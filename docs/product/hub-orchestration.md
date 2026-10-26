@@ -207,7 +207,7 @@ its own.
 | Field | Required | Contents |
 |---|---|---|
 | `goal` | yes | The outcome to achieve. |
-| `context` | no | Background and relevant leads. The field asks the caller to include which language the user converses with it in, so that the session can name the sessions it starts in that language (see "Naming the sessions a session starts" below). |
+| `context` | no | Background and relevant leads. The field asks the caller to include the user's language, so that the session can name the sessions it starts in it (see "Naming the sessions a session starts" below). |
 | `acceptance` | no | Criteria for being done. |
 | `constraints` | no | What must not be touched, whether committing or pushing is allowed, and so on. |
 
@@ -239,11 +239,14 @@ session takes over" in `docs/product/handing-off-sessions.md`. `rename_session`'
 `request_resume_session`'s names the session it opens or renames the archived session it reopens (see "The call" in
 `docs/product/requests-to-resume-a-conversation.md`).
 
-Every one of these `title` arguments tells the agent to write the name in **the language the user converses with it
-in**, not that of the project, its docs and code, or a brief. A session that takes its work from an owner session
-rather than from the user uses the user's language as its owner passes it on — the brief's `context` asks for it (see
-"Handing out a task: the brief" above) — else the language of its owner's messages. The language is the agent's to
-choose: Octoboard does not check it, and the daemon does not know the language of the user's interface.
+Every one of these `title` arguments tells the agent to write the name in **the user's language**: the language its
+instructions name under "The user's language" where they have that section (see "The guidance on the user's language"
+in `docs/product/launching-agents.md`), else the language the user converses with it in — not that of the project, its
+docs and code, or a brief. Where its instructions name none, a session that takes its work from an owner session rather
+than from the user uses the user's language as its owner passes it on — the brief's `context` asks for it (see
+"Handing out a task: the brief" above) — else the language of its owner's messages. The tools' descriptions say this
+the same way for every session, whatever its instructions hold. The language is the agent's to choose: Octoboard does
+not check the name's language.
 
 ## The agent and account of a session a session starts
 

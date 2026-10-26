@@ -109,17 +109,39 @@ What does not follow it:
 - **The terminal.** What the agent draws is laid out left to right whatever the language, and is never mirrored.
 - **Text aimed at the agents** — the console session's instructions, the tool descriptions and the tools' replies, the prompts
   injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI is
-  localized.
+  localized. What a session is told of the user's language names it, in English, without translating anything else
+  (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
 - **What a daemon error quotes from elsewhere** — a path, an agent's name, the operating system's or `git`'s own
   message — is shown as it came, inside the localized wording.
 
 ## Where the choice is stored
 
 The choice is remembered **per client**, in that client's own browser storage, as the appearance choice is (see "Where
-the choice is stored" in `docs/product/appearance.md`). The daemon neither stores it nor carries it. A desktop window
-and a browser tab, or two machines reaching the same daemon, each keep their own. A client whose storage has been
-cleared picks the language from the system again on its next load. Without that storage nothing is kept: every load
-picks the language from the system, and a choice in Settings lasts until the page is reloaded.
+the choice is stored" in `docs/product/appearance.md`). A desktop window and a browser tab, or two machines reaching the
+same daemon, each keep their own, and each renders its own whatever the daemon holds (see "The language the daemon
+holds" below). A client whose storage has been cleared picks the language from the system again on its next load.
+Without that storage nothing is kept: every load picks the language from the system, and a choice in Settings lasts
+until the page is reloaded.
+
+## The language the daemon holds
+
+The daemon also holds one language, taken as **the user's language**: the language sessions are told to talk to the
+user in (see "Talk to me in the interface language" in `docs/product/settings.md`). It is not a client's: there is one
+value for every client, the one reported most recently, and none until a client reports one. It is stored as
+`interface_language`, a tag from the 17 offered (see "The offered languages" above); the daemon refuses any other tag.
+
+A client reports its language:
+
+- **when the user picks one in Settings**. The window changes language whatever becomes of the report; a report the
+  daemon does not receive or refuses is shown as an error and is not sent again later;
+- **on connecting, only while the daemon holds none yet**, which seeds an installation from before the daemon held one.
+  A client never reports on connecting otherwise, so clients set to different languages do not overwrite each other at
+  every start: the daemon keeps the most recent report.
+
+The first launch's pick from the system is not reported by itself; it reaches the daemon only through the report on
+connecting. The held language is not carried by a configuration export (see "The application settings a full export
+carries" in `docs/product/configuration-export-and-import.md`), and agents can neither read nor change it (see "Who
+reads and changes what" in `docs/product/agent-settings-tools.md`).
 
 ## What is translated so far
 

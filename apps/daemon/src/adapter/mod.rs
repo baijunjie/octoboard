@@ -67,6 +67,10 @@ pub struct LaunchSpec<'a> {
     /// assembled, which decides whether a project session's role text asks it to put questions
     /// to the user as options to pick from.
     pub ask_questions_as_choices: bool,
+    /// The tag of the language the user's interface is set to, while the application setting
+    /// `reply_in_interface_language` was on when the launch was assembled and a language had been
+    /// reported; it decides whether a project session's role text names that language.
+    pub user_language: Option<&'a str>,
     /// The id to give an agent that can pre-allocate one for a *new* conversation. Freshly
     /// generated per launch: both Claude Code and Grok refuse an id that already has a stored
     /// conversation, so reusing one would make relaunching a session that was opened and never
@@ -124,6 +128,17 @@ pub struct LaunchSpec<'a> {
     pub daemon_port: u16,
     /// The token that session's MCP server authenticates to the daemon with.
     pub mcp_token: &'a str,
+}
+
+impl LaunchSpec<'_> {
+    /// What the launch adds to the role description beyond the role and owner.
+    pub fn role_options(&self) -> crate::mcp::role::RoleOptions<'_> {
+        crate::mcp::role::RoleOptions {
+            worktrees: self.worktrees.as_ref(),
+            ask_as_choices: self.ask_questions_as_choices,
+            user_language: self.user_language,
+        }
+    }
 }
 
 /// What an agent's own time limit on a call to Octoboard's tools is set to, for every agent that
@@ -495,6 +510,7 @@ pub mod tests {
         pub owner: Option<Owner>,
         pub worktrees: Option<crate::worktree_settings::WorktreeSettings>,
         pub ask_questions_as_choices: bool,
+        pub user_language: Option<String>,
         pub new_agent_session_id: String,
         pub cwd: PathBuf,
         pub scratch: crate::test_support::ScratchDir,
@@ -518,6 +534,7 @@ pub mod tests {
                 owner: self.owner.clone(),
                 worktrees: self.worktrees,
                 ask_questions_as_choices: self.ask_questions_as_choices,
+                user_language: self.user_language.as_deref(),
                 new_agent_session_id: &self.new_agent_session_id,
                 resume_agent_session_id: None,
                 cwd: &self.cwd,
@@ -555,6 +572,7 @@ pub mod tests {
             owner: Some(Owner::Console),
             worktrees: Some(crate::worktree_settings::WorktreeSettings::default()),
             ask_questions_as_choices: true,
+            user_language: None,
             new_agent_session_id: format!("agent-{}", std::process::id()),
             cwd,
             scratch: root,

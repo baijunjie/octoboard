@@ -42,4 +42,5 @@ export const BOOLEAN_SETTINGS: {
   { label: "settings.autoApproveAccountSwitches.label", field: "auto_approve_account_switches", consequence: "configuration.import.settings.consequence.autoApproveAccountSwitches" },
   { label: "settings.autoApproveHandoffs.label", field: "auto_approve_handoffs", consequence: "configuration.import.settings.consequence.autoApproveHandoffs" },
   { label: "settings.askQuestionsAsChoices.label", field: "ask_questions_as_choices", consequence: "configuration.import.settings.consequence.askQuestionsAsChoices" },
+  { label: "settings.replyInInterfaceLanguage.label", field: "reply_in_interface_language", consequence: "configuration.import.settings.consequence.replyInInterfaceLanguage" },
 ];

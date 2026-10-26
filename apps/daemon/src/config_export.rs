@@ -92,6 +92,10 @@ pub struct DocumentSettings {
     /// setting as it is.
     #[serde(default)]
     pub ask_questions_as_choices: Option<bool>,
+    /// Absent in a document exported before the setting was carried: importing it leaves the
+    /// setting as it is. The language itself is not carried: a client reports it.
+    #[serde(default)]
+    pub reply_in_interface_language: Option<bool>,
     /// The application-wide worktree settings. Absent in a document exported before they existed:
     /// importing it leaves them as they are.
     #[serde(default)]
@@ -232,6 +236,7 @@ pub fn build(
             auto_approve_account_switches: Some(store.auto_approve_account_switches()?),
             auto_approve_handoffs: Some(store.auto_approve_handoffs()?),
             ask_questions_as_choices: Some(store.ask_questions_as_choices()?),
+            reply_in_interface_language: Some(store.reply_in_interface_language()?),
             worktrees: Some(store.worktree_settings()?),
             keyboard_shortcuts: None,
         }),
@@ -559,6 +564,7 @@ mod tests {
                 auto_approve_account_switches: Some(false),
                 auto_approve_handoffs: Some(false),
                 ask_questions_as_choices: Some(true),
+                reply_in_interface_language: Some(true),
                 worktrees: Some(WorktreeSettings::default()),
                 keyboard_shortcuts: None,
             })

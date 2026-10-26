@@ -171,8 +171,8 @@ The choices, clearing and account-specific lists are described in "The Advanced 
 A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
 protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` is stored trimmed, and
 one that is absent, `null` or blank uses the parent's current name alone: the console's name for a console session,
-or the project's name for a project session. The daemon has no UI language; the UI supplies its localized default
-explicitly when no custom name was entered.
+or the project's name for a project session. The daemon words no default name in the UI's language; the UI supplies its
+localized default explicitly when no custom name was entered.
 
 **Every new session is listed at once as *starting*,** before its agent has been launched, and the launch goes on
 behind it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the

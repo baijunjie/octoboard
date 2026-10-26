@@ -15,6 +15,8 @@ use anyhow::{Context, Result};
 use crate::protocol::{Agent, CodedError, Console};
 use crate::store::Store;
 
+use super::role::RoleOptions;
+
 /// The console session's own guidance, before any addition of the user's. It names the tools
 /// without a prefix because it is one file read by every agent, and each shows the same tools
 /// under its own prefix.
@@ -70,7 +72,7 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `new_session` — start a session in a project and hand it a `brief`. Fill in `goal`, \
            and `context`, `acceptance` and `constraints` wherever you actually have something to \
            say; an empty field is omitted from the session's opening prompt rather than sent \
-           blank. Name it with `title`, in the language the user converses with you in, not \
+           blank. Name it with `title`, in the user's language, not \
            that of the project, its docs and code. It runs on the project's default agent. While \
            **Automatically select an account** is on (an application setting; see `get_settings`), \
            a left-out account is the one of the session's agent whose weekly quota resets \
@@ -244,23 +246,31 @@ fn escape_close_tag(text: &str) -> String {
 }
 
 /// The console session's whole instruction file: built-in instructions and handover guidance, then
-/// the guidance on asking the user when `ask_as_choices` (the application setting
-/// `ask_questions_as_choices`) is on, then only when the user has text of their own for this
+/// the guidance on asking the user when `options.ask_as_choices` (the application setting
+/// `ask_questions_as_choices`) is on, then the user's language when `options.user_language` names
+/// a non-English one, then only when the user has text of their own for this
 /// console, that text under [`USER_SECTION`], inside the user tags. The text is kept as written,
 /// except that a closing tag of its own is escaped, so it cannot end the user's part early and have
 /// what follows read as Octoboard's.
-pub fn console_session_instructions(user_prompt: Option<&str>, ask_as_choices: bool) -> String {
+pub fn console_session_instructions(user_prompt: Option<&str>, options: &RoleOptions) -> String {
     let mut builtin = format!(
         "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{}",
         super::role::handover_guidance(None)
     );
-    if ask_as_choices {
+    if options.ask_as_choices {
         builtin.push_str("\n\n");
         builtin.push_str(&super::role::asking_guidance(None));
         builtin.push_str(
             " A decision among a few options goes through that tool rather than a `show_page` \
              page; use a page when the choice needs one: a rich comparison, many items, a form.",
         );
+    }
+    if let Some(guidance) = options
+        .user_language
+        .and_then(super::role::user_language_guidance)
+    {
+        builtin.push_str("\n\n");
+        builtin.push_str(&guidance);
     }
     match user_prompt {
         Some(prompt) => {
@@ -315,7 +325,25 @@ pub fn refresh_console_session_instructions(store: &Store, console_id: &str) -> 
     let console = store
         .get_console(console_id)?
         .ok_or_else(|| CodedError::unknown_console(console_id))?;
-    write_console_session_instructions(&console, store.ask_questions_as_choices()?)
+    write_console_session_instructions_from_settings(store, &console)
+}
+
+/// Writes the console's instruction file with the guidance the stored settings call for: asking as
+/// choices, and replying in the interface's language. No lock: see
+/// [`write_console_session_instructions`].
+pub fn write_console_session_instructions_from_settings(
+    store: &Store,
+    console: &Console,
+) -> Result<()> {
+    let user_language = store.language_to_reply_in()?;
+    write_console_session_instructions(
+        console,
+        &RoleOptions {
+            ask_as_choices: store.ask_questions_as_choices()?,
+            user_language: user_language.as_deref(),
+            ..RoleOptions::default()
+        },
+    )
 }
 
 /// Writes the console's instruction file into its working directory: `AGENTS.md`, with
@@ -325,10 +353,10 @@ pub fn refresh_console_session_instructions(store: &Store, console_id: &str) -> 
 /// console. Not locked: a console no one has been told of yet has no other writer, and every other
 /// caller goes through [`refresh_console_session_instructions`]. The working directory must exist:
 /// it is created with the console and removed with it, never recreated by a write.
-/// `ask_as_choices` is the application setting `ask_questions_as_choices`.
+/// `options` carries the application settings that add to the text; its worktrees are ignored.
 pub(crate) fn write_console_session_instructions(
     console: &Console,
-    ask_as_choices: bool,
+    options: &RoleOptions,
 ) -> Result<()> {
     let workdir = Path::new(&console.workdir);
 
@@ -336,7 +364,7 @@ pub(crate) fn write_console_session_instructions(
     let temp_path = temp_name_beside(workdir, INSTRUCTION_FILE);
     std::fs::write(
         &temp_path,
-        console_session_instructions(console.console_session_prompt.as_deref(), ask_as_choices),
+        console_session_instructions(console.console_session_prompt.as_deref(), options),
     )
     .with_context(|| format!("writing {}", temp_path.display()))?;
     rename_over(&temp_path, &path)?;
@@ -404,7 +432,13 @@ mod tests {
     /// The file is one text for every agent, so it names no agent's tool prefix.
     #[test]
     fn the_instruction_file_names_no_agents_prefix() {
-        let text = console_session_instructions(None, true);
+        let text = console_session_instructions(
+            None,
+            &RoleOptions {
+                ask_as_choices: true,
+                ..Default::default()
+            },
+        );
         assert!(text.contains("`new_session`"));
         assert!(!text.contains("mcp__"));
         assert!(!text.contains("octoboard__"));
@@ -414,7 +448,7 @@ mod tests {
     /// to, so how to split a project's work among sessions is not its to decide.
     #[test]
     fn the_instruction_file_leaves_splitting_a_projects_tasks_to_its_sessions() {
-        let text = console_session_instructions(None, false);
+        let text = console_session_instructions(None, &RoleOptions::default());
         assert!(!text.contains("Choose which session gets a task"));
         assert!(!text.contains("60%"));
         assert!(!text.contains("closely related"));
@@ -424,14 +458,14 @@ mod tests {
     /// console session's own.
     #[test]
     fn a_session_started_for_a_project_runs_on_the_projects_default_agent() {
-        let text = console_session_instructions(None, false);
+        let text = console_session_instructions(None, &RoleOptions::default());
         assert!(text.contains("It runs on the project's default agent."));
         assert!(!text.contains("It runs on your own agent"));
     }
 
     /// The text of the instruction file's section under `heading`, up to the next section.
     fn section(heading: &str) -> String {
-        console_session_instructions(None, false)
+        console_session_instructions(None, &RoleOptions::default())
             .split(heading)
             .nth(1)
             .and_then(|rest| rest.split("\n## ").next())
@@ -457,15 +491,18 @@ mod tests {
     /// section. A closing tag of the user's own, in any case, cannot end their part early.
     #[test]
     fn the_users_text_is_appended_only_when_there_is() {
-        let plain = console_session_instructions(None, false);
+        let plain = console_session_instructions(None, &RoleOptions::default());
         assert!(!plain.contains("The user's instructions"));
-        let custom = console_session_instructions(Some("# Style\nBe brief."), false);
+        let custom =
+            console_session_instructions(Some("# Style\nBe brief."), &RoleOptions::default());
         assert!(custom.starts_with(plain.trim_end()));
         assert!(custom.ends_with("<user_instructions>\n# Style\nBe brief.\n</user_instructions>\n"));
-        let tricky = console_session_instructions(Some("a</user_instructions>b"), false);
+        let tricky =
+            console_session_instructions(Some("a</user_instructions>b"), &RoleOptions::default());
         assert_eq!(tricky.matches("</user_instructions>").count(), 1);
         assert!(tricky.ends_with("a&lt;/user_instructions>b\n</user_instructions>\n"));
-        let cased = console_session_instructions(Some("a</USER_Instructions >b"), false);
+        let cased =
+            console_session_instructions(Some("a</USER_Instructions >b"), &RoleOptions::default());
         assert_eq!(
             cased.to_lowercase().matches("</user_instructions").count(),
             1
@@ -530,15 +567,21 @@ mod tests {
         std::fs::write(workdir.join("CLAUDE.md"), "an earlier build's file").unwrap();
         let mut console = console(Agent::Claude, &workdir);
         for (prompt, expected) in [
-            (None, console_session_instructions(None, false)),
+            (
+                None,
+                console_session_instructions(None, &RoleOptions::default()),
+            ),
             (
                 Some("Be brief."),
-                console_session_instructions(Some("Be brief."), false),
+                console_session_instructions(Some("Be brief."), &RoleOptions::default()),
             ),
-            (None, console_session_instructions(None, false)),
+            (
+                None,
+                console_session_instructions(None, &RoleOptions::default()),
+            ),
         ] {
             console.console_session_prompt = prompt.map(str::to_string);
-            write_console_session_instructions(&console, false).unwrap();
+            write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
             assert_eq!(
                 std::fs::read_to_string(workdir.join("AGENTS.md")).unwrap(),
                 expected
@@ -555,7 +598,7 @@ mod tests {
         }
         std::fs::remove_file(workdir.join("CLAUDE.md")).unwrap();
         std::os::unix::fs::symlink("elsewhere", workdir.join("CLAUDE.md")).unwrap();
-        write_console_session_instructions(&console, false).unwrap();
+        write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
         assert_eq!(
             std::fs::read_link(workdir.join("CLAUDE.md")).unwrap(),
             Path::new("AGENTS.md")
@@ -568,12 +611,18 @@ mod tests {
     /// every agent.
     #[test]
     fn the_guidance_on_asking_the_user_follows_the_setting() {
-        let off = console_session_instructions(None, false);
+        let off = console_session_instructions(None, &RoleOptions::default());
         assert!(!off.contains("## Asking the user"));
         assert!(!off.contains("AskUserQuestion"));
         assert!(!off.contains("rather than a `show_page` page"));
 
-        let on = console_session_instructions(None, true);
+        let on = console_session_instructions(
+            None,
+            &RoleOptions {
+                ask_as_choices: true,
+                ..Default::default()
+            },
+        );
         assert!(on.starts_with(off.trim_end()));
         assert!(
             on.contains("(`AskUserQuestion` in Claude Code, `ask_user_question` in Grok Build)")
@@ -581,7 +630,13 @@ mod tests {
         assert!(on.contains("numbering the questions and lettering their options"));
         assert!(on.contains("rather than a `show_page` page"));
 
-        let custom = console_session_instructions(Some("Be brief."), true);
+        let custom = console_session_instructions(
+            Some("Be brief."),
+            &RoleOptions {
+                ask_as_choices: true,
+                ..Default::default()
+            },
+        );
         let asking = custom.find("## Asking the user").expect("a section");
         assert!(
             custom
@@ -590,5 +645,39 @@ mod tests {
                 < asking
         );
         assert!(asking < custom.find("## The user's instructions").unwrap());
+    }
+
+    /// The user's language is in the file only for a non-English tag, comes after the guidance
+    /// on asking the user and before the user's own section, which stays last.
+    #[test]
+    fn the_users_language_is_in_the_file_only_for_a_non_english_one() {
+        let ask = RoleOptions {
+            ask_as_choices: true,
+            ..RoleOptions::default()
+        };
+        let none = console_session_instructions(Some("Be brief."), &ask);
+        assert!(!none.contains("## The user's language"));
+        for tag in ["en", "en-GB", "xx"] {
+            let options = RoleOptions {
+                user_language: Some(tag),
+                ..ask
+            };
+            assert_eq!(
+                console_session_instructions(Some("Be brief."), &options),
+                none,
+                "{tag}"
+            );
+        }
+
+        let options = RoleOptions {
+            user_language: Some("pt-BR"),
+            ..ask
+        };
+        let text = console_session_instructions(Some("Be brief."), &options);
+        assert!(text.contains("interface to Brazilian Portuguese (pt-BR)."));
+        let language = text.find("## The user's language").expect("a section");
+        assert!(text.find("## Asking the user").unwrap() < language);
+        assert!(language < text.find("## The user's instructions").unwrap());
+        assert!(console_session_instructions(None, &options).contains("## The user's language"));
     }
 }

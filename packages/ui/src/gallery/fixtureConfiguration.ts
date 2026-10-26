@@ -113,6 +113,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
         ...(typeof state.settings.auto_approve_account_switches === "boolean" && { auto_approve_account_switches: state.settings.auto_approve_account_switches }),
         ...(typeof state.settings.auto_approve_handoffs === "boolean" && { auto_approve_handoffs: state.settings.auto_approve_handoffs }),
         ...(typeof state.settings.ask_questions_as_choices === "boolean" && { ask_questions_as_choices: state.settings.ask_questions_as_choices }),
+        ...(typeof state.settings.reply_in_interface_language === "boolean" && { reply_in_interface_language: state.settings.reply_in_interface_language }),
         worktrees: state.settings.worktrees,
       },
     }),

@@ -53,6 +53,7 @@ import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
+import { useInterfaceLanguageSync } from "./lifecycle/useInterfaceLanguageSync";
 import { useStatusItemMenu } from "./lifecycle/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { archiveKey, isLive, type Location } from "./navigation/history";
@@ -184,6 +185,7 @@ export function App(): React.ReactElement {
   const hasAside = asideOwner !== undefined;
   const sidebarView = useSidebarView(consoleList);
   useGitStatusSchedule(sidebarView.currentConsole?.id);
+  useInterfaceLanguageSync();
   const archiveConsole = archiveScope ? consoles.get(archiveScope.console) : undefined;
   const archiveProjectId = archiveScope && "project" in archiveScope ? archiveScope.project : undefined;
   const archiveProject = archiveProjectId ? projects.get(archiveProjectId) : undefined;

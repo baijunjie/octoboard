@@ -366,8 +366,7 @@ impl AgentAdapter for ClaudeAdapter {
             spec.role,
             spec.owner.as_ref(),
             Agent::Claude,
-            spec.worktrees.as_ref(),
-            spec.ask_questions_as_choices,
+            &spec.role_options(),
         ));
         // Last, after every list-valued flag has closed. All are global flags, so they sit
         // alongside `--resume` too.
@@ -1002,8 +1001,7 @@ mod tests {
                 fixture.role,
                 fixture.owner.as_ref(),
                 Agent::Claude,
-                fixture.worktrees.as_ref(),
-                fixture.ask_questions_as_choices,
+                &fixture.spec().role_options(),
             )
         );
     }

@@ -45,10 +45,13 @@ to any session:
   `docs/product/settings.md`), since that spends the user's quota;
 - reading or changing whether sessions are asked to put their questions as choices (see "Ask questions as choices" in
   `docs/product/settings.md`), since that shapes what sessions are told, and a session could otherwise switch off the
-  rule it is given.
+  rule it is given;
+- reading or changing whether sessions are told the user's language, or the language the daemon holds for it (see
+  "Talk to me in the interface language" in `docs/product/settings.md` and "The language the daemon holds" in
+  `docs/product/language.md`), for the same reason.
 
 Each of those stays the user's own, in the UI. Nor do the tools reach what a window keeps for itself rather than the
-daemon, such as the appearance, Markdown style, language and keyboard shortcuts.
+daemon, such as the appearance, Markdown style, the window's own language and keyboard shortcuts.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
@@ -194,8 +197,8 @@ built-in default. `worktrees` is an object of any of the four worktree settings,
 takes (`rebase_before_merge`, `delivery` and `revert_gate` apply only while `use_worktrees` is on, and keep their values
 while it is off); an item left out, or given as `null`, stays as it is. A refused value leaves the others unapplied too.
 An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
-`auto_approve_handoffs`, `auto_start_quota_windows` or `ask_questions_as_choices` argument is ignored — the setting
-stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual. Turning `auto_pull_repositories` on fast-forwards
+`auto_approve_handoffs`, `auto_start_quota_windows`, `ask_questions_as_choices`, `reply_in_interface_language` or
+`interface_language` argument is ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual. Turning `auto_pull_repositories` on fast-forwards
 the projects already known to be behind at once, as turning the switch on in Settings does, which changes files in the
 user's repositories. Turning `auto_delete_unresumable_archives` on deletes nothing at once, and turning it off stops a
 deletion pass under way, exactly as the switch in Settings does. Turning `auto_select_account` on or off changes no

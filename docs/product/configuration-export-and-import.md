@@ -221,9 +221,9 @@ accounts and which accounts are turned off (see "Added agents", "The default acc
 
 ### The application settings a full export carries
 
-Eleven, each under its own key. The first is in every document that has application settings. Each of the other ten
-is missing from a document exported before it was carried, and applying that document's settings then leaves the
-importing machine's value as it is; the import review notes each of the nine switches after the first only when the
+Twelve, each under its own key. The first is in every document that has application settings. Each of the other
+eleven is missing from a document exported before it was carried, and applying that document's settings then leaves the
+importing machine's value as it is; the import review notes each of the ten switches after the first only when the
 document carries it as a boolean.
 
 - **Automatically pull repositories** (see "Automatically pulling repositories" in
@@ -253,6 +253,11 @@ document carries it as a boolean.
 - **Ask questions as choices** (see that section in `docs/product/settings.md`), under `ask_questions_as_choices`. The
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
+- **Talk to me in the interface language** (see that section in `docs/product/settings.md`), under
+  `reply_in_interface_language`. The review's line for turning it on says that Octoboard then tells sessions started
+  afterwards which language the user's interface is set to, and asks them to talk to the user in it. The language
+  itself is not carried (see "The language the daemon holds" in `docs/product/language.md`): applying the document's
+  settings leaves the language the importing daemon holds as it is.
 - **The application-wide worktree settings** (see "The four settings" in `docs/product/worktree-settings.md`), under
   `worktrees`, an object holding all four of `use_worktrees`, `rebase_before_merge`, `delivery` and `revert_gate`.
   Applying the document's settings sets all four to the document's values, and a document without it, or with `null`
@@ -370,8 +375,8 @@ applied by default. Automatically pull repositories makes the daemon fast-forwar
 automatically deleting archived sessions makes it delete sessions by itself, automatic account selection makes a
 later new session that names no account take the one whose weekly quota resets soonest, starting usage windows
 automatically spends a little of the accounts' quota by itself, and the four automatic approvals let agents'
-requests, account switches and handoffs through without asking the user, and asking questions as choices changes what
-sessions are told at launch, so applying them changes how the daemon's host
+requests, account switches and handoffs through without asking the user, and asking questions as choices and talking
+to the user in the interface language change what sessions are told at launch, so applying them changes how the daemon's host
 behaves rather than only adding to what it holds. The inspection says both what the document sets and what is set now,
 so what applying would change can be shown before anything is done. The settings are applied last, through the same path as a change made in Settings — so an
 import that turns automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see
@@ -379,8 +384,8 @@ import that turns automatic pulling on runs the same immediate fast-forward pass
 nothing until the next scheduled check, as the switch does, one that turns automatic account selection on or off changes
 no session already open, one that turns the starting of usage windows on looks over the quota readings already held at
 once (see "When an account is kicked" in `docs/product/account-quotas.md`), one that turns an automatic approval on
-or off changes no request already waiting, and one that turns asking questions as choices on or off changes no session
-already running — and the result of the import reports what was applied. Asking to apply the
+or off changes no request already waiting, and one that turns asking questions as choices or talking to the user in the
+interface language on or off changes no session already running — and the result of the import reports what was applied. Asking to apply the
 settings of a document that carries none is refused rather than quietly ignored, so a request never does less than it
 was told to.
 

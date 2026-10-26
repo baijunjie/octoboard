@@ -341,6 +341,12 @@ it("states what turning on asking questions as choices does", async () => {
   expect(settingLines()["Ask questions as choices"]).toEqual({ badge: "Turns on", note: "Octoboard asks sessions started afterwards to put a question that needs your decision as options you can pick." });
 });
 
+it("states what turning on replying in the interface language does", async () => {
+  const turningOn = { ...REVIEW, settings: { ...REVIEW.settings!, reply_in_interface_language: true, current_reply_in_interface_language: false } };
+  await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...turningOn }) : reply(body)) });
+  expect(settingLines()["Talk to me in the interface language"]).toEqual({ badge: "Turns on", note: "Octoboard tells sessions started afterwards which language your interface is set to, and asks them to talk to you in it." });
+});
+
 it("leaves out the automatic approvals when the file does not carry them", async () => {
   const without = {
     ...REVIEW,

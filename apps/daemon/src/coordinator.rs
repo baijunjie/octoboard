@@ -1007,6 +1007,8 @@ async fn handle_inner(
             auto_approve_account_switches,
             auto_approve_handoffs,
             ask_questions_as_choices,
+            reply_in_interface_language,
+            interface_language,
             auto_select_account,
             sidebar_order_by_status,
             auto_start_quota_windows,
@@ -1023,6 +1025,8 @@ async fn handle_inner(
                     auto_approve_account_switches,
                     auto_approve_handoffs,
                     ask_questions_as_choices,
+                    reply_in_interface_language,
+                    interface_language,
                     auto_select_account,
                     sidebar_order_by_status,
                     auto_start_quota_windows,
@@ -1428,9 +1432,9 @@ fn store_new_console(
     };
     // Written before the record is stored: nothing else can touch a console no one has been told
     // of yet, and a failed write then leaves no console behind.
-    mcp::console_instructions::write_console_session_instructions(
+    mcp::console_instructions::write_console_session_instructions_from_settings(
+        &state.store,
         &console,
-        state.store.ask_questions_as_choices()?,
     )?;
     state.store.insert_console(&console)?;
     state.broadcast(Event::ConsoleUpserted {
@@ -3941,6 +3945,7 @@ async fn start_process(
         owner: owner_of(state, session)?,
         worktrees: launch_worktree_settings(state, session)?,
         ask_questions_as_choices: state.store.ask_questions_as_choices()?,
+        user_language: state.store.language_to_reply_in()?,
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),
@@ -5898,6 +5903,9 @@ pub struct SettingsChanges {
     pub auto_approve_account_switches: Option<bool>,
     pub auto_approve_handoffs: Option<bool>,
     pub ask_questions_as_choices: Option<bool>,
+    pub reply_in_interface_language: Option<bool>,
+    /// Refused unless it is a tag the interface offers.
+    pub interface_language: Option<String>,
     pub auto_select_account: Option<bool>,
     pub sidebar_order_by_status: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
@@ -5917,12 +5925,19 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_account_switches,
         auto_approve_handoffs,
         ask_questions_as_choices,
+        reply_in_interface_language,
+        interface_language,
         auto_select_account,
         sidebar_order_by_status,
         auto_start_quota_windows,
         default_clone_dir,
         worktrees,
     } = changes;
+    if let Some(tag) = &interface_language {
+        if !crate::interface_language::is_offered(tag) {
+            anyhow::bail!("`{tag}` is not a language the interface is offered in");
+        }
+    }
     // Checked before anything is written, so a refused directory leaves the other field unapplied
     // too rather than half the request taking effect.
     let default_clone_dir = match default_clone_dir {
@@ -5955,6 +5970,12 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = ask_questions_as_choices {
         changed |= state.store.set_ask_questions_as_choices(value)?;
+    }
+    if let Some(value) = reply_in_interface_language {
+        changed |= state.store.set_reply_in_interface_language(value)?;
+    }
+    if let Some(tag) = interface_language {
+        changed |= state.store.set_interface_language(&tag)?;
     }
     if let Some(value) = auto_select_account {
         changed |= state.store.set_auto_select_account(value)?;
@@ -6085,6 +6106,47 @@ mod tests {
         )
         .unwrap();
         assert_eq!(state.store.default_clone_dir().unwrap(), built_in);
+
+        // The interface language is one of the tags the interface offers; any other is refused
+        // before anything of the same request is written.
+        assert!(update_settings(
+            &state,
+            SettingsChanges {
+                auto_pull_repositories: Some(true),
+                interface_language: Some("klingon".to_string()),
+                ..SettingsChanges::default()
+            },
+        )
+        .is_err());
+        assert!(!state.store.get_settings().unwrap().auto_pull_repositories);
+        assert_eq!(state.store.interface_language().unwrap(), None);
+        let mut events = state.subscribe();
+        update_settings(
+            &state,
+            SettingsChanges {
+                interface_language: Some("zh-Hans".to_string()),
+                ..SettingsChanges::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            state.store.interface_language().unwrap().as_deref(),
+            Some("zh-Hans")
+        );
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { settings })
+                if settings.interface_language.as_deref() == Some("zh-Hans")
+        ));
+        update_settings(
+            &state,
+            SettingsChanges {
+                interface_language: Some("zh-Hans".to_string()),
+                ..SettingsChanges::default()
+            },
+        )
+        .unwrap();
+        assert!(events.try_recv().is_err());
 
         let mut events = state.subscribe();
         update_settings(
@@ -9259,21 +9321,39 @@ mod tests {
         assert_eq!(stored().as_deref(), Some("Be brief."));
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(Some("Be brief."), true)
+            mcp::console_instructions::console_session_instructions(
+                Some("Be brief."),
+                &mcp::role::RoleOptions {
+                    ask_as_choices: true,
+                    ..Default::default()
+                }
+            )
         );
 
         handle(&state, None, update(None)).await.unwrap();
         assert_eq!(stored().as_deref(), Some("Be brief."));
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(Some("Be brief."), true)
+            mcp::console_instructions::console_session_instructions(
+                Some("Be brief."),
+                &mcp::role::RoleOptions {
+                    ask_as_choices: true,
+                    ..Default::default()
+                }
+            )
         );
 
         handle(&state, None, update(Some(None))).await.unwrap();
         assert_eq!(stored(), None);
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(None, true)
+            mcp::console_instructions::console_session_instructions(
+                None,
+                &mcp::role::RoleOptions {
+                    ask_as_choices: true,
+                    ..Default::default()
+                }
+            )
         );
 
         handle(&state, None, update(Some(Some("Answer in French."))))
@@ -9284,7 +9364,10 @@ mod tests {
             file(),
             mcp::console_instructions::console_session_instructions(
                 Some("Answer in French."),
-                true
+                &mcp::role::RoleOptions {
+                    ask_as_choices: true,
+                    ..Default::default()
+                }
             )
         );
 
@@ -9294,9 +9377,28 @@ mod tests {
         assert_eq!(stored(), None);
         assert_eq!(
             file(),
-            mcp::console_instructions::console_session_instructions(None, true)
+            mcp::console_instructions::console_session_instructions(
+                None,
+                &mcp::role::RoleOptions {
+                    ask_as_choices: true,
+                    ..Default::default()
+                }
+            )
         );
         assert!(!file().contains("Answer in French."));
+
+        // The file follows the language the user's interface is set to at the next write, and
+        // drops it with the switch.
+        state.store.set_interface_language("ja").unwrap();
+        handle(&state, None, update(Some(Some("Be brief."))))
+            .await
+            .unwrap();
+        assert!(file().contains("interface to Japanese (ja)."));
+        state.store.set_reply_in_interface_language(false).unwrap();
+        handle(&state, None, update(Some(Some("Be brief."))))
+            .await
+            .unwrap();
+        assert!(!file().contains("## The user's language"));
     }
 
     /// A name that is blank, and a model or effort the agent does not offer, are refused by the

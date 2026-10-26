@@ -13,10 +13,10 @@ const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 vi.mock("../store", () => ({
   useDaemon: () => ({ request, toastError: vi.fn() }),
   useDaemonStore: (selector: (state: { settings: Record<string, boolean> }) => unknown) =>
-    selector({ settings: { auto_approve_session_requests: true, auto_approve_resume_requests: false, auto_approve_account_switches: false, auto_approve_handoffs: true, ask_questions_as_choices: true } }),
+    selector({ settings: { auto_approve_session_requests: true, auto_approve_resume_requests: false, auto_approve_account_switches: false, auto_approve_handoffs: true, ask_questions_as_choices: true, reply_in_interface_language: false } }),
 }));
 
-it("shows the session-request, resume-request, account-switch, handoff and question-asking switches in that order, each with its own value and setting", async () => {
+it("shows the session-request, resume-request, account-switch, handoff, question-asking and language switches in that order, each with its own value and setting", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -30,8 +30,8 @@ it("shows the session-request, resume-request, account-switch, handoff and quest
       </LanguageProvider>,
     ),
   );
-  expect(container.textContent).toContain("Choose what sessions may do without asking you first, and how they ask you.");
-  const [sessions, resumes, switches, handoffs, questions] = [...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
+  expect(container.textContent).toContain("Choose what sessions may do without asking you first, and how they ask and talk to you.");
+  const [sessions, resumes, switches, handoffs, questions, language] = [...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
   expect(container.textContent!.indexOf("Automatically approve session requests")).toBeLessThan(
     container.textContent!.indexOf("Automatically approve resume requests"),
   );
@@ -44,7 +44,10 @@ it("shows the session-request, resume-request, account-switch, handoff and quest
   expect(container.textContent!.indexOf("Automatically approve handoffs")).toBeLessThan(
     container.textContent!.indexOf("Ask questions as choices"),
   );
-  expect([sessions.checked, resumes.checked, switches.checked, handoffs.checked, questions.checked]).toEqual([true, false, false, true, true]);
+  expect(container.textContent!.indexOf("Ask questions as choices")).toBeLessThan(
+    container.textContent!.indexOf("Talk to me in the interface language"),
+  );
+  expect([sessions.checked, resumes.checked, switches.checked, handoffs.checked, questions.checked, language.checked]).toEqual([true, false, false, true, true, false]);
   await act(async () => {
     resumes.click();
   });
@@ -61,5 +64,9 @@ it("shows the session-request, resume-request, account-switch, handoff and quest
     questions.click();
   });
   expect(request).toHaveBeenLastCalledWith({ type: "update_settings", ask_questions_as_choices: false });
-  expect(request).toHaveBeenCalledTimes(4);
+  await act(async () => {
+    language.click();
+  });
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", reply_in_interface_language: true });
+  expect(request).toHaveBeenCalledTimes(5);
 });

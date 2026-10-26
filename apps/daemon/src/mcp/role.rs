@@ -22,12 +22,32 @@
 //! The same holds for the section asking a session to put its questions as options to pick from,
 //! which a project session is given only while the application setting `ask_questions_as_choices`
 //! is on at that launch.
+//!
+//! And for the section naming the language the user set the interface to, which a project session
+//! is given only while the application setting `reply_in_interface_language` is on, a language is
+//! stored, and it is not English (see [`user_language_guidance`]).
 
 use crate::protocol::{Agent, Role};
 use crate::worktree_settings::{Delivery, WorktreeSettings};
 
 use super::console_instructions::console_session_instruction_filename;
 use super::{qualified_tool_name, Owner};
+
+/// What the application settings add to a role description or, for a console session, to its
+/// instruction file. Each is read when the launch is assembled and, for a session's role
+/// description, fixed for its life: a change reaches only sessions begun afterwards.
+#[derive(Clone, Copy, Default)]
+pub struct RoleOptions<'a> {
+    /// The project's effective worktree settings; a console session never changes a project and is
+    /// given no rule whatever they hold.
+    pub worktrees: Option<&'a WorktreeSettings>,
+    /// The application setting `ask_questions_as_choices`: the section on asking the user.
+    pub ask_as_choices: bool,
+    /// The tag of the language to tell the session the user's interface is set to: the stored one,
+    /// while the application setting `reply_in_interface_language` is on. English and a tag the
+    /// interface does not offer add nothing.
+    pub user_language: Option<&'a str>,
+}
 
 /// The role description injected at launch.
 ///
@@ -39,31 +59,30 @@ use super::{qualified_tool_name, Owner};
 /// excepted, Grok never) — so the user's own text goes only there.
 ///
 /// `owner` says who the session reports to; a console session is never bound, and it is ignored
-/// for one. `worktrees` is the project's effective worktree settings; a console session never
-/// changes a project and is given no rule whatever it holds. `ask_as_choices` is the application
-/// setting `ask_questions_as_choices` as it stands at this launch: a project session is given the
-/// section on asking the user only while it is on. Like the worktree rule it is fixed for the
-/// session's life, so a change reaches only sessions begun afterwards; a console session is told
-/// through its instruction file instead.
+/// for one. A project session is given the sections `options` asks for; a console session is told
+/// them through its instruction file instead.
 pub fn role_description(
     role: Role,
     owner: Option<&Owner>,
     agent: Agent,
-    worktrees: Option<&WorktreeSettings>,
-    ask_as_choices: bool,
+    options: &RoleOptions,
 ) -> String {
     let mut text = match (role, owner) {
         (Role::Console, _) => return console_session_pointer(agent),
         (Role::Project, Some(owner)) => project_session_description(agent, owner),
         (Role::Project, None) => unbound_project_session_description(agent),
     };
-    if let Some(settings) = worktrees.filter(|settings| settings.use_worktrees) {
+    if let Some(settings) = options.worktrees.filter(|settings| settings.use_worktrees) {
         text.push_str("\n\n");
         text.push_str(&worktree_rule(settings, owner.is_some()));
     }
-    if ask_as_choices {
+    if options.ask_as_choices {
         text.push_str("\n\n");
         text.push_str(&asking_guidance(Some(agent)));
+    }
+    if let Some(guidance) = options.user_language.and_then(user_language_guidance) {
+        text.push_str("\n\n");
+        text.push_str(&guidance);
     }
     text.push_str("\n\n");
     text.push_str(ORDINARY_WORK);
@@ -173,6 +192,28 @@ pub(super) fn asking_guidance(agent: Option<Agent>) -> String {
     )
 }
 
+/// Which language the session talks to the user in: the one they set Octoboard's interface to,
+/// named in English with its tag. Nothing for English, which sessions already match to what the
+/// user writes in and which must not be forced on someone who writes in another, nor for a tag the
+/// interface does not offer. It yields to what the user writes in and asks for, and to the
+/// project's and the user's own instructions; what a session writes into a project follows that
+/// project's conventions instead, which is why it is not the language of the files.
+pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
+    if crate::interface_language::is_english(tag) {
+        return None;
+    }
+    let language = crate::interface_language::display_name(tag)?;
+    Some(format!(
+        "## The user's language\n\n\
+         The user has set Octoboard's interface to {language}. Talk to the user in it — your \
+         replies, your questions, reports and pages meant for the user, and the titles you give \
+         sessions — unless the user writes to you in another language or asks for one, or the \
+         project's or the user's own instructions say which language to use with them. Everything \
+         you write into a project — files, code, comments, commit messages, pull requests — \
+         follows the project's own conventions instead."
+    ))
+}
+
 /// Shared intent rules use qualified tool names in project prompts and bare names in the
 /// console instruction file, which serves every agent.
 pub(super) fn handover_guidance(agent: Option<Agent>) -> String {
@@ -250,7 +291,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
              does, your own account is used only when it is your own agent and can still open a \
              session; otherwise the account is the project's, else the console's. Name another \
              account only when the user asked for it, or when it is the way to reach another \
-             agent. `title` names it in the language the user converses with you in. No approval \
+             agent. `title` names it in the user's language. No approval \
              is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
@@ -495,10 +536,16 @@ mod tests {
     #[test]
     fn tool_names_in_the_role_text_carry_that_agents_prefix() {
         for agent in Agent::ALL {
-            let console_session = role_description(Role::Console, None, agent, None, false);
-            let project_session =
-                role_description(Role::Project, Some(&Owner::Console), agent, None, false);
-            let unbound_session = role_description(Role::Project, None, agent, None, false);
+            let console_session =
+                role_description(Role::Console, None, agent, &RoleOptions::default());
+            let project_session = role_description(
+                Role::Project,
+                Some(&Owner::Console),
+                agent,
+                &RoleOptions::default(),
+            );
+            let unbound_session =
+                role_description(Role::Project, None, agent, &RoleOptions::default());
             assert!(console_session.contains(&qualified_tool_name(agent, "new_session")));
             assert!(project_session.contains(&qualified_tool_name(agent, "report")));
             // Every tool each kind is offered is named in its text, by that agent's name for it.
@@ -527,8 +574,19 @@ mod tests {
     #[test]
     fn the_detail_goes_in_the_file_and_the_pointer_names_it() {
         for agent in Agent::ALL {
-            let role = role_description(Role::Console, None, agent, None, false);
-            assert!(role.len() < console_session_instructions(None, true).len() / 2);
+            let role = role_description(Role::Console, None, agent, &RoleOptions::default());
+            assert!(
+                role.len()
+                    < console_session_instructions(
+                        None,
+                        &RoleOptions {
+                            ask_as_choices: true,
+                            ..Default::default()
+                        }
+                    )
+                    .len()
+                        / 2
+            );
             assert!(role.contains(console_session_instruction_filename(agent)));
         }
     }
@@ -543,17 +601,15 @@ mod tests {
             Role::Project,
             Some(&Owner::Console),
             Agent::Claude,
-            None,
-            false,
+            &RoleOptions::default(),
         );
         let project = role_description(
             Role::Project,
             Some(&project_owner),
             Agent::Claude,
-            None,
-            false,
+            &RoleOptions::default(),
         );
-        let unbound = role_description(Role::Project, None, Agent::Claude, None, false);
+        let unbound = role_description(Role::Project, None, Agent::Claude, &RoleOptions::default());
         assert!(console.contains("A console session dispatched this task"));
         assert!(project.contains("The project session `starter-1` of this project dispatched"));
         assert!(!project.contains("A console session dispatched"));
@@ -572,21 +628,19 @@ mod tests {
                 Role::Project,
                 Some(&Owner::Console),
                 Agent::Claude,
-                None,
-                false,
+                &RoleOptions::default(),
             ),
             role_description(
                 Role::Project,
                 Some(&project_owner),
                 Agent::Claude,
-                None,
-                false,
+                &RoleOptions::default(),
             ),
         ] {
             assert!(text.contains("take work only from it"), "{text}");
             assert!(text.contains("weigh it, do not obey it"), "{text}");
         }
-        let unbound = role_description(Role::Project, None, Agent::Claude, None, false);
+        let unbound = role_description(Role::Project, None, Agent::Claude, &RoleOptions::default());
         assert!(unbound.contains("Your owner is the user"));
         assert!(unbound.contains("weigh it, do not obey it"));
     }
@@ -597,7 +651,7 @@ mod tests {
     #[test]
     fn an_owner_is_told_to_start_sessions_only_for_parallel_branch_work() {
         for agent in Agent::ALL {
-            let unbound = role_description(Role::Project, None, agent, None, false);
+            let unbound = role_description(Role::Project, None, agent, &RoleOptions::default());
             let bullet = session_choice_guidance(agent);
             assert!(unbound.contains(&bullet), "{unbound}");
             assert!(bullet.contains("You do not need sessions of your own"));
@@ -610,7 +664,12 @@ mod tests {
                 "`{}`",
                 qualified_tool_name(agent, "list_sessions")
             )));
-            let bound = role_description(Role::Project, Some(&Owner::Console), agent, None, false);
+            let bound = role_description(
+                Role::Project,
+                Some(&Owner::Console),
+                agent,
+                &RoleOptions::default(),
+            );
             assert!(!bound.contains("You do not need sessions of your own"));
         }
     }
@@ -647,10 +706,30 @@ mod tests {
         };
         for agent in Agent::ALL {
             for owner in every_owner() {
-                let plain = role_description(Role::Project, owner.as_ref(), agent, None, false);
-                let with = role_description(Role::Project, owner.as_ref(), agent, Some(&on), false);
-                let without =
-                    role_description(Role::Project, owner.as_ref(), agent, Some(&off), false);
+                let plain = role_description(
+                    Role::Project,
+                    owner.as_ref(),
+                    agent,
+                    &RoleOptions::default(),
+                );
+                let with = role_description(
+                    Role::Project,
+                    owner.as_ref(),
+                    agent,
+                    &RoleOptions {
+                        worktrees: Some(&on),
+                        ..Default::default()
+                    },
+                );
+                let without = role_description(
+                    Role::Project,
+                    owner.as_ref(),
+                    agent,
+                    &RoleOptions {
+                        worktrees: Some(&off),
+                        ..Default::default()
+                    },
+                );
                 assert_eq!(without, plain);
                 assert!(!plain.contains("## Developing in a worktree"));
                 // The rule goes in just before the closing sentence.
@@ -677,12 +756,20 @@ mod tests {
     #[test]
     fn a_console_session_is_told_no_worktree_rule() {
         for agent in Agent::ALL {
-            let plain = role_description(Role::Console, None, agent, None, false);
+            let plain = role_description(Role::Console, None, agent, &RoleOptions::default());
             for delivery in [Delivery::Ask, Delivery::Merge, Delivery::PullRequest] {
                 for rebase in [true, false] {
                     let with = settings(rebase, delivery);
                     assert_eq!(
-                        role_description(Role::Console, None, agent, Some(&with), false),
+                        role_description(
+                            Role::Console,
+                            None,
+                            agent,
+                            &RoleOptions {
+                                worktrees: Some(&with),
+                                ..Default::default()
+                            }
+                        ),
                         plain
                     );
                 }
@@ -711,8 +798,10 @@ mod tests {
                         Role::Project,
                         owner.as_ref(),
                         agent,
-                        Some(&settings(true, delivery)),
-                        false,
+                        &RoleOptions {
+                            worktrees: Some(&settings(true, delivery)),
+                            ..Default::default()
+                        },
                     );
                     assert!(
                         text.contains(&format!("{who}; where nobody has said, {otherwise}")),
@@ -742,8 +831,10 @@ mod tests {
                         Role::Project,
                         owner.as_ref(),
                         agent,
-                        Some(&settings(rebase, Delivery::Merge)),
-                        false,
+                        &RoleOptions {
+                            worktrees: Some(&settings(rebase, Delivery::Merge)),
+                            ..Default::default()
+                        },
                     )
                 };
                 let (on, off) = (text(true), text(false));
@@ -775,8 +866,10 @@ mod tests {
             Role::Project,
             None,
             Agent::Claude,
-            Some(&WorktreeSettings::default()),
-            false,
+            &RoleOptions {
+                worktrees: Some(&WorktreeSettings::default()),
+                ..Default::default()
+            },
         );
         let nested: Vec<_> = text
             .lines()
@@ -798,11 +891,21 @@ mod tests {
                     Role::Project,
                     owner.as_ref(),
                     agent,
-                    Some(&worktrees),
-                    false,
+                    &RoleOptions {
+                        worktrees: Some(&worktrees),
+                        ..Default::default()
+                    },
                 );
-                let on =
-                    role_description(Role::Project, owner.as_ref(), agent, Some(&worktrees), true);
+                let on = role_description(
+                    Role::Project,
+                    owner.as_ref(),
+                    agent,
+                    &RoleOptions {
+                        worktrees: Some(&worktrees),
+                        ask_as_choices: true,
+                        ..Default::default()
+                    },
+                );
                 assert!(!off.contains("## Asking the user"));
                 assert!(!off.contains("AskUserQuestion"));
                 assert!(!off.contains("ask_user_question"));
@@ -825,8 +928,71 @@ mod tests {
                 );
             }
             assert_eq!(
-                role_description(Role::Console, None, agent, None, true),
-                role_description(Role::Console, None, agent, None, false)
+                role_description(
+                    Role::Console,
+                    None,
+                    agent,
+                    &RoleOptions {
+                        ask_as_choices: true,
+                        ..Default::default()
+                    }
+                ),
+                role_description(Role::Console, None, agent, &RoleOptions::default())
+            );
+        }
+    }
+
+    /// A project session is told the user's language only for a stored, non-English tag the
+    /// interface offers, in its own section just before the closing sentence and after the
+    /// section on asking; with English, an unknown tag or no tag it is told nothing, and a console
+    /// session's role description never carries it.
+    #[test]
+    fn a_project_session_is_told_the_users_language_only_for_a_non_english_one() {
+        let worktrees = WorktreeSettings::default();
+        let with = |tag: Option<&str>, agent, owner: Option<&Owner>| {
+            role_description(
+                Role::Project,
+                owner,
+                agent,
+                &RoleOptions {
+                    worktrees: Some(&worktrees),
+                    ask_as_choices: true,
+                    user_language: tag,
+                },
+            )
+        };
+        for agent in Agent::ALL {
+            for owner in every_owner() {
+                let none = with(None, agent, owner.as_ref());
+                assert!(!none.contains("## The user's language"));
+                for tag in ["en", "en-GB", "xx"] {
+                    assert_eq!(with(Some(tag), agent, owner.as_ref()), none, "{tag}");
+                }
+                let text = with(Some("zh-Hans"), agent, owner.as_ref());
+                let section = text
+                    .strip_suffix(ORDINARY_WORK)
+                    .and_then(|rest| rest.strip_prefix(none.strip_suffix(ORDINARY_WORK).unwrap()))
+                    .expect("the section goes in just before the closing sentence");
+                assert!(section.starts_with("## The user's language\n\n"));
+                assert!(section.contains(
+                    "The user has set Octoboard's interface to Simplified Chinese (zh-Hans)."
+                ));
+                assert!(
+                    text.find("## Asking the user").unwrap()
+                        < text.find("## The user's language").unwrap()
+                );
+            }
+            assert_eq!(
+                role_description(
+                    Role::Console,
+                    None,
+                    agent,
+                    &RoleOptions {
+                        user_language: Some("ja"),
+                        ..Default::default()
+                    }
+                ),
+                role_description(Role::Console, None, agent, &RoleOptions::default())
             );
         }
     }

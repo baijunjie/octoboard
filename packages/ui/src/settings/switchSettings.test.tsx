@@ -8,6 +8,7 @@ import { ArchiveCleanupSetting } from "./ArchiveCleanupSetting";
 import { AutoApproveResumeRequestsSetting } from "./AutoApproveResumeRequestsSetting";
 import { AutoApproveAccountSwitchesSetting } from "./AutoApproveAccountSwitchesSetting";
 import { AskQuestionsAsChoicesSetting } from "./AskQuestionsAsChoicesSetting";
+import { ReplyInInterfaceLanguageSetting } from "./ReplyInInterfaceLanguageSetting";
 import { AutoApproveHandoffsSetting } from "./AutoApproveHandoffsSetting";
 import { AutoApproveSessionRequestsSetting } from "./AutoApproveSessionRequestsSetting";
 import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
@@ -40,6 +41,7 @@ const switches = [
   { Setting: AutoApproveAccountSwitchesSetting, key: "auto_approve_account_switches", onText: "without asking you first" },
   { Setting: AutoApproveHandoffsSetting, key: "auto_approve_handoffs", onText: "without asking you first" },
   { Setting: AskQuestionsAsChoicesSetting, key: "ask_questions_as_choices", onText: "Turn this off to let sessions ask in their own way" },
+  { Setting: ReplyInInterfaceLanguageSetting, key: "reply_in_interface_language", onText: "A change reaches sessions started afterwards" },
   { Setting: AutoApproveSessionRequestsSetting, key: "auto_approve_session_requests", onText: "without asking you first" },
   { Setting: AutoSelectAccountSetting, key: "auto_select_account", onText: "whose weekly limit resets soonest" },
   { Setting: SidebarOrderSetting, key: "sidebar_order_by_status", onText: "move as their status changes" },
@@ -100,6 +102,11 @@ describe.each(switches)("$Setting.name", ({ Setting, key, onText }) => {
 it("reads a daemon that sends no value for asking questions as choices as on", () => {
   settings = { ask_questions_as_choices: undefined };
   expect(mount(AskQuestionsAsChoicesSetting).checked).toBe(true);
+});
+
+it("reads a daemon that sends no value for replying in the interface language as on", () => {
+  settings = { reply_in_interface_language: undefined };
+  expect(mount(ReplyInInterfaceLanguageSetting).checked).toBe(true);
 });
 
 it("reads a daemon that sends no value for the sidebar order as on", () => {

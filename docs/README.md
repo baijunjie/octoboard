@@ -264,9 +264,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   ⌘, and when that is ignored), how it closes and where focus goes, its General (Appearance, Language, the default
   clone directory and, in the macOS application alone, keeping Octoboard running in the background), Git, Agent
   accounts, Trusted folders, Permissions, Agent behavior (automatically approving session requests and resume
-  requests, each its own switch, and asking questions as choices), Notifications, Keyboard shortcuts and
-  Configuration (exporting and importing the configuration document, where the window can save and open files)
-  sections.
+  requests, each its own switch, asking questions as choices and talking in the interface language), Notifications,
+  Keyboard shortcuts and Configuration (exporting and importing the configuration document, where the window can save
+  and open files) sections.
 - [Worktree settings](product/worktree-settings.md) — the four worktree settings (use worktrees, rebase before merging,
   delivery, revert gate), their values and defaults, the other three applying only while use worktrees is on, a project
   following each application-wide value or holding its own and how the effective values are worked out, and how they
@@ -298,7 +298,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Language](product/language.md) — the 17 offered languages and why they are ordered by tag, English as the fallback,
   the default picked from the system's languages on the first launch and kept from then on, the language chosen in
   Settings, how the system's languages map onto the list, what follows the current language and what does not (report
-  pages, text aimed at agents), where the choice is kept, and what is translated so far.
+  pages, text aimed at agents), where the choice is kept, the language the daemon holds as the user's (when windows
+  report it, and that it is neither exported nor visible to agents), and what is translated so far.
 - [Launching agents](product/launching-agents.md) — the guarantee that Octoboard installs nothing into a project and
   never writes the user's agent configuration (the five narrow exceptions being the conversation a switch of a session's
   account copies, the Codex thread row that switch points at the copied head, the Grok Build trust entry carried to the

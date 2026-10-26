@@ -289,8 +289,7 @@ impl AgentAdapter for CodexAdapter {
                 spec.role,
                 spec.owner.as_ref(),
                 Agent::Codex,
-                spec.worktrees.as_ref(),
-                spec.ask_questions_as_choices,
+                &spec.role_options(),
             ))
         ));
 
@@ -659,8 +658,7 @@ mod tests {
                 fixture.role,
                 fixture.owner.as_ref(),
                 Agent::Codex,
-                fixture.worktrees.as_ref(),
-                fixture.ask_questions_as_choices,
+                &fixture.spec().role_options(),
             ))
         ))));
         assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));

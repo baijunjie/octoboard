@@ -38,6 +38,7 @@ mod hooks;
 mod host_tools;
 mod hostfs;
 mod instance_lock;
+mod interface_language;
 mod launch_settings;
 mod line_file;
 mod loopback;

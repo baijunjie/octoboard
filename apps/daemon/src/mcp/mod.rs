@@ -113,11 +113,14 @@ pub fn qualified_tool_name(agent: Agent, tool: &str) -> String {
 
 /// Which language a session's name is written in, said on every argument that names one. Agents
 /// otherwise take the language of what they read most — the project, its docs and code, the brief —
-/// while the name is for the user, who may speak another.
-const NAMING_LANGUAGE: &str = "Write it in the language the user converses with you in, not \
-     that of the project, its docs and code, or a brief. If you take work from an owner session \
-     rather than from the user directly, use the user's language as your owner passes it on, else \
-     the language of your owner's messages.";
+/// while the name is for the user, who may speak another. The text stays static: the user's
+/// language is the one a section of the session's instructions names (see
+/// `role::user_language_guidance`) where there is one, else the one the user writes in.
+const NAMING_LANGUAGE: &str = "Write it in the user's language: the one your instructions name \
+     under \"The user's language\" where they have that section, else the one the user converses \
+     with you in. Not that of the project, its docs and code, or a brief. Where your instructions \
+     name none and you take work from an owner session rather than from the user directly, use the \
+     user's language as your owner passes it on, else the language of your owner's messages.";
 
 /// What every default agent and account setting says of the sessions a session starts itself:
 /// which follow the starting session, and which the project's default agent. A macro so the read
@@ -411,8 +414,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       you instruct it with `send_message`, archive it once it is done and reopen \
                       it with `reopen_session` when it has another task. Needs no approval. \
                       Returns the new session's id. The brief is rendered into the session's \
-                      opening prompt; `title` names the session in the language the user converses \
-                      with you in. It runs on the project's default agent. While \
+                      opening prompt; `title` names the session in the user's language. It runs \
+                      on the project's default agent. While \
                       `auto_select_account` is on, a left-out account is the one of the session's \
                       agent whose weekly quota resets soonest and that can still open a session. \
                       When none does, your own account is used only when the session's agent is \
@@ -561,8 +564,8 @@ const ARCHIVE_SELF: ToolDef = ToolDef {
 
 const RENAME_SESSION: ToolDef = ToolDef {
     name: "rename_session",
-    description: "Change the title of a session of yours, in the language the user converses with \
-                  you in. Refused for a session that is not yours (`yours: false`): it is \
+    description: "Change the title of a session of yours, in the user's language. Refused \
+                  for a session that is not yours (`yours: false`): it is \
                   somebody else's, to be left alone.",
     schema: || {
         object_schema(
@@ -1276,8 +1279,8 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   handing over work on a branch you are responsible for, pass it in `branches`: \
                   the user is shown them, and on approval the new session becomes responsible for \
                   them in your place. Leave `branches` out when you are only working on whatever \
-                  branch is checked out. `title` names the session in the language the user \
-                  converses with you in. In your own console it runs on your own agent, or on the \
+                  branch is checked out. `title` names the session in the user's language. In your \
+                  own console it runs on your own agent, or on the \
                   project's default agent when a project is named from a console session. While \
                   `auto_select_account` is on, a left-out account is the one of the session's \
                   agent whose weekly quota resets soonest and that can still open a session. When \
@@ -1411,8 +1414,8 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       another agent. Name another agent only when the user asked for it or when \
                       you judge it fits the work better and an account of it can open a session. \
                       Returns the new session's id. The brief is rendered into the session's \
-                      opening prompt; `title` names the session in the language the user converses \
-                      with you in. A session started this way cannot start sessions of its own, \
+                      opening prompt; `title` names the session in the user's language. A \
+                      session started this way cannot start sessions of its own, \
                       and only this project is available; a session elsewhere, or one that should \
                       not report to you, is one `request_session` asks the user for. To give the \
                       new session a branch you are responsible for, pass it in `branches`; \
@@ -1559,9 +1562,9 @@ fn new_session_schema(with_project: bool) -> Value {
                 "goal": { "type": "string", "description": "The outcome to achieve." },
                 "context": {
                     "type": "string",
-                    "description": "Background and relevant leads. Include which language the \
-                                    user converses with you in, so the session can name any \
-                                    sessions it starts in that language.",
+                    "description": "Background and relevant leads. Include the user's \
+                                    language, so the session can name any sessions it starts in \
+                                    it.",
                 },
                 "acceptance": { "type": "string", "description": "Criteria for being done." },
                 "constraints": {
