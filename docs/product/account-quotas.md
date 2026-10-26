@@ -85,9 +85,9 @@ it, so the same kind of window can carry a different name for different agents:
 | Codex | The **five-hour window**, called **5h**, and the **account-wide weekly window**, called **Weekly** |
 | Grok Build | One credit pool, named after its current period: **Weekly** for a period of about a week (6 to 8 days), **Monthly** for one of about a month (28 to 31 days), and **Credits** when the period is anything else or not given |
 
-Inside a sentence — a used-up account's reason, an alert — a window is named the same way, as a quota: Claude Code's
-"session quota", Codex's "5h quota", "weekly quota" ("weekly quota for all models" where the name above is
-**Weekly · all models**), "Fable weekly quota", "monthly quota", and a credit pool named **Credits** as "credits".
+Inside a sentence — a used-up account's reason, an alert — a window is named the same way, as a limit: Claude Code's
+"session limit", Codex's "5h limit", "weekly limit" ("weekly limit for all models" where the name above is
+**Weekly · all models**), "Fable weekly limit", "monthly limit", and a credit pool named **Credits** as "credit limit".
 Every place that names a window follows this: the meters in Settings and the rail's quota panel, the account pickers'
 and the Switch account submenu's descriptions of an account, the selected session's quota indicator, the menu bar
 icon and its quota submenus, the used-up alerts, and the daemon's refusal of a used-up account (see "Opening a
@@ -117,16 +117,18 @@ Each window shows:
   yet. A window the agent gives no reset time for has no countdown;
 - a bar of what remains, full when nothing is used. The bar has one colour per agent: an orange for Claude Code, a
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
-  appearance. In the rail's panel a used-up account's bars are a neutral grey instead (see "A used-up account"
-  below).
+  appearance. In the rail's panel and in Settings' accounts table a used-up account's bars are a neutral grey
+  instead (see "A used-up account" below).
 
 Settings shows an account's quota in two places (see "The accounts table" and "The account settings dialog" in
 `docs/product/agent-accounts.md`):
 
 - the accounts table's **Usage** cell holds the account's compact usage bar, the one an account picker shows (see "In
   an account picker" below), with no numbers, and assistive technology reads what remains of its windows in words.
-  Without a current reading — none taken, not logged in, or a latest reading that failed — the cell holds a dash,
-  followed by the failure mark or the out-of-date mark when the reading failed (see "Quota states" below);
+  Windows kept after a newer reading failed are drawn the same way, followed by the out-of-date mark. With no window to
+  draw — none read, not logged in, or a failed reading with nothing read before — the cell holds a dash, followed by
+  the failure mark when the reading failed (see "Quota states" below). A used-up account's cell is marked as "A used-up
+  account" below says;
 - the account's settings dialog draws its quota as the rail's panel does, every window included.
 
 In the rail's panel, and in the account settings dialog, each window has a line reading "<window> N% remaining", with the
@@ -162,7 +164,8 @@ colour: what remains of the five-hour window, with the account-wide weekly windo
 account without a five-hour window, one bar for its account-wide weekly window or its credit pool. An account with
 nothing to draw — not read yet, not logged in, unavailable, or whose latest reading failed so that its windows are out
 of date — shows an empty track. The tracks of a picker's or menu's bars have a hairline edge (a Settings table cell's have none), and the thin weekly bar is three quarters as tall as the main one, as everywhere a two-layer bar is drawn. The
-same bar fills the Usage cell of Settings' accounts table, wider. The bar is not read by
+same bar fills the Usage cell of Settings' accounts table, wider, where out-of-date windows are drawn rather than the
+empty track (see "How an account's quota is shown" above). The bar is not read by
 assistive technology; the account's option states what remains of those windows in words instead, or, for a used-up
 account, why it cannot be chosen (see "A used-up account" below).
 
@@ -182,10 +185,10 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 | State | What the account shows |
 |---|---|
 | Its agent is not available, or not yet determined | Nothing about a quota, no plan either; in Settings, a dash in the table's Usage cell and in the account settings dialog's Usage. |
-| Not read yet | "Reading quota…" in place of the windows, in the table's Usage cell and in the account settings dialog. |
+| Not read yet | "Reading usage…" in place of the windows, in the table's Usage cell and in the account settings dialog. |
 | Read | The plan, the windows and how long ago they were read. |
-| Never read successfully, and the last reading failed | No windows, and a red failure mark named "Quota unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and beside the name in the account settings dialog's heading; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures marked on a row" in `docs/product/error-alerts.md` for how the popover opens). |
-| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. In Settings the account settings dialog shows them so; the table's Usage cell shows a dash followed by the out-of-date mark instead of the windows. |
+| Never read successfully, and the last reading failed | No windows, and a red failure mark named "Usage unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and beside the name in the account settings dialog's heading; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures marked on a row" in `docs/product/error-alerts.md` for how the popover opens). |
+| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. In Settings the account settings dialog shows them so; the table's Usage cell draws them as its bar, followed by the out-of-date mark. |
 | Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings the table's Usage cell holds a dash and the account's **Not logged in** badge says why (see "The accounts table" in `docs/product/agent-accounts.md`); its account settings dialog says, in place of the windows, that it is not logged in yet and to log in to use it. |
 
 ## Why a quota is unavailable
@@ -234,11 +237,11 @@ The window does not offer what the daemon would refuse:
   `docs/product/sidebar-session-rows.md`), and the switch confirmation refuses one (see "Confirming a switch" in
   `docs/product/switching-session-accounts.md`).
 
-Where it is said in short, under an account's name in a picker or a menu, it is shown on two lines: "Used up", and
+Where it is said in short, under an account's name in a picker or a menu, it is shown on two lines: "Limit reached", and
 beneath it the countdown to the window's reset as in "How an account's quota is shown" above ("resets in 1h 57m"),
-with "Used up" alone when the agent gives no reset time. The short form is only drawn; assistive technology reads the
-full form, as the account's description. Said in full, it names the account, the window used up (as a quota, named
-as in "Quota windows" above) and when it resets. In an open dialog the judgement follows the clock,
+with "Limit reached" alone when the agent gives no reset time. The short form is only drawn; assistive technology reads
+the full form, as the account's description. Said in full, it names the account, the limit it has reached (the window
+named as in "Quota windows" above) and when it resets. In an open dialog the judgement follows the clock,
 so an account becomes usable again within 30 seconds of its reset time passing, without waiting for a newer reading.
 The new-session dialog and the handoff dialog use that same clock when they show the account whose weekly quota
 resets soonest (see "Which account a session uses" in `docs/product/sessions.md`): for up to one tick after a weekly
@@ -247,13 +250,21 @@ while it still shows that account runs on it. A session opened with defaults, an
 judged at the moment they are opened.
 
 In the rail's account quota panel (see "What the panel shows" below) a used-up account stays listed in its place and
-recedes, so that the accounts still usable stand out: its name is in the muted text colour, a neutral **Used up**
-badge follows its plan badge on the name line, its windows' lines are in the muted text colour, and its bars are a
-neutral grey instead of the agent's colour. A usable account looks as usual. Assistive technology reads the badge as
-part of the account's name line, like the plan badge; the panel adds no full sentence, and each bar's value still
-gives the window's countdown (see "How an account's quota is shown" above). The panel judges on the clock as an open
-dialog does, so the account returns to its usual look within 30 seconds of its reset time passing, without waiting for
-a newer reading. Settings' **Agent accounts** section does not mark a used-up account.
+recedes, so that the accounts still usable stand out: its name is in the muted text colour, a neutral **Limit
+reached** badge follows its plan badge on the name line, its windows' lines are in the muted text colour, and its bars
+are a neutral grey instead of the agent's colour. A usable account looks as usual. Assistive technology reads the badge
+as part of the account's name line, like the plan badge; the panel adds no full sentence, and each bar's value still
+gives the window's countdown (see "How an account's quota is shown" above).
+
+In Settings' accounts table (see "The accounts table" in `docs/product/agent-accounts.md`) a used-up account's row
+recedes the same way: its name in the **Account** column is in the muted text colour, and its **Usage** cell draws the
+usage bar in the same neutral grey, followed by a neutral **Limit reached** badge (and by the out-of-date mark when the
+windows are out of date). There assistive technology does not read the badge: in place of what remains, the cell's
+words say which limit the account has reached and, when known, when it resets ("Reached session limit · resets in
+42m"). The account settings dialog does not mark a used-up account, and no other usage bar turns grey.
+
+The panel and the table judge on the clock as an open dialog does, so the account returns to its usual look within 30
+seconds of its reset time passing, without waiting for a newer reading.
 
 ## Starting a window that has not begun counting
 
@@ -350,7 +361,7 @@ Some writes into the account's directory cannot be avoided:
 
 ## The selected session's quota indicator
 
-The rail's Account quota button shows the **remaining** quota of the selected session's own agent and account,
+The rail's Account usage button shows the **remaining** quota of the selected session's own agent and account,
 including the default account, as a compact indicator beneath its gauge, inside the same 32 px button. The gauge is
 16 px with or without an indicator. With one, the gauge is raised from the button's centre — 2 px above one capsule,
 4 px above two — and the indicator sits beneath it, so that the two stay together near the button's middle.
@@ -381,7 +392,7 @@ controls" in `docs/product/labels-and-tooltips.md`).
 The indicator is absent when no session is selected, its agent is unavailable or its availability is not yet
 determined, the account has no reading or no eligible window, or the latest reading failed. A failed reading hides it
 even when Settings and the quota panel retain the last good windows as out of date. Without an indicator the button's
-accessible name is plain "Account quota". Whether the session's agent is added plays no part: a session whose agent has been removed from
+accessible name is plain "Account usage". Whether the session's agent is added plays no part: a session whose agent has been removed from
 the added agents (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`) keeps its indicator.
 
 An account removed from Settings or belonging to another agent cannot supply the indicator. Sessions retain their
@@ -429,7 +440,7 @@ caller: the tool's description tells the agent to ask only when a reading is too
 
 ## The account quota panel on the rail
 
-The rail's **Account quota** button, a gauge directly above Settings (see "The rail" in
+The rail's **Account usage** button, a gauge directly above Settings (see "The rail" in
 `docs/product/window-layout.md`), opens a floating panel beside the button, on the content panel's side, that shows
 the accounts' quotas without opening Settings. The panel is drawn on the same surface as a tooltip (see "How a tooltip
 behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its content laid out to its edges.
@@ -449,9 +460,11 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
   default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows
   its name, its plan badge and its quota beneath, in the states of "Quota states" above, as "How an account's quota is
-  shown" above describes; a used-up account recedes, with a **Used up** badge after its plan badge (see "A used-up
-  account" below). A name too long for its space fades as in "Names too long for their space" in
-  `docs/product/labels-and-tooltips.md`. The panel shows no directories and offers nothing to edit.
+  shown" above describes; a used-up account recedes, with a **Limit reached** badge after its plan badge (see "A
+  used-up account" above). The name and its plan badge keep to one line, and a name too long for its space fades
+  before the plan badge, as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`; what follows
+  them on the name line — the Limit reached badge, a failure mark, how long ago the reading was taken — moves to the
+  next line when it does not fit beside them. The panel shows no directories and offers nothing to edit.
 - The list of accounts is at most 384 px high, or 60% of the window's height where that is less, and the panel is as
   tall as the tallest agent's list, so choosing a tab with fewer accounts never moves the tab strip from under the
   pointer (which would close a panel opened by hover). Beyond that height a list scrolls and fades at its edges, and
@@ -459,10 +472,10 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   `docs/product/scrolling-surfaces.md`).
 - **With no agent that is added and installed** there are no tabs, and an empty state stands in their place. When
   some agent is installed, or not yet determined unavailable, but none of them is added, it carries the bot icon, is
-  titled "No agent added", with a line saying to add an agent to see its quota there, and offers an **Add agent…**
+  titled "No agent added", with a line saying to add an agent to see its usage there, and offers an **Add agent…**
   button, which closes the panel and opens Settings on its Agent accounts section with the Add agent dialog in front
   (see "Opening and closing Settings" in `docs/product/settings.md`). When every agent has been determined
-  unavailable, it carries the gauge icon, is titled "No agent available", with a line saying an agent's quota is
+  unavailable, it carries the gauge icon, is titled "No agent available", with a line saying an agent's usage is
   shown once its command is found on the user's `PATH`, and offers nothing to press.
 - At the panel's foot, **Manage accounts…** closes the panel and opens Settings on its Agent accounts section (see
   "Opening and closing Settings" in `docs/product/settings.md`). It is left out while the panel shows "No agent
@@ -525,7 +538,7 @@ none.
 A panel the mouse floated in does not take the window around it the way a menu or popover does (see "What an open
 dialog, menu or popover covers" in `docs/product/window-layout.md`): while it is open the rest of the window stays
 usable, and the window's keyboard shortcuts, Back and Forward, `F6` and the floating panes go on working. It is no
-stop of its own in the `F6` cycle. Assistive technology is told it is a non-modal dialog named "Account quota", and
+stop of its own in the `F6` cycle. Assistive technology is told it is a non-modal dialog named "Account usage", and
 the button says whether the panel is expanded and which panel it controls. A panel opened by a tap or the keyboard is
 modal, as a menu is: focus is inside it, an outside press is swallowed, and the window's shortcuts and `F6` wait until
 it closes.

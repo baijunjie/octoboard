@@ -244,7 +244,7 @@ switches sit, and what the rest of the section shows and offers, are in `docs/pr
 A switch, **off to begin with** — installations from before the switch existed included: whether a new session whose
 account was not named uses the account of its agent whose weekly quota resets soonest. While the switch is off the
 row's description says what turning it on will do, and while it is on it says what is happening now: a new session uses
-the account whose weekly quota resets soonest, so quota that is about to reset is used before it is lost. The daemon
+the account whose weekly limit resets soonest, so usage left before a reset is not wasted. The daemon
 stores it as `auto_select_account` and keeps it, so every window shows the same. Unlike the switches in Agent
 behavior, a console session may read and change it, and a full configuration export carries it (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings
@@ -257,8 +257,8 @@ session already open.
 A switch, **off to begin with** — installations from before the switch existed included: whether Octoboard starts a
 usage window that has reset but not begun counting by sending one small request on its account. While the switch is
 off the row's description says that once it is on, a usage window starts counting once it resets, and while it is on
-that a usage window starts counting once it resets; either way it adds that this uses a little of the
-account's quota. A "?" help tip at the end of the row's name ("About starting usage windows automatically") holds the
+that a usage window starts counting once it resets; either way it adds that this counts a little toward the
+account's usage limits. A "?" help tip at the end of the row's name ("About starting usage windows automatically") holds the
 why and how: a usage window that has reset does not start counting until the account's next request, so until then it
 shows no countdown and the longer it waits the later its next reset comes; with the switch on, one small request is sent
 on that account with the agent's cheapest model to start it. The daemon stores it as

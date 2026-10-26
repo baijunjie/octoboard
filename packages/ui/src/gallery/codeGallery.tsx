@@ -101,11 +101,11 @@ export function CodeGallery(): React.ReactElement {
             <div className="grid gap-3 sm:grid-cols-3">
               <div data-status-mark-sample="danger" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                 <h3 className="text-sm font-medium">danger: the row has nothing to show</h3>
-                <p className="flex items-center gap-1.5 text-sm">Default <StatusMark label="Quota unavailable">Claude Code took too long to report its quota.</StatusMark></p>
+                <p className="flex items-center gap-1.5 text-sm">Default <StatusMark label="Usage unavailable">Claude Code took too long to report its usage.</StatusMark></p>
               </div>
               <div data-status-mark-sample="warning" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                 <h3 className="text-sm font-medium">warning: the row is usable but stale</h3>
-                <p className="flex items-center gap-1.5 text-sm">Work <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its quota.</StatusMark></p>
+                <p className="flex items-center gap-1.5 text-sm">Work <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its usage.</StatusMark></p>
               </div>
               <div data-status-mark-sample="bare" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
                 <h3 className="text-sm font-medium">without a reason: the popover holds the name</h3>

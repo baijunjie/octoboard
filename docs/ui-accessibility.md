@@ -110,9 +110,9 @@ letting HeroUI fade the whole row: the reason is the text that explains the disa
 
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
-neutral "Used up" badge on its name line says why in words, and its bars are drawn in a neutral grey
-(`.quota-meter--used-up` in `packages/ui/src/style.css`) that keeps 3:1 against the meter's track while sitting
-fainter on it than the agent colours. A veil over the row is not used for that state: it would take its text below AA.
+neutral "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
+(`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table
+marks such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. A veil over the row is not used for that state: it would take its text below AA.
 
 A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the button's own is
 covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in `packages/ui/src/components/inactiveVeil.ts`),
@@ -573,7 +573,7 @@ has to tell the control apart from its neighbours even where the tooltip's text 
 same text. Which control's tooltip repeats its name and which one's is the shorter of the two is settled per control in
 the "Tooltips on icon-only controls" section of `docs/product/labels-and-tooltips.md`; `ActionMenu` gives its trigger a
 name of that shape by default. The exception is a button whose hover opens a floating panel that shows what
-its tooltip would say — the rail's account quota button (above), a status mark, the help tip's "?": it carries only
+its tooltip would say — the rail's Account usage button (above), a status mark, the help tip's "?": it carries only
 its accessible name. So does a Files or Git tree chevron, whose whole row does what it does (see "Buttons").
 
 A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
@@ -1365,11 +1365,12 @@ the hues cannot reach: react-aria's Arabic names give violet and fuchsia one nam
 to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky in dark). `sessionColours.test.ts`
 lists them and fails on any other.
 
-A compact usage bar in front of an account option is decorative in the same way: it is hidden from assistive
-technology, and the option's description carries the remaining quota in words. Its fill still keeps 3:1 against its
-track and against a hovered option, since it is the only visible cue to the remaining quota in the picker. Its track
-(`.quota-bar-track`) is a step darker than a field's fill so it can be seen in a select's closed trigger, but not
-held to 3:1 against it: a darker track would take the fill below 3:1 against the track.
+A usage bar — the compact one in front of an account option and in the accounts table, and the rail panel's and the
+details' meters — is decorative in the same way: it is hidden from assistive technology, and the option's description,
+the cell's hidden text or the meter's headline carries the remaining usage in words. Its track is HeroUI's
+`--default` (`.quota-bar-track` a step darker than a field's fill, so it can be seen in a select's closed trigger), and
+its fill, the agent's colour or the grey of a used-up account, is settled by how it looks on that track, not by a
+contrast ratio: neither is held to 3:1.
 
 ### Row action menu buttons
 

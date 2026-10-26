@@ -232,12 +232,12 @@ document carries it as a boolean.
 - **Automatically delete archived sessions whose conversation is gone** (see "Deleting archived sessions whose
   conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
 - **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`.
-  The review's line for turning it on says that a new session then uses the account whose weekly quota resets soonest.
+  The review's line for turning it on says that a new session then uses the account whose weekly limit resets soonest.
 - **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`.
   The review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
 - **Start usage windows automatically** (see that section in `docs/product/settings.md`), under
   `auto_start_quota_windows`. The review's line for turning it on says that a usage window that has not started
-  counting is then started with one small request, which uses a little of the account's quota.
+  counting is then started with one small request, which counts a little toward the account's usage limits.
 - **Automatically approve session requests** (see "Approving requests automatically" in
   `docs/product/session-requests.md`), under `auto_approve_session_requests`. The review's line for turning it on says
   that a session's request to start a session that reports to the user is then approved without asking first.

@@ -64,7 +64,7 @@ application buttons below. These are:
 - the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded
   in, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
-  one, Turn on notifications and Settings (the rail's Account quota button has none, as said below this list);
+  one, Turn on notifications and Settings (the rail's Account usage button has none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
   row's actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and each
@@ -106,7 +106,7 @@ application buttons below. These are:
   config directories" in `docs/product/consoles.md`);
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
-The rail's **Account quota** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting
+The rail's **Account usage** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting
 the mouse on it floats its panel in instead (see "Opening the panel" in `docs/product/account-quotas.md`),
 and its accessible name, which states the selected session's quota when the button shows one, is described in "The
 selected session's quota indicator" in `docs/product/account-quotas.md`.

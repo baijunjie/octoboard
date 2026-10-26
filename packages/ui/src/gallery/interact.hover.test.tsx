@@ -377,22 +377,22 @@ function mountQuotaEntry(): void {
 
 it("hoverPanel floats in the panel of the control it names", async () => {
   mountQuotaEntry();
-  await settledLive(createUi(document, "en").hoverPanel("Account quota", "Account quota"));
-  expect(document.querySelector('[role="dialog"][aria-label="Account quota"]')).not.toBeNull();
-  release(document.querySelector('[aria-label="Account quota"]')!);
+  await settledLive(createUi(document, "en").hoverPanel("Account usage", "Account usage"));
+  expect(document.querySelector('[role="dialog"][aria-label="Account usage"]')).not.toBeNull();
+  release(document.querySelector('[aria-label="Account usage"]')!);
 });
 
 it("hoverPanel fails for a control whose hover floats in no such panel", async () => {
   mountQuotaEntry();
-  const done = expect(createUi(document, "en").hoverPanel("Account quota", "Nothing")).rejects.toThrow(/floated in no dialog matching Nothing/);
+  const done = expect(createUi(document, "en").hoverPanel("Account usage", "Nothing")).rejects.toThrow(/floated in no dialog matching Nothing/);
   await vi.advanceTimersByTimeAsync(8000);
   await done;
-  release(document.querySelector('[aria-label="Account quota"]')!);
+  release(document.querySelector('[aria-label="Account usage"]')!);
 });
 
 it("hoverPanel fails for a control that is not there", async () => {
   mountQuotaEntry();
-  const done = expect(createUi(document, "en").hoverPanel("Nothing", "Account quota")).rejects.toThrow(/Nothing to hover/);
+  const done = expect(createUi(document, "en").hoverPanel("Nothing", "Account usage")).rejects.toThrow(/Nothing to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
 });

@@ -59,15 +59,15 @@ describe("naming a window as the agent's own interface does", () => {
 
   it("calls the session window Session for Claude Code and 5h for Codex", () => {
     expect(quotaWindowLabel(t, claude, window())).toBe("Session");
-    expect(quotaWindowPhrase(t, claude, window())).toBe("session quota");
+    expect(quotaWindowPhrase(t, claude, window())).toBe("session limit");
     expect(quotaWindowLabel(t, codex, window())).toBe("5h");
-    expect(quotaWindowPhrase(t, codex, window())).toBe("5h quota");
+    expect(quotaWindowPhrase(t, codex, window())).toBe("5h limit");
   });
 
   it("names Claude's weekly window for all models only beside a model's own weekly window", () => {
     const both = { agent: "claude", windows: [weekly, model] } as const;
     expect(quotaWindowLabel(t, both, weekly)).toBe("Weekly · all models");
-    expect(quotaWindowPhrase(t, both, weekly)).toBe("weekly quota for all models");
+    expect(quotaWindowPhrase(t, both, weekly)).toBe("weekly limit for all models");
     expect(quotaWindowLabel(t, { agent: "claude", windows: [weekly] }, weekly)).toBe("Weekly");
     expect(quotaWindowLabel(t, { agent: "codex", windows: [weekly, model] }, weekly)).toBe("Weekly");
   });
@@ -166,23 +166,23 @@ describe("exhaustedQuotaWindow", () => {
   });
 
   it("words the reason in short for a picker, with the countdown when the reset time is known", () => {
-    expect(quotaUsedUpShort(t, window({ used_percent: 100, resets_at: NOW + 117 * MINUTE }), NOW)).toEqual({ state: "Used up", detail: "resets in 1h 57m" });
-    expect(quotaUsedUpShort(t, window({ kind: "weekly", used_percent: 100 }), NOW)).toEqual({ state: "Used up" });
+    expect(quotaUsedUpShort(t, window({ used_percent: 100, resets_at: NOW + 117 * MINUTE }), NOW)).toEqual({ state: "Limit reached", detail: "resets in 1h 57m" });
+    expect(quotaUsedUpShort(t, window({ kind: "weekly", used_percent: 100 }), NOW)).toEqual({ state: "Limit reached" });
   });
 
   it("words the reason in full for assistive technology", () => {
-    expect(quotaUsedUpDetail(t, codex, window({ used_percent: 100, resets_at: NOW + 117 * MINUTE }), NOW)).toBe("Used up: 5h quota · resets in 1h 57m");
-    expect(quotaUsedUpDetail(t, codex, window({ kind: "weekly", used_percent: 100 }), NOW)).toBe("Used up: weekly quota");
+    expect(quotaUsedUpDetail(t, codex, window({ used_percent: 100, resets_at: NOW + 117 * MINUTE }), NOW)).toBe("Reached 5h limit · resets in 1h 57m");
+    expect(quotaUsedUpDetail(t, codex, window({ kind: "weekly", used_percent: 100 }), NOW)).toBe("Reached weekly limit");
   });
 
-  it("words the reason as a sentence, naming a credit pool as credits and a window in lower case", () => {
-    expect(quotaUsedUpSentence(t, codex, "Work", window({ kind: "weekly", used_percent: 100, resets_at: NOW + 117 * MINUTE }), NOW)).toContain(`${isolate("Work")} cannot be used for now because it has used up its weekly quota. It resets in 1h 57m.`);
-    expect(quotaUsedUpSentence(t, codex, "Work", window({ kind: "credit_period", used_percent: 100 }), NOW)).toContain("has used up its credits.");
+  it("words the reason as a sentence, naming a credit pool as its credit limit and a window in lower case", () => {
+    expect(quotaUsedUpSentence(t, codex, "Work", window({ kind: "weekly", used_percent: 100, resets_at: NOW + 117 * MINUTE }), NOW)).toContain(`${isolate("Work")} cannot be used for now because it has reached its weekly limit. It resets in 1h 57m.`);
+    expect(quotaUsedUpSentence(t, codex, "Work", window({ kind: "credit_period", used_percent: 100 }), NOW)).toContain("has reached its credit limit.");
   });
 
   it.each([
-    [null, "It has used up its weekly quota."],
-    [NOW + 117 * MINUTE, "It has used up its weekly quota. It resets in 1h 57m."],
+    [null, "It has reached its weekly limit."],
+    [NOW + 117 * MINUTE, "It has reached its weekly limit. It resets in 1h 57m."],
   ])("separates the quota Alert title from its complete reason (%s)", (resets_at, description) => {
     expect(quotaUsedUpAlert(t, codex, "Work", window({ kind: "weekly", used_percent: 100, resets_at }), NOW)).toEqual({
       title: `${isolate("Work")} cannot be used for now`,
@@ -191,9 +191,9 @@ describe("exhaustedQuotaWindow", () => {
   });
 
   it("names a window inside a sentence in lower case, a credit pool by its period", () => {
-    expect(quotaWindowPhrase(t, codex, window({ kind: "credit_period", window_minutes: 7 * 24 * 60 }))).toBe("weekly quota");
-    expect(quotaWindowPhrase(t, codex, window({ kind: "credit_period", window_minutes: 30 * 24 * 60 }))).toBe("monthly quota");
-    expect(quotaWindowPhrase(t, codex, window({ kind: "credit_period" }))).toBe("credits");
+    expect(quotaWindowPhrase(t, codex, window({ kind: "credit_period", window_minutes: 7 * 24 * 60 }))).toBe("weekly limit");
+    expect(quotaWindowPhrase(t, codex, window({ kind: "credit_period", window_minutes: 30 * 24 * 60 }))).toBe("monthly limit");
+    expect(quotaWindowPhrase(t, codex, window({ kind: "credit_period" }))).toBe("credit limit");
   });
 });
 

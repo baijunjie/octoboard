@@ -10,8 +10,10 @@ import { useT } from "../i18n/react";
 import type { Account, Agent } from "../protocol";
 import { AccountUsageCell } from "../quota/AccountUsageCell";
 import { AccountNameLine, LoginStateBadge } from "../quota/AccountQuotaSummary";
+import { exhaustedQuotaWindow } from "../quota/quotaFormat";
 import { useAccountQuota } from "../quota/useAccountQuota";
 import { useDaemonStore } from "../store";
+import { useNow } from "../useNow";
 import { AccountDisableSwitch } from "./AccountDisableSwitch";
 import { AccountLoginAnnouncer, accountLoginOf, useClearSucceededLogin } from "./AccountLogin";
 import { AccountLoginButton, type ReturnLoginFocus } from "./AccountLoginButton";
@@ -79,11 +81,12 @@ export function rowActionsTrigger(row: string): HTMLElement | null {
 
 const CELL = "px-2 py-3 align-middle groove-b group-last/row:border-b-0";
 
-/** One account's row (`account` null for the agent's default account): its `name` with the plan (the row's header
- * cell), its login state with the Log in icon while it is signed out (the Status cell), a compact usage indicator, the
- * Disable switch, and the actions `menu`, whose first entry opens the details. A turned-off account's row looks like
- * any other but for its switch. The hidden status region that says a login succeeded is the row's, which also clears
- * that login once it has been shown. */
+/** One account's row (`account` null for the agent's default account): its `name` with the plan (the row's header cell,
+ * with the name muted while its quota is used up), its login state with the Log in icon while it is signed out (the
+ * Status cell), a compact usage indicator (grey and followed by the "Limit reached" badge while used up), the Disable
+ * switch, and the actions `menu`, whose first entry opens the details. A turned-off account's row looks like any other
+ * but for its switch. The hidden status region that says a login succeeded is the row's, which also clears that login
+ * once it has been shown. */
 export function AccountTableRow({ agent, account, name, menu, onLogin }: {
   agent: Agent;
   account: Account | null;
@@ -94,6 +97,7 @@ export function AccountTableRow({ agent, account, name, menu, onLogin }: {
   const t = useT();
   const id = account?.id ?? null;
   const quota = useAccountQuota(agent, id);
+  const exhausted = exhaustedQuotaWindow(quota, useNow());
   const login = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, id));
   const succeeded = login?.status === "succeeded" ? login : undefined;
   useClearSucceededLogin(succeeded);
@@ -102,7 +106,7 @@ export function AccountTableRow({ agent, account, name, menu, onLogin }: {
     <tr data-account-row={id ?? `default:${agent}`} className="group/row">
       <th scope="row" className={`${CELL} text-start font-normal`}>
         <div className="max-w-56 min-w-28">
-          <AccountNameLine name={<FadeOverflow dir="auto" titleWhenClipped={name}>{name}</FadeOverflow>} quota={quota} showUpdated={false} showFailure={false} />
+          <AccountNameLine name={<FadeOverflow dir="auto" titleWhenClipped={name}>{name}</FadeOverflow>} quota={quota} usedUp={exhausted !== undefined} showUpdated={false} showFailure={false} showUsedUp={false} />
           <AccountLoginAnnouncer login={succeeded} name={name} />
         </div>
       </th>
@@ -112,7 +116,7 @@ export function AccountTableRow({ agent, account, name, menu, onLogin }: {
           <AccountLoginButton agent={agent} account={id} name={name} quota={quota} onLogin={onLogin} fallback={() => actions.current?.querySelector<HTMLElement>("button")} />
         </div>
       </td>
-      <td className={CELL}><AccountUsageCell quota={quota} /></td>
+      <td className={CELL}><AccountUsageCell quota={quota} exhausted={exhausted} /></td>
       <td className={CELL}><AccountDisableSwitch agent={agent} account={id} name={name} /></td>
       <td className={`${CELL} ${PINNED_EDGE} sticky end-0 z-1 bg-overlay`}>
         <div ref={actions} data-row-actions="" className="flex items-center justify-end gap-1">

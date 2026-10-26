@@ -350,7 +350,7 @@ function AgentPanel({ agent, owned, currentAccount, dimOthers }: { agent: Agent;
 }
 
 /** One account of the panel: its name and plan, and its quota beneath. An account that is used up recedes, its
- * name and meters muted and a "Used up" badge saying so, so the accounts that can still be used stand out.
+ * name and meters muted and a "Limit reached" badge saying so, so the accounts that can still be used stand out.
  * `dimmed` is the other, passing cue: a veil of the panel's own colour laid over the row, not `opacity`: under a
  * translucent ancestor WebKit paints descendants that fade or sit on a GPU layer as blank tiles. The veil is
  * visual only and lets pointer events through. It takes the dimmed text below WCAG AA on purpose, by the user's

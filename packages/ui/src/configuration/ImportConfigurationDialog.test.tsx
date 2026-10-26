@@ -308,10 +308,10 @@ it("notes what applying each application setting would change with a badge, and 
   expect(lines["Automatically pull repositories"]).toEqual({ badge: "Turns on", note: "Octoboard then pulls your repositories by itself." });
   // Turning a setting off, or leaving it as it is, has no consequence line.
   expect(lines["Automatically delete archived sessions whose conversation is gone"]).toEqual({ badge: "Turns off" });
-  expect(lines["Automatically select an account"]).toEqual({ badge: "Turns on", note: "A new session then uses the account whose weekly quota resets soonest." });
+  expect(lines["Automatically select an account"]).toEqual({ badge: "Turns on", note: "A new session then uses the account whose weekly limit resets soonest." });
   expect(lines["Order the sidebar by status"]).toEqual({ badge: "Turns off" });
   expect(lines["Start usage windows automatically"]?.badge).toBe("Turns on");
-  expect(lines["Start usage windows automatically"]?.note).toContain("uses a little of the account's quota");
+  expect(lines["Start usage windows automatically"]?.note).toContain("counts a little toward the account's usage limits");
 });
 
 it("says a setting the file shares with this machine changes nothing", async () => {

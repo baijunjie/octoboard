@@ -172,9 +172,9 @@ default account first, then the accounts the user owns in the order they are kep
 
 | Column | What a row shows |
 |---|---|
-| **Account** | The account's name and, when the agent names one, its plan as a badge. A name too long for its space fades as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`. |
+| **Account** | The account's name and, when the agent names one, its plan as a badge. A name too long for its space fades as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
 | **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`). |
-| **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says the quota is being read. With no current reading it holds a dash, followed by the "Quota unavailable" mark when the reading failed with nothing read before, or by the out-of-date mark when the windows held are the last good ones (see "Quota states" in `docs/product/account-quotas.md`); otherwise assistive technology reads the dash as "No usage reading". Model-specific windows are left to the account settings dialog. |
+| **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says usage is being read. Out-of-date windows, the dash that stands in when there is no window to draw, and the marks that follow them are as in "How an account's quota is shown" and "Quota states" in `docs/product/account-quotas.md`; a dash with no mark after it is read by assistive technology as "No usage reading". A used-up account's bar is grey and followed by a **Limit reached** badge (see "A used-up account" in `docs/product/account-quotas.md`). Model-specific windows are left to the account settings dialog. |
 | **Disable** | The account's Disable switch (see "Turning an account off" below). The column's heading carries a "?" help tip. |
 | No heading | The account's actions menu button (see "The default account" and "The accounts the user owns" above). |
 
@@ -199,7 +199,7 @@ tab in view; the readings already held are shown at once.
 **Settings**, the first entry of an account's actions menu, with a gear icon, opens a modal dialog of everything about
 that one account.
 Its heading is the account's name, followed by its plan badge, its login state — the badge as in the table, or, while
-that is not known, "Checking…" while the first reading is on its way and "Unknown" otherwise — the "Quota unavailable"
+that is not known, "Checking…" while the first reading is on its way and "Unknown" otherwise — the "Usage unavailable"
 mark when its reading failed with nothing read before, and the **Log in** icon button for an account known to be signed
 out. Under the heading stands the account's directory; for the default account a "?" help tip follows it (see "The
 default account" above). For an account the user owns of an agent that is not available, the dialog's body opens with
@@ -207,7 +207,7 @@ a line saying it is not usable until the agent is on `PATH`. Then, one under ano
 
 - **Usage** — the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
   windows as one meter, every other window, model-specific ones included, as a meter of its own, one to a row. How
-  long ago the windows were read, with the out-of-date mark when it applies, ends the heading. It says the quota is
+  long ago the windows were read, with the out-of-date mark when it applies, ends the heading. It says usage is
   being read while the first reading is on its way, says for an account that is not logged in that it is not logged
   in yet and to log in to use it, and holds a dash when there is no reading to show otherwise. How windows are named
   and drawn is in "How an account's quota is shown" in `docs/product/account-quotas.md`.

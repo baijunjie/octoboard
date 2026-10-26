@@ -630,7 +630,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await wait(300);
     },
     async setAccountQuotas(accountQuotas) {
-      if (!daemon) throw new Error("This scenario has no daemon behind it to change the quota readings of");
+      if (!daemon) throw new Error("This scenario has no daemon behind it to change the usage readings of");
       daemon.store.setState({ accountQuotas });
       await wait(300);
     },

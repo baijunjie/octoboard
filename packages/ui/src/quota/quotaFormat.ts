@@ -144,8 +144,9 @@ export function exhaustedQuotaWindow(quota: AccountQuota | "loading" | undefined
   return blocking;
 }
 
-/** The window as a noun phrase inside a sentence, in lower case: "session quota", "5h quota", "weekly quota",
- * "credits". Unlike `quotaWindowLabel` it follows "its", so a credit pool is "credits" rather than "Credits quota". */
+/** The window as a noun phrase inside a sentence, in lower case: "session limit", "5h limit", "weekly limit",
+ * "credit limit". Unlike `quotaWindowLabel` it follows "its", so a credit pool is "credit limit" rather than
+ * "Credits limit". */
 export function quotaWindowPhrase(t: Translate, naming: QuotaNaming, window: QuotaWindow): string {
   switch (window.kind) {
     case "session":
@@ -163,22 +164,22 @@ export function quotaWindowPhrase(t: Translate, naming: QuotaNaming, window: Quo
   }
 }
 
-/** What a picker shows beside an account that cannot be chosen: "Used up" over "resets in 2h", without the
+/** What a picker shows beside an account that cannot be chosen: "Limit reached" over "resets in 2h", without the
  * countdown when the agent gives no reset time. */
 export function quotaUsedUpShort(t: Translate, window: QuotaWindow, now: number): Reason {
   const detail = quotaResetsIn(t, window, now);
   return detail ? { state: t("quota.usedUp"), detail } : { state: t("quota.usedUp") };
 }
 
-/** The same in full, for assistive technology: "Used up: 5h quota · resets in 2h". */
+/** The same in full, for assistive technology: "Reached 5h limit · resets in 2h". */
 export function quotaUsedUpDetail(t: Translate, naming: QuotaNaming, window: QuotaWindow, now: number): string {
   const resets = quotaResetsIn(t, window, now);
   const quota = quotaWindowPhrase(t, naming, window);
   return resets ? t("quota.usedUpDetailResets", { quota, resets }) : t("quota.usedUpDetail", { quota });
 }
 
-/** Why `account` cannot be used, as a sentence: "Work cannot be used for now because it has used up its 5h
- * quota. It resets in 2h." */
+/** Why `account` cannot be used, as a sentence: "Work cannot be used for now because it has reached its 5h
+ * limit. It resets in 2h." */
 export function quotaUsedUpSentence(t: Translate, naming: QuotaNaming, account: string, window: QuotaWindow, now: number): string {
   const resets = quotaResetsIn(t, window, now);
   const params = { account: isolate(account), quota: quotaWindowPhrase(t, naming, window) };

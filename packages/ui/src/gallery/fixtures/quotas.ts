@@ -48,3 +48,27 @@ export function manyClaudeAccounts(): { accounts: Account[]; quotas: AccountQuot
       ], { fetched_at: minutesAgo(1 + index * 2) })),
   };
 }
+
+/** Claude Code's accounts in every state a person meets: the default account usable (72% of its session and 75% of
+ * its week left), Work on the Team plan used up by its session window with its latest read failed (the windows it
+ * kept still apply), Second used up by its weekly window while its session window is untouched, Third and Fourth
+ * used up by their session windows with 15% and 86% of the week left. The default account has no entry in
+ * `accounts`; its reading is the first of `quotas`. */
+export const USED_UP_MIX: { accounts: Account[]; quotas: AccountQuota[] } = {
+  accounts: [
+    { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+    { id: "a-second", agent: "claude", name: "Second", config_dir: "/Users/dev/.claude-second" },
+    { id: "a-third", agent: "claude", name: "Third", config_dir: "/Users/dev/.claude-third" },
+    { id: "a-fourth", agent: "claude", name: "Fourth", config_dir: "/Users/dev/.claude-fourth" },
+  ],
+  quotas: [
+    quotaOf("claude", null, "max", [quotaWindow("session", 28, 117), quotaWindow("weekly", 25, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", "team", [quotaWindow("session", 100, 42), quotaWindow("weekly", 63, 2 * 24 * 60 + 5 * 60)], {
+      fetched_at: minutesAgo(38),
+      unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage."),
+    }),
+    quotaOf("claude", "a-second", "pro", [quotaWindow("session", 0, 280), quotaWindow("weekly", 100, 4 * 24 * 60 + 2 * 60)], { fetched_at: minutesAgo(4) }),
+    quotaOf("claude", "a-third", "pro", [quotaWindow("session", 100, 95), quotaWindow("weekly", 85, 5 * 24 * 60 + 7 * 60)], { fetched_at: minutesAgo(2) }),
+    quotaOf("claude", "a-fourth", "pro", [quotaWindow("session", 100, 160), quotaWindow("weekly", 14, 6 * 24 * 60 + 3 * 60)], { fetched_at: minutesAgo(6) }),
+  ],
+};

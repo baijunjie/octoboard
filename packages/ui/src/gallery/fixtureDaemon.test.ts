@@ -1359,10 +1359,10 @@ describe("the fixture daemon's quota gate", () => {
     const codex = [quotaOf("codex", null, "plus", [quotaWindow("session", 100, 30)])];
     const claudeRefusal = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
     expect(claudeRefusal).toMatchObject({ params: { agent: "Claude Code", window: "5-hour", window_kind: "session" } });
-    expect(claudeRefusal.message).toContain("session quota");
+    expect(claudeRefusal.message).toContain("session limit");
     const codexRefusal = await daemon([], codex).request({ type: "hand_off_session", session: "s", agent: "codex" }).catch((error) => error);
     expect(codexRefusal).toMatchObject({ params: { agent: "Codex", window: "5-hour", window_kind: "session", window_minutes: "300" } });
-    expect(codexRefusal.message).toContain("5h quota");
+    expect(codexRefusal.message).toContain("5h limit");
   });
 
   it("carries the window's kind and length, and `model_weekly` only when the same reading has a model's own weekly window", async () => {
@@ -1370,11 +1370,11 @@ describe("the fixture daemon's quota gate", () => {
       daemon([], [quotaOf("claude", null, "max", windows)]).request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
     const beside = await refusal([quotaWindow("weekly", 100, 30), quotaWindow("weekly_model", 10, 30, "Fable")]);
     expect(beside.params).toMatchObject({ window: "Weekly", window_kind: "weekly", window_minutes: "10080", model_weekly: "true" });
-    expect(beside.message).toContain("its weekly quota for all models.");
+    expect(beside.message).toContain("its weekly limit for all models.");
     const alone = await refusal([quotaWindow("weekly", 100, 30)]);
     expect(alone.params).toMatchObject({ window: "Weekly", window_kind: "weekly" });
     expect(alone.params).not.toHaveProperty("model_weekly");
-    expect(alone.message).toContain("its weekly quota.");
+    expect(alone.message).toContain("its weekly limit.");
     const unknownLength = await refusal([{ ...quotaWindow("session", 100, 30), window_minutes: null }]);
     expect(unknownLength.params).toMatchObject({ window_kind: "session" });
     expect(unknownLength.params).not.toHaveProperty("window_minutes");

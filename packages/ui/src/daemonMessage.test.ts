@@ -142,40 +142,40 @@ it("words a refusal of a disabled account in the UI's language", () => {
 it("words an exhausted account's quota, with the time left when the reset is known and the window in the UI's language", () => {
   const params = { agent: "Codex", account: "Work", window: "5-hour", window_kind: "session" };
   expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toBe(
-    `${isolate("Work")} (${isolate("Codex")}) cannot run a session because it has used up its 5h quota.`,
+    `${isolate("Work")} (${isolate("Codex")}) cannot run a session because it has reached its 5h limit.`,
   );
   const resetsAt = String(Date.now() + 2 * 60 * 60_000 + 30_000);
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("5 小时额度已用完");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("已达到5 小时限制");
   expect(daemonMessage("en", "account_quota_exhausted", { ...params, resets_at: resetsAt }, "x", records)).toContain("It resets in 2h");
 });
 
 it("words the session window as the agent's own interface names it", () => {
   const params = { agent: "Claude Code", account: "Work", window: "5-hour", window_kind: "session" };
-  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has used up its session quota.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain("会话额度已用完");
+  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has reached its session limit.");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", params, "x", records)).toContain("已达到会话限制");
 });
 
 it("words Claude Code's weekly window for all models only beside a model's own weekly window", () => {
   const params = { agent: "Claude Code", account: "Work", window: "Weekly", window_kind: "weekly" };
-  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has used up its weekly quota.");
-  expect(daemonMessage("en", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("has used up its weekly quota for all models.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("所有模型的每周额度已用完");
-  expect(daemonMessage("en", "account_quota_exhausted", { ...params, agent: "Codex", model_weekly: "true" }, "x", records)).toContain("has used up its weekly quota.");
+  expect(daemonMessage("en", "account_quota_exhausted", params, "x", records)).toContain("has reached its weekly limit.");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("has reached its weekly limit for all models.");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", { ...params, model_weekly: "true" }, "x", records)).toContain("已达到所有模型的每周限制");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, agent: "Codex", model_weekly: "true" }, "x", records)).toContain("has reached its weekly limit.");
 });
 
 it("words a credit pool by its period or as credits, and a window without the structured kind by its own name", () => {
   const params = { agent: "Grok Build", account: "Work", window: "Weekly", window_kind: "credit_period" };
-  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window_minutes: "10080" }, "x", records)).toContain("has used up its weekly quota.");
-  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Monthly", window_minutes: "43200" }, "x", records)).toContain("has used up its monthly quota.");
-  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Credits" }, "x", records)).toContain("has used up its credits.");
-  expect(daemonMessage("en", "account_quota_exhausted", { agent: "Codex", account: "Work", window: "5-hour" }, "x", records)).toContain(`its ${isolate("5-hour")} quota.`);
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window_minutes: "10080" }, "x", records)).toContain("has reached its weekly limit.");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Monthly", window_minutes: "43200" }, "x", records)).toContain("has reached its monthly limit.");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...params, window: "Credits" }, "x", records)).toContain("has reached its credit limit.");
+  expect(daemonMessage("en", "account_quota_exhausted", { agent: "Codex", account: "Work", window: "5-hour" }, "x", records)).toContain(`its ${isolate("5-hour")} limit.`);
   const codex = { agent: "Codex", account: "Work" };
   const credits = { ...codex, window: "Credits", window_kind: "credit_period" };
-  expect(daemonMessage("en", "account_quota_exhausted", credits, "x", records)).toContain("has used up its credits.");
-  expect(daemonMessage("zh-Hans", "account_quota_exhausted", credits, "x", records)).toContain("：额度已用完。");
-  expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} quota.`);
+  expect(daemonMessage("en", "account_quota_exhausted", credits, "x", records)).toContain("has reached its credit limit.");
+  expect(daemonMessage("zh-Hans", "account_quota_exhausted", credits, "x", records)).toContain("：已达到额度上限。");
+  expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Opus weekly" }, "x", records)).toContain(`its ${isolate("Opus weekly")} limit.`);
   for (const unknown of [{ window_kind: "weekly_model" }, { agent: "Other" }]) {
-    expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Weekly", window_kind: "weekly", ...unknown }, "x", records)).toContain(`its ${isolate("Weekly")} quota.`);
+    expect(daemonMessage("en", "account_quota_exhausted", { ...codex, window: "Weekly", window_kind: "weekly", ...unknown }, "x", records)).toContain(`its ${isolate("Weekly")} limit.`);
   }
 });
 

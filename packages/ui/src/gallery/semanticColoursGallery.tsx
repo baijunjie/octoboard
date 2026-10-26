@@ -84,9 +84,9 @@ function Mark({ color }: { color: StatusBadgeColor }): React.ReactElement | null
     case "success":
       return <ActivityMarker activity="running" />;
     case "danger":
-      return <StatusMark label="Quota unavailable">Claude Code took too long to report its quota.</StatusMark>;
+      return <StatusMark label="Usage unavailable">Claude Code took too long to report its usage.</StatusMark>;
     case "warning":
-      return <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its quota.</StatusMark>;
+      return <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its usage.</StatusMark>;
     case "default":
       return <Info aria-hidden="true" className="size-4" style={{ color: use("--default-soft-foreground") }} />;
     case "help":

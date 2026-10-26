@@ -100,7 +100,7 @@ function mount(
     container,
     before: container.querySelector<HTMLButtonElement>("#before")!,
     outside: container.querySelector<HTMLButtonElement>("#outside")!,
-    button: container.querySelector<HTMLButtonElement>('button[aria-label="Account quota"]')!,
+    button: container.querySelector<HTMLButtonElement>('button[aria-label="Account usage"]')!,
   };
 }
 
@@ -188,7 +188,7 @@ it("has no tooltip, on hover or on keyboard focus, while its name stays", () => 
   act(() => button.focus());
   advance(1000);
   expect(openTooltip()).toBeNull();
-  expect(button.getAttribute("aria-label")).toBe("Account quota");
+  expect(button.getAttribute("aria-label")).toBe("Account usage");
 });
 
 it("shows nothing for a pointer that only crosses the button", () => {
@@ -344,7 +344,7 @@ it("marks a failed reading on its account's name line, and the mark's popover op
   await act(async () => {});
   expect(panel()).not.toBeNull();
   const reason = document.querySelector<HTMLElement>("[data-status-mark-popover]")!;
-  expect(reason.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("took too long to report its quota");
+  expect(reason.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("took too long to report its usage");
   click(reason);
   expect(panel()).not.toBeNull();
   expect(document.querySelector("[data-status-mark-popover]")).not.toBeNull();
@@ -445,16 +445,16 @@ it("recedes a used-up account, naming it used up, and draws it as before once it
   openPanel(button);
   const rows = () => Array.from(document.querySelectorAll<HTMLElement>('[role="tabpanel"]:not([data-inert="true"]) .groove-b'));
   const [usable, usedUp] = rows();
-  expect(usable!.textContent).not.toContain("Used up");
+  expect(usable!.textContent).not.toContain("Limit reached");
   expect(usable!.querySelector(".quota-meter--claude")).not.toBeNull();
-  expect(usedUp!.textContent).toContain("Used up");
+  expect(usedUp!.textContent).toContain("Limit reached");
   expect(usedUp!.querySelector("div.min-w-0.text-app-muted")?.textContent).toBe("Work");
   expect(usable!.querySelector("div.min-w-0.text-app-muted")).toBeNull();
   expect(usedUp!.querySelector(".quota-meter--used-up")).not.toBeNull();
   expect(usedUp!.querySelector(".quota-meter--claude")).toBeNull();
 
   advance(10 * MINUTE + 1000);
-  expect(rows()[1]!.textContent).not.toContain("Used up");
+  expect(rows()[1]!.textContent).not.toContain("Limit reached");
   expect(rows()[1]!.querySelector(".quota-meter--claude")).not.toBeNull();
 });
 
@@ -547,7 +547,7 @@ it("says so, pointing to Settings, when agents are installed but none is added",
   openPanel(button);
   expect(tabs()).toHaveLength(0);
   expect(panel()!.textContent).toContain("No agent added");
-  expect(panel()!.textContent).toContain("Add an agent to see its quota here.");
+  expect(panel()!.textContent).toContain("Add an agent to see its usage here.");
   // The footer link would repeat the button.
   expect(panel()!.textContent).not.toContain("Manage accounts…");
   const add = Array.from(panel()!.querySelectorAll("button")).find((b) => b.textContent === "Add agent…");
@@ -612,7 +612,7 @@ it("closes when a modal opens without a press on the entry", async () => {
   modal.setAttribute("role", "dialog");
   await act(async () => {});
   expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
-  expect(document.querySelector('[aria-label="Account quota"][role="dialog"]')).toBeNull();
+  expect(document.querySelector('[aria-label="Account usage"][role="dialog"]')).toBeNull();
   modal.remove();
 });
 
@@ -627,7 +627,7 @@ it("closes a keyboard-opened (modal) panel when another modal opens and takes fo
   const inside = modal.appendChild(document.createElement("button"));
   act(() => inside.focus());
   await act(async () => {});
-  expect(document.querySelector('[aria-label="Account quota"][role="dialog"]')).toBeNull();
+  expect(document.querySelector('[aria-label="Account usage"][role="dialog"]')).toBeNull();
   modal.remove();
 });
 
@@ -692,7 +692,7 @@ it("follows the selected session's actual agent and account, account switches an
   expect(remaining(button())).toEqual(["82%", "36%"]);
   select();
   expect(fill()).toBeNull();
-  expect(button().getAttribute("aria-label")).toBe("Account quota");
+  expect(button().getAttribute("aria-label")).toBe("Account usage");
 });
 
 it("opens on the tab of the agent whose quota the button shows, each time, and on the first tab with none", () => {

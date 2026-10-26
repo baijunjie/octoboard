@@ -76,7 +76,7 @@ describe("the Switch account entry", () => {
     };
     const [current, other] = menu([spent("w"), spent(null)], 0);
     expect(current.reason).toBeUndefined();
-    expect(other.reason).toEqual({ state: "Used up", detail: "resets in 2h 0m" });
+    expect(other.reason).toEqual({ state: "Limit reached", detail: "resets in 2h 0m" });
     expect(menu([spent("w")], 7_200_000)[1].reason).toBeUndefined();
   });
 

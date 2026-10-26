@@ -180,18 +180,18 @@ describe("buildStatusItemMenu quota submenus", () => {
 
   it("has one submenu per available agent, in the agents' usual order", () => {
     const menu = menuOf([], source({ agentAvailability: available("grok", "claude") }));
-    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude quota", "Grok quota"]);
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude usage", "Grok usage"]);
   });
 
   it("has a submenu only for added agents, in the order they were added", () => {
     const menu = menuOf([], source({ addedAgents: ["grok", "claude"], agentAvailability: available("claude", "codex", "grok") }));
-    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Grok quota", "Claude quota"]);
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Grok usage", "Claude usage"]);
     expect(menuOf([], source({ addedAgents: [], agentAvailability: available("claude") })).submenus).toEqual([]);
   });
 
   it("still leaves out an added agent that is not available", () => {
     const menu = menuOf([], source({ addedAgents: ["codex", "claude"], agentAvailability: available("claude") }));
-    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude quota"]);
+    expect(menu.submenus.map((submenu) => submenu.title)).toEqual(["Claude usage"]);
   });
 
   it("names each submenu's mark by the key a session line of that agent uses", () => {
@@ -281,7 +281,7 @@ describe("buildStatusItemMenu quota submenus", () => {
       "Default · Available | Updated 1 minute ago",
       "5h | 82% remaining · resets in 1h 57m",
       "---",
-      `${isolate("Work")} · Pro Lite · Used up | Updated 1 minute ago`,
+      `${isolate("Work")} · Pro Lite · Limit reached | Updated 1 minute ago`,
       "5h | 0% remaining · resets in 1h 57m",
     ]);
   });
@@ -290,7 +290,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     const reading = quotaOf("claude", null, { windows: [window({ kind, used_percent: 100 }), window({ kind: "weekly_model", used_percent: 0 })] });
     const sourceState = source({ agentAvailability: available("claude"), accountQuotas: [reading] });
     const header = buildQuotaSubmenus(t, sourceState)[0].items[0];
-    expect(header).toMatchObject({ status: "used_up", title: "Default · Max · Used up", label: "Default · Max · Used up · updated 1 minute ago" });
+    expect(header).toMatchObject({ status: "used_up", title: "Default · Max · Limit reached", label: "Default · Max · Limit reached · updated 1 minute ago" });
     expect(buildQuotaSubmenus(t, { ...sourceState, now: NOW + 118 * MINUTE })[0].items[0]).toMatchObject({ status: "available", title: "Default · Max · Available" });
   });
 
@@ -301,7 +301,7 @@ describe("buildStatusItemMenu quota submenus", () => {
 
   it("keeps a stale exhausted reading used up, matching session gating", () => {
     const reading = quotaOf("claude", null, { windows: [window({ used_percent: 100, resets_at: null })], unavailable: { code: "quota_timed_out", params: {}, message: "" } });
-    expect(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] })).submenus[0].items[0]).toMatchObject({ status: "used_up", title: "Default · Max · Used up" });
+    expect(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [reading] })).submenus[0].items[0]).toMatchObject({ status: "used_up", title: "Default · Max · Limit reached" });
   });
 
   it("localizes the account status in Chinese", () => {
@@ -312,11 +312,11 @@ describe("buildStatusItemMenu quota submenus", () => {
 
   it("says so in one line when an account's quota is unavailable or not read yet", () => {
     const unavailable = quotaOf("claude", null, { plan: null, windows: [], unavailable: { code: "quota_timed_out", params: {}, message: "" } });
-    expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [unavailable] })))).toEqual(["Default", "Quota unavailable"]);
-    expect(labels(menuOf([], source({ agentAvailability: available("claude") })))).toEqual(["Default", "Reading quota…"]);
+    expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [unavailable] })))).toEqual(["Default", "Usage unavailable"]);
+    expect(labels(menuOf([], source({ agentAvailability: available("claude") })))).toEqual(["Default", "Reading usage…"]);
     // An entry with no windows and no failure to explain still gets the line, rather than a bare header.
     const empty = quotaOf("claude", null, { plan: null, windows: [] });
-    expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [empty] })))).toEqual(["Default", "Quota unavailable"]);
+    expect(labels(menuOf([], source({ agentAvailability: available("claude"), accountQuotas: [empty] })))).toEqual(["Default", "Usage unavailable"]);
   });
 
   it("says only that an account is not logged in, which is a state and not a failed reading", () => {

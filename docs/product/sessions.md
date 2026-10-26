@@ -272,12 +272,12 @@ name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Cre
 carries one), `window_kind` (session, weekly or credit period), `window_minutes` (its length, when known),
 `model_weekly` (when the same reading also has a model's own weekly window) and, when the agent gives a reset time, `resets_at` in
 milliseconds since the epoch. In the window it is shown in an error alert, in the UI's language, saying the account
-cannot run a session because it has used up that quota, the window named as everywhere else in the UI (see "Quota
-windows" in `docs/product/account-quotas.md`): Claude Code's "session quota", Codex's "5h quota", Claude Code's
-account-wide weekly window as "weekly quota for all models" when the reading also has a model's own weekly window, and
-so on; a refusal that does not say what the window is names it as a quota of its `window` name. The alert also says,
+cannot run a session because it has reached that limit, the window named as everywhere else in the UI (see "Quota
+windows" in `docs/product/account-quotas.md`): Claude Code's "session limit", Codex's "5h limit", Claude Code's
+account-wide weekly window as "weekly limit for all models" when the reading also has a model's own weekly window, and
+so on; a refusal that does not say what the window is names it as a limit of its `window` name. The alert also says,
 when known, how long until it resets, counted from when the alert is shown; the next step is to choose another account
-that still has quota, or to try again once the quota resets. An agent's tool call is refused with a reason in English
+that has not reached its limit, or to try again once the usage limit resets. An agent's tool call is refused with a reason in English
 naming the account, the agent and the window (the five-hour window as "session" for Claude Code and "5h" for Codex,
 Claude Code's account-wide weekly window as "Weekly · all models" when the reading also has a model's own weekly
 window, any other by its `window` name), about how long until it resets when known, and saying to choose another
@@ -353,8 +353,8 @@ up or turned off, there is nothing to open with defaults:
 - pressing it — or pressing a **+** with the modifier before the hold was noticed — opens nothing and shows an error
   alert: when the account it would open on is turned off, the alert for a turned-off account above; otherwise one that
   names the button's action and says it is unavailable because none of the default agent's accounts can open a session
-  right now, each being used up or turned off, with the advice to choose another agent in the new session dialog, or to
-  try again once a quota resets or an account is turned back on;
+  right now, each having reached its usage limit or being turned off, with the advice to choose another agent in the
+  new session dialog, or to try again once a usage limit resets or an account is turned back on;
 - in the **+** menu of projects in a console session's focus mode, held in its quick form, each such project is
   disabled, with a short note under its name saying the default agent's accounts are unavailable; it stays reachable
   with the arrow keys, and its accessible name ends with that note.

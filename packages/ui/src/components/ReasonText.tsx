@@ -1,13 +1,13 @@
 import React from "react";
 
-/** Why something cannot be chosen: the state ("Used up") and, where there is one, the detail that goes with it
+/** Why something cannot be chosen: the state ("Limit reached") and, where there is one, the detail that goes with it
  * ("resets in 2h"). */
 export interface Reason {
   state: string;
   detail?: string;
 }
 
-/** The reason as one phrase, for a name or description read aloud: "Used up · resets in 2h". */
+/** The reason as one phrase, for a name or description read aloud: "Limit reached · resets in 2h". */
 export function reasonText({ state, detail }: Reason): string {
   return detail ? `${state} · ${detail}` : state;
 }

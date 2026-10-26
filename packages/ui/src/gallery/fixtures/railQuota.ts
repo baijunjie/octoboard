@@ -3,7 +3,7 @@ import { describing } from "../interact";
 import type { Scenario } from "../scenario";
 import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
-import { manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
+import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
 import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
 
 const GROUP = "Window layout";
@@ -88,10 +88,10 @@ const unreadState = railQuotaState(
     { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
   ],
   [
-    quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its quota.") }),
+    quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage.") }),
     quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)], {
       fetched_at: minutesAgo(12),
-      unavailable: quotaFailure("quota_command_failed", { agent: "Claude Code", detail: "exit status 1: Error: not logged in\n    /Users/dev/.claude-work/مرحبا/credentials.json: permission denied" }, "Claude Code could not report its quota: exit status 1: Error: not logged in"),
+      unavailable: quotaFailure("quota_command_failed", { agent: "Claude Code", detail: "exit status 1: Error: not logged in\n    /Users/dev/.claude-work/مرحبا/credentials.json: permission denied" }, "Claude Code could not report its usage: exit status 1: Error: not logged in"),
     }),
   ],
 );
@@ -155,13 +155,16 @@ const usedUpState = railQuotaState(
   ],
 );
 
+/** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one. */
+const usedUpMixState = railQuotaState(USED_UP_MIX.accounts, USED_UP_MIX.quotas);
+
 export const railQuotaScenarios: Scenario[] = [
   {
     id: "rail-quota-selected-session",
     group: GROUP,
     category: "normal",
-    title: "Rail quota button and panel, selected session's named account",
-    description: "Hub uses Codex's Personal account: the compact indicator on the quota button is two outlined capsules, the 5h window's (88% remaining) over a slightly thinner one for the week (60%), and the button's accessible name identifies Codex, Personal and both remainders. The button has no tooltip. The panel floated in beside it opens on Codex's tab, the second tab, because the button shows Codex's quota; Personal's bar in the panel matches the button's. While the pointer is on the button every other account's row, Default and Automation, is dimmed by the same veil the sidebar puts over inactive projects, so Personal stands out as the button's account; moving the pointer into the panel takes the veil off. Select a Claude Code session to see the indicator and the open tab follow that session's agent instead.",
+    title: "Rail usage button and panel, selected session's named account",
+    description: "Hub uses Codex's Personal account: the compact indicator on the usage button is two outlined capsules, the 5h window's (88% remaining) over a slightly thinner one for the week (60%), and the button's accessible name identifies Codex, Personal and both remainders. The button has no tooltip. The panel floated in beside it opens on Codex's tab, the second tab, because the button shows Codex's usage; Personal's bar in the panel matches the button's. While the pointer is on the button every other account's row, Default and Automation, is dimmed by the same veil the sidebar puts over inactive projects, so Personal stands out as the button's account; moving the pointer into the panel takes the veil off. Select a Claude Code session to see the indicator and the open tab follow that session's agent instead.",
     state: {
       ...readState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "codex", account_id: "a-codex" } : session])),
@@ -169,29 +172,29 @@ export const railQuotaScenarios: Scenario[] = [
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       // With a session's bar showing, the button's name starts with the plain one and goes on to the reading.
-      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
     ],
   },
   {
     id: "rail-quota-selected-used-up",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, the selected session's account is used up",
-    description: "Hub uses Work, whose session window is spent, and the pointer is on the quota button, so the panel floated in beside it is on Claude Code's tab with the button's account marked by the veil: Default and Side project are dimmed, while Work is not: it keeps its \"Used up\" badge and grey bars, but its name and headlines are at full strength, unlike Side project's, which is used up and dimmed both.",
+    title: "Rail usage panel, the selected session's account has reached its limit",
+    description: "Hub uses Work, whose session window is spent, and the pointer is on the usage button, so the panel floated in beside it is on Claude Code's tab with the button's account marked by the veil: Default and Side project are dimmed, while Work is not: it keeps its \"Limit reached\" badge and grey bars, but its name and headlines are at full strength, unlike Side project's, which has reached its limit and is dimmed as well.",
     state: {
       ...usedUpState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-work" } : session])),
     },
     steps: [
       (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
     ],
   },
   {
     id: "rail-quota-selected-weekly",
     group: GROUP,
     category: "normal",
-    title: "Rail quota button, weekly fallback",
+    title: "Rail usage button, weekly fallback",
     description: "Hub's default Claude Code account has no session window. The compact indicator is a single outlined capsule showing its weekly 65% remaining, ignoring the model-specific weekly window; the accessible name identifies the default account and the \"Weekly · all models\" remainder, so named because the reading also has a model's weekly window.",
     state: railQuotaState([], [quotaOf("claude", null, "max", [
       quotaWindow("weekly_model", 90, null, "Fable"),
@@ -203,7 +206,7 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-selected-credit",
     group: GROUP,
     category: "normal",
-    title: "Rail quota button, credit-period fallback",
+    title: "Rail usage button, credit-period fallback",
     description: "Hub uses Grok Build's default account, which has only a credit-period window. The compact indicator is a single outlined capsule showing 77% remaining; the accessible name identifies Grok Build, the default account and credit-period remainder.",
     state: {
       ...shortTabsState,
@@ -215,8 +218,8 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-hover",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, floated in by hovering",
-    description: "No session is selected, so the quota button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its session and weekly quota as one two-layer bar (the thick bar for the session, the thin one beneath it for the week, headlined \"Weekly · all models\" because Fable has its own weekly window) and Fable last; Work, with no model window, headlines its week plain \"Weekly\". Codex's tab names its short window \"5h\". Each account's name line ends, at the far right, with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, so receded with a \"Used up\" badge, both bars empty, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan badge. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
+    title: "Rail usage panel, floated in by hovering",
+    description: "No session is selected, so the usage button has no mini bar. The panel floats in beside it, above Settings, after the pointer rests on it, with the button marked open. Claude Code's default account, under the name the user gave it (Studio laptop), shows its session and weekly usage as one two-layer bar (the thick bar for the session, the thin one beneath it for the week, headlined \"Weekly · all models\" because Fable has its own weekly window) and Fable last; Work, with no model window, headlines its week plain \"Weekly\". Codex's tab names its short window \"5h\". Each account's name line ends, at the far right, with a small muted \"Updated N ago\" (the default account's says 1 minute). Work (spent, so receded with a \"Limit reached\" badge after its plan badge and a muted name, both bars empty and grey, read 7 minutes ago) follows, then an account that is nearly spent, whose clipped name fades out before its plan badge, with its \"Updated 3 minutes ago\" on the line below. Manage accounts is at the bottom. Grok Build is added but not installed, so it has no tab.",
     state: readState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -224,43 +227,43 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-scrolled-to-account",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, long list opened on the selected session's account",
-    description: "Hub runs on Mobile, far down Claude Code's nine accounts. The panel opens on Claude Code's tab with its list already scrolled so that Mobile is the first whole row in view, only the tail of the row above it showing under the top fade, and the rows after it below; the quota button's compact indicator and accessible name are Mobile's. Nothing else marks the row, and the list scrolls freely from there.",
+    title: "Rail usage panel, long list opened on the selected session's account",
+    description: "Hub runs on Mobile, far down Claude Code's nine accounts. The panel opens on Claude Code's tab with its list already scrolled so that Mobile is the first whole row in view, only the tail of the row above it showing under the top fade, and the rows after it below; the usage button's compact indicator and accessible name are Mobile's. Nothing else marks the row, and the list scrolls freely from there.",
     state: {
       ...longListState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-mobile" } : session])),
     },
     steps: [
       (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
     ],
   },
   {
     id: "rail-quota-reset-passed",
     group: GROUP,
     category: "normal",
-    title: "Rail quota button and panel, a window whose reset has passed",
-    description: "Hub uses Claude Code's default account, whose reading (taken 9 minutes ago) has its session window spent, but that window's reset was a minute ago and no newer reading has arrived. The quota button's indicator shows that window full (100% remaining, over the weekly 59%), and in the panel the default account's session bar is full and its headline reads 100% remaining with \"resets now\". Work, whose session window is also spent but resets later, stays empty by comparison and is receded with a \"Used up\" badge, which the default account does not get.",
+    title: "Rail usage button and panel, a window whose reset has passed",
+    description: "Hub uses Claude Code's default account, whose reading (taken 9 minutes ago) has its session window spent, but that window's reset was a minute ago and no newer reading has arrived. The usage button's indicator shows that window full (100% remaining, over the weekly 59%), and in the panel the default account's session bar is full and its headline reads 100% remaining with \"resets now\". Work, whose session window is also spent but resets later, stays empty by comparison and is receded with a \"Limit reached\" badge after its plan badge, a muted name and grey bars, which the default account does not get.",
     state: resetPassedState,
     steps: [
       (ui) => ui.press(ui.session("Hub")),
-      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
     ],
   },
   {
     id: "rail-quota-used-up",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, accounts that are used up beside a usable one",
-    description: "The panel floated in on Claude Code's tab lists the default account as a normal row, then two accounts that cannot be used and recede: Work, whose session window is spent (its weekly window still has 37% remaining), and Side project, whose weekly window is spent while its session window still has 60% remaining. A receded row has its name and headline muted, a soft \"Used up\" badge after the plan badge, and neutral grey bars in place of Claude Code's colour.",
-    state: usedUpState,
+    title: "Rail usage panel, accounts at their limit in different windows beside a usable one",
+    description: "The panel floated in on Claude Code's tab lists the default account as a normal row (72% of its session and 75% of its week left), then four accounts that cannot be used and recede: Work (Team), whose session window is spent and whose latest read failed, so its row also says it is out of date; Second, whose weekly window is spent while its session window is untouched; Third and Fourth, whose session windows are spent with 15% and 86% of the week left. A receded row has a neutral \"Limit reached\" badge after the plan badge, its name and headline muted, and neutral grey bars in place of Claude Code's colour; the default account has none of these. In a short window Third and Fourth are reached by scrolling the list.",
+    state: usedUpMixState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {
     id: "rail-quota-pinned-codex",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, opened from the keyboard on Codex's tab",
+    title: "Rail usage panel, opened from the keyboard on Codex's tab",
     description: "Pressing the button with the keyboard opens the panel with focus on its tabs, and the arrow key has moved on to Codex: its tab is selected and carries the focus ring. Automation has no plan badge.",
     state: readState,
     steps: [
@@ -274,7 +277,7 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-live",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, accounts and agents changing while it is open",
+    title: "Rail usage panel, accounts and agents changing while it is open",
     description: "The panel is opened from the keyboard on Claude Code's tab and stays open while the \"Live changes\" buttons make what another window or the machine would: Side project is added between the default account and Work, or removed again, and Codex is found uninstalled, or installed again, taking its tab away from the middle of the strip or giving it back. Added and removed rows and tabs fade while the ones after them slide into place; with reduced motion they appear and disappear at once. Nothing moves when the panel first opens, when its list scrolls or when the window is resized.",
     state: liveState,
     steps: [
@@ -292,7 +295,7 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-short-tabs",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, tabs whose lists are all short, on the shortest",
+    title: "Rail usage panel, tabs whose lists are all short, on the shortest",
     description: "Grok Build's tab is selected and lists a single account, with empty space under it: the panel keeps the height of the tallest tab (Claude Code's two accounts) even though none of the lists reaches the scroll limit. Switch to Codex and Claude Code: the panel's top edge and the tab strip stay where they are and only the space under the list changes.",
     state: shortTabsState,
     steps: [
@@ -307,7 +310,7 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-narrow",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel in a narrow window",
+    title: "Rail usage panel in a narrow window",
     description: "In a window this narrow the panel is held to the width left beside the rail instead of its own, and the account names and meters fit it.",
     width: 390,
     state: readState,
@@ -317,8 +320,8 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-none",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel with no agent available",
-    description: "Hub is selected but its agent is unavailable, so the quota button has no mini bar. With no agent installed the panel shows the empty state (a glyph, \"No agent available\" and the hint) and Manage accounts is still offered.",
+    title: "Rail usage panel with no agent available",
+    description: "Hub is selected but its agent is unavailable, so the usage button has no mini bar. With no agent installed the panel shows the empty state (a glyph, \"No agent available\" and the hint) and Manage accounts is still offered.",
     state: railQuotaState([], [], { installed: [] }),
     steps: [
       (ui) => ui.press(ui.session("Hub")),
@@ -329,7 +332,7 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-added-order",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, agents in the order they were added",
+    title: "Rail usage panel, agents in the order they were added",
     description: "Codex was added before Claude Code, so its tab comes first and is the one open. Grok Build is installed and has a reading but is not added, so it has no tab.",
     state: reorderedState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
@@ -338,8 +341,8 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-none-added",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel with agents installed but none added",
-    description: "Every agent is installed but none is added, so the panel shows the empty state (a bot glyph, \"No agent added\", \"Add an agent to see its quota here.\" and an Add agent… button) rather than the PATH hint. The panel has no footer: its Manage accounts link would only repeat the button.",
+    title: "Rail usage panel with agents installed but none added",
+    description: "Every agent is installed but none is added, so the panel shows the empty state (a bot glyph, \"No agent added\", \"Add an agent to see its usage here.\" and an Add agent… button) rather than the PATH hint. The panel has no footer: its Manage accounts link would only repeat the button.",
     state: railQuotaState([], [], { installed: ALL_AGENTS, added: [] }),
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -347,21 +350,21 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-removed-agent-session",
     group: GROUP,
     category: "normal",
-    title: "Rail quota, selected session of an agent no longer added",
-    description: "Hub runs on Claude Code, which is no longer added: the quota button still carries Hub's compact indicator of two capsules (82% remaining in its session window over 95% in its weekly one) and an accessible name for it, while the panel beside it lists only Codex.",
+    title: "Rail usage, selected session of an agent no longer added",
+    description: "Hub runs on Claude Code, which is no longer added: the usage button still carries Hub's compact indicator of two capsules (82% remaining in its session window over 95% in its weekly one) and an accessible name for it, while the panel beside it lists only Codex.",
     state: { ...reorderedState, settings: { ...reorderedState.settings!, added_agents: ["codex"] } },
     steps: [
       (ui) => ui.press(ui.session("Hub")),
       // With a session's bar showing, the button's name starts with the plain one and goes on to the reading.
-      (ui) => ui.hoverPanel(describing("quota button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
     ],
   },
   {
     id: "rail-quota-unread",
     group: GROUP,
     category: "exceptional",
-    title: "Rail quota panel, accounts without a whole reading",
-    description: "Hub uses Work, whose failed refresh leaves an older reading: the quota button has no mini bar. Three accounts have no current reading: the default account has no bars and a danger mark after its name (Quota unavailable); Work keeps its older windows, with \"Updated 12 minutes ago\" at the end of its name line followed by a warning mark (Out of date); Client says the quota is being read. The reasons are in the marks' popovers.",
+    title: "Rail usage panel, accounts without a whole reading",
+    description: "Hub uses Work, whose failed refresh leaves an older reading: the usage button has no mini bar. Three accounts have no current reading: the default account has no bars and a danger mark after its name (Usage unavailable); Work keeps its older windows, with \"Updated 12 minutes ago\" at the end of its name line followed by a warning mark (Out of date); Client says its usage is being read. The reasons are in the marks' popovers.",
     state: {
       ...unreadState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-work" } : session])),
@@ -375,8 +378,8 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-failure-reason",
     group: GROUP,
     category: "exceptional",
-    title: "Rail quota panel, the reason an account's reading failed",
-    description: "The panel is opened from the keyboard and the default account's danger mark (Quota unavailable) is tapped with a finger: its small tooltip-like popover, holding why Claude Code's reading could not be had, is open above the mark with focus inside it, and the panel stays open under it.",
+    title: "Rail usage panel, the reason an account's reading failed",
+    description: "The panel is opened from the keyboard and the default account's danger mark (Usage unavailable) is tapped with a finger: its small tooltip-like popover, holding why Claude Code's reading could not be had, is open above the mark with focus inside it, and the panel stays open under it.",
     state: unreadState,
     steps: [
       (ui) => ui.focusControl(ui.t("rail.quota")),
@@ -388,8 +391,8 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-failure-hover",
     group: GROUP,
     category: "exceptional",
-    title: "Rail quota panel, the reason shown by resting on an account's mark",
-    description: "The panel floats in under a resting pointer and the pointer then rests on the default account's danger mark (Quota unavailable): its small tooltip-like popover, holding why Claude Code's reading could not be had, opens above the mark with no focus moved, and the panel stays open under it.",
+    title: "Rail usage panel, the reason shown by resting on an account's mark",
+    description: "The panel floats in under a resting pointer and the pointer then rests on the default account's danger mark (Usage unavailable): its small tooltip-like popover, holding why Claude Code's reading could not be had, opens above the mark with no focus moved, and the panel stays open under it.",
     state: unreadState,
     steps: [
       (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
@@ -400,8 +403,8 @@ export const railQuotaScenarios: Scenario[] = [
     id: "rail-quota-not-signed-in",
     group: GROUP,
     category: "normal",
-    title: "Rail quota panel, accounts not logged in yet",
-    description: "Work (never logged in) and Client (whose config directory does not exist yet) both read \"Not logged in yet. Log in to use this account.\" in place of a quota and a raw CLI error; the default account above them has its windows.",
+    title: "Rail usage panel, accounts not logged in yet",
+    description: "Work (never logged in) and Client (whose config directory does not exist yet) both read \"Not logged in yet. Log in to use this account.\" in place of a usage reading and a raw CLI error; the default account above them has its windows.",
     state: notSignedInState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },

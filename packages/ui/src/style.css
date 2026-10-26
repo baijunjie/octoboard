@@ -359,8 +359,8 @@ html {
    3.66; a trigger 1.00 and 3.55 / 1.50 and 2.98. The edge itself against the surface under it, main bar's (25% of the foreground) / thin bar's (30%),
    light then dark: picker popover 1.69 / 1.90 and 2.16 / 2.50; Switch account menu 1.72 / 1.95 and 2.24 / 2.67. They stay
    under 3:1: the edge is a hint at a track that is already there, not a control boundary. In dark a popover's own
-   surface is nearly `--default`, so the dark track is a step lighter. The fill-to-track values under 3:1 (dark
-   details and trigger, 2.98) are kept by the user's decision. */
+   surface is nearly `--default`, so the dark track is a step lighter. The fill is not held to 3:1 against the track
+   (see docs/ui-accessibility.md, "A colour mark whose meaning is in words"). */
 .quota-bar-track {
   background-color: var(--default);
 }
@@ -439,10 +439,10 @@ html {
   --meter-fill: #6ea0ff;
 }
 
-/* An account that is used up draws its bars in a neutral grey instead of the agent's colour, so it recedes
-   beside the accounts that can still be used; its badge says why in words. The grey is the muted text's hue
-   at a lightness that keeps it a little over 3:1 against the rail panel's track (HeroUI's `--default`):
-   3.19:1 in light and in dark, fainter than the agent colours on that track. */
+/* An account that is used up draws its bars in a neutral grey instead of the agent's colour, so it recedes beside the
+   accounts that can still be used; its "Limit reached" badge says why, beside the name on the rail
+   (`AccountNameLine`) and after the bar in the accounts table (`AccountUsageCell`). The grey is the muted text's hue,
+   a step fainter than the agent colours on their track. */
 .quota-meter--used-up {
   --meter-fill: oklch(0.61 0.0138 285.94);
 }

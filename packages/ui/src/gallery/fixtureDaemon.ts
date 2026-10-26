@@ -271,7 +271,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         ...(modelWeekly && { model_weekly: "true" }),
         ...(blocking.resets_at != null && { resets_at: String(blocking.resets_at) }),
       },
-      message: `${name} has used up its ${AGENT_LABEL[agent]} quota (${windowName})`,
+      message: `${name} has reached its ${AGENT_LABEL[agent]} usage limit (${windowName})`,
     });
   };
   /** Refuses a session on, a handoff to, or a switch to an account the user turned off, as the daemon does before it

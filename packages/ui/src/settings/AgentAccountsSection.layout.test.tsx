@@ -52,6 +52,42 @@ describe("the accounts table", () => {
     expect(row.textContent).not.toContain("Updated");
   });
 
+  it("marks a used-up account with its name muted, its bar grey and the Limit reached badge after the bar", () => {
+    availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+    const used = quotaOf("claude", "claude-work");
+    used.windows = [{ ...used.windows[0]!, used_percent: 100 }, ...used.windows.slice(1)];
+    accountQuotas.push(quotaOf("claude", null), used);
+    const { container } = mount("Claude Code");
+    const name = (id: string) => rowOf(container, id).querySelector("th")!;
+    expect(name("claude-work").textContent).not.toContain("Limit reached");
+    expect(name("claude-work").querySelector("div.min-w-0.text-app-muted")).not.toBeNull();
+    expect(name("default:claude").querySelector("div.min-w-0.text-app-muted")).toBeNull();
+    const usage = (id: string) => rowOf(container, id).querySelectorAll("td")[1]!;
+    expect(usage("claude-work").querySelector(".quota-meter--used-up")).not.toBeNull();
+    expect(usage("claude-work").querySelector(".quota-meter--claude")).toBeNull();
+    const badge = [...usage("claude-work").querySelectorAll('[aria-hidden="true"]')].find((node) => node.textContent === "Limit reached");
+    expect(badge).toBeDefined();
+    // The hidden badge leaves no separator of its own behind for assistive technology.
+    expect([...usage("claude-work").querySelectorAll(".sr-only")].map((node) => node.textContent?.trim())).not.toContain(",");
+    expect(usage("claude-work").querySelector(".sr-only")?.textContent).toContain("Reached session limit");
+    expect(usage("default:claude").textContent).not.toContain("Limit reached");
+    expect(usage("default:claude").querySelector(".quota-meter--claude")).not.toBeNull();
+    expect(usage("default:claude").querySelector(".quota-meter--used-up")).toBeNull();
+  });
+
+  it("keeps a used-up account's badge and the out-of-date mark side by side when its windows are the last good ones", () => {
+    availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+    const used = quotaOf("claude", "claude-work", { unavailable: { code: "quota_timed_out", params: {}, message: "x" } });
+    used.windows = [{ ...used.windows[0]!, used_percent: 100 }, ...used.windows.slice(1)];
+    accountQuotas.push(quotaOf("claude", null), used);
+    const { container } = mount("Claude Code");
+    const usage = rowOf(container, "claude-work").querySelectorAll("td")[1]!;
+    expect(usage.querySelector(".quota-meter--used-up .quota-bar-track > span")).not.toBeNull();
+    const badge = [...usage.querySelectorAll("span")].find((node) => node.textContent === "Limit reached")!;
+    const mark = usage.querySelector('button[aria-label^="Out of date"]')!;
+    expect(badge.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("marks a failed reading, and one out of date, in the usage cell, not by the name", () => {
     const failure = { code: "quota_timed_out", params: {}, message: "x" };
     accountQuotas.push(
@@ -60,10 +96,13 @@ describe("the accounts table", () => {
     );
     const { container } = mount("Claude Code");
     const usage = (id: string) => rowOf(container, id).querySelectorAll("td")[1]!;
-    expect(usage("claude-work").querySelector('button[aria-label="Quota unavailable"]')).not.toBeNull();
+    expect(usage("claude-work").querySelector('button[aria-label="Usage unavailable"]')).not.toBeNull();
     expect(rowOf(container, "claude-work").querySelector("th button")).toBeNull();
     expect(usage("claude-work").textContent).not.toContain("No usage reading");
     expect(usage("default:claude").querySelector('button[aria-label^="Out of date"]')).not.toBeNull();
+    // The windows kept from before the failed read are still drawn, the mark after them saying they are out of date.
+    expect(usage("default:claude").querySelectorAll(".quota-bar-track > span")).toHaveLength(2);
+    expect(usage("default:claude").textContent).not.toContain("—");
   });
 
   it("keeps the table in a sideways scroller with its actions column pinned at the end edge", () => {

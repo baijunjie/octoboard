@@ -94,7 +94,7 @@ it("counts the reset down as time passes", () => {
 
 it("waits for the first reading of an account that has no entry yet", () => {
   const container = mount(<><AccountQuotaSummary quota="loading" /><QuotaPlan quota="loading" /></>);
-  expect(container.textContent).toBe("Reading quota…");
+  expect(container.textContent).toBe("Reading usage…");
   expect(container.querySelector('[data-slot="meter"]')).toBeNull();
 });
 
@@ -105,11 +105,11 @@ it("marks an account that was never read as unavailable on its name line and say
   expect(summary.textContent).toBe("");
   const container = mount(<AccountNameLine name="Work" quota={reading} />);
   const mark = container.querySelector("button")!;
-  expect(mark.getAttribute("aria-label")).toBe("Quota unavailable");
+  expect(mark.getAttribute("aria-label")).toBe("Usage unavailable");
   expect(container.textContent).not.toContain("took too long");
   press(mark);
-  expect(dialog()?.getAttribute("aria-label")).toBe("Quota unavailable");
-  expect(plain(dialog() as HTMLElement)).toContain("Claude Code took too long to report its quota.");
+  expect(dialog()?.getAttribute("aria-label")).toBe("Usage unavailable");
+  expect(plain(dialog() as HTMLElement)).toContain("Claude Code took too long to report its usage.");
 });
 
 it("tells an account that is not signed in, or whose directory is missing, to log in and not that reading failed", () => {
@@ -120,7 +120,7 @@ it("tells an account that is not signed in, or whose directory is missing, to lo
     expect(recovery.textContent).toBe("Log in to use this account.");
     expect(container.querySelector("span")?.textContent).toBe("Not logged in yet.");
     expect(recovery.previousElementSibling?.textContent).toBe("Not logged in yet.");
-    expect(container.textContent).not.toContain("Quota unavailable");
+    expect(container.textContent).not.toContain("Usage unavailable");
   }
 });
 
@@ -150,7 +150,7 @@ it("keeps the last good windows, and marks them out of date on the name line wit
   expect(mark.getAttribute("aria-label")).toBe("Out of date: last read 5 minutes ago");
   expect(mark.querySelector("svg")?.getAttribute("class")).toContain("text-warning-soft-foreground");
   press(mark);
-  const summary = Array.from(dialog()!.querySelectorAll("span")).find((node) => node.textContent === "Claude Code could not report its quota.")!;
+  const summary = Array.from(dialog()!.querySelectorAll("span")).find((node) => node.textContent === "Claude Code could not report its usage.")!;
   expect(summary).toBeDefined();
   const agent = summary.querySelector("[data-inline-reference]")!;
   expect(agent.textContent).toBe("Claude Code");

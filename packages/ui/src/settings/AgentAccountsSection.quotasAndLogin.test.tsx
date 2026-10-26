@@ -116,7 +116,7 @@ it("marks a failed reading on the account's name line instead of writing the fai
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_timed_out", params: { agent: "Claude Code" }, message: "x" } }));
   const { container } = mount();
-  const mark = container.querySelector<HTMLElement>('tr button[aria-label="Quota unavailable"]')!;
+  const mark = container.querySelector<HTMLElement>('tr button[aria-label="Usage unavailable"]')!;
   expect(mark).not.toBeNull();
   expect(mark.parentElement?.textContent).not.toContain("took too long");
   expect(container.textContent).not.toContain("took too long");
@@ -291,12 +291,12 @@ it("gives focus back to the row's own Log in button when the login it opened is 
 it("waits for the first reading of an account of an available agent that has no entry yet", () => {
   availability.set("codex", { agent: "codex", availability: "available" });
   const { container } = mount("Codex");
-  expect(container.textContent?.match(/Reading quota/g)).toHaveLength(2);
+  expect(container.textContent?.match(/Reading usage/g)).toHaveLength(2);
 });
 
 it("leaves an account whose agent is not available without a quota block", () => {
   availability.set("codex", { agent: "codex", availability: "unavailable" });
   const { container } = mount("Codex");
   expect(container.querySelector('[data-slot="meter"]')).toBeNull();
-  expect(container.textContent).not.toContain("Reading quota");
+  expect(container.textContent).not.toContain("Reading usage");
 });

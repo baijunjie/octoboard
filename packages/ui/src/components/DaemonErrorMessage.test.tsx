@@ -304,11 +304,11 @@ it.each([
 it("keeps a complete nested diagnostic outside its launch sentence and translates name references", () => {
   const error = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "quota_command_failed", agent: "Codex", detail: "raw\n    quota failure" });
   const container = mount(<DaemonErrorMessage error={error} />);
-  expect(container.querySelector("span")?.textContent).toBe("Could not start Draft: Codex could not report its quota.");
+  expect(container.querySelector("span")?.textContent).toBe("Could not start Draft: Codex could not report its usage.");
   expect(container.querySelector("span pre")).toBeNull();
   expect(container.querySelectorAll("pre")).toHaveLength(1);
   act(() => setLanguage("zh-Hans"));
-  expect(container.textContent).toContain("无法报告额度");
+  expect(container.textContent).toContain("无法报告用量");
   expect(container.querySelector("pre")?.textContent).toBe("raw\n    quota failure");
 });
 

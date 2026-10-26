@@ -92,7 +92,7 @@ export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactEle
 
 /** A muted dash for an account with no usage to draw, that assistive technology reads as "No usage reading". With
  * `quota` and a failed reading it is followed by the failure mark, or by the out-of-date mark when the windows held are
- * the last good ones; the mark's name ("Quota unavailable", "Out of date: last read …") then says what the dash stands
+ * the last good ones; the mark's name ("Usage unavailable", "Out of date: last read …") then says what the dash stands
  * for in place of that sentence. */
 export function NoUsageReading({ quota }: { quota?: QuotaReading }): React.ReactElement {
   const t = useT();
@@ -105,17 +105,21 @@ export function NoUsageReading({ quota }: { quota?: QuotaReading }): React.React
   );
 }
 
-/** The line naming an account: its `name`, its plan badge when the agent names one, with `usedUp` a "Used up"
- * badge and the name in the muted colour, the mark of a reading with nothing to show, and at its end,
- * unless `showUpdated` is off for a surface that places it elsewhere, when the reading was taken and whether it is out
- * of date. `showFailure` is off for a surface that places the failure mark elsewhere (the table's usage cell). */
-export function AccountNameLine({ name, quota, usedUp = false, showUpdated = true, showFailure = true }: { name: React.ReactNode; quota: QuotaReading; usedUp?: boolean; showUpdated?: boolean; showFailure?: boolean }): React.ReactElement {
+/** The line naming an account: its `name`, its plan badge when the agent names one, with `usedUp` the name in the muted
+ * colour and a "Limit reached" badge, the mark of a reading with nothing to show, and at its end when the reading was
+ * taken and whether it is out of date. `showUsedUp`, `showFailure` and `showUpdated` are off for a surface that places
+ * the badge, the failure mark or the reading's age elsewhere (the table's usage cell holds the first two). The name
+ * and plan keep to one line, a name too long for it fading before the plan; what follows them wraps rather than
+ * squeezing the name, the reading's age first moving to a line of its own. */
+export function AccountNameLine({ name, quota, usedUp = false, showUpdated = true, showFailure = true, showUsedUp = true }: { name: React.ReactNode; quota: QuotaReading; usedUp?: boolean; showUpdated?: boolean; showFailure?: boolean; showUsedUp?: boolean }): React.ReactElement {
   const t = useT();
   return (
-    <div className="flex items-center gap-2 text-sm font-medium">
-      <div className={`min-w-0 ${usedUp ? "text-app-muted" : ""}`}>{name}</div>
-      <QuotaPlan quota={quota} />
-      {usedUp && <StatusBadge variant="soft">{t("quota.usedUp")}</StatusBadge>}
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className={`min-w-0 ${usedUp ? "text-app-muted" : ""}`}>{name}</div>
+        <QuotaPlan quota={quota} />
+      </div>
+      {usedUp && showUsedUp && <StatusBadge variant="soft">{t("quota.usedUp")}</StatusBadge>}
       {showFailure && <QuotaFailureMark quota={quota} />}
       {showUpdated && <QuotaUpdated quota={quota} />}
     </div>

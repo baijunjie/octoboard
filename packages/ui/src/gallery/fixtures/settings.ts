@@ -5,7 +5,7 @@ import type { Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, snapshotState } from "./builders";
 import { noneAddedState } from "./empty";
 import { agentAvailability } from "./liveChanges";
-import { manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
+import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
 import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
 
 const GROUP = "Settings";
@@ -104,6 +104,17 @@ const quotaState: Scenario["state"] = {
   ],
 };
 
+/** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one.
+ * Client is left out; Codex and Grok stay as they were. */
+const usedUpMixState: Scenario["state"] = {
+  ...quotaState,
+  settings: {
+    ...quotaState.settings!,
+    accounts: [...USED_UP_MIX.accounts, ...quotaState.settings!.accounts.filter((account) => account.agent !== "claude")],
+  },
+  accountQuotas: [...quotaState.accountQuotas!.filter((quota) => quota.agent !== "claude"), ...USED_UP_MIX.quotas],
+};
+
 /** Claude Code with more owned accounts than the dialog is tall: the default account, Work and Client, then eight
  * more (`manyClaudeAccounts`). */
 const many = manyClaudeAccounts();
@@ -121,16 +132,16 @@ const unavailableQuotaState: Scenario["state"] = {
   settings: { ...browserState.settings!, added_agents: ALL_AGENTS },
   agentAvailability: new Map(browserState.agentAvailability).set("grok", { agent: "grok", availability: "available", default_account_dir: "/Users/dev/.grok" }),
   accountQuotas: [
-    quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its quota.") }),
+    quotaOf("claude", null, null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage.") }),
     quotaOf("claude", "a-work", null, [], {
-      unavailable: quotaFailure("quota_command_failed", { agent: "Claude Code", detail: "exit status 1: Error: not logged in" }, "Claude Code could not report its quota: exit status 1: Error: not logged in"),
+      unavailable: quotaFailure("quota_command_failed", { agent: "Claude Code", detail: "exit status 1: Error: not logged in" }, "Claude Code could not report its usage: exit status 1: Error: not logged in"),
     }),
     quotaOf("claude", "a-long", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)], {
       fetched_at: minutesAgo(12),
-      unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its quota."),
+      unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage."),
     }),
     quotaOf("grok", null, null, [], {
-      unavailable: quotaFailure("quota_binary_not_found", { binary: "grok" }, "grok was not found, so the quota cannot be read."),
+      unavailable: quotaFailure("quota_binary_not_found", { binary: "grok" }, "grok was not found, so usage cannot be read."),
     }),
   ],
 };
@@ -600,7 +611,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "Claude Code's tab. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic. Then one table lists the agent's accounts, the default account first, under the headers Account, Status, Usage and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a soft success \"Logged in\" badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work is spent, so its bar is empty, also where use went past 100%); and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its quota cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
+    description: "Claude Code's tab. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic. Then one table lists the agent's accounts, the default account first, under the headers Account, Status, Usage and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a soft success \"Logged in\" badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a neutral \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -609,6 +620,18 @@ export const settingsScenarios: Scenario[] = [
     liveChanges: [
       agentAvailability("uninstall-codex", "Codex uninstalled", "codex", "unavailable"),
       agentAvailability("install-codex", "Codex installed", "codex", "available"),
+    ],
+  },
+  {
+    id: "settings-accounts-used-up",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Claude Code tab with accounts at their limit in different windows",
+    description: "The table lists the default account usable (Max, with most of both windows left), then four accounts that have reached their limit and recede: each has a muted name with only its plan badge beside it, and a Usage cell holding a grey usage bar in place of Claude Code's colour, followed by a neutral \"Limit reached\" badge. Work (Team) is at its limit in its session window, but its latest read failed, so after the badge its cell carries the warning-coloured \"Out of date\" triangle, the grey bar being the last windows it read 38 minutes ago; Second is at its limit in its weekly window (a full top layer over an empty one); Third and Fourth by their session windows (an empty top layer over a nearly empty and a nearly full one).",
+    state: usedUpMixState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
     ],
   },
   {
@@ -1253,8 +1276,8 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-accounts-quota-unavailable",
     group: GROUP,
     category: "exceptional",
-    title: "Settings: accounts, Claude Code quota unavailable or out of date",
-    description: "Claude Code's default account and Work have nothing to show: their Usage cells are a dash followed by a danger-coloured circled \"!\" (\"Quota unavailable\"), one a timeout and one a failed command; neither has a plan or a status, and their names carry no mark of their own. Client has a plan and reads \"Logged in\", but its Usage cell is a dash followed by a warning-coloured triangle, \"Out of date\", its last reading being too old to show (the scenario after this one opens why). No sentence of error text sits in the table; hovering a mark, or tapping it with a finger, opens one small popover with its name and its reason.",
+    title: "Settings: accounts, Claude Code usage unavailable or out of date",
+    description: "Claude Code's default account and Work have nothing to show: their Usage cells are a dash followed by a danger-coloured circled \"!\" (\"Usage unavailable\"), one a timeout and one a failed command; neither has a plan or a status, and their names carry no mark of their own. Client has a plan and reads \"Logged in\", but its latest read failed: its Usage cell still draws the last windows it read, a two-layer bar in Claude Code's colour, followed by a warning-coloured triangle, \"Out of date\" (the scenario after this one opens why). No sentence of error text sits in the table; hovering a mark, or tapping it with a finger, opens one small popover with its name and its reason.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1265,8 +1288,8 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-accounts-quota-failure-reason",
     group: GROUP,
     category: "exceptional",
-    title: "Settings: accounts, the reason an out-of-date quota carries",
-    description: "The warning-coloured triangle after the dash in Client's Usage cell is tapped with a finger: its popover holds why the newer reading failed. Client's settings dialog shows the last windows with the same triangle after \"Updated 12 minutes ago\".",
+    title: "Settings: accounts, the reason an out-of-date reading carries",
+    description: "The warning-coloured triangle after the bar in Client's Usage cell is tapped with a finger: its popover holds why the newer reading failed. Client's settings dialog shows the last windows with the same triangle after \"Updated 12 minutes ago\".",
     state: unavailableQuotaState,
     steps: [...openAccounts, (ui) => ui.touchPressStatusMark(describing("the out-of-date mark", (name) => name.startsWith(ui.t("quota.stale", { age: "\u0000" }).split("\u0000")[0])))],
   },

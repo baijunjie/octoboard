@@ -256,7 +256,7 @@ it("announces exhausted quota only when the selected conversation requires a new
   const assertQuotaAlert = () => {
     const alert = quotaAlert();
     expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Work cannot be used for now");
-    expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("It has used up its session quota.");
+    expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("It has reached its session limit.");
     expect(alert?.querySelector('[data-slot="alert-description"]')?.querySelector("div,p,ul,pre,h1,h2,h3")).toBeNull();
     expect(openDisabled()).toBe(true);
   };

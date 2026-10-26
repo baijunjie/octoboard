@@ -378,8 +378,8 @@ export const noticeScenarios: Scenario[] = [
     id: "session-request-switch-used-up",
     group: TRUST,
     category: "exceptional",
-    title: "Request to switch to an account whose quota is used up",
-    description: "The account asked for, Work, has its session quota used up. The picker still stands on Work, and an error above it says the quota is used up and when it resets. Confirm is disabled until another account is chosen.",
+    title: "Request to switch to an account whose usage limit is reached",
+    description: "The account asked for, Work, has its session limit reached. The picker still stands on Work, and an error above it says the usage limit is reached and when it resets. Confirm is disabled until another account is chosen.",
     state: moveState(switchRequestTo("a-work")),
   },
   {
@@ -434,8 +434,8 @@ export const noticeScenarios: Scenario[] = [
     id: "session-request-handoff-used-up",
     group: TRUST,
     category: "exceptional",
-    title: "Request to hand off to an account whose quota is used up",
-    description: "The account asked for, Team, has its session quota used up. The picker still stands on Team, and an error above it says the quota is used up and when it resets. Confirm is disabled until another account is chosen.",
+    title: "Request to hand off to an account whose usage limit is reached",
+    description: "The account asked for, Team, has its session limit reached. The picker still stands on Team, and an error above it says the usage limit is reached and when it resets. Confirm is disabled until another account is chosen.",
     state: moveState(handoffRequestOn("a-team"), { target: idleOwnedSession, quotas: teamUsedUpQuotas }),
   },
   {

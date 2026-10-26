@@ -99,8 +99,8 @@ From top to bottom:
      ("N more…"); the heading's number still counts them all.
    - With no session in any of these groups — none running, or only ones still starting — this part is a single
      heading, **No sessions running**, styled like the other headings but with no glyph.
-2. **The quota submenus**, one per added agent that is available — **Claude quota**, **Codex quota**, **Grok
-   quota**, in the order of the added agents (see "Added agents" in `docs/product/agent-accounts.md`), the agents'
+2. **The quota submenus**, one per added agent that is available — **Claude usage**, **Codex usage**, **Grok
+   usage**, in the order of the added agents (see "Added agents" in `docs/product/agent-accounts.md`), the agents'
    names never translated — each opening to that agent's accounts and showing what Settings and the rail's panel
    show, including window order (see "Quota windows" and "How an account's quota is shown" in
    `docs/product/account-quotas.md`). An account that is turned off (see "Turning an account off" in
@@ -148,8 +148,8 @@ From top to bottom:
      full strength, and none ever highlights under the pointer. Their text and the bar's track take the system's
      colours for the menu they are drawn in, light or dark. A header and a note are each read by assistive
      technology once, as their menu item, their words;
-   - an account never read shows **Reading quota…** in place of windows, and an account with no windows to show
-     shows **Quota unavailable**, a note in the secondary text colour at the menu font's size, and without the
+   - an account never read shows **Reading usage…** in place of windows, and an account with no windows to show
+     shows **Usage unavailable**, a note in the secondary text colour at the menu font's size, and without the
      reason. That includes an entry that has no windows and no failure to explain, which Settings and the rail show
      nothing for. An account that is not logged in (see "Quota states" in `docs/product/account-quotas.md`) shows the
      note **Not logged in** instead. One whose latest reading failed after a good one keeps its last windows under a
