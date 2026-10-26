@@ -548,7 +548,7 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   setting row (`ConsoleLaunchFields`, with `OptionSelect`'s `hideLabel` and `labelledBy`).
 - **A name drawn as several boxes in a flex row is built as one string of its own**, with the drawn boxes hidden from
   the name (`aria-hidden="true"`): WebKit puts a space around every flex item while composing a name, so the boxes
-  would be announced as "Modified , Staged : a.ts". The file viewer's title is the instance — an `sr-only` span holds
+  would be announced as "a.ts : Staged , Modified". The file viewer's title is the instance — an `sr-only` span holds
   the whole name, assembled from the catalog in the order the boxes are drawn in, and carries `select-none` so a copied
   heading does not hold the text twice (`packages/ui/src/viewer/FileViewer.tsx`).
 - **A field whose visible label shows less than its name** keeps both in its `<label>`: the visible text

@@ -7,21 +7,20 @@ changes or cannot be read.
 
 ## Opening a change
 
-A change opens in the project pane's file viewer (see "The header" in `docs/product/file-viewer.md`). Its title is
-the file's name, with the kind of change after it as a tag — Added, Deleted, Modified, Renamed or Type changed —
-coloured as the change's letter in the list is (green, red, amber, blue; the same colours for the same kind). A staged
-or unstaged change has its stage — Staged or Unstaged — as a second, neutral tag after the kind: the two things a
-change says, what kind it is and whether it is staged, are kept apart, the first coloured and the second not. Both tags
-come after the name, and read with it as "server.ts: Modified, Unstaged". An untracked file is always new, so its only
-tag is Untracked, in the neutral grey the list's U has, which is no kind of change and shares no colour with Added or
-Deleted; a path in conflict has only a Conflicted tag, coloured as its C is. The Conflicted tag's tooltip names the
-kind of conflict (see "What it shows" below) — "Both modified." — opened by a resting mouse and, on a
-touch screen, by a tap; assistive technology hears the same sentence as part of the title, after the tag —
-"merge.md: Conflicted. Both modified.". Neither has a stage tag, its status tag
-already saying where it is from; a committed change has none either. The tags read as one group,
-spaced closer to each other than the group is to the name, and each of them, the neutral stage tag included, is visibly
-a tag against the viewer's background in either appearance. The tags never shrink; the name fades out when there is no
-room for it.
+A change opens in the project pane's file viewer (see "The header" in `docs/product/file-viewer.md`). Its title is the
+file's name, with the kind of change after it as a tag — Added, Deleted, Modified, Renamed or Type changed — coloured
+as the change's letter in the list is (green, red, amber, blue; the same colours for the same kind). A staged or
+unstaged change has its stage — Staged or Unstaged — as a neutral tag before the kind, since a neutral qualifier goes
+before the coloured status: the two things a change says, whether it is staged and what kind it is, are kept apart,
+the first neutral and the second coloured. Both tags come after the name, and read with it as "server.ts: Unstaged,
+Modified". An untracked file is always new, so its only tag is Untracked, in the neutral grey the list's U has, which
+is no kind of change and shares no colour with Added or Deleted; a path in conflict has only a Conflicted tag,
+coloured as its C is. The Conflicted tag's tooltip names the kind of conflict (see "What it shows" below) — "Both
+modified." — opened by a resting mouse and, on a touch screen, by a tap; assistive technology hears the same sentence
+as part of the title, after the tag — "merge.md: Conflicted. Both modified.". Neither has a stage tag, its status tag
+already saying where it is from; a committed change has none either. The tags read as one group, spaced closer to each
+other than the group is to the name, and each of them, the neutral stage tag included, is visibly a tag against the
+viewer's background in either appearance. The tags never shrink; the name fades out when there is no room for it.
 
 A committed change carries the commits it is read from in the header's **subtitle**, the line directly under the
 title, each commit by its first seven characters:

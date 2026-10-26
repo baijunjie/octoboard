@@ -21,7 +21,7 @@ The header has three parts, one under the other:
 
 - **The title** — the file's name, and after it the tags saying what the subject is, which only a change carries
   (see "Opening a change" in `docs/product/project-pane-git-change-viewer.md`). The name comes first and the tags follow
-  it, on screen and in what assistive technology is given alike — "server.ts: Modified, Unstaged". The tags never
+  it, on screen and in what assistive technology is given alike — "server.ts: Unstaged, Modified". The tags never
   shrink, so the name is what the fade cuts.
 - **A subtitle**, a line of its own directly under the title, which carries one thing only: the commits a committed
   change is read from. It belongs to the title as a tag does, but is far too long to sit among them.

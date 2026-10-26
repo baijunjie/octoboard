@@ -692,18 +692,18 @@ const modified = (path = "src/c.ts"): ViewerSubject => {
   return { key: `m:${path}`, path, stage: "Unstaged", content: { state: "change", change: { old: side, new: side, patch: "@@ -1 +1 @@\n-a\n+b\n" } } };
 };
 
-// The kind of change and the stage are tags after the name in the title, the kind coloured and the
-// stage a neutral bordered badge; the description line has the path and the layout choice at its end.
-it("puts the status and the stage in the title and the layout choice on the description's row", () => {
+// The stage and the kind of change are tags after the name in the title, the stage a neutral bordered
+// badge and the kind coloured; the description line has the path and the layout choice at its end.
+it("puts the stage and the status in the title and the layout choice on the description's row", () => {
   show(modified());
   const heading = dialog()!.querySelector("h2")!;
-  expect(titleName()).toBe("c.ts: Modified, Unstaged");
+  expect(titleName()).toBe("c.ts: Unstaged, Modified");
   const tags = heading.querySelectorAll("[data-variant]");
-  expect([...tags].map((tag) => tag.textContent)).toEqual(["Modified", "Unstaged"]);
+  expect([...tags].map((tag) => tag.textContent)).toEqual(["Unstaged", "Modified"]);
   const drawn = heading.querySelector('[aria-hidden="true"]')!;
   expect([...tags].every((tag) => drawn.contains(tag))).toBe(true);
   // The drawn name comes first, then the tags, as the accessible name reads.
-  expect(drawn.textContent).toBe("c.tsModifiedUnstaged");
+  expect(drawn.textContent).toBe("c.tsUnstagedModified");
   const row = layoutToggles()[0].closest<HTMLElement>("[data-viewer-description]")!;
   expect(row.textContent).toContain("src/c.ts");
   expect(row.textContent).not.toMatch(/Modified|staged/i);

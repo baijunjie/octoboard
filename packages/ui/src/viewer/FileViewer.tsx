@@ -207,7 +207,7 @@ export function FileViewer({
     subject.status ?? (content.state === "change" ? changeStatus(content.change) : content.state === "conflict" ? "conflicted" : undefined);
   const renamedFrom = content.state === "change" ? renamedFromPath(content.change) : undefined;
   const statusLabel = status ? t(STATUS_LABELS[status]) : undefined;
-  const tags = [statusLabel, subject.stage].filter((tag): tag is string => tag !== undefined);
+  const tags = [subject.stage, statusLabel].filter((tag): tag is string => tag !== undefined);
   // What kind of conflict a conflicted path is in: the status badge's tooltip, and part of the heading's
   // name, since the drawn badge is hidden from assistive technology.
   const conflictKind = content.state === "conflict" ? content.conflict : undefined;
@@ -220,7 +220,7 @@ export function FileViewer({
       title={
         <>
           {/* WebKit puts a space around every flex item when it computes an accessible name
-              ("Modified , Staged : a.ts"), so the name is one string built here from the catalog and
+              ("a.ts : Staged , Modified"), so the name is one string built here from the catalog and
               the drawn boxes are hidden from it. select-none keeps a copied heading from holding the
               text twice. */}
           <span className="sr-only select-none">{titleName}</span>
@@ -228,17 +228,18 @@ export function FileViewer({
             <FadeOverflow as="span" dir="ltr" className="min-w-0" titleWhenClipped={name}>
               {name}
             </FadeOverflow>
-            {/* What the change is, coloured, then where it is from, neutral: both tags come after the name,
-                whichever the subject has, and never shrink, so the name is what the fade cuts. The
-                tags sit closer to each other than the group does to the name. */}
+            {/* Where the change is from, neutral, then what it is, coloured, since a neutral qualifier goes
+                before the coloured status: both tags come after the name, whichever the subject has, and never
+                shrink, so the name is what the fade cuts. The tags sit closer to each other than the group
+                does to the name. */}
             {tags.length > 0 && (
               <span className="flex shrink-0 items-center gap-1">
-                {status && <TitleStatusBadge status={status} label={statusLabel!} tooltip={conflictKind} />}
                 {subject.stage !== undefined && (
                   <StatusBadge separated={false}>
                     {subject.stage}
                   </StatusBadge>
                 )}
+                {status && <TitleStatusBadge status={status} label={statusLabel!} tooltip={conflictKind} />}
               </span>
             )}
           </span>
