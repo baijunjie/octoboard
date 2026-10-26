@@ -368,7 +368,10 @@ symbolic-link target outside the project's directory in the worktree acted on is
 worktree that no longer exists is refused with `worktree_unavailable`. Revealing a symbolic link selects the
 link itself.
 
-On macOS the system opener handles Default application and asks Finder to reveal the entry for File manager. On Linux Default application
+On macOS the system opener handles Default application and asks Finder to reveal the entry for File manager. When the
+system opener fails because no application claims the file's type (an unregistered extension such as `.env.secret`),
+a regular file whose first 8 KiB contain no NUL byte and are valid UTF-8 is opened in the user's default text editor
+instead, as Finder does; any other file, or any other failure, is still reported. On Linux Default application
 uses `xdg-open`; File manager requires `gdbus` and a desktop file manager providing
 `org.freedesktop.FileManager1.ShowItems`. The Linux tools are looked up in the user's login-shell environment.
 On macOS, and for Linux File manager, the request waits for the launcher to finish, at most **15 seconds**

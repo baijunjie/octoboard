@@ -39,7 +39,68 @@ pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
     // ShowItems is a short D-Bus call whose failure must reach the client; xdg-open may instead
     // live as long as the application it opens.
     let detached = std::env::consts::OS == "linux" && !reveal;
-    start(detached, command).map_err(|detail| path_unavailable(reveal, &detail))
+    start(detached, command)
+        .or_else(
+            |detail| match fallback_launch(std::env::consts::OS, path, reveal, &detail) {
+                Some(command) => start(false, command),
+                None => Err(detail),
+            },
+        )
+        .map_err(|detail| path_unavailable(reveal, &detail))
+}
+
+/// How many leading bytes of an unclaimed file are sniffed for text: judging a large file needs
+/// only its head, not a read of the whole file.
+const TEXT_SNIFF_BYTES: usize = 8192;
+
+/// Finder opens a text file no application claims in the default text editor; macOS open only
+/// does so when asked with -t, so a failure for want of a claiming application is retried that
+/// way when the file reads as text.
+fn fallback_launch(os: &str, path: &Path, reveal: bool, detail: &str) -> Option<Command> {
+    if os != "macos" || reveal || !no_application_claims(detail) || !looks_like_text(path) {
+        return None;
+    }
+    let mut command = Command::new("/usr/bin/open");
+    command.args(["-t", "--"]);
+    command.arg(path);
+    command.stdin(std::process::Stdio::null());
+    Some(command)
+}
+
+/// Whether macOS open failed because Launch Services binds no application to the file's type,
+/// as with an unregistered extension such as `.env.secret`.
+fn no_application_claims(detail: &str) -> bool {
+    detail.contains("Code=-10814")
+}
+
+/// Sniffs the head of a regular file: no NUL byte and valid UTF-8, bar a sequence cut at the end.
+/// The open does not block, so a FIFO swapped in for the file is refused rather than waited on.
+fn looks_like_text(path: &Path) -> bool {
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let Ok(file) = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
+        .open(path)
+    else {
+        return false;
+    };
+    if !file.metadata().is_ok_and(|meta| meta.is_file()) {
+        return false;
+    }
+    let mut head = Vec::with_capacity(TEXT_SNIFF_BYTES);
+    if file
+        .take(TEXT_SNIFF_BYTES as u64)
+        .read_to_end(&mut head)
+        .is_err()
+        || head.contains(&0)
+    {
+        return false;
+    }
+    match std::str::from_utf8(&head) {
+        Ok(_) => true,
+        Err(error) => error.error_len().is_none() && head.len() == TEXT_SNIFF_BYTES,
+    }
 }
 
 fn path_unavailable(reveal: bool, detail: &str) -> anyhow::Error {
@@ -184,6 +245,52 @@ mod tests {
                 Some("no default application")
             );
         }
+    }
+
+    #[test]
+    fn only_a_text_file_no_application_claims_is_retried_in_the_text_editor_on_macos() {
+        let unclaimed = "No application knows how to open URL file:///a.secret (Error Domain=NSOSStatusErrorDomain Code=-10814 \"kLSApplicationNotFoundErr\")";
+        let dir = ScratchDir::new("open-text-fallback");
+        let text = dir.join("-.env.secret");
+        std::fs::write(&text, "TOKEN=é\n").unwrap();
+
+        let command = fallback_launch("macos", &text, false, unclaimed).unwrap();
+        assert_eq!(command.get_program(), "/usr/bin/open");
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(
+            args,
+            [
+                std::ffi::OsStr::new("-t"),
+                std::ffi::OsStr::new("--"),
+                text.as_os_str()
+            ]
+        );
+        assert!(fallback_launch("macos", &text, true, unclaimed).is_none());
+        assert!(fallback_launch("linux", &text, false, unclaimed).is_none());
+        assert!(
+            fallback_launch("macos", &text, false, "The file /a-10814 does not exist.").is_none()
+        );
+
+        let mut cut = vec![b'a'; TEXT_SNIFF_BYTES - 1];
+        cut.extend_from_slice("é".as_bytes());
+        let fifo = dir.join("fifo");
+        let c_fifo = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c_fifo.as_ptr(), 0o600) }, 0);
+        for (name, bytes, text) in [
+            ("cut", Some(cut), true),
+            ("nul", Some(b"a\0b".to_vec()), false),
+            ("latin1", Some(b"caf\xe9 ok".to_vec()), false),
+            ("fifo", None, false),
+            ("missing", None, false),
+        ] {
+            let path = dir.join(name);
+            if let Some(bytes) = bytes {
+                std::fs::write(&path, bytes).unwrap();
+            }
+            let retried = fallback_launch("macos", &path, false, unclaimed).is_some();
+            assert_eq!(retried, text, "{name}");
+        }
+        assert!(fallback_launch("macos", &dir, false, unclaimed).is_none());
     }
 
     #[test]
