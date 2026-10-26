@@ -28,7 +28,7 @@ import {
   type ViewerContent,
   type ViewerSubject,
 } from "../viewer/content";
-import { viewerErrorText } from "../viewer/viewerError";
+import { changeBodiesFailure } from "../viewer/viewerError";
 import { displayWirePath } from "../wirePath";
 import { browseFailure } from "./browseError";
 import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type CommitRef, type ShownChange } from "./changes";
@@ -296,7 +296,7 @@ export function useChangeReader(project: string, onWorktreeGone?: () => void): C
           case "disconnected":
             throw new ChangeBodiesError("failed", t("viewer.expand.disconnected"));
           case "failed":
-            throw new ChangeBodiesError("failed", viewerErrorText(t, language, failure.message, item.path, state));
+            throw changeBodiesFailure(t, language, failure.message, item.path, state);
         }
       }
     };

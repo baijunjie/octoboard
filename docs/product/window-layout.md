@@ -104,7 +104,8 @@ wrong in short — that the daemon could not be connected to, or that an unexpec
 the title. On the screen for a UI that failed, that detail is the application's own instruction — try again, and if it
 happens again, report it with the error text below — never the error's raw message: the error's name and message head
 the stack trace under the alert instead, and the stack follows them, not repeating that line where the stack already
-begins with it. The error alert shown first, over the screen, holds the same stack trace, headed the same way.
+begins with it. The error alert shown first, over the screen, says in its body that something unexpected went
+wrong, and holds the same stack trace, headed the same way, under its **Error details**.
 
 ## What an open dialog, menu or popover covers
 

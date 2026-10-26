@@ -3,7 +3,8 @@ import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
-import { DaemonErrorMessage, errorDetails, errorRemedy } from "../components/DaemonErrorMessage";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
+import { errorDetails, errorRemedy } from "../components/errorParts";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineReference } from "../components/InlineReference";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";

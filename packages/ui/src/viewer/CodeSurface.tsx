@@ -4,7 +4,7 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFadeRegion, useScrollFade, type FadeRegion } from "../components/scrollFade";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { Message, useT } from "../i18n/react";
 import { diffPlan, textPlan } from "./budgets";
 import { CODE_THEMES } from "./codeTheme";
 import { HighlightedFile, RenderedDiff, RendererBoundary } from "./codeRenderer";
@@ -17,6 +17,7 @@ import { focusFirstSeparatorControl, scrollTextToLine, scrollToLine } from "./re
 import { isSelectAll, selectCode } from "./selectAll";
 import { FileNotice, type NoticeTone } from "./notices";
 import { LoadingOverlay, Unreadable } from "./viewerStates";
+import { BodiesFailureReason } from "./ViewerErrorMessage";
 import { WrapToggle, wordWrap } from "./wordWrap";
 
 /** What is said beside the diff when its collapsed lines cannot be expanded, by why (`failed` takes
@@ -261,7 +262,11 @@ export function DiffSurface({
   const status = reported?.key === resetKey && reported.read === loadBodies ? reported.status : undefined;
   const onExpansion = useCallback((next: ExpansionStatus) => setReported({ key: resetKey, read: loadBodies, status: next }), [resetKey, loadBodies]);
   const note = status && EXPANSION_NOTES[status.kind];
-  const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: isolate(status.message) }) : note ? t(note) : undefined;
+  const expansionNote = status?.kind === "failed" ? t("viewer.expand.failed", { reason: isolate(status.message ?? t("error.unexpected.summary")) }) : note ? t(note) : undefined;
+  // The popover sets the cause's names as chips, which the plain sentence (the mark's name) cannot.
+  const expansionLine = status?.kind === "failed" && status.message !== undefined
+    ? <Message id="viewer.expand.failed" params={{ reason: <BodiesFailureReason message={status.message} failure={status.failure} /> }} />
+    : undefined;
   const asText = (reason: string, tone: NoticeTone, speak = false) => (
     <>
       <WrapToggle />
@@ -277,7 +282,7 @@ export function DiffSurface({
       {onLayoutChange && <LayoutToggle layout={layout} onLayoutChange={onLayoutChange} />}
       <WrapToggle />
       {ending && <FileNotice sentence={t(ending)} />}
-      {expansionNote !== undefined && <FileNotice tone={status?.kind === "failed" ? "failed" : "explained"} sentence={expansionNote} />}
+      {expansionNote !== undefined && <FileNotice tone={status?.kind === "failed" ? "failed" : "explained"} sentence={expansionNote} line={expansionLine} detail={status?.kind === "failed" ? status.detail : undefined} />}
       <StatusAnnouncer text={status?.kind === "loading" ? t("viewer.expand.loading") : status?.kind === "failed" ? undefined : expansionNote} clearAfterRead />
       <CodeFrame label={label} resetKey={resetKey} theme={theme}>
         {(onDrawn) => (

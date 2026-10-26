@@ -568,10 +568,71 @@ it.each(["checking", "pulling", "pushing"] as const)("hoverGitBadge takes the ba
 });
 
 it("hoverGitBadge fails for a line the badge does not have", async () => {
-  const lone = gitStatusOf("p-1", { branch: null, error: "fetch failed" });
+  const lone = gitStatusOf("p-1", { branch: null, error: "fetch failed", activity: "checking" });
   mountFocusBadge(lone);
   await expect(createUi(document, "en").hoverGitBadge(lone, "line")).rejects.toThrow(/no line to hover/);
   expect(openTooltip()).toBeNull();
+});
+
+it("hoverGitBadge fails for a failed read that shows its failure mark alone, which has no tooltip", async () => {
+  const lone = gitStatusOf("p-1", { branch: null, error: "fetch failed" });
+  mountFocusBadge(lone);
+  await expect(createUi(document, "en").hoverGitBadge(lone, "line")).rejects.toThrow(/nothing to hover/);
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverGitBadge fails for the glyph of a failed check, which is the failure mark outside the tooltip", async () => {
+  const failed = gitStatusOf("p-1", { error: "fetch failed" });
+  mountFocusBadge(failed);
+  await expect(createUi(document, "en").hoverGitBadge(failed, "glyph")).rejects.toThrow(/no glyph to hover/);
+  expect(openTooltip()).toBeNull();
+});
+
+it("hoverGitBadge puts up the sentence of a failed check from its branch line, not the failure mark", async () => {
+  const failed = gitStatusOf("p-1", { ahead: 3, error: "fetch failed" });
+  mountProjectRow(failed);
+  await settledLive(createUi(document, "en").hoverGitBadge(failed, "line", (name) => name.startsWith("Website")));
+  expect(openTooltip()?.textContent).toBe(tooltipSentenceOf(failed));
+  release(document.querySelector("[role=button] [role=presentation]")!);
+});
+
+/** The row as the sidebar names it with a failed check: the badge's sentence, then the mark's name. */
+function mountFailedRow(status: typeof branchStatus): void {
+  // jsdom has no Web Animations, which the popover's exit waits for.
+  HTMLElement.prototype.animate = vi.fn(() => ({ cancel: vi.fn(), finished: Promise.resolve(), onfinish: null })) as unknown as typeof HTMLElement.prototype.animate;
+  onTestFinished(() => void delete (HTMLElement.prototype as Partial<HTMLElement>).animate);
+  mountForTooltip(
+    <div data-region="sidebar">
+      <div role="button" aria-label={`Website, ${sentenceOf(status)}, Git check failed`}>
+        <span>Website</span>
+        <GitBadge status={status} decorative />
+      </div>
+    </div>,
+  );
+}
+
+it("openGitFailure opens the press form of the failure mark of a row", async () => {
+  const failed = gitStatusOf("p-1", { error: "fatal: unable to access 'origin'" });
+  mountFailedRow(failed);
+  await settledLive(createUi(document, "en").openGitFailure((name) => name.startsWith("Website")));
+  const popover = document.querySelector("[data-status-mark-popover]");
+  expect(popover?.textContent).toContain("fatal: unable to access 'origin'");
+  expect(popover?.querySelector("[aria-modal=false]")).toBeNull();
+  expect(popover?.contains(document.activeElement)).toBe(true);
+});
+
+it("openGitFailure fails while the next check runs, when the spinning glyph takes the mark's place", async () => {
+  mountFocusBadge(gitStatusOf("p-1", { activity: "checking", error: "fetch failed" }));
+  const done = expect(createUi(document, "en").openGitFailure()).rejects.toThrow(/No git failure mark in the sidebar/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+});
+
+it("openGitFailure fails for a badge whose check did not fail", async () => {
+  mountFocusBadge(branchStatus);
+  const done = expect(createUi(document, "en").openGitFailure()).rejects.toThrow(/No git failure mark in the sidebar/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
 });
 
 it("hoverGitBadge fails for a header badge that says so in text and has no tooltip", async () => {

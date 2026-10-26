@@ -18,6 +18,7 @@ const noRepoProject = projectOf("p-no-repo", console_.id, "Not a git repository"
 const noCommitsProject = projectOf("p-no-commits", console_.id, "Empty repository");
 const unreadableProject = projectOf("p-unreadable", console_.id, "Branch unreadable");
 const firstCheckProject = projectOf("p-first-check", console_.id, "First check");
+const retryingProject = projectOf("p-retrying", console_.id, "Retrying after a failure");
 
 const projects = [
   evenProject,
@@ -106,11 +107,17 @@ const openGitSubmenu = (name: string) => [
   (ui: Ui) => ui.press(ui.t("sidebar.project.git")),
   (ui: Ui) => ui.wait(300),
 ];
+// The failure mark gives way to the spinning glyph while the next check runs; the error stays in the status.
+const retryingStatus = gitStatusOf(retryingProject.id, { activity: "checking", error: "fetch: Could not resolve host 'origin'" });
+const failureProjects = [errorProject, unreadableProject, retryingProject];
 const failureState = snapshotState({
   consoles: [console_],
-  projects: [errorProject, unreadableProject],
-  sessions: sessions.filter(({ project_id }) => project_id === errorProject.id || project_id === unreadableProject.id),
-  gitStatuses: [errorStatus, unreadableStatus],
+  projects: failureProjects,
+  sessions: [
+    ...sessions.filter(({ project_id }) => project_id === errorProject.id || project_id === unreadableProject.id),
+    sessionOf("s-retrying", console_.id, retryingProject.id, "Working on it", "idle"),
+  ],
+  gitStatuses: [errorStatus, unreadableStatus, retryingStatus],
 });
 
 const normalProjects = [...projects, ...squeezeProjects].filter(({ id }) => id !== errorProject.id && id !== unreadableProject.id);
@@ -185,13 +192,14 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-badges-errors", group: GROUP, category: "exceptional",
     title: "Fetch and branch-read failures",
-    description: "Deliberate fetch and HEAD errors replace the branch glyph with a danger-coloured circled \"!\". Hover each for its cause.",
+    description: "A deliberate fetch error and a HEAD read error each put a danger-coloured circled \"!\" named Git check failed at the start of the badge, in place of the branch glyph. It is a button of its own: pressing it opens a popover with the reason, the remedy and then Git's own text in a block of its own, held open here for the unreadable branch (the top row). The badge's tooltip (hover the branch or counts) covers only the branch and counts and never mentions the failure; the unreadable-branch row has no branch or counts, so only the mark stands there with no tooltip. The third row's next check is already running after a failure: the spinning glyph takes the mark's place, with no mark and no failure in the row's name, and the mark returns only if that run fails again.",
     state: failureState, preferences: { sidebarWidth: 280 },
+    steps: [(ui) => ui.openGitFailure((name) => name.startsWith(unreadableProject.name))],
   },
   {
     id: "git-badge-focus-long-error", group: GROUP, category: "exceptional",
     title: "Long branch with a fetch failure in project focus",
-    description: "The failure is deliberate: fetch cannot resolve origin. Hover the danger-coloured circled \"!\" for it; only the long branch fades and scrolls, while the mark and counts stay visible.",
+    description: "The failure is deliberate: fetch cannot resolve origin. Press the danger-coloured circled \"!\" named Git check failed at the start of the badge for its popover (reason, remedy, then Git's own text); only the long branch fades and scrolls, while the mark and counts stay visible. Hovering the branch or counts shows the badge's tooltip, which does not mention the failure.",
     state: longFailureState,
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
   },
@@ -237,7 +245,7 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch-error", group: "Projects", category: "exceptional",
     title: "Branch switch failed",
-    description: "A refused switch reports Git's reason in the error alert dialog, which requires OK. The branch badge stays on main.",
+    description: "A refused switch is reported in the error alert dialog, which requires OK: it says only that Git could not switch branches and what to do, and Git's own message sits only in the Error details disclosure, closed here. The branch badge stays on main.",
     ...switchFixture,
     projectBranchSwitches: { [restoreProject.id]: { [switchBranch]: { code: "git_switch_failed", params: { detail: "error: Your local changes to README.md would be overwritten by checkout. Please commit your changes or stash them before you switch branches." }, message: "Git switch failed" } } },
     steps: [...openSwitch, (ui) => ui.press(switchBranch), (ui) => ui.wait(300)],
@@ -257,7 +265,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Restore file changes failed",
-    description: "A failed restore is the error alert dialog's, raised over the confirmation; nothing is written into the confirmation, which stays behind it with retry and cancel enabled once OK is pressed.",
+    description: "A failed restore is the error alert dialog's, raised over the confirmation; it says only that Git could not restore the file changes and what to do, with Git's own message only in its Error details disclosure, closed here. Nothing is written into the confirmation, which stays behind it with retry and cancel enabled once OK is pressed.",
     ...restoreFixture,
     projectRestores: { [restoreProject.id]: { code: "git_restore_failed", params: { detail: "fatal: Unable to create .git/index.lock: File exists" }, message: "Git restore failed" } },
     steps: [...openRestore, (ui) => ui.confirm(), (ui) => ui.wait(300)],
@@ -278,7 +286,7 @@ export const gitScenarios: Scenario[] = [
     title: "Unreadable branch in project focus",
     state: failureState,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${unreadableProject.id}` },
-    description: "The focus header has only a warning glyph; hover it for the unreadable-branch reason.",
+    description: "The focus header has only the danger-coloured failure mark named Git check failed, with no branch, counts or tooltip; press it for the reason, the remedy and then Git's own text about the unreadable branch.",
   },
   {
     id: "git-badge-focus-long",

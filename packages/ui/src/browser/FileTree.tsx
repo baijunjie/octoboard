@@ -3,7 +3,7 @@ import React, { useEffect, useId, useMemo, useRef } from "react";
 import { Collection, ListLayout, Tree, TreeItem, TreeItemContent, Virtualizer, type Key } from "react-aria-components";
 
 import { Button } from "../components/Button";
-import { failureParam, FailureBody } from "../components/DaemonErrorMessage";
+import { failureParam, FailureBody } from "../components/errorParts";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusMark } from "../components/StatusMark";
 import { useCollectionOptionTab } from "../components/collectionOptionTab";

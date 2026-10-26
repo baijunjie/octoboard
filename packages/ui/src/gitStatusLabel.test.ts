@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { gitBadgeAriaLabel, withGitBadge } from "./gitStatusLabel";
+import { gitBadgeAriaLabel, gitFailureLabel, withGitBadge } from "./gitStatusLabel";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
@@ -42,10 +42,8 @@ describe("gitBadgeAriaLabel", () => {
     expect(gitBadgeAriaLabel("en", t, status({ branch: null }))).toBe("No commits yet");
   });
 
-  it("lets the error phrase stand alone for a branchless repository whose read failed", () => {
-    expect(gitBadgeAriaLabel("en", t, status({ branch: null, error: "fetch: Could not resolve host" }))).toBe(
-      `Git error: ${isolate("fetch: Could not resolve host")}`,
-    );
+  it("says nothing for a branchless repository whose read failed, the failure mark saying it", () => {
+    expect(gitBadgeAriaLabel("en", t, status({ branch: null, error: "fetch: Could not resolve host" }))).toBe("");
   });
 
   it("names the in-flight phase instead of the idle wording", () => {
@@ -56,10 +54,8 @@ describe("gitBadgeAriaLabel", () => {
     expect(gitBadgeAriaLabel("en", t, status({ activity: "checking", branch: null }))).toBe("Checking the branch");
   });
 
-  it("appends the last error verbatim, after ahead and behind", () => {
-    expect(gitBadgeAriaLabel("en", t, status({ behind: 1, error: "fetch: Could not resolve host" }))).toBe(
-      `Branch ${isolate("main")}, 1 commit behind, Git error: ${isolate("fetch: Could not resolve host")}`,
-    );
+  it("leaves a failed check and Git's own text out of the sentence, which is also the tooltip's", () => {
+    expect(gitBadgeAriaLabel("en", t, status({ behind: 1, error: "fetch: Could not resolve host" }))).toBe(`Branch ${isolate("main")}, 1 commit behind`);
   });
 });
 
@@ -71,5 +67,13 @@ describe("withGitBadge", () => {
 
   it("folds the badge's facts into the row's own label", () => {
     expect(withGitBadge("en", t, "Website", status({ ahead: 1 }))).toBe(`Website, Branch ${isolate("main")}, 1 commit ahead`);
+  });
+
+  it("names a failed check in the application's words after the badge's facts, never with Git's own text", () => {
+    const raw = "fetch: Could not resolve host";
+    expect(withGitBadge("en", t, "Website", status({ behind: 1, error: raw }))).toBe(`Website, Branch ${isolate("main")}, 1 commit behind, Git check failed`);
+    expect(withGitBadge("en", t, "Website", status({ branch: null, error: raw }))).toBe("Website, Git check failed");
+    expect(withGitBadge("en", t, "Website", status({ activity: "checking", error: raw }))).toBe(`Website, Checking branch ${isolate("main")}`);
+    expect(gitFailureLabel(t)).toBe("Git check failed");
   });
 });

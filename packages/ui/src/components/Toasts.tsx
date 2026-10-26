@@ -3,9 +3,11 @@ import React, { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { QueuedToast } from "react-aria-components";
 
 import { CodeToneContext } from "./codeTone";
+import { InlineReference } from "./InlineReference";
 import { DaemonErrorMessage, DaemonErrorTitle } from "./DaemonErrorMessage";
+import { rawErrorDetails } from "./errorParts";
 import { errorAlerts } from "../errorAlerts";
-import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
+import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure } from "../errorPresentation";
 import { isMessageKey, type MessageKey } from "../i18n/catalog";
 import { t } from "../i18n/language";
 import { Message, useT } from "../i18n/react";
@@ -49,7 +51,7 @@ const shownToasts = new Map<string, string>();
 
 /**
  * Routes errors into the acknowledgement queue and displays notices in HeroUI's timed toast
- * stack. An error alert is titled for what failed and names its session in the body; a session
+ * stack. An error alert is titled for what failed, with no name in the title, and names its session in the body; a session
  * notice keeps its location and structured daemon message. Notices keep keyboard focus where it
  * was, remain selectable, and move clear of dialog footers.
  */
@@ -63,22 +65,28 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
         const session = request.session ? sessions.get(request.session) : undefined;
         const location = session && sessionLocationContent(t, session, consoles, projects);
         if (request.kind === "error") {
+          const { daemonError } = request;
           const titleKey = alertTitleKey(request);
+          const goneName = request.daemonTitle?.params.title;
+          const sessionLine = session ? sessionWithLocationContent(t, session, consoles, projects) : goneName ? <InlineReference dir="auto" wrap>{goneName}</InlineReference> : undefined;
+          // The daemon's structure where it words the message, else the message as worded in this
+          // language; the raw text it carries is the alert's "Error details", never its body.
+          const shown = daemonError && isStructuredFailure(daemonError) ? daemonError : request.message;
           errorAlerts.report({
             message: request.message,
             session: request.session,
-            error: request.error ?? request.daemonError ?? request.message,
-            // The title says what failed. Which session it is about goes in the body, since the
-            // daemon words its message as "this session" without naming it; a title that names the
-            // session (a failed launch's) gives way to the coded one there, and stays when the
-            // session is gone and the body cannot name it.
-            title: request.daemonTitle && !(session && titleKey) ? <DaemonErrorMessage error={request.daemonTitle} /> : titleKey && t(titleKey),
+            error: request.error ?? daemonError ?? request.message,
+            // The title says what failed and never carries a name. Which session it is about goes in the
+            // body, since the daemon words its message as "this session" without naming it: from the
+            // session's record, or, when it is gone, from the name the request carries.
+            title: titleKey && t(titleKey),
             content: (
               <>
-                {session && <div dir="auto" className="mb-2"><Message id="error.alertSession" params={{ session: sessionWithLocationContent(t, session, consoles, projects) }} /></div>}
-                {request.content ?? <DaemonErrorMessage error={request.daemonError && (hasCodeParams(request.daemonError) || hasShellTimeoutDetails(request.daemonError)) ? request.daemonError : request.message} />}
+                {sessionLine && <div dir="auto" className="mb-2"><Message id="error.alertSession" params={{ session: sessionLine }} /></div>}
+                {request.content ?? <DaemonErrorMessage error={shown} />}
               </>
             ),
+            details: rawErrorDetails(daemonError ?? request.message),
           });
         } else showToast(request, location);
       }),

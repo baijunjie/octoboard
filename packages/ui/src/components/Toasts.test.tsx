@@ -6,7 +6,7 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
-import { noticeErrorPresentation } from "../errorPresentation";
+import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
 import { sessionOf } from "../gallery/fixtures/builders";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
@@ -199,6 +199,44 @@ it("shows a coded notice under the session's location, the path as code in the d
   }
 });
 
+it.each<{ code: string; params: Record<string, string>; title: string; sentence: string; raw: string }>([
+  { code: "sharing_resume_failed", params: { account: "a1", name: "Work", detail: "no such file or directory" }, title: "Could not resume the session", sentence: "could not be resumed after its sharing changed", raw: "no such file or directory" },
+  { code: "trust_not_carried_over", params: { agent: "Grok Build", path: "/Users/dev/.grok/trust.json", reason: "x", reason_code: "store_io_failed", detail: "Permission denied (os error 13)" }, title: "Trust not carried over", sentence: "the file could not be read or written", raw: "Permission denied (os error 13)" },
+  // The repair's own message is its raw reason; the cause is said with its fix in the body.
+  { code: "account_sharing_repair_failed", params: { account: "a1", name: "Work", items: "[]", cause: "permission_denied" }, title: "Could not repair sharing links", sentence: "You do not have permission to change the account’s directory.", raw: "plain fallback" },
+])("shows a $code notice as an error alert, not a toast, its sentence the body and the system's text behind Error details, under a plain title", ({ code, params, title, sentence, raw }) => {
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", undefined, "Hub", "idle")]]) }),
+    onToast: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const error = new DaemonRequestError("plain fallback", code, params);
+    // As the store routes a session notice.
+    act(() => deliver({ kind: noticeKind(code, params), message: error.message, daemonError: error, session: "s1" }));
+    expect(document.querySelector('[data-slot="toast-description"]')).toBeNull();
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    expect(alert.querySelector("h2")?.textContent).toBe(title);
+    expect(alert.textContent).toContain("Hub");
+    expect(alert.querySelector("details pre")?.textContent).toBe(raw);
+    const explanation = alert.cloneNode(true) as Element;
+    explanation.querySelector("details")!.remove();
+    expect(explanation.textContent).toContain(sentence);
+    expect(explanation.textContent).not.toContain(raw);
+    // An expected failure, not one to report as a bug.
+    expect(explanation.textContent).not.toContain("Report issue");
+  } finally {
+    act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
 it("shows a failed launch's shell timeout once: the title names the launch, the details sit beneath it", () => {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
@@ -283,7 +321,7 @@ it("titles an error alert for what failed and names the session and its project 
   }
 });
 
-it("titles a failed launch's alert for the failure when it names the session in its body, and keeps the named title when the session is gone", () => {
+it("titles a failed launch's alert for the failure, never with the session's name, which is in its body, even when the session is gone", () => {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
@@ -309,7 +347,10 @@ it("titles a failed launch's alert for the failure when it names the session in 
     expect(alert?.textContent).toContain("Fix login");
     act(() => document.querySelector<HTMLElement>('[role="alertdialog"] button')?.click());
     act(() => deliver({ ...request, session: "gone" }));
-    expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Could not start Fix login");
+    const gone = document.querySelector('[role="alertdialog"]');
+    expect(gone?.querySelector("h2")?.textContent).toBe("Could not start the session");
+    expect(gone?.querySelector("h2")?.textContent).not.toContain("Fix login");
+    expect(gone?.textContent).toContain("Session: Fix login");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

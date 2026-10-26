@@ -4,7 +4,8 @@ import React, { useRef } from "react";
 import type { ErrorPresentation } from "../errorPresentation";
 import { retryCanHelp } from "../errorRecovery";
 import { useT } from "../i18n/react";
-import { DaemonErrorMessage, errorDetails, errorRemedy } from "./DaemonErrorMessage";
+import { DaemonErrorMessage } from "./DaemonErrorMessage";
+import { errorDetails, errorRemedy } from "./errorParts";
 import { EmptyPanel } from "./EmptyPanel";
 
 /** A pane's whole subject that could not be read, in its place: the empty-state shape in the danger

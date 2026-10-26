@@ -384,7 +384,8 @@ Claude Code's choices:
 - **Ask me** launches Claude Code so that every tool call not already allowed asks the user.
 - **Approve everything** launches Claude Code so that every tool runs without asking.
 
-The choice is saved when selected; the choices are unavailable while saving, and a failure is shown in an error alert.
+The choice is saved when selected; the choices are unavailable while saving, and a failure is shown in an error alert
+titled "Could not save the permission approval".
 It applies when a session of any account of the agent next starts or resumes, including an account switch, and a
 legacy pinned directory with no account reference included; a running process keeps what it was started with. An
 explicit choice overrides the agent's own setting for that launch without writing its configuration files, and for
@@ -395,7 +396,8 @@ specifics a user will notice" in `docs/product/launching-agents.md`).
 **Approve everything** is saved only once the user accepts a destructive confirmation that names the agent and warns
 that every tool will run without asking in every account of that agent, commands that change or delete files
 included; its confirm button carries the choice's own name. Cancelling, Escape included, leaves the choice as it was.
-If the save fails, the error is shown in the confirmation, which stays open, and the choice stays unchanged. Because the
+If the save fails, the error alert above is shown over the confirmation, which stays open, and the choice stays
+unchanged. Because the
 user has agreed there, Claude Code's own blocking warning for that mode never appears (see "Per-agent specifics a user
 will notice" in `docs/product/launching-agents.md`).
 

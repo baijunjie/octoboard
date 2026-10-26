@@ -1,4 +1,3 @@
-import { ActionableError } from "../errorRecovery";
 import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useId, useState } from "react";
 
@@ -13,7 +12,7 @@ import { usePlatform } from "../platform/react";
 import type { Console, Event } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
-import { fileFailureText } from "./failureText";
+import { fileFailure } from "./failureText";
 
 type Scope = "console" | "all";
 
@@ -47,7 +46,7 @@ export function ExportConfigurationDialog({
   const t = useT();
   const { request, toastNotice } = useDaemon();
   const { configurationFile } = usePlatform();
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t("configuration.export.alertTitle"));
   const [scope, setScope] = useState<Scope>(inHand ? "console" : "all");
   const [includePaths, setIncludePaths] = useState(false);
   const warningId = useId();
@@ -68,7 +67,7 @@ export function ExportConfigurationDialog({
       try {
         saved = await configurationFile.save(exportFileName(exported), `${JSON.stringify(file, null, 2)}\n`);
       } catch (err) {
-        throw new ActionableError(fileFailureText(t, err, "configuration.export.failed"), "file", { cause: err });
+        throw fileFailure(t, err, "configuration.export.couldNotSave");
       }
       if (saved === undefined) return;
       toastNotice(

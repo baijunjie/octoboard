@@ -1,6 +1,5 @@
 import React from "react";
 
-import { CodeBlock } from "./components/CodeBlock";
 import { InlineReference } from "./components/InlineReference";
 import type { Translate } from "./i18n/catalog";
 import { joinNodes } from "./i18n/joinPhrases";
@@ -8,7 +7,8 @@ import type { Language } from "./i18n/languages";
 import { Message } from "./i18n/react";
 import type { GitStatus } from "./protocol";
 
-/** The tooltip's rich facts, retaining raw Git diagnostics outside the branch's inline copy. */
+/** The tooltip's rich facts, `gitBadgeAriaLabel`'s sentence with the branch drawn as a reference. A failed
+ * check is not among them: the failure mark beside the badge holds it, Git's own text included. */
 export function gitBadgeContent(language: Language, t: Translate, status: GitStatus): React.ReactNode {
   const branch = status.branch == null ? undefined : <InlineReference monospace wrap>{status.branch}</InlineReference>;
   const phrases: React.ReactNode[] = [];
@@ -23,6 +23,5 @@ export function gitBadgeContent(language: Language, t: Translate, status: GitSta
   }
   if (status.ahead > 0) phrases.push(t("sidebar.git.ahead", { count: status.ahead }));
   if (status.behind > 0) phrases.push(t("sidebar.git.behind", { count: status.behind }));
-  if (status.error) phrases.push(<Message id="sidebar.git.error" params={{ error: <CodeBlock dir="ltr">{status.error}</CodeBlock> }} />);
   return joinNodes(language, phrases.map((_, index) => String(index)), (index, key) => <React.Fragment key={key}>{phrases[Number(index)]}</React.Fragment>);
 }

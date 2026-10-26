@@ -41,6 +41,14 @@ it("opens the reason and details in a popover named like the mark when pressed",
   expect(button.getAttribute("aria-expanded")).toBe("true");
 });
 
+it("shows raw text under its one line on a surface of its own, the popover still named by its tone", () => {
+  const button = mountForTooltip(<StatusMark label="Could not read the unmodified lines. Something unexpected went wrong." detail="database is locked" />).querySelector("button")!;
+  press(button);
+  expect(dialog()?.getAttribute("aria-label")).toBe("Error");
+  expect(dialog()?.querySelector("p")?.textContent).toBe("Could not read the unmodified lines. Something unexpected went wrong.");
+  expect(dialog()?.querySelector("pre")?.textContent).toBe("database is locked");
+});
+
 it("closes the popover on Escape and gives focus back to the mark", () => {
   const button = mountForTooltip(<StatusMark label="Failed">Path not found.</StatusMark>).querySelector("button")!;
   act(() => button.focus());

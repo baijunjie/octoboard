@@ -263,7 +263,7 @@ const LOGIN_ENDS_WITHIN_MS = 700;
 
 /** Settings → Agent accounts on Claude Code's tab, Work's Log in icon button in the Status column (the first signed-out account), then
  * the moment the login takes to reach waiting and end inside its modal. */
-function loginFromInline(): Scenario["steps"] {
+function loginFromInline(): Step[] {
   return [
     (ui) => ui.press(ui.t("rail.settings")),
     (ui) => ui.press(ui.t("settings.section.accounts")),
@@ -993,8 +993,21 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account login, waiting for the browser",
-    description: "Settings finds Work's login already running, so its modal is open: titled \"Log in to\" and the name as a chip, a spinner with \"Waiting for you to authorize in your browser…\", and in the footer \"Open the page again\" beside Cancel login. The same modal serves Claude Code and Codex.",
+    description: "Settings finds Work's login already running, so its modal is open: titled with the plain name \"Log in\", the first sentence of the body saying it is logging in to Claude Code account Work… (agent and account as chips, the sentence ending in an ellipsis), then a spinner with \"Waiting for you to authorize in your browser…\", and in the footer \"Open the page again\" beside Cancel login. The same modal serves Claude Code and Codex.",
     state: withLogins(signedInState, loginOf("claude", "a-work", { authorization_url: CLAUDE_PAGE })),
+    externalLinks: "available",
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+    ],
+  },
+  {
+    id: "settings-account-login-starting",
+    group: GROUP,
+    category: "normal",
+    title: "Account login, starting",
+    description: "The login's modal while the daemon is still starting it, before any page or code exists: the same \"Log in\" modal over Claude Code account Work, with a spinner row that has no visible text beside it (the status is spoken, not shown). Cancel login alone is in the footer and has the focus; there is no Open the page again, since there is no page yet.",
+    state: withLogins(signedInState, loginOf("claude", "a-work", { status: "starting" })),
     externalLinks: "available",
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1006,7 +1019,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account login, device code (Grok Build)",
-    description: "Settings finds the default Grok Build account's login already running, so its modal is open. Grok Build opens its own page, so the modal shows the code to confirm there, set as code, with \"Open the page again\" and Cancel login in the footer; Octoboard does not open the page itself.",
+    description: "Settings finds the default Grok Build account's login already running, so its modal is open, titled \"Log in\" with the first body sentence naming Grok Build and the account. Grok Build opens its own page, so the modal shows the code to confirm there, set as code, with \"Open the page again\" and Cancel login in the footer; Octoboard does not open the page itself.",
     state: withLogins(quotaState, loginOf("grok", null, {
       authorization_url: "https://accounts.x.ai/oauth2/device?user_code=ABCD-1234",
       device_code: "ABCD-1234",
@@ -1035,17 +1048,17 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Account login failed",
-    description: "Log in was chosen for Work and the CLI gave up: the modal stays open, now saying \"Could not log in to\" the name as a chip, with the named agent in the short explanation and the CLI's multiline reason in an external selectable code block, and Log in again as its main button beside Close.",
+    description: "Log in was chosen for Work and the CLI gave up: the dialog becomes a fixed failure alert, with the danger icon in its header beside the title \"Could not log in\", no close button, and Escape does nothing. The body is only \"Logging in to Claude Code account Work failed.\" (agent and account as chips): the failure carries no specific cause of its own, so none follows in the sentence. \"Error details\" is open here, holding the CLI's multiline text, and nothing else, in a selectable block of its own. The footer reads Close, then Log in again as the main button, which has the focus.",
     state: notSignedInState,
     loginOutcome: "failed",
-    steps: loginFromInline(),
+    steps: [...loginFromInline(), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "settings-account-login-timed-out",
     group: GROUP,
     category: "exceptional",
     title: "Account login timed out",
-    description: "Log in was chosen for Work and nobody authorized in time: the modal stays open, saying the login to the name as a chip timed out, with no reason beneath, and Log in again as its main button beside Close.",
+    description: "Log in was chosen for Work and nobody authorized in time: the dialog becomes a fixed failure alert (no close button) with the danger icon in its header and the title \"Login timed out\". The body is the one sentence \"The login to Claude Code account Work timed out.\" (agent and account as chips); it has nothing after it and no Error details, since there is nothing more to say; the footer reads Close, then Log in again as the main button, which has the focus.",
     state: notSignedInState,
     loginOutcome: "timed_out",
     steps: loginFromInline(),
@@ -1055,7 +1068,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Account login refused, another Codex account is signing in",
-    description: "Choosing Log in on Personal is refused: the modal opens straight into its ended state, saying it could not log in to the name as a chip and that another Codex account is being logged in and to wait, with Log in again and Close.",
+    description: "Choosing Log in on Personal is refused: the dialog opens straight as a fixed failure alert (no close button), with the danger icon in its header and the title \"Could not log in\". The body opens with \"Logging in to Codex account Personal failed.\" (agent and account as chips), followed in the same sentence by the cause that another Codex account is logging in, then the remedy to wait as a paragraph of its own. It has no Error details, since there is no raw text; the footer reads Close, then Log in again.",
     state: quotaState,
     loginStartError: { code: "login_codex_busy", params: {}, message: "Another Codex account is being signed in. Wait for it to finish, then try again." },
     steps: [
@@ -1190,7 +1203,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Permission approval could not be saved",
-    description: "The error alert separates the failed-save summary from the selectable Permission denied diagnostic beneath it. Codex's Permission approval row keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact.",
+    description: "The error alert is titled \"Could not save the permission approval\" and says only \"Access was denied.\" with the permissions remedy (the daemon sent the system's text with no code to word it by, so the application names the cause from that text); that text, which says the account settings could not be saved with Permission denied (os error 13), is only in the Error details disclosure, closed here. Codex's Permission approval row keeps Follow account configuration behind the alert; acknowledging the error leaves that saved selection intact.",
     state: approvalState,
     accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [
@@ -1205,7 +1218,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Approve everything could not be saved",
-    description: "Confirming Approve everything was refused. The error alert shows the failed-save summary above a selectable Permission denied diagnostic, with the confirmation dialog still open beneath it; the Permission approval row still reads Automatic.",
+    description: "Confirming Approve everything was refused. The error alert is titled \"Could not save the permission approval\" and says only \"Access was denied.\" with the permissions remedy, and the system's text (the account settings could not be saved, Permission denied, os error 13) is only in its Error details disclosure, closed here, with the confirmation dialog still open beneath it; the Permission approval row still reads Automatic.",
     state: quotaState,
     accountApprovalError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The account settings could not be saved: Permission denied (os error 13)" },
     steps: [

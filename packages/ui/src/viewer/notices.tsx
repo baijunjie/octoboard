@@ -22,7 +22,8 @@ export const FIRST_ANNOUNCEMENT_DELAY_MS = AFTER_FOCUS_MOVE_DELAY_MS;
  *   is: a size budget, a change read at an older version, lines left collapsed because the whole
  *   file is not to be had.
  * - `warned` — it says something about the content that has to be known before reading it: a side
- *   of the change that lies outside the project.
+ *   of the change that lies outside the project, or a read that failed where the stand-in on screen
+ *   is still true and only the preview was lost.
  * - `failed` — it reports that something went wrong, so the view that was asked for is not the one
  *   on screen: a read that errored, a diff that could not be drawn, an image that would not decode.
  *
@@ -87,7 +88,8 @@ function SpokenSentence({ text, element }: { text: string; element?: "div" | "sp
  *
  * The mark is named by `sentence`, which is also what it says: every tone opens it in a popover.
  * `line` is the same sentence with markup in it (a path in a chip), shown in the popover in place of
- * the plain text; the popover is named by the tone either way.
+ * the plain text; the popover is named by the tone either way. `detail` is raw text (what the system
+ * said) the popover shows under the sentence, which the sentence never holds.
  *
  * A notice that can appear after the surface has been drawn would otherwise never reach a reader,
  * so it is also spoken: pass `speak`, which says the sentence in a status region. A notice that is
@@ -101,16 +103,18 @@ export function FileNotice({
   sentence,
   speak = false,
   line,
+  detail,
 }: {
   tone?: NoticeTone;
   sentence: string;
   speak?: boolean;
   line?: React.ReactNode;
+  detail?: string;
 }): React.ReactElement {
   const slot = useContext(NoticeSlots)?.slots[tone];
   return (
     <>
-      {slot && createPortal(<StatusMark tone={MARK_TONES[tone]} label={sentence} line={line} />, slot)}
+      {slot && createPortal(<StatusMark tone={MARK_TONES[tone]} label={sentence} line={line} detail={detail} />, slot)}
       {speak && <SpokenSentence text={sentence} />}
     </>
   );

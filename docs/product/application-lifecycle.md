@@ -43,8 +43,8 @@ Two things happen on every daemon start:
 processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a
 screen that states why the daemon could not start and offers to quit — a failed start never leaves a window with no
 explanation. The daemon's own reason is shown there as raw text in a block of its own, its long lines wrapped; the
-error alert shown over the screen says the daemon did not start, with the same reason in a block under that
-sentence. With no daemon running there is nothing to keep running, so closing the window quits whatever that
+error alert shown over the screen says the daemon did not start, with the same reason in a block under its **Error
+details**. With no daemon running there is nothing to keep running, so closing the window quits whatever that
 setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
 Unix user, whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
 

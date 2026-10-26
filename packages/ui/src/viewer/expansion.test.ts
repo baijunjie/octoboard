@@ -161,6 +161,12 @@ it("says a failed read at the separator, and reads again on the next expansion",
   expect(expanded).toEqual([[1, "up", EXPANSION_STEP]]);
 });
 
+it("says a failure that is no read refusal with no reason of its own, its text kept as the raw detail", async () => {
+  load.mockRejectedValueOnce(new TypeError("cannot read properties of undefined"));
+  await press(control("[data-expand-up]"));
+  expect(status.at(-1)).toStrictEqual({ kind: "failed", detail: "cannot read properties of undefined" });
+});
+
 it("drops a failure said at the separator when the change is read again", async () => {
   load.mockRejectedValueOnce(new ChangeBodiesError("failed", "no luck"));
   await press(control("[data-expand-up]"));

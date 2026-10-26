@@ -4,8 +4,9 @@
 // much each expansion reveals, the separators' wording in the app's language, and keyboard access
 // to them. Everything it reads or sets in the library's markup goes through `rendererDom.ts`. No
 // library type crosses it.
+import type { MessageParams } from "../protocol";
 import { bodiesPlan } from "./budgets";
-import { ChangeBodiesError, type ChangeBodies } from "./content";
+import { bodiesFailure, ChangeBodiesError, type ChangeBodies } from "./content";
 import {
   controlOf,
   controlsOf,
@@ -50,7 +51,9 @@ export interface SeparatorLabels {
 export type ExpansionStatus =
   | { kind: "idle" }
   | { kind: "loading" }
-  | { kind: "failed"; message: string }
+  /** `message` is why in the application's own words (absent: the generic sentence), `detail` the raw text and
+   * `failure` the coded failure behind `message` where it sets names as chips. */
+  | { kind: "failed"; message?: string; detail?: string; failure?: { code: string; params: MessageParams } }
   | { kind: "changed" }
   | { kind: "overBudget" }
   | { kind: "unavailable" };
@@ -257,7 +260,7 @@ export class Expansion {
         } else if (reason === "failed") {
           this.failedGap = gap;
           this.decorate();
-          this.hooks.report({ kind: "failed", message: error instanceof Error ? error.message : String(error) });
+          this.hooks.report({ kind: "failed", ...bodiesFailure(error) });
         } else {
           this.decorate();
           this.hooks.report({ kind: "idle" });

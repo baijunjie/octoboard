@@ -5,6 +5,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
 import { currentLanguage, setLanguage, t } from "../i18n/language";
 import type { Console, Project, Session } from "../protocol";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
@@ -79,7 +80,8 @@ it("keeps the stored value and reports a failed save", async () => {
   change(select, "auto_review");
   await act(async () => {});
   expect(select.value).toBe("inherit");
-  expect(toastError).toHaveBeenCalledOnce();
+  expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not save the permission approval"]);
+  while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   expect(select.disabled).toBe(false);
 });
 

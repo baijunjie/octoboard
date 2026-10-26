@@ -3,7 +3,7 @@ import React, { useMemo, useState } from "react";
 
 import { CopyButton } from "../components/CopyButton";
 import { Button } from "../components/Button";
-import { errorDetails, failureParam, FailureBody } from "../components/DaemonErrorMessage";
+import { errorDetails, failureParam, FailureBody } from "../components/errorParts";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { StatusMark } from "../components/StatusMark";
 import { PaneFailure } from "../components/PaneFailure";

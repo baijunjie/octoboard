@@ -110,16 +110,19 @@ glyph shape as well as its own colour, so a tone never rests on colour alone:
   size budget, a change read at an older version, lines that stay collapsed because the whole file is not to be had, a
   change with no differences whose content is shown whole in place of a diff;
 - **a warning**, an amber warning triangle, says something about the content that has to be known before reading it —
-  a side of a change that lies outside the project;
+  a side of a change that lies outside the project, or a change with no differences whose content could not be shown,
+  its stand-in still true;
 - **a failure**, a red circled `!`, reports that something went wrong, so the view on screen is not the one that was
   asked for — a read that failed, a grammar that could not be loaded, code, a diff or a document that could not be
   drawn, an image that would not decode.
 
-A mark is named by the notice's sentence, and that sentence is what it opens. Every mark, whatever its tone, is a
-button and a tab stop that opens the sentence in a popover, with no tooltip, under the rules of a failure mark (see
-"Failures marked on a row" in `docs/product/error-alerts.md`): a mouse resting on it opens it without moving keyboard
-focus, and it stays open while the pointer moves into it, so its text can be selected and copied with the mouse; a
-mouse click opens nothing; and a tap, Enter or Space, or assistive technology opens it with keyboard focus inside.
+A mark is named by the notice's sentence, and that sentence is what it opens; where the notice carries what the system
+or Git said, that text follows the sentence in the popover as raw text, and is never in the sentence or the name. Every
+mark, whatever its tone, is a button and a tab stop that opens the sentence in a popover, with no tooltip, under the
+rules of a failure mark (see "Failures marked on a row" in `docs/product/error-alerts.md`): a mouse resting on it opens
+it without moving keyboard focus, and it stays open while the pointer moves into it, so its text can be selected and
+copied with the mouse; a mouse click opens nothing; and a tap, Enter or Space, or assistive technology opens it with
+keyboard focus inside.
 
 Where a mark stands follows from what its notice is about:
 
@@ -176,7 +179,8 @@ shown on the screen" in `docs/product/error-alerts.md`).
 A reason the viewer gives for a read that failed — in an error or in a failure notice — does not repeat a path the
 header already shows: when the reason is about the file on screen, it speaks of "this file" instead. A reason about any
 other path, such as a parent folder or the path a rename came from, still names that path, and a reason the viewer
-does not recognise is shown as it arrived.
+has no words for is the sentence of a failure Octoboard has no message of its own for (see "Failures shown on the
+screen" in `docs/product/error-alerts.md`), its own text kept apart as raw text.
 
 ## A Markdown file as a document
 

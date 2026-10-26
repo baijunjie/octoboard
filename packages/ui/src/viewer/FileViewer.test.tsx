@@ -16,6 +16,7 @@ import { FileViewer, type ViewerNavigation } from "./FileViewer";
 import { detailsButton } from "../components/detailsTestSupport";
 import { enter, leave, openTooltip, press, tap } from "../components/tooltipTestSupport";
 import { markNames, ViewerHost } from "./viewerTestSupport";
+import { rawFailureText } from "../errorText";
 import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./wordWrap";
 
@@ -379,8 +380,29 @@ it("falls back to saying nothing changed when that content cannot be read", asyn
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", "git failed"));
   show({ key: "e", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
   await settled();
-  expect(markNames(dialog()!)).toEqual([`Could not read this file's content. ${isolate("git failed")}`]);
+  expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate("git failed")}`]);
   expect(dialog()?.textContent).toContain("No differences");
+});
+
+it.each([
+  { case: "an internal failure", failure: () => {
+    const error = new DaemonRequestError("database is locked", "internal_error", { detail: "database is locked" });
+    // As `useChangeReader` raises it: a failure the application has no words for carries no wording.
+    return new ChangeBodiesError("failed", undefined, rawFailureText(error));
+  } },
+  { case: "a failure that is no read refusal", failure: () => new TypeError("database is locked") },
+])("says $case of the unchanged content as the generic sentence, its own text only in the mark's popover", async ({ failure }) => {
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file" });
+  const loadBodies = () => Promise.reject(failure());
+  show({ key: "internal", path: "f", content: { state: "change", change: { old: side("f"), new: side("f"), patch: "", loadBodies } } });
+  await settled();
+  expect(markNames(dialog()!)).toEqual(["Could not show this file's content."]);
+  tap(dialog()!.querySelector("[data-status-mark]")!, "Enter");
+  const popover = document.querySelector("[data-status-mark-popover] [role=dialog]");
+  expect(popover?.getAttribute("aria-label")).toBe("Warning");
+  expect(popover?.textContent).toContain("Could not show this file's content.");
+  expect(popover?.textContent).not.toContain("Something unexpected");
+  expect(popover?.querySelector("pre")?.textContent).toBe("database is locked");
 });
 
 it.each([false, true])("does not repeat the path when unchanged content fails to load, renamed %s", async (renamed) => {
@@ -390,8 +412,21 @@ it.each([false, true])("does not repeat the path when unchanged content fails to
   const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message));
   show({ key: "missing-content", path, content: { state: "change", change: { old: side(renamed ? "src/old.ts" : path), new: side(path), patch: "", loadBodies } } });
   await settled();
-  expect(markNames(dialog()!)).toEqual([`Could not read this file's content. ${isolate(message)}`]);
+  expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate(message)}`]);
   expect(dialog()?.textContent?.match(/src\/gone\.ts/g)).toHaveLength(1);
+});
+
+it("sets a path in the cause of a failed read of the unchanged content as a chip in the mark's popover", async () => {
+  const side: ViewerChangeSide = { state: "present", path: "f", kind: "file" };
+  const failure = { code: "file_not_found", params: { path: "src/other.ts" } };
+  const message = viewerErrorText(t, "en", new DaemonRequestError("gone", failure.code, failure.params), "f", NO_RECORDS);
+  const loadBodies = () => Promise.reject(new ChangeBodiesError("failed", message, undefined, failure));
+  show({ key: "chip", path: "f", content: { state: "change", change: { old: side, new: side, patch: "", loadBodies } } });
+  await settled();
+  expect(markNames(dialog()!)).toEqual([`Could not show this file's content. ${isolate(message)}`]);
+  tap(dialog()!.querySelector("[data-status-mark]")!, "Enter");
+  const popover = document.querySelector("[data-status-mark-popover] [role=dialog]");
+  expect(popover?.querySelector("[data-inline-reference]")?.textContent).toBe("src/other.ts");
 });
 
 it("does not repeat the path in an expansion failure", async () => {

@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 
-import { codedMessageNode, type DaemonErrorPart } from "../components/DaemonErrorMessage";
+import type { DaemonErrorPart } from "../components/DaemonErrorMessage";
+import { codedMessageNode } from "../components/errorParts";
 import { daemonMessage } from "../daemonMessage";
-import { isolate } from "../i18n/isolate";
+import { ActionableError } from "../errorRecovery";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage } from "../i18n/react";
 import { ConfigurationFileError } from "../platform";
@@ -26,15 +27,15 @@ export function useFailureNode(): (failure: ImportFailure, part?: DaemonErrorPar
   return (failure, part) => codedMessageNode(failure, failureText(failure), part);
 }
 
-/** What went wrong saving or opening the configuration file, worded in the current language: a file
- * too large or not text by its kind, anything else as `failed` with the system's own text, which
- * cannot be localized. */
-export function fileFailureText(
+/** What went wrong saving or opening the configuration file, as the failure to report: a file too large or not text
+ * worded by its kind, anything else as `failed`, with the system's own text, which cannot be localized, kept apart as
+ * the failure's raw `detail`. Its remedy is the file's, or what the system's error names (`classifyError`). */
+export function fileFailure(
   t: Translate,
   err: unknown,
-  failed: "configuration.export.failed" | "configuration.import.readFailed",
-): string {
-  if (err instanceof ConfigurationFileError && err.kind === "too_large") return t("configuration.file.tooLarge");
-  if (err instanceof ConfigurationFileError && err.kind === "not_text") return t("configuration.file.notText");
-  return t(failed, { detail: isolate(err instanceof Error ? err.message : String(err)) });
+  failed: "configuration.export.couldNotSave" | "configuration.import.couldNotRead",
+): ActionableError {
+  if (err instanceof ConfigurationFileError && err.kind === "too_large") return new ActionableError(t("configuration.file.tooLarge"), "file", { cause: err });
+  if (err instanceof ConfigurationFileError && err.kind === "not_text") return new ActionableError(t("configuration.file.notText"), "file", { cause: err });
+  return new ActionableError(t(failed), "file", { cause: err, detail: err instanceof Error ? err.message : String(err) });
 }

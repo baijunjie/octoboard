@@ -4,12 +4,12 @@ import { DaemonErrorMessage, ShellTimeoutCommand } from "./components/DaemonErro
 import { DiagnosticBlock } from "./components/DiagnosticBlock";
 import { RecoveryGuidance } from "./components/ErrorGuidance";
 import { InlineReference } from "./components/InlineReference";
-import { DETAIL_BLOCK_CODES, RECOVERY_CODES } from "./daemonMessage";
+import { RECOVERY_CODES } from "./daemonMessage";
 import { errorAlerts } from "./errorAlerts";
 import { DaemonRequestError } from "./daemon-client";
 import { hasCodeParams, hasShellTimeoutDetails, isUncataloguedFailure } from "./errorPresentation";
 import { additionalRecovery, classifyError, type ErrorRecovery } from "./errorRecovery";
-import { errorText, unexpectedFailureDiagnostic } from "./errorText";
+import { errorText, rawFailureText } from "./errorText";
 import { isMessageKey } from "./i18n/catalog";
 import { t } from "./i18n/language";
 import { Message, useT } from "./i18n/react";
@@ -33,7 +33,7 @@ function isUnexpectedWithoutSentence(error: SwitchFailure["error"]): boolean {
  * for, which its row never shows. A failure whose message is the sentence already shown has none. */
 function rawDetails(error: SwitchFailure["error"]): ((labelledBy: string) => React.ReactNode) | undefined {
   if (hasShellTimeoutDetails(error)) return () => <ShellTimeoutCommand params={error.params} />;
-  const text = error.params.detail && DETAIL_BLOCK_CODES.has(error.code) ? error.params.detail : isUncataloguedFailure(error) ? unexpectedFailureDiagnostic(error) : undefined;
+  const text = rawFailureText(error);
   return text ? (labelledBy) => <DiagnosticBlock labelledBy={labelledBy}>{text}</DiagnosticBlock> : undefined;
 }
 

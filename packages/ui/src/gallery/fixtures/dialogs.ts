@@ -593,7 +593,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch partial failure",
-    description: "The dialog has closed and the batch has finished: one alert titled \"2 sessions could not move to\" the Work account's chip, its first line saying they stay on their current account. One row per failed session, its name in bold over a short reason: the copy failure's sentence for one, and for the other the daemon's own text of an unexpected failure. The remedy for the full disk follows the list once, then the paragraph about a possible bug, which is there because one failure is unexpected. Error details is open, with a heading per session that has raw text: only the copy's, the system's own words, since the unexpected failure's text is already in its row. The footer holds Report issue and OK; the session that did switch stays on the new account.",
+    description: "The dialog has closed and the batch has finished: one alert titled \"2 sessions could not move to\" the Work account's chip, its first line saying they stay on their current account. One row per failed session, its name in bold over a short reason: the copy failure's sentence for one, and for the other only the application's \"Failed unexpectedly.\", with no daemon text in the row. The remedy for the full disk follows the list once, then the paragraph about a possible bug, which is there because one failure is unexpected. Error details is open, with a heading per session and under it that session's raw text in a block of its own: the system's own words for the copy and the daemon's text for the unexpected failure. The footer holds Report issue and OK; the session that did switch stays on the new account.",
     state: switchAccountState,
     externalLinks: "available",
     sessionAccountSwitches: {
@@ -1182,7 +1182,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder could not be moved to the Trash",
-    description: "The move to the Trash failed; a separate error alert requires acknowledgement and the project is kept.",
+    description: "The move to the Trash failed; a separate error alert requires acknowledgement and the project is kept. It says only that the folder could not be moved and what to check; the system's own text (Operation not permitted, os error 1) is in its Error details disclosure, closed here, and in no sentence.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   archiveConsoleSession,
@@ -1241,7 +1241,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "exceptional",
     title: "Archive failed after confirmation",
-    description: "The danger error alert identifies the full disk and tells the user to free space before retrying. After OK, the archive confirmation remains open and usable, with the original sessions intact.",
+    description: "The danger error alert is titled \"Could not archive the session\" and says only \"The disk is full.\" (the daemon sent the system's text with no code to word it by, so the application names the cause from that text) and tells the user to free space on the disk before retrying; the system's own text, No space left on device (os error 28), is only in the Error details disclosure, closed here. After OK, the archive confirmation remains open and usable, with the original sessions intact.",
     sessionArchiveError: { code: "store_io_failed", params: { detail: "No space left on device (os error 28)" }, message: "No space left on device (os error 28)" },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),

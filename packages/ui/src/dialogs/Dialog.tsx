@@ -233,9 +233,13 @@ export function Dialog({
     openDialogs += 1;
     return () => {
       openDialogs -= 1;
-      if (openDialogs > 0) return;
-      const element = takeMenuFocusToRestore();
-      if (element) setTimeout(() => element.isConnected && element.focus(), 0);
+      // Decided a turn later: a dialog that replaces this one in the same commit (the login dialog's running form
+      // giving way to its failure form) has mounted by then, so the menu's focus is not taken from it.
+      setTimeout(() => {
+        if (openDialogs > 0) return;
+        const element = takeMenuFocusToRestore();
+        if (element?.isConnected) element.focus();
+      }, 0);
     };
   }, []);
 

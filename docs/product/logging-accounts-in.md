@@ -32,16 +32,16 @@ address to open by hand.
 
 ## The login dialog
 
-Log in opens a modal dialog titled for the agent and the account ("Log in to Codex account Work") and starts the
-login at once. While the login runs, the dialog shows a spinner and says that the account is logging in, then that it
-is waiting for the user to authorize in the browser — for Grok Build, with the code to confirm instead. Its buttons
-are **Open the page again**, while the page's address is known, and **Cancel login**. While the login runs, what the
-dialog says is announced to assistive technology as it changes. Its first announcement comes about 1.5 seconds after
+Log in opens a modal dialog titled "Log in" and starts the login at once. Its first line names the agent and the
+account ("Logging in to Codex account Work…"). Under it is a spinner, alone while the login starts, then beside it
+that the dialog is waiting for the user to authorize in the browser — for Grok Build, the code to confirm instead. Its
+buttons are **Open the page again**, while the page's address is known, and **Cancel login**. While the login runs,
+where it is is announced to assistive technology as it changes. Its first announcement comes about 1.5 seconds after
 the dialog opens, or after **Log in again** (below) starts a new login, so that it follows the announcement of the
 dialog itself and of the button focus is on.
 
-**Closing the dialog cancels the login**: Cancel login, Escape and the dialog's close button all end a login that is
-still running. Only one login can be followed from Settings at a time, since the dialog is modal; the daemon itself
+**Closing the dialog cancels the login**: while the login runs, Cancel login, Escape and the dialog's close button
+all end it. Only one login can be followed from Settings at a time, since the dialog is modal; the daemon itself
 runs at most one login per account, and one Codex login at a time across all accounts. Log in is unavailable for an
 account whose login is running.
 
@@ -68,17 +68,36 @@ A login ends in one of these:
   both have happened. While the user is away from the window — it is minimized or hidden, or another application, such
   as the browser they authorized in, is in front — the announcement waits, and comes about 1.5 seconds after they are
   back in it. A success that had already happened when the section or the agent's tab is shown again is not announced.
-- **Could not log in**: the dialog stays open, says the login to the account did not go through and gives the agent's
-  reason. When the CLI said it succeeded but the agent still reports the account not signed in, the reason says so.
-- **Timed out**, after 10 minutes of waiting for the user to authorize: the dialog stays open and says the login timed
-  out.
+- **Could not log in**: the dialog becomes a failure alert (see "When a login fails" below). When the CLI said it
+  succeeded but the agent still reports the account not signed in, its cause says so.
+- **Timed out**, after 10 minutes of waiting for the user to authorize: the dialog becomes a failure alert saying the
+  login timed out.
 - **Cancelled**, including from another window: the dialog closes.
 - **Lost**, when the daemon restarts or the connection is re-established while the login runs: the dialog closes.
 
-A login that cannot start is shown the same way as one that could not log in, in the dialog with the daemon's reason:
-for example while another Codex account is logging in. A start refused because this account's login is already
-running is not shown as a failure; the dialog takes up that login instead. After a failure, a timeout or a refusal,
-the dialog offers **Log in again**, which starts a new login in the same dialog, and **Close**.
+A login that cannot start is shown the same way as one that could not log in, with the daemon's reason: for example
+while another Codex account is logging in. A start refused because this account's login is already running is not
+shown as a failure; the dialog takes up that login instead.
+
+### When a login fails
+
+After a failure, a timeout or a refusal, the running dialog gives way to a failure alert of its own, in the form of an
+error alert (see "The error alert" in `docs/product/error-alerts.md`), though it is not queued with them: the danger
+icon, the title "Could not log in" or, for a timeout, "Login timed out", no close button, and Escape does not close it.
+Its appearing, with keyboard focus moving into it, is what assistive technology hears of the failure.
+
+- Its body opens with one sentence naming the agent and the account: that logging in to the account failed, or that
+  the login to it timed out. Where the failure has a cause beyond failing, the same sentence goes on with it — the
+  daemon's reason for a refusal, that the CLI finished but the account is still not logged in, and for a failure
+  Octoboard has no message of its own for, the sentence such a failure opens with (see "Failures shown on the screen"
+  in `docs/product/error-alerts.md`). A login the agent's CLI simply reported as failed has no further cause there.
+- Then the main remedy, where the failure has one; for a failure Octoboard has no message of its own for, the next step
+  of its kind, or, when it is unexpected, the request to report it, with **Report issue** in the footer.
+- Then any further explanation in Octoboard's words.
+- What the agent's CLI or the system said is only under a collapsed **Error details** disclosure at the end.
+
+Its buttons are **Report issue** where it applies, **Close**, and **Log in again**, which has keyboard focus. Log in
+again brings the running dialog back on a new login; Close closes it, as above.
 
 Whatever the outcome, the account's quota is read again within about 15 seconds (see "When quotas are read" in
 `docs/product/account-quotas.md`).

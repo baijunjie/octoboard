@@ -111,8 +111,9 @@ What does not follow it:
   injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI is
   localized. What a session is told of the user's language names it, in English, without translating anything else
   (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
-- **What a daemon error quotes from elsewhere** — a path, an agent's name, the operating system's or `git`'s own
-  message — is shown as it came, inside the localized wording.
+- **What a daemon error quotes from elsewhere** is shown as it came: a path or an agent's name inside the localized
+  wording, and the operating system's, `git`'s or an agent's own message never inside it but apart, as raw text (see
+  "Names and diagnostic details" in `docs/product/error-alerts.md`).
 
 ## Where the choice is stored
 

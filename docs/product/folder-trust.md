@@ -150,14 +150,17 @@ taken as the person answering it there: its prompt is not put to a client again,
 for a confirmation that is no longer waiting, and an attempt of Octoboard's to press it ends without a notice.
 
 When any check fails the attempt stops without sending the next key and the confirmation is left for the user. A
-session's confirmation is pressed at most once per run, so a failed attempt is not retried; the user is told in a
-notice on the session that Octoboard could not press that agent's confirmation, with the reason, and that they should
-answer it in the terminal. The confirmation counts as pressed once it is seen to go away — for Grok Build, once Grok has
-sent its first hook report, within about 12 seconds of the key, and the entry it wrote has reached the user's own trust
-store (see "Carrying Grok Build's trust record" below). When no hook report comes to carry the entry — a policy that
-runs none of Octoboard's hooks — the press counts once the session's screen is seen no longer to show the
-confirmation, and the permission a go-ahead from the trust dialog asked for is recorded then; nothing has been carried to the user's trust store at
-that point, and a hook report that comes later still carries the entry.
+session's confirmation is pressed at most once per run, so a failed attempt is not retried; the user is told in a notice
+on the session that Octoboard could not press that agent's confirmation, with the reason, and that they should answer it
+in the terminal. The window shows it as an error alert titled "Could not answer the trust confirmation"; a reason that
+carries the system's text, such as a failed write to the terminal, keeps that text under **Error details**, and one the
+window has no words for is given as something unexpected having gone wrong. The confirmation counts as pressed once it
+is seen to go away — for Grok Build, once Grok has sent its first hook report, within about 12 seconds of the key, and
+the entry it wrote has reached the user's own trust store (see "Carrying Grok Build's trust record" below). When no hook
+report comes to carry the entry — a policy that runs none of Octoboard's hooks — the press counts once the session's
+screen is seen no longer to show the confirmation, and the permission a go-ahead from the trust dialog asked for is
+recorded then; nothing has been carried to the user's trust store at that point, and a hook report that comes later
+still carries the entry.
 
 **Recognition is limited to the start of a session.** A confirmation is looked for only in the session's own terminal
 output, and only for as long as it can still come up, so the same words appearing later in a session are never taken
@@ -192,13 +195,17 @@ Octoboard's.
 
 When the entry does not reach the user's store, nothing is written there, no permission is recorded, and a notice on
 the session says that Octoboard could not copy Grok's trust for this folder into that file, so Grok will ask again the
-next time it opens the folder. The reason given is one of:
+next time it opens the folder. The window shows it as a toast (see `docs/product/toasts.md`), except where it carries
+what the system said — a failed read or write of the file, or a reason this window has no words for, which the
+sentence then gives as something unexpected having gone wrong. That is an error alert titled "Trust not carried
+over", its first line naming the session, with the system's text under **Error details** and no **Report issue** (see
+"The error alert" in `docs/product/error-alerts.md`). The reason given is one of:
 
 - no entry for the folder appeared in the session's copy of the store within a few seconds of Grok's hook report;
 - the user's store stayed locked by another program;
 - the user's store could not be read as a trust store, or the entry could not be added without changing anything else
   in it, so it was left as it is;
-- reading or writing the file failed, with the system's own message.
+- reading or writing the file failed; the system's own message is not part of the sentence.
 
 When Octoboard pressed the confirmation itself, such a failure is also the failure of that press, so "Trust and
 continue" records nothing, the folder checkbox ticked or not.

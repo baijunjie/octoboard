@@ -1,5 +1,5 @@
 import { AGENT_OPTIONS } from "../agents";
-import { gitBadgeAriaLabel } from "../gitStatusLabel";
+import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import { panelId, type PanelKind } from "../panels/stackState";
@@ -311,12 +311,21 @@ export interface Ui {
    * there, as `hoverIndicator` does. The badge has one tooltip for the glyph, branch and fixed
    * counts. Only the branch line fades and runs, so which of glyph or line the pointer
    * lands on is the scenario's to choose (`over`); it fails where the badge has no line, such as a
-   * lone glyph. With `row` it is the badge of the sidebar project row named `row`, whose own name
-   * must fold the badge's sentence in; without it, the badge in focus mode's header, found by its
-   * own name. It fails unless the tooltip that opens is that sentence exactly, which also takes a
-   * `status` that is not the one on screen. A badge that says "No commits yet" in visible text has
-   * no tooltip, and fails here rather than hover the activity marker beside it. */
+   * lone glyph, and where it has no glyph, which a failed check that is idle draws as its failure
+   * mark outside the tooltip (`openGitFailure`). With `row` it is the badge of the sidebar project row
+   * named `row`, whose own name must fold the badge's sentence in; without it, the badge in focus
+   * mode's header, found by its own name. It fails unless the tooltip that opens is that sentence
+   * exactly, which also takes a `status` that is not the one on screen. A badge that says "No commits
+   * yet" in visible text, or a failed read with no branch, nothing in flight and no counts, which shows
+   * the failure mark alone, has no tooltip, and fails here rather than hover the activity marker
+   * beside it. */
   hoverGitBadge: (status: GitStatus, over: "glyph" | "line", row?: Matcher) => Promise<void>;
+  /** Presses the failure mark of a git badge with a finger and returns once its popover is up in its
+   * press form (modal, focus inside), holding the reason, the remedy and Git's own text. With `row` it is
+   * the mark of the sidebar project row named `row`, found by its own name among the row's controls;
+   * without it, the one in the sidebar (focus mode's header). Fails if there is no such mark, which also
+   * catches a status that did not fail, or if what opens is not a popover. */
+  openGitFailure: (row?: Matcher) => Promise<void>;
   /** Moves the pointer onto the context size of the session card or row named `row` and leaves it
    * there, as `hoverIndicator` does, for the context window card. The size is the `role="img"`
    * trigger whose name starts with the "Context" heading, which a card's status glyph does not, so
@@ -389,11 +398,12 @@ export interface Ui {
   daemonEvents: (...events: (DaemonEvent | ((state: State) => DaemonEvent))[]) => Promise<void>;
 }
 
-/** The icon the git badge draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
- * chooses it: a check, pull or push in flight, a failed check, a detached `HEAD`, else a branch). */
-function gitGlyphOf(status: GitStatus): string {
+/** The icon the badge's tooltip trigger draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
+ * chooses it: a check, pull or push in flight, a detached `HEAD`, else a branch). A failed check that is idle draws
+ * none there: the failure mark (`openGitFailure`) stands in for it outside the trigger. */
+function gitGlyphOf(status: GitStatus): string | undefined {
   if (status.activity !== "idle") return "refresh-cw";
-  if (status.error) return "circle-alert";
+  if (gitFailureShown(status)) return undefined;
   return status.detached ? "git-commit-horizontal" : "git-branch";
 }
 
@@ -938,7 +948,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async hoverGitBadge(status, over, row) {
       const sentence = gitBadgeAriaLabel(language, t, status);
-      const glyph = `svg.lucide-${gitGlyphOf(status)}`;
+      // Nothing is waited for: the status is the scenario's own and does not change.
+      if (!sentence) throw new Error("The git badge has nothing to hover: a failed read with no branch, nothing in flight and no counts shows its failure mark alone, with no tooltip");
+      const glyph = gitGlyphOf(status);
+      if (over === "glyph" && !glyph) throw new Error("The git badge has no glyph to hover: its failure mark stands in for it, outside the tooltip (openGitFailure)");
+      // The branch line, or the counts, are the badge's own LTR parts; the activity marker beside it has none.
+      const own = (element: HTMLElement) => (glyph ? element.querySelector(`svg.lucide-${glyph}`) : element.querySelector("[dir=ltr]")) !== null;
       await hover(
         () => {
           let trigger: HTMLElement | undefined;
@@ -956,17 +971,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
               throw new Error(`The row matching ${String(row)} does not name the badge's sentence "${sentence}": its name is "${nameOf(found)}"`);
             }
             // A row holds more than one tooltip trigger (the badge, then the activity marker of a
-            // collapsed one), so the badge is the one holding its state glyph: a row whose badge is
-            // no trigger (a repository with no commit yet, a directory that is not a repository)
-            // fails here rather than hover the marker.
-            trigger = Array.from(found.querySelectorAll<HTMLElement>(TOOLTIP_TRIGGER)).find((element) => element.querySelector(glyph));
+            // collapsed one), so the badge is the one holding its state glyph, or, with none, its branch
+            // or counts: a row whose badge is no trigger (a repository with no commit yet, a directory
+            // that is not a repository) fails here rather than hover the marker.
+            trigger = Array.from(found.querySelectorAll<HTMLElement>(TOOLTIP_TRIGGER)).find(own);
             // Found, so waiting would not change it: the row's badge has no tooltip.
             if (!trigger) throw new Error(`The row matching ${String(row)} has a badge that carries no tooltip to hover`);
           }
-          const mark = trigger?.querySelector(glyph);
-          if (!mark) return undefined;
+          if (!trigger || !own(trigger)) return undefined;
           // The branch has its own LTR line; upstream counts stay outside its fade and marquee.
-          const part = over === "glyph" ? mark : trigger?.querySelector("[dir=ltr]");
+          const part = over === "glyph" ? trigger.querySelector(`svg.lucide-${glyph}`) : trigger.querySelector("[dir=ltr]");
           // Found, so waiting would not change it: the badge has no line, only its glyph.
           if (!part) throw new Error(`The git badge has no ${over} to hover`);
           return part as HTMLElement;
@@ -979,6 +993,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (shown !== spoken) {
         throw new Error(`The git badge's tooltip is not its sentence "${spoken}": the last tooltip is ${shown ? `"${shown}"` : "none"}`);
       }
+    },
+    async openGitFailure(row) {
+      const label = gitFailureLabel(t);
+      const where = row === undefined ? "in the sidebar" : `in the row matching ${String(row)}`;
+      const mark = await waitFor(() => {
+        const scope = row === undefined ? doc.querySelector("[data-region=sidebar]") : find(row);
+        return Array.from(scope?.querySelectorAll<HTMLElement>("[data-status-mark]") ?? []).find((element) => element.getAttribute("aria-label") === label);
+      }, `No git failure mark ${where}`);
+      touch(mark);
+      const popover = await markPopover(mark, `A touch press of the git failure mark ${where} opened no popover`);
+      if (popover.querySelector("[role=dialog][aria-modal=false]")) throw new Error(`The popover of the git failure mark ${where} is the hover form, not the press form`);
+      await wait(TOOLTIP_SHOW_MS);
     },
     async terminalContextMenu() {
       const screen = await waitFor(() => {

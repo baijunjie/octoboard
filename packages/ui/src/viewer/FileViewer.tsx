@@ -19,12 +19,14 @@ import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { Dialog, useRefocusIfLost } from "../dialogs/Dialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
+import type { MessageParams } from "../protocol";
 import { useOctoboardTheme } from "../theme";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { arrowNavigation } from "./arrowKeys";
 import { useRendererScope } from "./codeRenderer";
 import { CodeSurface, DiffSurface } from "./CodeSurface";
 import {
+  bodiesFailure,
   ChangeBodiesError,
   changePresentation,
   changeStatus,
@@ -57,6 +59,7 @@ import {
   ViewerFirstContentContext,
   ViewerPaintedContext,
 } from "./viewerStates";
+import { BodiesFailureReason } from "./ViewerErrorMessage";
 import { FileNotice, FIRST_ANNOUNCEMENT_DELAY_MS, NoticeSlotBoxes, NoticeSlotsProvider } from "./notices";
 import { useWrapClaims, WrapToggleHost } from "./wordWrap";
 
@@ -668,7 +671,8 @@ function ChangeView({
  * whole file; the two are the same kind of change and now look it.
  *
  * Where the bodies cannot be had after all, it falls back to the stand-in it used to be, with the
- * reason above it when there is one to give.
+ * reason above it when there is one to give. A read that failed is a warning, not an error: the
+ * stand-in is true (it comes from Git's empty patch) and only the preview of the content is lost.
  */
 function UnchangedView({
   resetKey,
@@ -687,7 +691,7 @@ function UnchangedView({
   // What the read answered for this subject: its text, or why there is none. A read given up for a
   // newer one is left as `unavailable`, like any other content that is not to be had, rather than
   // as a spinner nothing would resolve.
-  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string }>();
+  const [read, setRead] = useState<{ key: string; text?: string; why?: "failed" | "unavailable" | "changed"; message?: string; detail?: string; failure?: { code: string; params: MessageParams } }>();
   useEffect(() => {
     if (!loadBodies) return;
     let current = true;
@@ -704,8 +708,7 @@ function UnchangedView({
       (error: unknown) => {
         if (!current) return;
         const reason = error instanceof ChangeBodiesError ? error.reason : "failed";
-        const message = error instanceof Error ? error.message : String(error);
-        setRead({ key: resetKey, why: reason === "superseded" ? "unavailable" : reason, message });
+        setRead({ key: resetKey, why: reason === "superseded" ? "unavailable" : reason, ...bodiesFailure(error) });
       },
     );
     return () => {
@@ -718,12 +721,22 @@ function UnchangedView({
   const said = t(kind === "identical" ? "viewer.change.identical.sentence" : "viewer.change.renamedUnchanged.sentence");
   // Keyed on the subject alone, so a re-read of the same one keeps what is on screen until it answers.
   const done = read?.key === resetKey ? read : undefined;
+  // The stand-in is true, so a failed read loses only the preview: a warning, in the application's
+  // words. A failure with no words of its own gives no cause (the generic "something unexpected"
+  // sentence would say nothing); the raw text stays in the mark's popover alone. Where the cause sets
+  // names as chips, the popover shows it so (`line`).
+  const cause = done?.message;
   const reason =
     done === undefined || done.text !== undefined
       ? undefined
       : done.why === "failed"
-        ? { tone: "failed" as const, text: t("viewer.change.contentFailed", { reason: isolate(done.message ?? "") }) }
-        : { tone: "explained" as const, text: t(done.why === "changed" ? "viewer.change.contentChanged" : "viewer.change.contentUnavailable") };
+        ? {
+          tone: "warned" as const,
+          text: cause === undefined ? t("viewer.change.contentNotShown") : t("viewer.change.contentNotShownBecause", { reason: isolate(cause) }),
+          line: cause !== undefined ? <Message id="viewer.change.contentNotShownBecause" params={{ reason: <BodiesFailureReason message={cause} failure={done.failure} /> }} /> : undefined,
+          detail: done.detail,
+        }
+        : { tone: "explained" as const, text: t(done.why === "changed" ? "viewer.change.contentChanged" : "viewer.change.contentUnavailable"), line: undefined, detail: undefined };
   return (
     <>
       {/* Mounted for as long as the change is, so the read's own progress and its outcome are both
@@ -739,7 +752,7 @@ function UnchangedView({
         </>
       ) : (
         <>
-          {reason && <FileNotice tone={reason.tone} sentence={reason.text} />}
+          {reason && <FileNotice tone={reason.tone} sentence={reason.text} line={reason.line} detail={reason.detail} />}
           <Unchanged kind={kind} />
         </>
       )}

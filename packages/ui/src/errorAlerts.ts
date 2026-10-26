@@ -20,7 +20,9 @@ export interface ErrorAlertRequest {
   failures?: readonly ErrorAlertFailure[];
   /** What the alert's "Error details" disclosure holds, in place of the diagnostics it works out from the
    * errors: for an alert whose failures each have details of their own, set apart by whose they are. `null` says
-   * there are none, and the alert shows no disclosure; only when absent does it work them out. */
+   * there are none, and the alert shows no disclosure; only when absent does it work them out. A single failure's
+   * raw part (see `rawErrorDetails`) is passed here by `reportError`, `Toasts` and `ErrorBoundary`, which word the
+   * failure themselves, so the alert does not work out a second copy of its raw text. */
   details?: ReactNode;
 }
 

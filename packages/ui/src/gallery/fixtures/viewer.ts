@@ -12,6 +12,7 @@ import type { FileContent } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
 import { formatFileSize } from "../../viewer/format";
+import { describing, type Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "./viewerImages";
 
@@ -1096,13 +1097,13 @@ function failure(id: string, title: string, description: string, slot: "file" | 
 const failureScenarios: Scenario[] = [
   failure("viewer-file-error-not-found", "Failed read: file gone", "The explanation says this file does not exist any more without repeating the path the header names.", "file", "docs/plans/20261020-ui-standard-audit/alert-verification.md", { message: "docs/plans/20261020-ui-standard-audit/alert-verification.md does not exist any more.", code: "file_not_found" }),
   failure("viewer-file-error-invalid-path", "Failed read: name not valid in the project", "The header shows the name that is not valid UTF-8 in its display form; the explanation refers to it as this path rather than repeating it.", "file", "docs/%FFreport%2520final.md", { message: "docs/�report%20final.md is not a valid path in this project.", code: "invalid_path" }),
-  failure("viewer-file-error-permission", "Failed read: permission refused", "The path is left to the header, while the system's reason stays in the explanation.", "file", "config/secrets.env", { message: "Octoboard is not allowed to read config/secrets.env: Permission denied (os error 13)", code: "permission_denied", params: { detail: "Permission denied (os error 13)" } }),
+  failure("viewer-file-error-permission", "Failed read: permission refused", "The path is left to the header: the explanation says only that Octoboard is not allowed to read this file, and the system's reason (Permission denied, os error 13) is behind Details, not in the sentence.", "file", "config/secrets.env", { message: "Octoboard is not allowed to read config/secrets.env: Permission denied (os error 13)", code: "permission_denied", params: { detail: "Permission denied (os error 13)" } }),
   failure("viewer-file-error-outside-scope", "Failed read: link leads outside the project", "The explanation says the file leads outside this project without repeating its path.", "file", "docs/shared-notes.md", { message: "docs/shared-notes.md leads outside this project, so it is not shown.", code: "outside_scope" }),
   failure("viewer-file-error-not-regular", "Failed read: not a regular file", "A named pipe: the explanation says this is not a regular file without repeating its path.", "file", "logs/live.pipe", { message: "logs/live.pipe is not a regular file.", code: "unsupported_file_type", params: { file_type: "fifo" } }),
-  failure("viewer-file-error-folder-denied", "Failed read: project folder refused", "The refusal names the project's folder, not this file, so its absolute path stays in the explanation.", "file", "src/session.ts", { message: "Octoboard is not allowed to read /Users/dev/Projects/search-api: Operation not permitted (os error 1)", code: "permission_denied", params: { path: "/Users/dev/Projects/search-api", detail: "Operation not permitted (os error 1)" } }),
+  failure("viewer-file-error-folder-denied", "Failed read: project folder refused", "The refusal names the project's folder, not this file, so its absolute path stays in the explanation; the system's reason (Operation not permitted, os error 1) is behind Details, not in the sentence.", "file", "src/session.ts", { message: "Octoboard is not allowed to read /Users/dev/Projects/search-api: Operation not permitted (os error 1)", code: "permission_denied", params: { path: "/Users/dev/Projects/search-api", detail: "Operation not permitted (os error 1)" } }),
   failure("viewer-file-error-too-large", "Failed read: file too large", "The explanation gives the file's size and the most that can be opened here, without repeating the path the header names.", "file", "data/export.csv", (t, language) => t("browser.error.fileTooLarge", { size: formatFileSize(language, 5_242_880), max: formatFileSize(language, 4_194_304) })),
   failure("viewer-file-error-too-large-no-size", "Failed read: file too large, size unknown", "Without the file's size, the explanation gives only the most that can be opened here.", "file", "data/stream.log", (t, language) => t("browser.error.fileTooLargeNoSize", { max: formatFileSize(language, 4_194_304) })),
-  failure("viewer-file-error-source-unavailable", "Failed read: worktree folder unavailable", "The folder the read is scoped to is gone, so its absolute path and the system's reason stay in the explanation.", "file", "src/session.ts", { message: "The folder /Users/dev/Projects/search-api-review cannot be read: No such file or directory (os error 2)", code: "source_unavailable", params: { path: "/Users/dev/Projects/search-api-review", detail: "No such file or directory (os error 2)" } }),
+  failure("viewer-file-error-source-unavailable", "Failed read: worktree folder unavailable", "The folder the read is scoped to is gone, so its absolute path stays in the explanation; the system's reason (No such file or directory, os error 2) is behind Details, not in the sentence.", "file", "src/session.ts", { message: "The folder /Users/dev/Projects/search-api-review cannot be read: No such file or directory (os error 2)", code: "source_unavailable", params: { path: "/Users/dev/Projects/search-api-review", detail: "No such file or directory (os error 2)" } }),
   failure("viewer-conflict-error-not-found", "Conflict whose file on disk is gone", "The pane holds the empty-state failure \"Could not open this file\" with the explanation that this file does not exist any more, without repeating the path. The header has no marks: the title's conflict chip is what says the path is in conflict.", "conflict", "docs/merge.md", { message: "docs/merge.md does not exist any more.", code: "file_not_found" }),
   failure("viewer-change-error-unmerged", "Change read: conflicting index entry", "The change's explanation says the file is in conflict without repeating its path.", "change", "src/merge.ts", { message: "src/merge.ts is not a regular file.", code: "unsupported_file_type", params: { file_type: "unmerged" } }),
   failure("viewer-change-error-changing", "Change read: still changing", "A failure the app words itself, with no code behind it, is shown as it is.", "change", "src/session.ts", (t) => t("git.error.changeChanging")),
@@ -1125,42 +1126,63 @@ function bodiesFailure(id: string, title: string, description: string, build: (t
     viewer: {
       subjects: async (language) => {
         const { DaemonRequestError } = await import("../../daemon-client");
-        const { viewerErrorText } = await import("../../viewer/viewerError");
+        const { changeBodiesFailure } = await import("../../viewer/viewerError");
         const t: Translate = (key, ...args) => format(language, key, ...args);
-        return [build(t, (header, refusal) => () => Promise.reject(new ChangeBodiesError("failed", viewerErrorText(t, language, new DaemonRequestError(refusal.message, refusal.code, refusal.params), header, { consoles: new Map(), projects: new Map(), sessions: new Map() }))))];
+        return [build(t, (header, refusal) => () => {
+          const error = new DaemonRequestError(refusal.message, refusal.code, refusal.params);
+          return Promise.reject(changeBodiesFailure(t, language, error, header, { consoles: new Map(), projects: new Map(), sessions: new Map() }));
+        })];
       },
     },
     steps,
   };
 }
 
+/** The mark of a changed file's header that says its content could not be read or shown, whatever its reason says
+ * after its fixed opening words. */
+const failureMark = (ui: Ui, key: "viewer.expand.failed" | "viewer.change.contentNotShownBecause" | "viewer.change.contentNotShown") => {
+  const opening = ui.t(key, { reason: "\0" }).split("\0")[0];
+  return describing(`the failure mark opening "${opening}"`, (name) => name.startsWith(opening));
+};
+
 const counted = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", lines: 40 });
 
 const bodiesFailureScenarios: Scenario[] = [
   bodiesFailure(
     "viewer-change-expand-error", "Unmodified lines that could not be read",
-    "A request for unmodified lines has failed: a danger mark after the path keeps the system's reason (in its popover) and refers to the file without repeating its path, and the separator it came from offers to try again.",
+    "A request for unmodified lines has failed: a danger mark after the path says in its popover that Octoboard (a chip) is not allowed to read the file, without repeating its path, then the system's reason (Permission denied, os error 13) in a block of its own under that sentence (the popover is held open here), and the separator it came from offers to try again.",
     (t, refuse) => ({
       key: "unstaged:src/pipeline.ts", path: "src/pipeline.ts", host: hostOf("src/pipeline.ts"), stage: t("git.group.unstaged"),
       content: { state: "change", change: { old: counted("src/pipeline.ts"), new: counted("src/pipeline.ts"), patch: EXPAND_FAILURE_PATCH, loadBodies: refuse("src/pipeline.ts", { message: "Octoboard is not allowed to read src/pipeline.ts: Permission denied (os error 13)", code: "permission_denied", params: { path: "src/pipeline.ts", detail: "Permission denied (os error 13)" } }) } },
     }),
-    [(ui) => ui.pressInDiff(ui.t("viewer.expand.above"))],
+    [(ui) => ui.pressInDiff(ui.t("viewer.expand.above")), (ui) => ui.hoverStatusMark(failureMark(ui, "viewer.expand.failed"))],
   ),
   bodiesFailure(
     "viewer-change-identical-error", "Unchanged file whose content could not be read",
-    "A danger mark after the path says (in its popover) this file does not exist any more without repeating its path; the unchanged stand-in fills the pane.",
+    "A warning mark (a triangle) after the path says in its popover that the file's content could not be shown, with the reason that the file does not exist any more, without repeating its path and with no raw text under it since there is none (the popover is held open here); the \"No differences\" stand-in fills the pane.",
     (t, refuse) => ({
       key: "staged:src/unchanged.ts", path: "src/unchanged.ts", host: hostOf("src/unchanged.ts"), stage: t("git.group.staged"),
       content: { state: "change", change: { old: present("src/unchanged.ts"), new: present("src/unchanged.ts"), patch: "", loadBodies: refuse("src/unchanged.ts", { message: "src/unchanged.ts does not exist any more.", code: "file_not_found", params: { path: "src/unchanged.ts" } }) } },
     }),
+    [(ui) => ui.hoverStatusMark(failureMark(ui, "viewer.change.contentNotShownBecause"))],
+  ),
+  bodiesFailure(
+    "viewer-change-unexpected-error", "Unchanged file whose content failed in a way the application has no words for",
+    "A warning mark (a triangle) after the path says in its popover only \"Could not show this file's content.\" with no cause appended, since the application has no words for this failure, then the daemon's own text for it (an unexpected session state, in English whatever the language) in a block of its own under it, held open here; the \"No differences\" stand-in fills the pane.",
+    (t, refuse) => ({
+      key: "staged:src/unchanged.ts", path: "src/unchanged.ts", host: hostOf("src/unchanged.ts"), stage: t("git.group.staged"),
+      content: { state: "change", change: { old: present("src/unchanged.ts"), new: present("src/unchanged.ts"), patch: "", loadBodies: refuse("src/unchanged.ts", { message: "Unexpected session state while reading the file", code: "internal_error", params: { path: "src/unchanged.ts", detail: "Unexpected session state while reading the file" } }) } },
+    }),
+    [(ui) => ui.hoverStatusMark(failureMark(ui, "viewer.change.contentNotShown"))],
   ),
   bodiesFailure(
     "viewer-change-renamed-unchanged-error", "Unchanged rename whose original could not be read",
-    "The danger mark after the path names the original path in its popover, which is not the one in the header, so it stays in the sentence.",
+    "The warning mark (a triangle) after the path says in its popover that the file's content could not be shown, with the reason naming the original path, which is not the one in the header, so it stays in the sentence as a path chip (the popover is held open here); the \"Renamed without changes\" stand-in fills the pane.",
     (t, refuse) => ({
       key: "staged:src/kept.ts", path: "src/kept.ts", host: hostOf("src/kept.ts"), stage: t("git.group.staged"),
       content: { state: "change", change: { old: present("src/previous.ts"), new: present("src/kept.ts"), patch: "", loadBodies: refuse("src/kept.ts", { message: "src/previous.ts does not exist any more.", code: "file_not_found", params: { path: "src/previous.ts" } }) } },
     }),
+    [(ui) => ui.hoverStatusMark(failureMark(ui, "viewer.change.contentNotShownBecause"))],
   ),
   {
     id: "viewer-image-error", group: GROUP, category: "exceptional",

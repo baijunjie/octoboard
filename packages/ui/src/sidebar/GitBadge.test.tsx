@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
-import React from "react";
+import React, { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { appConfig } from "../appConfig";
 import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
-import { enter, leave, mountForTooltip, openPopover, openTooltip, press, withFakeTimers } from "../components/tooltipTestSupport";
+import { enter, leave, mountForTooltip, openPopover, openTooltip, press, tap, withFakeTimers } from "../components/tooltipTestSupport";
 import { consoleOf, gitStatusOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import { PlatformProvider } from "../platform/react";
 import type { GitStatus } from "../protocol";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { ProjectFocusView } from "./FocusView";
 import { GitBadge } from "./GitBadge";
 import { Sidebar } from "./Sidebar";
@@ -32,15 +33,21 @@ const sidebarWidth = { width: 280, min: 280, max: 480, setWidth: () => {}, persi
  * focus mode's header, where the badge names itself. */
 interface Placement {
   name: string;
+  /** Mounts the placement for `status` and returns its container. */
+  render: (status: GitStatus) => HTMLElement;
   /** Mounts the badge for `status` and returns its box, the tooltip's trigger, found by its state glyph. */
   mount: (status: GitStatus, glyph: string) => HTMLElement;
   /** The element carrying the badge's accessible name, whichever that is. */
   named: (container: HTMLElement) => Element | null;
 }
 
+/** The store of the placement mounted last, so a test can change the status under it. */
+let store: ReturnType<typeof createStateStore>;
+
 function daemonWith(status: GitStatus): Daemon {
+  store = createStateStore({ gitStatuses: new Map([[web.id, status]]), sessions: new Map(sessions.map((session) => [session.id, session])) } satisfies Partial<State>);
   return {
-    store: createStateStore({ gitStatuses: new Map([[web.id, status]]), sessions: new Map(sessions.map((session) => [session.id, session])) }),
+    store,
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -65,6 +72,16 @@ function mountOver(status: GitStatus, view: React.ReactElement): HTMLElement {
 /** The badge's trigger: the box around the state glyph that gives way when the row is squeezed. */
 const badgeOf = (container: HTMLElement, glyph: string): HTMLElement => container.querySelector(`svg.lucide-${glyph}`)!.closest<HTMLElement>(".grid")!;
 
+/** A failed check: the mark stands in for the idle glyph, so the badge's box is found by its branch. */
+const RAW = "fatal: unable to access 'https://example.com/repo.git/': Could not resolve host";
+const FAILED: Partial<GitStatus> = { ahead: 3, behind: 2, error: RAW };
+
+/** The failure mark's button. */
+const markOf = (container: HTMLElement): HTMLElement => container.querySelector<HTMLElement>("[data-status-mark]")!;
+
+/** The badge's box beside the failure mark, the tooltip's trigger, which has no state glyph while nothing is in flight. */
+const factsOf = (container: HTMLElement): HTMLElement => markOf(container).parentElement!.nextElementSibling as HTMLElement;
+
 /** The branch name alone, which fades and runs as a marquee. */
 const lineOf = (badge: HTMLElement): HTMLElement => badge.querySelector<HTMLElement>(".overflow-hidden")!;
 
@@ -75,17 +92,20 @@ function partsOf(badge: HTMLElement): Element[] {
   return Array.from(only?.classList.contains("contents") ? only.children : badge.children);
 }
 
+const renderRow = (status: GitStatus) => mountOver(status, <Sidebar {...handlers()} projects={[web]} shownConsole={main} open sidebarWidth={sidebarWidth} />);
+const renderHeader = (status: GitStatus) => mountOver(status, <ProjectFocusView handlers={handlers()} console={main} project={web} sessions={sessions} owners={new Map()} />);
+
 const PLACEMENTS: Placement[] = [
   {
     name: "a sidebar project row",
-    mount: (status, glyph) =>
-      badgeOf(mountOver(status, <Sidebar {...handlers()} projects={[web]} shownConsole={main} open sidebarWidth={sidebarWidth} />), glyph),
+    render: renderRow,
+    mount: (status, glyph) => badgeOf(renderRow(status), glyph),
     named: (container) => container.querySelector("div[role=button]"),
   },
   {
     name: "focus mode's header",
-    mount: (status, glyph) =>
-      badgeOf(mountOver(status, <ProjectFocusView handlers={handlers()} console={main} project={web} sessions={sessions} owners={new Map()} />), glyph),
+    render: renderHeader,
+    mount: (status, glyph) => badgeOf(renderHeader(status), glyph),
     named: (container) => container.querySelector("[role=img]"),
   },
 ];
@@ -101,7 +121,6 @@ const ALL_STATES: Array<[string, Partial<GitStatus>, string, string]> = [
   ["detached", { branch: "a1b2c3d", detached: true }, "git-commit-horizontal", `Detached at ${isolate("a1b2c3d")}`],
   ["ahead", { ahead: 1 }, "git-branch", `Branch ${BRANCH}, 1 commit ahead`],
   ["behind", { behind: 4 }, "git-branch", `Branch ${BRANCH}, 4 commits behind`],
-  ["failed", { ahead: 3, behind: 2, error: "fetch failed" }, "circle-alert", `Branch ${BRANCH}, 3 commits ahead, 2 commits behind, Git error: ${isolate("fetch failed")}`],
 ];
 
 /** Puts the pointer on `element`, runs the delay out and reads which tooltip is up; then takes it
@@ -119,7 +138,6 @@ function hoverAndRead(element: Element): string | undefined {
     expect(branch?.getAttribute("dir")).toBe("ltr");
     expect(branch?.getAttribute("data-size")).toBe("xs");
     expect(branch?.querySelector("code")).not.toBeNull();
-    if (text?.includes("Git error:")) expect(tooltip.querySelector("pre code")?.textContent).toBe("fetch failed");
   }
   leave(element);
   settle();
@@ -140,28 +158,69 @@ function stubOverflow(): void {
   }
 }
 
-const STATES = ALL_STATES.filter(([name]) => name !== "failed");
-const FAILED = ALL_STATES.find(([name]) => name === "failed")!;
-
 // The text and the glyph do not vary with where the badge sits, so the states run once, on the
-// sidebar row; each placement is held below to one full sentence, over the glyph and over the
-// branch text and counts alike.
-it.each(STATES)("says its whole state in one tooltip: %s", (_, extra, glyph, sentence) => {
+// sidebar row; each placement is held below to one full sentence, over the branch text and the
+// counts alike.
+it.each(ALL_STATES)("says its whole state in one tooltip: %s", (_, extra, glyph, sentence) => {
   const badge = PLACEMENTS[0].mount(gitStatusOf(web.id, extra), glyph);
   expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(sentence.replace(/[\u2068\u2069]/g, ""));
 });
 
 for (const placement of PLACEMENTS) {
-  it(`gives the glyph, the branch and the counts the one sentence, the error's and the branch's alone gone, on ${placement.name}`, () => {
+  it(`gives the branch and the counts the one sentence, with no word of the failure, on ${placement.name}`, () => {
     stubOverflow();
-    const [, extra, glyph, sentence] = FAILED;
-    const badge = placement.mount(gitStatusOf(web.id, { ...extra, branch: "feature/long-branch-name" }), glyph);
+    const container = placement.render(gitStatusOf(web.id, { ...FAILED, branch: "feature/long-branch-name" }));
+    const badge = factsOf(container);
     const line = lineOf(badge);
     expect(line.textContent).toBe("feature/long-branch-name");
-    const full = sentence.replace(BRANCH, "feature/long-branch-name").replace(/[\u2068\u2069]/g, "");
-    expect(hoverAndRead(badge.querySelector(`svg.lucide-${glyph}`)!)).toBe(full);
+    const full = "Branch feature/long-branch-name, 3 commits ahead, 2 commits behind";
     expect(hoverAndRead(line)).toBe(full);
-    expect(hoverAndRead(badge.querySelector(".col-start-3")!)).toBe(full);
+    expect(hoverAndRead(badge.querySelector(".col-start-2")!)).toBe(full);
+  });
+
+  it(`keeps Git's own text out of every name and tooltip, behind the failure mark's popover alone, on ${placement.name}`, () => {
+    const container = placement.render(gitStatusOf(web.id, FAILED));
+    expect(document.body.textContent).not.toContain(RAW);
+    for (const element of document.body.querySelectorAll("[aria-label]")) expect(element.getAttribute("aria-label")).not.toContain(RAW);
+    const mark = markOf(container);
+    expect(mark.getAttribute("aria-label")).toBe("Git check failed");
+    // The mark is no tooltip's trigger: hovering it opens its popover, never a tooltip.
+    expect(hoverAndRead(mark)).toBeUndefined();
+    act(() => mark.focus());
+    tap(mark, "Enter");
+    const popover = openPopover()!;
+    expect(popover.getAttribute("aria-label")).toBe("Git check failed");
+    expect(popover.contains(document.activeElement)).toBe(true);
+    expect(Array.from(popover.querySelectorAll("p"), (p) => p.textContent)).toEqual([
+      "Git reported an error the last time this project’s repository was checked or pulled.",
+      `${appConfig.name} checks it again on its own. If the error does not go away, resolve it in the repository with Git.`,
+    ]);
+    // Git's text comes last, on a diagnostic block of its own.
+    const block = popover.querySelector("pre")!;
+    expect(block.textContent).toBe(RAW);
+    expect(Array.from(popover.querySelectorAll("p, pre")).pop()).toBe(block);
+  });
+
+  it(`makes the failure mark a tab stop of its own, handing focus on when a check starting takes it away, on ${placement.name}`, () => {
+    const container = placement.render(gitStatusOf(web.id, FAILED));
+    const mark = markOf(container);
+    expect(mark.tabIndex).toBe(0);
+    expect(mark.closest("[aria-hidden=true]")).toBeNull();
+    act(() => mark.focus());
+    act(() => store.setState({ gitStatuses: new Map([[web.id, gitStatusOf(web.id, { ...FAILED, activity: "checking" })]]) }));
+    expect(container.querySelector("[data-status-mark]")).toBeNull();
+    expect(container.querySelector("svg.lucide-refresh-cw")).not.toBeNull();
+    const holder = placement.name === "a sidebar project row" ? placement.named(container) : container.querySelector("[data-focus-exit]");
+    expect(document.activeElement).toBe(holder);
+  });
+
+  it(`shows the failure mark again only when the check that hid it fails again, on ${placement.name}`, () => {
+    const container = placement.render(gitStatusOf(web.id, { ...FAILED, activity: "checking" }));
+    expect(container.querySelector("[data-status-mark]")).toBeNull();
+    act(() => store.setState({ gitStatuses: new Map([[web.id, gitStatusOf(web.id, { ahead: 3, behind: 2 })]]) }));
+    expect(container.querySelector("[data-status-mark]")).toBeNull();
+    act(() => store.setState({ gitStatuses: new Map([[web.id, gitStatusOf(web.id, FAILED)]]) }));
+    expect(markOf(container)).not.toBeNull();
   });
 
   it(`keeps the badge the part that gives way, its branch the only part that fades, on ${placement.name}`, () => {
@@ -205,6 +264,15 @@ it("names the badge in focus mode's header itself, once, with the sentence its t
   expect(document.body.querySelectorAll("[role=img]")).toHaveLength(1);
   expect(badge.querySelector("[aria-label]")).toBeNull();
   expect(lineOf(badge).closest("[aria-hidden=true]")).toBeNull();
+});
+
+it("keeps a press on the failure mark from folding the project, the row naming the failure in its own words", () => {
+  const container = PLACEMENTS[0].render(gitStatusOf(web.id, FAILED));
+  const row = PLACEMENTS[0].named(container)!;
+  expect(row.getAttribute("aria-label")).toBe(`${isolate("Website")}, a session is running, Branch ${BRANCH}, 3 commits ahead, 2 commits behind, Git check failed`);
+  const expanded = row.getAttribute("aria-expanded");
+  press(markOf(container), "mouse");
+  expect(row.getAttribute("aria-expanded")).toBe(expanded);
 });
 
 it("leaves the badge on a sidebar row unnamed, the row carrying its sentence in its own name", () => {

@@ -59,8 +59,9 @@ The failures of one confirmed set are reported together, in one error alert (see
   the target's record of the Codex thread could not be updated; or the copy did not complete and an older item could
   not be put back, naming the folder it is kept in until the daemon next starts or the session is next switched into
   that account (see "Carrying the conversation" below). An unexpected failure with no sentence of its own reads only
-  that it failed unexpectedly, and any other failure with none reads that something unexpected went wrong; neither
-  shows the system's own text, which is in **Error details** (see "Failures shown on the screen" in
+  that it failed unexpectedly, and any other failure with none reads as the sentence such a failure opens with — that
+  the disk is full, that access was denied, that the connection failed, or that the operation could not be completed;
+  neither shows the system's own text, which is in **Error details** (see "Failures shown on the screen" in
   `docs/product/error-alerts.md`).
 - **Remedies after the list, each said once**: a failure whose code has a remedy sentence of its own gets it once for
   that code, a login shell environment that could not be read in time included; the other failures with a known

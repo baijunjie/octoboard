@@ -136,7 +136,7 @@ export function ProjectFocusView({
       <FocusHeader handlers={handlers} ref={headerRef}>
         <FocusTitle heading={project.name} overline={parentConsole.name} />
         {/* Alone in the header, so a tap on it opens the popover. */}
-        <GitBadge status={gitStatus} touchPopover />
+        <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} />
         <RowIconGroup>
           <NewSessionButton shortcut label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu

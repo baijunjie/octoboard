@@ -9,15 +9,16 @@ what they list.
 
 Session titles throughout either view follow "Displayed names" in `docs/product/session-titles.md`.
 
-**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar; the view's heading;
-and a **+** button for a new session. A project's header shows the console's name on a smaller first line above the
+**The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar; the view's heading; and
+a **+** button for a new session. A project's header shows the console's name on a smaller first line above the
 project's name, which is the heading. A console session's header shows the console's name alone, on one line, as the
 heading; the console session's title is on its own card below. The heading is a heading only: pressing it selects
-nothing. The header shows no pin button. A project's header also carries its branch badge (see "The branch badge" in
-`docs/product/project-git-status.md`) and, after the **+**, the project's action menu without its **Focus mode**,
-**Pin** / **Unpin** and **View archive** items — the view's own **Archived (n)** list stands in for the last. A
-console session's header carries nothing else — no colour, lock button or action menu, and no menu on a right-click: those are on the console session's own card below it (see "A console session's focus
-mode" below).
+nothing. The header shows no pin button. A project's header also carries its branch badge, whose failure mark after a
+failed check is a tab stop of its own (see "The branch badge" in `docs/product/project-git-status.md`), and, after the
+**+**, the project's action menu without its **Focus mode**, **Pin** / **Unpin** and **View archive** items — the view's
+own **Archived (n)** list stands in for the last. A console session's header carries nothing else — no colour, lock
+button or action menu, and no menu on a right-click: those are on the console session's own card below it (see "A
+console session's focus mode" below).
 
 **The list's section headings**, in both: **Sessions (n)** stays at the top of the scrolling list while its
 cards move underneath; as **Archived (n)** approaches the top, it pushes the Sessions heading upward out of view

@@ -8,7 +8,7 @@ describe("structured error fixture contracts", () => {
     for (const scenario of structuredErrorScenarios) {
       const state = scenario.state!;
       for (const error of scenario.toasts ?? []) {
-        const text = daemonMessage(language, error.code!, error.params!, error.message, {
+        const text = daemonMessage(language, error.code!, error.params!, typeof error.message === "string" ? error.message : "", {
           consoles: state.consoles!, projects: state.projects!, sessions: state.sessions!,
           shellTerminals: state.shellTerminals, accounts: state.settings!.accounts,
         });

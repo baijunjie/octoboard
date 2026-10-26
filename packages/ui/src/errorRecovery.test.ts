@@ -18,6 +18,8 @@ it.each([
   ["grok_sandbox_unsupported", "grokSandbox"],
   ["default_account_not_shareable", "accountNotShareable"], ["account_sharing_failed", "accountSharing"], ["account_still_sharing", "accountBusy"],
   ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"], ["account_disabled", "accountDisabled"],
+  ["git_failed", "gitFailure"], ["git_clone_failed", "gitFailure"],
+  ["sharing_resume_failed", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);

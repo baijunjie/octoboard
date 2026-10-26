@@ -317,7 +317,7 @@ describe("a change that did not finish", () => {
     // The cause's fix is the one remedy in the description; the switch is the retry, so there is no
     // button for it, and the way to try again is in Details, with the raw entries.
     expect(announced(container).textContent).not.toContain("Turn the switch on again");
-    expect(openDetails(container).textContent).toBe("Turn the switch on again to try once more.skills/ was left unchanged. permission denied");
+    expect(openDetails(container).textContent).toBe("Turn the switch on again to try once more.skills/ was left unchanged.permission denied");
     expect(buttonNamed(container, "Try again")).toBeUndefined();
     const [sharing] = sharingSwitches(container);
     expect(sharing!.checked).toBe(false);
@@ -362,7 +362,7 @@ describe("a change that did not finish", () => {
     expect(lines).toEqual([
       "You do not have permission to change skills/ and 2 more. Check that the files and folders involved can be changed and are not locked.",
       "settings.json is in use. Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.",
-      "Could not change hooks/. See Details.",
+      "Could not change hooks/. See the details.",
     ]);
   });
 
@@ -373,7 +373,7 @@ describe("a change that did not finish", () => {
     ["no_space", "There is not enough disk space to change skills/.", "Free up disk space."],
     ["conflict", "skills/ conflicts with what is already there.", "Move or rename the conflicting items."],
     ["not_found", "skills/ could not be found.", retry],
-    ["other", "Could not change skills/.", "See Details."],
+    ["other", "Could not change skills/.", "See the details."],
   ] as const)("says a single %s cause as the two visible sentences, its own line and its fix", async (cause, line, fix) => {
     unfinished();
     accountSharing.set("codex-work", { account: "codex-work", failure: failure({ cause, items: [{ item: "skills/", left: "unchanged", detail: "x", cause }] }) });
@@ -440,7 +440,9 @@ describe("a change that did not finish", () => {
     expect(announced(container).contains(body)).toBe(false);
     expect(body.textContent).toContain("skills/ was left unchanged.");
     expect(body.querySelector("li")?.lastElementChild?.textContent).toBe("permission denied");
-    expect(body.querySelector("pre")).toBeNull();
+    // Raw text is always a block of its own, never a chip in the sentence.
+    expect(body.querySelector("li pre")?.textContent).toBe("permission denied");
+    expect(body.querySelector("li [data-slot=\"inline-reference\"]")).toBeNull();
     // Nothing of it is a second Details to open inside the popover.
     expect(body.querySelector("button")).toBeNull();
     expect(announced(container).textContent).not.toContain("left unchanged");

@@ -122,10 +122,21 @@ it("stays open, with no notice, when the save dialog is dismissed", async () => 
   expect(mounted.closed()).toBe(0);
 });
 
-it("shows why a file could not be written and stays open", async () => {
-  const mounted = mount(vi.fn<Save>(async () => Promise.reject(new Error("Permission denied"))));
+it("shows why a file could not be written in its own words, the system's text behind Error details, and stays open", async () => {
+  const mounted = mount(vi.fn<Save>(async () => Promise.reject(new Error("Permission denied (os error 13)"))));
   await press("Export");
-  expect(text().replace(/[\u2068\u2069]/g, "")).toContain("Could not save the file: Permission denied");
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  // The alert is titled for what failed, not the generic "Error".
+  expect(alert.querySelector("h2")?.textContent).toBe("Could not export the configuration");
+  const details = alert.querySelector("details")!;
+  expect(details.querySelector("summary")?.textContent).toBe("Error details");
+  expect(details.querySelector("pre")?.textContent).toBe("Permission denied (os error 13)");
+  const explanation = alert.cloneNode(true) as Element;
+  explanation.querySelector("details")!.remove();
+  expect(explanation.textContent).toContain("Could not save the file.");
+  expect(explanation.textContent).not.toContain("Permission denied");
+  // The remedy is still the one the system's error names.
+  expect(explanation.textContent).toContain("Grant Octoboard access");
   expect(mounted.closed()).toBe(0);
 });
 

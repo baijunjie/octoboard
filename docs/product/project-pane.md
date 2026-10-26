@@ -347,7 +347,8 @@ menu at the pointer** (Control-click also works in the desktop app).
   whose page is not a secure context — served over `http` from anywhere but `localhost` — has no clipboard; the
   packaged desktop app always does.
 
-Default application and File manager raise no success toast; failures raise an error alert with the reason. A missing
+Default application and File manager raise no success toast; failures raise an error alert saying the file or folder,
+or the file manager, could not be opened, with the reason under its **Error details**. A missing
 live entry, such as a deleted file that is still absent on disk, is refused with `file_not_found`; an entry or
 symbolic-link target outside the project's directory in the worktree acted on is refused with `outside_scope`. A
 worktree that no longer exists is refused with `worktree_unavailable`. Revealing a symbolic link selects the

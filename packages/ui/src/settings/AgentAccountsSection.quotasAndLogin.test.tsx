@@ -282,10 +282,36 @@ it("gives focus back to the row's own Log in button when the login it opened is 
     failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
   render();
   await settled();
-  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Close")!.click());
+  expect(document.activeElement).toBe(buttonNamed(document.querySelector('[role="alertdialog"]')!, "Log in again"));
+  await act(async () => buttonNamed(document.querySelector('[role="alertdialog"]')!, "Close")!.click());
   await frames();
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(document.activeElement).toBe(login);
+});
+
+async function failedLoginDialog(failure: { code: string; params: Record<string, string>; message: string }): Promise<Element> {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  await act(async () => rowLogin(rowOf(container, "claude-work"))!.click());
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false, failure });
+  render();
+  await frames();
+  return document.querySelector('[role="alertdialog"]')!;
+}
+
+it("words a login failure the system's text names as its cause, with that cause's remedy", async () => {
+  const dialog = await failedLoginDialog({ code: "future_code", params: {}, message: "No space left on device (os error 28)" });
+  expect(dialog.textContent).toContain("failed. The disk is full.");
+  expect(dialog.textContent).toContain("then retry the operation.");
+  expect(dialog.textContent).not.toContain("Report issue");
+});
+
+it("asks for a login failure nothing can be said of to be reported", async () => {
+  const dialog = await failedLoginDialog({ code: "future_code", params: {}, message: "a newer daemon's reason" });
+  expect(dialog.textContent).toContain("failed. Something unexpected went wrong.");
+  expect(dialog.textContent).toContain("file an Issue with the steps that led to it.");
+  expect(dialog.textContent).toContain("Report issue");
 });
 
 it("waits for the first reading of an account of an available agent that has no entry yet", () => {

@@ -144,6 +144,7 @@ it("keeps the dialog on the file step, with the daemon's reason, for a document 
 it("refuses a file that is not JSON without asking the daemon", async () => {
   const mounted = await reviewing({ text: "not json" });
   expect(text()).toContain("mine.json is not a JSON file.");
+  expect(document.body.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Could not import the configuration");
   expect(document.body.querySelector('[role="alertdialog"] code')?.textContent).toBe("mine.json");
   expect(mounted.sent()).toEqual([]);
 });
@@ -531,16 +532,22 @@ it("ignores another press of Choose file while the open dialog has not answered,
 });
 
 it.each([
-  { error: new ConfigurationFileError("too_large"), shown: "The file is too large to be a configuration file." },
-  { error: new ConfigurationFileError("not_text"), shown: "The file is not a text file." },
-  { error: new ConfigurationFileError("io", "Permission denied"), shown: `Could not read the file: ${isolate("Permission denied")}` },
-])("words a file that could not be read from its kind: $shown", async ({ error, shown }) => {
+  { error: new ConfigurationFileError("too_large"), shown: "The file is too large to be a configuration file.", raw: undefined },
+  { error: new ConfigurationFileError("not_text"), shown: "The file is not a text file.", raw: undefined },
+  { error: new ConfigurationFileError("io", "Permission denied"), shown: "Could not read the file.", raw: "Permission denied" },
+])("words a file that could not be read from its kind, the system's text only behind Error details: $shown", async ({ error, shown, raw }) => {
   const mounted = mountDialog((onClose) => <ImportConfigurationDialog onClose={onClose} />, reply, {
     save: vi.fn(),
     open: vi.fn(async () => Promise.reject(error)),
   });
   await press("Choose file");
-  expect(text()).toContain(shown);
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  expect(alert.querySelector("h2")?.textContent).toBe("Could not import the configuration");
+  expect(alert.querySelector("details pre")?.textContent).toBe(raw);
+  const explanation = alert.cloneNode(true) as Element;
+  explanation.querySelector("details")?.remove();
+  expect(explanation.textContent).toContain(shown);
+  if (raw) expect(explanation.textContent).not.toContain(raw);
   expect(mounted.sent()).toEqual([]);
 });
 

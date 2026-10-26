@@ -1,5 +1,10 @@
 import { ringForAutomaticFocus } from "../touchInput";
 
+/** Focuses `holder` itself when that is a tab stop, else the first button inside it. */
+export function focusHolderOrButton(holder: HTMLElement | null | undefined): void {
+  (holder && holder.tabIndex >= 0 ? holder : holder?.querySelector("button"))?.focus();
+}
+
 /** Hands keyboard focus from `from` to `holder` itself when that is a tab stop, else to the button
  * inside it, when `from` holds focus: a control about to be taken away would otherwise drop focus
  * to `<body>` (no blur event fires), and the terminal would stop receiving keystrokes. `showRing`
@@ -15,5 +20,5 @@ export function handFocusOff(
 ): void {
   if (!from?.contains(document.activeElement)) return;
   if (showRing) ringForAutomaticFocus();
-  (holder && holder.tabIndex >= 0 ? holder : holder?.querySelector("button"))?.focus();
+  focusHolderOrButton(holder);
 }

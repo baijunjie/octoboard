@@ -69,11 +69,12 @@ export function StartupHeading({ children }: { children: React.ReactNode }): Rea
 export function DaemonFailedMessage({ error }: { error: string }): React.ReactElement {
   const t = useT();
   useEffect(() => {
-    // The raw text sits on a surface of its own under the application's sentence, never straight on the dialog.
+    // The alert says it in the application's words; the raw text is its "Error details", on a surface of its own.
     errorAlerts.report({
       message: error,
       title: t("startup.daemonFailed.title"),
-      content: <><p>{t("startup.daemonFailed.description")}</p><DiagnosticBlock wrap>{error}</DiagnosticBlock></>,
+      content: <p>{t("startup.daemonFailed.description")}</p>,
+      details: <DiagnosticBlock wrap>{error}</DiagnosticBlock>,
     });
   }, [error, t]);
   return (

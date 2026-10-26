@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -22,7 +23,7 @@ function fakeDaemon(): Daemon {
 }
 
 /** Renders a confirmation and takes it down when the test finishes. */
-function mount(props: { destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean }): void {
+function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean }): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -32,8 +33,8 @@ function mount(props: { destructive?: boolean; typeToConfirm?: string; hideCance
   act(() => {
     root.render(
       <DaemonProvider value={fakeDaemon()}>
-        <ConfirmDialog title="Archive" message="Archive it?" confirmLabel="Archive" {...props}
-          onConfirm={async () => {}} onCancel={() => {}} />
+        <ConfirmDialog title="Archive" message="Archive it?" confirmLabel="Archive" onConfirm={async () => {}} {...props}
+          onCancel={() => {}} />
       </DaemonProvider>,
     );
   });
@@ -88,4 +89,11 @@ it("with hideCancel, only Confirm remains, focused, and the close button stays",
 it("with hideCancel and Confirm disabled, focus is on the dialog rather than the page", () => {
   mount({ hideCancel: true, confirmDisabled: true });
   expect(document.activeElement?.matches("[role=alertdialog]")).toBe(true);
+});
+
+it("titles the alert of a rejected confirmation with the failure title it was given", async () => {
+  mount({ errorTitle: "Could not archive the session", onConfirm: () => Promise.reject(new Error("refused")) });
+  await act(async () => document.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
+  expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not archive the session"]);
+  onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
 });

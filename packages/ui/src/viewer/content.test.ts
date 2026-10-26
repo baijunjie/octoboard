@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 
 import type { FileContent } from "../protocol";
-import { bodyFromFileContent, changePresentation, changeStatus, type ViewerChange, type ViewerChangeSide } from "./content";
+import { bodiesFailure, bodyFromFileContent, ChangeBodiesError, changePresentation, changeStatus, type ViewerChange, type ViewerChangeSide } from "./content";
 
 const textFile = (text: string): FileContent => ({ size: text.length, kind: "text", media_type: null, text, data: null });
 const binaryFile = (media_type: string | null): FileContent => ({ size: 3, kind: "binary", media_type, text: null, data: "AAEC" });
@@ -61,4 +61,11 @@ it.each<[ViewerChange, "old" | "new"]>([
 ])("restricts a change with a side outside the project", (change, hidden) => {
   expect(changePresentation(change)).toMatchObject({ kind: "restricted", hidden, repositoryPath: "lib/a.ts" });
   expect(changeStatus(change)).toBe("renamed");
+});
+
+it("carries the wording of a failed read apart from its error message, and none for a failure with no words", () => {
+  const failure = { code: "path_not_found", params: { path: "/p" } };
+  expect(bodiesFailure(new ChangeBodiesError("failed", "It is gone.", "raw", failure))).toEqual({ message: "It is gone.", detail: "raw", failure });
+  expect(bodiesFailure(new ChangeBodiesError("failed", undefined, "raw"))).toEqual({ message: undefined, detail: "raw", failure: undefined });
+  expect(bodiesFailure(new TypeError("boom"))).toEqual({ detail: "boom" });
 });

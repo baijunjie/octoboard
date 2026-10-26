@@ -29,12 +29,17 @@ What it holds, in this order:
   glyph while the remote is being checked, the branch is being pulled or the current branch is being pushed.
   Idle and in-flight states differ in shape, not in motion alone, and nothing animates where the system asks for reduced
   motion.
-- **A failure mark**, a red circled `!`, when the last check failed, standing in for the branch or commit glyph; the refresh
-  glyph takes its place while a check, a pull or a push runs. The message `git` or the operating system itself
-  gave is then part of what the badge says — in its tooltip and in its name, shown as it came inside localized wording
-  (see "What follows the language" in `docs/product/language.md`) — and the mark itself carries nothing of its own.
-  A failed check does not blank the rest of the badge: the branch and the counts are still read from the repository and
-  shown beside the failure mark.
+- **A failure mark**, a red circled `!`, when the last check failed, standing in for the branch or commit glyph at the
+  badge's start. It is a button of its own — a tab stop of its own on the sidebar row and in focus mode's header alike —
+  named that the Git check failed, with no tooltip, and it opens a popover under the rules of a failure mark (see
+  "Failures marked on a row" in `docs/product/error-alerts.md`). The popover says that Git reported an error the last
+  time the project's repository was checked or pulled, then that Octoboard checks it again on its own and that an error
+  that does not go away is to be resolved in the repository with Git, and last, as raw text in a block of its own, the
+  message `git` or the operating system itself gave. That message is shown nowhere else: not in the badge's tooltip and
+  not in any name. The two sentences are the same for every failure. A press on the mark on a sidebar row never reaches
+  the row, so it does not fold the project. A failed check does not blank the rest of the badge: the branch and the
+  counts are still read from the repository and shown beside the mark; a failed read with no branch and no counts shows
+  the mark alone.
 - **The branch name** — or the short commit id, when `HEAD` is detached. A repository with no commit yet says so in its
   place, and nothing stands there when the branch could not be read at all, the failure mark carrying the reason instead.
 - **How far the branch is ahead of its upstream**, after an up arrow, and **how far behind**, after a down arrow, each
@@ -44,9 +49,9 @@ What it holds, in this order:
   arrow and both numbers stay still. A zero count still has no arrow, so the leading refresh glyph remains the in-flight
   indication when the relevant count is zero. Reduced motion keeps the arrows still too.
 
-**While a check is in flight the badge keeps what it was showing** — the branch name (or short commit id), the
-counts and a failed check's message — and only its glyph turns into the spinning refresh glyph, the failure mark
-included; the whole badge is replaced once the check finishes. The glyph turns only once the check has been running
+**While a check is in flight the badge keeps what it was showing** — the branch name (or short commit id) and the
+counts — and only its glyph turns into the spinning refresh glyph, which takes the failure mark's place as well; the
+whole badge is replaced once the check finishes. The glyph turns only once the check has been running
 for about 0.4 seconds, so a check that finishes sooner goes straight from the old state to the new one without
 showing as in flight; a check asked for with **Pull current branch** shows as in flight at once. A project waiting
 for its turn (see "When a project is checked" below) is not yet in flight. Meanwhile a local re-read can still update
@@ -54,12 +59,20 @@ the branch and the counts (see "Following changes to the repository's refs" belo
 nothing to keep, so once its first check shows as in flight the badge shows the spinning glyph alone, and nothing
 before that.
 
-**While a push is in flight the badge describes the push**, including over a check or pull running at the same
-time. All three use the same leading refresh glyph; the tooltip, accessible name and animated count arrow follow the
-push state. The branch, counts and any failed check's message remain visible and can update during the push. Every
-window showing the project sees the pushing state, including one that connects while the push is running. Once all
-pushes of the project end, successfully or otherwise, the badge shows the latest check or pull state, or its
-idle glyph if neither is running (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
+**The failure mark comes back only once nothing is in flight**, and only while the project's status still records a
+failure: the check or pull that ran failed in its turn, or a push, or the pass that turning **Automatically pull
+repositories** on starts, has ended without clearing the failure the last check recorded, which neither of them does
+(see "Turning the switch on" below). A check that succeeds clears it, the one Pull current branch runs included. When
+the mark goes away while it or its popover holds keyboard focus, focus goes to the project's row on the sidebar, or to
+focus mode's header.
+
+**While a push is in flight the badge describes the push**, including over a check or pull running at the same time. All
+three use the same leading refresh glyph; the tooltip, accessible name and animated count arrow follow the push state.
+The branch and counts remain visible and can update during the push, and a failed check's mark gives way to the refresh
+glyph as during a check. Every window showing the project sees the pushing state, including one that connects while the
+push is running. Once all pushes of the project end, successfully or otherwise, the badge shows the latest check or pull
+state, or its idle glyph if neither is running (see "Pushing the current branch" in
+`docs/product/project-git-actions.md`).
 
 **As the row gets tight only the branch name gives way**: the branch name (or short commit id) shows its
 beginning and fades at its right edge. The state glyph, upstream arrows and counts remain visible, even when none of
@@ -72,20 +85,22 @@ repository has no commits yet follows the same fade and marquee rules, but follo
 either count — shows one tooltip, after the window's usual wait and on pointer hover only, since the badge is no tab
 stop (see "How a tooltip behaves" in `docs/product/labels-and-tooltips.md`). It says the badge's whole state in one
 sentence, the same one assistive technology is given: the branch (or that a check, a pull or a push is in
-flight, or why there is no branch), the ahead and behind counts, each only while it is not zero, and a failed check's
-message. It is one tooltip in both placements, the sidebar row and focus mode's header, and it shows whether or not the
-badge's text is cut — so the branch name and the error can still be read once the row has squeezed the text away. The
-one state with no tooltip at all is the one saying in visible text that the repository has no commits yet, which a
-tooltip would only repeat; that text still runs as a marquee while the pointer is over the text itself (see "Names too
-long for their space" in `docs/product/labels-and-tooltips.md`). In focus mode's header a tap on the badge opens the
-same sentence in a popover; on the sidebar row a tap is the row's press (see "Tooltips on indicators" in
-`docs/product/labels-and-tooltips.md`).
+flight, or why there is no branch) and the ahead and behind counts, each only while it is not zero. A failed check is
+not part of it: the failure mark stands outside the tooltip and opens only its own popover. It is one tooltip in both
+placements, the sidebar row and focus mode's header, and it shows whether or not the badge's text is cut — so the
+branch name can still be read once the row has squeezed the text away. The states with no tooltip at all are the one
+saying in visible text that the repository has no commits yet, which a tooltip would only repeat — that text still runs
+as a marquee while the pointer is over the text itself (see "Names too long for their space" in
+`docs/product/labels-and-tooltips.md`) — and a failed read showing the failure mark alone. In focus mode's header a tap
+on the badge opens the same sentence in a popover; on the sidebar row a tap is the row's press (see "Tooltips on
+indicators" in `docs/product/labels-and-tooltips.md`), except on the failure mark, which answers its own tap.
 
 **What assistive technology hears.** A project row announces itself as one control, so the badge's facts are folded
 into the row's own name instead of being announced separately: the branch (or why there is none), the ahead and behind
-counts, each only while it is not zero, and the error. In focus mode's header the badge is not inside such a row and
-carries its own name. The badge is deliberately not a live region, so a check or push starting or finishing is not
-announced.
+counts, each only while it is not zero, and, while the failure mark is shown, that the Git check failed — never Git's
+own message. The mark itself is reached on its own, as a button named that the Git check failed. In focus mode's header
+the badge is not inside such a row and carries its own name, without the failure, beside the mark's. The badge is
+deliberately not a live region, so a check or push starting or finishing is not announced.
 
 ## When a project is checked
 

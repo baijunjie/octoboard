@@ -173,8 +173,11 @@ refuse a change. The change goes through these phases, in order, each told in th
    change's outcome, onto the directory as it then stands. One archived, deleted or ended by itself meanwhile is not
    resumed. One whose relaunch fails is left *interrupted*, to be resumed by hand; one whose process was never seen
    to end (only beside a `sharing_session_did_not_stop` answer) may still be running and is not relaunched. Either
-   is told as a `sharing_resume_failed` notice, shown as a notice toast (see `docs/product/toasts.md`) naming the
-   account and saying which of the two happened; the change itself stands.
+   is told as a `sharing_resume_failed` notice about the session, shown as an error alert titled "Could not resume the
+   session", its first line naming the session (see "The error alert" in `docs/product/error-alerts.md`). It says,
+   naming the account, which of the two happened, and for a session left *interrupted* to resume it by hand; the
+   daemon's reason is under **Error details**. It is an expected failure, with no **Report issue**. The change itself
+   stands.
 
    A session is resumed with no prompt, so a Claude Code session whose prompt cache has gone cold may come back at
    "Resume this conversation?" (`claude_resume_at_launch`, see "Messages held until a session can take them" in
@@ -250,19 +253,19 @@ when the change could not start at all, and the error's `detail` then says why. 
 of the change as a whole: the cause its entries share (`other` when they differ), or why it could not start when there
 are none.
 
-**How the window shows the entries.** In an error alert and in a repair notice, a sharing failure's entries are said
-in plain language, one line per cause, each naming the entries it hit compactly: the first by name and the rest as a
-count ("no permission to change `skills/` and 1 more"), and going on, on the same line, with what to do about that
-cause. A conversation is named by a session that records it, under its current
-name. The rest is behind a collapsed **Details** disclosure: each entry on one row with what it was left as, in the
-interface language, a conversation naming the sessions that record it, and what the system said of it after that as
-small inline code; what the system said in several lines is shown as a block under its row instead. With no entry
-listed, the reason the change as a whole failed, from its `cause`, stands in place of the lines when it is one of the
-named causes, followed in the same way by what to do about it; when it is not (`other`, none, or one this client does
-not know) but there is an original diagnostic, a line saying to see Details stands there alone. Details holds the
-original diagnostic. No raw diagnostic is shown outside Details. At the account's switch the same lines, entries and
-diagnostic are all behind the alert's Details button, with no line pointing at it (see "Sharing the default
-configuration" in `docs/product/agent-accounts.md`).
+**How the window shows the entries.** In an error alert, a repair failure's included, a sharing failure's entries are
+said in plain language in its body, one line per cause, each naming the entries it hit compactly: the first by name and
+the rest as a count ("no permission to change `skills/` and 1 more"), and going on, on the same line, with what to do
+about that cause. A conversation is named by a session that records it, under its current name. The rest is under the
+alert's collapsed **Error details** disclosure: each entry on one row with what it was left as, in the interface
+language, a conversation naming the sessions that record it, and what the system said of it as a block of raw text under
+its row, never inline. With no entry listed, the reason the change as a whole failed, from its `cause`, stands in place
+of the lines when it is one of the named causes, followed in the same way by what to do about it; when it is not
+(`other`, none, or one this client does not know) but there is an original diagnostic, a line saying to see the details
+stands there alone. Error details holds the original diagnostic. No raw diagnostic is shown outside Error details. At
+the account's switch the same lines, entries and diagnostic are all behind the alert's Details button, with no line
+pointing at it, each entry's system text again a block under its row (see "Sharing the default configuration" in
+`docs/product/agent-accounts.md`).
 
 | Cause | What the window says to do |
 |---|---|
@@ -270,7 +273,7 @@ configuration" in `docs/product/agent-accounts.md`).
 | `busy` | close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool |
 | `no_space` | free up disk space |
 | `conflict` | move or rename the conflicting items |
-| `other` | see Details |
+| `other` | see the details |
 | `not_found`, `default_moved` | nothing is added |
 
 A failed change of the switch is shown at the account's switch, in every window and nowhere else (see "Sharing the
@@ -363,11 +366,13 @@ moved, with the cause `default_moved`), and the session launches all the same. A
 account's directory other than the one shared is told on every launch as an `unshared_state_database` notice: that
 account's threads are kept apart from the other accounts' from then on.
 
-The window presents a repair failure as a notice toast (see `docs/product/toasts.md`) explaining that the session
-started with the directory as it stands. The affected entries, or with none listed the reason from the notice's
-`cause`, are shown as for a failed change, by cause with what to do and **Details** (see "When a change is carried
-out" above), the notice's original message standing for the original diagnostic behind Details. The notice does not
-require acknowledgement or stop the session.
+The window presents a repair failure as an error alert titled "Could not repair sharing links", its first line naming
+the session (see "The error alert" in `docs/product/error-alerts.md`), explaining that the session started with the
+account's directory as it stands because its links to the default configuration could not be brought up to date. The
+affected entries, or with none listed the reason from the notice's `cause`, are shown as for a failed change, by cause
+with what to do in the body and the rest under **Error details** (see "When a change is carried out" above), the
+notice's original message standing for the original diagnostic there. It is an expected failure, with no **Report
+issue**, and it does not stop the session.
 
 ## Claude Code's auto memory
 

@@ -32,14 +32,19 @@ and removing an account" in `docs/product/agent-accounts.md`) or a conversation 
 
 ## The error alert
 
-The error alert uses the standard danger icon and a danger acknowledgement button. It appears above any open dialog
-and takes keyboard focus. It identifies the failure and preserves available details. Its title says what failed;
-when the failure is about a session, the first line of its body names that session and where it is (its project or
-console), since the daemon's message says only "this session". It has one acknowledgement button. Escape, a click outside and a
-close button cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the failed operation.
-The originating dialog remains available for correcting inputs or retrying unless that operation's own contract
-closes it, or a recovery action navigates Settings and closes its account or agent forms (see "Opening and closing
-Settings" in `docs/product/settings.md`).
+The error alert uses the standard danger icon and a danger acknowledgement button. It appears above any open dialog and
+takes keyboard focus. It identifies the failure and preserves available details. Its title says in plain words what
+failed — "Could not start the session", "Could not export the configuration" — and never carries a name; an alert with
+no title of its own for its failure is titled "Error", or "Unexpected error" when the failure is unexpected. When the
+failure is about a session, the first line of its body, "Session: …", names that session and where it is (its project or
+console), since the daemon's message says only "this session"; a session whose record is already gone, as after a failed
+launch, is named there by the name the failure carried, with no place. The rest of the body is in Octoboard's own words
+— what happened, the next step, any further explanation — and holds no raw text: that is only under the collapsed
+**Error details** disclosure at the body's end (see "Names and diagnostic details" below). It has one acknowledgement
+button. Escape, a click outside and a close button cannot dismiss it, and it never dismisses itself. Acknowledgement
+does not retry the failed operation. The originating dialog remains available for correcting inputs or retrying unless
+that operation's own contract closes it, or a recovery action navigates Settings and closes its account or agent forms
+(see "Opening and closing Settings" in `docs/product/settings.md`).
 
 Errors are queued and normally shown one at a time in arrival order. An identical failure already waiting for
 acknowledgement is not queued again: its message, affected session, original diagnostic message, recovery category
@@ -66,9 +71,16 @@ thing to do about it. Everything else is behind **Details**, a button that opens
 in this order, any further explanation in Octoboard's words (a reason per cause, each cause's own fix, further
 guidance), then the text that was not written for the reader: a message passed through from the system, Git or an
 agent, a diagnostic block, raw entries. Such text is never shown outside Details, and the two sentences on screen are
-never behind it. A failure with nothing beyond its two sentences has no Details button. A failure Octoboard has no
-message of its own for, whose only words are the system's raw text, says that something unexpected went wrong, with
-the raw text behind Details. Nothing about the failure stands beside it as loose text.
+never behind it. A failure with nothing beyond its two sentences has no Details button. Nothing about the failure
+stands beside it as loose text.
+
+**A failure Octoboard has no message of its own for**, whose only words are the system's raw text, opens with a
+sentence of Octoboard's saying what that text shows it to be: "The disk is full.", "Access was denied." or "The
+connection failed." where the text names one of those causes; "The operation could not be completed." for any other
+failure Octoboard can still tell the user how to act on; and "Something unexpected went wrong." only for one that is
+unexpected (see "Recovery and unexpected errors" below). The raw text is behind Details. This holds wherever such a
+failure is shown — on the screen, in a mark's popover, and in an error alert, where the raw text is under **Error
+details**.
 
 **An empty-state failure** stands in place of a whole subject that could not be loaded — a page, pane, panel or list
 with nothing else to show. It takes the shape of the empty state's full panel (see "The full panel" in
@@ -164,9 +176,9 @@ The places:
 - a project or console of a configuration import that failed, in the import's result, where the word **Failed**
   follows the mark, as the other results have their words, and where a reason was given the mark and word open the
   popover as one (see "In the window" in `docs/product/configuration-export-and-import.md`);
-- a project's branch badge whose last check failed, where the mark stands in for the badge's branch glyph; there it is
-  no button and opens no popover, the reason being part of the badge's own tooltip and name (see "The branch badge" in
-  `docs/product/project-git-status.md`);
+- a project's branch badge whose last check failed, where the mark stands in for the badge's branch glyph, and is a
+  tab stop of its own on the sidebar row and in focus mode's header; Git's own message is the last thing in its
+  popover and in no tooltip or name (see "The branch badge" in `docs/product/project-git-status.md`);
 - an account whose quota could not be read, in Settings and the rail's quota panel (see "Quota states" in
   `docs/product/account-quotas.md`);
 - the file viewer's notices about content it still shows — failures, warnings, and notes, which are the same mark
@@ -190,28 +202,35 @@ and product names referenced in the explanation use name chips too. Each name ke
 technical values keep left-to-right order. Accessible labels, system notifications and other text-only surfaces
 retain usable plain wording with the same names or fallback IDs.
 
-Known raw output from Git and agent commands appears separately from the short explanation as selectable code,
-including when it is the cause of a launch or trust-confirmation failure, an import failure, or a model or quota
-reading failure. The output retains its line breaks, indentation and left-to-right order. Long lines scroll
-horizontally, with a labelled region reachable from the keyboard. Raw text that stands as a block of its own — in an
-alert's body, behind **Error details** or **Details**, in a mark's popover, or on a screen of its own — sits on a tinted
-surface of its own rather than directly on the alert, popover or screen holding it, with whatever names it (the
-disclosure's summary, a heading) outside that surface. A crash's stack trace, which can be taller than its room, also
-scrolls vertically within its block; a daemon's startup failure, written in lines of prose, wraps its long lines instead
-of scrolling. A short ordinary reason remains part of the
-explanation; it is not turned into a diagnostic block simply because it accompanies an error. Unrecognized daemon
-messages retain the daemon's own readable wording; on the screen and in a mark's popover, that wording follows the
-sentence saying something unexpected went wrong (see "Failures shown on the screen" above). These rules hold wherever
-the failure is shown: in an error alert, in a failure on the screen, where such output is behind Details, or in a
-mark's popover, where it comes last.
+**Raw text is never part of a sentence.** A message passed through from the operating system, the daemon, Git or an
+agent, a stack trace and raw entries never appear inside an alert's body, a failure's sentence on the screen, a mark's
+name or the sentence in its popover, a tooltip, or an accessible name; only the names and references the wording cites
+on purpose — a path, a branch name, an address — appear inside it. Raw text is shown on its own, as selectable code: in
+an error alert under **Error details**, on the screen behind **Details**, and in a mark's popover as the last thing in
+it. That includes known raw output from Git and agent commands, also when it is the cause of a launch or
+trust-confirmation failure, an import failure, or a model or quota reading failure. A launch or trust-confirmation
+failure whose cause Octoboard has no words for gives a generic cause in its sentence — for a launch, the sentence of an
+uncatalogued failure (see "Failures shown on the screen" above); for a trust confirmation, that something unexpected
+went wrong — and the cause's own text is the raw text. The output retains its line breaks, indentation and left-to-right
+order. Long lines scroll horizontally, with a labelled region reachable from the keyboard. Raw text that stands as a
+block of its own — in an alert's body, behind **Error details** or **Details**, in a mark's popover, or on a screen of
+its own — sits on a tinted surface of its own rather than directly on the alert, popover or screen holding it, with
+whatever names it (the disclosure's summary, a heading) outside that surface. A crash's stack trace, which can be taller
+than its room, also scrolls vertically within its block; a daemon's startup failure, written in lines of prose, wraps
+its long lines instead of scrolling. A reason Octoboard words itself remains part of the explanation; it is not turned
+into a diagnostic block simply because it accompanies an error. Unrecognized daemon messages retain the daemon's own
+readable wording as their raw text, after the sentence of an uncatalogued failure (see "Failures shown on the screen"
+above). These rules hold wherever the failure is shown: in an error alert, where such output is under Error details, in
+a failure on the screen, where it is behind Details, or in a mark's popover, where it comes last.
 
 ## Recovery and unexpected errors
 
 The alert distinguishes failures with a known user remedy from unexpected failures. Both use the danger presentation
 and require acknowledgement.
 
-**An actionable failure** includes a specific next step alongside the original reason. References to controls such as
-Retry, Browse and Unlock appear as inline references rather than quoted text. For example:
+**An actionable failure** includes a specific next step alongside its reason, any raw text staying under Error
+details. References to controls such as Retry, Browse and Unlock appear as inline references rather than quoted text.
+For example:
 
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
@@ -219,6 +238,9 @@ Retry, Browse and Unlock appear as inline references rather than quoted text. Fo
 - An account name already in use asks for an unused name for that agent; an occupied destination asks for a different
   destination while preserving the existing folder.
 - A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.
+- A failure of Git — Git could not read something (`git_failed`), or a clone, push, branch switch or file restore
+  failed — asks the user to open the project's terminal from its action menu, resolve the Git error, including remote
+  access or an unfinished Git operation, then retry. It offers no **Report issue**.
 
 Known domain failures, the causes the daemon names for some of them (such as why a session's conversation could not
 be moved to another account; see "When a switch fails" in `docs/product/switching-session-accounts.md`), and

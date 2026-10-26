@@ -11,10 +11,12 @@ import { DaemonRequestError } from "../daemon-client";
 import { format } from "../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation } from "../errorPresentation";
+import { ActionableError } from "../errorRecovery";
 import { useDialogAction } from "../dialogs/Dialog";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { DaemonErrorMessage, hasErrorDetails, hasErrorRemedy } from "./DaemonErrorMessage";
+import { DaemonErrorMessage } from "./DaemonErrorMessage";
+import { hasErrorDetails, hasErrorRemedy } from "./errorPartPresence";
 import { ErrorAlert } from "./ErrorAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -35,6 +37,17 @@ function mount(element: React.ReactNode): HTMLElement {
   });
   act(() => root.render(element));
   return container;
+}
+
+/** The whole message and, apart from it, its raw part, as the error alert dialog and a toast lay them out. */
+function mountApart(error: DaemonRequestError, daemon: Daemon = { store: createStateStore({}) } as Daemon): { body: Element; raw: Element } {
+  const container = mount(
+    <DaemonProvider value={daemon}>
+      <section data-body><DaemonErrorMessage error={error} /></section>
+      <section data-raw><DaemonErrorMessage error={error} part="raw" /></section>
+    </DaemonProvider>,
+  );
+  return { body: container.querySelector("[data-body]")!, raw: container.querySelector("[data-raw]")! };
 }
 
 it("retains the structured request failure through the dialog action and responds to language changes", async () => {
@@ -75,14 +88,17 @@ it("keeps the complete field description registered when its command uses the co
   expect(description?.querySelector("code")?.id).not.toBe(descriptionId);
 });
 
-it("uses the plain fallback for an unfamiliar code or an incomplete shell timeout", () => {
+it("says the generic sentence for an unfamiliar code, its own text only in the raw part, and the plain fallback for an incomplete shell timeout", () => {
   const unknown = new DaemonRequestError("new daemon error", "future_code", params);
   const incomplete = new DaemonRequestError("incomplete daemon error", "shell_environment_timeout", { shell: "/bin/zsh" });
   expect(errorPresentation(unknown)).toBe(unknown);
   expect(errorPresentation(incomplete)).toBe(incomplete);
   const container = mount(<><DaemonErrorMessage error={unknown} /><DaemonErrorMessage error={incomplete} /></>);
-  expect(container.textContent).toBe("new daemon errorincomplete daemon error");
+  expect(container.textContent).toBe("Something unexpected went wrong.incomplete daemon error");
   expect(container.querySelector("code")).toBeNull();
+  const { body, raw } = mountApart(unknown);
+  expect(body.textContent).toBe("Something unexpected went wrong.");
+  expect(raw.querySelector("pre")?.textContent).toBe("new daemon error");
 });
 
 it("sets the path of a conversation that was not found as code, not as quoted text, and does not repeat the ID", () => {
@@ -150,7 +166,7 @@ it("names each branch or worktree still there as code with its reason, a comma i
   ];
   const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "3", items: JSON.stringify(items) });
   const daemon = { store: createStateStore({ homeDir: "/home/dev" }) } as Daemon;
-  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
   expect(Array.from(container.querySelectorAll("p"), (lead) => lead.textContent)).toEqual(["Removing these failed:", "This worktree is locked:"]);
   const announced = (row: Element) => {
     const copy = row.cloneNode(true) as Element;
@@ -175,37 +191,43 @@ it("names each branch or worktree still there as code with its reason, a comma i
   expect(badge.parentElement?.className).toContain("flex-wrap");
   expect(badge.previousElementSibling?.className).toBe("sr-only");
   expect(badge.parentElement?.firstElementChild?.textContent).toContain("~/wt, two");
+  // Where the raw text is kept apart, the list names each and git's messages are the raw part, each under its name.
+  const { body, raw } = mountApart(error, daemon);
+  expect(Array.from(body.querySelectorAll("li"), announced)).toEqual(["fix/a,b", "long", "~/wt, two on branch a, uncommitted changes"]);
+  expect(body.querySelector("pre")).toBeNull();
+  expect(Array.from(raw.querySelectorAll("h3"), (name) => [name.textContent, name.nextElementSibling?.querySelector("pre")?.textContent])).toEqual([
+    ["fix/a,b", "error: refused"],
+    ["long", "error: one\nhint: two"],
+  ]);
 });
 
 it("keeps a sharing repair's own reason behind Details when it names no entry, and lists the entries there once it does", () => {
   const daemon = { store: createStateStore({ sessions: new Map([["s1", { id: "s1", title: "Hub" } as import("../protocol").Session]]) }) } as Daemon;
   const reason = "account `Work`'s links to the default configuration could not be checked: permission denied";
   const empty = new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items: "[]", cause: "permission_denied" });
-  const unnamed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={empty} /></DaemonProvider>);
-  // Alone on its line in Details it is a diagnostic block on its own surface, not a chip.
-  expect(unnamed.querySelector("[hidden] pre code")?.textContent).toBe(reason);
-  expect(unnamed.querySelector("[hidden] [data-inline-reference]")).toBeNull();
-  expect(unnamed.textContent).toContain("could not be brought up to date");
-  expect(unnamed.textContent).toContain("You do not have permission to change the account’s directory.");
-  act(() => unnamed.querySelector("button")!.click());
-  expect(unnamed.querySelector("pre code")?.textContent).toBe(reason);
-  expect(unnamed.querySelector("[data-inline-reference] code")).toBeNull();
+  const unnamed = mountApart(empty, daemon);
+  // Alone on its line it is a diagnostic block on its own surface, not a chip, and only in the raw part.
+  expect(unnamed.raw.querySelector("pre code")?.textContent).toBe(reason);
+  expect(unnamed.raw.querySelector("[data-inline-reference]")).toBeNull();
+  expect(unnamed.body.textContent).toContain("could not be brought up to date");
+  expect(unnamed.body.textContent).toContain("You do not have permission to change the account’s directory.");
+  expect(unnamed.body.textContent).not.toContain(reason);
   const items = JSON.stringify([{ item: "skills/", left: "unchanged", detail: "permission denied", cause: "busy" }]);
-  const listed = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items })} /></DaemonProvider>);
-  expect(listed.querySelector("[hidden] li")?.lastElementChild?.textContent).toBe("permission denied");
-  expect(listed.textContent).toContain("skills/");
-  expect(listed.textContent).toContain("is in use");
-  expect(listed.textContent).not.toContain(reason);
-  act(() => listed.querySelector("button")!.click());
-  expect(listed.querySelector("li")?.lastElementChild?.textContent).toBe("permission denied");
-  expect(listed.textContent).toContain("skills/ was left unchanged.");
+  const listed = mountApart(new DaemonRequestError(reason, "account_sharing_repair_failed", { account: "a1", name: "Work", items }), daemon);
+  expect(listed.body.textContent).toContain("skills/");
+  expect(listed.body.textContent).toContain("is in use");
+  expect(listed.body.textContent).not.toContain(reason);
+  expect(listed.body.textContent).not.toContain("permission denied");
+  expect(listed.raw.querySelector("li")?.lastElementChild?.textContent).toBe("permission denied");
+  expect(listed.raw.textContent).toContain("skills/ was left unchanged.");
 });
 
-it("shows the reason what goes with a removed project's folder is unknown as a code block under the sentence", () => {
+it("keeps the reason what goes with a removed project's folder is unknown as a code block apart from the sentence", () => {
   const error = new DaemonRequestError("plain fallback", "project_branches_not_determined", { name: "Docs", detail: "fatal: not a git repository" });
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
-  expect(container.querySelector("pre")?.textContent).toBe("fatal: not a git repository");
-  expect(container.querySelector("span")?.textContent).not.toContain("fatal");
+  const { body, raw } = mountApart(error);
+  expect(raw.querySelector("pre")?.textContent).toBe("fatal: not a git repository");
+  expect(body.textContent).not.toContain("fatal");
+  expect(body.querySelector("pre")).toBeNull();
 });
 
 it("leaves the line over the groups out when there is one group, whose lead says it all", () => {
@@ -303,13 +325,34 @@ it.each([
 
 it("keeps a complete nested diagnostic outside its launch sentence and translates name references", () => {
   const error = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "quota_command_failed", agent: "Codex", detail: "raw\n    quota failure" });
-  const container = mount(<DaemonErrorMessage error={error} />);
-  expect(container.querySelector("span")?.textContent).toBe("Could not start Draft: Codex could not report its usage.");
-  expect(container.querySelector("span pre")).toBeNull();
-  expect(container.querySelectorAll("pre")).toHaveLength(1);
+  const { body, raw } = mountApart(error);
+  expect(body.querySelector("span")?.textContent).toBe("Could not start Draft: Codex could not report its usage.");
+  expect(body.querySelector("pre")).toBeNull();
+  expect(raw.querySelectorAll("pre")).toHaveLength(1);
   act(() => setLanguage("zh-Hans"));
-  expect(container.textContent).toContain("无法报告用量");
-  expect(container.querySelector("pre")?.textContent).toBe("raw\n    quota failure");
+  expect(body.textContent).toContain("无法报告用量");
+  expect(raw.querySelector("pre")?.textContent).toBe("raw\n    quota failure");
+});
+
+it.each(["unreadable_request", "project_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable"])("says %s in its own sentence, the system's text only in the raw part", (code) => {
+  const detail = "Operation not permitted (os error 1)";
+  const { body, raw } = mountApart(new DaemonRequestError("fallback", code, { detail }));
+  expect(body.textContent).toBe(format("en", `daemon.${code}.summary` as never));
+  expect(body.textContent).not.toContain(detail);
+  expect(raw.querySelector("pre")?.textContent).toBe(detail);
+});
+
+it.each([
+  { case: "a launch whose failure is internal", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "internal_error", reason: "spawn failed: os error 2", detail: "spawn failed: os error 2" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "spawn failed: os error 2" },
+  { case: "a launch whose failure the catalog lacks", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "a newer daemon's reason" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "a newer daemon's reason" },
+  { case: "a launch whose uncatalogued failure the system's text names", error: new DaemonRequestError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "No space left on device (os error 28)" }), sentence: "Could not start Draft: The disk is full.", rawText: "No space left on device (os error 28)" },
+  { case: "a trust answer whose reason the catalog lacks", error: new DaemonRequestError("fallback", "trust_answer_failed", { agent: "Codex", reason_code: "future_reason", reason: "the daemon's English reason" }), sentence: "Octoboard could not press Codex's trust confirmation (something unexpected went wrong).", rawText: "the daemon's English reason" },
+])("says $case with a generic reason, its own text only in the raw part", ({ error, sentence, rawText }) => {
+  const { body, raw } = mountApart(error);
+  expect(body.querySelector("span")?.textContent?.replace(/[\u2066-\u2069]/g, "")).toBe(sentence);
+  expect(body.textContent).not.toContain(rawText);
+  expect(raw.querySelector("pre")?.textContent).toBe(rawText);
+  expect(hasErrorDetails(error)).toBe(true);
 });
 
 it("uses name chips for fixed agent and product references while leaving plain messages usable", () => {
@@ -360,21 +403,22 @@ it("retains local quota-refusal action metadata in rich copy and a plain fallbac
 it.each(["terminal_write_failed", "store_io_failed"])("keeps nested trust %s diagnostics outside the reason sentence", (reason_code) => {
   const detail = "Permission denied\n    /tmp/مراجعة";
   const error = new DaemonRequestError("fallback", "trust_answer_failed", { agent: "Codex", reason_code, detail });
-  const container = mount(<DaemonErrorMessage error={error} />);
-  expect(container.querySelector("span")?.textContent).not.toContain(detail);
-  expect(container.querySelector("pre")?.textContent).toBe(detail);
-  expect(container.querySelectorAll("pre")).toHaveLength(1);
-  expect(container.textContent).toContain("Answer it in the terminal.");
+  const { body, raw } = mountApart(error);
+  expect(body.textContent).not.toContain(detail);
+  expect(body.querySelector("pre")).toBeNull();
+  expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  expect(raw.querySelectorAll("pre")).toHaveLength(1);
+  expect(body.textContent).toContain("Answer it in the terminal.");
 });
 
 it("retains the login producer's detail-only shell failure without inventing a command", () => {
   const detail = "capturing environment failed\n    permission denied";
   const fallback = `The shell environment could not be captured: ${detail}`;
   const error = new DaemonRequestError(fallback, "shell_environment_timeout", { detail });
-  const container = mount(<DaemonErrorMessage error={error} />);
-  expect(container.querySelector("span")?.textContent).toBe("The shell environment could not be captured.");
-  expect(container.querySelector("pre")?.textContent).toBe(detail);
-  expect(container.textContent).not.toMatch(/\{(?:shell|command|timeout)\}/);
+  const { body, raw } = mountApart(error);
+  expect(body.textContent).toBe("The shell environment could not be captured.");
+  expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  expect(body.textContent).not.toMatch(/\{(?:shell|command|timeout)\}/);
   expect(daemonMessage("en", error.code, error.params, fallback, createStateStore({}).getState())).toBe(fallback);
 });
 
@@ -404,7 +448,7 @@ it.each([
   ["sessionBranches", ["Terminal", "Git"]],
   ["repository", ["Git", "Git", "Terminal"]],
   ["noCommits", ["Terminal"]], ["shell", ["Terminal"]],
-  ["git", ["Terminal", "Git", "Git"]], ["gitHistory", ["Terminal"]],
+  ["gitFailure", ["Terminal", "Git", "Git"]], ["gitHistory", ["Terminal"]],
   ["unsentMessage", ["Enter"]],
 ] as const)("marks %s recovery references while preserving a matching plain companion", (recovery, englishValues) => {
   const container = mount(<RecoveryGuidance recovery={recovery} />);
@@ -492,8 +536,8 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
   expect(details.querySelector("[hidden]")).toBeNull();
   expect(details.querySelectorAll("li")).toHaveLength(3);
   expect(details.firstElementChild!.querySelectorAll("li")).toHaveLength(0);
-  // A one-line message is small inline code after its entry's sentence; one of several lines keeps them in a block.
-  expect([...details.querySelectorAll("pre")].map((node) => node.textContent)).toEqual([detail]);
+  // The system's message for an entry is raw text, so it is a block of its own whatever its length, never a chip.
+  expect([...details.querySelectorAll("pre")].map((node) => node.textContent)).toEqual([detail, "second", "busy"]);
   expect([...details.querySelectorAll("li")].map((item) => item.lastElementChild!.textContent)).toEqual([expect.stringContaining("permission denied"), "second", "busy"]);
   expect(details.querySelectorAll("li")[2]!.textContent).toContain(session.title);
   expect(container.textContent).not.toContain("do not repeat");
@@ -503,13 +547,11 @@ it.each(["account_sharing_failed", "account_sharing_repair_failed"])("says %s sh
 
 it("names the cause of a change that could not start when no entry is listed", () => {
   const error = new DaemonRequestError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail: "default dir moved", cause: "conflict" });
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
-  expect(container.textContent).toContain("The account’s directory conflicts with what sharing needs.");
-  expect(container.querySelector("[hidden] code")?.textContent).toBe("default dir moved");
-  expect(container.querySelector("[hidden] [data-inline-reference]")).toBeNull();
-  act(() => container.querySelector("button")!.click());
-  expect(container.querySelector("[hidden] code")).toBeNull();
-  expect(container.querySelector("code")?.textContent).toBe("default dir moved");
+  const { body, raw } = mountApart(error);
+  expect(body.textContent).toContain("The account’s directory conflicts with what sharing needs.");
+  expect(body.textContent).not.toContain("default dir moved");
+  expect(raw.querySelector("pre code")?.textContent).toBe("default dir moved");
+  expect(raw.querySelector("[data-inline-reference]")).toBeNull();
 });
 
 it("joins a whole failure's reason and its guidance in the catalog, and points a cause with no line of its own at Details", () => {
@@ -522,7 +564,7 @@ it("joins a whole failure's reason and its guidance in the catalog, and points a
   expect(busy.querySelector("span.block")!.textContent).toBe("此账户目录中有内容正在被使用。请关闭正在使用相关文件的其他程序，例如终端中的智能体、编辑器或同步工具。");
   expect(other.querySelector("span.block")!.textContent).toBe("请查看详情。");
   act(() => setLanguage("en"));
-  expect(other.querySelector("span.block")!.textContent).toBe("See Details.");
+  expect(other.querySelector("span.block")!.textContent).toBe("See the details.");
   expect(mountWith("other", undefined).querySelector("span.block")).toBeNull();
 });
 
@@ -544,18 +586,19 @@ it.each([
 
 it("shows a session left interrupted after a sharing change as a sentence with the reason as a code block", () => {
   const error = new DaemonRequestError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "no such file" });
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
-  expect(container.textContent).toContain("could not be resumed after its sharing changed");
-  expect(container.querySelector("[data-inline-reference]")?.textContent).toBe("Work");
-  expect(container.querySelector("pre")?.textContent).toBe("no such file");
+  const { body, raw } = mountApart(error);
+  expect(body.textContent).toContain("could not be resumed after its sharing changed");
+  expect(body.querySelector("[data-inline-reference]")?.textContent).toBe("Work");
+  expect(body.textContent).not.toContain("no such file");
+  expect(raw.querySelector("pre")?.textContent).toBe("no such file");
 });
 
 it("shows the still-running variant of the resume notice without 'left interrupted', keeping the reason as a code block", () => {
   const error = new DaemonRequestError("raw", "sharing_resume_failed", { account: "a1", name: "Work", detail: "timed out", still_running: "true" });
-  const container = mount(<DaemonProvider value={{ store: createStateStore({}) } as Daemon}><DaemonErrorMessage error={error} /></DaemonProvider>);
-  expect(container.textContent).toContain("may still be running; it was not restarted");
-  expect(container.textContent).not.toContain("interrupted");
-  expect(container.querySelector("pre")?.textContent).toBe("timed out");
+  const { body, raw } = mountApart(error);
+  expect(body.textContent).toContain("may still be running; it was not restarted");
+  expect(body.textContent).not.toContain("interrupted");
+  expect(raw.querySelector("pre")?.textContent).toBe("timed out");
 });
 
 it.each([
@@ -603,4 +646,13 @@ it("splits a shell timeout into the sentence, the one remedy, and the consequenc
   expect(consequence!.textContent).not.toContain("/bin/zsh");
   expect(command!.textContent).toContain("/bin/zsh -l -i -c 'env -0'");
   expect(details.textContent).not.toContain(remedy.textContent!);
+});
+
+it("keeps an ActionableError's detail as raw text of a block of its own whether or not its code is worded", () => {
+  const error = new ActionableError("The file could not be read.", "path", { code: "path_not_found", params: { path: "/missing" }, detail: "ENOENT: no such file" });
+  expect(hasErrorDetails(error)).toBe(true);
+  const { body, raw } = mountApart(error);
+  expect(body.textContent).toContain("/missing");
+  expect(body.textContent).not.toContain("ENOENT");
+  expect(raw.querySelector("pre")?.textContent).toBe("ENOENT: no such file");
 });

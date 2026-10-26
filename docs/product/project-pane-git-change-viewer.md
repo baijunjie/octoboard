@@ -123,9 +123,11 @@ as a file rather than as a diff — so a Markdown file is offered as a document 
 an untracked file is — with a note saying which of the two cases the change is, in one sentence. Where the
 content cannot be had after all, the change falls back to the centred stand-in and shows none of the file, saying there
 the same state the notice would have: as a heading, with the line under it where it has one, rather than as that one
-sentence (see "The same state said in one sentence" in `docs/product/empty-states.md`). With a reason to give — the read
-itself failed, a lost connection to the daemon among the reasons — a failure notice says the file's content
-could not be read and gives that reason; where the content simply cannot be had — a side the daemon will not deliver
+sentence (see "The same state said in one sentence" in `docs/product/empty-states.md`). Where the read itself failed —
+a lost connection to the daemon among the reasons — a warning notice, not a failure, since the stand-in is still true
+and only the content is lost, says the file's content could not be shown and goes on with why, in Octoboard's words;
+a failure that is unexpected gives no why at all. What the system or Git said is not in that sentence but under it,
+in the mark's popover. Where the content simply cannot be had — a side the daemon will not deliver
 whole, by the same rule as a diff's collapsed lines, or the change having moved on since it was read, or the two sides
 turning out to differ from what the change says they are — a note says which of those it was. Only a
 change with nothing to read the content from leaves the stand-in alone: one whose two sides are not both files whose
@@ -178,10 +180,12 @@ control of the diff reads as unavailable meanwhile. That, and each notice below,
 Then:
 
 - **A failed read** — but for one that finds the change's worktree gone, which closes the viewer (see "When the open
-  change changes" below) — leaves the diff as it is: the separator says the lines could not be loaded and to try again, a
-  failure notice gives the reason — that the connection to the daemon was lost, among them — and the
-  next expansion reads again. A read of the change itself that follows — on a listing with news of it, or once the
-  connection to the daemon is back — clears the failure without another expansion.
+  change changes" below) — leaves the diff as it is: the separator says the lines could not be loaded and to try again,
+  a failure notice says the unmodified lines could not be read and why, in Octoboard's words — that the connection to
+  the daemon was lost, among them, and that something unexpected went wrong for a failure that is unexpected — with what
+  the system or Git said under it in the mark's popover, and the next expansion reads again. A read of the change itself
+  that follows — on a listing with news of it, or once the connection to the daemon is back — clears the failure without
+  another expansion.
 - **A change that has moved on** since its patch was read, its file or its index having changed underneath, keeps every
   line the patch shows, with a notice saying its unmodified lines cannot be shown, and gives the
   expansion up as below; it is offered again only once the change is read again (see "When the open change changes"
@@ -283,7 +287,7 @@ in place of the diff, in the current language. The cases beyond those of a file 
 | A file it has to show whole (an untracked file, the inside version of a rename across the boundary, a binary side) is larger than 4 MiB | its size, and the most that can be opened |
 | It kept changing while it was being read, after two more tries | it kept changing, and is read again at the next refresh |
 | A committed change's commit is one the repository no longer has (a deleted branch's, once Git has pruned it) | the repository has no such commit |
-| A committed change's content is missing from the repository | Git could not read it, with Git's own message |
+| A committed change's content is missing from the repository | Git could not read it, with Git's own message behind Details |
 
 A change whose worktree is gone is none of these: the viewer closes instead (see "When the open change changes"
 above).

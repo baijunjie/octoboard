@@ -4,7 +4,7 @@ import { useStore } from "zustand/react";
 
 import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon-client";
 import { daemonMessage } from "./daemonMessage";
-import { errorPresentation, noticeErrorPresentation } from "./errorPresentation";
+import { errorPresentation, noticeErrorPresentation, noticeKind } from "./errorPresentation";
 import { errorText } from "./errorText";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
@@ -724,7 +724,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
       // not repeat the reason; any other notice as itself.
       const failure = noticeErrorPresentation(event.code, event.params, event.message);
       emitToast({
-        kind: ["launch_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped", "sharing_messages_dropped", "message_not_sent"].includes(event.code) ? "error" : "notice",
+        kind: noticeKind(event.code, event.params),
         message: daemonMessage(currentLanguage(), event.code, event.params, event.message, store.getState()),
         daemonTitle: failure ? new DaemonRequestError(event.message, `${event.code}.title`, event.params) : undefined,
         daemonError: failure ?? new DaemonRequestError(event.message, event.code, event.params),

@@ -291,9 +291,10 @@ These are:
   "Session rows" in `docs/product/sidebar-session-rows.md`);
 - a project's branch badge, on its sidebar row and in focus mode's header, which carries **one tooltip for the whole
   badge** rather than one per mark: resting the mouse on its state glyph, on the branch name or on either upstream
-  count shows the same sentence, the one the badge's whole state is said in — the branch, each count while it is not
-  zero and a failed check's message. It shows whether or not the badge's text is cut, and the one state that says in
-  visible text that the repository has no commits yet carries no tooltip (see "The branch badge" in
+  count shows the same sentence, the one the badge's whole state is said in — the branch and each count while it is
+  not zero. It shows whether or not the badge's text is cut, and the one state that says in visible text that the
+  repository has no commits yet carries no tooltip. A failed check is not in it: it is a failure mark of its own at the
+  badge's start, a button with a popover and no tooltip (see "The branch badge" in
   `docs/product/project-git-status.md`);
 - the responsible-session badge, the ring a branch carries in the Git mode's branch lists, whose tooltip names the
   session working on the branch, says so differently when that session no longer exists and when it is the selected
@@ -342,8 +343,8 @@ cut at its start, mirrored: it rests pinned to its end, fades at its start, and 
 while it is cut.
 
 A project's branch name in its branch badge also follows these fade and marquee rules. The badge's tooltip is not
-one of this section's, though: the whole badge carries one tooltip describing the full git state, shown whether or
-not the branch name is cut (see "The branch badge" in `docs/product/project-git-status.md`).
+one of this section's, though: the whole badge carries one tooltip describing the branch and its counts, shown whether
+or not the branch name is cut (see "The branch badge" in `docs/product/project-git-status.md`).
 
 **While the pointer is over it, such a label runs as a marquee**, so all of it can be read:
 

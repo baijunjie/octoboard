@@ -460,11 +460,11 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Queued error alerts",
     description:
-      "Errors require explicit OK, with no close button or automatic dismissal. The first names a missing folder as code. Recovery labels such as Browse, Try again and Settings are chips. OK advances through path, connection and account remedies (the account one puts a Manage accounts… button in the footer, left of OK), two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one), each an expected refusal with its own advice rather than the unexpected-failure alert, a session-specific error and a failed trust confirmation (each titled for what failed, with a Session line above the message naming the session and where it is, the session and its project each a chip) and an unknown code with fallback text.",
+      "Errors require explicit OK, with no close button or automatic dismissal, and every sentence is the application's own: raw text from the daemon or the system appears only in the Error details disclosure (closed here) of the alerts that carry it. OK advances through: a missing folder named as code, with recovery labels such as Browse, Try again and Settings as chips; the closed connection; an unknown account, whose Manage accounts… button sits in the footer, left of OK; two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one, whose system text is under Error details), each an expected refusal with its own advice rather than the unexpected-failure alert; a session-specific error and a failed trust confirmation, each titled for what failed (\"Request not carried out\", \"Could not answer the trust confirmation\") with a Session line above the message naming the session and where it is, the session and its project each a chip; and, last, an unknown code from a newer daemon: the generic sentence \"Something unexpected went wrong.\", with the daemon's English text under Error details and the Report issue guidance.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
-      { kind: "error", code: "connection_closed", params: {}, message: "The daemon connection closed" },
+      { kind: "error", code: "connection_closed", params: {}, message: (t) => t("connection.error.connectionClosed") },
       { kind: "error", code: "unknown_account", params: { account: "removed-account" }, message: "The configured account no longer exists" },
       {
         kind: "error",
@@ -486,7 +486,7 @@ export const noticeScenarios: Scenario[] = [
         message: "",
         session: codexSession.id,
       },
-      { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text, shown as is." },
+      { kind: "error", code: "a_code_from_a_newer_daemon", params: {}, message: "The daemon's own English text for a code this build does not know." },
     ],
   },
   {
@@ -538,8 +538,8 @@ export const noticeScenarios: Scenario[] = [
     description: "Two notice toasts, not alerts, stacked and tied to the Claude Code session; each names the agent. One says a dialog came up while the message was written and discarded it, and that the message is written again once the dialog has been answered. The other says the message went into a view of its background agents rather than the conversation, and asks the person to check the session; it does not say the message will be written again.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
-      { kind: "notice", code: "message_discarded_by_dialog", params: { agent: "Claude Code" }, message: "", session: "s-web-1" },
-      { kind: "notice", code: "message_diverted_by_view", params: { agent: "Claude Code" }, message: "", session: "s-web-1" },
+      { kind: "session_notice", code: "message_discarded_by_dialog", params: { agent: "Claude Code" }, message: "", session: "s-web-1" },
+      { kind: "session_notice", code: "message_diverted_by_view", params: { agent: "Claude Code" }, message: "", session: "s-web-1" },
     ],
   },
   {
@@ -547,7 +547,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Unexpected failure and issue reporting",
-    description: "The danger alert asks for a screenshot and reproduction steps. The body names Report issue in a noninteractive hint chip. Its secondary footer button, with an external-link icon, sits to the left of OK and opens the configured issue form. Diagnostic details remain available below the guidance.",
+    description: "The danger alert says only \"Something unexpected went wrong.\", then asks for a screenshot and reproduction steps. The body names Report issue in a noninteractive hint chip. Its secondary footer button, with an external-link icon, sits to the left of OK and opens the configured issue form. The daemon's own text for the failure is in the Error details disclosure below the guidance, closed here; it is the daemon's text, not a JavaScript stack.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
     externalLinks: "available",
     toasts: [{ kind: "error", code: "internal_error", params: { detail: "Unexpected session state while applying an update" }, message: "Unexpected session state while applying an update" }],
@@ -568,7 +568,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Branches and worktrees left after an archive",
-    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: a locked worktree, its path shortened with ~ as plain monospace text, its row ending with a soft warning \"uncommitted changes\" badge, and under \"Removing this failed:\" a branch git failed to delete, whose multi-line git message is a code block under its name. Recovery guidance follows. The archive itself stands.",
+    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: under \"Removing this failed:\" a branch git failed to delete, shown as its name alone, and a locked worktree, its path shortened with ~ as plain monospace text, its row ending with a soft warning \"uncommitted changes\" badge. Recovery guidance follows, then the Error details disclosure, open here: below a heading naming the branch, git's multi-line message sits in a block of its own, so no git text is in the list above. The archive itself stands.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",
@@ -582,6 +582,7 @@ export const noticeScenarios: Scenario[] = [
       },
       message: "The worktree is locked; the branch could not be deleted",
     }],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "toast-session-branches-not-removed-locked",
@@ -608,7 +609,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Project removed, what went with its folder not found out",
-    description: "The danger alert names the removed project as a chip and says the worktrees outside its folder, and its branches if the repository stays, were left, with git's reason in a code block below the sentence, then its own recovery guidance. The project itself is gone.",
+    description: "The danger alert names the removed project as a chip and says the worktrees outside its folder, and its branches if the repository stays, were left, then its own recovery guidance. Git's reason is not in the sentence: it is in the Error details disclosure, open here, in a block of its own. The project itself is gone.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",
@@ -616,6 +617,7 @@ export const noticeScenarios: Scenario[] = [
       params: { name: "Docs Site", detail: "fatal: not a git repository: '/Users/dev/code/docs-site/.git'" },
       message: "",
     }],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "toast-running-session-titles",
@@ -661,7 +663,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Launch failed, nested path in its reason",
-    description: "The session record is gone, so the alert keeps the title naming the session, \"Could not start Draft the release notes\", with the name a chip and no session line in the body; the configuration path inside the failure reason is a chip.",
+    description: "The session record is gone, so its name comes from the failure itself: the alert is still titled \"Could not start the session\", with the \"Session:\" line above the message holding the name as a chip and no location; the configuration path inside the failure reason is a chip.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",
@@ -693,9 +695,9 @@ export const noticeScenarios: Scenario[] = [
     description: "Deliberate warning notices: an untrusted workspace workaround naming its allow and deny settings as code and a trust entry blocked by a locked store. Session links identify where recovery is needed. The trust file's path is set as code.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
-      { kind: "notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
+      { kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
       {
-        kind: "notice",
+        kind: "session_notice",
         code: "trust_not_carried_over",
         params: {
           agent: "Grok Build",
@@ -707,5 +709,66 @@ export const noticeScenarios: Scenario[] = [
         session: grokSession.id,
       },
     ],
+  },
+  {
+    id: "error-sharing-resume-failed",
+    group: TRUST,
+    category: "exceptional",
+    title: "Session not resumed after a sharing change",
+    description: "A session notice that is a failure is an error alert, not a toast, and has no Report issue. Titled \"Could not resume the session\", with the session line above the message, it says only that a session of account Work could not be resumed after its sharing changed, so it is left interrupted, and to resume it yourself. The system's own text (No such file or directory, os error 2) is not in the sentence but in the Error details disclosure, open here.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "session_notice",
+      code: "sharing_resume_failed",
+      params: { account: "a-work", name: "Work", detail: "No such file or directory (os error 2)" },
+      message: "",
+      session: "s-web-1",
+    }],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "error-sharing-repair-failed",
+    group: TRUST,
+    category: "exceptional",
+    title: "Session started before its sharing links were repaired",
+    description: "An error alert titled \"Could not repair sharing links\", with the session line above the message, says only that the session started with account Work's directory as it stands, because its links to the default configuration could not be brought up to date. Under it come the advice for each cause (permission denied, in use). The entries that could not be repaired are in the Error details disclosure, open here, each with what it was left as and the system's own text in a block of its own under it.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "session_notice",
+      code: "account_sharing_repair_failed",
+      params: {
+        account: "a-work",
+        name: "Work",
+        items: JSON.stringify([
+          { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied", sessions: [] },
+          { item: "plugins/", left: "unchanged", cause: "busy", detail: "resource busy", sessions: [] },
+        ]),
+      },
+      message: "",
+      session: "s-web-1",
+    }],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "error-trust-not-carried-over-raw",
+    group: TRUST,
+    category: "exceptional",
+    title: "Trust not carried over, with what the system said",
+    description: "A trust entry that could not be copied is a toast when the cause is worded (see Warning notices and recovery); with the system's own text it is an error alert titled \"Trust not carried over\", with the session line above the message. The sentence says only that Grok Build will ask again the next time it opens the folder, with the file as code and the reason as the application's own short words; the system's text (Permission denied, os error 13) is only in the Error details disclosure, open here.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "session_notice",
+      code: "trust_not_carried_over",
+      params: {
+        agent: "Grok Build",
+        path: "/Users/dev/.grok/trusted_folders.toml",
+        reason: "Permission denied (os error 13)",
+        reason_code: "store_io_failed",
+        detail: "Permission denied (os error 13)",
+      },
+      message: "",
+      session: grokSession.id,
+    }],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
 ];

@@ -75,8 +75,9 @@ describe("an account's actions menu", () => {
     await chooseItem("Log in");
     expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
     const dialog = document.querySelector('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("Log in to Claude Code account claude-work");
-    expect(dialog.textContent).toContain("Logging in…");
+    const plain = (node: Element | null | undefined) => node?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(plain(dialog.querySelector("h2"))).toBe("Log in");
+    expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work…");
     await act(async () => buttonNamed(dialog, "Cancel login")!.click());
     expect(request).toHaveBeenLastCalledWith({ type: "cancel_account_login", agent: "claude", account: "claude-work" });
     expect(document.querySelector('[role="dialog"]')).toBeNull();
@@ -144,7 +145,7 @@ describe("an account's actions menu", () => {
     const region = dialog.querySelector<HTMLElement>('[role="status"]:not([aria-hidden])')!;
     const said = () => region.textContent?.replace(/[\u2068\u2069]/g, "");
     // Seen only: the visible line is not a second voice.
-    expect(dialog.textContent).toContain("Logging in…");
+    expect(dialog.textContent).toContain("Logging in to Claude Code account claude-work…");
     expect(region.previousElementSibling?.getAttribute("aria-hidden")).toBe("true");
     expect(said()).toBe("");
     act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS - 1));
@@ -170,23 +171,73 @@ describe("an account's actions menu", () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("keeps a failed login in the modal with its reason worded from the catalog, and logs in again from it", async () => {
+  it("turns the modal into a failure alert dialog for a failed login, worded from the catalog, the agent's own text only behind Error details, and logs in again from it", async () => {
     accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
     const { render } = mount();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
     accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
       failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
     render();
     await act(async () => {});
-    const dialog = document.querySelector('[role="dialog"]')!;
-    const text = dialog.textContent!.replace(/[\u2068\u2069]/g, "");
-    expect(text).toContain("Could not log in to claude-work.");
-    expect(text).toContain("Claude Code could not log in.");
-    expect(text).toContain("Login failed: 400");
+    expect(document.querySelectorAll('[role="dialog"], [role="alertdialog"]')).toHaveLength(1);
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const plain = (node: Element | null | undefined) => node?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(plain(dialog.querySelector("h2, [data-slot='alert-dialog-heading']"))).toBe("Could not log in");
+    expect(dialog.querySelector('[data-slot="alert-root"]')).toBeNull();
+    // A login that failed with no cause named says it once: the summary that only restates it is left out.
+    expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work failed.");
+    expect(plain(dialog)).not.toContain("could not log in.");
+    // The raw text is only in the disclosure, closed until opened.
+    const disclosure = dialog.querySelector("details")!;
+    expect(disclosure.querySelector("summary")?.textContent).toBe("Error details");
+    expect(disclosure.textContent).toContain("Login failed: 400");
+    expect(dialog.textContent!.replace(disclosure.textContent!, "")).not.toContain("Login failed: 400");
     expect(buttonNamed(dialog, "Cancel login")).toBeUndefined();
+    const names = [...dialog.querySelectorAll("button")].map((button) => button.textContent).filter((text) => text === "Close" || text === "Log in again");
+    expect(names).toEqual(["Close", "Log in again"]);
+    // A failure form like the error alert dialog: no close button of its own and no Escape.
+    expect(dialog.querySelector('[aria-label="Close"]')).toBeNull();
+    act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
+    expect(dismissAccountLogin).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(buttonNamed(dialog, "Log in again"));
     await act(async () => buttonNamed(dialog, "Log in again")!.click());
     expect(dismissAccountLogin).toHaveBeenCalledOnce();
     expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
-    await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Close")?.click());
+    // Starting again brings back the running form of the dialog.
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Logging in to Claude Code account claude-work…");
+    expect(buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")).toBeDefined();
+    await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")?.click());
+  });
+
+  it("keeps focus on Log in again when a login opened from the account's menu fails, the menu's focus not coming back over it", async () => {
+    const { container, render } = mount();
+    await openAccountMenu(container, 1);
+    await chooseItem("Log in");
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
+    render();
+    await act(async () => {});
+    // The running form's unmounting would hand the menu's focus back a turn later, were the swap not seen.
+    await act(async () => void (await new Promise((resolve) => setTimeout(resolve, 20))));
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    expect(document.activeElement).toBe(buttonNamed(dialog, "Log in again"));
+  });
+
+  it("says a failure's cause in the lead sentence, with its remedy under it, and leaves the announcement to the alert dialog opening", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { render } = mount();
+    accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_not_confirmed", params: { agent: "Claude Code" }, message: "x" } });
+    render();
+    await act(async () => {});
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const plain = (node: Element | null | undefined) => node?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(plain(dialog.querySelector("p"))).toBe("Logging in to Claude Code account claude-work failed. Claude Code finished, but this account is still not logged in.");
+    // No live region of its own: the dialog mounting, with focus moving into it, is what is announced.
+    expect(dialog.querySelector('[role="status"]')).toBeNull();
+    expect(dialog.querySelector("details")).toBeNull();
   });
 
   it("leaves no line in the row for a login that ended without success", () => {
@@ -271,9 +322,10 @@ describe("an account's actions menu", () => {
       failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } });
     render();
     await act(async () => {});
-    const text = document.querySelector('[role="dialog"]')!.textContent!.replace(/[\u2068\u2069]/g, "");
-    expect(text).toContain("Claude Code could not log in.");
-    expect(text).toContain("Login failed: 400");
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const text = dialog.textContent!.replace(/[\u2068\u2069]/g, "");
+    expect(text).toContain("Logging in to Claude Code account claude-work failed.");
+    expect(dialog.querySelector("details")?.textContent).toContain("Login failed: 400");
     expect(text).not.toContain("already running");
   });
 
@@ -284,7 +336,7 @@ describe("an account's actions menu", () => {
     await chooseItem("Log in");
     await act(async () => {});
     expect(dismissAccountLogin).toHaveBeenCalledOnce();
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Logging in…");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Logging in to Claude Code account claude-work…");
   });
 
   it("cancels a login that was still being started when the modal was closed, once the daemon has it", async () => {
@@ -329,8 +381,8 @@ describe("an account's actions menu", () => {
     accountLogins.length = 0;
     render();
     await act(async () => {});
-    const dialog = document.querySelector('[role="dialog"]')!;
-    expect(dialog.textContent).toContain("Login failed: 400");
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    expect(dialog.textContent).toContain("Logging in to Claude Code account claude-work failed.");
     expect(buttonNamed(dialog, "Log in again")).toBeDefined();
   });
 
@@ -341,7 +393,7 @@ describe("an account's actions menu", () => {
     await chooseItem("Log in");
     await act(async () => {});
     expect(trackAccountLogin).toHaveBeenLastCalledWith(expect.anything(), "claude", null, false);
-    const dialog = document.querySelector('[role="dialog"]')!;
+    const dialog = document.querySelector('[role="alertdialog"]')!;
     expect(dialog.textContent).toContain("Another Codex account is logging in");
     expect(buttonNamed(dialog, "Log in again")).toBeDefined();
     expect(toastError).not.toHaveBeenCalled();

@@ -5,7 +5,7 @@ import { HelpTip } from "../components/HelpTip";
 import { InlineReference } from "../components/InlineReference";
 import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { OptionSelect } from "../dialogs/OptionSelect";
-import { errorPresentation } from "../errorPresentation";
+import { reportError } from "../reportError";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
 import type { Agent, ApprovalReviewer, ClaudeApprovalMode } from "../protocol";
@@ -51,7 +51,6 @@ function ApprovalSelect<T extends string>({ label, value, choices, save, confirm
   confirmation?: (value: T) => ApprovalConfirmation | null;
 }): React.ReactElement {
   const t = useT();
-  const { toastError } = useDaemon();
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<{ value: T } & ApprovalConfirmation>();
   const choose = (picked: T | "inherit") => {
@@ -62,7 +61,7 @@ function ApprovalSelect<T extends string>({ label, value, choices, save, confirm
     }
     setBusy(true);
     void save(picked === "inherit" ? null : picked)
-      .catch((err) => toastError(errorPresentation(err as Error)))
+      .catch((err) => reportError(err, undefined, undefined, undefined, t("settings.accounts.approval.saveFailedTitle")))
       .finally(() => setBusy(false));
   };
   // The trigger must stay focusable while the popover returns keyboard focus after selection.
@@ -84,6 +83,7 @@ function ApprovalSelect<T extends string>({ label, value, choices, save, confirm
           message={confirming.message}
           confirmLabel={confirming.confirmLabel}
           destructive
+          errorTitle={t("settings.accounts.approval.saveFailedTitle")}
           onConfirm={async () => {
             await save(confirming.value);
             setConfirming(undefined);

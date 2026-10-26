@@ -1,12 +1,12 @@
 import { AlertDialog } from "@heroui/react";
-import React, { useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button } from "../components/Button";
 import { appConfig } from "../appConfig";
 import { ExternalLink } from "../components/ExternalLink";
 import { RecoveryGuidance, recoveryAction } from "../components/ErrorGuidance";
 import { InlineReference } from "../components/InlineReference";
-import { DiagnosticBlock } from "../components/DiagnosticBlock";
+import { DetailsDisclosure, DiagnosticDetails } from "../components/ErrorDetailsDisclosure";
 import { errorAlerts } from "../errorAlerts";
 import { diagnosticText } from "../errorText";
 import { Message, useT } from "../i18n/react";
@@ -18,43 +18,15 @@ import { Dialog } from "./Dialog";
 
 export const issueUrl = appConfig.issueUrl;
 
-/** The "Error details" disclosure around details a caller laid out itself. */
-function DetailsDisclosure({ children }: { children: React.ReactNode }): React.ReactElement {
-  const t = useT();
-  return (
-    <details className="min-w-0 max-w-full">
-      <summary>{t("error.diagnostics")}</summary>
-      <div className="mt-2 flex min-w-0 max-w-full flex-col gap-3">{children}</div>
-    </details>
-  );
-}
-
-function DiagnosticDetails({ text }: { text: string }): React.ReactElement {
-  const t = useT();
-  const summaryId = useId();
-  return (
-    <details className="min-w-0 max-w-full">
-      <summary id={summaryId}>{t("error.diagnostics")}</summary>
-      <DiagnosticBlock labelledBy={summaryId}>{text}</DiagnosticBlock>
-    </details>
-  );
-}
-
-/** Mounted outside the application boundary, so startup and render failures can also be acknowledged. */
-export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement | null {
+/** What an alert about an unexpected failure offers for reporting it: the sentence asking for the report (or, where
+ * the platform cannot open links, naming the address to report at) and the Report issue link for the footer, which is
+ * absent where the address is only named. A link that cannot be opened is itself reported. */
+export function useIssueReport(): { guidance: React.ReactElement; link: React.ReactElement | null } {
   const t = useT();
   const platform = useOptionalPlatform();
-  const [error] = useSyncExternalStore(errorAlerts.subscribe, errorAlerts.getSnapshot);
-  const acknowledge = useRef<HTMLButtonElement>(null);
   const reporting = useRef(false);
   const [reportPending, setReportPending] = useState(false);
-  useLayoutEffect(() => { dialogAround(acknowledge)?.focus(); }, [error?.id]);
-  if (!error) return null;
-  const unexpected = error.classification.kind === "unexpected";
-  const diagnostics = [error.error, ...(error.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== error.message);
   const manualIssue = !platform?.links && platform?.kind === "tauri";
-  // A button for the remedy when it is the one remedy of every failure the alert is about.
-  const action = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
   const report = async () => {
     if (reporting.current) return;
     reporting.current = true;
@@ -74,6 +46,26 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
       setReportPending(false);
     }
   };
+  return {
+    guidance: manualIssue
+      ? <Message id="error.unexpected.manualAddressGuidance" params={{ address: <InlineReference monospace wrap>{issueUrl}</InlineReference> }} />
+      : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineReference>{t("error.issue.report")}</InlineReference> }} />,
+    link: manualIssue ? null : <ExternalLink href={issueUrl} appearance="button" onOpen={platform?.links ? report : undefined} isPending={reportPending}>{t("error.issue.report")}</ExternalLink>,
+  };
+}
+
+/** Mounted outside the application boundary, so startup and render failures can also be acknowledged. */
+export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement | null {
+  const t = useT();
+  const [error] = useSyncExternalStore(errorAlerts.subscribe, errorAlerts.getSnapshot);
+  const acknowledge = useRef<HTMLButtonElement>(null);
+  const issue = useIssueReport();
+  useLayoutEffect(() => { dialogAround(acknowledge)?.focus(); }, [error?.id]);
+  if (!error) return null;
+  const unexpected = error.classification.kind === "unexpected";
+  const diagnostics = [error.error, ...(error.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== error.message);
+  // A button for the remedy when it is the one remedy of every failure the alert is about.
+  const action = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
   const dialog = (
     <Dialog
       key={error.id}
@@ -84,7 +76,7 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
       onClose={() => {}}
       resetKey={error.message}
       footer={<>
-        {unexpected && !manualIssue && <ExternalLink href={issueUrl} appearance="button" onOpen={platform?.links ? report : undefined} isPending={reportPending}>{t("error.issue.report")}</ExternalLink>}
+        {unexpected && issue.link}
         {action && (
           <Button variant="secondary" onPress={() => {
             errorAlerts.acknowledge();
@@ -97,9 +89,7 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
       <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{error.content ?? error.message}</div>
       {error.classification.kind === "unexpected"
         ? <>
-          <p>{manualIssue
-            ? <Message id="error.unexpected.manualAddressGuidance" params={{ address: <InlineReference monospace wrap>{issueUrl}</InlineReference> }} />
-            : <Message id="error.unexpected.reportGuidance" params={{ report: <InlineReference>{t("error.issue.report")}</InlineReference> }} />}</p>
+          <p>{issue.guidance}</p>
           {error.details === undefined && diagnostics.length > 0 && <DiagnosticDetails text={[...new Set(diagnostics)].join("\n\n")} />}
         </>
         : !error.failures?.length && error.classification.recovery !== "none" && <p><RecoveryGuidance recovery={error.classification.recovery} /></p>}

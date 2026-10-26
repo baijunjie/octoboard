@@ -3,6 +3,7 @@ import React from "react";
 
 import { useT } from "../i18n/react";
 import { Button } from "./Button";
+import { DiagnosticBlock } from "./DiagnosticBlock";
 import { Hint } from "./Hint";
 
 /** What a mark says: an error, a warning, or a note that is neither. */
@@ -23,9 +24,12 @@ interface StatusMarkProps {
   /** The popover's body; without it the `label` is the one line, and the tone's word names the popover. */
   children?: React.ReactNode;
   /** The one line drawn richer than the plain-text `label` (markup in it), the same sentence. The mark stays
-   * bare, so the tone's word still names the popover; with `children`, or with `text` and no `children` (no
-   * popover then), it has no effect. */
+   * bare, so the tone's word still names the popover; with `children`, or with `text` and neither `children`
+   * nor `detail` (no popover then), it has no effect. */
   line?: React.ReactNode;
+  /** Raw text (what the system said) under the one line, on a surface of its own: the line is still the label (or
+   * `line`), so the tone's word still names the popover. With `children` it has no effect. */
+  detail?: string;
   /** The mark stands in a collection's section header, which the collection's own walk does not reach. */
   inHeader?: boolean;
   /** The popover's last line, the recovery button (Try again), given a function that closes the popover. */
@@ -48,7 +52,7 @@ export function StatusMark(props: StatusMarkProps): React.ReactElement {
   const { label, tone = "danger", inline = false, text, children } = props;
   const Icon = GLYPHS[tone];
   const glyph = <Icon aria-hidden="true" className={`${inline ? "size-3.5" : "size-4"} shrink-0 ${GLYPH_COLOURS[tone]}`} />;
-  if (!children && text) {
+  if (!children && !props.detail && text) {
     return (
       <span role="img" aria-label={label} className="inline-flex items-center gap-1.5 whitespace-nowrap">
         {glyph}
@@ -56,7 +60,7 @@ export function StatusMark(props: StatusMarkProps): React.ReactElement {
       </span>
     );
   }
-  return <PopoverMark label={label} tone={tone} line={props.line} glyph={glyph} inline={inline} inHeader={props.inHeader ?? false} text={text} actions={props.actions}>{children}</PopoverMark>;
+  return <PopoverMark label={label} tone={tone} line={props.line} detail={props.detail} glyph={glyph} inline={inline} inHeader={props.inHeader ?? false} text={text} actions={props.actions}>{children}</PopoverMark>;
 }
 
 /** The mark's trigger, the same for every tone: an icon button, or the glyph and its word, ghost, so it
@@ -111,6 +115,7 @@ function PopoverMark({
   label,
   tone,
   line,
+  detail,
   glyph,
   inline,
   inHeader,
@@ -121,6 +126,7 @@ function PopoverMark({
   label: string;
   tone: MarkTone;
   line?: React.ReactNode;
+  detail?: string;
   glyph: React.ReactElement;
   inline: boolean;
   inHeader: boolean;
@@ -150,7 +156,7 @@ function PopoverMark({
     <Hint
       kind="popover"
       label={bare ? t(`mark.tone.${tone}`) : label}
-      bodyClassName={bare && !actions ? undefined : "flex flex-col gap-2 [overflow-wrap:anywhere]"}
+      bodyClassName={bare && !actions && !detail ? undefined : "flex flex-col gap-2 [overflow-wrap:anywhere]"}
       contentProps={{ "data-status-mark-popover": "" }}
       onClosed={handBackToHeading}
       trigger={({ onMouseHoverChange: _, expanded: __, popupId: ___, ...wiring }) => (
@@ -159,7 +165,7 @@ function PopoverMark({
     >
       {({ close }) => (
         <>
-          {bare ? (line ?? label) : children}
+          {!bare ? children : detail ? <><p>{line ?? label}</p><DiagnosticBlock>{detail}</DiagnosticBlock></> : (line ?? label)}
           {actions && <div className="flex justify-end">{actions(close)}</div>}
         </>
       )}

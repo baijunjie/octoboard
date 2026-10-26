@@ -4,7 +4,8 @@ import type { ErrorPresentation } from "../errorPresentation";
 import { retryCanHelp } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { AlertButton } from "./AlertButton";
-import { DaemonErrorMessage, errorDetails, errorRemedy } from "./DaemonErrorMessage";
+import { DaemonErrorMessage } from "./DaemonErrorMessage";
+import { errorDetails, errorRemedy } from "./errorParts";
 import { ErrorAlert } from "./ErrorAlert";
 
 /** The Alert of a failure that is the state of what the screen shows: `title` says what failed, the

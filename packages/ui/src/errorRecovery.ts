@@ -4,7 +4,7 @@ import { DaemonRequestError } from "./daemon-client";
 export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session"
-  | "configuration" | "image" | "clipboard" | "file" | "git" | "gitHistory" | "branch"
+  | "configuration" | "image" | "clipboard" | "file" | "gitFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
@@ -12,11 +12,15 @@ export type ErrorRecovery =
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
   | "none";
 
-/** A local failure whose user remedy is known without inspecting its translated message. */
+/** A local failure whose user remedy is known without inspecting its translated message. Its message is the
+ * application's own words; `detail` is the raw text it carries (what the system said), which is never part of the
+ * message and is shown apart from it, behind Details. */
 export class ActionableError extends DaemonRequestError {
-  constructor(message: string, readonly recovery: ErrorRecovery, options?: ErrorOptions & { code?: string; params?: MessageParams }) {
+  readonly detail?: string;
+  constructor(message: string, readonly recovery: ErrorRecovery, options?: ErrorOptions & { code?: string; params?: MessageParams; detail?: string }) {
     super(message, options?.code ?? "ui_actionable", options?.params ?? {});
     this.cause = options?.cause;
+    this.detail = options?.detail;
   }
 }
 
@@ -63,18 +67,19 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   image: ["icon_not_an_image", "icon_too_large"],
   remote: ["invalid_remote_url"],
   noCommits: ["no_commits_to_push", "no_commits_to_restore"],
-  git: ["git_clone_failed", "git_push_failed", "git_switch_failed", "git_restore_failed", "git_operation_in_progress", "no_push_remote", "upstream_not_a_remote"],
+  gitFailure: ["git_failed", "git_clone_failed", "git_push_failed", "git_switch_failed", "git_restore_failed", "git_operation_in_progress", "no_push_remote", "upstream_not_a_remote"],
   gitHistory: ["no_merge_base", "no_merge_base_shallow"],
   sessionBranches: ["session_branches_not_removed"],
   projectBranches: ["project_branches_not_determined"],
   branch: ["not_on_a_branch", "restore_not_on_branch", "invalid_branch_name", "unknown_branch", "worktree_unavailable"],
-  // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
-  // release_session without an owner, and offers Unbind only on a bound project session.
-  none: ["console_session_never_bound", "session_not_bound_to_owner"],
   refresh: ["source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "queued_messages_lost", "queued_messages_dropped"],
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],
   limit: ["limit_exceeded"],
   openExternal: ["terminal_unavailable", "directory_unavailable", "path_open_failed"],
+  // Expected failures whose sentence already says what follows and what to do, with no remedy of their kind to add;
+  // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
+  // release_session without an owner, and offers Unbind only on a bound project session.
+  none: ["sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
 };
 const DOMAIN_RECOVERY = new Map(Object.entries(GROUPS).flatMap(([recovery, codes]) => codes.map((code) => [code, recovery as ErrorRecovery] as const)));
 const OS_RECOVERY: Record<string, ErrorRecovery> = {

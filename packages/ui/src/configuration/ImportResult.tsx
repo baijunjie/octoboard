@@ -2,7 +2,7 @@ import { CircleAlert, CircleCheck, CircleMinus, CircleSlash, Info, type LucideIc
 import React, { useId } from "react";
 
 import { AGENT_LABEL } from "../agents";
-import { CodedFailureBody } from "../components/DaemonErrorMessage";
+import { CodedFailureBody } from "../components/errorParts";
 import { InlineReference } from "../components/InlineReference";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusMark } from "../components/StatusMark";

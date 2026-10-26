@@ -364,3 +364,30 @@ it("says both remedies when an older item is kept aside and the system also repo
   expect(visible.indexOf("copy it out")).toBeLessThan(visible.indexOf("Free space"));
   expect(visible).not.toContain("Report issue");
 });
+
+it.each([
+  { case: "an internal error", error: new DaemonRequestError("database is locked", "internal_error", { detail: "database is locked" }), sentence: "Something unexpected went wrong.", raw: "database is locked" },
+  { case: "a code the catalog lacks", error: new DaemonRequestError("a newer daemon's text", "a_newer_code", {}), sentence: "Something unexpected went wrong.", raw: "a newer daemon's text" },
+  { case: "a code whose sentence leaves its detail out", error: new DaemonRequestError("fallback", "git_failed", { detail: "fatal: bad object" }), sentence: "Git could not read this.", raw: "fatal: bad object" },
+])("says $case in the application's own words, the daemon's own text, not this window's stack, behind Error details", ({ error, sentence, raw }) => {
+  mount();
+  act(() => reportError(error));
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  const details = alert.querySelectorAll("details");
+  expect(details).toHaveLength(1);
+  expect(details[0].querySelector("summary")?.textContent).toBe("Error details");
+  expect(details[0].querySelector("pre")?.textContent).toBe(raw);
+  const explanation = alert.cloneNode(true) as Element;
+  explanation.querySelector("details")!.remove();
+  expect(explanation.textContent?.replace(/[⁦-⁩]/g, "")).toContain(sentence);
+  expect(explanation.textContent).not.toContain(raw);
+  expect(explanation.querySelector("pre")).toBeNull();
+});
+
+it("keeps the sentence of a failure the client raises itself, which is already the application's own words", () => {
+  mount();
+  act(() => reportError(new DaemonRequestError("The request timed out.", "request_timed_out", {})));
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  expect(alert.textContent).toContain("The request timed out.");
+  expect(alert.textContent).not.toContain("Something unexpected went wrong.");
+});

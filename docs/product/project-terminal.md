@@ -41,7 +41,8 @@ Any other operating system has no system terminal Octoboard opens.
 
 ## Refusals
 
-The open is refused with `terminal_unavailable`, and the error alert includes the reason, when:
+The open is refused with `terminal_unavailable`, and the error alert says the system terminal could not be opened,
+with the reason under its **Error details**, when:
 
 - the project directory does not exist, or is not a directory;
 - the project path is not valid Unicode;

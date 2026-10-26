@@ -25,7 +25,15 @@ for one console — any character a file name cannot hold (a control character, 
 console whose name leaves nothing. The user can change it in the save dialog; a browser may file the download under a
 name of its own. The desktop app's open dialog reads the picked file whole and refuses, before anything is sent to the
 daemon, one larger than 64 MiB, as too large to be a configuration file, and one that is not UTF-8 text, as not a text
-file; either is told in the import dialog, and another file can be chosen.
+file; either is told in an error alert over the import dialog, and another file can be chosen.
+
+**When the file fails.** An error alert raised from either dialog — a file that could not be saved or read, or a
+request the daemon refuses — stands over it, and the dialog stays open. It is titled "Could not export the
+configuration" from the export dialog and "Could not import the configuration" from the import dialog (see "The error
+alert" in `docs/product/error-alerts.md`). A file that could not be written says that the file
+could not be saved, and one that could not be read that the file could not be read, with the next step the system's
+error points to, such as granting Octoboard access, or else to choose a readable file or a writable folder with enough
+disk space and retry; what the system itself said is under **Error details**, never in the sentence.
 
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
 there is only everything. Each choice says whether the application settings go with it: everything carries them, this
@@ -38,7 +46,7 @@ the user name, and that the file is to be shared only with people the user trust
 asks the daemon for the document and opens the save dialog. In the desktop app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever
 its settings say, and does not report one that was blocked or cancelled, so there the toast says only that the
 configuration was downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the
-export dialog open; a file that could not be written is said in the dialog.
+export dialog open; a file that could not be written is told as above.
 
 **Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that the file is one
 exported earlier, that its contents can be reviewed and where each project goes on the machine running Octoboard chosen

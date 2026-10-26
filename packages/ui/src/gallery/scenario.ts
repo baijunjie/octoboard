@@ -1,4 +1,5 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
+import type { Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
@@ -55,10 +56,13 @@ export type Startup = { kind: "noAddress" } | { kind: "daemonFailed"; error: str
 /** Feedback the scenario raises once the app is mounted: errors enter the required-acknowledgement
  * alert queue, while notices remain toasts. With a `code` the text is worded from the
  * catalog as the daemon's own errors and notices are, with `message` as the fallback for a code the
- * catalog lacks; without one `message` is shown as is, like a client-side error. */
+ * catalog lacks; without one `message` is shown as is, like a client-side error. A `message` given as a function is
+ * worded from the catalog in the viewing language when the toast is raised, for a failure the client words itself. */
 export interface ToastFixture {
-  kind: ToastRequest["kind"];
-  message: string;
+  /** `"session_notice"` is a notice the daemon sends about a session (needs a `code`): the app routes it as it does
+   * the real one (`noticeKind`), a failure or a notice carrying raw text to an error alert and any other to a toast. */
+  kind: ToastRequest["kind"] | "session_notice";
+  message: string | ((t: Translate) => string);
   code?: string;
   params?: MessageParams;
   session?: string;

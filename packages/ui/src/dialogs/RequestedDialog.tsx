@@ -139,6 +139,7 @@ function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
       destructive={cleanup.forcing}
       waiting={cleanup.pending}
       extraControl={cleanup.extraControl}
+      errorTitle={t("dialog.archiveSession.failedTitle")}
       onCancel={onClose}
       onConfirm={async () => {
         await request({ type: "archive_session", session: session.id, ...cleanup.choices });

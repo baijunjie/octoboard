@@ -462,6 +462,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Export, the file could not be written",
+    description: "The error alert dialog, over the export dialog and titled \"Could not export the configuration\", says only \"Could not save the file.\" and what to do about it. The system's own text, Permission denied (os error 13), appears nowhere in the sentences and sits only in the Error details disclosure, closed here: open it to read it in its block.",
     state,
     configuration: { saveError: "Permission denied (os error 13)" },
     steps: [
@@ -487,7 +488,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, the file could not be read",
-    description: "The plain file-read error appears in a danger alert without a heading.",
+    description: "The error alert dialog, over the import dialog and titled \"Could not import the configuration\", says only \"Could not read the file.\" and what to do about it. The system's own text, Permission denied (os error 13), sits only in the Error details disclosure, closed here.",
     state,
     configuration: { readError: "Permission denied (os error 13)" },
     steps: [
@@ -564,6 +565,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, a document that cannot be read",
+    description: "The refusal says only that the configuration file could not be read; the parser's text about the unexpected type sits only in the Error details disclosure, closed here.",
     state,
     configuration: refusal(
       "octoboard-configuration.json",

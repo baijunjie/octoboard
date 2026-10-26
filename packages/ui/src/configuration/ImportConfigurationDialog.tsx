@@ -1,5 +1,4 @@
 import { Button } from "../components/Button";
-import { ActionableError } from "../errorRecovery";
 import { reportError } from "../reportError";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -13,7 +12,7 @@ import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { replaceOverrides, shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
-import { fileFailureText } from "./failureText";
+import { fileFailure } from "./failureText";
 import { documentShortcuts, hasDirectoryProblem, initialReview, resolutionsOf, shortcutsRecord, shortcutsReview, type ReviewState } from "./importPlan";
 import { ImportResult, type Imported } from "./ImportResult";
 import { ImportReview, type Inspection } from "./ImportReview";
@@ -45,7 +44,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const t = useT();
   const { request } = useDaemon();
   const { configurationFile } = usePlatform();
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t("configuration.import.alertTitle"));
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);
@@ -98,7 +97,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     try {
       opened = await configurationFile.open();
     } catch (err) {
-      if (picker === pickerRef.current) reportError(new ActionableError(fileFailureText(t, err, "configuration.import.readFailed"), "file", { cause: err }));
+      if (picker === pickerRef.current) reportError(fileFailure(t, err, "configuration.import.couldNotRead"), undefined, undefined, undefined, t("configuration.import.alertTitle"));
       return;
     } finally {
       if (picker === pickerRef.current) {
@@ -114,6 +113,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       } catch {
         errorAlerts.report({
           message: t("configuration.import.notJson", { name: isolate(opened.name) }),
+          title: t("configuration.import.alertTitle"),
           recovery: "configuration",
           content: <Message id="configuration.import.notJson" params={{ name: <InlineReference monospace wrap>{opened.name}</InlineReference> }} />,
         });

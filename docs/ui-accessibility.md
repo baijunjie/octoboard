@@ -900,8 +900,21 @@ remedy, such as freeing disk space, unlocking a session or correcting a folder's
 preserves its diagnostics, asks the user to take a screenshot and file an issue, and provides the issue entry.
 Do not ask the user to fix a likely application defect or present a known environmental problem as a bug.
 An error alert dialog's recovery action is a secondary button in its footer beside the acknowledgement button,
-never a button inside its body. Its body is the dialog's own prose: the explanation, the remedy and any diagnostic
-block follow one another without an Alert inside the dialog.
+never a button inside its body. Its body is the dialog's own prose in the application's own words: the explanation,
+the remedy and any further explanation follow one another without an Alert inside the dialog. What is not written for
+the reader — a message passed through from the system, Git, the daemon or an agent, a stack, a diagnostic block — is
+never part of that prose, not even as a reference chip: it sits behind an "Error details" disclosure under the body,
+each block on a surface of its own. A failure the application has no words for opens with a sentence for its cause
+where the raw text names one it recognises (a full disk, a refused access, a failed connection, or that the operation
+could not be completed) and with "Something unexpected went wrong." only where it is unexpected, its raw text behind
+Error details either way.
+
+A dialog whose purpose a failure ends (a login that failed or timed out) turns into a failure modal of this same
+form, in place of the dialog that was open: the danger icon in its header, a plain title saying what failed, the
+sentence naming its subject and cause as the body, raw text behind Error details, no close button and no Escape, and
+its buttons right-aligned, the secondary (Close) first and the primary (Log in again) trailing, which takes focus. It
+is a dialog of its own rather than the open one with an Alert added inside it, and the alert dialog's mounting and
+the focus move announce it, with no further live announcement.
 
 A state that must not happen is prevented rather than shown as a screen: disable an entry whose action cannot
 succeed, such as New session when there is no agent to pick. If that state arises while its dialog is open, close
@@ -991,7 +1004,12 @@ that has one** (a tree folder's, the account name line's), not at the row's trai
 and fade, so a long name clips and the mark stays visible after its visible text, and a hover marquee, if the name has
 one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes the place of its own
 layout: the status column of a table (an import result), beside the section's heading for a part of a compact layout,
-inline with the text in a document.
+inline with the text in a document. A failed Git check of a project stands at the start of its Git badge, in place of
+the badge's branch glyph, outside the badge's tooltip trigger and as a tab stop of its own; while a check, pull or push
+runs the refresh glyph takes its place, and the mark comes back when that run ends unless a check in it succeeded. The row's accessible name
+adds the mark's name ("Git check failed") as its own phrase; Git's text is in no name and no tooltip, only in the
+mark's popover. A press on the mark keeps to itself and does not reach the pressable row around it, and when the mark
+goes away while it or its popover holds focus, focus goes to the row (or focus mode's header).
 No sentence of error text is written into the row.
 
 **A mark is always a popover, and never also a tooltip.** What an error or a warning carries can hold a button (Try
@@ -1003,7 +1021,9 @@ like every floating surface of the application. A mark with a body, a button or 
 laid out inside. The exception is a mark that draws a word beside its glyph and has nothing more to say: the word
 already says it on screen, so it stays the glyph and the word as plain text, with no button and no popover. The popover
 holds the reason in the application's own words, then the main remedy, any further explanation, then the raw text, then
-the recovery action (Try again, at the popover's trailing edge). The glyph is a button named for what failed, with no
+the recovery action (Try again, at the popover's trailing edge). A mark whose content is one line and raw text holds
+that line, then the raw text in a diagnostic block under it; raw text in a mark is always such a block, never inline
+text or a chip. The glyph is a button named for what failed, with no
 tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is the same button and the
 same popover with nothing to press in it: marks of every tone side by side look alike, take the pointer alike, are each
 a tab stop and open the same way, so they differ only in glyph and colour. Glyphs per tone: circled `!` for danger, a
@@ -1561,8 +1581,10 @@ accessible name already says what it does; a focused grip shows itself and its r
 **A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said about
 content that is still shown — are status marks (`StatusMark`) in three tones (`packages/ui/src/viewer/notices.tsx`): an
 explanation of how the content is drawn (a note, the circled `i`), a warning about the content itself (the triangle),
-and a part of it the viewer could not show (danger, the circled `!`). The glyphs differ in shape, so the tone does not
-rest on colour. The viewer is a compact layout and holds no Alert: a notice about the whole file or change is one mark
+and a part of it the viewer could not show (danger, the circled `!`). A read that fails while what the viewer shows
+is still true is a warning, not a failure: a change with no differences whose content could not be read for display
+keeps "No differences" and carries the triangle, since only the preview of its content is lost. The glyphs differ in
+shape, so the tone does not rest on colour. The viewer is a compact layout and holds no Alert: a notice about the whole file or change is one mark
 after the file path in the viewer's header, ordered failed, warned, then notes; in a compared image change a side's
 own notice stands beside that side's heading instead; a notice about one spot of a Markdown document stays at that
 spot, inside a paragraph (a button is valid there) or before a block's fallback source, lined

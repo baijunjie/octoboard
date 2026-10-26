@@ -10,6 +10,7 @@ import { format, globalParam, type Translate } from "../i18n/catalog";
 import { setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
 import { ViewerErrorMessage } from "./ViewerErrorMessage";
+import { rawFailureText } from "../errorText";
 import { viewerErrorText } from "./viewerError";
 import { ViewerHost } from "./viewerTestSupport";
 
@@ -109,6 +110,15 @@ it.each<Language>(["en", "zh-Hans"])("uses the same compact reasons in plain-tex
   // Another file's failure is worded in the language, with its path.
   expect(text(new DaemonRequestError("other.ts was not found", "file_not_found", { path: "other.ts" }))).toContain("other.ts");
   expect(text("Read failed")).toBe("Read failed");
+});
+
+it.each([
+  new DaemonRequestError("database is locked", "internal_error", { detail: "database is locked" }),
+  new DaemonRequestError("a newer daemon's text", "a_newer_code", {}),
+])("says a body failure the application has no words for as its generic sentence, its text kept as the raw detail: $code", (error) => {
+  const t: Translate = (key, ...args) => format("en", key, args[0]);
+  expect(viewerErrorText(t, "en", error, "src/gone.ts", NO_RECORDS)).toBe("Something unexpected went wrong.");
+  expect(rawFailureText(error)).toBe(error.message);
 });
 
 it.each<Language>(["en", "zh-Hans"])("words a failure of another path as its summary sentence, without the raw reason, in %s", (language) => {

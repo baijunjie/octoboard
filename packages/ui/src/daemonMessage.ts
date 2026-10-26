@@ -261,6 +261,14 @@ export function sharingReasonKey(cause: string | undefined) {
   }
 }
 
+/** For a sharing failure (`account_sharing_failed`, `account_sharing_repair_failed`), the raw text that says why the
+ * change failed as a whole, which a failure with entries may leave empty: the daemon's `detail`, or for a repair the
+ * notice's own message. Nothing at all for any other failure. */
+export function sharingRawReason(error: { code: string; params: MessageParams; message: string }): { raw: string | undefined } | undefined {
+  if (!SHARING_ITEM_CODES.has(error.code)) return undefined;
+  return { raw: error.code === "account_sharing_failed" ? error.params.detail : error.message };
+}
+
 /** Whether a change that failed as a whole has a reason to put in front of the user: the cause's own line, or the raw
  * reason behind Details that the guidance points at. */
 export function hasSharingReason(cause: string | undefined, detail: string | undefined): boolean {
@@ -331,6 +339,7 @@ export const DETAIL_BLOCK_CODES = new Set([
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout", "relocation_failed",
   "directory_unreadable", "source_unavailable", "permission_denied",
+  "unreadable_request", "project_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable",
 ]);
 
 /** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */

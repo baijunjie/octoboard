@@ -1,7 +1,7 @@
 import { Label, ProgressBar } from "@heroui/react";
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../components/DaemonErrorMessage";
+import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../components/SharingFailure";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { HelpTip } from "../components/HelpTip";
 import { InlineReference } from "../components/InlineReference";
@@ -223,7 +223,7 @@ function SharingIncomplete({ id, failure, share, guidance, announce, idle }: {
   // With several causes, a cause with no line of its own points at the raw reason, which is right below it here, so it
   // says nothing; a single cause (a group or the change's own) is said by the guidance and fix below, not here.
   const reason = single || !groups ? undefined : <SharingCauseSummary items={items!} />;
-  const raw = failure && (items?.length || failure.detail) ? <SharingDetails items={items ?? []} detail={failure.detail} folded={false} /> : undefined;
+  const raw = failure && (items?.length || failure.detail) ? <SharingDetails items={items ?? []} detail={failure.detail} /> : undefined;
   const note = idle > 0 ? <span>{t("settings.accounts.sharing.idleSessions", { count: idle })}</span> : undefined;
   const later = single && fix ? <span className="block">{t(guidance)}</span> : undefined;
   const details = reason || later || note || raw ? <>{reason}{later}{note}{raw}</> : undefined;

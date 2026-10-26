@@ -1,7 +1,7 @@
 import React from "react";
 
 import { StatusBadge } from "../components/StatusBadge";
-import { codedMessageNode, CodedFailureBody } from "../components/DaemonErrorMessage";
+import { codedMessageNode, CodedFailureBody } from "../components/errorParts";
 import { StatusMark } from "../components/StatusMark";
 import { daemonMessage } from "../daemonMessage";
 import { useCurrentLanguage, useT } from "../i18n/react";

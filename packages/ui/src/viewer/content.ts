@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import type { HostPath } from "../components/useHostPathActions";
 import type { ErrorPresentation } from "../errorPresentation";
-import type { FileContent } from "../protocol";
+import type { FileContent, MessageParams } from "../protocol";
 import { joinedPatch, saysNothingChanged } from "./patch";
 import type { StatusKey } from "./statusMarks";
 
@@ -71,16 +71,31 @@ export interface ChangeBodies {
  *   or a change with no patch to expand. The viewer then keeps the collapsed lines as they are and says so
  *   (`viewer.expand.unavailable`).
  * - `changed`: the change moved on after its patch was read, so the bodies would not match it.
- * - `failed`: the read failed; `message` says why, and asking again is fine.
+ * - `failed`: the read failed; `wording` says why in the application's own words, where it has words for
+ *   it (absent for a failure classified unexpected, which the viewer then says as its generic sentence),
+ *   `detail` is the raw text the failure carried (what the system said), `failure` is the coded failure
+ *   behind `wording`, passed only where the wording sets names as chips (`hasCodeParams`), and asking again is
+ *   fine. `changeBodiesFailure` builds it from a read's failure.
  * - `superseded`: the read was given up for a newer one, and nothing is said.
  */
 export class ChangeBodiesError extends Error {
   constructor(
     readonly reason: "unavailable" | "changed" | "failed" | "superseded",
-    message?: string,
+    readonly wording?: string,
+    readonly detail?: string,
+    readonly failure?: { code: string; params: MessageParams },
   ) {
-    super(message ?? reason);
+    super(wording ?? reason);
   }
+}
+
+/** What a mark says of a failed read of a change's bodies: `message`, why in the application's own words, which only a
+ * `ChangeBodiesError` that has words for it carries (any other failure's text is raw, so the caller says the generic
+ * sentence instead), `detail`, the raw text its popover shows, and `failure`, the coded failure to set `message`'s
+ * names as chips. */
+export function bodiesFailure(error: unknown): { message?: string; detail?: string; failure?: { code: string; params: MessageParams } } {
+  if (error instanceof ChangeBodiesError) return { message: error.wording, detail: error.detail, failure: error.failure };
+  return { detail: error instanceof Error ? error.message : String(error) };
 }
 
 export type ViewerContent =

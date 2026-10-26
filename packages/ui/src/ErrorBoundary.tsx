@@ -54,7 +54,8 @@ function diagnostic(error: Error): string {
 function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   const t = useT();
   const text = diagnostic(error);
-  useEffect(() => { errorAlerts.report({ message: error.message, title: <Message id="error.crashed" />, content: <DiagnosticBlock>{text}</DiagnosticBlock> }); }, [error, text, t]);
+  // The alert says it in the application's words; the error's own text is its "Error details".
+  useEffect(() => { errorAlerts.report({ message: error.message, title: <Message id="error.crashed" />, content: <p>{t("error.unexpected.summary")}</p>, details: <DiagnosticBlock tall>{text}</DiagnosticBlock> }); }, [error, text, t]);
   return (
     <StartupScreen
       message={

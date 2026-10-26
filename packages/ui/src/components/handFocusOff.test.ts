@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { handFocusOff } from "./handFocusOff";
+import { focusHolderOrButton, handFocusOff } from "./handFocusOff";
 
 const setInteractionModality = vi.hoisted(() => vi.fn());
 vi.mock("react-aria", () => ({ setInteractionModality }));
@@ -55,4 +55,13 @@ it("focuses the holder itself when it is a tab stop", () => {
   from.querySelector("button")?.focus();
   handFocusOff(from, holder, true);
   expect(document.activeElement).toBe(holder);
+});
+
+it("focuses the first button of a holder that is no tab stop, and the holder itself when it is one", () => {
+  focusHolderOrButton(holder);
+  expect(document.activeElement).toBe(destination());
+  holder.tabIndex = 0;
+  focusHolderOrButton(holder);
+  expect(document.activeElement).toBe(holder);
+  expect(() => focusHolderOrButton(null)).not.toThrow();
 });

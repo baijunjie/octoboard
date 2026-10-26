@@ -20,8 +20,10 @@ when the chevron appears. The hover chevron fades and opens out as it
 appears, and back as it goes, briefly — at once where the system asks for reduced motion.
 
 After the name, before the activity marker below and the row's controls, comes the project's **branch badge** — its
-current branch and how far it is from its upstream, when its directory is a git repository (see "The branch badge" in
-`docs/product/project-git-status.md`).
+current branch and how far it is from its upstream, when its directory is a git repository, led by a failure mark when
+its last check failed (see "The branch badge" in `docs/product/project-git-status.md`). That mark is a button and a tab
+stop of its own on the row, and pressing it does not fold the project; the row's own name adds that the Git check
+failed while it shows.
 
 A collapsed project shows an activity marker with the same meanings as a console's badge on the rail (see "The
 console switcher" in `docs/product/console-switcher.md`), taken from its sessions that are not archived, so a waiting

@@ -59,7 +59,7 @@ it.each(AGENT_OPTIONS)("retains account qualifiers and removed-account paths for
   }
 });
 
-it.each(["en", "zh-Hans", "ar"] as const)("preserves every Git phase and diagnostic text in rich/plain routes (%s)", (language) => {
+it.each(["en", "zh-Hans", "ar"] as const)("keeps every Git phase the same in rich and plain routes, Git's own text in neither (%s)", (language) => {
   const before = currentLanguage();
   setLanguage(language);
   onTestFinished(() => setLanguage(before));
@@ -68,7 +68,10 @@ it.each(["en", "zh-Hans", "ar"] as const)("preserves every Git phase and diagnos
       const status = gitStatusOf("p", { activity, branch, ahead: 2, behind: 1, error: "fatal: failed\n    /Users/中文/مرحبا" });
       const container = mount(gitBadgeContent(language, t, status));
       expect(container.textContent).toBe(bare(gitBadgeAriaLabel(language, t, status)));
-      expect(container.querySelector("pre")?.textContent).toBe(status.error);
+      // A failed check's own text is the failure mark's popover's alone.
+      expect(container.querySelector("pre")).toBeNull();
+      expect(container.textContent).not.toContain("fatal");
+      expect(gitBadgeAriaLabel(language, t, status)).not.toContain("fatal");
       expect(Array.from(container.querySelectorAll("[data-inline-reference]")).filter((chip) => chip.querySelector("code"))).toHaveLength(branch ? 1 : 0);
     }
   }
