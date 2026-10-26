@@ -33,11 +33,16 @@ row each, and the items below the table say so where packages differ.
   (`en`, `zh-Hans`) when a changed path can make the languages differ (`LANGUAGE_SENSITIVE` in
   `packages/ui/scripts/gallery-languages.mjs`) or the change cannot be judged; `--lang all` forces all and `--lang
   <list>` names them. Its page loads wait for a heavy-step slot (the lock `pnpm verify` also takes), and it skips pages
-  already recorded clean on the same content; `--fresh` loads them anyway. Kept out of the quick check: the dark theme,
-  `pnpm gallery:sweep --theme dark`, run when a change touches colours; chip geometry, self-built on Playwright, `node
-  scripts/gallery-chip-geometry.mjs http://localhost:<port>` in `packages/ui` against a gallery served from this
-  checkout (unlike the sweep it falls back to no other browser: without Playwright's own Chromium, set
-  `OCTOBOARD_CHROMIUM` to one), run when a change touches inline references.
+  already recorded clean on the same content; `--fresh` loads them anyway. Before loading anything it judges whether the
+  branch's changes since that merge base can make a page fail (the rule is in `packages/ui/scripts/gallery-impact.mjs`,
+  described in `packages/ui/README.md`, section "Sweeping the gallery"; a file in the preview scratch location counts as
+  added, so a checkout holding preview scenarios never skips); when they cannot, it prints "Nothing to load: …" and
+  exits 0 without loading a page, which counts as a passed quick check. `--force`, named scenarios, `--group`, `--theme
+  dark|both` and `--url` are never judged; `--fresh` does not override this skip.
+  Kept out of the quick check: the dark theme, `pnpm gallery:sweep --theme dark`, run when a change touches colours;
+  chip geometry, self-built on Playwright, `node scripts/gallery-chip-geometry.mjs http://localhost:<port>` in
+  `packages/ui` against a gallery served from this checkout (unlike the sweep it falls back to no other browser:
+  without Playwright's own Chromium, set `OCTOBOARD_CHROMIUM` to one), run when a change touches inline references.
 - Shared-layer examples: `packages/ui/src/components/`; `packages/ui/src/style.css` and `packages/ui/src/theme.tsx`;
   `packages/ui/src/i18n/`; `packages/ui/src/gallery/fixtures/` and `packages/ui/src/gallery/fixtureDaemon.ts` (mocks
   shared by many scenarios); `packages/ui/src/protocol.ts` and `packages/ui/src/daemon-client.ts` (the contract the
