@@ -54,10 +54,18 @@ even under mouse reporting.** On macOS an Option-drag therefore always makes an 
 (block) one; on other platforms an Alt-drag on a screen without mouse reporting selects a column.
 
 Moving the pointer away to right-click keeps a selection made under mouse reporting: while the terminal holds a
-selection, pointer motion with no button held is not reported to a program that follows all motion, since the report (in
-the SGR encodings Claude Code uses) would clear the selection, so that program sees no hover until the selection is gone. Typing, and a click or the wheel
-reported to the program, may still clear it, and so can the program, by switching screens or turning mouse reporting
-on again.
+selection, pointer motion with no button held is not reported to a program that follows all motion, since the report
+(in the SGR encodings Claude Code uses) would clear the selection, so that program sees no hover until the selection
+is gone. Typing, and a click or the wheel reported to the program, may still clear it.
+
+The selection also survives the program re-asserting its modes, as Claude Code does whenever input reaches it after a
+few idle seconds (a focus report as the window comes back to the front, say): output that only sets modes, leaving mouse
+reporting as it was, leaves the selection where it was, unless a key, a paste, a press that cannot open the editing
+menu, or a drag or the wheel reported to the program reached the terminal while that output was being parsed. A
+re-assertion in the middle of a forced drag (Option-drag, or Shift-drag elsewhere) still ends the drag, keeping what it
+had selected so far. The program does clear the selection when re-asserted mouse modes come in the same output as
+anything else, such as text it redraws, when it switches to another mouse reporting mode, and when it switches between
+the main and the alternate screen.
 
 **Text a program copies.** A program running in the terminal can put text on the clipboard with the OSC 52 escape
 sequence, as Claude Code does with the text selected in its fullscreen view. Whichever selection the request names, the

@@ -1,7 +1,7 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
-import { type IBufferRange, Terminal } from "@xterm/xterm";
+import { type IBuffer, type IBufferRange, Terminal } from "@xterm/xterm";
 
 import { interactionIsTouch } from "../touchInput";
 import { isSecondaryPress } from "../useWindowShortcut";
@@ -74,16 +74,39 @@ function watchUserInput(term: Terminal, onUserInput: () => void): void {
   core?.coreService?.onUserInput?.(onUserInput);
 }
 
-/** Whether `data` is a mouse report that reaches `onData`: SGR and SGR-pixels (`CSI < b;x;y M|m`).
- * xterm's default encoding always goes through `onBinary`, and it has no urxvt encoding. */
+/** Whether `data` is a mouse report that reaches `onData`: SGR and SGR-pixels (`CSI < b;x;y M|m`),
+ * with the button code `b` captured. xterm's default encoding always goes through `onBinary`, and
+ * it has no urxvt encoding. */
 // eslint-disable-next-line no-control-regex -- Terminal mouse reports begin with the escape control character.
-const MOUSE_REPORT = /^\x1b\[<\d+;\d+;\d+[Mm]$/;
+const MOUSE_REPORT = /^\x1b\[<(\d+);\d+;\d+[Mm]$/;
 
 /** Turns off the mouse tracking (X10 to any-motion, and the SGR encoding) and focus reporting an
  * agent may have switched on, which xterm answers with input of its own. `?1015l` (urxvt) is a
  * no-op in xterm 6.0.0, which does not support that encoding; it is harmless and kept for an
  * xterm that does. */
 const RESET_REPORTING_MODES = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?1015l";
+
+/** Output made of nothing but private mode sets and resets (`CSI ? Pm h`, `CSI ? Pm l`), with at
+ * most charset designations (`ESC ( B`) and shifts (SI, SO) around them: what a program writes to
+ * re-assert its modes, as Claude Code does after a pause in its input, on a resize and in other
+ * cases. Of the modes, only the alternate screen's change the text on screen, by switching buffers,
+ * which `keepSelectionThroughModes` checks for itself. */
+// eslint-disable-next-line no-control-regex -- Mode sequences begin with the escape control character.
+const MODES_ONLY = /^(?:\x1b\[\?\d+(?:;\d+)*[hl]|\x1b[()*+][0-9A-Za-z]|[\x0e\x0f])+$/;
+/** Longer output is never a bare re-assertion of modes; past this it is not even looked at. */
+const MODES_ONLY_MAX_BYTES = 256;
+
+/** Whether `data` only sets or resets modes (see `MODES_ONLY`). */
+function onlySetsModes(data: Uint8Array): boolean {
+  return data.length > 0 && data.length <= MODES_ONLY_MAX_BYTES && MODES_ONLY.test(String.fromCharCode(...data));
+}
+
+/** Whether `data` is an SGR report of the pointer moving with no button held: motion (32) with the
+ * "no button" code (3), not the wheel (64), whatever modifiers (4, 8, 16) are held. */
+function isButtonlessMotion(data: string): boolean {
+  const code = MOUSE_REPORT.exec(data)?.[1];
+  return code !== undefined && (Number(code) & 0b110_0011) === 0b010_0011;
+}
 
 /** The most a single `write` hands xterm. xterm parses one write as one task, and a session's whole
  * replay arrives as one frame, which would hold the main thread for tens of milliseconds; between
@@ -205,6 +228,14 @@ export class TerminalController {
    * since a drag under mouse reporting selects in the program, not here. Dropped once the user turns
    * back to the program (a key, a paste, a press that cannot open the menu) and with the screen. */
   private programCopy?: string;
+  /** Counts what the user does that may clear or replace the terminal's selection on purpose: input
+   * xterm marks as theirs (keys, pastes, mouse reports other than the pointer moving with no button
+   * held), Control-C, which the controller sends itself, and presses that cannot open the editing
+   * menu. A selection is put back after a
+   * re-assertion of modes only if this has not moved (see `keepSelectionThroughModes`). Motion does
+   * not count: it is held back only while a selection is up, so once a re-assertion has cleared it
+   * the pointer's next move would be reported and would cancel putting it back. */
+  private userActs = 0;
   /** Removes the listeners `mount` puts on the container. */
   private readonly mountListeners = new AbortController();
   /** Set by xterm's `onUserInput` right before the `onData` it belongs to, and consumed there:
@@ -300,6 +331,7 @@ export class TerminalController {
       ) {
         event.preventDefault();
         this.programCopy = undefined;
+        this.userActs++;
         this.sendInput(new Uint8Array([0x03]));
         return false;
       }
@@ -310,6 +342,7 @@ export class TerminalController {
     this.term.onData((data) => {
       let fromUser = this.userInput;
       this.userInput = false;
+      if (fromUser && !isButtonlessMotion(data)) this.userActs++;
       // Saved output may have turned mouse tracking on, with the reset (`RESET_REPORTING_MODES`)
       // still to be parsed: a click then would be reported, and a report is not the user typing.
       if (
@@ -361,7 +394,10 @@ export class TerminalController {
         // before xterm's own listener on its element reads it.
         this.term.options.altClickMovesCursor = this.term.modes.mouseTrackingMode === "none";
         // A secondary press opens the editing menu, which is how what the program copied gets used.
-        if (!isSecondaryPress(event)) this.programCopy = undefined;
+        if (!isSecondaryPress(event)) {
+          this.programCopy = undefined;
+          this.userActs++;
+        }
       },
       { capture: true, signal },
     );
@@ -673,15 +709,72 @@ export class TerminalController {
     });
   }
 
-  /** Writes `data` to xterm in slices of at most `WRITE_SLICE_BYTES`, in order; `onParsed` is the last
-   * slice's write callback, so it fires once all of `data` has been parsed. */
+  /** Writes `data` to xterm in slices of at most `WRITE_SLICE_BYTES`, in order; `onParsed` is the
+   * last slice's write callback, so it fires once all of `data` has been parsed. `data` that only
+   * sets modes keeps the terminal's selection through it (`keepSelectionThroughModes`): it is looked
+   * at whole, so a re-assertion of modes counts only as output of its own, never inside a larger
+   * one. */
   private write(data: Uint8Array, onParsed?: () => void): void {
+    const keepSelection = onlySetsModes(data) ? this.keepSelectionThroughModes() : undefined;
     let start = 0;
     do {
       const end = start + WRITE_SLICE_BYTES;
       this.term.write(data.subarray(start, end), end >= data.length ? onParsed : undefined);
       start = end;
     } while (start < data.length);
+    if (keepSelection) this.term.write("", keepSelection);
+  }
+
+  /**
+   * Notes the selection as it stands right before the output written next is parsed, and returns
+   * the callback to write right after that output, which puts the selection back if parsing it
+   * cleared it. For output that only sets modes (`onlySetsModes`): xterm clears its selection
+   * whenever a mouse tracking mode is set, even one already on, so a program re-asserting its modes
+   * (Claude Code does so whenever input arrives after a few idle seconds, such as the focus report
+   * of the window coming back) would take away a selection forced under mouse reporting, which
+   * nothing on screen has invalidated.
+   *
+   * The selection is put back only when nothing else could have meant to clear it: the tracking
+   * mode and the active buffer are what they were, and the user has done nothing in between
+   * (`userActs`); xterm may parse queued output across tasks, letting a click or a key in. Output
+   * that comes with anything else, text included, is never looked at, so a selection is never put
+   * back over redrawn text.
+   */
+  private keepSelectionThroughModes(): () => void {
+    let kept:
+      | { range: IBufferRange; tracking: Terminal["modes"]["mouseTrackingMode"]; buffer: IBuffer["type"]; userActs: number }
+      | undefined;
+    this.term.write("", () => {
+      const range = this.term.getSelectionPosition();
+      kept = range && {
+        range,
+        tracking: this.term.modes.mouseTrackingMode,
+        buffer: this.term.buffer.active.type,
+        userActs: this.userActs,
+      };
+    });
+    return () => {
+      if (
+        !kept ||
+        this.disposed ||
+        this.term.hasSelection() ||
+        this.term.modes.mouseTrackingMode !== kept.tracking ||
+        this.term.buffer.active.type !== kept.buffer ||
+        this.userActs !== kept.userActs
+      ) {
+        return;
+      }
+      // The range's end is exclusive, and a selection that spans rows runs on through the ends of
+      // the rows in between, which is what a length counted in whole rows gives back. A selection
+      // ending at column 0 of a later row comes back ending at the end of the row before, without
+      // the line break the original ended with: `select` takes a length, and xterm maps one that
+      // reaches a row's end exactly to that end, never to the start of the next row. A column
+      // (block) selection keeps its mode through `select`, so it comes back as the same rectangle,
+      // except one whose end corner is at column 0: that end comes back at (cols, the row before),
+      // a different rectangle.
+      const { start, end } = kept.range;
+      this.term.select(start.x, start.y, (end.y - start.y) * this.term.cols + end.x - start.x);
+    };
   }
 
   /** Tells the daemon the terminal's current size once it has settled for `RESIZE_SETTLE_MS`, and

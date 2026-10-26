@@ -5,8 +5,10 @@ import { IS_MAC } from "../useWindowShortcut";
 import { TerminalController } from "./TerminalController";
 
 /** Enough of xterm for the controller: writes are parsed in a later task, in order, as xterm's are,
- * a device-attributes query in the output is answered through `onData`, as xterm answers it, and
- * data that is the user's is announced through `_core.coreService.onUserInput` right before it. */
+ * a device-attributes query in the output is answered through `onData`, as xterm answers it, a
+ * mouse tracking mode set in the output clears the selection, as xterm's does even for the mode
+ * already on, as does a switch to or from the alternate screen (`?1049`), and data that is the
+ * user's is announced through `_core.coreService.onUserInput` right before it. */
 const { FakeTerminal } = vi.hoisted(() => {
   class FakeTerminal {
     static last: FakeTerminal;
@@ -65,6 +67,19 @@ const { FakeTerminal } = vi.hoisted(() => {
     getSelection(): string { return this.selection; }
     hasSelection(): boolean { return this.selection !== ""; }
     selection = "";
+    /** Where `select` put the selection, in xterm's terms: columns and buffer rows, the end exclusive. */
+    selectionRange?: { start: { x: number; y: number }; end: { x: number; y: number } };
+    getSelectionPosition() { return this.selection ? this.selectionRange : undefined; }
+    /** Ends where xterm's `SelectionModel.finalSelectionEnd` puts the end of a start and a length:
+     * running on across rows, and at a row's end rather than the next row's start. */
+    select(column: number, row: number, length: number): void {
+      this.selection = "selected";
+      const reach = column + length;
+      let end = { x: reach % this.cols, y: row + Math.floor(reach / this.cols) };
+      if (reach <= this.cols) end = { x: reach, y: row };
+      else if (reach % this.cols === 0) end = { x: this.cols, y: row + reach / this.cols - 1 };
+      this.selectionRange = { start: { x: column, y: row }, end };
+    }
     selectAll(): void { this.selection = this.screen; }
     paste(text: string): void { this.userTypes(`\x1b[200~${text}\x1b[201~`); }
     focus(): void {}
@@ -130,6 +145,16 @@ const { FakeTerminal } = vi.hoisted(() => {
         if (text.includes("\x1b[c")) this.emit("\x1b[?1;2c");
         // eslint-disable-next-line no-control-regex -- An OSC sequence begins with ESC and ends with BEL.
         for (const [, ident, payload] of text.matchAll(/\x1b\](\d+);([^\x07]*)\x07/g)) this.oscHandlers.get(Number(ident))?.(payload);
+        // eslint-disable-next-line no-control-regex -- A mode set begins with ESC.
+        for (const [, mode] of text.matchAll(/\x1b\[\?(1000|1002|1003)h/g)) {
+          this.modes.mouseTrackingMode = { "1000": "vt200", "1002": "drag", "1003": "any" }[mode]!;
+          this.selection = "";
+        }
+        // eslint-disable-next-line no-control-regex -- A mode set begins with ESC.
+        for (const [, set] of text.matchAll(/\x1b\[\?1049([hl])/g)) {
+          this.buffer.active.type = set === "h" ? "alternate" : "normal";
+          this.selection = "";
+        }
         this.screen += text;
         callback?.();
       }
@@ -549,5 +574,63 @@ describe("pointer motion with no button held", () => {
     target.dispatchEvent(new MouseEvent("mousemove", { buttons, bubbles: true }));
     expect(report).toHaveBeenCalledTimes(reported ? 1 : 0);
     expect(hover).toHaveBeenCalledTimes(over === "screen" ? 1 : 0);
+  });
+});
+
+describe("a selection made under mouse reporting, when the program re-asserts its modes", () => {
+  /** What Claude Code writes on its own after a pause in its input. */
+  const reassert = "\x1b(B\x0f\x1b[?2004h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h";
+  const selected = async (column = 3, row = 1, length = 7) => {
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    lastSocket().receive(`replay${reassert}`);
+    await settle();
+    term.select(column, row, length);
+  };
+
+  it.each([
+    { what: "Claude Code's re-assertion", output: reassert, kept: true },
+    { what: "the mouse modes alone", output: "\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h", kept: true },
+    { what: "a re-assertion with text", output: `${reassert}redrawn`, kept: false },
+    { what: "another tracking mode", output: "\x1b[?1000h", kept: false },
+    { what: "a re-assertion that switches to the alternate screen", output: `${reassert}\x1b[?1049h`, kept: false },
+  ])("is kept only through output that sets nothing but the modes it had: $what", async ({ output, kept }) => {
+    await selected();
+    lastSocket().receive(output);
+    await settle();
+    expect(term.getSelectionPosition()).toEqual(kept ? { start: { x: 3, y: 1 }, end: { x: 10, y: 1 } } : undefined);
+  });
+
+  it("is kept whole when it spans rows", async () => {
+    await selected(70, 1, 2 * 80 + 5 - 70);
+    expect(term.getSelectionPosition()).toEqual({ start: { x: 70, y: 1 }, end: { x: 5, y: 3 } });
+    lastSocket().receive(reassert);
+    await settle();
+    expect(term.getSelectionPosition()).toEqual({ start: { x: 70, y: 1 }, end: { x: 5, y: 3 } });
+  });
+
+  it.each([
+    { what: "clicked", act: () => term.textarea!.dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true })), kept: false },
+    { what: "typed a key", act: () => term.press("x", "x"), kept: false },
+    { what: "pressed Control-C", act: () => term.keyHandler?.(new KeyboardEvent("keydown", { key: "c", keyCode: 67, ctrlKey: true })), kept: false },
+    { what: "moved the pointer with no button held", act: () => term.userTypes("\x1b[<35;4;2M"), kept: true },
+  ])("is put back after the user $what while the output was being parsed only if that could not mean to clear it", async ({ act, kept }) => {
+    await selected();
+    container.appendChild(term.textarea!);
+    const write = term.write.bind(term);
+    let snapshotTaken = false;
+    // The first empty write after the output arrives is the one that notes the selection, ahead of
+    // the output; the user acts right after it, before the output is parsed.
+    vi.spyOn(term, "write").mockImplementation((data, callback) => {
+      if (data !== "" || snapshotTaken || !callback) return write(data, callback);
+      snapshotTaken = true;
+      write(data, () => {
+        callback();
+        act();
+      });
+    });
+    lastSocket().receive(reassert);
+    await settle();
+    expect(term.getSelectionPosition()).toEqual(kept ? { start: { x: 3, y: 1 }, end: { x: 10, y: 1 } } : undefined);
   });
 });
