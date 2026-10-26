@@ -42,6 +42,8 @@ export interface ConfirmDialogProps {
   /** Names what the dialog currently asks about, for one reused across subjects: a change clears
    * the failure shown for the previous one. */
   resetKey?: string;
+  /** What the alert for a failure of `onConfirm` is titled, in place of the generic "Error". */
+  errorTitle?: string;
   size?: "sm" | "md" | "lg";
   /** For an action that cannot be undone and loses a lot: the word the user has to type before
    * Confirm is enabled, shown in capitals. What is typed shows in capitals too, and is compared
@@ -68,6 +70,7 @@ export function ConfirmDialog({
   otherAction,
   unprompted,
   resetKey,
+  errorTitle,
   size,
   typeToConfirm,
   onConfirm,
@@ -75,7 +78,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
-  const { busy, run } = useDialogAction(resetKey);
+  const { busy, run } = useDialogAction(resetKey, errorTitle);
   const [typed, setTyped] = useState("");
   const typedField = useTrimmedField(typed, setTyped);
   const word = typeToConfirm?.toLocaleUpperCase(language);

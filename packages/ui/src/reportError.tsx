@@ -6,7 +6,7 @@ import { errorAlerts } from "./errorAlerts";
 import { errorPresentation } from "./errorPresentation";
 
 /** Preserves daemon metadata while sending a failure to the acknowledgement queue. */
-export function reportError(error: unknown, session?: string, recovery?: ErrorRecovery, content?: ReactNode): void {
+export function reportError(error: unknown, session?: string, recovery?: ErrorRecovery, content?: ReactNode, title?: string): void {
   const presentation = typeof error === "string" ? error : errorPresentation(error);
   errorAlerts.report({
     message: typeof presentation === "string" ? presentation : presentation.message,
@@ -14,5 +14,6 @@ export function reportError(error: unknown, session?: string, recovery?: ErrorRe
     error,
     recovery,
     content: content ?? <DaemonErrorMessage error={presentation} />,
+    title,
   });
 }

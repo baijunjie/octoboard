@@ -226,6 +226,11 @@ export interface Scenario {
   conversationLocation?: ConversationLocation | FixtureError | "pending";
   /** A runtime refusal after the user confirms archiving; no session changes on failure. */
   sessionArchiveError?: FixtureError;
+  /** A coded refusal of releasing a session from its owner after the user confirms; the session stays bound. */
+  sessionReleaseError?: FixtureError;
+  /** With `sessionReleaseError`: the session another owner takes the moment the refusal fires, as when
+   * the binding moved between the check and the write. */
+  sessionReleaseMovedTo?: string;
   /** Native session-file inspection per session. Unlisted or missing sessions are unknown;
    * has_conversation does not establish whether files exist. Aggregate presence is present if
    * any inspected session has files, otherwise unknown if any cannot be established. */

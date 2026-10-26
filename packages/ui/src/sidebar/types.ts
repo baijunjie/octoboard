@@ -58,8 +58,6 @@ export interface SidebarHandlers {
   /** Sets the colour of a console session. */
   onSetSessionColour: (session: Session, colour: ConsoleSessionColour) => void;
   onSetLocked: (session: Session, locked: boolean) => void;
-  /** Unbinds the session from its owner. */
-  onReleaseSession: (session: Session) => void;
   onSetPinned: (target: { project: Project } | { session: Session }, pinned: boolean) => void;
   /** Archives the session, asking first unless nothing is cut short. */
   onArchiveSession: (session: Session) => void;

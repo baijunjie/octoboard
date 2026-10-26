@@ -593,9 +593,23 @@ describe("the fixture daemon's session release", () => {
   it("refuses an unknown, a console and an unbound session", async () => {
     const daemon = createFixtureDaemon(scenario);
     await expect(daemon.request({ type: "release_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
-    await expect(daemon.request({ type: "release_session", session: hub.id })).rejects.toMatchObject({ code: "internal_error" });
-    await expect(daemon.request({ type: "release_session", session: loner.id })).rejects.toMatchObject({ code: "internal_error" });
+    await expect(daemon.request({ type: "release_session", session: hub.id })).rejects.toMatchObject({ code: "console_session_never_bound", params: { session: hub.id } });
+    await expect(daemon.request({ type: "release_session", session: loner.id })).rejects.toMatchObject({ code: "session_not_bound", params: { session: loner.id } });
     expect(daemon.store.getState().sessions.get(hub.id)).toEqual(hub);
+  });
+
+  it("leaves the session bound when the scenario stages a refusal", async () => {
+    const error = { code: "session_binding_changed", params: { session: lead.id }, message: "the binding changed while it was being released" };
+    const daemon = createFixtureDaemon({ ...scenario, sessionReleaseError: error });
+    await expect(daemon.request({ type: "release_session", session: lead.id })).rejects.toMatchObject({ code: error.code, params: error.params });
+    expect(daemon.store.getState().sessions.get(lead.id)).toEqual(lead);
+  });
+
+  it("moves the session to another owner as a staged refusal fires", async () => {
+    const error = { code: "session_binding_changed", params: { session: lead.id }, message: "the binding changed while it was being released" };
+    const daemon = createFixtureDaemon({ ...scenario, sessionReleaseError: error, sessionReleaseMovedTo: archived.id });
+    await expect(daemon.request({ type: "release_session", session: lead.id })).rejects.toMatchObject({ code: error.code });
+    expect(daemon.store.getState().sessions.get(lead.id)).toEqual({ ...lead, bound_to: archived.id });
   });
 });
 

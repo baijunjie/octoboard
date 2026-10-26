@@ -812,10 +812,6 @@ export function App(): React.ReactElement {
     request({ type: "set_session_locked", session: session.id, locked }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
   };
 
-  const releaseSession = (session: Session) => {
-    request({ type: "release_session", session: session.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
-  };
-
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
     const body =
       "project" in target
@@ -921,7 +917,6 @@ export function App(): React.ReactElement {
   const stablePushProjectBranch = useStableHandler(pushProjectBranch);
   const stableLoadProjectBranches = useStableHandler(loadProjectBranches);
   const stableSetLocked = useStableHandler(setLocked);
-  const stableReleaseSession = useStableHandler(releaseSession);
   const stableSetPinned = useStableHandler(setPinned);
   const stableOpenSettingsAt = useStableHandler(openSettingsAt);
   useEffect(() => registerSettingsLauncher(stableOpenSettingsAt), [stableOpenSettingsAt]);
@@ -1053,7 +1048,6 @@ export function App(): React.ReactElement {
                 onLoadProjectBranches={stableLoadProjectBranches}
                 onSetSessionColour={stableSetSessionColour}
                 onSetLocked={stableSetLocked}
-                onReleaseSession={stableReleaseSession}
                 onSetPinned={stableSetPinned}
                 onReopenSession={stableReopenSession}
                 onArchiveSession={stableArchiveSession}

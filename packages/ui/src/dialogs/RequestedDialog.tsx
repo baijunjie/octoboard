@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { useStableHandler } from "../components/useLatest";
+import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
 import { useListMotion } from "../components/useListMotion";
 import { InlineReference } from "../components/InlineReference";
@@ -10,7 +11,7 @@ import { StatusIcon } from "../components/StatusIcon";
 import { TintedAlert } from "../components/TintedAlert";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
-import { isLive, type Project, type Session, type SessionBranchItem } from "../protocol";
+import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Project, type Session, type SessionBranchItem } from "../protocol";
 import { sessionAgentLabel, sessionDisplayTitle, sessionShownStatusKind, sessionStatusKind } from "../sessionLabel";
 import {
   boundArchivedSessions,
@@ -141,6 +142,53 @@ function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
       onCancel={onClose}
       onConfirm={async () => {
         await request({ type: "archive_session", session: session.id, ...cleanup.choices });
+        onClose();
+      }}
+    />
+  );
+}
+
+/** The confirmation of releasing a session from its owner, which only the session itself can undo.
+ * Closes without a word when the binding is already gone: the session was deleted or released, or its owner
+ * is gone, or the daemon refuses the release as `session_not_bound`. An archived session keeps its binding, but
+ * the menu offers no Unbind on an archived row, so the dialog closes for it too. Any other refusal is shown
+ * and the dialog stays, `session_binding_changed` included: the session is bound to another owner by then,
+ * which the dialog reads live and so names. */
+function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string; onClose: () => void }): React.ReactElement | null {
+  const t = useT();
+  const { request, store } = useDaemon();
+  const session = useDaemonStore((s) => s.sessions.get(sessionId));
+  const owner = useDaemonStore((s) => (session?.bound_to ? s.sessions.get(session.bound_to) : undefined));
+  // The release itself clears the binding, which must not read as the session having gone.
+  const [releasing, setReleasing] = useState(false);
+  const gone = !releasing && (!session || !owner || session.status === "archived");
+  useEffect(() => {
+    if (gone) onClose();
+  }, [gone]);
+  if (!session || !owner) return null;
+  const ownerName = <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineReference>;
+  return (
+    <ConfirmDialog
+      title={t("dialog.unbindSession.title")}
+      message={<p><Message id="dialog.unbindSession.message" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, owner: ownerName }} /></p>}
+      confirmLabel={t("dialog.unbindSession.confirm")}
+      errorTitle={t("dialog.unbindSession.error")}
+      onCancel={onClose}
+      onConfirm={async () => {
+        setReleasing(true);
+        try {
+          await request({ type: "release_session", session: session.id });
+        } catch (err) {
+          const code = err instanceof DaemonRequestError ? err.code : undefined;
+          // Refused as changed while still bound (to another owner, which the dialog then names): the user
+          // decides again. Once the store shows it unbound there is nothing left to decide.
+          if (code === SESSION_NOT_BOUND || (code === SESSION_BINDING_CHANGED && !store.getState().sessions.get(sessionId)?.bound_to)) {
+            onClose();
+            return;
+          }
+          setReleasing(false);
+          throw err;
+        }
         onClose();
       }}
     />
@@ -425,6 +473,8 @@ export function RequestedDialog({
       );
     case "hand-off":
       return <HandoffDialog session={dialog.session} onClose={onClose} onHandedOff={onSessionOpened} />;
+    case "unbind-session":
+      return <UnbindSessionDialog sessionId={dialog.session.id} onClose={onClose} />;
     case "delete-session": {
       // An archived owner takes the archived sessions bound to it, and those bound to those, along.
       const withIt = boundArchivedSessions(Array.from(sessions.values()), dialog.session.id);

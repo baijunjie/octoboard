@@ -58,6 +58,10 @@ const openHandoff = (title: string) => [
   openMenu(title),
   (ui: Ui) => ui.press(ui.t("sidebar.session.handOff")),
 ];
+const openUnbind = (title: string) => [
+  openMenu(title),
+  (ui: Ui) => ui.press(ui.t("sidebar.session.unbind")),
+];
 // The dialog's confirming button, pressed once the dialog is up.
 const confirmHandoff = (title: string) => [...openHandoff(title), (ui: Ui) => ui.confirm()];
 
@@ -72,7 +76,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of an idle project session, Hand off offered",
-    description: "Three dividers separate Lock and Pin, Rename and Copy session ID, account and binding actions, and Archive, with no group headings. Copy session ID stays directly after Rename, with the ID in smaller muted monospace text beneath its label inside the same clickable item. Hand off is enabled and Unbind follows it directly, before the divider and Archive; Unbind is offered because Hub owns the session. Choosing Unbind drops the session's binding badge, the dot in Hub's colour, so it reads as one of the project's own sessions, and the sessions it owns stay under it.",
+    description: "Three dividers separate Lock and Pin, Rename and Copy session ID, account and binding actions, and Archive, with no group headings. Copy session ID stays directly after Rename, with the ID in smaller muted monospace text beneath its label inside the same clickable item. Hand off is enabled and Unbind follows it directly, before the divider and Archive; Unbind is offered because Hub owns the session. Unbind opens a confirmation first (see the Unbind session dialog); the session keeps its binding badge, the dot in Hub's colour, until that is confirmed.",
     state,
     steps: [openMenu(lead.title)],
   },
@@ -168,6 +172,58 @@ export const handoffScenarios: Scenario[] = [
     description: "Reached only when the agents change under an open dialog (the menu's Hand off is disabled without another agent): Codex and Grok Build stop being installed meanwhile. The dialog closes itself and a plain error alert says no other agent can take the session over; OK is its only button.",
     state,
     steps: [...openHandoff(bare.title), (ui) => ui.setAgents({ installed: ["claude"] })],
+  },
+  {
+    id: "dialog-unbind-session",
+    group: GROUP,
+    category: "normal",
+    title: "Unbind a session from its live owner",
+    description: "A plain confirmation titled Unbind session, not a danger one, with Cancel then the primary Unbind. The body names the session and its owner, Hub, each as a chip, and says what Hub can no longer do with the session (send it messages, archive it, give it to another owner), that archiving Hub will not archive it, that it will answer only to you, and that only the session itself can bind it to an owner again.",
+    state,
+    steps: openUnbind(lead.title),
+  },
+  {
+    id: "dialog-unbind-session-changing",
+    group: GROUP,
+    category: "exceptional",
+    title: "Unbind refused while the session is changing",
+    description: "Unbind was confirmed and refused because the session is being started, handed off or otherwise changing. An error alert titled \"Could not unbind the session\", with OK alone, says the session is changing so its owner cannot change right now, then the line on waiting for its current turn or operation before retrying; it shows no session ID, raw daemon text, Report issue or Error details. The Unbind session confirmation lies fully hidden beneath it and shows again, still open, once OK is pressed.",
+    state,
+    sessionReleaseError: {
+      code: "session_changing",
+      params: { session: lead.id },
+      message: `\`${lead.id}\` is being started, resumed, handed off, switched to another account, having its branches handed over or having its owner changed, so its owner cannot change now: look again once that is done`,
+    },
+    steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
+  },
+  {
+    id: "dialog-unbind-session-owner-changing",
+    group: GROUP,
+    category: "exceptional",
+    title: "Unbind refused while the owner is changing",
+    description: "Unbind was confirmed and refused because Hub, the owner, is being started, handed off or otherwise changing. An error alert titled \"Could not unbind the session\", with OK alone, opens with Hub as a chip at the start of its sentence, which says sessions cannot be bound to or moved from it right now, then the line telling you to wait for the owner's current start, resume, handoff, account switch or change of owner to finish; it shows no ID, raw daemon text, Report issue or Error details. The Unbind session confirmation lies fully hidden beneath it and shows again, still open, once OK is pressed.",
+    state,
+    sessionReleaseError: {
+      code: "session_owner_changing",
+      params: { session: lead.id, owner: hub.id },
+      message: `\`${hub.id}\` is being started, resumed, handed off, switched to another account or having its owner changed, so sessions cannot be bound to or moved from it now: look again once that is done`,
+    },
+    steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
+  },
+  {
+    id: "dialog-unbind-session-binding-changed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Unbind refused, the session got another owner meanwhile",
+    description: "Unbind was confirmed on Hub, but the session had been given to another owner (Update the dependencies) before the release landed. An error alert titled \"Could not unbind the session\", with OK alone, says the session's owner changed while it was being released, then the line saying the confirmation now names the session's current owner and to unbind again if you still want to; it shows no ID, raw daemon text, Report issue or Error details. Once OK is pressed the Unbind session confirmation is still open and now names Update the dependencies, not Hub, as the owner.",
+    state,
+    sessionReleaseError: {
+      code: "session_binding_changed",
+      params: { session: lead.id },
+      message: `the binding changed while it was being released — \`${lead.id}\` was bound elsewhere; look again before retrying`,
+    },
+    sessionReleaseMovedTo: sibling.id,
+    steps: [...openUnbind(lead.title), (ui) => ui.confirm()],
   },
   {
     id: "dialog-hand-off-pending",

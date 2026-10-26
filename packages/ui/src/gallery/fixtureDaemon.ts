@@ -482,13 +482,14 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
         case "release_session": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
-          // The real daemon refuses a console session and an unbound one in prose, which reaches the window as an internal error.
-          if (session.role === "console" || !session.bound_to) {
-            const detail = session.role === "console"
-              ? "a console session is never bound, so it has no owner to be released from"
-              : `\`${session.id}\` is not bound to any owner, so there is nothing to release`;
-            return fail({ code: "internal_error", params: { detail }, message: detail });
+          if (scenario.sessionReleaseError) {
+            const movedTo = scenario.sessionReleaseMovedTo;
+            if (movedTo) store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: movedTo }) }));
+            return fail(scenario.sessionReleaseError);
           }
+          // Refused with the daemon's codes and English messages.
+          if (session.role === "console") return fail({ code: "console_session_never_bound", params: { session: session.id }, message: `\`${session.id}\` is a console session, which is never bound, so it has no owner to be released from` });
+          if (!session.bound_to) return fail({ code: "session_not_bound", params: { session: session.id }, message: `\`${session.id}\` is not bound to any owner, so there is nothing to release` });
           // Whatever the session owns stays bound to it, and so do its branches; only its own binding goes.
           store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: undefined }) }));
           return { type: "ack" };

@@ -133,7 +133,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   a session's history page by page, the models an agent offers, and what stays narrower than the reads.
 - [Changing a session's owner](product/changing-session-owners.md) — how a binding changes while sessions run: who can
   own a session, handing a session to another owner with `transfer_session`, an unbound session binding itself with
-  `bind_to_session`, releasing a session from its owner (`release_session` or the sidebar's Unbind), what a session is
+  `bind_to_session`, releasing a session from its owner (`release_session`, or the sidebar's Unbind and its
+  confirmation), what a session is
   told when its binding changes — at once, or at its next launch if it is not running — and how its tools follow.
 - [Reporting to an owner](product/reporting-to-owners.md) — how a bound session reports to its owner with `report`, the
   report synthesised when a session stops without reporting, and automatic archiving on a `done` report.

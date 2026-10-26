@@ -20,6 +20,21 @@ it("words a known code from the catalog, showing a record by its name and an unk
   expect(daemonMessage("en", "path_not_found", { path: "/a/b" }, "x", records)).toBe(`${isolate("/a/b")} does not exist.`);
 });
 
+it("words the refusals of an owner change under way without ids, naming the owner by its title", () => {
+  expect(daemonMessage("en", "session_changing", { session: "s1" }, "x", records)).not.toContain("Try again");
+  expect(daemonMessage("en", "session_owner_changing", { session: "s2", owner: "s1" }, "x", records)).toBe(
+    `${isolate("Hub")} is being started, resumed, handed off, switched to another account or given another owner, so sessions cannot be bound to or moved from it right now.`,
+  );
+  expect(daemonMessage("en", "session_not_bound_to_owner", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
+  expect(daemonMessage("zh-Hans", "session_owner_changing", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
+  const withTasks = { ...records, sessions: new Map([["s1", { id: "s1", title: "Hub", terminal_title: "Fixing tests" } as Session], ["s3", { id: "s3", title: "" } as Session]]) };
+  expect(daemonMessage("en", "session_not_bound_to_owner", { session: "s2", owner: "s1" }, "x", withTasks)).toContain("Fixing tests");
+  expect(daemonMessage("en", "session_not_bound_to_owner", { session: "s2", owner: "s3" }, "x", withTasks)).toContain(isolate("s3"));
+  for (const language of ["en", "zh-Hans"] as const) {
+    expect(daemonMessage(language, "session_changing", { session: "s1" }, "x", records)).not.toContain("s1");
+  }
+});
+
 it("shows a shell terminal param by the terminal's name, and by its id once the terminal is gone", () => {
   const withTerminal = { ...records, shellTerminals: new Map([["t1", { id: "t1", title: "npm run dev" } as ShellTerminal]]) };
   expect(daemonMessage("en", "unknown_shell_terminal", { shell_terminal: "t1" }, "x", withTerminal)).toBe(`Unknown terminal ${isolate("npm run dev")}.`);

@@ -3495,6 +3495,27 @@ pub mod error_code {
     pub const ICON_NOT_AN_IMAGE: &str = "icon_not_an_image";
     pub const ICON_TOO_LARGE: &str = "icon_too_large";
     pub const SESSION_NOT_RUNNING: &str = "session_not_running";
+    /// A `release_session` for a console session, which is never bound. `params` names the
+    /// `session`.
+    pub const CONSOLE_SESSION_NEVER_BOUND: &str = "console_session_never_bound";
+    /// A `release_session` for a session that is not bound to any owner. `params` names the
+    /// `session`.
+    pub const SESSION_NOT_BOUND: &str = "session_not_bound";
+    /// A `release_session` by an owner for a session bound to another owner. `params` names the
+    /// `session` and the `owner` that asked.
+    pub const SESSION_NOT_BOUND_TO_OWNER: &str = "session_not_bound_to_owner";
+    /// A `release_session` found the session's binding changed between checking it and writing the
+    /// release, so nothing was released. `params` names the `session`.
+    pub const SESSION_BINDING_CHANGED: &str = "session_binding_changed";
+    /// A change of a session's owner (a bind, a handover to another owner, a release) is refused
+    /// because the session itself is being started, resumed, handed off, switched to another
+    /// account, having its branches handed over or having its owner changed. Nothing was
+    /// changed. `params` names the `session`.
+    pub const SESSION_CHANGING: &str = "session_changing";
+    /// A change of a session's owner is refused because the owner it gains or loses the session
+    /// for is itself being started, resumed, handed off, switched to another account or having its
+    /// owner changed. Nothing was changed. `params` names the `session` and the `owner`.
+    pub const SESSION_OWNER_CHANGING: &str = "session_owner_changing";
     /// A lock change raced an archive or deletion. The client may retry once it finishes.
     pub const SESSION_LOCK_BUSY: &str = "session_lock_busy";
     /// The operation includes a locked session. `params.session` names it.

@@ -19,8 +19,9 @@ import { useToastClearance } from "./useToastClearance";
  * for the duration of `action` and reports a rejection to the queue instead of letting it escape,
  * so the dialog stays open for another try. A dialog reused for successive subjects passes a
  * `resetKey` naming the current one: when it changes the busy state is cleared, and an action
- * still running for the previous subject no longer reports into it. */
-export function useDialogAction(resetKey?: string): {
+ * still running for the previous subject no longer reports into it. A failure is titled
+ * `errorTitle` when the dialog has one that says more than "Error". */
+export function useDialogAction(resetKey?: string, errorTitle?: string): {
   busy: boolean;
   run: (action: () => Promise<void>) => Promise<void>;
 } {
@@ -39,7 +40,7 @@ export function useDialogAction(resetKey?: string): {
     try {
       await action();
     } catch (err) {
-      if (!stale()) reportError(err as Error);
+      if (!stale()) reportError(err as Error, undefined, undefined, undefined, errorTitle);
     } finally {
       if (!stale()) setBusy(false);
     }

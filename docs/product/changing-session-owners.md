@@ -85,9 +85,8 @@ a lead session. It needs no approval.
 | `session` | yes | The session to release: one of the caller's (`yours: true`). |
 | `note` | no | A parting note for the released session: what it should know to carry on without its owner. Trimmed; a blank note is ignored, and one longer than 4000 characters is refused. |
 
-The user can release any bound session, whoever its owner is, with **Unbind** in the sidebar's session menu (see
-"Session rows" in `docs/product/sidebar-session-rows.md`), which asks for no confirmation and takes no note; a refusal
-is shown as an error alert.
+The user can release any bound session, whoever its owner is, with **Unbind** in the sidebar's session menu, which
+asks for confirmation first and takes no note (see "Unbinding a session from the window" below).
 
 A released session is an **ordinary unbound project session**, the user's own:
 
@@ -101,11 +100,20 @@ A released session is an **ordinary unbound project session**, the user's own:
 - its former owner no longer drives it: archiving that owner no longer takes it along, and nothing archives it on a
   `done` report.
 
-A session can be released whatever its state — running, interrupted or archived. The call is refused, with the reason
-in prose, and changes nothing, for a console session, which is never bound; for a session that is not bound; for a
-session that is not the caller's, or with a `note` longer than 4000 characters (the tool only); and while the session,
-or the owner it is bound to, is being started, resumed, handed off, switched to another account or having its owner
-changed, the reason saying to look again once that is done. One whose binding changed while it was being released is refused too, saying to look again before retrying.
+A session can be released whatever its state — running, interrupted or archived. The call is refused and changes
+nothing:
+
+| Refused | Code |
+|---|---|
+| A console session, which is never bound | `console_session_never_bound` |
+| A session that is not bound | `session_not_bound` |
+| A session that is not the caller's, or a `note` longer than 4000 characters (the tool only) | — |
+| The session is being started, resumed, handed off, switched to another account, having its branches handed over or having its owner changed; the reason says to look again once that is done | `session_changing` |
+| The owner it is bound to is being started, resumed, handed off, switched to another account or having its owner changed; the reason says to look again once that is done | `session_owner_changing` (names the `owner`) |
+| Its binding changed while it was being released — it was bound elsewhere meanwhile; the reason says to look again before retrying | `session_binding_changed` |
+
+The window's request is answered with these codes (an id that names no session is `unknown_session`); through the
+tool, every refusal reaches the model as its reason in prose.
 
 **The released session is told**, by a message written through the delivery every message takes (queued while it
 cannot take one; see "Messages held until a session can take them" in `docs/product/message-delivery.md`), that it has
@@ -131,6 +139,36 @@ message, is not running and will be told when it next starts, or was not told be
 input but its agent did not send it to the conversation, the user having been told to check the session (see "A
 message written but not sent" in `docs/product/message-delivery.md`). Once the binding is cleared the release stands,
 whatever became of the message.
+
+## Unbinding a session from the window
+
+**Unbind** in a bound session's menu (see "Session rows" in `docs/product/sidebar-session-rows.md`) releases nothing
+by itself: it opens a confirmation, **Unbind session**. Its body names the session and its owner by their titles and
+says what the release means: the session will no longer report to that owner; the owner can no longer send it
+messages, archive it or give it to another owner, and archiving the owner will not archive it; it will answer only to
+the user; and Octoboard cannot bind it to an owner again — only the session itself can (with `bind_to_session`).
+**Cancel** closes the confirmation and releases nothing. **Unbind**, the primary button, releases the session as
+"Releasing a session from its owner" above describes, with no note, and closes the confirmation.
+
+The confirmation reads the session and its owner as they stand while it is open:
+
+- **The binding is gone.** When the session is released some other way, archived or deleted, or its owner no longer
+  exists, the confirmation closes without a word. So does a confirmed release refused as `session_not_bound`, or as
+  `session_binding_changed` once the session reads unbound.
+- **The binding moved to another owner.** The confirmation names the session's owner as it is now. A confirmed release
+  refused as `session_binding_changed` while the session is still bound opens an error alert saying the session's
+  owner changed while it was being released, with a line saying the confirmation now names its current owner and to
+  unbind again if the user still wants to; the confirmation stays open.
+- **The session or its owner is busy.** A confirmed release refused as `session_changing` opens an error alert saying
+  the session is being started, resumed, handed off or switched to another account, is having its branches handed
+  over or is being given another owner, so its owner cannot change now, with a line saying to wait for that to finish
+  before trying again. One refused as `session_owner_changing` says the owner, named, is being started, resumed, handed
+  off, switched to another account or given another owner, so sessions cannot be bound to or moved from it now, with a
+  line saying to wait for that to finish, then try again. The
+  confirmation stays open.
+
+Every error alert a confirmed release opens is titled that the session could not be unbound, and leaves the
+confirmation open for another try (see "The error alert" in `docs/product/error-alerts.md`).
 
 ## Binding an unbound session to an owner
 

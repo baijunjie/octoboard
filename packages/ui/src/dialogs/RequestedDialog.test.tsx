@@ -4,6 +4,7 @@ import { expect, it, vi } from "vitest";
 
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Account, Session, SessionBranchItem } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
@@ -854,4 +855,138 @@ it("validates a project rename before requesting it, retaining excess Unicode te
   setName("😀".repeat(100));
   await save();
   expect(daemon.request).toHaveBeenCalledWith({ type: "update_project", project: project.id, name: "😀".repeat(100) });
+});
+
+const unbindOwner = sessionOf("s-unbind-owner", console_.id, undefined, "Hub", "idle", { role: "console" });
+const unbindable = sessionOf("s-unbindable", console_.id, project.id, "Worker", "idle", { bound_to: unbindOwner.id });
+const cancelButton = () => document.body.querySelector("[data-slot=alert-dialog-footer] button:first-child");
+
+it("names the session and its owner in the unbind confirmation and releases only on confirm", async () => {
+  const onClose = vi.fn();
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], { onClose, request: async () => ({ type: "ack" }) });
+  const text = document.querySelector("[role=alertdialog]")!.textContent!.replace(/[\u2066-\u2069]/g, "");
+  expect(text).toContain("Unbind session");
+  expect(text).toContain("Worker will no longer report to Hub");
+  expect(cancelButton()?.textContent).toBe("Cancel");
+  expect(confirmText()).toBe("Unbind");
+  expect(daemon.request).not.toHaveBeenCalled();
+  await submitDialog();
+  expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "release_session", session: unbindable.id });
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(daemon.toastError).not.toHaveBeenCalled();
+});
+
+it("releases nothing when the unbind confirmation is cancelled", () => {
+  const onClose = vi.fn();
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], { onClose });
+  act(() => (cancelButton() as HTMLButtonElement).click());
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(daemon.request).not.toHaveBeenCalled();
+});
+
+it("keeps the unbind confirmation open when the release fails unexpectedly", async () => {
+  const onClose = vi.fn();
+  try {
+    const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
+      onClose,
+      request: async () => { throw new DaemonRequestError("internal error", "internal_error", {}); },
+    });
+    await submitDialog();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(daemon.request).toHaveBeenCalledOnce();
+    expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  } finally {
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  }
+});
+
+it("closes the unbind confirmation silently when the daemon refuses with session_not_bound", async () => {
+  const onClose = vi.fn();
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
+    onClose,
+    request: async () => { throw new DaemonRequestError("`s-unbindable` is not bound to any owner, so there is nothing to release", "session_not_bound", { session: unbindable.id }); },
+  });
+  await submitDialog();
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it("shows session_binding_changed and keeps the unbind confirmation open, naming the new owner once the store has it", async () => {
+  const onClose = vi.fn();
+  const newOwner = sessionOf("s-new-owner", console_.id, undefined, "Other hub", "idle", { role: "console" });
+  try {
+    const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, newOwner, unbindable], [], {
+      onClose,
+      request: async () => { throw new DaemonRequestError("raw daemon text", "session_binding_changed", { session: unbindable.id }); },
+    });
+    await submitDialog();
+    expect(onClose).not.toHaveBeenCalled();
+    const [alert] = errorAlerts.getSnapshot();
+    expect(alert.error).toMatchObject({ code: "session_binding_changed" });
+    expect(alert.title).toBe("Could not unbind the session");
+    expect(alert.classification).toEqual({ kind: "actionable", recovery: "ownerMoved" });
+    await act(async () => {
+      daemon.store.setState({ sessions: new Map([unbindOwner, newOwner, { ...unbindable, bound_to: newOwner.id }].map((s) => [s.id, s])) });
+    });
+    expect(document.querySelector("[role=alertdialog]")!.textContent).toContain("Other hub");
+    expect(onClose).not.toHaveBeenCalled();
+  } finally {
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  }
+});
+
+it("closes the unbind confirmation silently on session_binding_changed when the store shows the session unbound", async () => {
+  const onClose = vi.fn();
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
+    onClose,
+    request: async () => {
+      daemon.store.setState({ sessions: new Map([unbindOwner, { ...unbindable, bound_to: undefined }].map((s) => [s.id, s])) });
+      throw new DaemonRequestError("raw daemon text", "session_binding_changed", { session: unbindable.id });
+    },
+  });
+  await submitDialog();
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+});
+
+it.each([
+  ["session_changing", { session: unbindable.id }],
+  ["session_owner_changing", { session: unbindable.id, owner: unbindOwner.id }],
+])("reports a %s refusal in the error alert and keeps the unbind confirmation open", async (code, params) => {
+  const onClose = vi.fn();
+  try {
+    mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
+      onClose,
+      request: async () => { throw new DaemonRequestError("raw daemon text", code, params); },
+    });
+    await submitDialog();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
+    const [alert] = errorAlerts.getSnapshot();
+    expect(alert.error).toMatchObject({ code, params });
+    expect(alert.title).toBe("Could not unbind the session");
+    expect(alert.classification).toEqual({ kind: "actionable", recovery: code === "session_changing" ? "wait" : "ownerChanging" });
+  } finally {
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  }
+});
+
+it.each([
+  ["released elsewhere", { ...unbindable, bound_to: undefined }],
+  ["archived", { ...unbindable, status: "archived" as const }],
+  ["deleted", undefined],
+  ["left without its owner", "ownerGone" as const],
+])("closes the unbind confirmation silently when the session is %s while it is open", async (_, now) => {
+  const onClose = vi.fn();
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], { onClose });
+  expect(onClose).not.toHaveBeenCalled();
+  await act(async () => {
+    const rest = now === "ownerGone" ? [unbindable] : [unbindOwner, ...(now ? [now] : [])];
+    daemon.store.setState({ sessions: new Map(rest.map((s) => [s.id, s])) });
+  });
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });

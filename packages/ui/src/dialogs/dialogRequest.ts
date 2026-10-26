@@ -28,6 +28,8 @@ export type DialogRequest =
   | { kind: "switch-account"; session: Session; account: string | null; accountName: string }
   /** Hands `session` off to a new session of another agent. */
   | { kind: "hand-off"; session: Session }
+  /** Releases `session` from its owner. */
+  | { kind: "unbind-session"; session: Session }
   | { kind: "delete-session"; session: Session }
   /** Every archived session of `project`, or every archived session bound to `consoleSession`, or
    * with neither every archived console session of `console`. */

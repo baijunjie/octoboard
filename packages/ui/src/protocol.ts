@@ -1959,6 +1959,14 @@ export const SESSION_REQUEST_NOT_WAITING = "session_request_not_waiting";
  * wrong, so nothing is shown. */
 export const SESSION_REQUEST_ANSWERED = "session_request_answered";
 
+/** A release of a session whose binding is already gone (it was never bound, or was released
+ * meanwhile): the dialog that asked closes without a word, as for a session that vanished. */
+export const SESSION_NOT_BOUND = "session_not_bound";
+
+/** A release of a session that was bound to another owner meanwhile: it is still bound, so the dialog
+ * that asked shows the refusal and stays open, naming the owner it now reads. */
+export const SESSION_BINDING_CHANGED = "session_binding_changed";
+
 /** A browse request given up for a newer one in its slot, as the client asked: nothing is shown. */
 export const REQUEST_SUPERSEDED = "request_superseded";
 

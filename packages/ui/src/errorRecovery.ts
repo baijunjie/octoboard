@@ -9,7 +9,7 @@ export type ErrorRecovery =
   | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
-  | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop"
+  | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
   | "none";
 
 /** A local failure whose user remedy is known without inspecting its translated message. */
@@ -34,7 +34,9 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   connection: ["git_remote_unreachable", "connection_closed", "request_timed_out"],
   unlock: ["session_locked"],
   stopSessions: ["session_has_running_sessions", "console_has_running_sessions", "project_has_running_sessions", "session_not_deletable"],
-  wait: ["session_lock_busy", "session_already_running", "session_already_starting", "session_working", "session_busy"],
+  wait: ["session_lock_busy", "session_already_running", "session_already_starting", "session_working", "session_busy", "session_changing"],
+  ownerChanging: ["session_owner_changing"],
+  ownerMoved: ["session_binding_changed"],
   lostMessages: ["handoff_messages_dropped"],
   sharingLostMessages: ["sharing_messages_dropped"],
   unsentMessage: ["message_not_sent"],
@@ -56,7 +58,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   unresumable: ["conversation_unresumable"],
   unarchive: ["codex_unarchive_failed"],
   conversation: ["conversation_not_found", "conversation_to_resume_not_found", "resume_id_invalid", "conversation_outside_project", "conversation_in_session"],
-  session: ["session_archived", "session_not_running", "session_already_on_account", "unknown_session", "session_request_not_waiting", "session_request_answered", "trust_not_waiting"],
+  session: ["session_archived", "session_not_running", "session_already_on_account", "unknown_session", "session_request_not_waiting", "session_request_answered", "trust_not_waiting", "session_not_bound"],
   configuration: ["configuration_not_recognised", "configuration_version_unsupported", "configuration_unreadable", "import_choice_unavailable"],
   image: ["icon_not_an_image", "icon_too_large"],
   remote: ["invalid_remote_url"],
@@ -66,6 +68,9 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   sessionBranches: ["session_branches_not_removed"],
   projectBranches: ["project_branches_not_determined"],
   branch: ["not_on_a_branch", "restore_not_on_branch", "invalid_branch_name", "unknown_branch", "worktree_unavailable"],
+  // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
+  // release_session without an owner, and offers Unbind only on a bound project session.
+  none: ["console_session_never_bound", "session_not_bound_to_owner"],
   refresh: ["source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "queued_messages_lost", "queued_messages_dropped"],
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],
   limit: ["limit_exceeded"],

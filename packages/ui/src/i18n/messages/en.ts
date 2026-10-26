@@ -111,6 +111,8 @@ export const en = {
   "error.recovery.sqliteHome": "Set {sqliteHome} in the account's {configToml}, or {codexSqliteHome} in your login shell, to an absolute path (a leading {tilde} needs {home} to be set), then try the switch again.",
   "error.recovery.symlink": "The conversation files contain a symbolic link, which is never copied. Replace it with a copy of what it points to, or remove it if it is not needed, in the files named in the details, then try the switch again.",
   "error.recovery.notRestored": "If you need the older item, copy it out of the folder named above before the daemon next starts or the session is next switched into that account, either of which clears it. Then try the switch again.",
+  "error.recovery.ownerChanging": "Wait for the owner's current start, resume, handoff, account switch or change of owner to finish, then try again.",
+  "error.recovery.ownerMoved": "The confirmation now names the session's current owner. Unbind again if you still want to.",
   "error.recovery.wait": "Wait for the session's current turn or operation to finish and check its status before retrying.",
   "error.recovery.sharingLostMessages": "The messages were never written to a terminal, and the session may not be running. Resume the session if you still need it, and send the messages again.",
   "error.recovery.lostMessages": "Open the session they were meant for, or the one that took over, and check its terminal. Send again anything that did not arrive.",
@@ -385,7 +387,9 @@ export const en = {
   "daemon.session_already_on_account": "This session is on that account already.",
   "daemon.session_archived": "An archived session cannot be switched to another account or handed off. Reopen it first.",
   "daemon.session_working": "This session is in the middle of a turn, so it cannot be handed off yet.",
-  "daemon.session_busy": "This session is being switched to another account, handed off, having its branches handed over, given another owner or restarted, so its turn cannot be interrupted now.",
+  "daemon.session_busy": "This session is being switched to another account, handed off, restarted or given another owner, or is having its branches handed over, so its turn cannot be interrupted now.",
+  "daemon.session_changing": "This session is being started, resumed, handed off or switched to another account, is having its branches handed over, or is being given another owner, so its owner cannot change right now.",
+  "daemon.session_owner_changing": "{owner} is being started, resumed, handed off, switched to another account or given another owner, so sessions cannot be bound to or moved from it right now.",
   "daemon.handoff_to_same_agent": "A handoff moves a session to another agent, and this session already runs on {agent}.",
   "daemon.conversation_not_found":
     "No {agent} conversation of this session was found in {path}, so it cannot continue under another account.",
@@ -418,6 +422,10 @@ export const en = {
   "daemon.switch_did_not_come_up":
     "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
   "daemon.session_not_running": "This session is not running.",
+  "daemon.console_session_never_bound": "A console session is never bound, so it has no owner to be released from.",
+  "daemon.session_not_bound": "This session is not bound to an owner, so there is nothing to release.",
+  "daemon.session_not_bound_to_owner": "This session is not bound to {owner}, so {owner} cannot release it.",
+  "daemon.session_binding_changed": "This session's owner changed while it was being released.",
   "daemon.session_not_deletable": "Only an archived session, or one that has never been used, can be deleted, and not while it is starting.",
   "daemon.session_has_running_sessions": {
     one: "This session cannot be archived while {count} session under it is running: {sessions}. Archive that session or let it finish first.",
@@ -1308,6 +1316,11 @@ export const en = {
     one: "{count} session under it is archived with it. Its process ends.",
     other: "{count} sessions under it are archived with it. Their processes end.",
   },
+  "dialog.unbindSession.title": "Unbind session",
+  "dialog.unbindSession.message":
+    "{title} will no longer report to {owner}. {owner} can no longer send it messages, archive it or give it to another owner, and archiving {owner} will not archive it. It will answer only to you. {appName} cannot bind it to an owner again; only the session itself can.",
+  "dialog.unbindSession.error": "Could not unbind the session",
+  "dialog.unbindSession.confirm": "Unbind",
   "dialog.switchAccount.title": "Switch {title} to {account}?",
   "dialog.switchAccount.message":
     "Its process restarts under the new account and the conversation continues there. The session reads that account's configuration and keeps its explicit model and reasoning effort settings. A copy of the conversation stays in the current account.",

@@ -88,6 +88,7 @@ export const RECORD_ID_PARAMS: Record<string, readonly string[]> = {
   not_a_git_repository: ["project"], conversation_in_session: ["session"],
   conversation_held_in_project: ["session", "project"], conversation_held_in_console: ["session", "console"],
   session_did_not_stop: ["session"], sharing_session_did_not_stop: ["session"], switch_did_not_come_up: ["session"],
+  session_not_bound_to_owner: ["owner"], session_owner_changing: ["owner"],
 };
 
 /** Names retain the surrounding prose's typeface rather than the monospace used for paths. */
@@ -105,6 +106,8 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   config_dir_taken: ["name"],
   project_directory_shared: ["project"],
   conversation_in_session: ["session"],
+  session_not_bound_to_owner: ["owner"],
+  session_owner_changing: ["owner"],
   conversation_held_in_project: ["session", "project"],
   conversation_held_in_console: ["session", "console"],
   launch_failed: ["title"],
@@ -434,13 +437,23 @@ const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, string> = {
   account_disabled: "account",
 };
 
+/** The name of the record a param `name` holds the id of, or `undefined` once the record is gone or has no name to
+ * show: the caller then shows the id, never an empty name. An `owner` is a session, named as the session list
+ * shows it. */
+function recordName(records: RecordNames, name: string, id: string, language: Language): string | undefined {
+  if (name !== "owner") return RECORD_NAMES[name]?.(records, id);
+  const session = records.sessions.get(id);
+  const title = session && sessionDisplayTitle((key, ...args) => format(language, key, args[0]), session);
+  return title?.trim() ? title : undefined;
+}
+
 /** A param as plain text: a record id as that record's name, anything else as it came, isolated. */
 function paramText(records: RecordNames, name: string, value: string, code: string, language: Language): string {
   if (name === "session" && (code === "conversation_held_in_project" || code === "conversation_held_in_console")) {
     const session = records.sessions.get(value);
     if (session) return isolate(sessionDisplayTitle((key, ...args) => format(language, key, args[0]), session));
   }
-  return isolate(RECORD_ID_PARAMS[code]?.includes(name) ? RECORD_NAMES[name]?.(records, value) ?? value : value);
+  return isolate(RECORD_ID_PARAMS[code]?.includes(name) ? recordName(records, name, value, language) ?? value : value);
 }
 
 /** The values a message `code` is filled in with: the daemon's `params` over the UI's own
@@ -508,8 +521,8 @@ export function daemonParams<V = never>(
   for (const name of NAME_PARAMS[messageCode(code, all)] ?? []) {
     if (!(name in all)) continue;
     const recordId = RECORD_ID_PARAMS[code]?.includes(name) ?? false;
-    const recordName = recordId ? RECORD_NAMES[name]?.(records, all[name]) : undefined;
-    marked[name] = mark(recordName ?? all[name], recordId && recordName === undefined);
+    const shownName = recordId ? recordName(records, name, all[name], language) : undefined;
+    marked[name] = mark(shownName ?? all[name], recordId && shownName === undefined);
   }
   for (const name of referenceNameParams(code, all)) {
     const value = all[name] ?? globalParam(name);

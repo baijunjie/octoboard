@@ -440,12 +440,12 @@ it("keeps a locked live session protected and offers unlocking", () => {
 });
 
 it("offers unbinding only on a bound session that is not archived", () => {
-  const handlers = { onReleaseSession: vi.fn() } as unknown as SidebarHandlers;
+  const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
   const unbind = (session: Session) => sessionMenu(t, handlers, session, [], undefined).find((item) => typeof item === "object" && item.label === "Unbind");
   expect(unbind(sessionOf("free", "c", "p", "Free", "idle"))).toBeUndefined();
   const bound = sessionOf("bound", "c", "p", "Bound", "idle", { bound_to: "hub" });
   (unbind(bound) as { onClick: () => void }).onClick();
-  expect(handlers.onReleaseSession).toHaveBeenCalledExactlyOnceWith(bound);
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "unbind-session", session: bound });
   expect(unbind(sessionOf("new", "c", "p", "New", "starting", { bound_to: "hub" }))).toMatchObject({ disabled: true });
   expect(unbind(sessionOf("gone", "c", "p", "Gone", "archived", { bound_to: "hub" }))).toBeUndefined();
 });
