@@ -175,6 +175,10 @@ test("agent documents follow the pages and do not publish a download that does n
       "usageFeatureTitle",
       "previewTitle",
       "coordinationTitle",
+      "developerTitle",
+      "developerShiftTitle",
+      "developerContextTitle",
+      "developerQualityTitle",
       "localTitle",
       "platformsTitle",
       "faqTitle",
@@ -185,8 +189,15 @@ test("agent documents follow the pages and do not publish a download that does n
       assert.ok(position > previous, `${locale.code}: missing or reordered ${title}`);
       previous = position;
     }
-    for (const key of ["accountFeatureDescription", "handoffFeatureDescription", "usageFeatureDescription"]) {
-      assert.equal(body.split(catalog[key]).length - 1, 1, `${locale.code}: ${key} must appear once`);
+    for (const key of [
+      "accountFeatureDescription", "handoffFeatureDescription", "usageFeatureDescription",
+      "developerIntro", "developerShiftBody", "developerContextBody", "developerQualityBody",
+      "developerPurpose", "developerInvitation", "developerByline",
+    ]) {
+      const text = catalog[key]
+        .replaceAll("{appName}", "Octoboard")
+        .replaceAll("{operatorName}", "BaiJunjie");
+      assert.equal(body.split(text).length - 1, 1, `${locale.code}: ${key} must appear once`);
     }
   }
   assert.equal(home.includes("Replay workflow"), false);

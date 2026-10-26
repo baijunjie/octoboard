@@ -345,8 +345,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   its Quit.
 
 - [Website](product/website.md) — the localized homepage's account switching, agent handoff and usage features,
-  cross-project workflow illustration, sample application preview, privacy and error pages, keyboard navigation,
-  motion, release-page links, platform roadmap (including the planned Linux server), privacy disclosures,
+  cross-project workflow illustration, sample application preview, developer motivation, privacy and error pages,
+  keyboard navigation, motion, release-page links, platform roadmap (including the planned Linux server), privacy disclosures,
   planned remote host support and how the server form differs from it, search indexing, and the agent-readable
   Markdown copies.
 

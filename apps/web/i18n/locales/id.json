@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Apakah sesi yang bekerja pada proyek yang sama bisa menimbulkan konflik?",
   "faqParallelAnswer": "Secara default, sesi menggunakan direktori proyek yang sama, sehingga pengeditan file yang sama secara bersamaan dapat menimbulkan konflik. Untuk tugas paralel, Anda dapat meminta agen menggunakan Git worktree terpisah dan meninjau perubahan sebelum menggabungkannya.",
   "faqPortabilityQuestion": "Bisakah saya kembali bekerja di CLI aslinya?",
-  "faqPortabilityAnswer": "Bisa. File proyek tetap berada di folder aslinya, dan setiap agen menyimpan catatan percakapannya sendiri. Anda dapat melanjutkan melalui CLI asli selama catatan percakapan tersebut masih tersedia. Untuk akun tambahan, arahkan CLI ke direktori konfigurasi akun tersebut."
+  "faqPortabilityAnswer": "Bisa. File proyek tetap berada di folder aslinya, dan setiap agen menyimpan catatan percakapannya sendiri. Anda dapat melanjutkan melalui CLI asli selama catatan percakapan tersebut masih tersedia. Untuk akun tambahan, arahkan CLI ke direktori konfigurasi akun tersebut.",
+  "developerEyebrow": "Alasan saya membuat aplikasi ini",
+  "developerTitle": "Biarkan AI menulis kode.\nCurahkan energi Anda pada produk.",
+  "developerIntro": "Saya membuat {appName} karena saya percaya manusia tidak perlu lagi menulis kode sendiri. Pengembang dapat kembali memusatkan perhatian pada hal yang penting: produk yang ingin mereka hasilkan.",
+  "developerShiftTitle": "Melangkah keluar dari editor kode",
+  "developerShiftBody": "Seiring bertambahnya kode yang dihasilkan AI, meninjau dan menulis ulang setiap baris secara manual tidak lagi mampu mengimbangi laju pengembangan. Saya melihat implementasi yang semakin berlangsung di dalam kotak hitam sebagai pergeseran yang tidak bisa dibalik. Menurut saya, AI sudah menulis logika yang lebih lengkap daripada kebanyakan pemrogram. Ketika AI menangani penulisan sekaligus pemeliharaan, pedoman “kode yang baik” yang kita susun agar mudah dibaca manusia mulai kehilangan peran utamanya.",
+  "developerContextTitle": "Kebutuhan yang jelas dan konteks yang cukup",
+  "developerContextBody": "Menurut saya, hambatan terbesar dalam pengembangan dengan AI adalah kesalahpahaman: kebutuhan yang tidak jelas, konteks yang kurang, atau asumsi yang tidak disampaikan. Perhatian kita sebaiknya dicurahkan untuk mendefinisikan masalah, menjelaskan batasan, dan memberi agen konteks yang mereka perlukan untuk bekerja menuju tujuan yang sama.",
+  "developerQualityTitle": "Menilai kualitas melalui pengujian",
+  "developerQualityBody": "Bagi saya, kualitas perangkat lunak memiliki satu tolok ukur penentu: apakah produk memenuhi kebutuhan nyata saat diuji secara menyeluruh. Membaca kode saja tidak dapat membuktikannya. Pengujian perlu mencakup alur kerja nyata, kasus batas, dan kegagalan, lalu hasilnya menjadi dasar perbaikan berikutnya.",
+  "developerPurpose": "Itulah alasan saya membuat {appName}: ruang kerja untuk mengoordinasikan agen, menjaga kesinambungan konteks, dan mengikuti pekerjaan hingga produk selesai diserahkan. Dengan lebih sedikit waktu di editor kode, pengembang dapat mencurahkan lebih banyak perhatian pada kebutuhan, keputusan, pengujian, dan produk itu sendiri.",
+  "developerInvitation": "Jika Anda juga percaya manusia tidak perlu lagi menulis kode sendiri, {appName} dibuat untuk Anda.",
+  "developerByline": "{operatorName} · Pembuat {appName}"
 }

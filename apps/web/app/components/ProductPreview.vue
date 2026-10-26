@@ -210,7 +210,6 @@ onBeforeUnmount(() => {
       }"
       :style="{
         '--preview-scale': scale,
-        height: `${Math.round((compact ? 640 : 900) * scale)}px`,
       }"
     >
       <div v-if="!ready" class="preview-loading" role="status">
@@ -236,6 +235,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.product-preview {
+  container-type: inline-size;
+}
 .preview-toolbar {
   display: flex;
   align-items: center;
@@ -280,6 +282,8 @@ onBeforeUnmount(() => {
 }
 .preview-window {
   position: relative;
+  /* Reserve the responsive height before hydration so anchor destinations stay in place. */
+  height: min(900px, 62.5cqw);
   overflow: hidden;
   border-radius: 12px;
   background: #131313;
@@ -345,6 +349,11 @@ iframe {
   gap: 12px;
   color: #aaa;
   font-size: 13px;
+}
+@container (max-width: 800px) {
+  .preview-window {
+    height: 640px;
+  }
 }
 @media (max-width: 800px) {
   .preview-toolbar {

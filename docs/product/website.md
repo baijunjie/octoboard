@@ -1,7 +1,8 @@
 # Website
 
-The official website presents Octoboard and its privacy policy. It is a static public site, separate from the
-application: visiting it does not connect to a local daemon, open a real agent session, or require an account.
+The official website presents Octoboard, its developer's motivation, and its privacy policy. It is a static public
+site, separate from the application: visiting it does not connect to a local daemon, open a real agent session, or
+require an account.
 
 ## Publishing
 
@@ -27,11 +28,11 @@ The site has a homepage and a privacy page. Paths below are relative to the site
   Traditional Chinese uses `zh-Hant` for both.
 
 All 17 languages have complete website translations, including navigation, account switching, agent handoff and
-usage features, preview controls, the illustrative workflow, questions and answers, privacy text, client error
-messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian, Japanese, Korean,
-Brazilian Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional Chinese. This coverage
-is specific to the website; the application's translation coverage is described in `docs/product/language.md`,
-"What is translated so far".
+usage features, preview controls, the illustrative workflow, the developer's motivation, questions and answers,
+privacy text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian,
+Italian, Japanese, Korean, Brazilian Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and
+Traditional Chinese. This coverage is specific to the website; the application's translation coverage is described
+in `docs/product/language.md`, "What is translated so far".
 
 English is the default. On a normal site page that opens in English, the site checks the remembered language after
 the app mounts. If there is no remembered language, it matches the browser's preferred languages to the supported
@@ -150,7 +151,9 @@ the repository, the license, the GitHub privacy statement, and email — stay on
 The Markdown carries the page's localized wording in the same section order. It includes the three feature titles
 and descriptions, the statement that Octoboard is free and open source under the MIT License, the preview scene
 names and sample-data explanation, and every workflow
-node's task and report. It does not include the embedded application's sample screens. Release links are those in
+node's task and report. The developer's motivation follows the workflow in each homepage copy and in `llms-full.txt`,
+including its title, opening, three subsections, product purpose, invitation, and byline. It does not include the
+embedded application's sample screens. Release links are those in
 "Homepage and navigation" and sit beside the
 early-prototype status. The workflow is identified as an illustration. The copies omit the header, the footer,
 decorative art and feature sample readings, the labels
@@ -166,9 +169,9 @@ handing work to another agent, tracking usage, and coordinating projects when a 
 links to view releases, visit its GitHub repository, and open the preview section.
 
 The page continues through account and usage features, the product preview, one cross-project coordination
-example, local data and open-source information with platform availability, and questions. These five sections
-share a numbered heading, a short label marked by a red square, and a title. Section and workflow-step numbers
-are prominent visual markers.
+example, the developer's motivation, local data and open-source information with platform availability, and questions.
+These six sections share a numbered heading, a short label marked by a red square, and a title. Section and
+workflow-step numbers are prominent visual markers.
 
 The first numbered section presents three feature rows, in this order:
 
@@ -211,12 +214,29 @@ within their own native project context, and following or intervening in their c
 uses its native support for instructions, Skills, hooks, tools and permissions. The illustration is fixed sample
 content: it does not show live activity, run agents, or submit work.
 
-The next section combines local data handling, the source repository and MIT License, and platform availability.
+Section 04 explains why the developer created Octoboard, as a signed personal statement. Its opening expresses the
+belief that people no longer need to write code themselves and can focus on the product they want to deliver.
+Three subsections develop that position:
+
+- Moving beyond the code editor: manual review and rewriting cannot keep pace with AI's output; the developer sees
+  implementation becoming a black box as irreversible, considers AI's logic more complete than most programmers',
+  and regards code conventions designed for human readers as less central when AI writes and maintains the code.
+- Requirements and context: the developer sees unclear requirements, missing context and unstated assumptions as
+  the main source of misunderstanding, making problem definition and shared context central to coordinating agents.
+- Quality through testing: the developer regards thorough testing against real needs, including workflows, edge
+  cases and failures, as the deciding quality standard, and reading code alone as insufficient.
+
+The statement connects those beliefs to a workspace for coordinating agents, carrying context forward and following
+delivery, then invites readers who share the belief that people need not write code themselves. It is signed by
+BaiJunjie in every language; the author name is not translated. These are the developer's convictions and motivation,
+not verified claims about AI performance or promises of fully autonomous development or guaranteed software quality.
+
+Section 05 combines local data handling, the source repository and MIT License, and platform availability.
 Its data-handling summary describes local application storage, no upload of code or conversations to Octoboard's
 own servers, and configured agents and tools connecting to their providers. The open-source panel states that
 Octoboard is free and open source under the MIT License.
 
-The four questions that follow cover using existing projects and CLI configuration, data handling, concurrent edits,
+The four questions in section 06 cover using existing projects and CLI configuration, data handling, concurrent edits,
 and returning to the original CLI. The section's introductory label is
 separate from its questions heading. Each question can be expanded or collapsed independently, with the first
 expanded initially; several answers can remain open at once. The plus marker rotates into a cross when an answer
@@ -237,7 +257,8 @@ question and its answer share a uniform background.
 The primary action in the header, hero, menu, and closing section uses the same localized label for viewing releases
 and opens the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies
 macOS Apple Silicon and labels the app as an early prototype. The closing note repeats that status beside the MIT
-License. Other repository links open GitHub; the footer links to the localized privacy page, explicitly names the
+License. Other repository links open GitHub; the footer links to the developer's motivation at the localized
+homepage's `#developer-intent` and to the localized privacy page, explicitly names the
 MIT License in its license link, and provides the operator's email address. The hero, open-source section and footer
 use icon-only GitHub links with 44-by-44-pixel targets, accessible names and hover titles. The navigation menu retains
 its text repository link.
@@ -250,14 +271,24 @@ The closing section displays the mascot beside the wordmark, with the localized 
 wordmark, centered on the wordmark. Under that group, centered, is the sentence that states the slogan's two
 meanings (see "Brand slogan"). Decorative graphics do not act as slide or pagination controls.
 
-The floating header stays visible while scrolling and links to account and usage features, product preview,
-coordination explanation, and questions from either page. Following a section link leaves space for the header
-above the destination. Its inline links identify the current homepage section as the visitor moves through the
-page. The header has a glass surface with edge
+The floating header stays visible while scrolling. From either page, both the header and full-screen menu link to
+all six homepage sections in page order: account and usage features (`#benefits`), product preview
+(`#product-preview`), coordination explanation (`#how-it-works`), developer motivation (`#developer-intent`),
+local data, open source and platforms (`#local-workspace`), and questions (`#questions`). The menu numbers these
+links 01–06 to match the page; its external GitHub link has no number. Following a section link leaves space for
+the header above the destination. Its inline links identify the current homepage section as the visitor moves
+through the page.
+
+Inline links appear only when the header has room for all six labels and its other controls. Their visibility
+adapts to the window width, language and loaded fonts; the full menu remains available at every width. Hidden
+inline links cannot receive keyboard focus and are omitted from assistive technology. If they contain focus when
+they collapse, focus moves to the menu button. The header has a glass surface with edge
 refraction where supported and a sheen that follows the pointer. Browsers without refraction support use blurred glass;
 those without backdrop blur use a more opaque surface.
-A menu button is available at every screen width and opens a full-screen navigation dialog. The button changes into a
-close control, with an accessible name identifying the opening or closing action. The header navigation, menu dialog
+A menu button opens a full-screen navigation dialog. The button changes into a close control, with an accessible name
+identifying the opening or closing action. The close control follows the language's reading direction: right in
+left-to-right languages and left in right-to-left languages. Long menu labels wrap on narrow screens without
+horizontal overflow. The header navigation, menu dialog
 and menu navigation have accessible names identifying main navigation. The background cannot be interacted with or
 scrolled while the menu is open. Tab and Shift+Tab stay within the dialog. Closing it with the button or Escape
 returns focus to the header's menu button. Choosing an internal destination or another language closes the dialog
@@ -334,7 +365,8 @@ agent's default account: Claude Code on the Max plan and Codex on the Plus plan,
 window, and Grok Build on SuperGrok with a weekly credit pool. Their reset times count from when the preview loaded,
 so no visit finds a reset already past. These readings are demonstration data.
 
-The homepage embeds a complete desktop viewport scaled to fit its available width. The application fills the
+The homepage embeds a complete desktop viewport scaled to fit its available width. The preview reserves its final
+responsive height while loading, keeping section-link destinations stable as it initializes. The application fills the
 embedded viewport, with the sample-data explanation in a caption below it. Once ready, the embedded
 application accepts pointer and keyboard interaction, including its report and project panes, and is available to
 assistive technology. While loading, it remains hidden and cannot receive interaction. A continuous border with
@@ -424,7 +456,8 @@ Markdown includes the same introduction and the same status for each row.
 The hero text and mascot enter with a short motion. On both mobile and desktop, the mascot's eight tentacles
 swing independently, its body floats up and down and rocks from side to side, and its red eyes brighten and dim.
 Red and silver pixel particles move through the surrounding
-space without covering content or intercepting interaction. Sections reveal as they enter view. Question expansion
+space without covering content or intercepting interaction. Sections reveal as they enter view, except the developer's
+motivation, whose text remains visible without a reveal transition, including at high zoom. Question expansion
 and control state changes also have visual transitions.
 
 A control beside the mascot pauses and resumes the homepage's decorative animation, including the mascot, particles and

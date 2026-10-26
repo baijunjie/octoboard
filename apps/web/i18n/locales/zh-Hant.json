@@ -148,5 +148,17 @@
   "faqParallelQuestion": "多個工作階段同時修改同一專案，會衝突嗎？",
   "faqParallelAnswer": "多個工作階段預設共用專案目錄，同時修改同一檔案可能發生衝突。平行開發時，可以請代理使用獨立的 Git worktree，並在合併前審查變更。",
   "faqPortabilityQuestion": "還能回到原本的 CLI 繼續工作嗎？",
-  "faqPortabilityAnswer": "可以。專案檔案仍在原本的資料夾，對話紀錄也由各代理儲存。只要對話紀錄仍可使用，就能透過原本的 CLI 繼續工作。使用額外帳號時，請將 CLI 指向這個帳號的設定目錄。"
+  "faqPortabilityAnswer": "可以。專案檔案仍在原本的資料夾，對話紀錄也由各代理儲存。只要對話紀錄仍可使用，就能透過原本的 CLI 繼續工作。使用額外帳號時，請將 CLI 指向這個帳號的設定目錄。",
+  "developerEyebrow": "開發者初衷",
+  "developerTitle": "把實作交給 AI，\n把心力留給產品。",
+  "developerIntro": "我開發 {appName}，是因為我相信：人類不必再親手撰寫程式碼，開發者的重心應該回到想要交付的產品本身。",
+  "developerShiftTitle": "走出程式碼編輯器",
+  "developerShiftBody": "隨著 AI 產生的程式碼越來越多，逐行檢查、再由人手動修改的方式，已經跟不上開發速度。在我看來，程式的實作逐漸進入黑盒，是不可逆的趨勢。AI 已經能寫出比大多數程式設計師更完備的邏輯；當撰寫和維護都由 AI 承擔，為方便人類閱讀而制定的「好程式碼」規範，也不再居於核心地位。",
+  "developerContextTitle": "說清楚需求，補齊脈絡",
+  "developerContextBody": "我認為，AI 開發最大的障礙是理解落差：需求不明確、脈絡不足，或重要前提沒有說明。更值得投入心力的工作，是定義問題、說明限制，讓代理取得足夠的資訊，朝同一個目標協作。",
+  "developerQualityTitle": "以充分測試檢驗品質",
+  "developerQualityBody": "對我而言，判斷軟體品質的唯一標準，是產品能否經過充分測試，滿足實際需求。單靠閱讀程式碼無法得出這個結論。測試需要涵蓋實際流程、邊界條件和失敗情境，再以結果推動下一輪改進。",
+  "developerPurpose": "這就是我開發 {appName} 的初衷：提供一個協調代理、延續脈絡、追蹤產品交付的工作區。讓開發者逐漸從程式碼編輯器中解放出來，把更多心力放在需求、決策、測試和產品本身。",
+  "developerInvitation": "如果你也認同，人類不必再親手寫程式碼，那麼 {appName} 就是為你而做的。",
+  "developerByline": "{operatorName} · {appName} 開發者"
 }

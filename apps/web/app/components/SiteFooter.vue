@@ -28,6 +28,9 @@ const localePath = useLocalePath();
           aria-label="GitHub"
           title="GitHub"
         ><SiteIcon name="github-logo" /></a
+        ><NuxtLink :to="`${localePath('/')}#developer-intent`">{{
+          t("developerEyebrow")
+        }}</NuxtLink
         ><NuxtLink :to="localePath('/privacy/')">{{
           t("footerPrivacy")
         }}</NuxtLink

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   developedPlatform,
+  developerSections,
   githubPrivacyUrl,
   heroAgents,
   homeFeatures,
@@ -158,6 +159,15 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       heading(3, text(`step${step}Title`)),
       text(`step${step}Description`),
     ]),
+    heading(2, text("developerTitle")),
+    text("developerIntro"),
+    ...developerSections.flatMap((section) => [
+      heading(3, text(`developer${section}Title`)),
+      text(`developer${section}Body`),
+    ]),
+    text("developerPurpose"),
+    text("developerInvitation"),
+    text("developerByline"),
     heading(2, text("localTitle")),
     text("localDescription"),
     link(text("localLink"), privacy),

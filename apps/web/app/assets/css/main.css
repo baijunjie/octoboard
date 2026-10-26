@@ -138,8 +138,16 @@ select:focus-visible {
 }
 .desktop-nav {
   display: flex;
+  width: max-content;
+  flex-shrink: 0;
   align-items: center;
   gap: 24px;
+}
+.nav-pill.nav-compact .desktop-nav {
+  position: absolute;
+  max-width: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 .desktop-nav a {
   white-space: nowrap;
@@ -325,6 +333,7 @@ select:focus-visible {
 }
 .overlay-links > a {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 24px;
   font-size: 60px;
@@ -344,11 +353,16 @@ select:focus-visible {
   color: var(--red);
 }
 .overlay-links .menu-number {
+  flex-shrink: 0;
   font-size: 12px;
   line-height: 16px;
   color: var(--muted);
   align-self: flex-start;
   margin-top: 8px;
+}
+.overlay-links .menu-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .overlay-links .link-arrow,
 .overlay-links .menu-section-arrow {
@@ -1108,7 +1122,7 @@ h3 {
   position: fixed;
   z-index: 100;
   top: 32px;
-  right: 64px;
+  inset-inline-end: 64px;
 }
 .menu-close-space {
   width: 40px;
@@ -1263,7 +1277,7 @@ h3 {
   }
   .menu-floating-close {
     top: 24px;
-    right: 24px;
+    inset-inline-end: 24px;
   }
   .hero {
     padding-block: 116px 32px;

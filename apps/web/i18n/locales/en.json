@@ -35,7 +35,7 @@
   "stepTwoDescription": "Each agent works in its own project directory, using that project’s instructions, Skills, hooks, tools, and permissions.",
   "stepThreeTitle": "Follow the work. Step in anywhere.",
   "stepThreeDescription": "Project agents send progress and results to the coordinator. Open any project’s conversation to add context, adjust direction, or work directly with its agent.",
-  "localEyebrow": "LOCAL BY DESIGN",
+  "localEyebrow": "Local by design",
   "localTitle": "Your workspace runs on your machine.",
   "localDescription": "{appName} stores its application data locally and doesn't upload your code or conversations to its own servers. Your chosen agents and tools connect to their own providers according to your configuration.",
   "localLink": "Read our privacy policy",
@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Can sessions working on the same project cause conflicts?",
   "faqParallelAnswer": "Sessions share the project directory by default, so simultaneous edits to the same files can conflict. For parallel tasks, you can ask agents to use separate Git worktrees and review the changes before merging.",
   "faqPortabilityQuestion": "Can I go back to working in the original CLI?",
-  "faqPortabilityAnswer": "Yes. Your project files stay in their original folders, and each agent keeps its own conversation records. You can resume through the original CLI as long as that conversation is still available. For an additional account, point the CLI at that account’s configuration directory."
+  "faqPortabilityAnswer": "Yes. Your project files stay in their original folders, and each agent keeps its own conversation records. You can resume through the original CLI as long as that conversation is still available. For an additional account, point the CLI at that account’s configuration directory.",
+  "developerEyebrow": "Why I built it",
+  "developerTitle": "Let AI write the code.\nPut your energy into the product.",
+  "developerIntro": "I built {appName} because I believe people no longer need to write code by hand. Developers can put their attention back where it matters: the product they want to deliver.",
+  "developerShiftTitle": "Moving beyond the code editor",
+  "developerShiftBody": "As AI produces more code, reviewing and rewriting every line by hand can no longer keep pace. I see a future where implementation increasingly happens inside a black box as an irreversible shift. In my view, AI already writes more complete logic than most programmers. The conventions for “good code” that we designed around human readers are losing their central role as AI takes on both writing and maintenance.",
+  "developerContextTitle": "Clear requirements and enough context",
+  "developerContextBody": "I see the biggest obstacle in AI development as misunderstanding: unclear requirements, missing context, or assumptions left unstated. The work that deserves our attention is defining the problem, explaining constraints, and giving agents the context they need to work toward the same goal.",
+  "developerQualityTitle": "Judge quality through testing",
+  "developerQualityBody": "For me, software quality has one deciding standard: whether the product meets real needs under thorough testing. Reading code cannot establish that on its own. Tests need to cover real workflows, edge cases, and failures, and their results need to guide the next iteration.",
+  "developerPurpose": "That is why I built {appName}: a workspace for coordinating agents, carrying context forward, and following the work through to delivery. As developers spend less time in code editors, they can devote more of it to requirements, decisions, testing, and the product itself.",
+  "developerInvitation": "If you also believe people no longer need to write code themselves, {appName} is built for you.",
+  "developerByline": "{operatorName} · Creator of {appName}"
 }

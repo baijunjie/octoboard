@@ -35,7 +35,7 @@
   "stepTwoDescription": "Jeder Agent arbeitet in seinem eigenen Projektverzeichnis mit den dort geltenden Anweisungen, Skills, Hooks, Tools und Berechtigungen.",
   "stepThreeTitle": "Verfolge die Arbeit. Beteilige dich jederzeit.",
   "stepThreeDescription": "Projektagenten melden Fortschritte und Ergebnisse an den Koordinator. Öffne das Gespräch eines Projekts, um Kontext zu ergänzen, die Richtung anzupassen oder direkt mit seinem Agenten zu arbeiten.",
-  "localEyebrow": "VON GRUND AUF LOKAL",
+  "localEyebrow": "Von Grund auf lokal",
   "localTitle": "Dein Arbeitsbereich läuft auf deinem Rechner.",
   "localDescription": "{appName} speichert seine Anwendungsdaten lokal und lädt deinen Code oder deine Gespräche nicht auf eigene Server hoch. Die gewählten Agenten und Tools verbinden sich gemäß deiner Konfiguration mit ihren jeweiligen Anbietern.",
   "localLink": "Datenschutzerklärung lesen",
@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Können mehrere Sitzungen im selben Projekt Konflikte verursachen?",
   "faqParallelAnswer": "Sitzungen nutzen standardmäßig dasselbe Projektverzeichnis. Wenn sie gleichzeitig dieselben Dateien bearbeiten, kann es zu Konflikten kommen. Für parallele Aufgaben kannst du die Agenten bitten, getrennte Git-Worktrees zu verwenden, und die Änderungen vor dem Zusammenführen prüfen.",
   "faqPortabilityQuestion": "Kann ich wieder mit der ursprünglichen CLI arbeiten?",
-  "faqPortabilityAnswer": "Ja. Deine Projektdateien bleiben in ihren ursprünglichen Ordnern, und jeder Agent behält seine eigenen Gesprächsverläufe. Solange das Gespräch noch verfügbar ist, kannst du es über die ursprüngliche CLI fortsetzen. Wenn du ein zusätzliches Konto nutzt, muss die CLI dessen Konfigurationsverzeichnis verwenden."
+  "faqPortabilityAnswer": "Ja. Deine Projektdateien bleiben in ihren ursprünglichen Ordnern, und jeder Agent behält seine eigenen Gesprächsverläufe. Solange das Gespräch noch verfügbar ist, kannst du es über die ursprüngliche CLI fortsetzen. Wenn du ein zusätzliches Konto nutzt, muss die CLI dessen Konfigurationsverzeichnis verwenden.",
+  "developerEyebrow": "Warum ich diese App entwickelt habe",
+  "developerTitle": "Lass KI den Code schreiben.\nWidme deine Energie dem Produkt.",
+  "developerIntro": "Ich habe {appName} entwickelt, weil ich glaube, dass Menschen Code nicht mehr von Hand schreiben müssen. Entwickler können sich wieder auf das konzentrieren, was zählt: das Produkt, das sie liefern wollen.",
+  "developerShiftTitle": "Über den Code-Editor hinaus",
+  "developerShiftBody": "Je mehr Code KI erzeugt, desto weniger können wir mithalten, wenn wir jede Zeile von Hand prüfen und überarbeiten. Dass die Implementierung zunehmend in einer Blackbox stattfindet, halte ich für eine unumkehrbare Entwicklung. Meiner Ansicht nach schreibt KI bereits vollständigere Logik als die meisten Programmierer. Die Regeln für „guten Code“, die wir auf menschliche Leser ausgerichtet haben, verlieren ihre zentrale Rolle, wenn KI sowohl das Schreiben als auch die Wartung übernimmt.",
+  "developerContextTitle": "Klare Anforderungen und genügend Kontext",
+  "developerContextBody": "Das größte Hindernis bei der Entwicklung mit KI sind für mich Missverständnisse: unklare Anforderungen, fehlender Kontext oder unausgesprochene Annahmen. Unsere Aufmerksamkeit verdient die Arbeit, das Problem zu definieren, Einschränkungen zu erklären und Agenten den Kontext zu geben, den sie für ein gemeinsames Ziel brauchen.",
+  "developerQualityTitle": "Qualität durch Tests beurteilen",
+  "developerQualityBody": "Für mich gibt es einen entscheidenden Maßstab für Softwarequalität: ob sich bei gründlichen Tests zeigt, dass das Produkt reale Anforderungen erfüllt. Code zu lesen reicht dafür allein nicht aus. Tests müssen reale Abläufe, Grenzfälle und Fehler abdecken. Ihre Ergebnisse müssen die nächste Verbesserung bestimmen.",
+  "developerPurpose": "Deshalb habe ich {appName} entwickelt: einen Arbeitsbereich, um Agenten zu koordinieren, Kontext weiterzugeben und die Arbeit bis zur Auslieferung zu verfolgen. Wenn Entwickler weniger Zeit in Code-Editoren verbringen, bleibt ihnen mehr Zeit für Anforderungen, Entscheidungen, Tests und das Produkt selbst.",
+  "developerInvitation": "Wenn auch du glaubst, dass Menschen Code nicht mehr selbst schreiben müssen, ist {appName} für dich gemacht.",
+  "developerByline": "{operatorName} · Entwickler von {appName}"
 }

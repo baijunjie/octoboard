@@ -4,6 +4,7 @@ const config = useRuntimeConfig();
 const localePath = useLocalePath();
 const route = useRoute();
 const open = ref(false);
+const compactNav = ref(true);
 const activeSection = ref("");
 const menuToggle = ref<HTMLButtonElement | null>(null);
 const menuPanel = ref<HTMLElement | null>(null);
@@ -14,11 +15,39 @@ const sections = [
   { id: "benefits", key: "navContinuity" },
   { id: "product-preview", key: "previewEyebrow" },
   { id: "how-it-works", key: "navHow" },
+  { id: "developer-intent", key: "developerEyebrow" },
+  { id: "local-workspace", key: "localEyebrow" },
   { id: "questions", key: "navFaq" },
 ];
 let previousOverflow = "";
 let sectionObserver: IntersectionObserver | undefined;
+let navObserver: ResizeObserver | undefined;
 const releasesUrl = `${config.public.repositoryUrl}/releases`;
+function observeNavWidth() {
+  const pill = glass.value;
+  const header = pill?.parentElement;
+  const nav = pill?.querySelector<HTMLElement>(".desktop-nav");
+  const brand = pill?.querySelector<HTMLElement>(".brand");
+  const actions = pill?.querySelector<HTMLElement>(".nav-actions");
+  if (!pill || !header || !nav || !brand || !actions || !("ResizeObserver" in window)) return;
+  const update = () => {
+    const headerStyle = getComputedStyle(header);
+    const pillStyle = getComputedStyle(pill);
+    const available = header.clientWidth
+      - parseFloat(headerStyle.paddingInlineStart) - parseFloat(headerStyle.paddingInlineEnd);
+    const needed = brand.offsetWidth + nav.scrollWidth + actions.scrollWidth
+      + 2 * parseFloat(pillStyle.columnGap)
+      + parseFloat(pillStyle.paddingInlineStart) + parseFloat(pillStyle.paddingInlineEnd)
+      + parseFloat(pillStyle.borderInlineStartWidth) + parseFloat(pillStyle.borderInlineEndWidth);
+    const collapse = getComputedStyle(nav).display === "none" || Math.ceil(needed) > available;
+    if (collapse && !compactNav.value && nav.contains(document.activeElement)) menuToggle.value?.focus();
+    compactNav.value = collapse;
+  };
+  navObserver = new ResizeObserver(update);
+  // Measure the labels even while collapsed so font and language changes can restore the inline links.
+  for (const element of [header, brand, actions, ...nav.children]) navObserver.observe(element);
+  update();
+}
 async function showMenu() {
   if (open.value) return;
   previousOverflow = document.body.style.overflow;
@@ -90,8 +119,10 @@ watch(
   },
 );
 onMounted(observeSections);
+onMounted(observeNavWidth);
 onBeforeUnmount(() => {
   sectionObserver?.disconnect();
+  navObserver?.disconnect();
   closeMenu(false);
 });
 </script>
@@ -99,7 +130,7 @@ onBeforeUnmount(() => {
 <template>
   <a class="skip-link" href="#main-content">{{ t("skipContent") }}</a>
   <header class="site-header">
-    <div ref="glass" class="nav-pill liquid-glass">
+    <div ref="glass" class="nav-pill liquid-glass" :class="{ 'nav-compact': compactNav }">
       <NuxtLink
         :to="localePath('/')"
         class="brand"
@@ -112,7 +143,7 @@ onBeforeUnmount(() => {
           height="19"
         />
       </NuxtLink>
-      <nav class="desktop-nav" :aria-label="t('navMenu')">
+      <nav class="desktop-nav" :aria-label="t('navMenu')" :inert="compactNav" :aria-hidden="compactNav || undefined">
         <NuxtLink
           v-for="section in sections"
           :key="section.id"
@@ -177,15 +208,14 @@ onBeforeUnmount(() => {
                     "
                     @click="closeMenu(false)"
                   ><span class="menu-number">0{{ index + 1 }}</span
-                  >{{ t(section.key)
-                  }}<SiteIcon
+                  ><span class="menu-label">{{ t(section.key) }}</span><SiteIcon
                     name="arrow-right"
                     class="menu-section-arrow" /></NuxtLink
                   ><a
                     :href="config.public.repositoryUrl"
-                    :style="{ '--link-order': 4 }"
+                    :style="{ '--link-order': sections.length }"
                   >
-                    <span class="menu-number">05</span>GitHub<span
+                    GitHub<span
                       class="link-arrow"
                       aria-hidden="true"
                     /></a>

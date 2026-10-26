@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   developedPlatform,
+  developerSections,
   heroAgents,
   homeQuestions,
   homeSteps,
@@ -144,9 +145,27 @@ useSeoMeta({
       </div>
     </section>
 
-    <section class="trust-section wrap section-space" data-reveal>
+    <section id="developer-intent" class="developer-section wrap section-space">
       <SectionHeading
         number="04"
+        :label="t('developerEyebrow')"
+        :title="t('developerTitle')"
+      />
+      <div class="developer-letter">
+        <p class="developer-intro">{{ t("developerIntro") }}</p>
+        <div v-for="section in developerSections" :key="section" class="developer-point">
+          <h3>{{ t(`developer${section}Title`) }}</h3>
+          <p>{{ t(`developer${section}Body`) }}</p>
+        </div>
+        <p>{{ t("developerPurpose") }}</p>
+        <p class="developer-invitation">{{ t("developerInvitation") }}</p>
+        <p class="developer-byline">{{ t("developerByline") }}</p>
+      </div>
+    </section>
+
+    <section id="local-workspace" class="trust-section wrap section-space" data-reveal>
+      <SectionHeading
+        number="05"
         :label="t('localEyebrow')"
         :title="t('localTitle')"
         :description="t('localDescription')"
@@ -199,7 +218,7 @@ useSeoMeta({
     </section>
 
     <section id="questions" class="faq-section wrap section-space" data-reveal>
-      <SectionHeading number="05" :label="t('faqEyebrow')" :title="t('faqTitle')" />
+      <SectionHeading number="06" :label="t('faqEyebrow')" :title="t('faqTitle')" />
       <div class="faq-list">
         <details
           v-for="(question, index) in homeQuestions"
@@ -249,3 +268,35 @@ useSeoMeta({
     </section>
   </main>
 </template>
+
+<style scoped>
+.developer-letter {
+  max-width: 48rem;
+  margin-inline: auto;
+  display: grid;
+  gap: 32px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.85;
+  overflow-wrap: anywhere;
+}
+.developer-intro,
+.developer-invitation {
+  color: var(--text);
+  font-size: clamp(20px, 2vw, 24px);
+  line-height: 1.65;
+}
+.developer-point h3 {
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1.5;
+}
+.developer-invitation {
+  border-inline-start: 2px solid var(--red);
+  padding-inline-start: 24px;
+}
+.developer-byline {
+  font-size: 14px;
+}
+</style>

@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Aynı projede çalışan oturumlar çakışmaya yol açabilir mi?",
   "faqParallelAnswer": "Oturumlar varsayılan olarak proje dizinini paylaşır. Bu yüzden aynı dosyalarda eşzamanlı değişiklikler çakışmaya yol açabilir. Paralel görevler için ajanlardan ayrı Git worktree dizinlerinde çalışmalarını isteyebilir, değişiklikleri birleştirmeden önce inceleyebilirsiniz.",
   "faqPortabilityQuestion": "Asıl CLI ile çalışmaya geri dönebilir miyim?",
-  "faqPortabilityAnswer": "Evet. Proje dosyalarınız mevcut klasörlerinde kalır ve her ajan kendi sohbet kayıtlarını tutar. Sohbet kaydı hâlâ kullanılabilir durumdaysa sohbeti asıl CLI üzerinden sürdürebilirsiniz. Ek bir hesap kullanıyorsanız CLI için bu hesabın yapılandırma dizinini belirtin."
+  "faqPortabilityAnswer": "Evet. Proje dosyalarınız mevcut klasörlerinde kalır ve her ajan kendi sohbet kayıtlarını tutar. Sohbet kaydı hâlâ kullanılabilir durumdaysa sohbeti asıl CLI üzerinden sürdürebilirsiniz. Ek bir hesap kullanıyorsanız CLI için bu hesabın yapılandırma dizinini belirtin.",
+  "developerEyebrow": "Bu uygulamayı neden geliştirdim",
+  "developerTitle": "Kodu yapay zekâ yazsın.\nEnerjinizi ürüne ayırın.",
+  "developerIntro": "{appName} uygulamasını, insanların artık kodu elle yazmasına gerek olmadığına inandığım için geliştirdim. Geliştiriciler dikkatlerini yeniden asıl önemli olana, ortaya çıkarmak istedikleri ürüne verebilir.",
+  "developerShiftTitle": "Kod editörünün ötesine geçmek",
+  "developerShiftBody": "Yapay zekâ daha fazla kod ürettikçe, her satırı elle inceleyip yeniden yazarak bu hıza yetişmek artık mümkün olmuyor. Uygulamanın teknik olarak hayata geçirilmesinin giderek bir kara kutunun içinde gerçekleşmesini geri döndürülemez bir değişim olarak görüyorum. Bence yapay zekâ şimdiden çoğu programcıdan daha eksiksiz mantık kurabiliyor. İnsanların okuması için tasarladığımız “iyi kod” kuralları, yapay zekâ hem yazımı hem de bakımı üstlendikçe merkezî rolünü kaybediyor.",
+  "developerContextTitle": "Açık gereksinimler ve yeterli bağlam",
+  "developerContextBody": "Bence yapay zekâyla geliştirmede en büyük engel yanlış anlamalar: belirsiz gereksinimler, eksik bağlam veya açıkça belirtilmeyen varsayımlar. Dikkatimizi vermemiz gereken iş; sorunu tanımlamak, kısıtları açıklamak ve ajanlara aynı hedef doğrultusunda çalışmaları için gereken bağlamı sağlamak.",
+  "developerQualityTitle": "Kaliteyi testlerle değerlendirmek",
+  "developerQualityBody": "Benim için yazılım kalitesinde belirleyici tek bir ölçüt var: kapsamlı testlerin, ürünün gerçek ihtiyaçları karşıladığını göstermesi. Yalnızca kodu okumak bunu ortaya koymaya yetmez. Testler gerçek iş akışlarını, sınır durumlarını ve hataları kapsamalı; sonuçları da bir sonraki geliştirme turuna yön vermeli.",
+  "developerPurpose": "{appName} uygulamasını bu yüzden geliştirdim: ajanları koordine etmek, bağlamı koruyarak aktarmak ve işi teslimata kadar takip etmek için bir çalışma alanı. Geliştiriciler kod editörlerinde daha az zaman geçirdikçe gereksinimlere, kararlara, testlere ve ürünün kendisine daha fazla zaman ayırabilir.",
+  "developerInvitation": "İnsanların artık kodu kendilerinin yazmasına gerek olmadığına siz de inanıyorsanız, {appName} sizin için geliştirildi.",
+  "developerByline": "{operatorName} · {appName} geliştiricisi"
 }

@@ -35,7 +35,7 @@
   "stepTwoDescription": "Ogni agente lavora nella directory del proprio progetto, con le istruzioni, le Skills, gli hook, gli strumenti e i permessi di quel progetto.",
   "stepThreeTitle": "Segui il lavoro. Intervieni dove vuoi.",
   "stepThreeDescription": "Gli agenti di progetto inviano progressi e risultati al coordinatore. Apri la conversazione di un progetto per aggiungere contesto, cambiare direzione o lavorare direttamente con il suo agente.",
-  "localEyebrow": "LOCALE PER SCELTA",
+  "localEyebrow": "Locale per scelta",
   "localTitle": "Il tuo spazio di lavoro funziona sul tuo computer.",
   "localDescription": "{appName} conserva i dati dell’applicazione in locale e non carica codice o conversazioni sui propri server. Gli agenti e gli strumenti che scegli si collegano ai rispettivi fornitori in base alla tua configurazione.",
   "localLink": "Leggi l’informativa sulla privacy",
@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Le sessioni che lavorano sullo stesso progetto possono creare conflitti?",
   "faqParallelAnswer": "Le sessioni condividono per impostazione predefinita la directory del progetto, quindi modificare gli stessi file contemporaneamente può causare conflitti. Per le attività in parallelo, puoi chiedere agli agenti di usare worktree Git separati e controllare le modifiche prima di unirle.",
   "faqPortabilityQuestion": "Posso tornare a lavorare nella CLI originale?",
-  "faqPortabilityAnswer": "Sì. I file dei progetti restano nelle cartelle originali e ogni agente conserva i propri registri delle conversazioni. Finché la conversazione è ancora disponibile, puoi riprenderla dalla CLI originale. Se usi un account aggiuntivo, indica alla CLI la directory di configurazione di quell’account."
+  "faqPortabilityAnswer": "Sì. I file dei progetti restano nelle cartelle originali e ogni agente conserva i propri registri delle conversazioni. Finché la conversazione è ancora disponibile, puoi riprenderla dalla CLI originale. Se usi un account aggiuntivo, indica alla CLI la directory di configurazione di quell’account.",
+  "developerEyebrow": "Perché ho creato questa app",
+  "developerTitle": "Lascia che l’IA scriva il codice.\nDedica le tue energie al prodotto.",
+  "developerIntro": "Ho creato {appName} perché credo che le persone non abbiano più bisogno di scrivere codice a mano. Chi sviluppa software può tornare a concentrarsi su ciò che conta: il prodotto che vuole consegnare.",
+  "developerShiftTitle": "Oltre l’editor di codice",
+  "developerShiftBody": "Man mano che l’IA produce più codice, rivedere e riscrivere ogni riga a mano non permette più di tenere il passo. Per me, il fatto che l’implementazione avvenga sempre più all’interno di una scatola nera è un cambiamento irreversibile. A mio avviso, l’IA scrive già una logica più completa di quella della maggior parte dei programmatori. Le convenzioni del “buon codice”, pensate per lettori umani, perdono il loro ruolo centrale quando l’IA si occupa sia della scrittura sia della manutenzione.",
+  "developerContextTitle": "Requisiti chiari e contesto sufficiente",
+  "developerContextBody": "Per me, il maggiore ostacolo nello sviluppo con l’IA sono i fraintendimenti: requisiti poco chiari, contesto insufficiente o presupposti non esplicitati. Il lavoro che merita la nostra attenzione consiste nel definire il problema, spiegare i vincoli e dare agli agenti il contesto necessario per lavorare verso lo stesso obiettivo.",
+  "developerQualityTitle": "Valutare la qualità attraverso i test",
+  "developerQualityBody": "Per me, la qualità del software ha un solo criterio decisivo: verificare con test approfonditi che il prodotto soddisfi esigenze reali. Leggere il codice, da solo, non basta a stabilirlo. I test devono coprire flussi reali, casi limite e malfunzionamenti, e i risultati devono guidare l’iterazione successiva.",
+  "developerPurpose": "È per questo che ho creato {appName}: uno spazio di lavoro per coordinare gli agenti, mantenere il contesto e seguire il lavoro fino alla consegna. Passando meno tempo negli editor di codice, chi sviluppa software può dedicarne di più ai requisiti, alle decisioni, ai test e al prodotto stesso.",
+  "developerInvitation": "Se anche tu credi che le persone non abbiano più bisogno di scrivere codice da sole, {appName} è fatto per te.",
+  "developerByline": "{operatorName} · Creatore di {appName}"
 }

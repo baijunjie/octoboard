@@ -35,7 +35,7 @@
   "stepTwoDescription": "Chaque agent travaille dans le répertoire de son projet, avec les instructions, Skills, hooks, outils et permissions de ce projet.",
   "stepThreeTitle": "Suivez le travail. Intervenez où vous voulez.",
   "stepThreeDescription": "Les agents de projet communiquent leur avancement et leurs résultats au coordinateur. Ouvrez la conversation d’un projet pour ajouter du contexte, ajuster la direction ou travailler directement avec son agent.",
-  "localEyebrow": "LOCAL PAR CONCEPTION",
+  "localEyebrow": "Local par conception",
   "localTitle": "Votre espace de travail fonctionne sur votre ordinateur.",
   "localDescription": "{appName} conserve ses données d’application localement et n’envoie ni votre code ni vos conversations à ses propres serveurs. Les agents et outils choisis se connectent à leurs fournisseurs selon votre configuration.",
   "localLink": "Lire la politique de confidentialité",
@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Les sessions qui travaillent sur le même projet peuvent-elles créer des conflits ?",
   "faqParallelAnswer": "Les sessions partagent par défaut le répertoire du projet. Des modifications simultanées des mêmes fichiers peuvent donc créer des conflits. Pour les tâches en parallèle, vous pouvez demander aux agents d’utiliser des worktrees Git distincts et vérifier les changements avant de les fusionner.",
   "faqPortabilityQuestion": "Puis-je reprendre le travail dans la CLI d’origine ?",
-  "faqPortabilityAnswer": "Oui. Les fichiers de vos projets restent dans leurs dossiers d’origine, et chaque agent conserve ses propres historiques de conversation. Tant que la conversation est encore disponible, vous pouvez la reprendre dans la CLI d’origine. Pour un compte supplémentaire, configurez la CLI pour qu’elle utilise le répertoire de configuration de ce compte."
+  "faqPortabilityAnswer": "Oui. Les fichiers de vos projets restent dans leurs dossiers d’origine, et chaque agent conserve ses propres historiques de conversation. Tant que la conversation est encore disponible, vous pouvez la reprendre dans la CLI d’origine. Pour un compte supplémentaire, configurez la CLI pour qu’elle utilise le répertoire de configuration de ce compte.",
+  "developerEyebrow": "Pourquoi j’ai créé cette application",
+  "developerTitle": "Laissez l’IA écrire le code.\nConsacrez votre énergie au produit.",
+  "developerIntro": "J’ai créé {appName} parce que je crois que les humains n’ont plus besoin d’écrire du code à la main. Les développeurs peuvent à nouveau se concentrer sur l’essentiel : le produit qu’ils veulent livrer.",
+  "developerShiftTitle": "Au-delà de l’éditeur de code",
+  "developerShiftBody": "À mesure que l’IA produit davantage de code, relire et réécrire chaque ligne à la main ne permet plus de suivre le rythme. À mes yeux, le passage à une implémentation qui se déroule de plus en plus dans une boîte noire est irréversible. Je considère que l’IA écrit déjà une logique plus complète que la plupart des programmeurs. Les conventions du « bon code », conçues pour des lecteurs humains, perdent leur place centrale à mesure que l’IA prend en charge l’écriture comme la maintenance.",
+  "developerContextTitle": "Des besoins clairs et suffisamment de contexte",
+  "developerContextBody": "Pour moi, le principal obstacle au développement avec l’IA est l’incompréhension : des besoins flous, un contexte incomplet ou des hypothèses qui ne sont pas explicitées. Le travail qui mérite notre attention consiste à définir le problème, expliquer les contraintes et donner aux agents le contexte nécessaire pour avancer vers un même objectif.",
+  "developerQualityTitle": "Évaluer la qualité par les tests",
+  "developerQualityBody": "Pour moi, la qualité d’un logiciel repose sur un seul critère décisif : des tests approfondis montrent-ils que le produit répond à des besoins réels ? La lecture du code ne suffit pas à l’établir. Les tests doivent couvrir les parcours réels, les cas limites et les défaillances, et leurs résultats doivent guider l’itération suivante.",
+  "developerPurpose": "C’est pourquoi j’ai créé {appName} : un espace de travail pour coordonner les agents, préserver le contexte et suivre le travail jusqu’à la livraison. En passant moins de temps dans les éditeurs de code, les développeurs peuvent en consacrer davantage aux besoins, aux décisions, aux tests et au produit lui-même.",
+  "developerInvitation": "Si vous aussi, vous pensez que les humains n’ont plus besoin d’écrire eux-mêmes du code, {appName} est fait pour vous.",
+  "developerByline": "{operatorName} · Créateur de {appName}"
 }

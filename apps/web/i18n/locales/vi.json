@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Các phiên làm việc trên cùng một dự án có thể gây xung đột không?",
   "faqParallelAnswer": "Theo mặc định, các phiên dùng chung thư mục dự án, nên việc sửa cùng một tệp đồng thời có thể gây xung đột. Với các tác vụ song song, bạn có thể yêu cầu agent dùng Git worktree riêng và xem xét các thay đổi trước khi hợp nhất.",
   "faqPortabilityQuestion": "Có thể quay lại làm việc trong CLI ban đầu không?",
-  "faqPortabilityAnswer": "Có. Các tệp dự án vẫn nằm trong thư mục ban đầu, và mỗi agent giữ bản ghi trò chuyện riêng. Bạn có thể tiếp tục qua CLI ban đầu miễn là bản ghi cuộc trò chuyện đó vẫn sử dụng được. Với tài khoản bổ sung, hãy cấu hình CLI để dùng thư mục cấu hình của tài khoản đó."
+  "faqPortabilityAnswer": "Có. Các tệp dự án vẫn nằm trong thư mục ban đầu, và mỗi agent giữ bản ghi trò chuyện riêng. Bạn có thể tiếp tục qua CLI ban đầu miễn là bản ghi cuộc trò chuyện đó vẫn sử dụng được. Với tài khoản bổ sung, hãy cấu hình CLI để dùng thư mục cấu hình của tài khoản đó.",
+  "developerEyebrow": "Lý do tôi tạo ứng dụng này",
+  "developerTitle": "Để AI viết mã.\nDành tâm sức cho sản phẩm.",
+  "developerIntro": "Tôi tạo {appName} vì tin rằng con người không còn cần tự tay viết mã. Nhà phát triển có thể trở lại tập trung vào điều quan trọng: sản phẩm họ muốn hoàn thiện và bàn giao.",
+  "developerShiftTitle": "Bước ra khỏi trình soạn thảo mã",
+  "developerShiftBody": "Khi AI tạo ra ngày càng nhiều mã, việc tự tay xem xét và viết lại từng dòng không còn theo kịp tốc độ phát triển. Tôi cho rằng việc triển khai ngày càng diễn ra trong một hộp đen là xu hướng không thể đảo ngược. Theo tôi, AI đã viết được logic đầy đủ hơn phần lớn lập trình viên. Khi AI đảm nhiệm cả viết mã lẫn bảo trì, các quy tắc về “mã tốt” vốn được đặt ra để con người dễ đọc đang dần mất đi vai trò trung tâm.",
+  "developerContextTitle": "Yêu cầu rõ ràng và ngữ cảnh đầy đủ",
+  "developerContextBody": "Theo tôi, trở ngại lớn nhất khi phát triển bằng AI là hiểu sai: yêu cầu không rõ, thiếu ngữ cảnh hoặc những giả định chưa được nói ra. Điều đáng tập trung là xác định vấn đề, giải thích các ràng buộc và cung cấp ngữ cảnh cần thiết để các agent cùng hướng tới một mục tiêu.",
+  "developerQualityTitle": "Đánh giá chất lượng qua kiểm thử",
+  "developerQualityBody": "Với tôi, chất lượng phần mềm chỉ có một tiêu chuẩn quyết định: sản phẩm có đáp ứng nhu cầu thực tế khi được kiểm thử kỹ lưỡng hay không. Chỉ đọc mã không thể chứng minh điều đó. Kiểm thử cần bao quát quy trình thực tế, các trường hợp biên và tình huống thất bại; kết quả phải định hướng cho lần cải tiến tiếp theo.",
+  "developerPurpose": "Đó là lý do tôi tạo {appName}: một không gian làm việc để điều phối các agent, tiếp nối ngữ cảnh và theo dõi công việc đến khi bàn giao sản phẩm. Khi dành ít thời gian hơn trong trình soạn thảo mã, nhà phát triển có thể tập trung hơn vào yêu cầu, quyết định, kiểm thử và bản thân sản phẩm.",
+  "developerInvitation": "Nếu bạn cũng tin rằng con người không còn cần tự tay viết mã, {appName} được tạo ra dành cho bạn.",
+  "developerByline": "{operatorName} · Người tạo {appName}"
 }

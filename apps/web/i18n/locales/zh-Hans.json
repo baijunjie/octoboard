@@ -148,5 +148,17 @@
   "faqParallelQuestion": "多个会话同时修改同一项目，会冲突吗？",
   "faqParallelAnswer": "多个会话默认共用项目目录，同时修改同一文件可能冲突。并行开发时，可以让智能体使用独立的 Git worktree，并在合并前审查改动。",
   "faqPortabilityQuestion": "还能回到原来的 CLI 继续工作吗？",
-  "faqPortabilityAnswer": "可以。项目文件仍在原目录，对话记录也由各智能体保存。只要原生对话记录仍可用，就能通过原 CLI 恢复；使用额外账号时，需要沿用该账号的配置目录。"
+  "faqPortabilityAnswer": "可以。项目文件仍在原目录，对话记录也由各智能体保存。只要原生对话记录仍可用，就能通过原 CLI 恢复；使用额外账号时，需要沿用该账号的配置目录。",
+  "developerEyebrow": "开发者初衷",
+  "developerTitle": "把实现交给 AI，\n把精力留给产品。",
+  "developerIntro": "我开发 {appName}，是因为我相信：人类不必再亲手编写代码，开发者的重心应当回到想要交付的产品本身。",
+  "developerShiftTitle": "走出代码编辑器",
+  "developerShiftBody": "随着 AI 生成代码的规模不断扩大，逐行检查、再由人手工修改的方式，已经跟不上开发的速度。在我看来，代码的实现逐渐进入黑盒，是不可逆的趋势。AI 已经能够写出比大多数程序员更完备的逻辑；当编写和维护都由 AI 承担，为人类阅读而制定的“好代码”规范，也不再处于核心位置。",
+  "developerContextTitle": "把需求说清楚，把上下文补完整",
+  "developerContextBody": "我认为，AI 开发最大的障碍是理解偏差：需求不清晰、上下文不足，或关键前提没有说明。更值得投入精力的工作，是定义问题、讲清约束，让智能体获得足够的信息，朝着同一个目标协作。",
+  "developerQualityTitle": "用充分的测试检验质量",
+  "developerQualityBody": "对我而言，判断软件质量的唯一标准，是产品能否经受充分测试，满足真实需求。单靠阅读代码无法得出这个结论。测试需要覆盖真实流程、边界条件和失败场景，再用结果推动下一轮改进。",
+  "developerPurpose": "这就是我开发 {appName} 的初衷：提供一个协调智能体、延续上下文、跟进产品交付的工作台。让开发者逐渐从代码编辑器中解放出来，把更多精力放在需求、决策、测试和产品本身。",
+  "developerInvitation": "如果你也认同，人类不必再亲手写代码，那么 {appName} 就是为你而做的。",
+  "developerByline": "{operatorName} · {appName} 开发者"
 }

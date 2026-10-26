@@ -35,7 +35,7 @@
   "stepTwoDescription": "Cada agente trabalha no diretório do próprio projeto, com as instruções, Skills, hooks, ferramentas e permissões desse projeto.",
   "stepThreeTitle": "Acompanhe o trabalho. Participe onde quiser.",
   "stepThreeDescription": "Os agentes de projeto enviam progresso e resultados ao coordenador. Abra a conversa de qualquer projeto para adicionar contexto, ajustar a direção ou trabalhar diretamente com o agente dele.",
-  "localEyebrow": "LOCAL DESDE A CONCEPÇÃO",
+  "localEyebrow": "Local desde a concepção",
   "localTitle": "Seu espaço de trabalho funciona no seu computador.",
   "localDescription": "O {appName} armazena os dados do aplicativo localmente e não envia seu código nem suas conversas para servidores operados pelo projeto. Os agentes e as ferramentas que você escolhe se conectam aos respectivos provedores conforme sua configuração.",
   "localLink": "Ler a política de privacidade",
@@ -148,5 +148,17 @@
   "faqParallelQuestion": "Sessões que trabalham no mesmo projeto podem causar conflitos?",
   "faqParallelAnswer": "As sessões compartilham o diretório do projeto por padrão, então alterações simultâneas nos mesmos arquivos podem causar conflitos. Para tarefas em paralelo, você pode pedir aos agentes que usem worktrees Git separados e revisar as alterações antes de mesclá-las.",
   "faqPortabilityQuestion": "Posso voltar a trabalhar na CLI original?",
-  "faqPortabilityAnswer": "Sim. Os arquivos dos seus projetos continuam nas pastas originais, e cada agente mantém os próprios registros de conversa. Enquanto a conversa estiver disponível, você pode retomá-la pela CLI original. Se usar uma conta adicional, configure a CLI para usar o diretório de configuração dessa conta."
+  "faqPortabilityAnswer": "Sim. Os arquivos dos seus projetos continuam nas pastas originais, e cada agente mantém os próprios registros de conversa. Enquanto a conversa estiver disponível, você pode retomá-la pela CLI original. Se usar uma conta adicional, configure a CLI para usar o diretório de configuração dessa conta.",
+  "developerEyebrow": "Por que criei este aplicativo",
+  "developerTitle": "Deixe a IA escrever o código.\nDedique sua energia ao produto.",
+  "developerIntro": "Criei o {appName} porque acredito que as pessoas não precisam mais escrever código à mão. Quem desenvolve software pode voltar a se concentrar no que importa: o produto que quer entregar.",
+  "developerShiftTitle": "Além do editor de código",
+  "developerShiftBody": "À medida que a IA produz mais código, revisar e reescrever cada linha à mão já não permite acompanhar o ritmo. Vejo como irreversível a tendência de a implementação acontecer cada vez mais dentro de uma caixa-preta. Na minha visão, a IA já escreve uma lógica mais completa que a da maioria dos programadores. As convenções de “bom código”, pensadas para leitores humanos, perdem seu papel central à medida que a IA assume tanto a escrita quanto a manutenção.",
+  "developerContextTitle": "Requisitos claros e contexto suficiente",
+  "developerContextBody": "Para mim, o maior obstáculo no desenvolvimento com IA são os mal-entendidos: requisitos pouco claros, contexto insuficiente ou pressupostos que não foram explicitados. O trabalho que merece nossa atenção é definir o problema, explicar as restrições e dar aos agentes o contexto necessário para trabalhar em direção ao mesmo objetivo.",
+  "developerQualityTitle": "Avaliar a qualidade por meio de testes",
+  "developerQualityBody": "Para mim, a qualidade do software tem um único critério decisivo: verificar com testes completos se o produto atende a necessidades reais. Só ler o código não basta para chegar a essa conclusão. Os testes precisam cobrir fluxos reais, casos extremos e falhas, e seus resultados devem orientar a próxima iteração.",
+  "developerPurpose": "Foi por isso que criei o {appName}: um espaço de trabalho para coordenar agentes, preservar o contexto e acompanhar o trabalho até a entrega. Ao passar menos tempo nos editores de código, quem desenvolve software pode dedicar mais tempo aos requisitos, às decisões, aos testes e ao próprio produto.",
+  "developerInvitation": "Se você também acredita que as pessoas não precisam mais escrever código por conta própria, o {appName} foi feito para você.",
+  "developerByline": "{operatorName} · Criador do {appName}"
 }

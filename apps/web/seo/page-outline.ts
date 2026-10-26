@@ -9,6 +9,8 @@ export const homeFeatures = [
 
 export const homeSteps = ["One", "Two", "Three"] as const;
 
+export const developerSections = ["Shift", "Context", "Quality"] as const;
+
 export const homeQuestions = [
   "Setup",
   "Data",
