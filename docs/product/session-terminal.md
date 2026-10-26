@@ -316,6 +316,10 @@ described under "Web addresses" and "File paths" below; the rest holds for both:
 
 A file path in the output is a link only once the machine the daemon runs on has confirmed it names a file or folder
 the session may open. Until then — for a moment after it appears — and whenever it does not, it is plain text.
+A path the pointer already rests on when it is confirmed becomes a link under the pointer — underlined, and opened by
+a click — without the pointer having to move; when the pointer is outside the terminal or a mouse button is held at
+that moment, it does so at the pointer's next move over the terminal or the button's release there. In a terminal one
+row high, the pointer has to move first.
 
 - **What is taken for a path**:
   - an absolute path, `/…`;

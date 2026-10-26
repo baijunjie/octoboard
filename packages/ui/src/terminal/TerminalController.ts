@@ -8,6 +8,7 @@ import { isSecondaryPress } from "../useWindowShortcut";
 import { TerminalLinkColors } from "./linkColors";
 import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./pathLinks";
+import { watchPointerForLinks } from "./pointerLinks";
 import {
   brokenUrlLinkProvider,
   type HoveredTerminalLink,
@@ -198,6 +199,8 @@ export class TerminalController {
   private hoveredViewportY = 0;
   private readonly linkColors: TerminalLinkColors;
   private readonly pathLinks?: PathLinkCache;
+  /** Has xterm ask the link providers again for the cell under a resting pointer; set by `mount`. */
+  private askLinksUnderPointer?: () => void;
   /** False until a frame has passed since `open()`; see `mount`. */
   private touchable = false;
   private openFrame?: number;
@@ -294,7 +297,11 @@ export class TerminalController {
     this.term.loadAddon(new WebLinksAddon(onLinkClick, { urlRegex: TERMINAL_URL_REGEX }));
     const paths =
       handlers.pathLinks &&
-      installPathLinks(this.term, handlers.pathLinks, () => this.term.hasSelection(), () => this.linkColors.refresh());
+      installPathLinks(this.term, handlers.pathLinks, () => this.term.hasSelection(), () => {
+        this.linkColors.refresh();
+        // A path the pointer already rests on becomes a link without the pointer having to move.
+        this.askLinksUnderPointer?.();
+      });
     this.pathLinks = paths?.cache;
     // The tooltip is placed against the viewport, so a scroll under the pointer leaves it behind.
     // xterm reports every line feed that scrolls the buffer, even while the view stays put under a
@@ -426,6 +433,7 @@ export class TerminalController {
       },
       { signal },
     );
+    if (screen) this.askLinksUnderPointer = watchPointerForLinks(this.term, screen, signal);
     // Observed: fitting or clearing the terminal in the same task as `open()` throws from inside
     // xterm's own scheduled work, where no caller's `try` can catch it — and an uncaught throw
     // there takes the whole window down with it. Deferring by a frame avoids it. This is anchored

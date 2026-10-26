@@ -366,7 +366,8 @@ function pathSegmentsIn(
 
 /**
  * The link provider for paths the daemon found. A path it has no answer for yet is no link, but
- * is asked about, so the pointer meeting it again a moment later finds one.
+ * is asked about; xterm keeps a row's replies while the pointer stays on the row, so the answer has
+ * to make xterm ask again (`onChange` of `installPathLinks`).
  */
 function pathLinkProvider(
   term: Terminal,
@@ -396,7 +397,8 @@ function pathLinkProvider(
  * Makes the file paths in `term`'s output links once the daemon says they are files or folders:
  * a link provider for the pointer, registered after the address providers (an address is never a
  * candidate, so the two never meet), and the cells to colour, for `TerminalLinkColors`. `onChange`
- * runs when an answer changes what is a link, for the colours to be drawn again.
+ * runs when an answer changes what is a link, for the colours to be drawn again and for xterm to ask
+ * again about the link under a pointer that rests on one.
  */
 export function installPathLinks(
   term: Terminal,

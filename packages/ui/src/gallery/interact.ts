@@ -540,11 +540,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
   /** Puts the pointer on the terminal's text `text` and waits for xterm to give its link pointer
    * cursor, which it does whichever renderer draws the underline. A link may not exist yet: a file
    * path is one only once the daemon has answered for it, a moment after the text is drawn, and a
-   * busy page is slow to get there. xterm asks the link providers only as the pointer enters a row,
-   * and answers a move within that row from what the entry found, so a pointer left on the text
-   * never sees the link appear: until the cursor shows, the pointer leaves the row and comes back,
-   * which asks again. The text is found again each time, since a busy page can redraw it elsewhere
-   * (the terminal redraws at its settled width). */
+   * busy page is slow to get there. The app has xterm ask again about the cell under a resting pointer
+   * once the answer arrives, so a pointer left on the path sees the link appear; the wait is on that
+   * cursor, not on a timer. Until it shows, the pointer also leaves the row and comes back: xterm keeps
+   * a row's replies for as long as the pointer stays on it, and the app asks again only when an answer
+   * changes what is a link, so text drawn or redrawn onto the row the pointer already rests on, with its
+   * answer already known (or a URL, which never gets an answer), is asked about only this way. The text
+   * is found again each time, since a busy page can redraw it elsewhere (the terminal redraws at its
+   * settled width). */
   const pointOnTerminalLink = async (text: string) => {
     for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
       const at = await pointTerminalText(text);
