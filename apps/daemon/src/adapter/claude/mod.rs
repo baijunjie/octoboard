@@ -21,7 +21,8 @@
 //! resume, and none is passed for an account that follows its own configuration. Approve everything
 //! also adds `skipDangerousModePermissionPrompt` to the `--settings` JSON: Octoboard asks the user
 //! for that consent in Settings, and the flag-borne key keeps Claude Code's own blocking warning
-//! from appearing without writing anything into the account's configuration files.
+//! from appearing without writing anything into the account's configuration files. Whatever the
+//! mode, the `--settings` JSON also allows the injected MCP server's own tools, and nothing else.
 //!
 //! A console can pin its sessions to another Claude Code configuration directory
 //! (`CLAUDE_CONFIG_DIR`). That directory holds the conversation transcripts as well as the global
@@ -154,7 +155,15 @@ impl ClaudeAdapter {
             }
             hooks.insert((*event).to_string(), json!([group]));
         }
-        let mut settings = json!({ "hooks": hooks });
+        // Octoboard's own tools are not a decision to put to the user: each is something the
+        // session was told to do, and a prompt for every one would make orchestration unusable.
+        // A rule naming the server alone allows every tool of that server and no other; injected
+        // rules merge with the user's and the project's, and a `deny` or `ask` of theirs still
+        // outranks this `allow`, so nothing else the session may need approval for is widened.
+        let mut settings = json!({
+            "hooks": hooks,
+            "permissions": { "allow": [format!("mcp__{}", mcp::SERVER_KEY)] },
+        });
         if spec.approval_mode == Some(ClaudeApprovalMode::Bypass) {
             settings["skipDangerousModePermissionPrompt"] = json!(true);
         }
@@ -538,7 +547,7 @@ mod tests {
 
     /// The flag follows the choice on a fresh launch and a resume alike; following the account
     /// configuration passes none, and only Approve everything carries the consent key in
-    /// `--settings`.
+    /// `--settings`. Octoboard's own tools are allowed under every choice, and nothing else is.
     #[test]
     fn the_approval_mode_is_passed_on_fresh_launches_and_resumes() {
         let mut fixture = spec_fixture();
@@ -593,6 +602,11 @@ mod tests {
                     "{mode:?} {resume:?}"
                 );
                 assert!(settings["hooks"].is_object());
+                assert_eq!(
+                    settings["permissions"],
+                    serde_json::json!({ "allow": ["mcp__octoboard"] }),
+                    "{mode:?} {resume:?}"
+                );
             }
         }
     }

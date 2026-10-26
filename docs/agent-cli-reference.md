@@ -214,6 +214,19 @@ handler that reads one.
 Precedence among permission rules is by rule *kind* rather than by source — `deny` > `ask` > `allow` — so an injected
 `allow` can never re-open something the project denies.
 
+**An MCP server's tools are pre-approved by a rule naming the server alone** (Claude Code 2.1.310, real PTY, stub
+inference and stub stdio servers whose unannotated tools logged every `tools/call`). `"permissions":{"allow":
+["mcp__<key>"]}` in the `--settings` JSON runs every tool of the server registered under `<key>` with no prompt, in
+`default` mode, in `auto` mode (where it also keeps those calls away from the auto-mode classifier, which otherwise
+judges them) and on `--resume`; without the rule the same call prompts in `default` mode. It is an exact match on the
+key, not a prefix: servers keyed `<key>2` and `<key>_x` still prompted, as did Bash. Allow rules in the user's and the
+project's settings files still applied alongside it, and their `deny` or `ask` for one of the server's tools still won —
+a `deny` removes the tool from the model's view entirely (ToolSearch no longer finds it). `mcp__<key>__*` is accepted
+and behaves the same, and is the form Claude Code's own settings warning suggests; neither form raises a warning. MCP
+tools are deferred behind ToolSearch in this build, so a scripted stub has to call `ToolSearch` (`select:<tool>`)
+before the tool itself; ToolSearch never prompts. A fresh config directory with no `defaultMode` started in `auto` mode
+on 2.1.310 too.
+
 **`--mcp-config` takes a list of values, not one.** Every non-flag argument after it is read as a
 further config path, resolved against the cwd: `claude --mcp-config '<json>' mcp list` fails with
 `MCP config file not found: <cwd>/mcp`. Anything positional — the task prompt in particular — has

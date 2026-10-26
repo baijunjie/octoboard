@@ -388,7 +388,9 @@ The choice is saved when selected; the choices are unavailable while saving, and
 It applies when a session of any account of the agent next starts or resumes, including an account switch, and a
 legacy pinned directory with no account reference included; a running process keeps what it was started with. An
 explicit choice overrides the agent's own setting for that launch without writing its configuration files, and for
-Codex without changing its sandbox or approval policy.
+Codex without changing its sandbox or approval policy. Whatever the choice, Follow account configuration included,
+Octoboard's own tools run without asking in both agents, while every other tool stays under the choice (see "Per-agent
+specifics a user will notice" in `docs/product/launching-agents.md`).
 
 **Approve everything** is saved only once the user accepts a destructive confirmation that names the agent and warns
 that every tool will run without asking in every account of that agent, commands that change or delete files

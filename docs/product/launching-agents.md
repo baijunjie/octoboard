@@ -83,7 +83,8 @@ besides the variables a project session's agent is given for its git (see "The l
 - **Status hooks** — the events the session statuses in `docs/product/sessions.md` are derived from.
 - **Octoboard's own MCP server** — the tools described in `docs/product/hub-orchestration.md`. It is
   a child process of the agent, started fresh per session, and each session's tools are reachable
-  only by that session. The agent's own and the project's own MCP servers keep working alongside it.
+  only by that session. The agent's own and the project's own MCP servers keep working alongside it. Claude Code and
+  Codex are told to run its tools without asking (see "Per-agent specifics a user will notice" below).
 - **A role description** — whether this session is a console session or a project session, and the reporting conventions
   that go with that. A console session's is short: it is the console session, it decomposes requests on its console's
   projects, dispatches them, follows up and summarizes, does itself any work that touches no project, and does not
@@ -413,6 +414,18 @@ account's `settings.json` decides. Under **Approve everything**, every launch al
 mode has been accepted, so the blocking screen it would otherwise raise on a config directory's first use of the mode
 never appears; this holds for that launch alone, and nothing is written into the account's configuration files. The
 choices are in "Approval modes" in `docs/product/agent-accounts.md`.
+
+Octoboard's own tools are pre-approved for the session on every launch, a resume included, under every approval mode,
+following the account's configuration included, so a session's calls to them, a console session's orchestration
+included, raise no Claude Code permission prompt. The launch carries one `allow` permission rule naming Octoboard's MCP
+server, `mcp__octoboard`; like the acceptance of the warning above, it holds for that launch alone and nothing is
+written into any settings file. The rule covers that one server's tools alone: every other MCP server, whatever its
+name, Bash, file edits and every other tool keep the approval mode in effect. It adds to the user's and the project's
+own `allow` rules rather than replacing them, and a `deny` or `ask` rule of the user's or the project's that names one
+of Octoboard's tools still wins over it — a `deny` takes that tool away from the session altogether. Under
+**Automatic**, Octoboard's tools are therefore not put to Claude Code's auto-mode classifier either. What a tool itself
+refuses, and the requests Octoboard puts to the user before acting on a session's behalf (see
+`docs/product/session-requests.md`), are unaffected.
 
 **Codex.** Codex cannot be given a session id in advance, and its conversation is created lazily on the first prompt
 submission — so a session opened without a task has no agent-side id until the user types something, unless it was
