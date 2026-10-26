@@ -121,6 +121,9 @@ const AGENT_TERMINAL = '[data-region="terminal"]';
 
 const POLL_MS = 50;
 const TIMEOUT_MS = 5000;
+/** For a dialog that opens a file in the viewer, whose code is loaded the first time one is shown (a lazy
+ * chunk the gallery's dev server serves unbundled): on a heavily loaded machine that takes seconds. */
+const VIEWER_LOAD_TIMEOUT_MS = 30_000;
 
 /** The app's global `--tooltip-delay`: a tooltip opens this long after the pointer comes to rest
  * on its trigger. */
@@ -460,8 +463,8 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
 
   /** Polls for what `look` finds, up to the timeout, so a step can name something a press or a
    * render has not yet brought into the page. */
-  const waitFor = async <T>(look: () => T | undefined, missing: string): Promise<T> => {
-    for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
+  const waitFor = async <T>(look: () => T | undefined, missing: string, timeout = TIMEOUT_MS): Promise<T> => {
+    for (let waited = 0; waited <= timeout; waited += POLL_MS) {
       const found = look();
       if (found !== undefined) return found;
       await wait(POLL_MS);
@@ -502,8 +505,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
   };
   const find = (matcher: Matcher): HTMLElement | undefined => findAll(matcher)[0];
 
-  /** Puts the pointer on the terminal's text `text`, waiting for a row that holds it. */
-  const pointTerminalText = async (text: string): Promise<{ screen: Element; clientX: number; clientY: number }> => {
+  /** Puts the pointer on the terminal's text `text`, waiting for a row that holds it. `away` is a point on
+   * another row, for a pointer that must leave this one: the nearest row that holds no text, else a neighbour. */
+  const pointTerminalText = async (
+    text: string,
+  ): Promise<{ screen: Element; clientX: number; clientY: number; away: { clientX: number; clientY: number } }> => {
     // The text comes from the terminal's buffer, which says the same under the DOM renderer and
     // under WebGL (whose `.xterm-rows` is empty), and the pointer goes to a cell computed from the
     // screen's box. xterm finds the link under the pointer from the coordinates of a `mousemove`
@@ -523,20 +529,28 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     const cellWidth = box.width / found.view.cols();
     const cellHeight = box.height / found.view.rows();
     const at = { clientX: box.x + (found.col + text.length / 2) * cellWidth, clientY: box.y + (found.y + 0.5) * cellHeight };
+    const rows = Array.from({ length: found.view.rows() }, (_, y) => y).filter((y) => y !== found.y);
+    const blank = rows.filter((y) => found.view.row(y).trim() === "").sort((a, b) => Math.abs(a - found.y) - Math.abs(b - found.y))[0];
+    const awayRow = blank ?? (found.y > 0 ? found.y - 1 : found.y + 1);
+    const away = { clientX: at.clientX, clientY: box.y + (awayRow + 0.5) * cellHeight };
     screen.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, ...at }));
-    return { screen, ...at };
+    return { screen, ...at, away };
   };
 
   /** Puts the pointer on the terminal's text `text` and waits for xterm to give its link pointer
-   * cursor, which it does whichever renderer draws the underline. The text is found and the pointer
-   * moved again while it waits: a link is found from the coordinates of a `mousemove` alone, and a
-   * busy page can redraw the text elsewhere (the terminal redraws at its settled width), or finish
-   * finding the link, after the first. */
+   * cursor, which it does whichever renderer draws the underline. A link may not exist yet: a file
+   * path is one only once the daemon has answered for it, a moment after the text is drawn, and a
+   * busy page is slow to get there. xterm asks the link providers only as the pointer enters a row,
+   * and answers a move within that row from what the entry found, so a pointer left on the text
+   * never sees the link appear: until the cursor shows, the pointer leaves the row and comes back,
+   * which asks again. The text is found again each time, since a busy page can redraw it elsewhere
+   * (the terminal redraws at its settled width). */
   const pointOnTerminalLink = async (text: string) => {
     for (let waited = 0; waited <= TIMEOUT_MS; waited += POLL_MS) {
       const at = await pointTerminalText(text);
       await wait(POLL_MS);
       if (doc.querySelector(`${AGENT_TERMINAL} .xterm-cursor-pointer`)) return at;
+      at.screen.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, ...at.away }));
     }
     throw new Error(`Hovering ${text} in the terminal did not give xterm its link pointer cursor: it is not a link`);
   };
@@ -939,7 +953,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       for (const type of ["mousedown", "mouseup"]) {
         screen.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY }));
       }
-      await waitFor(() => doc.querySelector("[role=dialog]") ?? undefined, `Clicking ${text} in the terminal opened no dialog`);
+      await waitFor(() => doc.querySelector("[role=dialog]") ?? undefined, `Clicking ${text} in the terminal opened no dialog`, VIEWER_LOAD_TIMEOUT_MS);
       await wait(600);
     },
     async hoverChangeStatus(row, status) {
