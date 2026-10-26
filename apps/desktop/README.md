@@ -45,7 +45,7 @@ checked with `cargo`. `src-tauri/` is a member of the root Cargo workspace along
 the `.app`:
 
 1. Put `APPLE_SIGNING_IDENTITY` (a valid signing certificate in the keychain) in the gitignored repo-root `.env.secret`.
-2. Copy [`.env.install.example`](../../.env.install.example) to `.env.install.local` and set `OCTOBOARD_INSTALL_DIR`
+2. Copy [`.env.local.example`](../../.env.local.example) to `.env.local` and set `OCTOBOARD_INSTALL_DIR`
    to an absolute installation directory. Environment variables take precedence over file values.
 3. Quit any running Octoboard, then run `pnpm install:macos` (it takes no arguments).
 

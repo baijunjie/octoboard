@@ -1,8 +1,7 @@
-// What a branch changed, for the commands that decide what to run from it (`pnpm verify`, the gallery
-// sweep's choice of languages and whether it loads anything). The changes are those since the
-// branch's current merge base with its recorded target branch (`branch.<name>.targetBranch`): the
-// target branch is taken as already checked, so what a rebase or merge brought in from it is not
-// counted, while the branch's own changes, conflict resolutions included, are.
+// What a branch changed, for the command that decides what to run from it (`pnpm verify`). The changes
+// are those since the branch's current merge base with its recorded target branch
+// (`branch.<name>.targetBranch`): the target branch is taken as already checked, so what a rebase or
+// merge brought in from it is not counted, while the branch's own changes, conflict resolutions included, are.
 //
 // `git` is a function taking git's arguments and returning its trimmed output, or null when git
 // fails; each caller owns how it runs git.

@@ -2,17 +2,19 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
-import { loadEnv } from "../../../scripts/env.mjs";
+import { loadEnv, localValue } from "../../../scripts/env.mjs";
 import { appDir, assertLayeredIcon, bundleDir, findBundle, tauriBuild, withoutUpdaterArtifacts } from "./bundle.mjs";
 
 if (process.platform !== "darwin") throw new Error("install:macos requires macOS.");
-if (process.argv.length > 2) throw new Error("install:macos takes no arguments; configure .env.install.local.");
-loadEnv(".env.secret", ".env.install.local");
+if (process.argv.length > 2) throw new Error("install:macos takes no arguments; configure .env.local.");
+loadEnv(".env.secret");
 
-const installDir = process.env.OCTOBOARD_INSTALL_DIR;
+// Only the installation directory is taken from `.env.local`: the dev values it may also hold (`VITE_*`)
+// must not reach this release build's environment.
+const installDir = localValue("OCTOBOARD_INSTALL_DIR");
 const identity = process.env.APPLE_SIGNING_IDENTITY;
 if (!installDir || !path.isAbsolute(installDir)) {
-  throw new Error("Set OCTOBOARD_INSTALL_DIR to an absolute directory in .env.install.local.");
+  throw new Error("Set OCTOBOARD_INSTALL_DIR to an absolute directory in .env.local.");
 }
 if (!identity || identity === "-") {
   throw new Error("Set APPLE_SIGNING_IDENTITY to a keychain certificate identity in .env.secret.");

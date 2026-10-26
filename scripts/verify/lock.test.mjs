@@ -29,12 +29,12 @@ function wait(label, root, slots, order, pollMs = 20) {
 }
 
 test("the slot count follows cores and memory, between one and two", () => {
-  assert.equal(slotCount({ cores: 10, memory: 16 * GIB, env: {} }), 1);
-  assert.equal(slotCount({ cores: 4, memory: 8 * GIB, env: {} }), 1);
-  assert.equal(slotCount({ cores: 16, memory: 32 * GIB, env: {} }), 2);
-  assert.equal(slotCount({ cores: 64, memory: 256 * GIB, env: {} }), 2);
-  assert.equal(slotCount({ cores: 16, memory: 16 * GIB, env: {} }), 1);
-  assert.equal(slotCount({ cores: 10, memory: 16 * GIB, env: { OCTOBOARD_VERIFY_SLOTS: "3" } }), 3);
+  assert.equal(slotCount({ cores: 10, memory: 16 * GIB, configured: "" }), 1);
+  assert.equal(slotCount({ cores: 4, memory: 8 * GIB, configured: "" }), 1);
+  assert.equal(slotCount({ cores: 16, memory: 32 * GIB, configured: "" }), 2);
+  assert.equal(slotCount({ cores: 64, memory: 256 * GIB, configured: "" }), 2);
+  assert.equal(slotCount({ cores: 16, memory: 16 * GIB, configured: "" }), 1);
+  assert.equal(slotCount({ cores: 10, memory: 16 * GIB, configured: "3" }), 3);
 });
 
 test("a second claim waits until the first is released", async () => {

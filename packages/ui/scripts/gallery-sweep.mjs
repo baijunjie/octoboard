@@ -13,17 +13,10 @@
 // chromium`, run from this package (the workspace root resolves another `playwright` or none), fetches
 // the one this version expects, and `--chromium` names any other already on the machine.
 //
-// Without `--lang` the languages follow what the branch changed (`gallery-languages.mjs`), and a sweep of
-// the whole gallery loads nothing when what the branch changed cannot make a page fail (`gallery-impact.mjs`).
-//
-// Two things keep a sweep from costing more than it must, both shared with `pnpm verify`
-// (`scripts/verify/`). The page loads take a heavy-step slot of the machine-wide lock, so that sweeps
-// in several worktrees queue instead of together loading the machine. And a page that came out clean
-// is recorded against the content the sweep depends on (`STAMP_INPUTS`), so a later sweep of the same
-// content skips it; `--fresh` ignores the records. A gallery served by `--url` is another checkout's
-// content, which this one's key does not describe, so nothing is read or recorded then.
+// It loads the scenarios it is given, in English unless `--lang` names more, every time. The page loads
+// take a heavy-step slot of the machine-wide lock `pnpm verify` also takes (`scripts/verify/lock.mjs`),
+// so that sweeps in several worktrees queue instead of together loading the machine.
 
-import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -31,47 +24,33 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { acquireSlot, describeWait } from "../../../scripts/verify/lock.mjs";
-import { contentKey, readStamp, recordPasses, stampDirectory, stepKey } from "../../../scripts/verify/stamp.mjs";
-import { idsAt, workingTree } from "../../../scripts/verify/tree.mjs";
-import { branchChanges, judgeFromChanges, STAMP_FORCED, STAMP_INPUTS } from "./gallery-impact.mjs";
-import { chooseLanguages } from "./gallery-languages.mjs";
 
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Every language the app has a catalog for. `--lang all` sweeps all of them, and so does a change that can
- * reach what differs between languages, a change that cannot be judged, and `--url` without `--lang`. */
+/** What a sweep without `--lang` loads. A translation is checked where it is written (each catalog is typed
+ * to hold every message and plural category, `src/i18n/catalog.test.ts` checks the placeholders, and
+ * `src/gallery/fixtures/fixtures.test.ts` checks that no step names a control in English copy or with
+ * the English separator), so the gallery verifies English unless asked for more. */
+const DEFAULT_LANGUAGES = ["en"];
+
+/** Every language the app has a catalog for, which `--lang all` sweeps. */
 const LANGUAGES_WITH_CATALOGS = ["en", "zh-Hans"];
 
 const USAGE = `Usage: pnpm gallery:sweep [options] [scenario ...]
 
 Loads gallery scenarios in a headless browser, runs their steps and fails on any gallery failure banner.
-With no scenario given, every scenario is swept, unless nothing the branch changed since its merge base
-with its target branch can make a page fail: only paths the gallery does not load, comments or
-formatting, or in CSS only properties that change how an element looks (colours, backgrounds, shadows,
-radii, font families and weights, and custom properties holding a colour). Then it says so and exits 0
-without loading a page. A change that cannot be judged sweeps, and so do named scenarios, --group, a dark
-theme, --url (another checkout's gallery) and --force; --list lists the scenarios whatever changed.
+With no scenario given, every scenario is swept, in English and the light theme unless --lang and --theme
+say otherwise.
 
   scenario              An id, or a pattern with * as a wildcard ("git-*"). Repeatable.
   --group <title>       Only the scenarios of the group whose title contains this text (case-insensitive).
-  --force               Sweep even when nothing the branch changed can make a page fail.
   --lang <list>         Comma-separated languages, each one the app offers, or "all" for every language
-                        with a catalog (${LANGUAGES_WITH_CATALOGS.join(", ")}). Without it the languages follow what the branch
-                        changed since its merge base with its target branch: English alone, unless a
-                        changed path can reach what differs between languages (the i18n code, the gallery
-                        machinery, the build or configuration) or the change cannot be judged (no recorded
-                        target branch, as on the target branch itself; nothing differing from the merge
-                        base; git cannot say), when every language is swept; with --url, every language.
-                        The line before the sweep says which and why.
+                        with a catalog (${LANGUAGES_WITH_CATALOGS.join(", ")}). Default: ${DEFAULT_LANGUAGES.join(", ")}.
   --theme <name>        light (default), dark or both. A scenario's steps do not depend on the theme, so
-                        light settles a step that no longer runs; dark is for a change to colours.
+                        light settles a step that no longer runs; dark when asked for.
   --jobs <n>            Pages loaded at once (default: ${defaultJobs()}).
   --url <origin>        Use the gallery served at this origin (a running \`pnpm gallery\`) instead of
                         starting a dev server of this checkout.
-  --fresh               Load every selected page, even one that already came out clean on this content
-                        (it does not override a change judged unable to fail a page; --force does). The
-                        records are kept in the git directory shared by all worktrees, and are not read
-                        or written with --url, whose gallery is another checkout's.
   --list                Print the scenario ids that would be swept and exit.
   --playwright <dir>    A Playwright other than this package's own: a directory holding
                         node_modules/playwright (or playwright-core), or the package itself. Also
@@ -127,8 +106,6 @@ function parse() {
         theme: { type: "string" },
         jobs: { type: "string" },
         url: { type: "string" },
-        fresh: { type: "boolean" },
-        force: { type: "boolean" },
         list: { type: "boolean" },
         playwright: { type: "string" },
         chromium: { type: "string" },
@@ -143,9 +120,8 @@ function parse() {
     console.log(USAGE);
     process.exit(0);
   }
-  // Undefined without --lang: `main` chooses them from the branch's changes.
-  const languages = values.lang === undefined ? undefined : values.lang.trim() === "all" ? LANGUAGES_WITH_CATALOGS : [...new Set(values.lang.split(",").map((s) => s.trim()).filter(Boolean))];
-  if (languages?.length === 0) throw new SetupError("--lang names no language");
+  const languages = values.lang === undefined ? DEFAULT_LANGUAGES : values.lang.trim() === "all" ? LANGUAGES_WITH_CATALOGS : [...new Set(values.lang.split(",").map((s) => s.trim()).filter(Boolean))];
+  if (languages.length === 0) throw new SetupError("--lang names no language");
   const theme = values.theme ?? "light";
   if (!["light", "dark", "both"].includes(theme)) throw new SetupError(`--theme is light, dark or both, not "${theme}"`);
   const jobs = values.jobs === undefined ? defaultJobs() : Number(values.jobs);
@@ -157,8 +133,6 @@ function parse() {
     themes: theme === "both" ? ["light", "dark"] : [theme],
     jobs,
     url: values.url?.replace(/\/+$/, ""),
-    fresh: values.fresh ?? false,
-    force: values.force ?? false,
     list: values.list ?? false,
     playwright: values.playwright ?? process.env.OCTOBOARD_PLAYWRIGHT,
     chromium: values.chromium ?? process.env.OCTOBOARD_CHROMIUM,
@@ -314,66 +288,6 @@ async function startServer() {
   return { origin: `http://localhost:${address.port}`, close: () => server.close() };
 }
 
-// ---- records of clean pages ----------------------------------------------------------------------
-
-/** The env files the dev server reads: `vite.config.ts` loads the root's `.env` and `.env.local`, and Vite its
- * own package's. Not `.env.secret`, which holds credentials nothing here reads. */
-const ENV_FILES = [".env", ".env.local", ...[".env", ".env.local", ".env.development", ".env.development.local"].map((name) => `packages/ui/${name}`)];
-
-const git = (cwd, ...args) => {
-  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : undefined;
-};
-
-/** `OCTOBOARD_SWEEP_STATE_DIR` moves the slots and the records out of the machine-wide places: the
- * script's own tests use it, so that they neither wait on a slot held by the test run that started them
- * nor leave records behind. */
-const stateDir = process.env.OCTOBOARD_SWEEP_STATE_DIR;
-
-/** The content the sweep depends on as it is now, or undefined when git cannot say, which sweeps without
- * records. Taken before the dev server starts and again when the run ends, so that an edit made during the
- * run is seen (the server reads a module when it is first requested). The env files Vite reads set the
- * daemon port the app is built with, so they count, the git-ignored ones too. */
-function snapshotContent() {
-  const root = git(packageDir, "rev-parse", "--show-toplevel");
-  const common = root && git(root, "rev-parse", "--git-common-dir");
-  const forced = [...STAMP_FORCED, ...ENV_FILES];
-  const inputs = [...STAMP_INPUTS, ...forced];
-  const tree = common && workingTree(root, { paths: inputs, forced });
-  if (!tree) {
-    console.error("Could not take the content the sweep depends on, so no records of clean pages are read or written");
-    return undefined;
-  }
-  return { root, common, ids: idsAt(root, tree, inputs).join("\n") };
-}
-
-/** Reads the records of clean pages for `content`, and records new ones against it. */
-function openRecords(content, browserVersion) {
-  // What is not in the files: the versions the pages ran on and the environment Vite reads.
-  const toolchain = [
-    "gallery sweep",
-    `node ${process.version}`,
-    `browser ${browserVersion}`,
-    ...Object.keys(process.env).filter((name) => name === "OCTOBOARD_DAEMON_PORT" || name.startsWith("VITE_")).sort().map((name) => `${name}=${process.env[name]}`),
-  ];
-  const key = contentKey(content.ids, toolchain);
-  const dir = stateDir ? path.join(stateDir, "stamps") : stampDirectory(content.root, content.common);
-  const step = ({ scenario, language, theme }) => ({ cmd: [scenario.id, language, theme], label: `gallery sweep: ${language}/${theme} ${scenario.id}` });
-  const recorded = readStamp(dir, key);
-  return {
-    isRecorded: (job) => stepKey(step(job)) in recorded,
-    /** Records the pages that came out clean, unless the content is no longer what they ran on. */
-    record(passed) {
-      if (passed.length === 0) return;
-      if (snapshotContent()?.ids !== content.ids) {
-        console.error("The content changed while the sweep ran (or could not be read again), so its clean pages are not recorded");
-        return;
-      }
-      recordPasses(dir, key, passed.map(step));
-    },
-  };
-}
-
 // ---- scenarios -----------------------------------------------------------------------------------
 
 /** The scenarios and the languages the gallery page itself knows, read off the page the way the page
@@ -426,9 +340,11 @@ function select(all, { patterns, group }) {
 
 // ---- one page ------------------------------------------------------------------------------------
 
-/** Behavioral checks run after the gallery settles, so the displayed scenario remains archived.
- * The floating bar sits over the history view, which covers the terminal beneath it. DOM clicks bypass
- * hit testing; drive the actual pointer and verify the fixture session becomes live. */
+/** Behavioral check run after the gallery settles, so the displayed scenario remains archived. It needs a
+ * real browser, which a unit test does not have (the Reopen label in each language is held by
+ * `TerminalPane.test.tsx`): the floating bar sits over the history view, which covers the terminal beneath
+ * it, and DOM clicks bypass hit testing, so it drives the actual pointer and verifies the fixture session
+ * becomes live. */
 async function checkArchivedReopen(page, language) {
   const labels = await page.evaluate(async (language) => {
     const { format } = await import("/src/i18n/catalog.ts");
@@ -470,9 +386,9 @@ async function sweepOne(context, origin, scenario, language, theme) {
     if (scenario.live.length > 0) query.set("live", scenario.live.join(","));
     await page.goto(`${origin}/gallery-frame.html?${query}`, { waitUntil: "commit" });
     try {
-      // The page sets this on <html> once the app has mounted and the scenario's steps have run, failed or
-      // not, and then after two frames or 200ms, whichever is first; the sweep reads text, not pixels, so
-      // it does not depend on the frames having been drawn.
+      // The page sets this on <html> once the app has mounted, the scenario's steps have run, failed or not,
+      // and its own toasts have been raised, and then after two frames or 200ms, whichever is first; the
+      // sweep reads text, not pixels, so it does not depend on the frames having been drawn.
       await page.waitForSelector("html[data-gallery-ready]", { state: "attached", timeout: READY_TIMEOUT_MS });
     } catch (error) {
       // Only a timeout is a page that never became ready; a page, context or browser that went away
@@ -481,7 +397,7 @@ async function sweepOne(context, origin, scenario, language, theme) {
       problems.push(`the page never became ready within ${READY_TIMEOUT_MS / 1000}s`);
     }
     await page.waitForTimeout(SETTLE_MS);
-    if (scenario.id === "history-loaded" && problems.length === 0) await checkArchivedReopen(page, language);
+    if (scenario.id === "history-loaded" && language === "en" && problems.length === 0) await checkArchivedReopen(page, language);
     const banner = await within(
       READ_TIMEOUT_MS,
       page.evaluate(() => Array.from(document.querySelectorAll("[data-gallery-failure] > div"), (line) => line.textContent ?? "")),
@@ -526,6 +442,10 @@ async function runAll(browser, origin, jobs, concurrency, onDone) {
 }
 
 // ---- main ----------------------------------------------------------------------------------------
+
+/** `OCTOBOARD_SWEEP_STATE_DIR` moves the slots out of the machine-wide place: the script's own tests use
+ * it, so that they do not wait on a slot held by the test run that started them. */
+const stateDir = process.env.OCTOBOARD_SWEEP_STATE_DIR;
 
 const label = (r) => `${r.language}/${r.theme}  ${r.scenario.id}`;
 
@@ -573,24 +493,8 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 
 async function main() {
   const options = parse();
-  const root = git(packageDir, "rev-parse", "--show-toplevel") ?? null;
-  let changes;
-  const branch = () => (changes ??= branchChanges(root));
-  // Before anything starts, so that a sweep with nothing to find costs nothing. Scenarios or a group named, a
-  // dark theme (asked for after a change to colours), a gallery served by another checkout (which this
-  // branch's changes do not describe) and `--list` are not judged.
-  const judging = !options.force && !options.list && !options.url && options.patterns.length === 0 && !options.group && !options.themes.includes("dark");
-  if (judging) {
-    const judged = await judgeFromChanges(branch());
-    if (!judged.sweep) {
-      console.log(`Nothing to load: ${judged.reason} (--force sweeps anyway)`);
-      return 0;
-    }
-    console.error(`Changes: ${judged.reason}`);
-  }
   const { chromium, own } = await loadChromium(options.playwright);
   const started = Date.now();
-  const content = options.url ? undefined : snapshotContent();
   // Held until the browser and the server are closed, so the next holder does not start while they still run.
   let release = () => {};
   try {
@@ -604,40 +508,22 @@ async function main() {
     const gallery = await readGallery(browser, origin).catch((error) => {
       throw new SetupError(`Could not load the gallery from ${origin}: ${firstLine(error)}`);
     });
-    if (options.languages) checkLanguages(options.languages, gallery.languages);
+    checkLanguages(options.languages, gallery.languages);
     const scenarios = select(gallery.scenarios, options);
     if (options.list) {
       for (const s of scenarios) console.log(s.id);
       return 0;
     }
-    let languages = options.languages;
-    if (!languages) {
-      const chosen = options.url
-        ? { languages: LANGUAGES_WITH_CATALOGS, reason: "the gallery at --url is another checkout's, so this branch's changes do not describe it" }
-        : chooseLanguages(LANGUAGES_WITH_CATALOGS, branch().base, branch().files);
-      languages = chosen.languages;
-      checkLanguages(languages, gallery.languages);
-      console.error(`Languages: ${languages.join(", ")} (${chosen.reason})`);
-    }
-    const jobs = options.themes.flatMap((theme) => languages.flatMap((language) => scenarios.map((scenario) => ({ scenario, language, theme }))));
-    const records = content && openRecords(content, browser.version());
-    const skipped = options.fresh || !records ? [] : jobs.filter((job) => records.isRecorded(job));
-    const pending = jobs.filter((job) => !skipped.includes(job));
-    const concurrency = Math.min(options.jobs, pending.length);
+    const jobs = options.themes.flatMap((theme) => options.languages.flatMap((language) => scenarios.map((scenario) => ({ scenario, language, theme }))));
+    const concurrency = Math.min(options.jobs, jobs.length);
     console.error(
-      `Sweeping ${plural(scenarios.length, "scenario")} x ${languages.join(", ")} x ${options.themes.join(", ")} = ${plural(jobs.length, "load")}` +
-        (skipped.length > 0 ? `, skipping ${skipped.length} that came out clean on this content (--fresh loads them again)` : "") +
-        (pending.length > 0 ? `; loading ${pending.length}, ${concurrency} at a time` : ""),
+      `Sweeping ${plural(scenarios.length, "scenario")} x ${options.languages.join(", ")} x ${options.themes.join(", ")} = ${plural(jobs.length, "load")}; ${concurrency} at a time`,
     );
-    if (pending.length === 0) {
-      console.log(`\nNothing to load: all ${plural(jobs.length, "load")} came out clean on this content`);
-      return 0;
-    }
     release = await acquireSlot(`${path.basename(path.resolve(packageDir, "../.."))}: gallery sweep`, {
       root: stateDir && path.join(stateDir, "slots"),
       onWait: (holders, ahead) => console.error(`Waiting for a free heavy-step slot; ${describeWait(holders, ahead)}`),
     });
-    return await sweepPages(browser, origin, pending, concurrency, skipped.length, records, started);
+    return await sweepPages(browser, origin, jobs, concurrency, started);
   } finally {
     await closeResources();
     release();
@@ -645,7 +531,7 @@ async function main() {
 }
 
 /** Loads `jobs` and reports; returns the exit status. */
-async function sweepPages(browser, origin, jobs, concurrency, skipped, records, started) {
+async function sweepPages(browser, origin, jobs, concurrency, started) {
   let done = 0;
   const interactive = process.stderr.isTTY;
   const results = await runAll(browser, origin, jobs, concurrency, (r) => {
@@ -678,10 +564,9 @@ async function sweepPages(browser, origin, jobs, concurrency, skipped, records, 
     console.log(`\nFailed while pages loaded together, passed alone (${loadOnly.length}); a failure that needs a busy machine is still one:`);
     for (const r of loadOnly) console.log(`  ${label(r)}\n      ${r.failure}`);
   }
-  records?.record(results.filter((r) => !r.failure));
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
   console.log(
-    `\n${plural(jobs.length, "load")} in ${seconds}s (${concurrency} at a time): ${jobs.length - failed.length} clean, ${failed.length} failed${loadOnly.length ? ` (${loadOnly.length} only under load)` : ""}${skipped > 0 ? `; ${skipped} skipped, clean on this content` : ""}`,
+    `\n${plural(jobs.length, "load")} in ${seconds}s (${concurrency} at a time): ${jobs.length - failed.length} clean, ${failed.length} failed${loadOnly.length ? ` (${loadOnly.length} only under load)` : ""}`,
   );
   return failed.length > 0 ? 1 : 0;
 }

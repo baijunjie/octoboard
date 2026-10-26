@@ -69,6 +69,72 @@ function englishCopyIn(language: Language): (matcher: Matcher) => boolean {
   return (matcher) => (typeof matcher === "string" ? english.includes(matcher) || filled.some((form) => form.test(matcher)) : english.some((text) => matcher(text)));
 }
 
+/** A short run of punctuation, which is what a separator between two placeholders is. */
+const isSeparator = (run: string) => /^[\p{P}\p{S}\s]{1,4}$/u.test(run) && /[\p{P}\p{S}]/u.test(run);
+
+/** The separators the English catalog writes between two placeholders that `language` writes differently,
+ * as `[english, language's]` (`", "` and `"，"`, say). Only a run that `isSeparator` accepts counts, which keeps
+ * the prose around a placeholder out; one that `language` also writes between placeholders somewhere is
+ * dropped, since a matcher accepting it may be taking that message's own form. */
+function separatorPairs(language: Language): [string, string][] {
+  const formsOf = (message: Message): Record<string, string> => (typeof message === "string" ? { other: message } : { ...message });
+  /** The literal runs between two placeholders, and how many parts the text splits into. */
+  const betweenPlaceholders = (text: string) => {
+    const parts = splitPlaceholders(text);
+    return { runs: parts.filter((_, index) => index % 2 === 0 && index > 0 && index < parts.length - 1), size: parts.length };
+  };
+  const pairs = new Map<string, [string, string]>();
+  const own = new Set<string>();
+  for (const key of Object.keys(en) as MessageKey[]) {
+    const translated = CATALOGS[language]?.[key];
+    if (translated === undefined) continue;
+    const english = formsOf(en[key]);
+    const mine = formsOf(translated);
+    for (const text of Object.values(mine)) betweenPlaceholders(text).runs.forEach((run) => own.add(run));
+    for (const [category, text] of Object.entries(english)) {
+      const other = mine[category];
+      if (other === undefined) continue;
+      const [a, b] = [betweenPlaceholders(text), betweenPlaceholders(other)];
+      if (a.size !== b.size) continue;
+      a.runs.forEach((run, index) => {
+        if (run !== b.runs[index] && [run, b.runs[index]].every(isSeparator)) pairs.set(`${run}\0${b.runs[index]}`, [run, b.runs[index]]);
+      });
+    }
+  }
+  return [...pairs.values()].filter(([english]) => !own.has(english));
+}
+
+/** Every string a scenario's state holds, as the names its steps can look for are taken from it. */
+function namesIn(scenario: unknown): string[] {
+  const names = new Set<string>();
+  const seen = new Set<unknown>();
+  const walk = (value: unknown, depth: number) => {
+    if (typeof value === "string") {
+      if (value.trim() !== "" && value.length <= 60) names.add(value);
+      return;
+    }
+    if (typeof value !== "object" || value === null || seen.has(value) || depth > 6) return;
+    seen.add(value);
+    if (value instanceof Map) value.forEach((item, key) => (walk(key, depth + 1), walk(item, depth + 1)));
+    else if (value instanceof Set || Array.isArray(value)) value.forEach((item) => walk(item, depth + 1));
+    else Object.values(value).forEach((item) => walk(item, depth + 1));
+  };
+  walk(scenario, 0);
+  return [...names];
+}
+
+/** Whether a matcher takes a name followed by the English catalog's separator and not by `language`'s: a
+ * test of the name that spells `", "` out finds nothing in a window whose catalog writes `"，"`. Each of
+ * `names` is probed with each of `pairs`, the separators the two catalogs write differently
+ * (`separatorPairs`), and the matcher is flagged when it takes one with the English separator after it
+ * and refuses it with the language's. A string
+ * matcher is exact, and a test that ignores what follows the name takes both, so neither is flagged;
+ * a test of a different shape of label is out of the probe's reach. */
+function spellsEnglishSeparator(pairs: [string, string][], names: string[], matcher: Matcher): boolean {
+  if (typeof matcher !== "function") return false;
+  return pairs.some(([english, mine]) => names.some((name) => ["", "x"].some((tail) => matcher(`${name}${english}${tail}`) && !matcher(`${name}${mine}${tail}`))));
+}
+
 describe("gallery scenarios", () => {
   it("explicitly classifies every scenario under a functional group and defaults to normal", () => {
     expect(DEFAULT_SCENARIO.category).toBe("normal");
@@ -145,6 +211,27 @@ describe("gallery scenarios", () => {
       expect(found.map(({ id, matcher }) => `${id}: ${String(matcher)}`)).toEqual([]);
     },
   );
+
+  it.each((Object.keys(CATALOGS) as Language[]).filter((language) => language !== "en"))(
+    "name a control by a name followed by the window's own separator in %s, never the English one",
+    async (language) => {
+      const pairs = separatorPairs(language);
+      const names = new Map(SCENARIOS.map((scenario) => [scenario.id, namesIn(scenario)]));
+      const found = (await matchersOf(language)).filter(({ id, matcher }) => spellsEnglishSeparator(pairs, names.get(id)!, matcher));
+      expect(found.map(({ id, matcher }) => `${id}: ${String(matcher)}`)).toEqual([]);
+    },
+  );
+
+  it("tell a matcher that spells the English separator out from one that takes any punctuation, as the check above relies on", () => {
+    const zhPairs = separatorPairs("zh-Hans");
+    expect(zhPairs).toContainEqual([", ", "，"]);
+    const spelled = (label: string) => label === "Operations" || label.startsWith("Operations, ");
+    const anyPunctuation = (label: string) => label === "Operations" || (label.startsWith("Operations") && /^\p{P}/u.test(label.slice("Operations".length)));
+    expect(spellsEnglishSeparator(zhPairs, ["Operations"], spelled)).toBe(true);
+    expect(spellsEnglishSeparator(zhPairs, ["Operations"], anyPunctuation)).toBe(false);
+    expect(spellsEnglishSeparator(zhPairs, ["Operations"], "Operations, x")).toBe(false);
+    expect(spellsEnglishSeparator(zhPairs, ["Operations"], (label) => label === "Operations")).toBe(false);
+  });
 
   it("tell English copy from a name that is data, as the check above relies on", () => {
     const isEnglishCopy = englishCopyIn("zh-Hans");

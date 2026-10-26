@@ -204,9 +204,6 @@ importers:
       playwright:
         specifier: 1.64.0
         version: 1.64.0
-      postcss:
-        specifier: ^8.5.28
-        version: 8.5.28
       typescript:
         specifier: ^5.9.0
         version: 5.9.3

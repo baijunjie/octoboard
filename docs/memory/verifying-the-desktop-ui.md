@@ -4,7 +4,10 @@
 
 The user has objected to drawn-out testing. Verify in the app only the behaviour this change altered, in a short,
 targeted run — the states, languages or screens the change actually touches, not a tour of the rest or a matrix of
-every combination — and leave what a unit test or the type checker already covers to them.
+every combination — and leave what a unit test or the type checker already covers to them. Where a question can be
+settled by a program without a browser (whether a catalog is complete, whether a step would find its control in
+another language), settle it there, extending a test where none covers it, rather than by rendering the gallery in more
+languages or themes: the user prefers that check to a wider render.
 
 A fallback written for an environment this machine does not have is settled by reading the code, not by finding that
 environment: a browser too old for an event the code works around, a platform the build does not target. The user has
@@ -53,10 +56,10 @@ it is not the app's WKWebView. A pointer interaction or a WebKit rendering quest
 page loaded in Playwright's `webkit`, a paint defect still in the real window, and behaviour that depends on the
 daemon, the shell or how the window starts up still in the real app.
 
-For batch checks that scenarios still run (`pnpm gallery:sweep`), keep to the scope the "Finishing" section of
-`.claude/agents/gallery-writer.md` sets: which scenarios, languages and themes to sweep, when a full sweep is warranted,
-and when a sweep adds nothing. A page with no errors does not establish that its mocks supply what the current
-components need: verify the fields, data conditions and contracts behind a new UI state against the code.
+Whether to sweep the gallery (`pnpm gallery:sweep`) at all, and on which scenarios, languages and themes, is set by the
+"Quick check" section of `.claude/skills/agent-gallery/SKILL.md`; a change touching the UI is not by itself a reason to
+sweep. A page with no errors does not establish that its mocks supply what the current components need: verify the
+fields, data conditions and contracts behind a new UI state against the code.
 
 How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
 build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from
@@ -165,22 +168,6 @@ the daemon sends for an unreadable directory shows copy the app never shows.
 Applies when visually verifying gallery interactions. A capture taken after setup shows only the view it leaves on
 screen; it does not visually verify earlier states, even when their assertions passed. Display initialization is not
 a regression sequence: keep necessary behavioral assertions in tests or separate verification runs.
-
-## A scenario's steps run in every language, so no matcher spells out the catalog's own punctuation
-
-Applies to the matchers a gallery scenario's steps find a control by name with (`ui.press`, `ui.hover*`,
-`ui.focusControl` in `packages/ui/src/gallery/`). The page renders every scenario in every offered language, so a
-matcher written against the English catalog finds nothing in another one and the scenario fails there — loudly, but
-only in the language that hits it, which the default run never reaches. Matching a rail avatar as the console's name
-followed by `", "` broke in `zh-Hans`, whose catalog writes the full-width `，`, while the English capture was clean.
-
-- Where the matcher can be built inside a step, which has `ui.t`, take the text from the catalog message: format it
-  with a sentinel in place of every placeholder and split on that, as `Ui.session` does in `interact.ts`.
-- A matcher defined at module level has no `t`, so it accepts the name alone or the name followed by a punctuation
-  character (`/^\p{P}/u`), never a literal separator. That still tells the avatar of a console named `Operations`
-  from a row for `Operations hub`, where the next character is a space.
-- Check a new or changed matcher by rendering its scenario in a language other than English, not only in the default
-  one; and when a matcher changes, check the other scenarios that use it in that language too.
 
 ## Settle what `git` writes against real `git` in a throwaway repository
 

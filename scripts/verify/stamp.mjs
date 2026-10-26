@@ -26,12 +26,10 @@ export function readStamp(dir, key) {
   }
 }
 
-export const recordPass = (dir, key, step) => recordPasses(dir, key, [step]);
-
-export function recordPasses(dir, key, steps) {
+export function recordPass(dir, key, step) {
   mkdirSync(dir, { recursive: true });
   const stamp = readStamp(dir, key);
-  for (const step of steps) stamp[stepKey(step)] = step.label;
+  stamp[stepKey(step)] = step.label;
   writeFileSync(path.join(dir, `${key}.json`), JSON.stringify(stamp));
   prune(dir);
 }

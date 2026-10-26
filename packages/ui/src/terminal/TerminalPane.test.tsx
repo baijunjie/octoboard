@@ -6,7 +6,9 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { errorAlerts } from "../errorAlerts";
 import type { PlatformAdapter } from "../platform";
 import { sessionOf } from "../gallery/fixtures/builders";
+import { CATALOGS, format } from "../i18n/catalog";
 import { currentLanguage, setLanguage } from "../i18n/language";
+import type { Language } from "../i18n/languages";
 import type { TermStatus } from "./TerminalController";
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 
@@ -450,6 +452,23 @@ it("shows an archived session's history over an inert terminal", async () => {
   expect(FakeController.last.attaches).toBe(0);
   expect(FakeController.last.detaches).toEqual([{}]);
   expect(container.textContent).toContain("This session is archived");
+});
+
+// The gallery's archived-session scenario reaches Reopen by the label in the window's language.
+it.each(Object.keys(CATALOGS) as Language[])("offers an archived session's Reopen by its name in %s, and reopens the session when pressed", async (language) => {
+  const previous = currentLanguage();
+  try {
+    act(() => setLanguage(language));
+    const onResume = vi.fn(async (_id: string) => true);
+    const { container } = mountArchived({ onResume });
+    await act(async () => {});
+    const buttons = [...container.querySelectorAll<HTMLElement>("[data-region=terminal] button")].filter((button) => button.textContent === format(language, "sidebar.session.reopen"));
+    expect(buttons).toHaveLength(1);
+    act(() => buttons[0].click());
+    expect(onResume).toHaveBeenCalledWith("s-old");
+  } finally {
+    act(() => setLanguage(previous));
+  }
 });
 
 it("keeps an interrupted session's saved screen and shows no history for it", () => {

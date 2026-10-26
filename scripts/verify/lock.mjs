@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { localValue } from "../env.mjs";
 
 const GIB = 1024 ** 3;
 // A slot directory is made before its owner file is written; one without an owner for this long is orphaned.
@@ -28,9 +29,10 @@ export const defaultRoot = process.platform === "win32"
   : `/tmp/octoboard-verify-slots-${process.getuid()}`;
 
 // One heavy step per 8 cores and per 12 GiB of memory, between one and two, so a 10-core 16 GiB
-// machine gets one. `OCTOBOARD_VERIFY_SLOTS` overrides it.
-export function slotCount({ cores = os.cpus().length, memory = os.totalmem(), env = process.env } = {}) {
-  const override = Number.parseInt(env.OCTOBOARD_VERIFY_SLOTS ?? "", 10);
+// machine gets one. `OCTOBOARD_VERIFY_SLOTS` overrides it, from the environment or else from `.env.local`
+// (`.env.local.example`).
+export function slotCount({ cores = os.cpus().length, memory = os.totalmem(), configured = localValue("OCTOBOARD_VERIFY_SLOTS") } = {}) {
+  const override = Number.parseInt(configured ?? "", 10);
   if (override > 0) return override;
   return Math.min(2, Math.max(1, Math.min(Math.floor(cores / 8), Math.floor(memory / (12 * GIB)))));
 }

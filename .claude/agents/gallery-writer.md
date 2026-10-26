@@ -13,11 +13,12 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 ## Read first
 
 - The "Project conventions" of the project's `agent-gallery` skill: the approach, where scenarios live (including
-  which are not yours), the direct entry, the quick check's commands, check items, the shared-layer examples, and the
+  which are not yours), the direct entry, the quick check's commands, check items, what many scenarios share, and the
   preview scratch location are as it says.
 - The project's conventions for code, comments and UI copy; scenarios and mocks follow them too.
 - The existing scenarios, mocks and helpers; reuse what can be reused rather than rewriting it.
-- Before starting, run the checks you will run at the end and note the failures that predate your change.
+- Before starting, run the checks you will run at the end on what already exists, and note the failures that predate
+  your change.
 
 ## What you own
 
@@ -70,13 +71,10 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
 
 ## Finishing
 
-- Run the project's type check and the relevant tests, and the quick check; the next item sets the quick check's
-  range, where "the change" covers both the changes handed to you and your own writes.
-- Where the affected scenarios can be listed one by one (the change is only inside a component, such as its structure,
-  order, copy or component-private styles) and the conventions have "Quick check (selected scenarios)", run only
-  those; otherwise run the full check, including changes to shared styles and themes, the i18n machinery, shared
-  mocks, contracts and types, or the gallery machinery, whose reach cannot be listed in full (the conventions'
-  "Shared-layer examples" are only part of what is known), and anything you cannot judge.
+- Run the project's type check and the relevant tests, and the quick check on what you wrote: the scenarios you added
+  or changed, in the source language only. Run the full check only when you changed what many scenarios share (shared
+  mocks, the fixture daemon, the gallery machinery), whose reach your own scenarios do not show; a change handed to
+  you that you did not have to write into the gallery for is not a reason to sweep.
 - Change only what you own: a failure your change caused is fixed within it; one that cannot be removed, that predates
   your change, or that is the app's behaviour being wrong is not fixed — keep your change, write it into the report with
   whose it is, and mark it uncertain where you cannot tell.

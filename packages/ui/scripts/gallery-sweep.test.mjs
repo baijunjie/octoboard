@@ -9,17 +9,16 @@ import { afterAll, expect, test } from "vitest";
 const script = fileURLToPath(new URL("./gallery-sweep.mjs", import.meta.url));
 const loader = new URL("./test-fixtures/gallery-sweep-loader.mjs", import.meta.url).href;
 
-// Slots and records of clean pages are kept here, not in the machine-wide places: a sweep started by a
-// test run that holds the heavy-step slot would otherwise wait for it forever. A run is given a state
-// of its own unless it is one of several that share records. `--force` is added unless `judged` is set:
-// whether the branch's changes call for a sweep depends on the checkout the test runs in.
+// Slots are kept here, not in the machine-wide place: a sweep started by a test run that holds the
+// heavy-step slot would otherwise wait for it forever. A run is given a state of its own unless a test
+// passes one that already holds the slot.
 const stateDir = mkdtempSync(path.join(os.tmpdir(), "gallery-sweep-state-"));
 afterAll(() => rmSync(stateDir, { recursive: true, force: true }));
 const newState = () => mkdtempSync(path.join(stateDir, "state-"));
 
-function run(mode, args = ["--list"], state = newState(), onOutput = () => {}, { judged = false } = {}) {
+function run(mode, args = ["--list"], state = newState(), onOutput = () => {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["--no-warnings", "--experimental-loader", loader, script, ...(judged ? [] : ["--force"]), ...args], {
+    const child = spawn(process.execPath, ["--no-warnings", "--experimental-loader", loader, script, ...args], {
       env: { ...process.env, GALLERY_TEST_MODE: mode, OCTOBOARD_SWEEP_STATE_DIR: state, OCTOBOARD_VERIFY_SLOTS: "1" },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -82,37 +81,17 @@ test("cleanup failure retains a scenario failure's exit code", async () => {
   expect(result.output).toContain("Cleanup failed for Chromium:");
 });
 
-test("a page that came out clean is skipped on the same content, until --fresh asks for it again", async () => {
-  const state = newState();
-  const first = await run("normal", ["--lang", "en"], state);
-  expect(first).toMatchObject({ code: 0 });
-  expect(first.output).toContain("1 clean, 0 failed");
-  const second = await run("normal", ["--lang", "en"], state);
-  expect(second).toMatchObject({ code: 0 });
-  expect(second.output).toContain("skipping 1 that came out clean");
-  expect(second.output).toContain("Nothing to load");
-  const fresh = await run("normal", ["--lang", "en", "--fresh"], state);
-  expect(fresh.output).toContain("1 clean, 0 failed");
-  expect(fresh.output).not.toContain("skipping");
-  const otherLanguage = await run("normal", ["--lang", "en,zh-Hans"], state);
-  expect(otherLanguage.output).toContain("skipping 1 that came out clean");
-  expect(otherLanguage.output).toContain("1 clean, 0 failed");
-});
-
-test("without --lang the languages follow the branch's changes, and --lang all sweeps every language", async () => {
+test("without --lang only English is swept, and --lang names or --lang all widens it", async () => {
   const automatic = await run("normal", []);
   expect(automatic).toMatchObject({ code: 0 });
-  // Which of the two depends on the state of the checkout the test runs in, so only the line is certain.
-  expect(automatic.output).toMatch(/Languages: (en|en, zh-Hans) \(.+\)\nSweeping 1 scenario x \1 x light = [12] loads?/);
+  expect(automatic.output).toContain("1 scenario x en x light = 1 load");
   const all = await run("normal", ["--lang", "all"]);
   expect(all).toMatchObject({ code: 0 });
   expect(all.output).toContain("1 scenario x en, zh-Hans x light = 2 loads");
-  expect(all.output).not.toContain("Languages:");
-  const elsewhere = await run("normal", ["--url", "http://localhost:1"]);
-  expect(elsewhere.output).toContain("Languages: en, zh-Hans (the gallery at --url is another checkout's");
-  expect(elsewhere.output).toContain("1 scenario x en, zh-Hans x light = 2 loads");
   const named = await run("normal", ["--lang", "zh-Hans"]);
   expect(named.output).toContain("1 scenario x zh-Hans x light = 1 load");
+  const elsewhere = await run("normal", ["--url", "http://localhost:1"]);
+  expect(elsewhere.output).toContain("1 scenario x en x light = 1 load");
 }, 40_000);
 
 test("a language the app does not offer stops the sweep", async () => {
@@ -121,44 +100,13 @@ test("a language the app does not offer stops the sweep", async () => {
   expect(result.output).toContain("--lang names no such language: fr");
 });
 
-test("a failed page is not recorded", async () => {
-  const state = newState();
-  expect(await run("scenario-failure", ["--lang", "en"], state)).toMatchObject({ code: 1 });
-  const again = await run("scenario-failure", ["--lang", "en"], state);
-  expect(again).toMatchObject({ code: 1 });
-  expect(again.output).not.toContain("skipping");
-});
-
-test("a gallery served from elsewhere neither reads nor writes records", async () => {
-  const state = newState();
-  await run("normal", ["--lang", "en"], state);
-  const url = await run("normal", ["--lang", "en", "--url", "http://localhost:1"], state);
-  expect(url.output).toContain("1 clean, 0 failed");
-  expect(url.output).not.toContain("skipping");
-  const freshState = newState();
-  await run("normal", ["--lang", "en", "--url", "http://localhost:1"], freshState);
-  expect((await run("normal", ["--lang", "en"], freshState)).output).not.toContain("skipping");
-});
-
 test("a page load waits while every heavy-step slot is held", async () => {
   const state = newState();
   const { acquireSlot } = await import("../../../scripts/verify/lock.mjs");
   const release = await acquireSlot("another worktree: ui tests", { root: path.join(state, "slots"), slots: 1 });
-  const result = await run("normal", ["--lang", "en", "--fresh"], state, (output) => {
+  const result = await run("normal", ["--lang", "en"], state, (output) => {
     if (output.includes("Waiting for a free heavy-step slot")) release();
   });
   expect(result).toMatchObject({ code: 0 });
   expect(result.output).toContain("Waiting for a free heavy-step slot; running now: another worktree: ui tests");
 }, 20_000);
-
-test("without --force the branch's changes decide whether pages are loaded, and say why", async () => {
-  const result = await run("normal", ["--lang", "en"], newState(), () => {}, { judged: true });
-  expect(result).toMatchObject({ code: 0 });
-  // Which of the two depends on the state of the checkout the test runs in, so only the line is certain.
-  expect(result.output).toMatch(/^Nothing to load: .+ \(--force sweeps anyway\)$|^Changes: .+\nSweeping 1 scenario/m);
-  const named = await run("normal", ["--lang", "en", "test"], newState(), () => {}, { judged: true });
-  expect(named.output).not.toMatch(/^(Changes|Nothing to load):/m);
-  const dark = await run("normal", ["--lang", "en", "--theme", "dark"], newState(), () => {}, { judged: true });
-  expect(dark.output).not.toMatch(/^(Changes|Nothing to load):/m);
-  expect(dark.output).toContain("1 clean, 0 failed");
-}, 40_000);

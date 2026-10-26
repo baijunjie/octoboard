@@ -1,14 +1,14 @@
 // Maps the paths a branch changed to the checks that cover them, by the scope rule of `CLAUDE.md`
 // "Before delivery", "Formatting and checks": the full set, only files no check reads, or one
-// package's checks (with the UI's, for the modules the gallery sweep shares), and the full set for a
+// package's checks (with the UI's, for the module the gallery sweep shares), and the full set for a
 // shared layer, configuration, dependency versions, a change spanning packages, or anything that
 // cannot be judged. Anything not recognised here is the last of these.
 //
 // Every changed path is one of: `unread` (no build, type check or test reads it), a package's own
-// path, or `full`. One cross-package relation is narrower than the full set: the modules
-// `packages/ui/scripts/gallery-sweep.mjs` imports from `scripts/verify/` (`SWEEP_SHARED`) are the
-// `verify` package's, used outside it only by the UI's gallery scripts, which the UI's tests run, so
-// a change to them runs the `verify` checks and the `ui` checks. The cross-package relations that
+// path, or `full`. One cross-package relation is narrower than the full set: the module
+// `packages/ui/scripts/gallery-sweep.mjs` imports from `scripts/verify/` (`SWEEP_SHARED`) is the
+// `verify` package's, used outside it only by the UI's gallery sweep, which the UI's tests run, so
+// a change to it runs the `verify` checks and the `ui` checks. The cross-package relations that
 // make a path `full` are:
 //   - what `apps/web` imports from `packages/ui/src`, and the inputs of the preview build it takes
 //     from there;
@@ -58,8 +58,9 @@ export const DESKTOP_CONTRACT = [
 ];
 export const MENU_KEYS_FILE = "packages/ui/src/i18n/messages/en.ts";
 
-// The modules of `scripts/verify/` that the UI's gallery scripts also use, which the UI's tests run.
-export const SWEEP_SHARED = ["scripts/verify/changes.mjs", "scripts/verify/lock.mjs", "scripts/verify/stamp.mjs", "scripts/verify/tree.mjs"];
+// The modules of `scripts/verify/` that the UI's gallery sweep also uses, which the UI's tests run: the
+// machine-wide heavy-step lock.
+export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 
 export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol.rs", "packages/ui/src/protocol.ts"];
 

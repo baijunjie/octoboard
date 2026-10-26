@@ -41,7 +41,7 @@ test("the cross-package relations count as spanning packages", () => {
   assert.equal(classify("apps/daemon/README.md"), "unread");
 });
 
-test("a module the gallery sweep shares runs the verify and UI checks, not the full set", () => {
+test("the module the gallery sweep shares runs the verify and UI checks, not the full set", () => {
   for (const file of SWEEP_SHARED) assert.deepEqual(planScope([file, "scripts/verify/scope.mjs"]).packages, ["verify", "ui"], file);
   assert.equal(mode(["scripts/verify/lock.mjs", "packages/ui/src/App.tsx"]), "full");
 });

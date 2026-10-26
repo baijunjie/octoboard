@@ -43,7 +43,6 @@ export const chromium = {
       return new Promise(() => {});
     }
     return {
-      version: () => "test",
       async newPage() { return page; },
       async newContext() { return { newPage: async () => page, async close() {} }; },
       close: () => close("browser"),

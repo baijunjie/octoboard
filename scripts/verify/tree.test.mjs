@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { idsAt, workingTree } from "./tree.mjs";
+import { workingTree } from "./tree.mjs";
 
 function repository(run) {
   const root = mkdtempSync(path.join(os.tmpdir(), "tree-"));
@@ -24,38 +24,22 @@ function repository(run) {
   }
 }
 
-test("uncommitted and untracked edits change the ids of the paths read, and only those", () => {
+test("uncommitted, untracked and deleted edits each change the tree, and an ignored file does not", () => {
   repository((root) => {
-    const ids = () => idsAt(root, workingTree(root, { paths: ["pkg", "other"] }), ["pkg", "other"]);
-    const before = ids();
-    writeFileSync(path.join(root, "pkg/new.txt"), "n");
-    const afterNew = ids();
-    assert.notEqual(afterNew[0], before[0]);
-    assert.equal(afterNew[1], before[1]);
-    writeFileSync(path.join(root, "other/b.txt"), "changed");
-    assert.notEqual(ids()[1], before[1]);
-  });
-});
-
-test("an ignored path counts only when it is forced, and a missing one is skipped", () => {
-  repository((root) => {
-    const ids = (forced) => idsAt(root, workingTree(root, { paths: ["pkg", "missing"], forced }), ["pkg/ignored", "missing"]);
+    const id = (entry) => {
+      const result = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${workingTree(root)}:${entry}`], { cwd: root, encoding: "utf8" });
+      return result.stdout.trim();
+    };
+    const before = id("pkg");
     writeFileSync(path.join(root, "pkg/ignored/s.txt"), "s");
-    assert.deepEqual(ids([]), ["", ""]);
-    assert.notEqual(ids(["pkg/ignored"])[0], "");
-    assert.equal(ids(["pkg/ignored"])[1], "");
-    const listed = workingTree(root, { paths: ["pkg", "pkg/ignored"], forced: ["pkg/ignored"] });
-    assert.notEqual(idsAt(root, listed, ["pkg/ignored"])[0], "");
-  });
-});
-
-test("deleting a tracked path changes its id", () => {
-  repository((root) => {
-    const ids = () => idsAt(root, workingTree(root, { paths: ["pkg", "other"] }), ["other"]);
-    const before = ids();
+    assert.equal(id("pkg"), before);
+    writeFileSync(path.join(root, "pkg/new.txt"), "n");
+    const afterNew = id("pkg");
+    assert.notEqual(afterNew, before);
+    writeFileSync(path.join(root, "pkg/a.txt"), "changed");
+    assert.notEqual(id("pkg"), afterNew);
     rmSync(path.join(root, "other"), { recursive: true });
-    assert.deepEqual(ids(), [""]);
-    assert.notDeepEqual(ids(), before);
+    assert.equal(id("other"), "");
   });
 });
 

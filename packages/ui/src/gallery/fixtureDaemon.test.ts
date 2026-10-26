@@ -855,6 +855,28 @@ describe("the fixture daemon's structured notices", () => {
     unsubscribe();
   });
 
+  it("settles the scenario's toasts as raised only once the stack has been handed them, a delay after it subscribed", async () => {
+    vi.useFakeTimers();
+    try {
+      const daemon = createFixtureDaemon({ ...scenario, toasts: [{ kind: "error", message: "Could not save" }] });
+      const toasts: ToastRequest[] = [];
+      const raised = vi.fn();
+      void daemon.scenarioToastsRaised.then(raised);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(raised).not.toHaveBeenCalled();
+      const unsubscribe = daemon.onToast((toast) => toasts.push(toast));
+      await vi.advanceTimersByTimeAsync(299);
+      expect(raised).not.toHaveBeenCalled();
+      expect(toasts).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(toasts).toHaveLength(1);
+      expect(raised).toHaveBeenCalledOnce();
+      unsubscribe();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps a failed launch's title metadata, nested path and complete plain message", async () => {
     vi.useFakeTimers();
     try {

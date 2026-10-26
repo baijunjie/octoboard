@@ -23,7 +23,8 @@ coverage/
 # Scratch of `pnpm bench:wkwebview` in packages/ui: throwaway HOME, daemon build, bundles, host binary
 /packages/ui/.bench/
 
-# Env & logs: `.env` and `.env.secret.example` are committed; credentials live in `.env.secret`
+# Env & logs: `.env`, `.env.secret.example` and `.env.local.example` are committed; credentials live in `.env.secret`,
+# machine-local values in `.env.local`
 .env.secret*
 !.env.secret.example
 .env*.local

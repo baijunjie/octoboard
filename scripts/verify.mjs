@@ -20,7 +20,8 @@
 // failed is re-run on its failed and changed test files alone while nothing else changed but test
 // files nothing imports (`scripts/verify/rerun.mjs`). Heavy steps wait for a machine-wide slot
 // (`scripts/verify/lock.mjs`), and consecutive ones hold it together; light ones never wait. The UI
-// gallery's quick check is not run here: `agent-gallery` decides it from the scenarios touched.
+// gallery's quick check is not run here: it belongs to what is written to the gallery or previewed
+// (`agent-gallery`), not to a change of code.
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
@@ -206,9 +207,6 @@ for (const group of groups) {
   }
   for (const step of group) await runStep(step, key, current.tree);
   release();
-}
-if (current.scope.packages.includes("ui") || current.scope.mode === "full") {
-  console.log("verify: the gallery quick check is not part of this command; run it through the agent-gallery skill");
 }
 if (!recorded) {
   console.error("verify: the steps passed, but the content changed while they ran, so the content as it stands now was not verified as a whole; run again");

@@ -43,11 +43,12 @@ Per-package commands are in that package's doc.
   `apps/web/site.config.ts` (the website address); `packages/ui/src/appConfig.test.ts` fails when either drifts.
 - [`.env`](../.env), [`.env.secret.example`](../.env.secret.example) and [`scripts/env.mjs`](../scripts/env.mjs) — the
   env files and the small reader they share. `.env` (committed) holds non-secret configuration, read by the UI's dev
-  server, with a gitignored `.env.local` overriding it; `.env.secret` (gitignored, template `.env.secret.example`) holds
-  the release credentials (Apple's, and the update signing key), read by `apps/desktop/scripts/release.mjs` and by
-  `apps/desktop/scripts/install-app.mjs` for its signing identity.
-  [`.env.install.example`](../.env.install.example) is the template for the gitignored `.env.install.local`, read
-  only by the desktop's `install:macos` command for its installation directory.
+  server. The gitignored `.env.local` (template [`.env.local.example`](../.env.local.example)) holds machine-local
+  values and overrides it: the dev ports, the installation directory `install:macos` reads and the heavy-step slot
+  count (the last two a linked worktree takes from the main working copy's `.env.local` when its own lacks them).
+  `.env.secret` (gitignored, template `.env.secret.example`) holds the release credentials (Apple's, and the update
+  signing key), read by `apps/desktop/scripts/release.mjs` and by `apps/desktop/scripts/install-app.mjs` for its signing
+  identity.
 - [`scripts/`](../scripts/) — the repository-level scripts behind root `package.json` commands: `env.mjs` (the env
   reader above), `test-rust.mjs` (`pnpm test:rust`) and `verify.mjs` with `verify/` (`pnpm verify`, the pre-delivery
   checks). `pnpm verify` picks the checks a branch's changes call for (`verify/scope.mjs` implements the scope rule,
@@ -55,10 +56,10 @@ Per-package commands are in that package's doc.
   `verify/changes.mjs`, skips steps already passed on the same content and toolchain (`verify/stamp.mjs`, keyed by the
   working tree's content from `verify/tree.mjs`), re-runs only the failed UI test files after a failed UI test step when
   nothing but test files nothing else imports changed since (`verify/rerun.mjs`, fed by the reporter in
-  `packages/ui/src/test/failedFilesReporter.ts`), and caps concurrent heavy steps across worktrees (`verify/lock.mjs`); its tests are
-  `verify/*.test.mjs`. The UI package's gallery sweep reuses the lock, the stamps directory, `tree.mjs` and `changes.mjs`
-  (to choose its languages and to judge whether any page can fail). The scope rule's source is the "Formatting and checks" step of the root
-  `CLAUDE.md`.
+  `packages/ui/src/test/failedFilesReporter.ts`), and caps concurrent heavy steps across worktrees (`verify/lock.mjs`);
+  its tests are `verify/*.test.mjs`, which include `verify/env.test.mjs` for `env.mjs`. The UI
+  package's gallery sweep reuses the heavy-step lock (`verify/lock.mjs`). The scope rule's source is the "Formatting and
+  checks" step of the root `CLAUDE.md`.
 
 ## Brand artwork
 

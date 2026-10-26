@@ -22,6 +22,11 @@ import { SAMPLE_GIT } from "./fixtures/projectGit";
  * on screen to receive them. */
 const TOAST_DELAY_MS = 300;
 
+/** The daemon the gallery runs a scenario over: `scenarioToastsRaised` settles once the scenario's own toasts have
+ * been handed to the stack, which the page waits for before it calls itself ready. It never settles if nothing
+ * subscribes to toasts. */
+export type FixtureDaemon = Daemon & { readonly scenarioToastsRaised: Promise<void> };
+
 const HOME = "/Users/dev";
 
 /** What the CLI said when a login the scenario ends as `failed` did not go through. */
@@ -197,11 +202,13 @@ function quotaWindowName(window: QuotaWindow): string {
  * of configuration by `fixtureConfiguration.ts`; each is asked before anything here and says with
  * `undefined` that a request is not one of its own.
  */
-export function createFixtureDaemon(scenario: Scenario): Daemon {
+export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
   const store = createStateStore(scenario.state);
   const toastListeners = new Set<(toast: ToastRequest) => void>();
   const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
   let toastsRaised = false;
+  let markToastsRaised!: () => void;
+  const scenarioToastsRaised = new Promise<void>((resolve) => (markToastsRaised = resolve));
   let openedSessionCount = 0;
   let createdShellTerminalCount = 0;
   let createdProjectCount = 0;
@@ -216,22 +223,27 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const raiseScenarioToasts = () => {
     if (toastsRaised) return;
     toastsRaised = true;
-    for (const { code, params, message: fixtureMessage, title: fixtureTitle, kind, ...toast } of scenario.toasts ?? []) {
-      const message = typeof fixtureMessage === "function" ? fixtureMessage(t) : fixtureMessage;
-      const title = typeof fixtureTitle === "function" ? fixtureTitle(t) : fixtureTitle;
-      const failure = code ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
-      if (kind === "session_notice" && !code) throw new Error("A session_notice fixture needs a code to route by");
-      emitToast({
-        ...toast,
-        kind: kind === "session_notice" ? noticeKind(code!, params ?? {}) : kind,
-        title,
-        // Mirror the store: keep the full plain message and structured launch title separately.
-        ...(code && {
-          daemonTitle: failure ? new DaemonRequestError(message, `${code}.title`, params ?? {}) : undefined,
-          daemonError: failure ?? new DaemonRequestError(message, code, params ?? {}),
-        }),
-        message: code ? daemonMessage(currentLanguage(), code, params ?? {}, message, store.getState()) : message,
-      });
+    // Settled even when a fixture throws, so the page reports that error and not a missing subscriber.
+    try {
+      for (const { code, params, message: fixtureMessage, title: fixtureTitle, kind, ...toast } of scenario.toasts ?? []) {
+        const message = typeof fixtureMessage === "function" ? fixtureMessage(t) : fixtureMessage;
+        const title = typeof fixtureTitle === "function" ? fixtureTitle(t) : fixtureTitle;
+        const failure = code ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
+        if (kind === "session_notice" && !code) throw new Error("A session_notice fixture needs a code to route by");
+        emitToast({
+          ...toast,
+          kind: kind === "session_notice" ? noticeKind(code!, params ?? {}) : kind,
+          title,
+          // Mirror the store: keep the full plain message and structured launch title separately.
+          ...(code && {
+            daemonTitle: failure ? new DaemonRequestError(message, `${code}.title`, params ?? {}) : undefined,
+            daemonError: failure ?? new DaemonRequestError(message, code, params ?? {}),
+          }),
+          message: code ? daemonMessage(currentLanguage(), code, params ?? {}, message, store.getState()) : message,
+        });
+      }
+    } finally {
+      markToastsRaised();
     }
   };
 
@@ -338,6 +350,7 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
 
   return {
     store,
+    scenarioToastsRaised,
     request: async (body): Promise<Event> => {
       if (body.type === "list_project_branches") {
         const result = scenario.projectBranches?.[body.project];

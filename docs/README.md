@@ -446,17 +446,18 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   sharing the machine with other worktrees' dev apps (fixed port, stopping by PID only), and fully reloading a dev
   window before judging a defect in it.
 - [Verifying the desktop UI](memory/verifying-the-desktop-ui.md) — how to verify terminal and UI behaviour in the
-  desktop app: why a verification stays as narrow as the change, why an app-wide UI hunt narrows candidates by reading
-  code before rendering any and what a brief for such work must cap, and why a shared component's markup widens that
-  scope to every surface already using it, settling a change to the data a fixture answers with on the replies rather
-  than on renderings, looking at a UI state in the gallery before staging it through a daemon and what the gallery
-  cannot settle, why a check that rests on translated copy is made in `zh-Hans` since the other 15 languages render
-  English, holding what a reply carries in a fixture factory's signature first and in the fixture daemon's refusal only
-  where no signature can settle it, and where to take that condition from, settling hand-written `git` output against
-  real `git` in a throwaway repository, checking in WebKit with real pointer input and with long and CJK text, bisecting
-  a symptom against the daemon, where to watch for a report page's blocked navigation, where a network probe's positive
-  control comes from, proving that no key reached the terminal with a stand-in agent that echoes every byte, and judging
-  a packaged window's geometry from measured pixels and a real click rather than from a capture alone.
+  desktop app: why a verification stays as narrow as the change and prefers a scripted check to rendering the gallery in
+  more languages or themes, where the gallery sweep's scope is set, why an app-wide UI hunt narrows candidates by
+  reading code before rendering any and what a brief for such work must cap, and why a shared component's markup widens
+  that scope to every surface already using it, settling a change to the data a fixture answers with on the replies
+  rather than on renderings, looking at a UI state in the gallery before staging it through a daemon and what the
+  gallery cannot settle, why a check that rests on translated copy is made in `zh-Hans` since the other 15 languages
+  render English, holding what a reply carries in a fixture factory's signature first and in the fixture daemon's
+  refusal only where no signature can settle it, and where to take that condition from, settling hand-written `git`
+  output against real `git` in a throwaway repository, checking in WebKit with real pointer input and with long and CJK
+  text, bisecting a symptom against the daemon, where to watch for a report page's blocked navigation, where a network
+  probe's positive control comes from, proving that no key reached the terminal with a stand-in agent that echoes every
+  byte, and judging a packaged window's geometry from measured pixels and a real click rather than from a capture alone.
 - [Driving and reading the real app window](memory/driving-and-reading-the-real-app-window.md) — how to script input
   into the packaged app's real window and read output off it on the user's machine: ruling out a locked screen or a
   window not on screen before trusting a capture, getting an error out of a blank window, what a scripted GUI probe can

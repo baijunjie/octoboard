@@ -1,6 +1,6 @@
 ---
 name: agent-gallery
-description: Entry point for the UI state gallery — keep the gallery in step after a change to UI states, mocks or the interface contract mocks depend on, run the quick check by the scope affected, start a preview from this task's branch for the user to confirm at delivery, and clean it up after confirmation. Bring it to mind when a UI state is added or changed, or a UI change is to be handed to the user for confirmation. Use when the user says "add a gallery scenario", "show this state in the gallery", "the gallery is out of date", "clean up the gallery", "start a preview for me".
+description: Entry point for the UI state gallery — keep the gallery in step after a change to UI states, mocks or the interface contract mocks depend on, run the quick check on what was written to it, start a preview from this task's branch for the user to confirm at delivery, and clean it up after confirmation. Bring it to mind when a UI state is added or changed, or a UI change is to be handed to the user for confirmation. Use when the user says "add a gallery scenario", "show this state in the gallery", "the gallery is out of date", "clean up the gallery", "start a preview for me".
 ---
 
 # UI state gallery
@@ -28,25 +28,17 @@ row each, and the items below the table say so where packages differ.
 | `packages/ui` | Self-built: `gallery.html` / `gallery-frame.html` over `packages/ui/src/gallery/` (the real `App` over the fixture daemon) | `packages/ui/src/gallery/fixtures/` — the area's file, or a new file listed in its `index.ts`; how a scenario is built and the conventions for writing one are in `packages/ui/README.md`, section "The UI state gallery". All of them are `gallery-writer`'s. The fixture-backed website preview (`packages/ui/src/website-preview/`) is not part of the gallery | `pnpm gallery --port <free port>` in `packages/ui` (the script's port 5175 is strict, so another checkout serving it fails the start; pick a free one; `BROWSER=none` in front keeps it from opening a browser tab); the address is the `Local:` line Vite prints | `http://localhost:<port>/gallery.html?scenario=<id>&theme=<light\|dark>&lang=<en\|zh-Hans\|…>`, plus `width=<px>`, `height=<px>`, `held=1` (shortcut modifier held) as needed; the frame alone, sized by the browser window, is `gallery-frame.html?scenario=<id>&theme=…&lang=…`, with `held=1` and `chrome=1` (the desktop window chrome) as needed | `pnpm gallery:sweep` in `packages/ui` (starts its own dev server on a free port) | `pnpm gallery:sweep <id or pattern …>`, or `--group <title>`; `--list` lists the ids |
 
 - UI check items: render smoke (each scenario reaches `data-gallery-ready`, no `[data-gallery-failure]` overlay, no
-  uncaught error): self-built `packages/ui/scripts/gallery-sweep.mjs` on Playwright; light; the languages come from what
-  the branch changed since its merge base with its recorded target branch: `en` alone, or every language with a catalog
-  (`en`, `zh-Hans`) when a changed path can make the languages differ (`LANGUAGE_SENSITIVE` in
-  `packages/ui/scripts/gallery-languages.mjs`) or the change cannot be judged; `--lang all` forces all and `--lang
-  <list>` names them. Its page loads wait for a heavy-step slot (the lock `pnpm verify` also takes), and it skips pages
-  already recorded clean on the same content; `--fresh` loads them anyway. Before loading anything it judges whether the
-  branch's changes since that merge base can make a page fail (the rule is in `packages/ui/scripts/gallery-impact.mjs`,
-  described in `packages/ui/README.md`, section "Sweeping the gallery"; a file in the preview scratch location counts as
-  added, so a checkout holding preview scenarios never skips); when they cannot, it prints "Nothing to load: …" and
-  exits 0 without loading a page, which counts as a passed quick check. `--force`, named scenarios, `--group`, `--theme
-  dark|both` and `--url` are never judged; `--fresh` does not override this skip.
-  Kept out of the quick check: the dark theme, `pnpm gallery:sweep --theme dark`, run when a change touches colours;
+  uncaught error): self-built `packages/ui/scripts/gallery-sweep.mjs` on Playwright; light; `en` only, `--lang <list>`
+  or `--lang all` (every language with a catalog) when the user asks for other languages. It loads exactly the
+  scenarios it is given, never skipping one; its page loads wait for a heavy-step slot (the lock `pnpm verify` also
+  takes). The flags are in `packages/ui/README.md`, section "Sweeping the gallery".
+  Kept out of the quick check and run only when the user asks: the dark theme, `pnpm gallery:sweep --theme dark`;
   chip geometry, self-built on Playwright, `node scripts/gallery-chip-geometry.mjs http://localhost:<port>` in
   `packages/ui` against a gallery served from this checkout (unlike the sweep it falls back to no other browser:
-  without Playwright's own Chromium, set `OCTOBOARD_CHROMIUM` to one), run when a change touches inline references.
-- Shared-layer examples: `packages/ui/src/components/`; `packages/ui/src/style.css` and `packages/ui/src/theme.tsx`;
-  `packages/ui/src/i18n/`; `packages/ui/src/gallery/fixtures/` and `packages/ui/src/gallery/fixtureDaemon.ts` (mocks
-  shared by many scenarios); `packages/ui/src/protocol.ts` and `packages/ui/src/daemon-client.ts` (the contract the
-  fixture daemon mocks); the gallery machinery itself under `packages/ui/src/gallery/`.
+  without Playwright's own Chromium, set `OCTOBOARD_CHROMIUM` to one).
+- What many scenarios share: `packages/ui/src/gallery/fixtures/` helpers and `packages/ui/src/gallery/fixtureDaemon.ts`
+  (mocks shared by many scenarios), and the gallery machinery itself under `packages/ui/src/gallery/`, the gallery's
+  pages and its scripts in `packages/ui/scripts/`.
 - App preview: gallery only.
 - Preview scratch location: `packages/ui/src/gallery/preview/` (ignored by git, so per checkout). Each `.ts` / `.tsx`
   file directly in it default-exports a `Scenario[]` that `packages/ui/src/gallery/fixtures/index.ts` appends to the
@@ -62,8 +54,7 @@ row each, and the items below the table say so where packages differ.
   scenario is shown, which to extend and which to delete, is its judgement.
 - One dispatch at a time, to keep each from adding its own; it cannot see your conversation, so each time hand over
   every UI state to be shown, what each is for a person to confirm, what changed in the contract, the files this
-  change touches (it sets the quick check's range from them) and the trade-offs the user settled, plus the address of
-  any preview this working copy is serving.
+  change touches and the trade-offs the user settled, plus the address of any preview this working copy is serving.
 - For what it reports as unshowable, needing app code changes, or trade-offs it could not settle: decide the minor
   ones yourself and leave the rest to the user; where the conventions must follow, handle it as "Project conventions"
   says.
@@ -73,13 +64,19 @@ row each, and the items below the table say so where packages differ.
 
 ## Quick check
 
-- When this change (including what `gallery-writer` wrote) touches the UI, mocks, or the interface contracts and types
-  mocks depend on, run the quick check before delivery; every scenario that runs must pass.
-- Where the affected scenarios can be listed one by one (the change is only inside a component, such as its structure,
-  order, copy or component-private styles) and the conventions have "Quick check (selected scenarios)", run only
-  those; otherwise run the full check, including changes to shared styles and themes, the i18n machinery, shared
-  mocks, contracts and types, or the gallery machinery, whose reach cannot be listed in full (the conventions'
-  "Shared-layer examples" are only part of what is known), and anything you cannot judge.
+- The quick check guards the gallery, not the app: the app's correctness is for type checking and the tests, so a
+  change does not run it just because it touches the UI, mocks or contracts. It runs only on what was actually written
+  to the gallery or put in front of the user:
+  - the scenarios `gallery-writer` added or changed, which it runs itself before reporting;
+  - the full check, only when `gallery-writer` changed what many scenarios share (shared mocks, the fixture daemon,
+    the gallery machinery), whose reach its own scenarios do not show;
+  - the scenarios a preview shows, swept by id ("Quick check (selected scenarios)") before the entries are given.
+  A change that writes nothing to the gallery and shows no preview runs no quick check. Beyond that, run it only when
+  the user asks.
+- The quick check runs in the source language only; whether a translation is complete and well-formed, and whether a
+  scenario's step names a control in English copy or with the English separator, is for type checking and the catalog
+  and fixture tests, and other languages are swept only when the user asks.
+- Every scenario that runs must pass.
 - Pass only by making things right: never delete scenarios, skip or loosen checks to make it pass, and never change a
   scenario or mock to accommodate an app error; updating a screenshot baseline after a deliberate scenario change is
   not loosening.
@@ -94,7 +91,7 @@ row each, and the items below the table say so where packages differ.
 
 - Passing the check only shows the scenarios run, not that they show the latest UI: where appearance and interaction
   need confirming, look at them for real.
-- State in the final reply whether the full check or which scenarios were run, and the result.
+- State in the final reply whether the full check, which scenarios, or none were run, and the result.
 
 ## Previewing for the user to confirm
 
@@ -113,7 +110,7 @@ row each, and the items below the table say so where packages differ.
 - Scenarios and mocks added only for the preview go into the "Preview scratch location", never mixed into the formal
   scenarios; when asking for confirmation, ask whether to keep them, and where you are not waiting for confirmation,
   still wait for the answer to this question; those to keep are handed to `gallery-writer` at once to be made formal
-  scenarios, then rerun the quick check.
+  scenarios, which it checks itself.
 - Record the services you start and the builds you install in the "Preview scratch location", enough to recognise at
   cleanup that they are this working copy's.
 - Never overwrite, stop or uninstall a service or build not started or installed by this working copy; when unsure,
