@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { IS_MAC } from "../useWindowShortcut";
 import { TerminalController } from "./TerminalController";
 
 /** Enough of xterm for the controller: writes are parsed in a later task, in order, as xterm's are,
@@ -52,12 +53,17 @@ const { FakeTerminal } = vi.hoisted(() => {
       this.keyHandler = handler;
     }
     textarea?: HTMLTextAreaElement;
-    /** xterm names its input textarea in English when it opens. */
-    open(): void {
+    element?: HTMLElement;
+    /** xterm names its input textarea in English when it opens, and puts its element, with the screen
+     * inside it, in the container. */
+    open(container: HTMLElement): void {
       this.textarea = document.createElement("textarea");
       this.textarea.setAttribute("aria-label", "Terminal input");
+      this.element = container.appendChild(document.createElement("div"));
+      this.element.appendChild(document.createElement("div")).className = "xterm-screen";
     }
     getSelection(): string { return this.selection; }
+    hasSelection(): boolean { return this.selection !== ""; }
     selection = "";
     selectAll(): void { this.selection = this.screen; }
     paste(text: string): void { this.userTypes(`\x1b[200~${text}\x1b[201~`); }
@@ -453,14 +459,24 @@ describe("keyboard focus on attaching a session the user picked", () => {
 describe("text a program asks to copy (OSC 52)", () => {
   const copy = (text: string) => `\x1b]52;c;${btoa(String.fromCharCode(...new TextEncoder().encode(text)))}\x07`;
 
-  it("goes to the clipboard from live output, but not from the replay of what came before the attach", async () => {
+  const liveCopy = async (text: string) => {
+    controller.attach("a", url("a"), false);
+    lastSocket().open();
+    lastSocket().receive("replay");
+    lastSocket().receive(copy(text));
+    await settle();
+  };
+
+  it("goes to the clipboard and the editing menu from live output, but not from the replay of what came before the attach", async () => {
     controller.attach("a", url("a"), false);
     lastSocket().open();
     lastSocket().receive(`before${copy("old")}`);
     await settle();
+    expect(controller.programCopiedText).toBeUndefined();
     lastSocket().receive(copy("选中的文本"));
     await settle();
     expect(copied).toEqual(["选中的文本"]);
+    expect(controller.programCopiedText).toBe("选中的文本");
   });
 
   it("is ignored in a dormant session's saved output", async () => {
@@ -468,6 +484,35 @@ describe("text a program asks to copy (OSC 52)", () => {
     lastSocket().receive(copy("saved"));
     await settle();
     expect(copied).toEqual([]);
+    expect(controller.programCopiedText).toBeUndefined();
+  });
+
+  it("stays on offer through the pointer's way to the editing menu: its motion reports and a right press", async () => {
+    await liveCopy("picked");
+    container.appendChild(term.textarea!);
+    term.userTypes("\x1b[<35;4;2M");
+    term.textarea!.dispatchEvent(new MouseEvent("mousedown", { button: 2, bubbles: true }));
+    expect(controller.programCopiedText).toBe("picked");
+  });
+
+  it("stays on offer through a Control-click only on macOS, where it opens the editing menu", async () => {
+    await liveCopy("picked");
+    container.appendChild(term.textarea!);
+    term.textarea!.dispatchEvent(new MouseEvent("mousedown", { button: 0, ctrlKey: true, bubbles: true }));
+    expect(controller.programCopiedText).toBe(IS_MAC ? "picked" : undefined);
+  });
+
+  it.each<[string, () => void]>([
+    ["a key", () => term.press("x", "x")],
+    ["Ctrl+C", () => term.keyHandler?.(new KeyboardEvent("keydown", { key: "c", keyCode: 67, ctrlKey: true }))],
+    ["a paste", () => controller.paste("text", "a")],
+    ["a primary press", () => term.textarea!.dispatchEvent(new MouseEvent("mousedown", { button: 0, bubbles: true }))],
+    ["a session switch", () => controller.attach("b", url("b"), false)],
+  ])("is dropped by %s", async (_, act) => {
+    await liveCopy("picked");
+    container.appendChild(term.textarea!);
+    act();
+    expect(controller.programCopiedText).toBeUndefined();
   });
 });
 
@@ -481,5 +526,28 @@ describe("an Option-click", () => {
     term.modes.mouseTrackingMode = "none";
     press();
     expect(term.options.altClickMovesCursor).toBe(true);
+  });
+});
+
+describe("pointer motion with no button held", () => {
+  it.each([
+    { tracking: "any", selection: "picked", buttons: 0, over: "screen", reported: false },
+    { tracking: "any", selection: "picked", buttons: 0, over: "edge", reported: false },
+    { tracking: "any", selection: "", buttons: 0, over: "screen", reported: true },
+    { tracking: "any", selection: "picked", buttons: 1, over: "screen", reported: true },
+    { tracking: "drag", selection: "picked", buttons: 0, over: "screen", reported: true },
+    { tracking: "none", selection: "picked", buttons: 0, over: "screen", reported: true },
+  ])("reaches xterm's report unless that would clear a selection, and the screen's link hover always (%o)", ({ tracking, selection, buttons, over, reported }) => {
+    const screen = term.element!.querySelector<HTMLElement>(".xterm-screen")!;
+    const target = (over === "screen" ? screen : term.element!).appendChild(document.createElement("div"));
+    const report = vi.fn();
+    const hover = vi.fn();
+    term.element!.addEventListener("mousemove", report);
+    screen.addEventListener("mousemove", hover);
+    term.modes.mouseTrackingMode = tracking;
+    term.selection = selection;
+    target.dispatchEvent(new MouseEvent("mousemove", { buttons, bubbles: true }));
+    expect(report).toHaveBeenCalledTimes(reported ? 1 : 0);
+    expect(hover).toHaveBeenCalledTimes(over === "screen" ? 1 : 0);
   });
 });

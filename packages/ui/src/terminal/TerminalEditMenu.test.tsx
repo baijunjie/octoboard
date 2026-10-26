@@ -15,7 +15,7 @@ let root: Root;
 let container: HTMLDivElement;
 let target: HTMLDivElement;
 let input: HTMLTextAreaElement;
-let controller: { selectedText: string; inputSessionId?: string; selectAll: () => void; paste: ReturnType<typeof vi.fn>; focus: () => void };
+let controller: { selectedText: string; programCopiedText?: string; inputSessionId?: string; selectAll: () => void; paste: ReturnType<typeof vi.fn>; focus: () => void };
 let clipboard: ClipboardCapability | undefined;
 let sessionId: string;
 const controllerRef = { current: undefined as TerminalController | undefined };
@@ -78,6 +78,18 @@ it("selects terminal output, then copies the selection captured at opening", asy
   controller.selectedText = "changed after menu opened";
   await choose("Copy");
   expect(clipboard!.writeText).toHaveBeenCalledWith("all terminal output");
+});
+
+it.each([
+  { selected: "", expected: "program copy" },
+  { selected: "terminal selection", expected: "terminal selection" },
+])("copies what the program copied only while the terminal has nothing selected ($expected)", async ({ selected, expected }) => {
+  controller.selectedText = selected;
+  controller.programCopiedText = "program copy";
+  await open();
+  expect(item("Copy").getAttribute("aria-disabled")).not.toBe("true");
+  await choose("Copy");
+  expect(clipboard!.writeText).toHaveBeenCalledWith(expected);
 });
 
 it("reads the clipboard only for Paste and sends it to the captured session", async () => {

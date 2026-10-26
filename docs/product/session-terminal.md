@@ -34,8 +34,10 @@ app and a browser. On macOS, Control-click opens it too. With keyboard focus in 
 opens the same menu; neither key is sent to the agent. Opening it preserves the terminal's selection, and closing it
 returns keyboard focus to the terminal. There is no separate menu button.
 
-- **Copy** copies the terminal text selected when the menu opened. It is disabled without a selection. Where the
-  platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead.
+- **Copy** copies the terminal text selected when the menu opened or, with nothing selected in the terminal, the text
+  a program last copied, while that is still on offer (see "Text a program copies" below). It is disabled with
+  neither. Where the platform has no clipboard, or it refuses, the text is copied through the browser's selection copy
+  instead.
 - **Paste** reads text from the clipboard and sends it as terminal input, respecting the running program's bracketed
   paste mode. It is disabled without clipboard reading support or while the selected session cannot accept input.
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
@@ -46,10 +48,16 @@ paste is discarded. It is never redirected to another session. A failed clipboar
 allows, shows an error alert.
 
 **Selecting with the mouse.** A drag selects terminal text, except while the running program has mouse reporting on:
-then a plain drag goes to the program, and Copy stays disabled for want of a selection. **Option-drag on macOS, and
-Shift-drag on other platforms, selects even under mouse reporting.** On macOS an Option-drag therefore always makes an
-ordinary selection, never a column (block) one; on other platforms an Alt-drag on a screen without mouse reporting
-selects a column.
+then a plain drag goes to the program, which may highlight and copy the text itself (Claude Code's fullscreen view
+does), but makes no selection of the terminal's own. **Option-drag on macOS, and Shift-drag on other platforms, selects
+even under mouse reporting.** On macOS an Option-drag therefore always makes an ordinary selection, never a column
+(block) one; on other platforms an Alt-drag on a screen without mouse reporting selects a column.
+
+Moving the pointer away to right-click keeps a selection made under mouse reporting: while the terminal holds a
+selection, pointer motion with no button held is not reported to a program that follows all motion, since the report (in
+the SGR encodings Claude Code uses) would clear the selection, so that program sees no hover until the selection is gone. Typing, and a click or the wheel
+reported to the program, may still clear it, and so can the program, by switching screens or turning mouse reporting
+on again.
 
 **Text a program copies.** A program running in the terminal can put text on the clipboard with the OSC 52 escape
 sequence, as Claude Code does with the text selected in its fullscreen view. Whichever selection the request names, the
@@ -59,12 +67,22 @@ text goes to the one system clipboard. Only writes are honoured:
 - a request in output written before the session was attached is ignored: the replay that opens each attach (or,
   when there was nothing to replay, the first live output after it), a dormant session's saved output, and output still
   waiting to be drawn when the screen is reset, as on a switch to another session;
-- where the platform has no clipboard the request is ignored; there is no fallback to the browser's selection copy.
+- where the platform has no clipboard nothing is put on it; the text is still offered to Copy in the editing menu,
+  which falls back to the browser's selection copy.
 
 A write the clipboard fails shows the same error alert as a failed Copy, with its clipboard remedy (see "Recovery and
 unexpected errors" in `docs/product/error-alerts.md`). A browser's refusal of a copy the user did not just make (no
 recent gesture, or the page not focused) stays silent, so in a browser that refuses every such copy (Safari) a
-program's copy can fail without notice.
+program's copy can fail without notice; Copy in the editing menu, a gesture of the user's, then puts it there.
+
+**The menu offers what a program copied.** The text of the latest honoured write stays on offer to the editing menu's
+Copy while the terminal has no selection of its own; a selection in the terminal comes first. It is offered until the
+user turns back to the program or the screen moves on: a key typed to the program (`Control-C` included), a paste, a
+press in the terminal other than a right-click or, on macOS, a `Control`-click (a click, a drag, an Option-click), a
+reset of the screen (another session selected, a reconnect) or the terminal closing. Moving the pointer and the
+right-click that opens the menu leave it on offer, as does the wheel while the program has mouse reporting on; on an
+alternate screen without mouse reporting the wheel sends the program arrow keys, which drop it like any other key. The
+program's next copy replaces it.
 
 ## Output, scrollback and size
 

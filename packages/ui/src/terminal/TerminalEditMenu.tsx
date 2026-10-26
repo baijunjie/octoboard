@@ -46,7 +46,9 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
       contextTargetRef={contextTargetRef}
       onContextOpen={() => {
         const controller = controllerRef.current;
-        setSelection(controller?.selectedText ?? "");
+        // The terminal's own selection first; failing that, what a program that selects for itself
+        // (under mouse reporting) last copied.
+        setSelection(controller?.selectedText || controller?.programCopiedText || "");
         setInputSession(controller?.inputSessionId);
         controller?.focus();
       }}

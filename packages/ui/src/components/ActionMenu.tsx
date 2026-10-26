@@ -4,7 +4,7 @@ import { MenuContext, useSlottedContext } from "react-aria-components";
 import { setInteractionModality } from "react-aria";
 import React, { useEffect, useId, useRef, useState } from "react";
 
-import { IS_MAC } from "../useWindowShortcut";
+import { isSecondaryPress } from "../useWindowShortcut";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { FailureAlert } from "./FailureAlert";
@@ -529,7 +529,7 @@ export function ActionMenu({
     // must not take focus: a target without its own focus handling would pull it off whatever had
     // it (typically the terminal), and the menu returns focus to where it stood at the gesture.
     const onMouseDown = (event: MouseEvent) => {
-      if (event.button === 2 || (event.button === 0 && event.ctrlKey && (!contextOnly || IS_MAC))) {
+      if (isSecondaryPress(event, !contextOnly)) {
         event.preventDefault();
         // xterm handles a secondary press itself; leaving it through would change the selection
         // or send a mouse report before the editing menu can use it.
@@ -582,7 +582,7 @@ export function ActionMenu({
     const inMenu = (event: Event) => event.target instanceof Element && event.target.closest("[data-slot=dropdown-popover]");
     const onMouseDown = (event: MouseEvent) => {
       if (inMenu(event)) return;
-      if (event.button === 2 || (event.button === 0 && event.ctrlKey && (!contextOnly || IS_MAC))) onOpenChange(false);
+      if (isSecondaryPress(event, !contextOnly)) onOpenChange(false);
     };
     const onContextMenu = (event: MouseEvent) => {
       if (!inMenu(event)) event.preventDefault();

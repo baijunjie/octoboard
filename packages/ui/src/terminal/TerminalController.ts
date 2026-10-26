@@ -4,6 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBufferRange, Terminal } from "@xterm/xterm";
 
 import { interactionIsTouch } from "../touchInput";
+import { isSecondaryPress } from "../useWindowShortcut";
 import { TerminalLinkColors } from "./linkColors";
 import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./pathLinks";
@@ -130,10 +131,10 @@ export interface TerminalControllerHandlers {
    * their target. */
   onLinkHover?: (link: HoveredTerminalLink | undefined) => void;
   /** Puts on the clipboard the text a program in the terminal asks to copy (OSC 52), as Claude Code
-   * does with the text selected in its own fullscreen view; absent where there is no clipboard, which
-   * leaves the request ignored. Never called for output written before the screen's session was
-   * attached: a live session's replay, a dormant session's saved output, or what was still queued
-   * when the screen was reset. */
+   * does with the text selected in its own fullscreen view; absent where there is no clipboard, where
+   * the text is only offered to the editing menu (`programCopiedText`). Never called for output
+   * written before the screen's session was attached: a live session's replay, a dormant session's
+   * saved output, or what was still queued when the screen was reset. */
   copyToClipboard?: (text: string) => void;
   /** What the daemon makes of the file paths in the output, for the session on screen: absent where
    * there is no daemon to ask, which leaves paths as plain text. */
@@ -199,6 +200,11 @@ export class TerminalController {
   /** A live session's replay (the first frame after an attach) written and not yet parsed. What it
    * asks to copy was asked before the attach, and may be long gone from the user's mind. */
   private replayWritesInFlight = 0;
+  /** The text a program last asked to copy (OSC 52), while it still stands for what the user picked
+   * in that program: the editing menu's Copy offers it when the terminal itself has no selection,
+   * since a drag under mouse reporting selects in the program, not here. Dropped once the user turns
+   * back to the program (a key, a paste, a press that cannot open the menu) and with the screen. */
+  private programCopy?: string;
   /** Removes the listeners `mount` puts on the container. */
   private readonly mountListeners = new AbortController();
   /** Set by xterm's `onUserInput` right before the `onData` it belongs to, and consumed there:
@@ -268,7 +274,10 @@ export class TerminalController {
     this.linkColors = new TerminalLinkColors(this.term, paths?.segments);
     this.term.parser.registerOscHandler(OSC_52, (payload) => {
       const text = osc52ClipboardText(payload);
-      if (text && this.savedWritesInFlight === 0 && this.replayWritesInFlight === 0) this.handlers.copyToClipboard?.(text);
+      if (text && this.savedWritesInFlight === 0 && this.replayWritesInFlight === 0) {
+        this.programCopy = text;
+        this.handlers.copyToClipboard?.(text);
+      }
       // Handled even when ignored, which keeps xterm from logging it as an unknown sequence.
       return true;
     });
@@ -290,6 +299,7 @@ export class TerminalController {
         event.key.toLowerCase() === "c"
       ) {
         event.preventDefault();
+        this.programCopy = undefined;
         this.sendInput(new Uint8Array([0x03]));
         return false;
       }
@@ -310,6 +320,9 @@ export class TerminalController {
       ) {
         fromUser = false;
       }
+      // A mouse report is not the user turning back to the program: the pointer crossing the screen
+      // on the way to a right-click must leave what the program copied on offer.
+      if (fromUser && !MOUSE_REPORT.test(data)) this.programCopy = undefined;
       this.sendInput(new TextEncoder().encode(data), fromUser);
     });
     // Mouse reports in the default encoding are not UTF-8: a coordinate is `32 + n`, so a byte can
@@ -338,14 +351,44 @@ export class TerminalController {
     this.container = container;
     this.term.open(container);
     this.exposeReadOnlyView();
-    // Under mouse reporting an Option-click forces a selection rather than reaching the program, and
-    // xterm would turn a click that selected nothing into arrow keys towards it, which a fullscreen
-    // program reads as keys of its own (Claude Code walks its prompt history). Set before xterm's own
-    // listener on its element reads it.
+    const { signal } = this.mountListeners;
     container.addEventListener(
       "mousedown",
-      () => (this.term.options.altClickMovesCursor = this.term.modes.mouseTrackingMode === "none"),
-      { capture: true, signal: this.mountListeners.signal },
+      (event) => {
+        // Under mouse reporting an Option-click forces a selection rather than reaching the program,
+        // and xterm would turn a click that selected nothing into arrow keys towards it, which a
+        // fullscreen program reads as keys of its own (Claude Code walks its prompt history). Set
+        // before xterm's own listener on its element reads it.
+        this.term.options.altClickMovesCursor = this.term.modes.mouseTrackingMode === "none";
+        // A secondary press opens the editing menu, which is how what the program copied gets used.
+        if (!isSecondaryPress(event)) this.programCopy = undefined;
+      },
+      { capture: true, signal },
+    );
+    // xterm reports pointer motion to a program that tracks any motion in the SGR encodings (Claude
+    // Code's fullscreen view does) as the user's input, and clears its own selection on any user input. A selection forced
+    // under mouse reporting (Option-drag on macOS) would then be gone the moment the pointer moved on
+    // its way to a right-click, leaving the editing menu nothing to copy. While the terminal holds a
+    // selection, motion with no button held is kept from the report, which xterm's element listens
+    // for: the program sees no hover until the selection goes, which a click, a key or the wheel still
+    // does. Over the screen the motion is held back only once it has passed the screen element, whose
+    // own listener finds the link under the pointer, so a link's hover still ends when it is left.
+    const screen = this.term.element?.querySelector<HTMLElement>(".xterm-screen");
+    const holdBack = (event: MouseEvent) =>
+      event.buttons === 0 && this.term.modes.mouseTrackingMode === "any" && this.term.hasSelection();
+    container.addEventListener(
+      "mousemove",
+      (event) => {
+        if (!(event.target instanceof Node && screen?.contains(event.target)) && holdBack(event)) event.stopPropagation();
+      },
+      { capture: true, signal },
+    );
+    screen?.addEventListener(
+      "mousemove",
+      (event) => {
+        if (holdBack(event)) event.stopPropagation();
+      },
+      { signal },
     );
     // Observed: fitting or clearing the terminal in the same task as `open()` throws from inside
     // xterm's own scheduled work, where no caller's `try` can catch it — and an uncaught throw
@@ -412,6 +455,7 @@ export class TerminalController {
     this.linkColors.dispose();
     this.pathLinks?.clear();
     this.mountListeners.abort();
+    this.programCopy = undefined;
     this.disposed = true;
     this.generation++;
     this.socket?.close();
@@ -424,6 +468,12 @@ export class TerminalController {
   /** Text selected in the terminal buffer, independent of the document's selection. */
   get selectedText(): string {
     return this.term.getSelection();
+  }
+
+  /** The text the program on screen last asked to copy (OSC 52), while it is still current; see
+   * `programCopy`. */
+  get programCopiedText(): string | undefined {
+    return this.programCopy;
   }
 
   selectAll(): void {
@@ -657,6 +707,7 @@ export class TerminalController {
    * next session's screen. */
   private resetScreen(): void {
     this.screenSessionId = undefined;
+    this.programCopy = undefined;
     // What the daemon said of the paths was for the session shown until now.
     this.pathLinks?.clear();
     this.savedLoad?.close();
