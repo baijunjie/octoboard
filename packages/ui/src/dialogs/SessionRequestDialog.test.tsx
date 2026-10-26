@@ -7,6 +7,7 @@ import { setLanguage } from "../i18n/language";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "../gallery/fixtures/builders";
 import { SESSION_REQUEST_NOT_WAITING } from "../protocol";
 import type { SessionRequest, TrustPrompt } from "../store";
+import { press } from "../components/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -236,12 +237,15 @@ it("shows a dash for a session the store does not know", () => {
   expect(dialogText()).toContain("a Codex session on —");
 });
 
-// The account's unfinished sharing change is warned of in the dialog, which is the confirmation, for
-// the account of the session that comes back and for the one that holds a record, and not otherwise.
+// The account's unfinished sharing change is warned of in the dialog, which is the confirmation, by a
+// warning mark right after the account in the sentence, for the account of the session that comes back
+// and for the one that holds a record, and not otherwise.
+const incompleteMark = () => document.body.querySelector<HTMLElement>('[role=alertdialog] button[aria-label="Sharing may be incomplete"]');
+
 it.each([
   { name: "a session's account", asked: reopening },
   { name: "a record's account", asked: { ...request, action: "resume_record" as const, account: "a-half", conversation: "x" } },
-])("warns when the account's last sharing change did not finish: $name", ({ asked }) => {
+])("marks the account whose last sharing change did not finish, in the sentence: $name", ({ asked }) => {
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
   const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true };
   mountPendingQuestionDialog({
@@ -250,7 +254,19 @@ it.each([
     settings: { ...snapshotState({}).settings!, accounts: [half] },
     sessionRequests: [asked],
   }, ack);
-  expect(dialogText()).toContain("The last sharing change of Half did not finish");
+  const mark = incompleteMark()!;
+  expect(mark).not.toBeNull();
+  // In the question's paragraph, right after the account's reference, and nothing of it written beside.
+  expect(mark.closest("p")?.textContent).toContain("Half");
+  expect(mark.previousElementSibling).toBeNull();
+  expect(mark.parentElement?.previousElementSibling?.textContent).toBe("Half");
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(dialogText()).not.toContain("The last sharing change");
+  // The popover holds the sentence and the consequence.
+  press(mark);
+  const popover = document.body.querySelector('[role="dialog"]')!;
+  expect(popover.getAttribute("aria-label")).toBe("Sharing may be incomplete");
+  expect(popover.textContent?.replace(/[\u2066-\u2069]/g, "")).toBe("The last sharing change of Half did not finish.Its configuration and conversations may be incomplete.");
 });
 
 it("does not warn while the account's sharing change is running", () => {
@@ -262,7 +278,67 @@ it("does not warn while the account's sharing change is running", () => {
     settings: { ...snapshotState({}).settings!, accounts: [half] },
     sessionRequests: [reopening],
   }, ack);
-  expect(dialogText()).not.toContain("sharing change");
+  expect(incompleteMark()).toBeNull();
+});
+
+const halfCodex = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true };
+const settingsWith = (accounts: unknown[]) => ({ ...snapshotState({}).settings!, accounts: accounts as never });
+const statusTexts = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).filter(Boolean);
+
+it.each([
+  { name: "a switch of a session the window does not know", asked: { ...request, action: "switch" as const, agent: "codex" as const, target: "s-gone", account: "a-half" }, state: { ...names } },
+  { name: "a handoff in a console the window does not know", asked: { ...request, action: "handoff" as const, agent: "codex" as const, target: "s-held", account: "a-half" }, state: {} },
+])("marks the account in the sentence where the form is not drawn: $name", ({ asked, state }) => {
+  const held = sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" });
+  mountPendingQuestionDialog({ ...snapshotState({ sessions: [held] }), ...state, settings: settingsWith([halfCodex]), sessionRequests: [asked] }, ack);
+  const mark = incompleteMark()!;
+  expect(mark).not.toBeNull();
+  expect(mark.closest("p")?.textContent).toContain("Half");
+  expect(mark.parentElement?.previousElementSibling?.textContent).toBe("Half");
+  expect(document.body.querySelectorAll('[role=alertdialog] button[aria-label="Sharing may be incomplete"]')).toHaveLength(1);
+});
+
+it("says a sharing change that ends unfinished while the dialog is open once, and not one it opened with", async () => {
+  const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
+  const { store } = mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [held] }),
+    ...names,
+    settings: settingsWith([{ ...halfCodex, share_default_config_incomplete: false }]),
+    sessionRequests: [reopening],
+  }, ack);
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(incompleteMark()).toBeNull();
+  expect(statusTexts()).toEqual([]);
+  await act(async () => store.setState((s) => ({ settings: { ...s.settings, accounts: [halfCodex] } })));
+  expect(incompleteMark()).not.toBeNull();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(statusTexts().map((text) => text?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["The last sharing change of Half did not finish."]);
+});
+
+it("does not say an unfinished sharing change the dialog opened with", async () => {
+  const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
+  mountPendingQuestionDialog({ ...snapshotState({ sessions: [held] }), ...names, settings: settingsWith([halfCodex]), sessionRequests: [reopening] }, ack);
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(incompleteMark()).not.toBeNull();
+  expect(statusTexts()).toEqual([]);
+});
+
+it("does not say an unfinished sharing change of the request that comes up after the first is answered", async () => {
+  const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-one" });
+  const other = sessionOf("s-other", "c-1", "p-1", "Other work", "archived", { account_id: "a-half" });
+  const first: SessionRequest = { ...reopening, requestId: "r-first", requestedAt: 1 };
+  const second: SessionRequest = { ...reopening, requestId: "r-second", target: "s-other", requestedAt: 2 };
+  const { store } = mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [held, other] }),
+    ...names,
+    settings: settingsWith([{ ...halfCodex, id: "a-one", name: "One", share_default_config_incomplete: false }, halfCodex]),
+    sessionRequests: [first, second],
+  }, ack);
+  expect(incompleteMark()).toBeNull();
+  await act(async () => store.setState({ sessionRequests: [second] }));
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(incompleteMark()).not.toBeNull();
+  expect(statusTexts()).toEqual([]);
 });
 
 // A request to switch a session's account or hand it off names the session, the agent and the account
@@ -354,7 +430,8 @@ it.each([
     ...extra,
   }, ack);
   expect(dialogText()).toContain("is disabled, so a session cannot use it");
-  expect(dialogText()).toContain("Account is disabled");
+  // The error of the account field, which is marked invalid.
+  expect(document.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toContain("is disabled, so a session cannot use it");
   expect(findButton("Switch account")?.disabled).toBe(true);
 });
 
@@ -383,11 +460,41 @@ it("a switch leaves out a turned-off account that is neither the session's nor t
   expect(options.some((text) => text.includes("Three"))).toBe(false);
 });
 
-it("a switch warns of an unfinished sharing change of the account its form is on, and follows the form", async () => {
+it("a switch marks an unfinished sharing change of the account its form is on, inside the account field, and follows the form", async () => {
   mountWith(switching, owned, [claudeAccounts[0], half]);
-  expect(dialogText()).toContain("The last sharing change of Two did not finish");
+  const mark = incompleteMark()!;
+  expect(mark).not.toBeNull();
+  // Inside the account picker's box, beside its trigger, not written under it.
+  expect(mark.closest(".relative")?.querySelector('[data-slot="select-trigger"]')).not.toBeNull();
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(dialogText()).not.toContain("The last sharing change");
+  press(mark);
+  expect(document.body.querySelector('[role="dialog"]')?.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("The last sharing change of Two did not finish");
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("Its configuration and conversations may be incomplete.");
+  await act(async () => document.body.querySelector('[role="dialog"]')!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await pickOption("Default");
-  expect(dialogText()).not.toContain("sharing change of Two");
+  expect(incompleteMark()).toBeNull();
+});
+
+it("a switch says an unfinished sharing change of its account once when it appears after the dialog opened", async () => {
+  const { store } = mountWith(switching, owned, [claudeAccounts[0], { ...half, share_default_config_incomplete: false }]);
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(incompleteMark()).toBeNull();
+  await act(async () => store.setState((s) => ({ settings: { ...s.settings, accounts: [claudeAccounts[0], half] as never } })));
+  expect(incompleteMark()).not.toBeNull();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(statusTexts().map((text) => text?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["The last sharing change of Two did not finish."]);
+});
+
+it("a handoff marks an unfinished sharing change of the account its form is on, inside the joined account picker", () => {
+  const codexHalf = { ...half, id: "a-codex", agent: "codex" as const, name: "Half" };
+  const handoff: SessionRequest = { ...request, action: "handoff", agent: "codex", target: "s-held", account: "a-codex" };
+  mountWith(handoff, owned, [codexHalf] as never);
+  const mark = incompleteMark()!;
+  expect(mark).not.toBeNull();
+  const triggers = [...document.body.querySelectorAll('[role=alertdialog] [data-slot="select-trigger"]')];
+  expect(mark.closest(".relative")?.querySelector('[data-slot="select-trigger"]')).toBe(triggers[1]);
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
 });
 
 it("a switch approves with the account the user picked instead", async () => {
@@ -450,11 +557,20 @@ it("a handoff whose agent can no longer be picked shows empty pickers until the 
   expect(findButton("Hand off session")?.disabled).toBe(false);
 });
 
-it.each([
-  { status: "archived" as const, text: "is archived" },
-  { status: "starting" as const, text: "still starting" },
-])("a switch of a session that is $status cannot be confirmed", ({ status, text }) => {
-  mountWith(switching, sessionOf("s-held", "c-1", "p-1", "Old work", status, { account_id: "a-one" }));
-  expect(dialogText()).toContain(text);
+it("a switch of a session that is still starting cannot be confirmed", () => {
+  mountWith(switching, sessionOf("s-held", "c-1", "p-1", "Old work", "starting", { account_id: "a-one" }));
+  expect(dialogText()).toContain("still starting");
   expect(findButton("Switch account")?.disabled).toBe(true);
+});
+
+// The session being archived ends the dialog's purpose: the dialog is the failure, and acknowledging it refuses.
+it("a switch of a session that is archived turns the dialog into a failure modal, and acknowledging it refuses the request", async () => {
+  const dialog = mountWith(switching, sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-one" }));
+  expect(document.querySelector('[role="alertdialog"] [data-slot$="icon"]')).not.toBeNull();
+  expect(dialogText()).toContain("Cannot switch the account");
+  expect(dialogText()).toContain("The session is archived, so its account cannot be switched.");
+  expect(findButton("Switch account")).toBeUndefined();
+  expect(findButton("Refuse")).toBeUndefined();
+  await pressButton("OK");
+  expect(dialog.sent()).toEqual([expect.objectContaining({ approve: false })]);
 });

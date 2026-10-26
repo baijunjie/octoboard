@@ -132,7 +132,17 @@ export interface ActionMenuPanel {
   panel: (context: ActionMenuPanelContext) => React.ReactNode;
 }
 
-export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | "separator";
+/** A line of muted text at the menu's end that says something about the items above it (a limit the list
+ * hit): it carries no glyph, its text lines up with the items' labels (past the check indicator of a menu with
+ * choices too), and it cannot be chosen. It stays in
+ * the arrow-key walk, so it is reached and read from the keyboard. */
+export interface ActionMenuNote {
+  /** The note's text. */
+  label: string;
+  note: true;
+}
+
+export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | ActionMenuNote | "separator";
 
 /** A lucide glyph is drawn quieter than the label beside it, or in the danger colour with a
  * destructive item's label; an element (an agent's mark) keeps its own colours. */
@@ -151,7 +161,7 @@ function ItemIcon({
 }
 
 function isLeaf(entry: ActionMenuEntry): entry is ActionMenuItem {
-  return entry !== "separator" && !("items" in entry) && !("panel" in entry);
+  return entry !== "separator" && !("items" in entry) && !("panel" in entry) && !("note" in entry);
 }
 
 function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
@@ -274,6 +284,16 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
       // A menu built from conditional items can leave a separator with nothing on one side; a separator
       // is drawn only between two items, and a run of them draws one.
       if (nodes.length > 0 && index < entries.length - 1 && entries[index + 1] !== "separator") nodes.push(<Separator key={index} />);
+    } else if ("note" in entry) {
+      nodes.push(
+        // Disabled so that it cannot be chosen, yet drawn at full opacity as the quiet text it is, not as a
+        // branch that is off; the spacer holds the place of the glyph the items have, and `ps-7` that of the check
+        // indicator a menu with choices reserves at the start of each of its items (HeroUI's `ps-7` for them).
+        <Dropdown.Item key={index} id={itemId(index)} textValue={entry.label} isDisabled className={`cursor-default data-[disabled=true]:opacity-100${entries.some(isChoice) ? " ps-7" : ""}`}>
+          <span aria-hidden="true" className="size-4 shrink-0" />
+          <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted" dir="auto">{entry.label}</Label>
+        </Dropdown.Item>,
+      );
     } else if ("items" in entry || "panel" in entry) {
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>

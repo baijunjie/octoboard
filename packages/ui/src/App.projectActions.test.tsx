@@ -261,6 +261,29 @@ it("restores only the confirmed project and reports success", async () => {
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
+it("says a truncated branch list is limited, as a muted note after the branches and not a failure", async () => {
+  const { daemon, project } = mountApp();
+  await act(async () => daemon.store.setState((state) => ({
+    gitStatuses: new Map(state.gitStatuses).set(project.id, {
+      project: project.id, repository: true, branch: "main", detached: false,
+      ahead: 0, behind: 0, activity: "idle",
+    }),
+  })));
+  vi.mocked(daemon.request).mockImplementation((async (body: { type: string }) => body.type === "list_project_branches"
+    ? { type: "project_branches", project: project.id, branches: [{ name: "alpha" }, { name: "beta" }], complete: false }
+    : { type: "ack" }) as never);
+  await openProjectMenu(project.name);
+  await press("Git");
+  await press("Switch branch");
+  const notice = Array.from(document.querySelectorAll("[role=menuitem]")).find((item) => controlName(item).startsWith("There are more branches"))!;
+  expect(controlName(notice)).toBe("There are more branches than this list can show. The others are not listed.");
+  expect(notice.getAttribute("aria-disabled")).toBe("true");
+  // The last item, with no glyph of the branches' kind.
+  expect(notice.querySelector("svg")).toBeNull();
+  expect([...notice.closest("[role=menu]")!.querySelectorAll("[role^=menuitem]")].at(-1)).toBe(notice);
+  expect(menuHas("Some branches could not be listed")).toBe(false);
+});
+
 it("keeps a native operation rejection string as the error diagnostic", async () => {
   const { daemon } = mountApp();
   vi.mocked(daemon.request).mockRejectedValueOnce("Native file manager rejected");

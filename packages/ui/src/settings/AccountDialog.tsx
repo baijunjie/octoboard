@@ -80,18 +80,14 @@ export function AccountDialog({
   return (
     <>
       <Dialog
-        title={
-          renameDefault
-            ? <Message id="settings.accounts.dialog.renameDefault" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />
-            : editing
-              ? <Message id="settings.accounts.dialog.edit" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[editing.agent]}</InlineReference> }} />
-              : t("settings.accounts.add")
-        }
+        title={t(renameDefault ? "settings.accounts.dialog.renameDefault" : editing ? "settings.accounts.dialog.edit" : "settings.accounts.add")}
         onClose={onClose}
         submitLabel={editing || renameDefault ? t("common.save") : t("common.add")}
         busy={busy}
         onSubmit={submit}
       >
+        {renameDefault && <p className="text-sm"><Message id="settings.accounts.dialog.renameDefaultSubject" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>}
+        {editing && <p className="text-sm"><Message id="settings.accounts.dialog.editSubject" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[editing.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{editing.name}</InlineReference> }} /></p>}
         {!editing && !renameDefault && (
           <OptionSelect
             label={t("settings.accounts.agent")}

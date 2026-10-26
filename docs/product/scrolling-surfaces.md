@@ -78,9 +78,9 @@ Once it holds more than it can show, each of these fades at its edge:
   as a column as tall as the sections it holds, however many there are, which therefore never scrolls and carries
   no fade;
 - the **screens shown before there is anything to show** (see "The window chrome and the content panel" in
-  `docs/product/window-layout.md`): the column of content of the screen for a daemon that could not start or for no
-  daemon address being known (see "Starting up" in `docs/product/application-lifecycle.md`), and on the screen for a
-  UI that failed both that column and the stack trace in it.
+  `docs/product/window-layout.md`): the column of content of each of them, and, in the popover of the mark after the
+  heading of the screens for a UI that failed and for a daemon that could not start, the stack trace and the daemon's
+  message.
 
 Three kinds of scrolling show no fade:
 
@@ -108,12 +108,12 @@ covers. These are:
   message, a page of text — has nothing in its body to take focus otherwise.
 - **the welcome screen's content area** (see "Keyboard focus" in `docs/product/welcome-screen.md`).
 - **the column of content of a screen shown before there is anything to show**, named as the screen's message. Its
-  buttons sit at the end of that content and the window itself never scrolls, so a long message — the reasons a
-  daemon could not start, say — would otherwise leave nothing between those buttons and the top of the screen to take
-  focus. In Tab order it comes before the buttons it holds.
-- **the stack trace on the screen for a UI that failed**, named "Error details". Nothing else on that screen
-  scrolls the stack, so without it the fade at the stack's edge would be saying there is more where a keyboard could
-  not go. In Tab order it comes before Try again, and after the screen's column where that is a stop too.
+  buttons sit at the end of that content and the window itself never scrolls, so a long message — the instructions
+  of the screen with no daemon address, say — would otherwise leave nothing between those buttons and the top of the
+  screen to take focus. In Tab order it comes before the buttons it holds.
+- **the stack trace in the heading mark's popover on the screen for a UI that failed, and the daemon's message in the
+  heading mark's popover on the screen for a daemon that could not start**, each named "Error details". Nothing else in that popover takes
+  focus, so without it the fade at the block's edge would be saying there is more where a keyboard could not go.
 - **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes
   focus, so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts… (see
   "What the panel shows" in `docs/product/account-quotas.md`).

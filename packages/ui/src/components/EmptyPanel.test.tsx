@@ -94,3 +94,36 @@ it("speaks the heading and the line, and not the buttons, when it announces", ()
   expect(alert.textContent).toBe("Could not loadGone.");
   expect(alert.querySelector("button")).toBeNull();
 });
+
+it("draws a heading mark right after the heading, on its line, and keeps it out of the button row", () => {
+  const container = mount(
+    <EmptyPanel
+      tone="danger"
+      icon={FolderOpen}
+      headingLevel={1}
+      message="Could not start"
+      action={{ label: "Quit", onPress: () => {} }}
+      headingMark={<button type="button" aria-label="Error details" />}
+    />,
+  );
+  const heading = container.querySelector("h1")!;
+  const mark = container.querySelector<HTMLElement>("button[aria-label='Error details']")!;
+  expect(mark.previousElementSibling).toBe(heading);
+  expect(mark.parentElement).toBe(heading.parentElement);
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent || button.getAttribute("aria-label"))).toEqual(["Error details", "Quit"]);
+});
+
+it("keeps a heading mark out of the announced element and a row to two buttons", () => {
+  const container = mount(
+    <EmptyPanel tone="danger" icon={FolderOpen} headingLevel={1} message="Could not start" action={{ label: "Try again", onPress: () => {} }} secondaryAction={{ label: "Quit", onPress: () => {} }} headingMark={<button type="button" aria-label="Why" />} />,
+  );
+  expect(container.querySelector("[role=alert]")).toBeNull();
+  expect(container.querySelectorAll("button")).toHaveLength(3);
+  // A heading mark takes the place of Details and cannot be announced with the heading.
+  // @ts-expect-error a heading mark and Details are not both allowed
+  <EmptyPanel icon={FolderOpen} message="x" headingMark={<span />} details={<span />} />;
+  // @ts-expect-error a heading mark is not announced
+  <EmptyPanel icon={FolderOpen} message="x" headingMark={<span />} announce />;
+  // @ts-expect-error a second way out and Details are not both allowed
+  <EmptyPanel icon={FolderOpen} message="x" secondaryAction={{ label: "Quit", onPress: () => {} }} details={<span />} />;
+});

@@ -6,6 +6,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { pageOf } from "../gallery/fixtures/builders";
+import { press } from "../components/detailsTestSupport";
 import { PanelFrameProvider } from "../components/PanelHeader";
 import { focusLanding, focusLandingWithoutText } from "../components/regionFocus";
 import { PlatformProvider } from "../platform/react";
@@ -183,10 +184,15 @@ it("shows a failed page listing in the panel with its reason and Try again, and 
   expect(container.querySelector('[data-slot="empty-state"]')).toBeNull();
 });
 
-it("hands focus on from Try again when the listing succeeds and the warning above the pages goes", async () => {
-  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+const MARK = 'button[aria-label="Could not load the pages of this session"]';
+
+/** The panel with two pages in hand, whose first listing is answered by `request`'s first reply. */
+async function renderListed(request: Daemon["request"]) {
   const pages = [pageOf("page-0", "console-session", "<p>Page 0</p>", 0), pageOf("page-1", "console-session", "<p>Page 1</p>", 1)];
-  const store = createStateStore({ connectionState: "open", pages: new Map([["console-session", pages]]) });
+  return renderWith(request, createStateStore({ connectionState: "open", pages: new Map([["console-session", pages]]) }));
+}
+
+async function renderWith(request: Daemon["request"], store: ReturnType<typeof createStateStore>) {
   const daemon: Daemon = {
     store, request, toastError: vi.fn(), toastNotice: vi.fn(),
     onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
@@ -208,59 +214,94 @@ it("hands focus on from Try again when the listing succeeds and the warning abov
       </DaemonProvider>
     </PlatformProvider>,
   ));
-  const retry = [...container.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
-  act(() => retry.focus());
-  await act(async () => retry.click());
-  await act(async () => { await Promise.resolve(); });
+  return container;
+}
+
+const popoverRetry = () => [...document.querySelectorAll('[role="dialog"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+const announcement = (container: HTMLElement) => container.querySelector('[role="status"].sr-only')?.textContent ?? "";
+
+it("marks a failed refresh of the listed pages at the panel title with its reason and Try again in the popover, with no Alert or loose text", async () => {
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+  const container = await renderListed(request);
+  const mark = container.querySelector<HTMLButtonElement>(MARK)!;
+  expect(mark).not.toBeNull();
   expect(container.querySelector('[data-slot="alert-root"]')).toBeNull();
-  expect(document.activeElement).not.toBe(document.body);
-  expect(container.contains(document.activeElement)).toBe(true);
+  expect(container.querySelector("[role=alert]")).toBeNull();
+  expect(container.textContent).not.toContain("Something unexpected went wrong.");
+  const heading = container.querySelector("h2")!;
+  expect(heading.textContent).toBe("Report");
+  expect(heading.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(mark.closest("h2")).toBeNull();
+  press(mark);
+  const dialog = document.querySelector('[role="dialog"]')!;
+  expect(dialog.textContent).toContain("Something unexpected went wrong.");
+  expect(popoverRetry()).toBeDefined();
+  await act(async () => popoverRetry().click());
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(container.querySelector(MARK)).toBeNull();
 });
 
-it("keeps the warning above the pages while Try again's listing is out, its button pending and focused, and announces a second failure", async () => {
+it("says a failed refresh of the listed pages once through the panel's status region", async () => {
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+  const container = await renderListed(request);
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(announcement(container)).toBe("Could not load the pages of this session");
+  expect(container.querySelectorAll('[role="status"]')).toHaveLength(1);
+});
+
+it("does not say the listing failure again when pages arrive after the whole card announced it, and says a new failure", async () => {
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockRejectedValueOnce(new Error("Daemon busy"));
+  const store = createStateStore({ connectionState: "open" });
+  const container = await renderWith(request, store);
+  expect(container.querySelector('[data-slot="empty-state"]')).not.toBeNull();
+  expect(container.querySelector(MARK)).toBeNull();
+  await act(async () => store.setState({ pages: new Map([["console-session", [pageOf("page-0", "console-session", "<p>Page 0</p>", 0)]]]) }));
+  expect(container.querySelector(MARK)).not.toBeNull();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(announcement(container)).toBe("");
+  // A failure after that, with the pages in hand, is a new one.
+  await act(async () => store.setState({ snapshotEpoch: store.getState().snapshotEpoch + 1 }));
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  expect(announcement(container)).toBe("Could not load the pages of this session");
+});
+
+it("hands focus on from the mark to a header control when the listing succeeds and the mark goes", async () => {
+  let answer!: (event: { type: "ack" }) => void;
+  const request = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("Daemon busy"))
+    .mockReturnValueOnce(new Promise((resolve) => void (answer = resolve)));
+  const container = await renderListed(request);
+  const mark = container.querySelector<HTMLButtonElement>(MARK)!;
+  press(mark);
+  act(() => popoverRetry().focus());
+  await act(async () => popoverRetry().click());
+  // The mark stays while the listing is out, and focus is on it when the listing answers.
+  await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+  act(() => mark.focus());
+  expect(document.activeElement).toBe(mark);
+  await act(async () => answer({ type: "ack" }));
+  expect(container.querySelector(MARK)).toBeNull();
+  expect(document.activeElement).not.toBe(document.body);
+  expect(container.contains(document.activeElement)).toBe(true);
+  expect(document.activeElement?.tagName).toBe("BUTTON");
+});
+
+it("keeps the mark while Try again's listing is out and across a second failure, which is not said again", async () => {
   let finish!: (error: Error) => void;
   const request = vi
     .fn()
     .mockRejectedValueOnce(new Error("Daemon busy"))
     .mockReturnValueOnce(new Promise((_, reject) => void (finish = reject)));
-  const pages = [pageOf("page-0", "console-session", "<p>Page 0</p>", 0)];
-  const store = createStateStore({ connectionState: "open", pages: new Map([["console-session", pages]]) });
-  const daemon: Daemon = {
-    store, request, toastError: vi.fn(), toastNotice: vi.fn(),
-    onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
-  };
-  const container = document.body.appendChild(document.createElement("section"));
-  container.dataset.region = "panel-report";
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  await act(async () => root.render(
-    <PlatformProvider value={{ kind: "browser" }}>
-      <DaemonProvider value={daemon}>
-        <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
-          <ReportPanel consoleSessionId="console-session" peek={undefined}
-            onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
-        </PanelFrameProvider>
-      </DaemonProvider>
-    </PlatformProvider>,
-  ));
-  const retry = [...container.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
-  const first = container.querySelector("[role=alert]")!;
-  act(() => retry.focus());
-  await act(async () => retry.click());
+  const container = await renderListed(request);
+  const mark = container.querySelector<HTMLButtonElement>(MARK)!;
+  await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
+  press(mark);
+  await act(async () => popoverRetry().click());
   expect(request).toHaveBeenCalledTimes(2);
-  expect(container.querySelector('[data-slot="alert-root"]')).not.toBeNull();
-  expect(retry.isConnected).toBe(true);
-  expect(retry.getAttribute("aria-disabled")).toBe("true");
-  expect(retry.hasAttribute("data-pending")).toBe(true);
-  expect(document.activeElement).toBe(retry);
+  expect(container.querySelector(MARK)).toBe(mark);
   await act(async () => finish(new Error("Daemon busy")));
-  expect(retry.isConnected).toBe(true);
-  expect(retry.getAttribute("aria-disabled")).not.toBe("true");
-  expect(document.activeElement).toBe(retry);
-  const second = container.querySelector("[role=alert]")!;
-  expect(second).not.toBe(first);
-  expect(second.textContent).toContain("Something unexpected went wrong.");
+  expect(container.querySelector(MARK)).toBe(mark);
+  expect(container.querySelector("[role=alert]")).toBeNull();
+  expect(announcement(container)).toBe("Could not load the pages of this session");
 });

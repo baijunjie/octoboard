@@ -9,7 +9,7 @@ import { errorDetails, errorRemedy } from "./errorParts";
 import { EmptyPanel } from "./EmptyPanel";
 
 /** A pane's whole subject that could not be read, in its place: the empty-state shape in the danger
- * tone, centred in the pane (see "Errors shown among other content" in `docs/ui-accessibility.md`).
+ * tone, centred in the pane (see "A whole subject that failed" in `docs/ui-accessibility.md`).
  * `title` is the heading saying what could not be loaded; the line under it is `summary`, or the
  * failure's own sentence when `message` is given; under it goes the one main thing to do, `remedy`
  * or what `message` holds of it, and the rest is behind Details (further explanation, then raw

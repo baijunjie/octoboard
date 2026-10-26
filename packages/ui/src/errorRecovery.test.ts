@@ -40,7 +40,13 @@ it("preserves local typed remedies and OS causes through presentation", () => {
   const failure = new Error("operation failed", { cause });
   expect(classifyError(errorPresentation(failure))).toEqual({ kind: "actionable", recovery: "diskSpace" });
   expect(classifyError(new ActionableError("translated", "clipboard"))).toEqual({ kind: "actionable", recovery: "clipboard" });
-  expect(classifyError(new ActionableError("translated", "file", { cause }))).toEqual({ kind: "actionable", recovery: "diskSpace" });
+  expect(classifyError(new ActionableError("translated", "fileWrite", { cause }))).toEqual({ kind: "actionable", recovery: "diskSpace" });
+});
+
+it("keeps a file read's own remedy over the writing remedy an OS signature names", () => {
+  const cause = Object.assign(new Error("Permission denied (os error 13)"), { code: "EACCES" });
+  expect(classifyError(new ActionableError("Could not read the file.", "fileRead", { cause, detail: "Permission denied (os error 13)" }))).toEqual({ kind: "actionable", recovery: "fileRead" });
+  expect(classifyError(new ActionableError("Could not save the file", "fileWrite", { cause }))).toEqual({ kind: "actionable", recovery: "access" });
 });
 
 it.each(["issueLink", "openExternal"] as const)("keeps %s recovery specific to opening the external destination", (recovery) => {

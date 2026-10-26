@@ -48,7 +48,7 @@ export function ChangeTree({
   layout,
   collapsed,
   onCollapsedChange,
-  failures,
+  headingMarks,
 }: {
   items: ChangeItem[];
   /** The key of the change the viewer showed last. */
@@ -60,12 +60,12 @@ export function ChangeTree({
   /** Row keys of the sections, the commits and the directories folded away. */
   collapsed: ReadonlySet<string>;
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
-  /** The mark of a section's failure to be listed, which that section's heading carries; a section
-   * with none of its rows keeps its heading for it. */
-  failures?: ReadonlyMap<ChangeSection, React.ReactNode>;
+  /** The mark of a section's failure to be listed, or of its list being cut short, which that section's
+   * heading carries; a section with none of its rows keeps its heading for it. */
+  headingMarks?: ReadonlyMap<ChangeSection, React.ReactNode>;
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const groups = useMemo(() => changeGroups(items, layout, failures?.keys()).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout, failures]);
+  const groups = useMemo(() => changeGroups(items, layout, headingMarks?.keys()).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout, headingMarks]);
   // Only the commits and directories of the sections on screen: a folded section renders none of
   // its rows, so whether a row inside one is folded is not this list's to decide. react-aria hands
   // an expanded key it knows nothing of back unchanged, so those keys would survive either way;
@@ -159,7 +159,7 @@ export function ChangeTree({
             onAction={onAction}
             // `collapsed` among the dependencies, or the collection keeps the rows of a section that
             // has just been folded: nothing else about it changed.
-            dependencies={[language, selected, collapsed, layout, failures]}
+            dependencies={[language, selected, collapsed, layout, headingMarks]}
           >
             {(group) => (
               <TreeSection className="h-full" id={group.section}>
@@ -167,7 +167,7 @@ export function ChangeTree({
                   <ChangeSectionHeading
                     section={group.section}
                     count={group.items.length}
-                    failure={failures?.get(group.section)}
+                    mark={headingMarks?.get(group.section)}
                     collapsed={collapsed}
                     onCollapsedChange={onCollapsedChange}
                     topDivider={group.previousSection !== undefined && !collapsed.has(sectionKey(group.previousSection))}

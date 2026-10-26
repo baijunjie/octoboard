@@ -1,44 +1,49 @@
 import { Label, ProgressBar } from "@heroui/react";
-import React, { useEffect, useId, useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 
 import { SharingCauseLine, SharingCauseSummary, SharingDetails, SharingFailureReason } from "../components/SharingFailure";
-import { ErrorAlert } from "../components/ErrorAlert";
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { HelpTip } from "../components/HelpTip";
 import { InlineReference } from "../components/InlineReference";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { StatusMark } from "../components/StatusMark";
 import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../daemonMessage";
-import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Account, AccountSharing } from "../protocol";
+import { reportError } from "../reportError";
 import { useDaemon, useDaemonStore } from "../store";
 import { SettingRow, SettingSwitch } from "./SettingRow";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
  * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the
- * account's details dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end): the
- * progress bar and the warning take the row's full width under it. What the switch does now is the row's description,
- * following its position (and left out while a change runs or did not finish); what turning it off does is behind the
- * label's help tip, with the idle sessions it would end; and under the description, why the switch is locked. A change is
- * carried out at once, so the switch is either free or unavailable, and says which. Unavailable, it stays focusable and
- * describes itself, so a keyboard user hears why (see "Buttons" in `docs/ui-accessibility.md`):
+ * account's details dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end,
+ * with the warning's mark after it): the progress bar takes the row's full width under it. What the switch does now
+ * is the row's description, following its position (and left out while a change runs or did not finish); what
+ * turning it off does is behind the label's help tip, with the idle sessions it would end; and under the
+ * description, why the switch is locked. A change is carried out at once, so the switch is either free or
+ * unavailable, and says which. Unavailable, it stays focusable and describes itself, so a keyboard user hears why
+ * (see "Buttons" in `docs/ui-accessibility.md`):
  * - free: nothing under it;
  * - unavailable while sessions of the account run or start under its directory, or it is being signed in (`in_use`),
  *   saying so;
  * - unavailable while the change runs (`progress`), under a progress bar that every window shows from the daemon's
  *   `account_sharing` event;
- * - after a failure, or a change the daemon restarted in the middle of (`share_default_config_incomplete`), one compact
- *   warning saying what did not finish and, for a failure, two sentences: with a single cause, that cause's own line
- *   and its fix; with several, that some files or folders could not be changed and the way to try again (turning the
- *   switch). Behind its Details button are the line of each cause with its fix (when there are several), the way to try
- *   again (when the fix took its place), the note on idle sessions and the raw diagnostics.
+ * - after a failure, or a change the daemon restarted in the middle of (`share_default_config_incomplete`), a warning
+ *   mark right after the switch, named "Last sharing change", with nothing written beside it. Its popover says what
+ *   did not finish and, for a failure, two sentences: with a single cause, that cause's own line and its fix; with
+ *   several, that some files or folders could not be changed and the way to try again (turning the switch). Under
+ *   them are the line of each cause with its fix (when there are several), the way to try again (when the fix took its
+ *   place), the note on idle sessions and the raw diagnostics.
  *   The switch then shows the position it had before the change, so turning it is asking for the recorded choice once
  *   more, which the daemon treats as the retry (but for a default directory that moved, which only turning sharing off
- *   and on again mends; the switch then shows the recorded choice). The warning describes the switch in place of its
- *   caption. Focus inside it goes to the switch when it goes. */
+ *   and on again mends; the switch then shows the recorded choice). The switch is described by the title in place of
+ *   its caption (a hidden copy, since the popover is not there while closed); the title is spoken when the mark appears
+ *   after a change this view saw, unless this window asked for it: the error alert dialog that opens then speaks it.
+ *   Focus on the mark or in its popover goes to the switch when the mark goes. */
 export function AccountSharingSwitch({ account }: { account: Account }): React.ReactElement {
   const t = useT();
-  const { request, toastError } = useDaemon();
+  const { request } = useDaemon();
   const sharing = useDaemonStore((s) => s.accountSharing.get(account.id));
   const [busy, setBusy] = useState(false);
   const id = useId();
@@ -56,32 +61,40 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
   // A retry is turning the switch, which asks for the recorded choice again; so the switch shows the position it had
   // before. A moved default directory cannot be mended by asking again, so it shows the recorded choice.
   const shown = unfinished && !moved && !busy ? !shared : shared;
+  const title = t(failure
+    ? (shared ? "settings.accounts.sharing.failedOn" : "settings.accounts.sharing.failedOff")
+    : (shared ? "settings.accounts.sharing.incompleteOn" : "settings.accounts.sharing.incompleteOff"));
   const guidance = moved ? "settings.accounts.sharing.guidanceMoved" : shared ? "settings.accounts.sharing.guidanceOn" : "settings.accounts.sharing.guidanceOff";
   // Only a failure that follows a change this view saw run (its own request, or progress from the daemon) is announced:
-  // one already there when it mounted, or restated by an unrelated update, is not.
+  // one already there when it mounted, or restated by an unrelated update, is not. Nor is one that follows a change
+  // asked for here: the error alert dialog opened for it speaks it, and the mark is its lasting state. Whether the
+  // change was asked for here is decided per run, as the run starts: a run that shows up without this window's own
+  // request (another window's) is not.
   const [sawChange, setSawChange] = useState(false);
+  const [askedHere, setAskedHere] = useState(false);
   const running = progress !== undefined || busy;
+  const [wasRunning, setWasRunning] = useState(false);
+  if (running !== wasRunning) {
+    setWasRunning(running);
+    if (running && !busy) setAskedHere(false);
+  }
   if (running && !sawChange) setSawChange(true);
-  else if (!running && failure === undefined && sawChange) setSawChange(false);
-  const announce = failure !== undefined && sawChange;
+  else if (!running && failure === undefined && sawChange) {
+    setSawChange(false);
+    setAskedHere(false);
+  }
+  const announce = failure !== undefined && sawChange && !askedHere;
   const root = useRef<HTMLDivElement>(null);
-  const focusInWarning = useRef(false);
-  useEffect(() => {
-    if (unfinished || !focusInWarning.current) return;
-    focusInWarning.current = false;
-    // Only when focus went with the warning; a user who has moved on is left where they are.
-    if (document.activeElement && document.activeElement !== document.body) return;
-    root.current?.querySelector<HTMLElement>('input[role="switch"]')?.focus();
-  }, [unfinished]);
-  // Asks for `share`; the request is answered when the change ends. The failure of the change itself is shown at the
-  // switch, so only a refusal is reported as an error alert.
+  // Asks for `share`; the request is answered when the change ends. Whatever it is answered with besides success, a
+  // refusal or a change that ended unfinished, is reported as an error alert in this window, which asked for it. A
+  // change that ended unfinished also leaves the mark at the switch, as the same change seen from another window does
+  // alone.
   const ask = (share: boolean) => {
     if (locked) return;
     setBusy(true);
+    setAskedHere(true);
     void request({ type: "set_account_sharing", account: account.id, share })
-      .catch((err) => {
-        if ((err as { code?: string }).code !== "account_sharing_failed") toastError(errorPresentation(err as Error));
-      })
+      .catch((err) => reportError(err, undefined, undefined, undefined, t("settings.accounts.sharing.failedTitle")))
       .finally(() => setBusy(false));
   };
   // The only line kept under the switch: why it cannot be turned now. What it does is in the help tip.
@@ -97,8 +110,6 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
     progress && `${id}-value`,
     progress && progress.phase === "changing" && progress.item !== undefined && `${id}-current`,
     unfinished && `${id}-title`,
-    unfinished && failure && `${id}-reason`,
-    unfinished && `${id}-remedy`,
   ].filter(Boolean).join(" ") || undefined;
   return (
     <SettingRow
@@ -131,19 +142,23 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
           {caption !== undefined && <p id={`${id}-caption`} className="text-xs">{caption}</p>}
         </>
       }
-      below={
-        <>
-          {progress && <SharingProgress id={id} progress={progress} />}
-          {unfinished && (
-            <div onFocus={() => { focusInWarning.current = true; }} onBlur={(event) => { if (event.relatedTarget) focusInWarning.current = false; }}>
-              <SharingIncomplete id={id} failure={failure} share={shared} guidance={guidance} announce={announce} idle={idle} />
-            </div>
-          )}
-        </>
-      }
+      below={progress && <SharingProgress id={id} progress={progress} />}
     >
-      <div ref={root} data-sharing-account={account.id}>
-        <SettingSwitch label={label} isSelected={shown} onChange={ask} isUnavailable={locked} describedBy={describedBy} />
+      <div className="flex items-center gap-2">
+        <div ref={root} data-sharing-account={account.id}>
+          <SettingSwitch label={label} isSelected={shown} onChange={ask} isUnavailable={locked} describedBy={describedBy} />
+        </div>
+        {unfinished && (
+          <SharingIncomplete
+            id={id}
+            failure={failure}
+            title={title}
+            guidance={guidance}
+            idle={idle}
+            focusSwitch={() => root.current?.querySelector<HTMLElement>('input[role="switch"]')?.focus()}
+          />
+        )}
+        <StatusAnnouncer text={announce ? title : undefined} clearAfterRead />
       </div>
     </SettingRow>
   );
@@ -194,22 +209,22 @@ function SharingProgress({ id, progress }: { id: string; progress: NonNullable<A
   );
 }
 
-/** The change that did not finish, whether it failed just now or the daemon restarted in the middle of it. One compact
- * warning: the title and, for a failure, two sentences, in the one live region that is all a screen reader is told when
- * it appears (the remedy, under it and not announced, is described by the switch too). With a single cause the
- * sentences are that cause's own line and its fix, or, where the cause has no fix of its own (`not_found`, a default
- * directory that moved), the way to try again; with several, that some files or folders could not be changed and the
- * way to try again (turning the switch, so there is no retry button). Behind its Details button, which opens a popover,
- * are first the further explanation: each cause's line with its fix when there are several, the way to try again when
- * the fix took its place, and the note on idle sessions, then the raw entries and the system's own reason; with none of
- * it there is no Details button. */
-function SharingIncomplete({ id, failure, share, guidance, announce, idle }: {
+/** The change that did not finish, whether it failed just now or the daemon restarted in the middle of it: a warning
+ * mark in the row's control area, after the switch, with everything of it in its popover. In order: the title; for a
+ * failure, the reason and either its fix or the way to try again (turning the switch, so there is no retry button);
+ * then the several causes' lines, the way to try again where the fix took its place, the idle-sessions note and the raw
+ * entries. With a single cause the reason is that cause's own line and its fix, or, where the cause has no fix of its
+ * own (`not_found`, a default directory that moved), the way to try again; with several, that some files or folders
+ * could not be changed and the way to try again. The switch is described by a hidden copy of the title (`${id}-title`);
+ * the title is spoken by the switch's own announcer. The mark takes the focus it or its popover held to the switch as
+ * it goes. */
+function SharingIncomplete({ id, failure, title, guidance, idle, focusSwitch }: {
   id: string;
   idle: number;
   failure: AccountSharing["failure"];
-  share: boolean;
+  title: string;
   guidance: "settings.accounts.sharing.guidanceOn" | "settings.accounts.sharing.guidanceOff" | "settings.accounts.sharing.guidanceMoved";
-  announce: boolean;
+  focusSwitch: () => void;
 }): React.ReactElement {
   const t = useT();
   const items = parseSharingItems(failure?.items);
@@ -218,25 +233,27 @@ function SharingIncomplete({ id, failure, share, guidance, announce, idle }: {
   const group = groups?.length === 1 ? groups[0] : undefined;
   const whole = !groups && failure && sharingReasonKey(failure.cause) ? failure.cause : undefined;
   const single = group !== undefined || whole !== undefined;
-  const fix = group ? sharingFixKey(group.cause) : sharingFixKey(whole);
-  const guided = <span>{t(guidance)}</span>;
+  // The raw reason is further down the same popover, so a fix that points at it says so.
+  const fix = sharingFixKey(group ? group.cause : whole, true);
   // With several causes, a cause with no line of its own points at the raw reason, which is right below it here, so it
   // says nothing; a single cause (a group or the change's own) is said by the guidance and fix below, not here.
-  const reason = single || !groups ? undefined : <SharingCauseSummary items={items!} />;
+  const reason = single || !groups ? undefined : <SharingCauseSummary items={items!} rawBelow />;
   const raw = failure && (items?.length || failure.detail) ? <SharingDetails items={items ?? []} detail={failure.detail} /> : undefined;
-  const note = idle > 0 ? <span>{t("settings.accounts.sharing.idleSessions", { count: idle })}</span> : undefined;
-  const later = single && fix ? <span className="block">{t(guidance)}</span> : undefined;
-  const details = reason || later || note || raw ? <>{reason}{later}{note}{raw}</> : undefined;
+  const markId = `${id}-mark`;
   return (
-    <ErrorAlert
-      status="warning"
-      className="mt-2 w-full"
-      announce={announce}
-      title={<span id={`${id}-title`}>{t(failure ? (share ? "settings.accounts.sharing.failedOn" : "settings.accounts.sharing.failedOff") : (share ? "settings.accounts.sharing.incompleteOn" : "settings.accounts.sharing.incompleteOff"))}</span>}
-      remedy={<span id={`${id}-remedy`}>{single && fix ? <Message id={fix} /> : guided}</span>}
-      details={details}
-    >
-      {failure && <span id={`${id}-reason`}>{group ? <SharingCauseLine group={group} withFix={false} /> : whole ? <SharingFailureReason cause={whole} withFix={false} /> : t("settings.accounts.sharing.failedSummary")}</span>}
-    </ErrorAlert>
+    <>
+      {/* The mark goes with the warning; focus it or its popover held goes to the switch. */}
+      <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={focusSwitch} />
+      <StatusMark tone="warning" markId={markId} label={t("settings.accounts.sharing.unfinishedMark")}>
+        <p>{title}</p>
+        {failure && <p>{group ? <SharingCauseLine group={group} withFix={false} /> : whole ? <SharingFailureReason cause={whole} withFix={false} /> : t("settings.accounts.sharing.failedSummary")}</p>}
+        <p>{single && fix ? <Message id={fix} /> : t(guidance)}</p>
+        {reason}
+        {single && fix && <p>{t(guidance)}</p>}
+        {idle > 0 && <p>{t("settings.accounts.sharing.idleSessions", { count: idle })}</p>}
+        {raw}
+      </StatusMark>
+      <span id={`${id}-title`} className="sr-only">{title}</span>
+    </>
   );
 }

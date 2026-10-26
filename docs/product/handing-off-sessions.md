@@ -59,8 +59,9 @@ project session or a console session that is not archived, wherever that menu is
 session is *working* or *starting*, and while the session is locked, as Archive is, and while no agent other than the
 session's own can be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`).
 
-It opens the **handoff dialog**, titled with the session's name, which opens with keyboard focus on its **Hand off**
-button, or on **Cancel** while Hand off cannot be pressed. It says that a new session of another agent takes over this session's place and this one is archived, and that
+It opens the **handoff dialog**, titled "Hand off session", which opens with keyboard focus on its **Hand off**
+button, or on **Cancel** while Hand off cannot be pressed. Its first sentence names the session to be handed off; it
+then says that a new session of another agent takes over this session's place and this one is archived, and that
 the conversation does not carry over: the new session starts by reading a record of it. Then, under the heading
 **Moves to the new session**, it lists what moves:
 
@@ -72,11 +73,14 @@ the conversation does not carry over: the new session starts by reading a record
 
 Only the lines that apply are shown. When none does, the dialog says that nothing moves — the session is responsible
 for no branches, owns no sessions and reports to no session; it never says so when the branch inspection failed.
-**An inspection that fails** is shown under the list in a red alert titled that the branches it is responsible for could
-not be checked, with the reason under the title and **Try again**, which inspects them again; the alert stays, its button unavailable,
-while that runs. It is announced to assistive technology when it appears after the dialog was drawn, and it opens no
-error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). While the handoff request is under
-way the list stays as it was when it was sent.
+**An inspection that fails** leaves the dialog usable, as the handoff does not depend on it: a red error mark right
+after the **Moves to the new session** heading, named that the branches to move are unknown, and the list says nothing of
+branches. The mark's popover says that the branches the session is responsible for could not be checked, with the
+reason, what to do, any details and, where trying again can help, **Try again**, which closes the popover and inspects
+them again; the mark stays while that runs, and goes once an inspection succeeds, focus then moving to the dialog when
+the mark or its popover held it. The dialog's status region says the failure after the announcement of the dialog's
+opening focus move, and again each time a retry fails again, in the same words or not; it opens no error alert (see "Failures, warnings and notes marked at their point" in
+`docs/product/error-alerts.md`). While the handoff request is under way the list stays as it was when it was sent.
 
 Then come the fields:
 
@@ -91,7 +95,7 @@ Then come the fields:
   the project or console resolves (see "Which account a session uses" in `docs/product/sessions.md`). The account the
   field shows is sent as the receiving session's own account choice. Used-up accounts are treated
   as in the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and,
-  when the chosen account is used up all the same, a danger callout at the top of the dialog says why and **Hand off**
+  when the chosen account is used up all the same, the field says why under it, marked invalid, and **Hand off**
   cannot be pressed. An account whose sharing of the default configuration is being changed is treated the same way
   while the change runs, and a turned-off account is left out unless the field ends on it, as in the session dialog.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
@@ -100,9 +104,9 @@ Then come the fields:
   left for the daemon to resolve.
 
 If, while the dialog is open, no agent other than the session's own can be picked any more — the last one removed or
-found unavailable meanwhile — the dialog closes at once, with nothing sent, and an error alert says that no other agent
-is available to take the session over; that alert offers nothing but its acknowledgement (see "Recovery and unexpected
-errors" in `docs/product/error-alerts.md`).
+found unavailable meanwhile — nothing is sent, and the dialog turns into a failure modal titled that the session
+cannot be handed off, saying that no other agent is available to take the session over, with nothing but its
+acknowledgement, which closes the dialog (see "The failure modal" in `docs/product/error-alerts.md`).
 
 Pressing **Hand off** sends `hand_off_session`, once the user has confirmed starting on the chosen account when its
 last change of sharing is incomplete (see "Starting a session on an account whose last change is incomplete" in
@@ -188,26 +192,31 @@ the title nor the note it passed. A form follows:
 - **Hand off to** — the agent picker joined to an account picker of the handoff dialog (see "Handing off from the
   window" above), the session's own agent never offered, starting on the agent and the account the call asked for.
   Another agent the user switches to, without picking one of its accounts, opens on the account the handoff dialog
-  would open on. An account whose quota is used up, or whose sharing change runs, is treated as there: a danger callout
-  at the top of the dialog says why and Confirm cannot be pressed. So is an account turned off while the request waits
-  (a call naming one is refused before the user is asked): the disabled callout shows and Confirm cannot be pressed.
+  would open on. An account whose quota is used up, or whose sharing change runs, is treated as there: the field says
+  why under it, marked invalid, and Confirm cannot be pressed. So is an account turned off while the request waits
+  (a call naming one is refused before the user is asked): the field says that it is turned off, and Confirm cannot be
+  pressed.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, starting on those the call
   asked for, else on what a new session of that agent and account would inherit (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). The values the call asked for belong to the agent it asked for:
   another agent starts on what it would inherit.
 
 **When the agent asked for can no longer be picked, or the account asked for is no longer among its accounts,** both
-pickers show nothing chosen and an alert says that the agent or account asked for is no longer available and to choose
-another; **Hand off session** cannot be pressed, and the Advanced section's fields cannot be changed, until the user
+pickers show nothing chosen and the field says under them, marked invalid, that the agent or account asked for is no
+longer available and to choose another; **Hand off session** cannot be pressed, and the Advanced section's fields cannot be changed, until the user
 picks.
 
 **Hand off session cannot be pressed either**, and an alert at the top of the dialog says why, while the session cannot
 be handed off from its menu: it is in the middle of a turn or still starting, it is locked, a switch of its account
 holds it, or its own account's sharing is being changed. Nor while no agent other than the session's own can be picked.
-Where the chosen account's last change of sharing is incomplete, the dialog carries a warning line saying so instead of
-asking again on confirming (see "Starting a session on an account whose last change is incomplete" in
-`docs/product/sharing-the-default-configuration.md`). A window that does not know the session's console shows no form,
-and its approval is for what the call asked for.
+Where the chosen account's last change of sharing is incomplete and no change of it is running, an amber warning mark
+inside the account picker of **Hand off to**, named that sharing may be incomplete, says so instead of
+asking again on confirming: its popover says that the account's last sharing change did not finish, so its
+configuration and conversations may be incomplete (see "Starting a session on an account whose last change is
+incomplete" in `docs/product/sharing-the-default-configuration.md`). A mark that appears after the dialog opened is
+announced once, as in a request to switch a session's account. While the pickers show nothing chosen, there is no
+mark. A window that does not know the session's console shows no form, and so no mark, and its approval is for what the
+call asked for.
 
 **On approval the handoff is made with what the form ended on**: the agent and the account it shows, and the model and
 reasoning effort the user changed, else, for the agent the call asked for, those it asked for. Everything a handoff

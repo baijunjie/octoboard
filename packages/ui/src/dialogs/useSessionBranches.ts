@@ -112,9 +112,8 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
  * `enabled`. Unlike `useSessionBranches` it says when the daemon could not tell (`error`, what went
  * wrong), since a handoff's summary must not read a failure as "none", and `retry` asks again. The
  * last failure stays in `error` while a retry is out (`pending`), so what shows it, and the control
- * that retried, are not taken away under focus; `attempt` numbers the answer it comes from, so a
- * failure that repeats can be told from the one before. */
-export function useResponsibleBranches(sessionId: string, enabled: boolean): { items: SessionBranchItem[]; pending: boolean; error: ErrorPresentation | undefined; attempt: number; retry: () => void } {
+ * that retried, are not taken away under focus. */
+export function useResponsibleBranches(sessionId: string, enabled: boolean): { items: SessionBranchItem[]; pending: boolean; error: ErrorPresentation | undefined; retry: () => void } {
   const t = useT();
   const { request } = useDaemon();
   const [attempt, setAttempt] = useState(0);
@@ -128,5 +127,5 @@ export function useResponsibleBranches(sessionId: string, enabled: boolean): { i
     );
     return () => { active = false; };
   }, [sessionId, enabled, request, attempt]);
-  return { items: answer?.items ?? [], pending: enabled && answer?.attempt !== attempt, error: answer?.error, attempt: answer?.attempt ?? 0, retry: () => setAttempt((n) => n + 1) };
+  return { items: answer?.items ?? [], pending: enabled && answer?.attempt !== attempt, error: answer?.error, retry: () => setAttempt((n) => n + 1) };
 }

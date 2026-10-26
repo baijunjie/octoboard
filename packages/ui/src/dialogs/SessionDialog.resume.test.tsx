@@ -90,6 +90,9 @@ function renderForResume(projectOverride: Partial<typeof project> | null = {}, l
 /** What the lookup the Resume tab makes found wrong with the ID, as the Alert under the field says it. */
 const resumeAlert = () => document.body.querySelector<HTMLElement>('[data-slot="alert-root"]');
 
+/** The error text of a field (its `FieldError`, an alert of its own). */
+const fieldError = () => document.body.querySelector<HTMLElement>('[data-slot="field-error"] [role="alert"]');
+
 /** The text of the line under the Session ID field. */
 const resumeStatusText = () => document.body.querySelector('[role="status"]:not([data-slot="spinner"])')?.textContent ?? "";
 
@@ -245,19 +248,18 @@ it("announces exhausted quota only when the selected conversation requires a new
     heldBy("live_session", interrupted.id),
     { ...claudeAccounts, sessions: new Map([[interrupted.id, interrupted]]) },
   );
-  const quotaAlert = () => document.body.querySelector('[role="alert"]');
+  const quotaAlert = fieldError;
   expect(quotaAlert()).toBeNull();
   expect(openDisabled()).toBe(false);
-  // The quota arrives after the form opened, so its title and reason must announce together.
+  // The quota arrives after the form opened, so it is announced as the account field's error.
   act(() => daemon.store.setState({ accountQuotas: [null, "a-work"].map((account) => ({
     agent: "claude" as const, account, fetched_at: Date.now(), plan: null, unavailable: null,
     windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
   })) }));
   const assertQuotaAlert = () => {
     const alert = quotaAlert();
-    expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Work cannot be used for now");
-    expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("It has reached its session limit.");
-    expect(alert?.querySelector('[data-slot="alert-description"]')?.querySelector("div,p,ul,pre,h1,h2,h3")).toBeNull();
+    expect(alert?.textContent).toContain("Work cannot be used for now because it has reached its session limit.");
+    expect(alert?.querySelector("div,p,ul,pre,h1,h2,h3")).toBeNull();
     expect(openDisabled()).toBe(true);
   };
   assertQuotaAlert();
@@ -299,9 +301,7 @@ it("holds Open back, with why, when the only account left is changing its sharin
     }],
     accountSharing: new Map([["a-work", { account: "a-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]),
   });
-  const alert = document.body.querySelector('[role="alert"]');
-  expect(alert?.querySelector('[data-slot="alert-title"]')?.textContent).toBe("Sharing is being changed");
-  expect(alert?.querySelector('[data-slot="alert-description"]')?.textContent).toContain("Choose another account or wait for the change to finish.");
+  expect(fieldError()?.textContent).toContain("Choose another account or wait for the change to finish.");
   expect(openDisabled()).toBe(true);
   expect(daemon.request).not.toHaveBeenCalled();
 });
@@ -553,7 +553,7 @@ it("asks again when the session the lookup named is not in the store, and goes b
   await settle();
   expect(locateRequests(daemon)).toHaveLength(2);
   expect(resumeStatusText()).toBe("");
-  expect(resumeAlert()).not.toBeNull();
+  expect(fieldError()?.textContent).toContain("No conversation with this ID was found");
   expect(openDisabled()).toBe(true);
 });
 
@@ -586,14 +586,15 @@ it("keeps the dialog open with the reason when the reopen is refused, without re
 });
 
 it.each([
-  { name: "belongs to a session outside the project", reply: heldBy("outside_project", "s-unknown"), message: "already belongs to a session outside this project" },
-  { name: "is in no account", reply: heldBy("not_found"), message: "No conversation with this ID was found in any account." },
-])("says under the field that the conversation $name, and holds Open back", async ({ reply, message }) => {
+  { name: "belongs to a session outside the project", reply: heldBy("outside_project", "s-unknown"), message: "already belongs to a session outside this project", found: resumeAlert },
+  // No conversation having the ID is a verdict on the ID, so it is the field's own error.
+  { name: "is in no account", reply: heldBy("not_found"), message: "No conversation with this ID was found in any account.", found: fieldError },
+])("says under the field that the conversation $name, and holds Open back", async ({ reply, message, found }) => {
   const { daemon } = renderForResume({}, reply);
   await chooseResume();
   typeResumeId(UUID);
   await settle();
-  expect(resumeAlert()?.textContent).toContain(message);
+  expect(found()?.textContent).toContain(message);
   expect(openDisabled()).toBe(true);
   await submit();
   expect(sentOpenSession(daemon)).toBeUndefined();

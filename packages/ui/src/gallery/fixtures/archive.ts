@@ -166,7 +166,7 @@ const deleteBoundSessions: Scenario = {
   state: archiveState,
   sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, id === underArchivedLead[0].id ? "present" as const : "absent" as const])),
   preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-  description: "Native files exist for a child, so the confirmation keeps the agent-records Trash option, unchecked, with a short note. Above it, two plain options with closed Details: \"Also force-remove the worktrees and branches Git keeps (2)\" for an uncommitted worktree and an unmerged branch, and \"Also delete the locked worktrees (4)\", each unchecked. Under the options, one warning titled \"2 archived sessions under it are deleted with it\" holds, inside it, the list of both archived children, with no consequence line yet. The confirming button reads \"Delete\" until an option is ticked.",
+  description: "A warning modal (warning icon in the header, the plain title Delete session) whose body opens with the sentence naming the session, then says the project's files are kept. Native files exist for a child, so the agent-records Trash option stays, unchecked, with a short note, under two plain options with closed Details: \"Also force-remove the worktrees and branches Git keeps (2)\" for an uncommitted worktree and an unmerged branch, and \"Also delete the locked worktrees (4)\", each unchecked. Under the options the plain line \"2 archived sessions under it are deleted with it\" heads the list of both archived children, with no consequence line yet. The confirming button reads \"Delete\" until an option is ticked.",
   sessionBranches: [
     worktreeItemOf(boundProject, underArchivedLead[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
     branchItemOf(boundProject, archivedLead, "release/retry-policy"),
@@ -186,7 +186,7 @@ const deleteAll: Scenario = {
   group: GROUP,
   category: "normal",
   title: "Delete all archived console sessions",
-  description: "The confirmation counts the archived console sessions. Plain options come first: the force-remove option counting the worktree with uncommitted changes and the unmerged branch left by the sessions deleted (Details closed, unchecked), then the unchecked option to also move the agents' own session records to the Trash with its short note. Under them, one warning titled \"1 archived session under a console session in the view is deleted too\", with nothing else inside it yet. The confirming button reads \"Delete all\".",
+  description: "A warning modal whose plain title is Delete archived sessions and whose body opens with the count of archived sessions deleted permanently. Plain options come first: the force-remove option counting the worktree with uncommitted changes and the unmerged branch left by the sessions deleted (Details closed, unchecked), then the unchecked option to also move the agents' own session records to the Trash with its short note. Under them stands the plain line \"1 archived session under a console session in the view is deleted too\", with nothing else under it yet. The confirming button reads \"Delete all\".",
   sessionBranches: [
     worktreeItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "feat/hub-handoff", "/Users/dev/worktrees/search-api-hub-handoff"),
     branchItemOf(project, deleteAllState.sessions.get("s-under-hub")!, "fix/stale-cache"),
@@ -298,7 +298,7 @@ export const archiveScenarios: Scenario[] = [
     ...deleteBoundSessions,
     id: "archive-delete-bound-sessions-ticked",
     title: "Delete an archived lead session, every option ticked",
-    description: "All three options are ticked and the two Details disclosures opened: the force-remove list (the uncommitted worktree and the unmerged branch), the locked worktrees in each wording, and the agent-records Trash option. The dialog scrolls, so look at its bottom: the one warning under the options, titled \"2 archived sessions under it are deleted with it\", holds the list of both archived children first and, under it inside the same Alert, a consequence line for each ticked option, among them that the agent's records of this session and of the sessions deleted with it are moved to the Trash. The confirming button reads \"Delete all\" because options are ticked. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
+    description: "All three options are ticked and the two Details disclosures opened: the force-remove list (the uncommitted worktree and the unmerged branch), the locked worktrees in each wording, and the agent-records Trash option. The dialog scrolls, so look at its bottom: under the options the line \"2 archived sessions under it are deleted with it\" heads the list of both archived children first and, under it, a consequence line as plain text for each ticked option, among them that the agent's records of this session and of the sessions deleted with it are moved to the Trash. The confirming button reads \"Delete all\" because options are ticked. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
     steps: [
       ...deleteBoundSessions.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
@@ -315,7 +315,7 @@ export const archiveScenarios: Scenario[] = [
     state: archiveState,
     sessionRecords: Object.fromEntries([...archiveState.sessions.keys()].map((id) => [id, "absent" as const])),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${boundConsoleSession.id}` },
-    description: "The used archived lead still requires confirmation, with one warning titled \"2 archived sessions under it are deleted with it\" holding the list of its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
+    description: "The used archived lead still requires confirmation: under the sentence naming it, the plain line \"2 archived sessions under it are deleted with it\" heads the list of its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
       (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedLead.title })),
@@ -325,7 +325,7 @@ export const archiveScenarios: Scenario[] = [
     ...deleteBoundSessions,
     id: "archive-delete-session-no-bound-ticked",
     title: "Delete an archived session with none under it, options ticked",
-    description: "Nothing is deleted along with the session, so the warning has no list: its title is \"Additional consequences\" and the consequence lines for the two ticked options (the force-remove option and the agent-records Trash option, Details closed) sit under it inside the same Alert.",
+    description: "Nothing is deleted along with the session, so there is no list and no heading: the consequence lines for the two ticked options (the force-remove option and the agent-records Trash option, Details closed) stand as plain text under the options.",
     sessionBranches: [
       worktreeItemOf(boundProject, underArchivedLead[0], "feat/pagination", "/Users/dev/worktrees/search-api-pagination"),
       branchItemOf(boundProject, underArchivedLead[0], "release/retry-policy"),
@@ -342,7 +342,7 @@ export const archiveScenarios: Scenario[] = [
     ...deleteAll,
     id: "archive-delete-all-trash",
     title: "Delete all archived console sessions, Trash option ticked",
-    description: "Only the agents' records Trash option is ticked; the force-remove option stays unchecked. The confirming button still reads \"Delete all\", and the warning's title is now followed, inside the same Alert, by a consequence line saying the records go to the Trash.",
+    description: "Only the agents' records Trash option is ticked; the force-remove option stays unchecked. The confirming button still reads \"Delete all\", and a consequence line saying the records go to the Trash now follows the plain line under the options.",
     steps: [
       ...deleteAll.steps!,
       (ui) => ui.press(ui.t("dialog.deleteArchived.trashRecords")),

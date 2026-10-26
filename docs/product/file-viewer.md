@@ -106,8 +106,8 @@ much of the subject it still has to show.
 per notice, never a block of text over the content. Each notice is in one of three tones, and each tone has its own
 glyph shape as well as its own colour, so a tone never rests on colour alone:
 
-- **a note**, a neutral circled `i`, states how the content is drawn and why, for what this file or change is — a
-  size budget, a change read at an older version, lines that stay collapsed because the whole file is not to be had, a
+- **a note**, an accent-coloured circled `i`, states how the content is drawn and why, for what this file or change is —
+  a size budget, a change read at an older version, lines that stay collapsed because the whole file is not to be had, a
   change with no differences whose content is shown whole in place of a diff;
 - **a warning**, an amber warning triangle, says something about the content that has to be known before reading it —
   a side of a change that lies outside the project, or a change with no differences whose content could not be shown,
@@ -119,10 +119,10 @@ glyph shape as well as its own colour, so a tone never rests on colour alone:
 A mark is named by the notice's sentence, and that sentence is what it opens; where the notice carries what the system
 or Git said, that text follows the sentence in the popover as raw text, and is never in the sentence or the name. Every
 mark, whatever its tone, is a button and a tab stop that opens the sentence in a popover, with no tooltip, under the
-rules of a failure mark (see "Failures marked on a row" in `docs/product/error-alerts.md`): a mouse resting on it opens
-it without moving keyboard focus, and it stays open while the pointer moves into it, so its text can be selected and
-copied with the mouse; a mouse click opens nothing; and a tap, Enter or Space, or assistive technology opens it with
-keyboard focus inside.
+rules of a failure mark (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`): a
+mouse resting on it opens it without moving keyboard focus, and it stays open while the pointer moves into it, so its
+text can be selected and copied with the mouse; a mouse click opens nothing; and a tap, Enter or Space, or assistive
+technology opens it with keyboard focus inside.
 
 Where a mark stands follows from what its notice is about:
 

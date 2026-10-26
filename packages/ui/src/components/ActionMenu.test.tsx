@@ -257,6 +257,50 @@ describe("a panel entry", () => {
   });
 });
 
+describe("a note", () => {
+  it("is a muted line with no glyph that stays in the arrow-key walk, is read there, and cannot run anything", async () => {
+    const onClick = vi.fn();
+    await openMenu([
+      { label: "Main", icon: Trash2, onClick },
+      { label: "There are more than this list can show.", note: true },
+    ]);
+    const menu = document.querySelector<HTMLElement>("[role=menu]")!;
+    const items = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
+    const note = items.find((el) => el.textContent === "There are more than this list can show.")!;
+    expect(note.querySelector("svg")).toBeNull();
+    // Drawn as quiet text, not as a faded (disabled) item.
+    expect(note.className).toContain("data-[disabled=true]:opacity-100");
+    expect(note.querySelector("label, span:not([aria-hidden])")?.className).toContain("text-app-muted");
+    expect(note.getAttribute("aria-disabled")).toBe("true");
+    await act(async () => void menu.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
+    await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(note);
+    await act(async () => void note.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
+  });
+});
+
+describe("a note in a menu of choices", () => {
+  const noteOf = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent === "There are more than this list can show.")!;
+
+  it("reserves the check indicator's column too, so its text lines up with the labels", async () => {
+    await openMenu([
+      { label: "main", icon: Trash2, onClick: vi.fn(), selected: true },
+      { label: "There are more than this list can show.", note: true },
+    ]);
+    expect(noteOf().className).toContain("ps-7");
+  });
+
+  it("keeps the plain indent in a menu with none", async () => {
+    await openMenu([
+      { label: "Main", icon: Trash2, onClick: vi.fn() },
+      { label: "There are more than this list can show.", note: true },
+    ]);
+    expect(noteOf().className).not.toContain("ps-7");
+  });
+});
+
 describe("a disabled item", () => {
   const key = (target: Element, name: string) =>
     act(async () => {

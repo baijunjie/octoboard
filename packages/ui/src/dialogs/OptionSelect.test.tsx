@@ -53,3 +53,66 @@ it("keeps badge text in native choices without changing raw selected keys or ric
   expect(trigger.querySelector("[data-inline-reference]")?.textContent).toBe(label);
   expect(trigger.textContent).toContain(`${label}, ${badge}`);
 });
+
+it("does not focus the trigger when the mark that holds focus goes in the render that disables it", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  // The hand-off decides after the commit, in a microtask, which `act` waits for only when awaited.
+  const render = (marked: boolean, locked: boolean) => act(async () => root.render(
+    <OptionSelect label="Model" value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]} isDisabled={locked}
+      mark={marked ? (markId) => <button type="button" data-status-mark-id={markId}>Why</button> : undefined} />,
+  ));
+  await render(true, false);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  const focusMark = () => act(() => container.querySelector<HTMLButtonElement>("[data-status-mark-id]")!.focus());
+  focusMark();
+  await render(false, true);
+  expect(trigger.disabled).toBe(true);
+  expect(document.activeElement).not.toBe(trigger);
+  expect(document.activeElement).toBe(document.body);
+  // Enabled, the trigger is handed focus.
+  await render(true, false);
+  focusMark();
+  await render(false, false);
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("puts a label mark beside the label, keeps it out of the field's name, and hands focus to the trigger when it goes", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const render = (marked: boolean) => act(async () => root.render(
+    <OptionSelect label="Model" value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]}
+      labelMark={marked ? (markId) => <button type="button" data-status-mark-id={markId}>Why</button> : undefined} />,
+  ));
+  await render(true);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  const label = container.querySelector<HTMLElement>("[data-slot=label]")!;
+  const mark = container.querySelector<HTMLButtonElement>("[data-status-mark-id]")!;
+  expect(label.contains(mark)).toBe(false);
+  expect(label.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(document.getElementById(trigger.getAttribute("aria-labelledby")!.split(" ").at(-1)!)).toBe(label);
+  act(() => mark.focus());
+  await render(false);
+  expect(document.activeElement).toBe(trigger);
+});
+
+it("marks the select invalid and describes it by its error, which stands under it as an alert", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const render = (errorMessage?: string) => act(() => root.render(
+    <OptionSelect label="Account" value="a" onChange={() => {}} options={[{ value: "a", label: "Work" }]} errorMessage={errorMessage} />,
+  ));
+  render();
+  const trigger = () => container.querySelector<HTMLElement>('[data-slot="select-trigger"]')!;
+  expect(trigger().getAttribute("aria-invalid")).not.toBe("true");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  render("Account Work is disabled.");
+  const alert = container.querySelector('[role="alert"]');
+  expect(alert?.textContent).toBe("Account Work is disabled.");
+  expect(trigger().getAttribute("aria-describedby")?.split(" ")).toContain(alert!.closest('[data-slot="field-error"]')!.id);
+  render();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+});

@@ -285,8 +285,9 @@ export function AgentAccountsSection(): React.ReactElement {
       )}
       {removing && (
         <ConfirmDialog
-          title={<Message id="settings.accounts.removeTitle" params={{ name: <InlineReference dir="auto" wrap>{removing.name}</InlineReference> }} />}
-          message={<Message id="settings.accounts.removeMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[removing.agent]}</InlineReference> }} />}
+          title={t("settings.accounts.removeTitle")}
+          subject={<Message id="settings.accounts.removeSubject" params={{ name: <InlineReference dir="auto" wrap>{removing.name}</InlineReference> }} />}
+          message={<p><Message id="settings.accounts.removeMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[removing.agent]}</InlineReference> }} /></p>}
           confirmLabel={t("common.remove")}
           destructive
           resetKey={removing.id}

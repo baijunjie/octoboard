@@ -56,8 +56,9 @@ function useHeldElsewhere(): (sessionId: string | undefined) => DaemonRequestErr
  * The Resume tab's answer for `resumeId`: once the ID is valid the daemon is asked where the
  * conversation is held (`locate_conversation_to_resume`), which settles `target`, what the submit
  * does and on which agent and account. `idProblem` is what is wrong with the ID itself, by kind;
- * `problem` is what the answer says is wrong with the conversation (a session outside the project,
- * no conversation at all, a holder no longer offered, a failed lookup), shown under the ID field;
+ * `notFound` is the answer that no conversation has the ID, which is the ID field's own error, and
+ * `problem` is what else the answer says is wrong with the conversation (a session outside the project,
+ * a holder no longer offered, a failed lookup), shown under the ID field as an Alert;
  * `status` is what the live region says. `looking` is true while the answer for the ID is not in. All
  * are empty unless `resuming`.
  *
@@ -70,6 +71,7 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   idProblem: "required" | "invalid" | undefined;
   target: ResumeTarget | undefined;
   looking: boolean;
+  notFound: boolean;
   problem: string | ErrorPresentation | undefined;
   status: string | undefined;
   reask: () => void;
@@ -99,9 +101,9 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
     target = { kind: "record", agent: located.agent, account: located.account, accountName: recordEntry.name };
   }
 
+  const notFound = located?.kind === "not_found";
   let problem: string | ErrorPresentation | undefined;
   if (located?.kind === "outside_project") problem = heldElsewhere(located.session) ?? t("daemon.conversation_outside_project");
-  else if (located?.kind === "not_found") problem = t("dialog.session.resumeNotFound");
   else if (located?.kind === "record" && !target) problem = t("dialog.session.resumeUnavailable");
   else if (lookup.status === "failed") problem = lookup.error;
 
@@ -112,5 +114,5 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   else if (target?.kind === "record") status = t("dialog.session.resumeFound", { agent: AGENT_LABEL[target.agent], account: isolate(target.accountName) });
   else if (target) status = t(FOUND_SESSION_MESSAGE[target.kind], { title: isolate(sessionDisplayTitle(t, target.session)) });
 
-  return { idProblem, target, looking, problem, status, reask: () => setReasked((count) => count + 1) };
+  return { idProblem, target, looking, notFound, problem, status, reask: () => setReasked((count) => count + 1) };
 }

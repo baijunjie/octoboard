@@ -412,11 +412,14 @@ describe("an account's actions menu", () => {
     const { container } = mount();
     await openAccountMenu(container);
     await chooseItem("Edit");
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Edit Claude Code account");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Edit account");
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Edit account");
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain("of the Claude Code account claude-work.");
     act(() => buttonNamed(document, "Cancel")!.click());
     await openAccountMenu(container);
     await chooseItem("Remove");
     expect(document.querySelector('[role="alertdialog"], [role="dialog"]')?.textContent).toContain("Remove account");
+    expect(document.querySelector('[role="alertdialog"], [role="dialog"]')?.textContent).toContain("The account claude-work will be removed.");
     await act(async () => buttonNamed(document.querySelector('[role="alertdialog"], [role="dialog"]')!, "Remove")!.click());
     expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work" });
   });

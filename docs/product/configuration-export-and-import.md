@@ -25,23 +25,28 @@ for one console — any character a file name cannot hold (a control character, 
 console whose name leaves nothing. The user can change it in the save dialog; a browser may file the download under a
 name of its own. The desktop app's open dialog reads the picked file whole and refuses, before anything is sent to the
 daemon, one larger than 64 MiB, as too large to be a configuration file, and one that is not UTF-8 text, as not a text
-file; either is told in an error alert over the import dialog, and another file can be chosen.
+file; either is told in an error alert over the import dialog whose remedy is to choose a configuration file a
+compatible version exported, and another file can be chosen.
 
 **When the file fails.** An error alert raised from either dialog — a file that could not be saved or read, or a
 request the daemon refuses — stands over it, and the dialog stays open. It is titled "Could not export the
 configuration" from the export dialog and "Could not import the configuration" from the import dialog (see "The error
-alert" in `docs/product/error-alerts.md`). A file that could not be written says that the file
-could not be saved, and one that could not be read that the file could not be read, with the next step the system's
-error points to, such as granting Octoboard access, or else to choose a readable file or a writable folder with enough
-disk space and retry; what the system itself said is under **Error details**, never in the sentence.
+alert" in `docs/product/error-alerts.md`). A file that could not be written says that the file could not be saved,
+with the remedy to choose a writable folder with enough disk space and save again, unless a recognized
+operating-system cause the system's error names gives its own, such as granting Octoboard access (see "Recovery and
+unexpected errors" in `docs/product/error-alerts.md`). A picked file that could not be read at all says that the file
+could not be read, with the remedy, whatever the system's error names, to make sure the file still exists and that
+Octoboard may read it, granting access in the system's privacy settings if needed, or to choose another file. What the
+system itself said is under **Error details**, never in the sentence.
 
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
 there is only everything. Each choice says whether the application settings go with it: everything carries them, this
 device's keyboard shortcuts included, and a single console does not. Under that choice is a checkbox, **Include full project paths**, unchecked by default; its
 note says that without them the file records only each project's directory name, and that an import then places each
 project in the default clone directory or clones it from its remote (see "Project paths" below). Only while it is
-checked, and so before anything is saved, a warning says that the file contains each project's full directory path on
-the machine running Octoboard, which may not be the device the user is on, that those paths can reveal details such as
+checked, and so before anything is saved, an amber warning mark named that paths are in the file follows the checkbox's
+label, on its line: its popover says that the file contains project paths, each project's full directory path on the
+machine running Octoboard, which may not be the device the user is on, that those paths can reveal details such as
 the user name, and that the file is to be shared only with people the user trusts. The dialog's **Export** button then
 asks the daemon for the document and opens the save dialog. In the desktop app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever
 its settings say, and does not report one that was blocked or cancelled, so there the toast says only that the
@@ -63,16 +68,22 @@ created**, in this order:
   directory**, **Clone from remote** and **Leave out**, each with the number of projects it reaches. Each sets that
   choice on every project that offers it — Leave out reaches every project — and a project it does not reach keeps its
   choice; a button that reaches none is unavailable.
-- A card for each console: its name, how many projects it has (or that it has none), the console's own account
-  references that would fall back to a default account, and a row for each of its projects.
+- A card for each console: its name, how many projects it has (or that it has none), and a row for each of its
+  projects. Where the console's own account references would fall back to a default account, an amber warning mark
+  follows its name (see the account fallbacks below).
 - When the document carries application settings, a card for them (below).
 - While any project is set to be cloned, a note that cloning can take several minutes and that an import cannot be
   cancelled once it has started.
 
 A **project's row** has the project's name and, under it, where the daemon found it: at its exported path, in the
-default clone directory, not found but able to be cloned from its remote, or not found on the machine running
-Octoboard. That line follows what was found, whatever choice is then made. The choice of where the project goes sits at
-the end of the name's line, and drops under it where the row is narrow; its accessible name is "Where to place" followed
+default clone directory, or not found but able to be cloned from its remote. That line follows what was found,
+whatever choice is then made. A project with nothing offered, and so no default (see "Where an imported project goes"
+below), has no such line: an amber warning mark follows its name instead, named after the project as not found,
+whose popover says that it was not found on the machine running Octoboard and that it is left out unless a directory
+is chosen for it. A project not found that also has account fallbacks still has this one mark, named after the
+project as not found and with accounts not set up, its popover adding the fallbacks' sentences (see the account
+fallbacks below) after its own. The choice of where the
+project goes sits at the end of the name's line, and drops under it where the row is narrow; its accessible name is "Where to place" followed
 by the project's name. A row offers only the choices its state allows, with the daemon's default preselected, and always
 offers **Another directory** and **Leave out**. Labelled lines under them give the paths:
 
@@ -84,8 +95,9 @@ offers **Another directory** and **Leave out**. Labelled lines under them give t
 
 Another directory has no Placed in line: it shows a field labelled **Directory** (its accessible name is "Directory
 for" followed by the project's name) where a path is typed or browsed to; a path that is not absolute and does not
-start with `~/` is refused. A project left out has no path line but its exported path. The project's own account references
-that would fall back to a default account end its row.
+start with `~/` is refused. A project left out has no path line but its exported path. Where the project's own account
+references would fall back to a default account, an amber warning mark follows its name (see the account fallbacks
+below).
 
 The **application settings card** is headed by the checkbox **Also apply the application settings**, unchecked. Under
 it is a line for each setting the document carries — one an older document leaves out has no line — naming the setting
@@ -109,13 +121,15 @@ The **result** replaces the review, in this order:
   projects once, and a console that could not be created, or that came out with no projects, shows its own result on
   that heading line. Under it each project has a line with its result (created, left out, not attempted, each in words
   with a glyph) and a detail: how a created project was placed (at its exported path, in the default clone directory,
-  cloned from its remote, in the directory chosen), or that a project was not attempted because its console could not
-  be created. A line that failed has no detail: its result is a red circled `!` followed by the word **Failed**, like
-  the other results. Where the failure came with a reason, the two together are one control, named for that project —
-  or console — having failed, which opens a popover with why, any raw diagnostic included (see "Failures marked on a
-  row" in `docs/product/error-alerts.md`); where it came with none, they are the glyph and the word alone, with nothing
-  to open. In a narrow dialog each line becomes a block that names every value, under its console's name.
-- Each account that fell back to a default account, listed under a heading of its own.
+  cloned from its remote, in the directory chosen), or that a project was not attempted because its console could not be
+  created. A line that failed has no detail: its result is a red circled `!` followed by the word **Failed**, like the
+  other results. Where the failure came with a reason, the two together are one control, named for that project — or
+  console — having failed, which opens a popover with why, any raw diagnostic included (see "Failures, warnings and
+  notes marked at their point" in `docs/product/error-alerts.md`); where it came with none, they are the glyph and the
+  word alone, with nothing to open. In a narrow dialog each line becomes a block that names every value, under its
+  console's name. A console or project whose account references fell back to a default account has an amber warning mark
+  right after its name, on the console's heading line or the project's line (see the account fallbacks below); the
+  result has no list of them elsewhere.
 - When the application settings were applied, a card headed **Application settings applied**, with a line for each
   setting applied, badged **On** or **Off**; one line for the git workflow settings, when the document carried them, badged
   **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with how
@@ -123,6 +137,14 @@ The **result** replaces the review, in this order:
   not be used here and were left out said under it, when any were.
 
 The result is the only place the import's failures are shown: no error alert opens for them.
+
+**Account fallbacks.** In the review and in the result alike, a console or project holding account references that match
+no account (see "Accounts are rebound by name" below) has an amber warning triangle right after its name, named that
+accounts are not set up for that console or project — in the review, for a project not found, the not-found mark
+instead, which says both. Its popover has one sentence per such reference, naming the agent
+and the account and saying that the account is not set up in Octoboard, so the default account is used. It opens as a
+row's mark does (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). A console
+or project with no such reference has no mark.
 
 Exporting and importing are also requests of the daemon, which any program on its host can reach (see "Who can reach
 the daemon" in `docs/product/application-lifecycle.md`).

@@ -138,17 +138,21 @@ sessions and Project sessions, each carry this note. Asking the agent is bounded
 
 The agent cannot always be asked: its binary does not resolve on the user's login shell `PATH`, the shell environment
 could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), the command failed or did
-not finish in time, or what it printed held no model that could be read. None of those stops the dialog: an alert
-directly under the Model field, titled that the models could not be loaded, says which it was — in the console dialog, one alert under the table for the tab —
-and the field offers the stored value alone, marked as not in the list, or nothing at all when there is none; the
-effort picker has no list to offer but stays operable, so a stored level can still be cleared. A refusal of the
-model-list request is shown the same way, with its actual reason, including named records or technical values
-supplied with it: a short explanation and any raw diagnostic output separately, as "Names and diagnostic details" in
-`docs/product/error-alerts.md` describes. The alert opens no error alert (see "Failures shown on the screen" in
-`docs/product/error-alerts.md`). For assistive technology, the Advanced section announces the first sentence under
-the alert's title alone, as the alert states it (the generic sentence for a failure Octoboard has no words for) — never what to do about
-it, and never the raw diagnostic output. Neither a missing list nor one still being fetched stops the dialog from being
-saved.
+not finish in time, or what it printed held no model that could be read. None of those stops the dialog, and it is
+about the whole field rather than the value it holds, so the reason is said by an amber warning mark right after the
+Model field's label, named that the models could not be loaded. In the console dialog's table of console-session and
+project-session settings, the mark follows the Model row's name, once; where the table is stacked, with the setting's
+name over each picker, it follows each Model name.
+Its popover says which of them it was, what to do about it, and any raw diagnostic output, as "Names and diagnostic
+details" in `docs/product/error-alerts.md` describes; it has no **Try again**. It opens as any mark does and opens no
+error alert (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). The field
+offers the stored value alone, marked as not in the list, or nothing at all when there is none; the effort picker has
+no list to offer but stays operable, so a stored level can still be cleared. A refusal of the model-list request is
+shown the same way, with its actual reason, including named records or technical values supplied with it. When the
+mark goes while it or its popover holds keyboard focus, focus goes to the Model field. For assistive technology, the
+Advanced section announces the popover's first sentence once, alone (the generic sentence for a failure Octoboard has
+no words for) — never what to do about it, and never the raw diagnostic output. Neither a missing list nor one still
+being fetched stops the dialog from being saved.
 
 ## The model and effort a session is shown running with
 

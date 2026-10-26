@@ -4,7 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
-import { errorAlerts } from "../errorAlerts";
+import { errorAlerts, type AcknowledgementView } from "../errorAlerts";
+import { ActionableError } from "../errorRecovery";
 import { Dialog, useDialogAction } from "./Dialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -555,4 +556,51 @@ it.each([
   expect(control).toBeDefined();
   act(() => control?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true })));
   expect(submit).toHaveBeenCalledTimes(submits);
+});
+
+// A failure that ends the dialog's purpose replaces its content in the same modal, in the error alert dialog's form.
+it("turns into a failure modal in place: danger icon, title, explanation, details, the acknowledgement alone", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const onClose = vi.fn();
+  const failure: AcknowledgementView = {
+    ...errorAlerts.view({
+      message: "Gone.",
+      error: new ActionableError("Gone.", "none"),
+      details: <code>raw detail</code>,
+    }),
+    classification: { kind: "actionable", recovery: "none" },
+  };
+  const render = (withFailure: boolean) => act(() => {
+    root.render(
+      <DaemonProvider value={fakeDaemon()}>
+        <Dialog title="Rename" onClose={onClose} submitLabel="Save" onSubmit={() => {}} failure={withFailure ? failure : undefined}>
+          <span>body</span>
+        </Dialog>
+      </DaemonProvider>,
+    );
+  });
+  try {
+    render(false);
+    const before = document.querySelector("[role=dialog]");
+    expect(before?.querySelector("form")).not.toBeNull();
+    render(true);
+    const dialog = document.querySelector("[role=alertdialog]");
+    // The same modal, with its form, title and body gone.
+    expect(dialog).toBe(before);
+    expect(dialog?.querySelector("form")).toBeNull();
+    expect(dialog?.textContent).not.toContain("Rename");
+    expect(dialog?.querySelector("h2, h1, [data-slot$=heading]")?.textContent).toBe("Error");
+    expect(dialog?.querySelector('[data-slot$="icon"]')).not.toBeNull();
+    expect(dialog?.textContent).toContain("Gone.");
+    expect(dialog?.querySelector("details summary")?.textContent).toBe("Error details");
+    const footer = [...(dialog?.querySelectorAll("button") ?? [])].filter((button) => button.closest("[data-slot$=footer]")).map((button) => button.textContent);
+    expect(footer).toEqual(["OK"]);
+    expect(dialog?.querySelector('[aria-label="Close"]')).toBeNull();
+    act(() => [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "OK")!.click());
+    expect(onClose).toHaveBeenCalledOnce();
+  } finally {
+    act(() => root.unmount());
+    container.remove();
+  }
 });

@@ -135,8 +135,9 @@ behind **Error details**:
   available to install; check for updates to look for it again. The offer and its notice are withdrawn, and the alert
   has no Error details.
 
-An automatic check that fails, including the one a channel switch starts, opens no alert: Settings' Updates row says
-that the last check did not finish (see "The Updates and Update channel rows" below), and the next check tries again.
+An automatic check that fails, including the one a channel switch starts, opens no alert: Settings' Updates row shows
+a warning mark saying that the last check did not finish (see "The Updates and Update channel rows" below), and the next check
+tries again.
 A check or install refused because the application is already busy with one is not a failure and says nothing.
 
 ## The Updates and Update channel rows
@@ -150,18 +151,28 @@ Settings' About section holds two rows for updates, in the macOS application onl
 2. a version being downloaded;
 3. a check under way;
 4. a newer version available, with the version running;
-5. the last check not having finished, with the version running;
-6. the version running being the latest on the channel;
-7. otherwise, before any check, only the version running.
+5. the version running being the latest on the channel;
+6. otherwise — before any check, or after a check that did not finish — only the version running.
 
 Beside it one button moves the update on: **Check for updates** until a newer version is found, showing a pending
 spinner while a check runs; then **Download and install**, showing the spinner while a check or the download is under
 way; then **Restart now** once the update is installed.
 
+**After a check that did not finish**, pressed here or automatic, while no newer version is known and nothing is under
+way, an amber warning mark stands in the row before **Check for updates**, named for the last update check; the row's
+sentence stays the version running. Its popover says that the last check for updates did not finish, that it is not
+known whether a newer version exists, and that pressing **Check for updates** tries again; it has no button of its own,
+the row's button being the retry, and it opens as a row's mark does (see "Failures, warnings and notes marked at their
+point" in `docs/product/error-alerts.md`). The mark goes once a check starts; keyboard focus on the mark or in its
+popover then goes to **Check for updates**.
+
 While Settings is open, once the state of the update changes — through a press here, a check that was already running
 when Settings opened ending, a download started from the notice finishing, or an automatic check — every change of the
-sentence is announced, except the sentence of a check under way, which the button's pending state already says. What
-the sentence said when Settings opened is not announced.
+sentence is announced, except the sentence of a check under way, which the button's pending state already says, and
+the sentence after a check that did not finish. That the last check for updates did not finish is announced instead,
+except when the check that did not finish was the one **Check for updates** started here, whose failure its error
+alert says. A failed automatic check is announced even after an earlier check was pressed. What the row said
+when Settings opened is not announced.
 
 **Update channel** chooses between **Beta** and **Stable** (see "Update channels" above), with a line saying that Beta
 gets every release, stable ones included, and Stable only stable releases.

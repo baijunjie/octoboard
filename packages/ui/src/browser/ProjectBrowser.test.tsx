@@ -3,6 +3,7 @@ import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { press as pressMark } from "../components/detailsTestSupport";
 import { isolate } from "../i18n/isolate";
 import { DaemonRequestError } from "../daemon-client";
 import { PlatformProvider } from "../platform/react";
@@ -84,7 +85,7 @@ async function mount(id: string, mode: "files" | "git"): Promise<() => Element> 
   await act(async () =>
     root.render(
       <DaemonProvider value={daemon}>
-        <PlatformProvider value={{ kind: "browser" }}><Open /></PlatformProvider>
+        <PlatformProvider value={{ kind: "browser" }}><section data-region="panel-files"><Open /></section></PlatformProvider>
       </DaemonProvider>,
     ),
   );
@@ -353,7 +354,37 @@ it("debounces whole-project searches and ignores an older query's reply", async 
   await wait(250);
   await answer("search_project_files", { type: "project_file_matches", project: "search-races", query: "new", paths: [], complete: false });
   expect(document.body.textContent).toContain("No matching files");
-  expect(document.body.textContent).toContain("The search is incomplete");
+  // The incomplete search is a warning mark inside the field, not a loose line in the pane.
+  const mark = document.body.querySelector<HTMLElement>("button[aria-label='The search is incomplete']")!;
+  expect(mark).not.toBeNull();
+  expect(mark.closest("[role=row], ul, [role=tree]")).toBeNull();
+  expect(document.body.textContent).not.toContain("not every match may be listed");
+  pressMark(mark);
+  expect(document.body.querySelector("[role=dialog][aria-label='The search is incomplete']")?.textContent).toContain("stopped at its limits, or could not read some files or folders");
+});
+
+it("marks a cut-short project folder with a warning mark right after the pane's title, not a line under the tree", async () => {
+  await mount("cut-root", "files");
+  await answer("list_project_dir", { ...dir("cut-root"), entries: [{ name: "src", kind: "directory", size: null, version: null, target: null }], complete: false } as Event);
+  const title = document.querySelector("h2")!;
+  const mark = document.body.querySelector<HTMLElement>("button[aria-label='Not every entry of this folder is shown.']")!;
+  expect(mark).not.toBeNull();
+  expect(title.textContent).toBe("cut-root");
+  expect(title.parentElement!.contains(mark)).toBe(true);
+  expect(document.body.textContent).not.toContain("Not every entry");
+});
+
+it("hands focus to the header's first control when the root's cut-short mark it held goes with a complete listing", async () => {
+  const icon = await mount("cut-root-focus", "files");
+  await answer("list_project_dir", { ...dir("cut-root-focus"), entries: [{ name: "src", kind: "directory", size: null, version: null, target: null }], complete: false } as Event);
+  const mark = document.body.querySelector<HTMLElement>("button[aria-label='Not every entry of this folder is shown.']")!;
+  act(() => mark.focus());
+  expect(document.activeElement).toBe(mark);
+  await press(icon());
+  await answer("list_project_dir", { ...dir("cut-root-focus"), entries: [{ name: "src", kind: "directory", size: null, version: null, target: null }] } as Event);
+  expect(document.body.querySelector("button[aria-label='Not every entry of this folder is shown.']")).toBeNull();
+  await act(async () => {});
+  expect(document.activeElement).toBe(document.querySelector('[role="tab"][aria-selected="true"]'));
 });
 
 it("lists every ancestor of an unopened search match so its viewer can notice file changes", async () => {

@@ -1,15 +1,21 @@
-import { Input, Label, TextField } from "@heroui/react";
+import { AlertDialog, Input, Label, TextField } from "@heroui/react";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { InlineReference } from "../components/InlineReference";
+import type { AcknowledgementView } from "../errorAlerts";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
 import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "./useTrimmedField";
 
 export interface ConfirmDialogProps {
+  /** A plain name for what the dialog does ("Delete session"), the same whatever it is opened on: the subject goes in
+   * `subject`. */
   title: string | React.ReactElement;
+  /** The first sentence of the body, naming what the dialog is about ("The session Fix search will be deleted."), with
+   * the names in it as `InlineReference` chips. */
+  subject?: React.ReactNode;
   /** What the dialog says: a string is one paragraph; a node lays out its own structure. */
   message: React.ReactNode;
   confirmLabel?: string;
@@ -32,9 +38,10 @@ export interface ConfirmDialogProps {
    * what the action covers; the caller holds its state and reads it in `onConfirm`. A function is
    * given whether `onConfirm` is running, for a control to freeze while it does. */
   extraControl?: React.ReactNode | ((busy: boolean) => React.ReactNode);
-  /** The one warning the dialog shows, under its options and over its buttons, so that a line it
-   * gains when an option is ticked moves no checkbox. */
-  warning?: React.ReactNode;
+  /** What the action takes along, as body text under the options and over the buttons, so that a line
+   * it gains when an option is ticked moves no checkbox. A confirmation with it, like a destructive
+   * one, is a warning modal: the warning icon leads its header. */
+  consequences?: React.ReactNode;
   /** Holds Confirm, shown as pending, while what it would act on is still being found out. */
   waiting?: boolean;
   /** Disables Confirm while what it would do is refused, with the reason shown in the dialog. */
@@ -44,6 +51,9 @@ export interface ConfirmDialogProps {
   resetKey?: string;
   /** What the alert for a failure of `onConfirm` is titled, in place of the generic "Error". */
   errorTitle?: string;
+  /** A failure that ends the question's purpose: the dialog turns into a failure modal that says it, and its
+   * acknowledgement calls `onCancel` (see `Dialog`'s `failure`). */
+  failure?: AcknowledgementView;
   size?: "sm" | "md" | "lg";
   /** For an action that cannot be undone and loses a lot: the word the user has to type before
    * Confirm is enabled, shown in capitals. What is typed shows in capitals too, and is compared
@@ -57,13 +67,14 @@ export interface ConfirmDialogProps {
 
 export function ConfirmDialog({
   title,
+  subject,
   message,
   confirmLabel,
   pendingLabel,
   cancelLabel,
   hideCancel,
   extraControl,
-  warning,
+  consequences,
   waiting = false,
   confirmDisabled = false,
   destructive,
@@ -71,6 +82,7 @@ export function ConfirmDialog({
   unprompted,
   resetKey,
   errorTitle,
+  failure,
   size,
   typeToConfirm,
   onConfirm,
@@ -132,14 +144,19 @@ export function ConfirmDialog({
   );
 
   return (
-    <Dialog title={title} onClose={busy ? () => {} : onCancel} footer={footer} resetKey={resetKey} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
+    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <AlertDialog.Icon status="warning" /> : undefined} onClose={busy ? () => {} : onCancel} footer={footer} failure={failure} resetKey={resetKey} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
       {typeof message === "string" ? (
-        <p className="text-sm">{message}</p>
+        // The space joins the message's own text node: VoiceOver drops a text node that is only whitespace, and would run
+        // the two sentences together.
+        <p className="text-sm">{subject}{subject === undefined ? message : ` ${message}`}</p>
       ) : (
-        <div className="flex flex-col gap-3 text-sm text-foreground">{message}</div>
+        <div className="flex flex-col gap-3 text-sm text-foreground">
+          {subject !== undefined && <p>{subject}</p>}
+          {message}
+        </div>
       )}
       {typeof extraControl === "function" ? extraControl(busy) : extraControl}
-      {warning}
+      {consequences}
       {word !== undefined && (
         <TextField
           fullWidth

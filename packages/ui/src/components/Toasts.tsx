@@ -5,10 +5,9 @@ import type { QueuedToast } from "react-aria-components";
 import { CodeToneContext } from "./codeTone";
 import { InlineReference } from "./InlineReference";
 import { DaemonErrorMessage, DaemonErrorTitle } from "./DaemonErrorMessage";
-import { rawErrorDetails } from "./errorParts";
+import { errorAlertParts } from "../errorAlertParts";
 import { errorAlerts } from "../errorAlerts";
-import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure } from "../errorPresentation";
-import { isMessageKey, type MessageKey } from "../i18n/catalog";
+import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
 import { t } from "../i18n/language";
 import { Message, useT } from "../i18n/react";
 import { sessionLocationContent, sessionWithLocationContent } from "../sessionCopy";
@@ -19,18 +18,6 @@ import { useLatest } from "./useLatest";
 
 /** How long a notice stays before it dismisses itself. */
 const NOTICE_DURATION_MS = 5000;
-
-type AlertTitleKey = Extract<MessageKey, `daemon.${string}.alertTitle`>;
-
-/** The catalog key of the title an error alert takes for what failed (`daemon.<code>.alertTitle`),
- * where the code has one: it says what failed without naming the session, which the alert's body
- * does. A failed launch's `daemonError` carries its cause's code, so its own is read off
- * `daemonTitle`. */
-function alertTitleKey({ daemonError, daemonTitle }: ToastRequest): AlertTitleKey | undefined {
-  const code = daemonTitle ? daemonTitle.code.replace(/\.title$/, "") : daemonError?.code;
-  const key = `daemon.${code}.alertTitle`;
-  return isMessageKey(key) ? (key as AlertTitleKey) : undefined;
-}
 
 /** Matches a window at least as wide as HeroUI's toast breakpoint (its `sm:`); the narrow window is
  * the one it does not match. */
@@ -65,28 +52,23 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
         const session = request.session ? sessions.get(request.session) : undefined;
         const location = session && sessionLocationContent(t, session, consoles, projects);
         if (request.kind === "error") {
-          const { daemonError } = request;
-          const titleKey = alertTitleKey(request);
+          const { title, body, details } = errorAlertParts(request);
+          // Which session the alert is about goes in the body, since the daemon words its message as "this session"
+          // without naming it: from the session's record, or, when it is gone, from the name the request carries.
           const goneName = request.daemonTitle?.params.title;
           const sessionLine = session ? sessionWithLocationContent(t, session, consoles, projects) : goneName ? <InlineReference dir="auto" wrap>{goneName}</InlineReference> : undefined;
-          // The daemon's structure where it words the message, else the message as worded in this
-          // language; the raw text it carries is the alert's "Error details", never its body.
-          const shown = daemonError && isStructuredFailure(daemonError) ? daemonError : request.message;
           errorAlerts.report({
             message: request.message,
             session: request.session,
-            error: request.error ?? daemonError ?? request.message,
-            // The title says what failed and never carries a name. Which session it is about goes in the
-            // body, since the daemon words its message as "this session" without naming it: from the
-            // session's record, or, when it is gone, from the name the request carries.
-            title: titleKey && t(titleKey),
+            error: request.error ?? request.daemonError ?? request.message,
+            title,
             content: (
               <>
                 {sessionLine && <div dir="auto" className="mb-2"><Message id="error.alertSession" params={{ session: sessionLine }} /></div>}
-                {request.content ?? <DaemonErrorMessage error={shown} />}
+                {body}
               </>
             ),
-            details: rawErrorDetails(daemonError ?? request.message),
+            details,
           });
         } else showToast(request, location);
       }),

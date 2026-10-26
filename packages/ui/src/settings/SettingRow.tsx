@@ -7,7 +7,7 @@ import React, { useEffect, useRef } from "react";
  * under the text instead, since beside it a wide control (a select) squeezes the description to a
  * few words per line. `help` is a help tip that ends the name's line (see "Explanations in help
  * tips" in `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across its whole
- * width (a warning, a progress bar), inside its divider. */
+ * width (a progress bar), inside its divider. */
 export function SettingRow({
   label,
   help,

@@ -57,12 +57,16 @@ it("explains the default account in a help tip after its path in the details hea
   const tip = dialog.querySelector<HTMLButtonElement>('button[aria-label="About the default account"]')!;
   expect(dialog.textContent).not.toContain("The agent's own default configuration directory");
   expect(dialog.textContent).toContain("/home/dev/.claude");
-  // It follows the path under the title, outside the heading, whose name is the account's name alone.
+  // It follows the path, in the body below the account's name and its badges; the title is a plain name.
   expect(tip.previousElementSibling!.textContent).toContain("/home/dev/.claude");
   expect(dialog.textContent).not.toContain("Claude Code account");
-  expect(dialog.querySelector("h2, [role=heading]")!.textContent).toBe("Default");
-  expect(dialog.textContent).toContain("Plus");
-  expect(dialog.textContent).toContain("Logged in");
+  expect(dialog.querySelector("h2, [role=heading]")!.textContent).toBe("Account settings");
+  // The first line of the body is the name, then its badges, and the path comes after them.
+  const text = dialog.textContent!;
+  expect(text).toContain("Default");
+  expect(text.indexOf("Default")).toBeLessThan(text.indexOf("Plus"));
+  expect(text.indexOf("Plus")).toBeLessThan(text.indexOf("Logged in"));
+  expect(text.indexOf("Logged in")).toBeLessThan(text.indexOf("/home/dev/.claude"));
   press(tip);
   expect(document.querySelector('[role="dialog"][aria-label="About the default account"]')?.textContent).toBe("The agent's own default configuration directory. New sessions use it when no account is chosen, and other accounts can share its configuration.");
 });

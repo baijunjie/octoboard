@@ -102,14 +102,14 @@ export function compareFilePaths(a: string, b: string): number {
   return left.length - right.length;
 }
 
-export type StatusRow = "loading" | "empty" | "partial";
+export type StatusRow = "loading" | "empty";
 
 /** One row of the tree. A `file` without an `entry` is the selected file where its directory no
  * longer lists it: `removed` when the listing is complete, `unlisted` when it was cut short. An
  * expanded `directory` whose listing failed has no children and carries the failure, which its own
- * row marks. */
+ * row marks; one whose listing was cut short is `partial`, which its own row marks too. */
 export type TreeNode =
-  | { type: "directory"; key: string; path: string; entry: BrowseEntry; children: TreeNode[]; failure?: ErrorPresentation }
+  | { type: "directory"; key: string; path: string; entry: BrowseEntry; children: TreeNode[]; failure?: ErrorPresentation; partial?: true }
   | { type: "file"; key: string; path: string; entry?: BrowseEntry; missing?: "removed" | "unlisted"; selected: boolean }
   | { type: "status"; key: string; dir: string; status: StatusRow };
 
@@ -137,8 +137,8 @@ const statusKey = (dir: string, status: StatusRow): string => `status:${status}:
 
 /**
  * The rows on screen for the listings held and the directories expanded. A directory's rows follow
- * its own, after its status while it is loading, empty or cut short (an unreadable one has no rows, and
- * its own row carries the failure); a collapsed
+ * its own, after its status while it is loading or empty (an unreadable one has no rows, and its own
+ * row carries the failure, as a cut-short one carries that it is); a collapsed
  * directory's descendants are not rows at all. `selected` is shown where its directory is on screen
  * even when that directory's listing no longer has it, so a selection that went away stays visible
  * as such.
@@ -182,7 +182,7 @@ export function buildTree(
       if (isDirectory(item)) {
         const children = expanded.has(path) ? childrenOf(path) : [];
         const listed = expanded.has(path) ? listings.get(path) : undefined;
-        nodes.push({ type: "directory", key: rowKey(path), path, entry: item, children, ...(listed?.state === "error" && { failure: listed.message }) });
+        nodes.push({ type: "directory", key: rowKey(path), path, entry: item, children, ...(listed?.state === "error" && { failure: listed.message }), ...(listed?.state === "loaded" && !listed.complete && { partial: true }) });
       } else {
         files.push(path);
         nodes.push({ type: "file", key: rowKey(path), path, entry: item, selected: path === selected });
@@ -190,7 +190,6 @@ export function buildTree(
     }
     if (dir !== "") {
       if (listing.entries.length === 0 && !missing) nodes.push(status(dir, "empty"));
-      if (!listing.complete) nodes.push(status(dir, "partial"));
     }
     return nodes;
   };

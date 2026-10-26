@@ -1,11 +1,9 @@
 import React, { useEffect } from "react";
 
 import { errorAlerts } from "./errorAlerts";
-import { ErrorAlert } from "./components/ErrorAlert";
-import { CodeToneContext } from "./components/codeTone";
 import { DiagnosticBlock } from "./components/DiagnosticBlock";
 import { Message, useT } from "./i18n/react";
-import { StartupHeading, StartupScreen } from "./StartupScreen";
+import { StartupScreen } from "./StartupScreen";
 
 interface ErrorBoundaryState {
   error?: Error;
@@ -49,27 +47,31 @@ function diagnostic(error: Error): string {
 }
 
 /** The fallback, a function component because only one can read the current language. The error's
- * own message is raw text, so the Alert says what to do in the application's words and the message
- * stands in the diagnostic block under it. */
+ * own text is raw, so the page says what happened and what to do in the application's words and the
+ * text is in the popover of the mark after the heading. */
 function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   const t = useT();
   const text = diagnostic(error);
-  // The alert says it in the application's words; the error's own text is its "Error details".
-  useEffect(() => { errorAlerts.report({ message: error.message, title: <Message id="error.crashed" />, content: <p>{t("error.unexpected.summary")}</p>, details: <DiagnosticBlock tall>{text}</DiagnosticBlock> }); }, [error, text, t]);
+  // Reported once per error: the alert's words are components that follow the language, so a change of language needs
+  // no new report. The alert says it in the application's words; the error's own text is its "Error details".
+  useEffect(() => {
+    errorAlerts.report({
+      message: error.message,
+      title: <Message id="error.crashed.heading" />,
+      content: <p><Message id="error.crashed" /></p>,
+      details: <DiagnosticBlock wrap tall>{text}</DiagnosticBlock>,
+    });
+  }, [error, text]);
   return (
     <StartupScreen
-      message={
-        <CodeToneContext value="danger">
-          <div className="flex min-w-0 flex-col gap-4">
-            <StartupHeading><Message id="error.crashed" /></StartupHeading>
-            <ErrorAlert announce={false} title={t("error.crashed.alertTitle")}>{t("error.crashed.alertDescription")}</ErrorAlert>
-            {/* The stack is taller than the screen more often than not, so the block scrolls (`tall`). */}
-            <div className="max-w-[70ch]">
-              <DiagnosticBlock tall>{text}</DiagnosticBlock>
-            </div>
-          </div>
-        </CodeToneContext>
-      }
+      failure={{
+        title: t("error.crashed.heading"),
+        description: t("error.crashed.retry"),
+        markLabel: t("error.crashed.markLabel"),
+        // The stack is taller than the popover more often than not, so the block scrolls (`tall`), and its lines are
+        // wider, so they wrap rather than run past its edge.
+        details: <DiagnosticBlock wrap tall>{text}</DiagnosticBlock>,
+      }}
       action={{ label: t("error.tryAgain"), onSelect: onRetry }}
     />
   );

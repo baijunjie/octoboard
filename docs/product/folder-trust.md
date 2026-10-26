@@ -73,8 +73,8 @@ the named session, when the session is known — with the project's path set apa
   project is pressed without asking;
 - for Codex only, that Codex records the trust for the root of the git repository the folder is in, which covers more
   than this project when the project is a subfolder or a linked worktree;
-- a caution, a warning alert set apart at the end, titled that the project's own configuration takes effect, and
-  under the title what that means for the agent that is asking: for Claude Code, that trusting lets
+- last, a caution, a plain paragraph of the message like the rest, with no alert or title of its own, saying what
+  trusting means for the agent that is asking: for Claude Code, that trusting lets
   the project's own permission rules and hooks take effect and its `.claude/settings.json` may pre-approve tool
   permissions; for Codex, that trusting lets Codex load the project's own configuration, hooks and command rules, which
   can run code even without a model request, and that the confirmation does not change Codex's sandbox or approval
@@ -269,8 +269,9 @@ there are none yet (see "The compact row" in `docs/product/empty-states.md`); wh
 paragraph above it, not in that row.
 
 **Removing a folder asks first.** Each folder has a Remove button, whose accessible name gives the folder's full path
-and whose tooltip says that it stops trusting the folder. Pressing it opens a confirmation asking whether to remove that
-trusted folder, its path written with the daemon host's home directory as `~` as in the list. Its message says that
+and whose tooltip says that it stops trusting the folder. Pressing it opens a confirmation, titled to remove a trusted folder,
+whose first sentence says that the folder will be removed from the trusted folders, its path written with the daemon
+host's home directory as `~` as in the list. Its message then says that
 later trust confirmations for projects under the folder are asked about again unless the project's own permission or
 another trusted folder covers them, and that projects' own permissions, running sessions and the trust each agent has
 already recorded are kept. Cancelling changes nothing; confirming with **Remove** stops trusting the folder, and the

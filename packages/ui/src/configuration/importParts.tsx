@@ -1,8 +1,13 @@
 import React from "react";
 
+import { AGENT_LABEL } from "../agents";
+import { InlineReference } from "../components/InlineReference";
+import { StatusMark } from "../components/StatusMark";
 import { StatusBadge, type StatusBadgeColor } from "../components/StatusBadge";
 import type { PlainMessageKey } from "../i18n/catalog";
-import type { DocumentSettings } from "../protocol";
+import { isolate } from "../i18n/isolate";
+import { Message, useT } from "../i18n/react";
+import type { AccountFallback, DocumentSettings } from "../protocol";
 
 /** The look of one card of the import dialog: a console's projects, the applied or applicable settings. */
 export const CARD_CLASS = "flex flex-col rounded-xl border border-transparent shadow-(--panel-shadow)";
@@ -43,3 +48,33 @@ export const BOOLEAN_SETTINGS: {
   { label: "settings.autoApproveHandoffs.label", field: "auto_approve_handoffs", consequence: "configuration.import.settings.consequence.autoApproveHandoffs" },
   { label: "settings.askQuestionsAsChoices.label", field: "ask_questions_as_choices", consequence: "configuration.import.settings.consequence.askQuestionsAsChoices" },
 ];
+
+/** One paragraph per account reference that names no account of this machine: the agent's default account
+ * is used instead. */
+export function FallbackLines({ fallbacks }: { fallbacks: AccountFallback[] }): React.ReactElement {
+  return (
+    <>
+      {fallbacks.map((fallback) => (
+        <p key={`${fallback.agent}:${fallback.name}`} dir="auto">
+          <Message
+            id="configuration.import.fallback"
+            params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference> }}
+          />
+        </p>
+      ))}
+    </>
+  );
+}
+
+/** The warning mark after the name of a console or a project whose account references name no account of
+ * this machine: its popover says, per reference, that the agent's default account is used instead. Nothing
+ * when there are none. */
+export function FallbackMark({ subject, fallbacks }: { subject: string; fallbacks: AccountFallback[] }): React.ReactElement | null {
+  const t = useT();
+  if (fallbacks.length === 0) return null;
+  return (
+    <StatusMark tone="warning" label={t("configuration.import.fallbacks.label", { subject: isolate(subject) })}>
+      <FallbackLines fallbacks={fallbacks} />
+    </StatusMark>
+  );
+}

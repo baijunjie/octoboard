@@ -1,13 +1,12 @@
-import React, { useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { incompleteAccount } from "../accountChoices";
 import { AGENT_LABEL, defaultAccountName } from "../agents";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { InlineReference } from "../components/InlineReference";
-import { TintedAlert } from "../components/TintedAlert";
-import { isolate } from "../i18n/isolate";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -17,7 +16,9 @@ import { sessionAccount, sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, useDaemonStore, type SessionRequest } from "../store";
 import { displayWirePath } from "../wirePath";
 import type { ConfirmDialogProps } from "./ConfirmDialog";
-import { HandoffRequestForm, isChangeRequest, SwitchRequestForm, type RequestFormState } from "./SessionRequestForms";
+import { dialogAround } from "./dialogElement";
+import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
+import { HandoffRequestForm, IncompleteSharingAnnouncer, IncompleteSharingMark, isChangeRequest, SwitchRequestForm, type RequestFormState } from "./SessionRequestForms";
 
 /** The branches an approval would hand over, each as code, joined as the language joins a list.
  * They are not text the agent wrote: the daemon checked each is a branch the requester is
@@ -66,8 +67,41 @@ function failureSubject(request: SessionRequest, err: unknown): string {
  * in, which the sentence names anyway. A session is named by its display title, its current task
  * beside its name, since the name alone is often just its project's. The names are the user's own,
  * and a long one may have no break opportunity, so the sentence wraps anywhere. Names the store
- * does not know stand in as their ids. */
+ * does not know stand in as their ids. Where the account the session would run on has a sharing change
+ * that did not finish (`incompleteAccount`), a warning mark in the sentence follows the account; a
+ * switch or a handoff has it in its form instead, unless the form is not drawn (the window does not
+ * know the session, or the console), when the sentence has it. */
 function SessionRequestMessage({ request }: { request: SessionRequest }): React.ReactElement {
+  const accounts = useDaemonStore((s) => s.settings.accounts);
+  const sharing = useDaemonStore((s) => s.accountSharing);
+  // The account the sentence marks, kept here with the announcer so that a mark which appears after the
+  // dialog opened is said once.
+  const launchAccount = useDaemonStore((s) => {
+    switch (request.action) {
+      case "resume_record":
+        return request.account;
+      case "reopen":
+      case "resume":
+        return s.sessions.get(request.target)?.account_id;
+      case "switch":
+        return s.sessions.has(request.target) ? undefined : request.account;
+      case "handoff":
+        return s.consoles.has(request.console) ? undefined : request.account;
+      default:
+        return undefined;
+    }
+  });
+  const incomplete = incompleteAccount(accounts, sharing, launchAccount);
+  return (
+    <>
+      <IncompleteSharingAnnouncer account={incomplete} />
+      <SessionRequestSentence request={request} incomplete={incomplete} />
+    </>
+  );
+}
+
+/** The sentence `SessionRequestMessage` describes, with `incomplete` the account it marks, if any. */
+function SessionRequestSentence({ request, incomplete }: { request: SessionRequest; incomplete: Account | undefined }): React.ReactElement {
   const language = useCurrentLanguage();
   const t = useT();
   // Only the sessions the sentence names, so an unrelated session changing does not redraw it.
@@ -80,6 +114,16 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
   const projects = useDaemonStore((s) => s.projects);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
+  const markId = useId();
+  const sentence = useRef<HTMLParagraphElement>(null);
+  // The mark after the account the session would run on. When it goes while it or its popover holds
+  // focus, focus moves to the dialog.
+  const incompleteMark = incomplete && (
+    <span className="ms-1">
+      <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => dialogAround(sentence)?.focus()} />
+      <IncompleteSharingMark inline account={incomplete} markId={markId} />
+    </span>
+  );
   // Named rather than "this console": the window may be showing another one, and the session can
   // be asked for in any console.
   const console_ = recordReference(consoles.get(request.console)?.name, request.console);
@@ -105,18 +149,18 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
   const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[request.agent]}</InlineReference>;
   const params = { requester, console: console_, agent };
   if (request.action === "resume_record") {
-    const account = recordAccount(t, accounts, defaultNames, request.agent, request.account);
+    const account = <>{recordAccount(t, accounts, defaultNames, request.agent, request.account)}{incompleteMark}</>;
     return (
-      <p className="[overflow-wrap:anywhere]">
+      <p ref={sentence} className="[overflow-wrap:anywhere]">
         <Message id="dialog.sessionRequest.question.record" params={{ ...params, project, account, conversation: recordReference(undefined, request.conversation) }} />
       </p>
     );
   }
   if (request.action === "switch" || request.action === "handoff") {
     const session = recordReference(target ? sessionDisplayTitle(t, target) : undefined, request.target);
-    const account = recordAccount(t, accounts, defaultNames, request.agent, request.account);
+    const account = <>{recordAccount(t, accounts, defaultNames, request.agent, request.account)}{incompleteMark}</>;
     return (
-      <p className="[overflow-wrap:anywhere]">
+      <p ref={sentence} className="[overflow-wrap:anywhere]">
         <Message id={request.action === "switch" ? "dialog.sessionRequest.question.switchAndContinue" : "dialog.sessionRequest.question.handoff"} params={{ requester, agent, session, account }} />
       </p>
     );
@@ -126,18 +170,19 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
     // A target the store does not know has no account to name, so a dash stands in for it; a known
     // one that recorded an account the store does not know is shown by that id.
     const targetAccount = target && sessionAccount(t, target, accounts, defaultNames);
-    const account = !target
+    const accountReference = !target
       ? <InlineReference dir="auto">—</InlineReference>
       : targetAccount
         ? <InlineReference monospace={targetAccount.isPath} dir={targetAccount.isPath ? "ltr" : "auto"} wrap>{targetAccount.name}</InlineReference>
         : recordReference(undefined, target.account_id ?? "");
+    const account = <>{accountReference}{incompleteMark}</>;
     const reports = request.owner === undefined
       ? <Message id="dialog.sessionRequest.reportsTo.user" />
       : <Message id="dialog.sessionRequest.reportsTo.owner" params={{ owner: recordReference(owner ? sessionDisplayTitle(t, owner) : undefined, request.owner) }} />;
     const question = <Message id={request.action === "reopen" ? "dialog.sessionRequest.question.reopen" : "dialog.sessionRequest.question.resume"} params={{ ...params, project, session: targetName, account, reports }} />;
     const reopened = request.reopenedOwners;
     return (
-      <p className="[overflow-wrap:anywhere]">
+      <p ref={sentence} className="[overflow-wrap:anywhere]">
         {reopened.length > 0
           ? <Message id="dialog.sessionRequest.withOwners" params={{ question, owners: <Message id="dialog.sessionRequest.reopenedOwners" params={{ count: reopened.length, owners: joinNodes(language, reopened, (id, key) => {
             const reopenedOwner = reopening[reopened.indexOf(id)];
@@ -151,7 +196,7 @@ function SessionRequestMessage({ request }: { request: SessionRequest }): React.
     ? <Message id="dialog.sessionRequest.question.console" params={params} />
     : <Message id="dialog.sessionRequest.question.project" params={{ ...params, project }} />;
   return (
-    <p className="[overflow-wrap:anywhere]">
+    <p ref={sentence} className="[overflow-wrap:anywhere]">
       {request.branches.length > 0
         ? <Message id="dialog.sessionRequest.withBranches" params={{ question, branches: <Message id="dialog.sessionRequest.branches" params={{ count: request.branches.length, branches: branchList(language, request.branches) }} /> }} />
         : question}
@@ -173,22 +218,23 @@ const ACTION_TEXT = {
  * resume a conversation, or to switch the account of a session the requester owns or hand it off
  * (each a form the user may change before confirming, which an approval carries to the daemon) —
  * for the request `PendingQuestionDialog` puts forward, or nothing without one. A request that
- * would launch on an account whose last sharing change did not finish says so in a warning line,
- * where the user's own resume asks again (`useConfirmIncompleteLaunch`): the dialog is already the
- * confirmation; for a switch or a handoff it is the account the form is on. The daemon holds the
- * request, so the dialog moves on when the daemon says it stopped waiting, which an answer from
- * here or from any other client does at once. Dismissing it is a refusal. A hook rather than a
+ * would launch on an account whose last sharing change did not finish says so in a warning mark at
+ * the account, where the user's own resume asks again (`useConfirmIncompleteLaunch`): the dialog is
+ * already the confirmation; for a switch or a handoff it is the account the form is on (the
+ * sentence's where the form is not drawn). One that appears after the dialog opened is said once.
+ * The daemon holds the request, so the dialog moves on when the daemon says it stopped waiting,
+ * which an answer from here or from any other client does at once. Dismissing it is a refusal. A hook rather than a
  * component, so the one dialog slot it shares with the trust prompts (`PendingQuestionDialog`)
  * stays mounted between them. */
 export function useSessionRequestDialogProps(request: SessionRequest | undefined): ConfirmDialogProps | undefined {
   const t = useT();
   const { request: send, toastError } = useDaemon();
-  const accounts = useDaemonStore((s) => s.settings.accounts);
-  const sharing = useDaemonStore((s) => s.accountSharing);
-  const targetId = request?.action === "reopen" || request?.action === "resume" ? request.target : undefined;
-  const targetAccount = useDaemonStore((s) => (targetId === undefined ? undefined : s.sessions.get(targetId)?.account_id));
   // What the form of a switch or a handoff ended on, which the form reports.
   const [reported, setReported] = useState<RequestFormState>();
+  // A switch of a session that has been archived cannot be carried out whatever the user changes: the dialog says
+  // so as a failure, and acknowledging it refuses the request.
+  const archived = useDaemonStore((s) => request?.action === "switch" && s.sessions.get(request.target)?.status === "archived");
+  const failure = useFailureWhenBlocked(archived, t("dialog.sessionRequest.switch.archived"), t("dialog.sessionRequest.switch.archivedTitle"), request?.requestId);
   if (!request) return undefined;
   const form = reported?.requestId === request.requestId ? reported : undefined;
 
@@ -210,28 +256,11 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
   };
 
   const { action } = request;
-  // The account the session runs on: the one holding the record, the session's own for a resume
-  // (which a store that does not know the session cannot say), or for a switch or a handoff the
-  // one its form is on, else the one it was asked for.
-  const launchAccount = request.action === "resume_record"
-    ? request.account
-    : isChangeRequest(request)
-      ? (form?.edits.account !== undefined ? form.edits.account : request.account)
-      : request.action === "start"
-        ? undefined
-        : targetAccount;
-  const incomplete = incompleteAccount(accounts, sharing, launchAccount);
   return {
     resetKey: `request:${request.requestId}`,
+    failure,
     title: t(ACTION_TEXT[action].title),
-    message: <SessionRequestMessage request={request} />,
-    warning: incomplete && (
-      <TintedAlert
-        status="warning"
-        title={t("dialog.sessionRequest.incompleteTitle", { account: isolate(incomplete.name) })}
-        description={t("dialog.sessionRequest.incomplete")}
-      />
-    ),
+    message: <SessionRequestMessage key={request.requestId} request={request} />,
     extraControl: isChangeRequest(request)
       ? (busy: boolean) => (
         <div key={request.requestId} className="flex flex-col gap-4">

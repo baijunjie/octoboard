@@ -67,10 +67,10 @@ function useLoginFocusReturn(
 const UNAVAILABLE_CLASS = `${ICON_TRIGGER_BASE_CLASS} bg-transparent pointer-events-auto data-[pressed=true]:[transform:none] active:[transform:none]`;
 
 /** The Log in button of an account: an icon with a tooltip and a name that says whose account, looking as the row's
- * actions menu button does, shown in the table row's Status cell and in the details dialog's header while the account
- * reads as not logged in, and nothing otherwise. While a login of the account runs it is unavailable, not natively
- * disabled: it keeps focus, is marked `aria-disabled`, takes no hover tint or press shrink, gives "Logging in…" as its
- * tooltip and its description (its name stays the action), and a press does nothing (see "Buttons" in
+ * actions menu button does, shown in the table row's Status cell and on the details dialog's first body line while the
+ * account reads as not logged in, and nothing otherwise. While a login of the account runs it is unavailable, not
+ * natively disabled: it keeps focus, is marked `aria-disabled`, takes no hover tint or press shrink, gives "Logging
+ * in…" as its tooltip and its description (its name stays the action), and a press does nothing (see "Buttons" in
  * `docs/ui-accessibility.md`). Focus comes back after the login dialog closes as `useLoginFocusReturn` settles it
  * (`fallback` is where it goes when the button is gone). */
 export function AccountLoginButton({ agent, account, name, quota, onLogin, fallback }: {

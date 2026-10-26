@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { FocusScope } from "react-aria";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
 import { StatusMark } from "./StatusMark";
 import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "./Hint";
@@ -520,4 +520,32 @@ it("leaves Escape alone while an input method is composing", () => {
   act(() => void elsewhere.dispatchEvent(event));
   expect(event.defaultPrevented).toBe(false);
   expect(dialog()).not.toBeNull();
+});
+
+/** Makes every element measure `scrollHeight` tall in a `clientHeight` box (jsdom has no layout), for the test. */
+function fakeOverflow(scrollHeight: number, clientHeight: number): void {
+  const sizes = { scrollHeight, clientHeight };
+  for (const key of ["scrollHeight", "clientHeight"] as const) {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+    Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => sizes[key] });
+    onTestFinished(() => void (original ? Object.defineProperty(HTMLElement.prototype, key, original) : delete (HTMLElement.prototype as unknown as Record<string, unknown>)[key]));
+  }
+}
+
+it.each([[1000, true], [100, false]])("keeps the actions outside the faded scroller the body is in, a region named like the popover only while it overflows (%i tall)", async (scrollHeight, overflows) => {
+  fakeOverflow(scrollHeight, 100);
+  const button = mountForTooltip(
+    <StatusMark label="Failed" actions={() => <button type="button">Try again</button>}>
+      <p>Path not found.</p>
+    </StatusMark>,
+  ).querySelector("button")!;
+  press(button);
+  // HeroUI writes the fade's state on the next frame.
+  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  const scroller = dialog()!.querySelector<HTMLElement>("[data-slot=scroll-shadow]")!;
+  expect(scroller.textContent).toBe("Path not found.");
+  const again = [...dialog()!.querySelectorAll("button")].find((b) => b.textContent === "Try again")!;
+  expect(scroller.contains(again)).toBe(false);
+  expect(scroller.getAttribute("role")).toBe(overflows ? "region" : null);
+  expect(scroller.getAttribute("aria-labelledby")).toBe(overflows ? dialog()!.id : null);
 });

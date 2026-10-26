@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { press } from "../components/detailsTestSupport";
 import { LanguageProvider } from "../i18n/react";
 import type { AvailableUpdate, PlatformAdapter, UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -64,6 +65,72 @@ async function spoken(container: HTMLElement): Promise<string> {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
   return textOf(container.querySelector("[role=status]")!);
 }
+
+const failedMark = (container: HTMLElement) => container.querySelector<HTMLElement>("button[aria-label='Last update check']");
+
+it("shows a check that did not finish as a warning mark before the button, its popover holding the sentences, not as an alert under the row", async () => {
+  const check = vi.fn(async () => { throw new Error("offline"); });
+  const { container } = mount({ kind: "tauri", updater: updaterOf(check) });
+  await act(async () => void button(container, "Check for updates")!.click());
+  expect(container.querySelector(".alert")).toBeNull();
+  const mark = failedMark(container)!;
+  expect(mark).not.toBeNull();
+  // Before the Check for updates button, in the row's control area.
+  expect(mark.compareDocumentPosition(button(container, "Check for updates")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  press(mark);
+  const popover = document.querySelector("[data-status-mark-popover]")!;
+  expect(textOf(popover)).toContain("The last check for updates did not finish");
+  expect(textOf(popover)).toContain("It is not known whether a newer version exists.");
+  expect(textOf(popover)).toContain("Press Check for updates to try again.");
+  // No retry button of its own (the buttons react-aria adds for dismissing are unnamed).
+  expect([...popover.querySelectorAll("button")].filter((b) => b.textContent !== "")).toHaveLength(0);
+  // The row's own sentence does not carry the failure.
+  expect(textOf(container.querySelector("[class*=text-app-muted]")!)).toBe("You are using version 0.1.0.");
+});
+
+it("hands focus to the Check for updates button when the mark that holds it goes as a check starts, and leaves other focus alone", async () => {
+  let fail = true;
+  let finish: () => void = () => {};
+  const check = vi.fn(() => (fail ? Promise.reject(new Error("offline")) : new Promise<undefined>((resolve) => (finish = () => resolve(undefined)))));
+  const { container, store } = mount({ kind: "tauri", updater: updaterOf(check) });
+  await act(async () => void button(container, "Check for updates")!.click());
+  fail = false;
+  act(() => failedMark(container)!.focus());
+  await act(async () => void store().check("automatic"));
+  expect(failedMark(container)).toBeNull();
+  expect(document.activeElement).toBe(button(container, "Check for updates"));
+  await act(async () => finish());
+  // Focus that was elsewhere stays there.
+  fail = true;
+  await act(async () => store().check("automatic"));
+  const outside = document.body.appendChild(document.createElement("button"));
+  onTestFinished(() => outside.remove());
+  act(() => outside.focus());
+  fail = false;
+  await act(async () => void store().check("automatic"));
+  expect(failedMark(container)).toBeNull();
+  expect(document.activeElement).toBe(outside);
+  await act(async () => finish());
+});
+
+it("leaves a check pressed here to the error alert dialog: the mark appears without being spoken", async () => {
+  const { container } = mount({ kind: "tauri", updater: updaterOf(async () => { throw new Error("offline"); }) });
+  await act(async () => void button(container, "Check for updates")!.click());
+  expect(failedMark(container)).not.toBeNull();
+  expect(await spoken(container)).toBe("");
+  expect(container.querySelector("[role=alert]")).toBeNull();
+});
+
+it("speaks an automatic check that does not finish, though an earlier check was pressed here", async () => {
+  let fail = false;
+  const { container, store } = mount({ kind: "tauri", updater: updaterOf(async () => { if (fail) throw new Error("offline"); return undefined; }) });
+  await act(async () => void button(container, "Check for updates")!.click());
+  expect(failedMark(container)).toBeNull();
+  fail = true;
+  await act(async () => store().check("automatic"));
+  expect(failedMark(container)).not.toBeNull();
+  expect(await spoken(container)).toBe("The last check for updates did not finish.");
+});
 
 it("has no update rows without the capability", () => {
   const container = mount({ kind: "browser" }).container;

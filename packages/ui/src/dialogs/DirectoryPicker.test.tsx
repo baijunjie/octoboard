@@ -70,9 +70,11 @@ it("shows a listing failure in an Alert with its reason and Try again, and opens
   expect(document.querySelector('[data-slot="alert-root"]')).toBeNull();
 });
 
-it("announces a failure that repeats in the same words again, without moving focus off Try again", async () => {
+it("reports a failed Try again in the error alert dialog and leaves the first-listing Alert as it was, focus on Try again", async () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
   const request = vi.fn().mockRejectedValue(new Error("Permission denied"));
   const daemon = { store: createStateStore(), request } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
@@ -83,15 +85,39 @@ it("announces a failure that repeats in the same words again, without moving foc
   });
   await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
   await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  expect(report).not.toHaveBeenCalled();
   const first = document.querySelector('[role="alert"]')!;
   const retry = [...document.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
   act(() => retry.focus());
   await act(async () => retry.click());
   expect(request).toHaveBeenCalledTimes(2);
-  const second = document.querySelector('[role="alert"]')!;
-  expect(second).not.toBe(first);
-  expect(second.textContent).toContain("Something unexpected went wrong.");
+  expect(report).toHaveBeenCalledOnce();
+  expect(report.mock.calls[0]![0].title).toBe("Could not open the directory");
+  // The dialog alone speaks the repeat: the Alert is the one from opening, neither replaced nor announced again.
+  expect(document.querySelector('[role="alert"]')).toBe(first);
   expect(document.activeElement).toBe(retry);
+});
+
+it("reports a failed Go before any listing in the error alert dialog, and the first-listing Alert stays", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
+  const request = vi.fn().mockRejectedValue(new Error("Permission denied"));
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
+  expect(report).not.toHaveBeenCalled();
+  await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(report).toHaveBeenCalledOnce();
+  expect(report.mock.calls[0]![0].title).toBe("Could not open the directory");
+  expect(document.querySelectorAll('[data-slot="alert-root"]')).toHaveLength(1);
 });
 
 it("keeps Try again where it is, pending and focused, while its listing is out", async () => {
@@ -127,6 +153,47 @@ it("keeps Try again where it is, pending and focused, while its listing is out",
   expect(retry.getAttribute("aria-disabled")).not.toBe("true");
   expect(document.activeElement).toBe(retry);
 });
+
+/** A picker whose first listing succeeds and whose second fails, after which `navigate` is run. */
+async function failLaterNavigation(navigate: () => void | Promise<void>) {
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
+  const entries = [{ name: "code", path: "/home/me/code", is_git_repo: false }];
+  const request = vi.fn()
+    .mockResolvedValueOnce({ type: "dir_listing", path: "/home/me", entries })
+    .mockRejectedValueOnce(new Error("Permission denied"));
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
+  expect(option("code")).toBeDefined();
+  await act(async () => navigate());
+  expect(request).toHaveBeenCalledTimes(2);
+  expect(report).toHaveBeenCalledOnce();
+  expect(report.mock.calls[0]![0].title).toBe("Could not open the directory");
+  // The failure is the error alert dialog's to show, not the picker's: no Alert, no mark, no loose text.
+  expect(document.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(document.querySelector("[data-status-mark]")).toBeNull();
+  expect(document.body.textContent).not.toContain("Could not list this directory");
+  // The previous listing and its path stay.
+  expect(option("code")).toBeDefined();
+  expect((document.querySelector('input[aria-label="Directory path"]') as HTMLInputElement).value).toBe("/home/me");
+}
+
+const option = (name: string) => [...document.querySelectorAll('[role="option"]')].find((item) => item.getAttribute("aria-label") === name) as HTMLElement | undefined;
+
+it("reports a failed later navigation to an entry in the error alert dialog and keeps the listing, with no Alert", () =>
+  failLaterNavigation(() => option("code")!.click()));
+
+it("reports a failed later navigation by Go in the error alert dialog and keeps the listing, with no Alert", () =>
+  failLaterNavigation(() => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click()));
+
+it("reports a failed later navigation to the parent row in the error alert dialog and keeps the listing, with no Alert", () =>
+  failLaterNavigation(() => option("Parent directory")!.click()));
 
 async function mountListing(path: string, entries: unknown[]): Promise<HTMLElement> {
   const request = vi.fn(async () => ({ type: "dir_listing", path, entries }));

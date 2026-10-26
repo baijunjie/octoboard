@@ -18,8 +18,8 @@ nothing is staged, committed or checked out. A row can open its live file or fol
 
 Failures to load the pane, list the project's directory or search its files are shown in the pane alone, each as an
 empty-state failure in place of what could not be loaded, with **Try again**, and a folder that could not be listed is
-marked on its row; none of them opens an error alert (see "Failures shown on the screen" and "Failures marked on a
-row" in `docs/product/error-alerts.md`).
+marked on its row; none of them opens an error alert (see "Failures shown on the screen" and "Failures, warnings and
+notes marked at their point" in `docs/product/error-alerts.md`).
 
 ## Opening a project's files
 
@@ -161,22 +161,31 @@ A folder that is not simply listed says so:
 
 - **loading** while it is being read, in a row of its own under it;
 - **empty** when it has nothing in it, in a row of its own under it;
-- **unreadable**: a red failure mark on the folder's own row, right after its name (not at the row's end), named as the folder that could not be
-  listed, and nothing under the folder, which is drawn closed. The mark opens a popover with the reason, and **Try
-  again** where asking again can help, with the mouse resting on it or with a tap, Enter or Space (a mouse click on
-  it does nothing; see "Errors" below and "Failures marked on a row" in `docs/product/error-alerts.md`). Opening the
-  closed folder again — pressing the row, Enter, or its arrow — lists it again, as Try again does, and pressing the
-  mark does not. Right (Left under a right-to-left language) on the row moves keyboard focus to the mark instead of
-  opening the folder, Enter or Space on the mark opens its popover, a further Right reaches the row's own actions
-  button, and the opposite key goes back. A failure that arrives while the folder is open closes it
-  and keyboard focus goes to its row, and so does Try again; the folder stays open in what the user chose, so it
-  opens once it lists;
-- **cut short** — "not every entry is shown" — after the entries read before a limit stopped the listing: at most
-  10,000 entries of one folder, or 2 MiB of names, are listed. These are the entries read first, not a chosen subset.
+- **unreadable**: a red failure mark on the folder's own row, right after its name (not at the row's end), named as the
+  folder that could not be listed, and nothing under the folder, which is drawn closed. The mark opens a popover with
+  the reason, and **Try again** where asking again can help, with the mouse resting on it or with a tap, Enter or Space
+  (a mouse click on it does nothing; see "Errors" below and "Failures, warnings and notes marked at their point" in
+  `docs/product/error-alerts.md`). Opening the closed folder again — pressing the row, Enter, or its arrow — lists it
+  again, as Try again does, and pressing the mark does not. Right (Left under a right-to-left language) on the row moves
+  keyboard focus to the mark instead of opening the folder, Enter or Space on the mark opens its popover, a further
+  Right reaches the row's own actions button, and the opposite key goes back. A failure that arrives while the folder is
+  open closes it and keyboard focus goes to its row, and so does Try again; the folder stays open in what the user
+  chose, so it opens once it lists;
+- **cut short**: an amber warning mark on the folder's own row, right after its name, named and saying that not every
+  entry of this folder is shown; under it are the entries read before a limit stopped the listing, and no row of its
+  own says so. Its popover opens as the failure mark's does. Right (Left under a right-to-left language) on the open
+  folder's row moves keyboard focus to the mark, a further Right reaches the row's own actions button, and the
+  opposite key goes back, the folder staying open. At most 10,000 entries of one folder, or 2 MiB of names, are listed.
+  These are the entries read first, not a chosen subset. A folder whose listing failed carries its failure mark
+  instead. When a later listing is complete and the mark goes while it or its popover held keyboard focus, focus goes
+  to the folder's row.
 
 For the project's own directory the same states take the whole pane: a loading line while it is first read, announced to
 assistive technology, an empty panel saying the project folder is empty (see "The full panel" in
-`docs/product/empty-states.md`), a line under the tree when it is cut short, and, when it cannot be read at all, an
+`docs/product/empty-states.md`), when it is cut short an amber warning mark right after the pane's title, named and
+saying that not every entry of this folder is shown (not while a file name filter is active, whose results have their
+own mark; see "Filtering by file name" below) — when the mark goes while it or its popover held keyboard focus,
+focus goes to the header's first control — and, when it cannot be read at all, an
 empty-state failure in place of the tree, headed that the project's files could not be listed, with the reason (the
 folder shown as its path, `~` standing for the home directory) and **Try again**; it is announced to assistive technology when it appears
 after the panel was drawn. Try again pressed from the keyboard hands keyboard focus to the header's Refresh, which stays while
@@ -210,8 +219,8 @@ that row was under; when it was on the button itself, which is then disabled, it
 In Files, the **filter toggle**, the first of the header's controls, shows and hides a field directly below the
 header. It starts hidden. Opening it puts keyboard focus in the field; closing it clears its text and returns focus
 to the toggle if the field held it. An empty field closes when focus leaves it, with whitespace alone counting as
-empty; focus moving to the include-ignored toggle beside it (see below) is not leaving it, and the window itself losing
-focus leaves it in place. A field with text stays visible. The toggle follows the
+empty; focus moving to the incomplete-search mark or the include-ignored toggle beside it (see below) is not leaving
+it, and the window itself losing focus leaves it in place. A field with text stays visible. The toggle follows the
 convention in "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`.
 
 A nonempty filter **searches the entire project directory**, including folders never expanded in the tree, and
@@ -225,8 +234,9 @@ restores the unfiltered tree.
   at every depth, with everything beneath them. Symbolic links to files
   inside the project can match under the link's own name; symbolic links to directories are not traversed, and links
   outside the project are excluded.
-- **Include ignored files**, an icon toggle at the end of the field's row, after the field, includes them: an ignored
-  file then matches as any other, and ignored results are drawn dimmed (see "Ignored entries" above). It shows a file
+- **Include ignored files**, an icon toggle at the end of the field's row, after the field,
+  includes them: an ignored file then matches as any other, and ignored results are drawn dimmed (see "Ignored
+  entries" above). It shows a file
   with a cross while ignored files are left out, named "Include ignored files", and a file with a magnifying glass
   while they are included, named "Exclude ignored files", following "Two-state icon toggles" in
   `docs/product/labels-and-tooltips.md`. It starts off, and goes back to off whenever the field closes. Pressing it
@@ -239,10 +249,14 @@ restores the unfiltered tree.
   arrive; a reply to an earlier one never replaces them. A failure shows, in place of the results, an empty-state failure
   headed that the search failed, with its reason and **Try again**. No matches has a distinct empty state, leaving the
   field available to change or clear.
-- A search is bounded to **250,000 visited entries**, **2,000 matching files**, **2 MiB of encoded result paths**,
-  **128 directory levels** and **5 seconds**. An unreadable subdirectory or entry also makes the result incomplete.
-  Incomplete results carry a notice that not every matching file may be shown, even when no matches were found;
-  an unreadable project root instead fails the search.
+- A search is bounded to **250,000 visited entries**, **2,000 matching files**, **2 MiB of encoded result paths**, **128
+  directory levels** and **5 seconds**. An unreadable subdirectory or entry also makes the result incomplete. Incomplete
+  results — with matches or with none — are marked by an amber warning triangle inside the filter field, at its trailing
+  end before its clear button, named that the search is incomplete; its popover says that the search stopped at its
+  limits, or could not read some files or folders, so not every match may be listed, and it opens as a row's mark does
+  (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). When a later search
+  completes and the mark goes while it or its popover held keyboard focus, focus goes to the field's input. An
+  unreadable project root instead fails the search.
 - Reading which entries are ignored takes at most **2 seconds** of a search's 5. Where it cannot be read in that time
   or within its size limits, or Git cannot be run or fails, the search goes on with nothing left out for that repository: it may then
   show ignored files, and it is not marked incomplete for that. A nested repository the search reaches only after
@@ -323,7 +337,7 @@ menu at the pointer** (Control-click also works in the desktop app).
   could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The file viewer's header offers the same
   action, and File manager and Default application too (see "The header" in `docs/product/file-viewer.md`).
 - **The Git mode's grouping folders and commit rows have no button**, and neither does a row that says something about a folder instead
-  of listing an entry (loading, empty, unreadable, cut short; see "Rows and the keyboard" above).
+  of listing an entry (loading, empty; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
   open**, and always on a device whose primary input cannot hover — a phone, or a tablet's touch screen. It is
   reachable from the keyboard either way. In Files it fades and opens out as it appears, as the

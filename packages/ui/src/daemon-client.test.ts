@@ -3,7 +3,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { sessionOf } from "./gallery/fixtures/builders";
 import type { Event } from "./protocol";
-import { DaemonClient } from "./daemon-client";
+import { DaemonClient, DaemonRequestError } from "./daemon-client";
+import { setLanguage } from "./i18n/language";
 
 class FakeSocket extends EventTarget {
   static OPEN = 1;
@@ -79,4 +80,18 @@ it("answers a request at once, behind the broadcasts that arrived before its rep
   FakeSocket.last.receive({ type: "ack", id });
   await reply;
   expect(order).toEqual(["session_upserted", "ack", "resolved"]);
+});
+
+it("fails a request the reconnect cut off in the UI's language, as a closed connection", async () => {
+  setLanguage("zh-Hans");
+  try {
+    const client = new DaemonClient("ws://test");
+    const reply = client.request({ type: "shutdown" });
+    client.reconnect();
+    const error = await reply.catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(DaemonRequestError);
+    expect(error).toMatchObject({ code: "connection_closed", message: "守护进程控制连接在收到回复前已重新建立。" });
+  } finally {
+    setLanguage("en");
+  }
 });

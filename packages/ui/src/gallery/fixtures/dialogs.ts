@@ -2,6 +2,7 @@ import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow"
 import type { Agent, AgentAvailability, Settings } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
+import type { FixtureError } from "./projectFiles";
 import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount, worktreeItemOf } from "./builders";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
@@ -96,6 +97,17 @@ const removeState = snapshotState({
 
 // A model the agent no longer lists, long enough to be clipped in a picker.
 const RETIRED_MODEL = "retired-model-for-production-release-coordination-and-compatibility-review-مرحبا-发布";
+// The daemon found no binary for the agent, so it has no model list to offer.
+const CLAUDE_NOT_FOUND: Scenario["agentModels"] = {
+  claude: {
+    models: [],
+    unavailable: {
+      code: "models_binary_not_found",
+      params: { binary: "claude" },
+      message: "claude was not found on the login shell's PATH",
+    },
+  },
+};
 const RETIRED_EFFORT = "retired-effort-for-production-release-coordination-مرحبا-发布";
 
 // A console that carries a stored model and effort for its default agent: the model is one the
@@ -325,6 +337,14 @@ const hubSessions = {
   review: cascadeState.sessions!.get("s-api-4")!,
 };
 
+/** The daemon's refusal to list a directory it was not allowed to read, as a packaged application meets it on a volume
+ * macOS asks permission for. */
+const DIRECTORY_UNREADABLE = (path: string): FixtureError => ({
+  code: "directory_unreadable",
+  params: { path, detail: "Operation not permitted (os error 1)" },
+  message: `\`${path}\` could not be read. On a volume the application has no file access to, macOS asks for permission per volume \u2014 grant it and try again: Operation not permitted (os error 1)`,
+});
+
 const dialogFixture = { state: dialogState, directories: { "/Users/dev": HOME_LISTING }, detections: { ...{ "~/code/slow": "pending" },
   ...{ "~/code/site": { agent: "codex" } },
   ...{
@@ -520,7 +540,7 @@ const removeProjectTrash: Scenario = {
   group: "Projects",
   category: "normal",
   title: "Remove project and move its folder to the Trash",
-  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, the dialog's one warning has appeared because the Trash option is checked: with no sessions to list, it is titled \"Additional consequences\" and holds, inside it, the consequence lines for the worktrees moved to the Trash and the branches deleted permanently.",
+  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, consequence lines have appeared because the Trash option is checked: with no sessions to list they stand as plain text, one for the worktrees moved to the Trash and one for the branches deleted permanently.",
   state: removalState,
   projectRemovalBranches: {
     [tagged[0].id]: [
@@ -544,7 +564,7 @@ const archiveConsoleSession: Scenario = {
   group: "Archive view",
   category: "normal",
   title: "Archive console session and its bound sessions",
-  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them, the one warning is titled with the count of the sessions archived with it and holds, inside it, the list of the running manually bound session, the waiting lead and its interrupted child. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
+  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them the plain line \"3 sessions under it are archived with it. Their processes end.\" heads the list of the running manually bound session, the waiting lead and its interrupted child. The header carries a warning icon and the plain title Archive session, and the body's first sentence names the session. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
   sessionBranches: [
     worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
     worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),
@@ -593,7 +613,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch partial failure",
-    description: "The dialog has closed and the batch has finished: one alert titled \"2 sessions could not move to\" the Work account's chip, its first line saying they stay on their current account. One row per failed session, its name in bold over a short reason: the copy failure's sentence for one, and for the other only the application's \"Failed unexpectedly.\", with no daemon text in the row. The remedy for the full disk follows the list once, then the paragraph about a possible bug, which is there because one failure is unexpected. Error details is open, with a heading per session and under it that session's raw text in a block of its own: the system's own words for the copy and the daemon's text for the unexpected failure. The footer holds Report issue and OK; the session that did switch stays on the new account.",
+    description: "The dialog has closed and the batch has finished: one alert titled \"Could not switch account\", whose first line, \"2 sessions could not move to\" and the Work account's chip, is followed by a line saying they stay on their current account. One row per failed session, its name in bold over a short reason: the copy failure's sentence for one, and for the other only the application's \"Failed unexpectedly.\", with no daemon text in the row. The remedy for the full disk follows the list once, then the paragraph about a possible bug, which is there because one failure is unexpected. Error details is open, with a heading per session and under it that session's raw text in a block of its own: the system's own words for the copy and the daemon's text for the unexpected failure. The footer holds Report issue and OK; the session that did switch stays on the new account.",
     state: switchAccountState,
     externalLinks: "available",
     sessionAccountSwitches: {
@@ -652,7 +672,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch refused, the usage limit is reached",
-    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both rows say the account's weekly limit for all models is reached, with no reset time, and the advice to choose another account or try again once the usage limit resets comes once under them. The footer holds OK alone. The account's name appears as a chip in the title and in each row, in the app's language.",
+    description: "The daemon holds a newer reading than the window and refuses two sessions' switch to the Work account. Both rows say the account's weekly limit for all models is reached, with no reset time, and the advice to choose another account or try again once the usage limit resets comes once under them. The footer holds OK alone. The account's name appears as a chip in the first line and in each row, in the app's language.",
     state: switchAccountState,
     sessionAccountSwitches: { "s-switch-bound": quotaRefusal, "s-switch-work": quotaRefusal },
     steps: submitConsoleSwitch,
@@ -979,7 +999,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Session resume, no conversation with this ID",
-    description: "A danger Alert directly under the Session ID, titled \"Could not resume this conversation\", says no conversation with this ID was found in any account; nothing else appears below the field and the footer button is disabled.",
+    description: "The Session ID field itself is marked invalid, its label and border in the danger colour, with its own error under it, \"No conversation with this ID was found in any account\"; no Alert stands under the field, and the footer button is disabled.",
     conversationLocation: { kind: "not_found" },
     steps: resumeLookup,
   },
@@ -1057,7 +1077,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "New session dialog open as the last agent is removed",
-    description: "Reached only when the agents change under an open dialog (the buttons that open it are disabled without an added agent): every agent is removed meanwhile. The dialog closes itself and a plain error alert says no agent is available to open a session; OK is its only button.",
+    description: "Reached only when the agents change under an open dialog (the buttons that open it are disabled without an added agent): every agent is removed meanwhile. The dialog itself turns into a failure modal: a danger icon in the header, the plain title \"Cannot open a session\", a sentence saying no agent is available to open a session, and OK as its only button. No second dialog opens over it.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.setAgents({ added: [] }),
@@ -1110,7 +1130,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Remove project with running sessions",
-    description: "The confirmation as first opened: the Trash option is unchecked, and the confirming button reads \"End and remove\" because sessions are running. The one warning is titled with the count of running sessions and holds the list of them. Default, named and removed-directory account cases coexist in the running-sessions list; hover each agent mark.",
+    description: "A warning modal (warning icon in the header, the plain title Remove project, the project named in the first sentence of the body). As first opened the Trash option is unchecked, and the confirming button reads \"End and remove\" because sessions are running. Under the option the plain line \"4 sessions are still running and will be ended\" heads the list of them. Default, named and removed-directory account cases coexist in the running-sessions list; hover each agent mark.",
     steps: [
       (ui) => projectActions(ui, web.name),
       (ui) => ui.press(ui.t("sidebar.project.remove")),
@@ -1121,7 +1141,7 @@ export const dialogScenarios: Scenario[] = [
     ...removeProjectTrash,
     id: "dialog-remove-project-trash-expanded",
     title: "Remove project to the Trash, lists opened",
-    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The warning under the options (\"Additional consequences\") holds the consequence lines, including one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The consequence lines under the options include one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
   },
   {
@@ -1133,8 +1153,8 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Remove project to the Trash, what goes along unknown",
-    description: "The Trash option is checked but the daemon could not say what else goes: the dialog's one warning under the option (\"Additional consequences\") holds a consequence line that outside worktrees may be moved to the Trash with the project and its branches deleted permanently, with no disclosure or locked-worktree option. Confirm stays available.",
-    steps: removeDocsSite,
+    description: "The Trash option is checked but the daemon could not say what else goes: a warning mark named \"Other worktrees unknown\" sits beside the option's checkbox, after its label and outside it, and its popover, opened here, says that worktrees of the repository outside the project folder may be moved to the Trash with the project and its branches deleted permanently. There is no disclosure, locked-worktree option or loose line, and Confirm stays available.",
+    steps: [...removeDocsSite, (ui) => ui.hoverStatusMark(ui.t("dialog.removeProject.alongUnknownMark"))],
   },
   {
     ...dialogFixture,
@@ -1190,7 +1210,7 @@ export const dialogScenarios: Scenario[] = [
     ...archiveConsoleSession,
     id: "dialog-archive-console-session-expanded",
     title: "Archive console session, lists opened",
-    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each named by its path as plain monospace text, with its branch after a branch icon, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. The one warning under the options holds the affected sessions first and, under them inside the same Alert, a consequence line for each ticked option saying it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each named by its path as plain monospace text, with its branch after a branch icon, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. Under the options the affected sessions are listed first and, under them, a consequence line as plain text for each ticked option says it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
     steps: [
       ...archiveConsoleSession.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
@@ -1205,7 +1225,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive confirmation while the bound branches are inspected",
-    description: "The sessions warning is shown at once, but Confirm is pending and cannot be pressed until the inspection of bound branches and worktrees answers, so nothing is archived before the user has seen what would be left. The same hold applies to every archive, delete and remove-project confirmation.",
+    description: "The list of sessions is shown at once, but Confirm is pending and cannot be pressed until the inspection of bound branches and worktrees answers, so nothing is archived before the user has seen what would be left. The same hold applies to every archive, delete and remove-project confirmation.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
@@ -1228,7 +1248,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive a session switching its account",
-    description: "Release coordinator and its bound session are both mid account switch, as the daemon reports it. The warning lists the bound session that goes with the archive, its status glyph the muted turning arc of \"Switching account…\" in place of its waiting status, the same as in its own row and the hub's row behind the dialog.",
+    description: "Release coordinator and its bound session are both mid account switch, as the daemon reports it. The body lists the bound session that goes with the archive, its status glyph the muted turning arc of \"Switching account…\" in place of its waiting status, the same as in its own row and the hub's row behind the dialog.",
     state: switchingAccount(switchAccountState, ["s-switch-hub", "s-switch-bound"]),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Release coordinator" })),
@@ -1383,21 +1403,27 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Edit a project whose agent cannot list its models",
-    description: "In Advanced, the project's Model picker offers the stored model alone and a danger Alert directly under it, titled \"Could not load the models\", says the agent was not found, with the effort picker beneath it; the Alert follows the field, where the console dialog's matrix has one for both columns.",
-    agentModels: {
-      claude: {
-        models: [],
-        unavailable: {
-          code: "models_binary_not_found",
-          params: { binary: "claude" },
-          message: "claude was not found on the login shell's PATH",
-        },
-      },
-    },
+    description: "In Advanced, the project's Model picker offers the stored model alone, which stays readable and is clipped at the field edge, and a warning mark named \"Could not load the models\" stands right after the \"Model\" label, with nothing drawn inside the field, so the Not in the list badge and the clear button are uncovered; the effort picker below is unchanged. The popover is in the next scenario.",
+    agentModels: CLAUDE_NOT_FOUND,
     steps: [
       (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-edit-project-models-unavailable-details",
+    group: "Projects",
+    category: "exceptional",
+    title: "Why a project's model list could not be loaded, in the mark's popover",
+    description: "The mark after the Model label is pressed, so its popover is open with focus inside it. It reads that the agent was not found, with claude as inline code, then the remedy to check it is installed and on the shell's PATH. This failure has no raw diagnostic and no Try again: the dialog goes on without the list.",
+    agentModels: CLAUDE_NOT_FOUND,
+    steps: [
+      (ui) => projectActions(ui, configured.name),
+      (ui) => ui.press(ui.t("sidebar.project.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.touchPressStatusMark(ui.t("dialog.agentSettings.modelsFailedMark")),
     ],
   },
   {
@@ -1530,19 +1556,41 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    directories: {
-      ...dialogFixture.directories,
-      "/Users/dev/Documents": {
-        code: "directory_unreadable",
-        params: { path: "/Users/dev/Documents", detail: "Operation not permitted (os error 1)" },
-        message: "`/Users/dev/Documents` could not be read. On a volume the application has no file access to, macOS asks for permission per volume \u2014 grant it and try again: Operation not permitted (os error 1)",
-      },
-    },
+    directories: { "/Users/dev": DIRECTORY_UNREADABLE("/Users/dev") },
     id: "dialog-directory-picker-failed",
     group: "Projects",
     category: "exceptional",
-    title: "Directory picker, a directory that could not be listed",
-    description: "Documents was entered and refused. One danger Alert under the path field says Could not list this directory, then that the path could not be read and the remedy of granting the application access to the volume, a Details button holding the macOS explanation and then the system's reason, and Try again inside it; the home listing it came from stays available below it.",
+    title: "Directory picker, the first listing could not be read",
+    description: "The picker opens with no listing to show, so the failure is its own state: one danger Alert under the path field says Could not list this directory, then that the path could not be read and the remedy of granting the application access to the volume, a Details button holding the macOS explanation and then the system's reason, and Try again inside it.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("common.browse")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    directories: { "/Users/dev": DIRECTORY_UNREADABLE("/Users/dev") },
+    id: "dialog-directory-picker-retry-failed",
+    group: "Projects",
+    category: "exceptional",
+    title: "Directory picker, Try again failed before any listing",
+    description: "The first listing could not be read and Try again, pressed here, failed again. Pressing it is the user's own action, so its failure is an error alert dialog over the picker, with the path that could not be read, the macOS remedy and OK as its only button; the first-listing Alert with its Try again stays in the picker behind it.",
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.addProject")),
+      (ui) => ui.press(ui.t("common.browse")),
+      (ui) => ui.press(ui.t("error.tryAgain")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    directories: { ...dialogFixture.directories, "/Users/dev/Documents": DIRECTORY_UNREADABLE("/Users/dev/Documents") },
+    id: "dialog-directory-picker-navigation-failed",
+    group: "Projects",
+    category: "exceptional",
+    title: "Directory picker, a directory entered later could not be read",
+    description: "Documents was entered from the home listing and refused. The failure is an error alert dialog over the picker, with the path that could not be read, the macOS remedy and OK as its only button; no Alert stands in the picker. The home listing and its path stay as they were behind the alert.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1664,7 +1712,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project path refused",
-    description: "A danger Alert directly under the Directory field, titled \"Could not check the location\", says the path does not exist, with the missing path as code in it.",
+    description: "The Directory field itself is marked invalid, its label and border in the danger colour, and its own error under it says the path does not exist, with the missing path as code in it; no Alert stands under the field, since the lookup found the path wrong rather than failing to run.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
@@ -1772,18 +1820,9 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "exceptional",
     title: "Edit a console whose agent cannot list its models",
-    description: "The daemon found no binary for the agent, so the model picker offers the stored model alone and a danger Alert below the launch settings table, titled \"Could not load the models\", says why; the effort picker still works over what is stored.",
+    description: "The daemon found no binary for the agent, so each Model picker in the launch settings table (Console sessions and Project sessions) offers its stored model alone, and one warning mark named \"Could not load the models\" stands beside the Model row's name, outside both fields; the long stored console model stays readable at the field edge with its badge and clear button uncovered. The effort pickers still work over what is stored.",
     state: dialogState,
-    agentModels: {
-      claude: {
-        models: [],
-        unavailable: {
-          code: "models_binary_not_found",
-          params: { binary: "claude" },
-          message: "claude was not found on the login shell's PATH",
-        },
-      },
-    },
+    agentModels: CLAUDE_NOT_FOUND,
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),
@@ -1794,15 +1833,20 @@ export const dialogScenarios: Scenario[] = [
     id: "dialog-edit-console-models-command-failed",
     group: "Consoles",
     category: "exceptional",
-    title: "Model command failed with raw diagnostics",
-    description: "The model picker retains its stored choice, and one danger Alert below the launch settings table, titled \"Could not load the models\", says the named agent could not list its models, with its multiline diagnostics in the Details popover on the right of the Alert.",
+    title: "Model command failed, raw diagnostics in the mark's popover",
+    description: "The warning mark beside the Model row's name is pressed, so its popover is open with focus inside it: the sentence that Claude Code could not list its models, then the command's multiline diagnostics as a raw block that scrolls sideways at its fade, with the right-to-left path kept legible. There is no Try again, and the one mark serves both the Console sessions and the Project sessions field.",
     state: dialogState,
     agentModels: { claude: { models: [], unavailable: {
       code: "models_command_failed",
       params: { agent: "Claude Code", detail: "Error: failed to load models\n    /Users/dev/.claude/مرحبا/settings.json: permission denied" },
       message: "Claude Code could not list its models",
     } } },
-    steps: [consoleActions, (ui) => ui.press(ui.t("sidebar.console.edit")), (ui) => ui.press(ui.t("dialog.agentSettings.advanced"))],
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.edit")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.touchPressStatusMark(ui.t("dialog.agentSettings.modelsFailedMark")),
+    ],
   },
 
 ];

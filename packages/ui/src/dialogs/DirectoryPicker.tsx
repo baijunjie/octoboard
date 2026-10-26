@@ -17,6 +17,7 @@ import { joinPhrases } from "../i18n/joinPhrases";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { DirEntry, Event } from "../protocol";
 import { abbreviateHome } from "../pathDisplay";
+import { reportError } from "../reportError";
 import { useDaemon, useDaemonStore } from "../store";
 import { Dialog, useRefocusIfLost } from "./Dialog";
 import { useTrimmedField } from "./useTrimmedField";
@@ -45,9 +46,11 @@ function ancestorOf(path: string): string {
  *
  * Failure here is a normal path, not an edge case: a packaged application raises a macOS
  * file-access prompt per volume, and the user may decline it or leave it unanswered (see "Known
- * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing is the state of
- * what the picker shows: an Alert under the path field with the reason and Try again, while the
- * previous listing stays available.
+ * pitfalls of the Tauri / Rust approach" in docs/architecture.md), so a failed listing is handled by
+ * what the picker has to show. With no listing yet the picker cannot do its job, so the failure of the
+ * listing made as it opens is an Alert under the path field with the reason and Try again. A navigation
+ * the user starts (Go, Try again, an entry, the parent row) that fails is a failure of their own action,
+ * so it is the error alert dialog, with a listing standing or not, and the picker stays as it was.
  */
 export function DirectoryPicker({
   title,
@@ -67,10 +70,9 @@ export function DirectoryPicker({
   const pathField = useTrimmedField(path, setPath);
   const [entries, setEntries] = useState<DirEntry[]>();
   const [resolvedPath, setResolvedPath] = useState<string>();
-  // The last listing that failed and why, until a listing succeeds; `count` numbers the failures, so
-  // one that repeats in the same words is announced again, and `initial` marks the listing made as
-  // the picker mounted.
-  const [failure, setFailure] = useState<{ target: string; error: ErrorPresentation; count: number; initial: boolean }>();
+  // Why the listing made as the picker mounted failed, and the path it asked for, until a listing
+  // succeeds. A listing the user starts that fails is reported apart, and leaves this as it is.
+  const [failure, setFailure] = useState<{ target: string; error: ErrorPresentation }>();
   // Whether Try again's listing is out: its button stays where it is, unavailable, rather than
   // taking a second press, and the failure stays shown until the listing answers.
   const [retrying, setRetrying] = useState(false);
@@ -93,10 +95,13 @@ export function DirectoryPicker({
       if (initial && targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
         return load(ancestorOf(targetPath), true);
       }
-      setFailure((last) => ({ target: targetPath, error: errorPresentation(err), count: (last?.count ?? 0) + 1, initial }));
-      // Deliberately not clearing `entries`/`resolvedPath`: a denied or not-yet-answered volume
-      // prompt is the expected failure here, and it should not yank the previous listing (and its
-      // parent-directory row back up) out from under the user along with it.
+      // A navigation the user started (Go, Try again, an entry) is a failure of their own action, with or without a
+      // listing yet: it is reported apart from the picker, which keeps its listing or its first-listing Alert as they are.
+      if (!initial) {
+        reportError(err, undefined, undefined, undefined, t("directoryPicker.navigationFailedTitle"));
+        return;
+      }
+      setFailure({ target: targetPath, error: errorPresentation(err) });
     }
   };
 
@@ -141,13 +146,11 @@ export function DirectoryPicker({
         </Button>
       </div>
       {failure && (
-        // A listing is asked for after the picker opened, so its failure always announces itself. The
-        // one for the listing made on mount may come while the path field is still taking focus, so
-        // it waits that out.
+        // The listing is asked for after the picker opened, so its failure announces itself; it may
+        // come while the path field is still taking focus, so it waits that out.
         <FailureAlert
           announce
-          announceDelayMs={failure.initial ? AFTER_FOCUS_MOVE_DELAY_MS : undefined}
-          attempt={failure.count}
+          announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
           title={t("directoryPicker.failed")}
           message={failure.error}
           pending={retrying}

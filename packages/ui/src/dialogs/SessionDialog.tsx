@@ -1,7 +1,6 @@
 import { Tabs } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
-import { ErrorAlert } from "../components/ErrorAlert";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { DaemonRequestError } from "../daemon-client";
@@ -22,7 +21,7 @@ import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import type { NewSessionBinding } from "./dialogRequest";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { ResumeConversationFields } from "./ResumeConversationFields";
-import { useCloseWhenBlocked } from "./useCloseWhenBlocked";
+import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { useResumeTarget, type ResumeTarget } from "./useResumeTarget";
@@ -166,11 +165,11 @@ export function SessionDialog({
     ? storedFixedOwner ?? sessions.find((s) => s.id === sessionBinding.to.id) ?? sessionBinding.to
     : undefined;
   const fixedOwnerGone = fixedOwner !== undefined && !owners.some((s) => s.id === fixedOwner.id);
-  useCloseWhenBlocked(blocked || fixedOwnerGone, fixedOwnerGone && fixedOwner ? new ActionableError(
+  const failure = useFailureWhenBlocked(blocked || fixedOwnerGone, fixedOwnerGone && fixedOwner ? new ActionableError(
     t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, fixedOwner)) }),
     "none",
     { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, fixedOwner) } },
-  ) : t("dialog.session.noAgent"), onClose);
+  ) : t("dialog.session.noAgent"), t("dialog.session.blockedTitle"));
   const owner = fixedOwner ?? (sessionBinding.kind === "choose" && !resuming ? owners.find((s) => s.id === pickedOwner) : undefined);
   const [ownerOffered, setOwnerOffered] = useState(owners.length > 0);
   if (owners.length > 0 && !ownerOffered) setOwnerOffered(true);
@@ -186,7 +185,6 @@ export function SessionDialog({
   const foundName = target?.kind === "archived" && heldName?.session === target.session.id ? heldName.value : foundSession?.title ?? "";
 
   const submit = () => {
-    if (fixedOwnerGone) return;
     if (!attempt(resume.idProblem)) {
       resumeFieldRef.current?.querySelector("input")?.focus();
       return;
@@ -252,6 +250,7 @@ export function SessionDialog({
         value={choice.agent}
         onChange={setPickedAgent}
         account={accountField}
+        errorMessage={accountUnavailable}
       />
       {fixedOwner && (
         <div data-marquee-scope className="flex items-center gap-2 text-sm">
@@ -275,28 +274,30 @@ export function SessionDialog({
       <LaunchSettingsFields
         {...launch}
         note={t(project ? "dialog.session.launchInheritanceNote" : "dialog.consoleSession.launchInheritanceNote")}
-        isDisabled={blocked}
       />
     </>
   );
 
   return (
     <Dialog
-      title={project
-        ? <Message id="dialog.session.title" params={{ project: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />
-        : <Message id="dialog.consoleSession.title" params={{ console: <InlineReference dir="auto" wrap>{parentConsole.name}</InlineReference> }} />}
+      title={t(project ? "dialog.session.title" : "dialog.consoleSession.title")}
       onClose={onClose}
+      failure={failure}
       submitLabel={t(target ? SUBMIT_LABEL[target.kind] : "dialog.session.open")}
       busy={busy}
-      submitDisabled={blocked || fixedOwnerGone || accountUnavailable !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
+      submitDisabled={accountUnavailable !== undefined || (resuming && resume.idProblem === undefined && target === undefined)}
       onSubmit={submit}
     >
-      {accountUnavailable && <ErrorAlert title={accountUnavailable.title} announce>{accountUnavailable.description}</ErrorAlert>}
+      <p className="text-sm">
+        {project
+          ? <Message id="dialog.session.subject" params={{ project: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />
+          : <Message id="dialog.consoleSession.subject" params={{ console: <InlineReference dir="auto" wrap>{parentConsole.name}</InlineReference> }} />}
+      </p>
       {resumable && (
         <Tabs selectedKey={conversation} onSelectionChange={(key) => {
           setSwitched(true);
           setConversation(key as Conversation);
-        }} isDisabled={blocked} className="gap-4">
+        }} className="gap-4">
           <Tabs.ListContainer className="w-max max-w-full self-start" render={(props) => <div {...props}>{tabScrollLabels(props.children)}</div>}>
             <Tabs.List aria-label={t("dialog.session.conversation")} className="w-max min-w-0 p-1.5">
               {/* Keep hovered labels at full opacity and use the foreground colour for clear feedback. */}
@@ -328,7 +329,7 @@ export function SessionDialog({
               onNameChange={(value) => target && target.kind !== "record" && setHeldName({ session: target.session.id, value })}
               recordName={nameField}
               launch={launch}
-              blocked={blocked}
+              accountError={accountUnavailable}
             />
           </Tabs.Panel>
         </Tabs>

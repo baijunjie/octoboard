@@ -245,7 +245,7 @@ export const layoutScenarios: Scenario[] = [
     category: "normal",
     title: "Quit held up by a terminal",
     description:
-      "Quitting while a shell terminal is running something, with every session idle: the dialog says some terminals are still running something and that quitting ends it. It makes no mention of sessions, which an idle session never holds a quit up for, nor of resuming, which a terminal cannot.",
+      "Quitting while a shell terminal is running something, with every session idle: the dialog is titled \"Quit Octoboard\" (the app name is plain text in the title) and says some terminals are still running something and that quitting ends it. It makes no mention of sessions, which an idle session never holds a quit up for, nor of resuming, which a terminal cannot.",
     state: quitIdleState,
     quitRequested: true,
   },

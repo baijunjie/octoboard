@@ -41,7 +41,7 @@ import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { useConfirmIncompleteLaunch } from "./dialogs/useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
-import { Message, useT } from "./i18n/react";
+import { useT } from "./i18n/react";
 import { useOctoboardTheme } from "./theme";
 import type { AsideLayout } from "./layout/AsidePane";
 import { liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
@@ -672,7 +672,7 @@ export function App(): React.ReactElement {
       };
     });
     if (!entries.length) entries.push({ label: t("sidebar.project.noBranches"), icon: GitBranch, disabled: true, onClick: () => {} });
-    if (!reply.complete) entries.push({ label: t("sidebar.project.branchesIncomplete"), icon: GitBranch, disabled: true, onClick: () => {} });
+    if (!reply.complete) entries.push({ label: t("sidebar.project.branchesBeyondList"), note: true });
     return entries;
   };
 
@@ -1205,7 +1205,7 @@ export function App(): React.ReactElement {
       <PendingQuestionDialog />
       {exitConfirmOpen && (
         <ConfirmDialog
-          title={<Message id={exitRestarts ? "app.restart.title" : "app.quit.title"} />}
+          title={t(exitRestarts ? "app.restart.title" : "app.quit.title")}
           message={t(exitMessageKey(exitRestarts, exitHolders))}
           confirmLabel={t(exitRestarts ? "common.restart" : "common.quit")}
           destructive

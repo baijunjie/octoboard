@@ -14,9 +14,9 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
 
 - With none running, the confirmation offers **Remove**.
 - With some running, the confirmation lists them — each with its status glyph, its agent's icon and its title, in the
-  sidebar's order (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`) — inside
-  its one warning alert, which sits after its options and before its buttons. The alert's title says that that many
-  sessions are still running and will be ended, and the list follows under it (see "The confirmation" in
+  sidebar's order (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`) — in
+  its consequences, the body text after its options and before its buttons: a line says that that many sessions are
+  still running and will be ended, and the list follows it (see "The confirmation" in
   `docs/product/branch-and-worktree-cleanup.md` for the lines a ticked option adds).
   Its button reads **End and remove**. The list follows
   sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
@@ -40,7 +40,7 @@ ended once the removal is past its refusals below.
 
 Removal is refused while a session of the project is being launched or resumed at that moment, since that session has
 no process yet that could be ended, and, with the Trash option ticked, for the folder reasons below. A refusal is shown
-in the confirmation and names the reason; nothing is ended, moved or removed.
+in an error alert over the confirmation and names the reason; nothing is ended, moved or removed.
 
 ## Moving the project folder to the Trash
 

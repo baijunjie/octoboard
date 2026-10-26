@@ -178,6 +178,11 @@ describe("the sample repository's changes", () => {
     expect(cut.type === "project_branches" ? cut.default_branch : null).toBeUndefined();
   });
 
+  it("answer a branch list incomplete when the lookup was cut short", async () => {
+    const cut = await sampleDaemon({ ...FORKED_GIT, branchesCut: true }).request({ type: "list_project_branches", project: "p-1" });
+    expect(cut).toMatchObject({ type: "project_branches", complete: false, branches: FORKED_GIT.branches });
+  });
+
   it("answer a comparison of a branch with its upstream or with nothing", async () => {
     const daemon = sampleDaemon(UNPUSHED_GIT);
     const upstream = UNPUSHED_GIT.branches?.find((b) => b.name === "main")?.upstream;
@@ -288,6 +293,16 @@ describe("the sample repository's changes", () => {
     const remaining = SAMPLE_GIT.branches?.filter((b) => b.name !== "feature/ranking-experiments");
     await expect(daemon.request({ type: "list_project_branches", project: "p-1" })).resolves.toEqual({ type: "project_branches", project: "p-1", branches: remaining, complete: true });
     await expect(daemon.request(compare)).rejects.toMatchObject({ code: "unknown_branch", params: { branch: "feature/ranking-experiments" } });
+  });
+
+  it("take a branch of goneAfter away once its pair has been compared, and not for the comparison of any other pair", async () => {
+    const daemon = sampleDaemon({ ...SAMPLE_GIT, goneAfter: { "main..chore/update-dependencies": ["main"] } });
+    await expect(daemon.request({ type: "compare_project_branches", project: "p-1", left: "origin/main", left_remote: true, right: "main" })).resolves.toMatchObject({ type: "project_comparison" });
+    await expect(daemon.request({ type: "list_project_branches", project: "p-1" })).resolves.toMatchObject({ branches: SAMPLE_GIT.branches });
+    await expect(daemon.request({ type: "compare_project_branches", project: "p-1", left: "main", right: "chore/update-dependencies" })).resolves.toMatchObject({ type: "project_comparison" });
+    const remaining = SAMPLE_GIT.branches?.filter((b) => b.name !== "main");
+    await expect(daemon.request({ type: "list_project_branches", project: "p-1" })).resolves.toMatchObject({ branches: remaining });
+    await expect(daemon.request({ type: "compare_project_branches", project: "p-1", left: "main", right: "chore/update-dependencies" })).rejects.toMatchObject({ code: "unknown_branch", params: { branch: "main" } });
   });
 
   it("keep a gone branch listed while only other branches have been compared", async () => {

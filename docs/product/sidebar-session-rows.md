@@ -102,7 +102,8 @@ A session row's action menu offers:
   also archive itself once nothing under it is unarchived (see "A session archiving itself" in
   `docs/product/hub-orchestration.md`); its confirmation lists the
   interrupted sessions under it — bound to it, or to a lead session bound to it (see "Lead sessions" in
-  `docs/product/hub-orchestration.md`) — inside a warning titled with their number, as the ones archived with it, and the
+  `docs/product/hub-orchestration.md`) — in its consequences, under a line giving their number as the ones archived
+  with it, and the
   archive is refused, with the sessions named, while any session under it has a process running. A project session that
   has started sessions is archived under the same rule, with the same confirmation while any of them is unarchived.
 - **Delete**, in place of Archive for a session that has never been used and is not still starting (what counts as

@@ -2,6 +2,7 @@ import { Disclosure, Surface } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { BranchGroups, type BranchGroup, type BranchRow } from "../components/BranchGroups";
+import { StatusMark } from "../components/StatusMark";
 import { Message, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
 import type { SessionBranchItem } from "../protocol";
@@ -11,9 +12,9 @@ import { ConfirmOption } from "./ConfirmOption";
 import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { branchChoices, forcibleBranches, lockedWorktrees, useProjectRemovalBranches, useSessionBranches } from "./useSessionBranches";
 
-/** A line the dialog's one warning adds while an option is ticked: `key` names its kind, so a line
- * whose count changes stays the same line; one with an `id` describes an option too. */
-export type WarningLine = { key: string; text: React.ReactNode; id?: string };
+/** A line the dialog's consequences add while an option is ticked: `key` names its kind, so a line
+ * whose count changes stays the same line. */
+export type ConsequenceLine = { key: string; text: React.ReactNode };
 
 /** `items` as rows of a cleanup list, in display form; `tagChanges` marks a worktree with
  * uncommitted changes where the group it is in does not say so already. */
@@ -57,8 +58,8 @@ function BranchDisclosure({ groups, describedBy, name }: {
 }
 
 /** One option over bound branches and worktrees a confirmation leaves unless the user says
- * otherwise, as a plain block of its own — never inside a warning, which is the dialog's one
- * callout and says what a ticked option does: the checkbox (unchecked by default, by whoever holds
+ * otherwise, as a plain block of its own, apart from the consequences, which say what a ticked
+ * option does: the checkbox (unchecked by default, by whoever holds
  * its state) with what it removes and how many in its label, its note, and under them the
  * disclosure of what it covers. Nothing shows while there are none; once an inspection takes the
  * last of them away, focus that was in the block goes back to the confirmation. */
@@ -111,14 +112,14 @@ export function useChoiceOver(items: SessionBranchItem[]): [boolean, (selected: 
  * the unmerged branches under one checkbox, each kind as a group of its own, the locked worktrees
  * under a checkbox of their own. `extraControl` renders them, `choices` is what the request names
  * (`force_remove`, and in `keep` what was listed and left unticked), `consequences` are the lines
- * the dialog's one warning adds while they are ticked, and `pending` holds Confirm while the
+ * the confirmation's consequence text adds while they are ticked, and `pending` holds Confirm while the
  * scope's inspection is on its way; `forcing` is whether either checkbox is ticked, for a
  * confirmation whose label, and for archiving its colour, say it deletes too. */
 export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchItem[]): {
   choices: ReturnType<typeof branchChoices>;
   pending: boolean;
   forcing: boolean;
-  consequences: WarningLine[];
+  consequences: ConsequenceLine[];
   extraControl: (busy: boolean) => React.ReactNode;
 } {
   const t = useT();
@@ -174,20 +175,19 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
 /** The Trash option of a project's removal and what goes along with its folder, asked afresh
  * whenever the option is ticked: under the option, the disclosure of the worktrees moved to the
  * Trash and the branches deleted, each as a group; then the locked worktrees as an option of their
- * own. `consequences` are the lines the dialog's one warning adds while the options are ticked —
- * among them that more may go, when the daemon could not say what goes. A branch a locked worktree has checked
+ * own. `consequences` are the lines the confirmation's consequence text adds while the options are ticked. A
+ * lookup that failed, so that the daemon could not say what else goes, is a mark after the Trash
+ * option's label instead. A branch a locked worktree has checked
  * out goes only with it. `pending` holds Confirm while the answer is on its way. */
 export function useProjectRemovalCleanup(projectId: string, trash: boolean, setTrash: (trash: boolean) => void): {
   choices: ReturnType<typeof branchChoices>;
   pending: boolean;
-  consequences: WarningLine[];
+  consequences: ConsequenceLine[];
   extraControl: (busy: boolean) => React.ReactNode;
 } {
   const t = useT();
   const rows = useRows();
   const trashId = useId();
-  // The line saying more may go, while it shows, describes the Trash option as well.
-  const unknownId = useId();
   const found = useProjectRemovalBranches(projectId, trash);
   const locked = lockedWorktrees(found.items);
   const [removeLocked, setRemoveLocked] = useChoiceOver(locked);
@@ -200,7 +200,6 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
     pending: found.pending,
     consequences: trash
       ? [
-        ...(found.failed ? [{ key: "unknown", text: t("dialog.removeProject.alongUnknown"), id: unknownId }] : []),
         ...(trashed.length > 0 ? [{ key: "trashed", text: t("branchCleanup.consequence.trashed", { count: trashed.length }) }] : []),
         ...(deleted.length > 0 ? [{ key: "deleted", text: t("branchCleanup.consequence.deleted", { count: deleted.length }) }] : []),
         ...(removeLocked ? [{ key: "lockedTrash", text: t("branchCleanup.consequence.lockedTrash", { count: locked.length }) }] : []),
@@ -210,7 +209,8 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
       <>
         <div className="flex flex-col gap-2">
           <div id={trashId}>
-            <ConfirmOption isSelected={trash} onChange={setTrash} isReadOnly={busy} label={t("dialog.removeProject.trash")} hint={<Message id="dialog.removeProject.trashHint" />} describedBy={trash && found.failed ? unknownId : undefined} />
+            <ConfirmOption isSelected={trash} onChange={setTrash} isReadOnly={busy} label={t("dialog.removeProject.trash")} hint={<Message id="dialog.removeProject.trashHint" />}
+              mark={trash && found.failed ? <StatusMark tone="warning" label={t("dialog.removeProject.alongUnknownMark")}>{t("dialog.removeProject.alongUnknown")}</StatusMark> : undefined} />
           </div>
           <KeepFocusInDialog>
             {trash && along.length > 0 && (

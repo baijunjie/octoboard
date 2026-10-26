@@ -47,7 +47,7 @@ describe("buildTree", () => {
     expect(listingSaysDirectory(listings, "missing")).toBe(false);
   });
 
-  it("shows only expanded directories' rows, with a status row for loading, empty and cut listings", () => {
+  it("shows only expanded directories' rows, with a status row for loading and empty ones", () => {
     const tree = buildTree(listings, new Set(["src", "src/lib", "empty"]), undefined);
     expect(tree.rows).toEqual([
       "path:docs",
@@ -57,17 +57,28 @@ describe("buildTree", () => {
       "path:src/lib",
       "status:loading:src/lib",
       "path:src/main.ts",
-      "status:partial:src",
       "path:README.md",
     ]);
     expect(tree.files).toEqual(["src/main.ts", "README.md"]);
     expect(tree.wanted).toEqual(["", "empty", "src", "src/lib"]);
   });
 
-  it("gives the empty and partial notices of an incomplete empty folder distinct row keys", () => {
+  it("marks an expanded folder whose listing was cut short on the folder itself, with no row beneath it", () => {
+    const tree = buildTree(listings, new Set(["src", "src/lib"]), undefined);
+    const src = tree.nodes.find((n) => n.type === "directory" && n.path === "src");
+    expect(src).toMatchObject({ partial: true });
+    expect(src?.type === "directory" && src.children.some((n) => n.type === "status" && n.status !== "loading")).toBe(false);
+    // Whole, folded or failed listings carry no mark.
+    expect(buildTree(listings, new Set(["docs"]), undefined).nodes.find((n) => n.type === "directory" && n.path === "docs")).not.toHaveProperty("partial");
+    expect(buildTree(listings, new Set(), undefined).nodes.find((n) => n.type === "directory" && n.path === "src")).not.toHaveProperty("partial");
+    const failed = new Map<string, DirListing>([["", loaded([dir("src")])], ["src", { state: "error", message: "denied" }]]);
+    expect(buildTree(failed, new Set(["src"]), undefined).nodes[0]).not.toHaveProperty("partial");
+  });
+
+  it("keeps the empty row of an incomplete empty folder, marking the folder as cut short", () => {
     const partial = new Map<string, DirListing>([["", loaded([dir("src")])], ["src", loaded([], false)]]);
     const tree = buildTree(partial, new Set(["src"]), undefined);
-    expect(tree.nodes[0]).toMatchObject({ children: [{ status: "empty" }, { status: "partial" }] });
+    expect(tree.nodes[0]).toMatchObject({ partial: true, children: [{ status: "empty" }] });
     expect(new Set(tree.rows).size).toBe(tree.rows.length);
   });
 

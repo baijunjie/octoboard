@@ -21,9 +21,9 @@ import type { useResumeTarget } from "./useResumeTarget";
 import { TextInput } from "./TextInput";
 
 /** An agent and account fixed by what holds the conversation, shown as the picker pair a new session
- * has, disabled. Each is a single option, so the field reads as the enabled one does; the account
+ * has, disabled (and marked invalid with `errorMessage`, when the account cannot run a session). Each is a single option, so the field reads as the enabled one does; the account
  * half is there as in a new session's, unless the account has no name to show. */
-function HeldAgentAccount({ agent, accountName }: { agent: Agent; accountName: string | undefined }): React.ReactElement {
+function HeldAgentAccount({ agent, accountName, errorMessage }: { agent: Agent; accountName: string | undefined; errorMessage?: React.ReactNode }): React.ReactElement {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -40,6 +40,7 @@ function HeldAgentAccount({ agent, accountName }: { agent: Agent; accountName: s
         onChange: () => {},
       }}
       isDisabled
+      errorMessage={errorMessage}
     />
   );
 }
@@ -65,12 +66,12 @@ export function ResumeConversationFields({
   resumeId,
   onResumeIdChange,
   shownProblem,
-  resume: { target, looking, problem, status },
+  resume: { target, looking, notFound, problem, status },
   name,
   onNameChange,
   recordName,
   launch,
-  blocked,
+  accountError,
 }: {
   idFieldRef: React.RefObject<HTMLDivElement | null>;
   resumeId: string;
@@ -81,7 +82,8 @@ export function ResumeConversationFields({
   onNameChange: (value: string) => void;
   recordName: React.ReactNode;
   launch: ReturnType<typeof useLaunchChoice>["launch"];
-  blocked: boolean;
+  /** Why the account that holds an agent's record cannot run a session, as that field's error text. */
+  accountError?: React.ReactNode;
 }): React.ReactElement {
   const t = useT();
   const lookupAlertId = useId();
@@ -100,11 +102,11 @@ export function ResumeConversationFields({
           value={resumeId}
           onChange={onResumeIdChange}
           placeholder={t("dialog.session.resumeExample", { example: EXAMPLE_CONVERSATION_ID })}
-          errorMessage={shownProblem ? idProblems[shownProblem] : undefined}
+          // The ID's text is wrong once a submit has tried it; no conversation having the ID is found out on its own.
+          errorMessage={shownProblem ? idProblems[shownProblem] : notFound ? t("dialog.session.resumeNotFound") : undefined}
           describedBy={!shownProblem && problem ? lookupAlertId : undefined}
           endAdornment={looking ? <Spinner size="sm" aria-hidden /> : null}
           dir="ltr"
-          isDisabled={blocked}
         />
         {/* What the lookup the field makes on its own found against the ID is not a verdict on its text
             (that is the field's error, above) but the state of the lookup, so it is an Alert directly
@@ -141,8 +143,8 @@ export function ResumeConversationFields({
         {target?.kind === "record" && (
           <>
             {recordName}
-            <HeldAgentAccount agent={target.agent} accountName={target.accountName} />
-            <LaunchSettingsFields {...launch} note={t("dialog.session.launchInheritanceNote")} isDisabled={blocked} />
+            <HeldAgentAccount agent={target.agent} accountName={target.accountName} errorMessage={accountError} />
+            <LaunchSettingsFields {...launch} note={t("dialog.session.launchInheritanceNote")} />
           </>
         )}
       </div>

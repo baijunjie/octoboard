@@ -93,11 +93,13 @@ it.each([
   expect(hoverAgentIcon()).toBe(text);
 });
 
-it("leaves the screen-reader-only name of the agent beside the icon as it was", () => {
+it("leaves the screen-reader-only name of the agent beside the icon as it was, set apart from the title by a comma", () => {
   const listed = sessionOf("s-2", console_.id, project.id, "Stopped", "interrupted", { bound_to: owner.id, account_id: account.id });
   mount({ kind: "archive-session", session: owner }, [owner, listed], [account]);
   const row = document.body.querySelector("[role=alertdialog] li")!;
-  expect(row.querySelector(".sr-only")?.textContent).toBe(`Claude Code (${isolate("Work")})`);
+  const name = row.querySelector(".sr-only")!;
+  expect(name.textContent).toBe(`Claude Code (${isolate("Work")}), `);
+  expect(name.childNodes).toHaveLength(1);
   expect(agentIcon().hasAttribute("aria-label")).toBe(false);
 });
 
@@ -139,17 +141,24 @@ it("edits the created session name while the agent has a dynamic terminal title"
 });
 
 
-it.each(["archive-session", "delete-session", "switch-account"] as const)("updates the %s confirmation heading when the terminal title changes", (kind) => {
+it.each([
+  ["archive-session", "Archive session"],
+  ["delete-session", "Delete session"],
+  ["switch-account", "Switch account"],
+] as const)("keeps the %s confirmation heading plain and names the session in its body as the terminal title changes", (kind, heading) => {
   const session = { ...owner, terminal_title: "First task" };
   const dialog: DialogRequest = kind === "switch-account"
     ? { kind, session, account: account.id, accountName: account.name }
     : { kind, session };
   const { daemon } = mount(dialog, [session]);
   const title = () => document.body.querySelector('[role="alertdialog"] h2')?.textContent;
-  expect(title()).toContain("First task");
+  const body = () => document.body.querySelector('[role="alertdialog"] p')?.textContent;
+  expect(title()).toBe(heading);
+  expect(body()).toContain("First task");
   act(() => daemon.store.setState({ sessions: new Map([[session.id, { ...session, terminal_title: "Next task" }]]) }));
-  expect(title()).toContain(`${isolate("Next task")}｜${isolate(session.title)}`);
-  expect(title()).not.toContain("First task");
+  expect(title()).toBe(heading);
+  expect(body()).toContain(`${isolate("Next task")}｜${isolate(session.title)}`);
+  expect(body()).not.toContain("First task");
 });
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -639,7 +648,8 @@ it("holds a project's removal while what goes along is asked, and says more may 
   await act(async () => document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
   expect(sent(daemon, "delete_project")).toEqual([]);
   await act(async () => answer.resolve());
-  expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("its branches deleted permanently");
+  await act(async () => unknownMark()!.click());
+  expect(document.querySelector("[data-status-mark-popover]")?.textContent).toContain("its branches deleted permanently");
   await submitDialog();
   expect(sent(daemon, "delete_project")).toHaveLength(1);
 });
@@ -664,24 +674,36 @@ it("takes a locked worktree, and the branch it has checked out, along with a pro
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
 });
 
-/** The warning boxes the confirmation shows. */
-const warnings = () => [...document.querySelectorAll("[role=alertdialog] [data-slot=alert-root]")];
+/** The mark after the Trash option's label that says what else may go, when the lookup failed. */
+const unknownMark = () => document.querySelector<HTMLElement>("[role=alertdialog] button[data-status-mark][aria-label='Other worktrees unknown']");
+/** The list of sessions the confirmation says it takes along. */
+const sessionList = (text: string) => [...document.querySelectorAll("[role=alertdialog] ul")].find((ul) => ul.textContent?.includes(text))!;
+const dialogParagraph = (text: string) => [...document.querySelectorAll("[role=alertdialog] p")].find((p) => p.textContent?.includes(text));
 
-it("says that more may go along with a project in the dialog's one warning", async () => {
+it("marks that more may go along with a project beside the Trash option, outside its label, with no alert", async () => {
   mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
       if (body.type === "inspect_project_removal") throw new Error("Connection lost");
       return { type: "ack" };
     },
   });
-  expect(warnings()).toHaveLength(0);
+  expect(unknownMark()).toBeNull();
   checkAll();
   await act(async () => {});
-  expect(warnings()).toHaveLength(1);
-  expect(warnings()[0].textContent).toContain("deleted permanently");
+  const mark = unknownMark()!;
+  // The checkbox is named by its label alone; the mark is no content of that label.
+  expect(mark.closest("label")).toBeNull();
+  expect(checkbox().labels?.[0]?.textContent).toBe("Also move the project folder to the Trash");
+  expect(document.querySelector("[role=alertdialog] [data-slot=alert-root]")).toBeNull();
+  expect(dialogParagraph("deleted permanently")).toBeUndefined();
+  // The mark's press leaves the option ticked.
+  await act(async () => mark.click());
+  expect(checkbox().checked).toBe(true);
+  checkAll();
+  expect(unknownMark()).toBeNull();
 });
 
-it("adds what a ticked option does inside the dialog's one warning, after its list, which holds no checkbox", async () => {
+it("adds what a ticked option does as body text after the list, which holds no checkbox", async () => {
   const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
   mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
     request: async (body) => body.type === "inspect_session_branches"
@@ -689,39 +711,51 @@ it("adds what a ticked option does inside the dialog's one warning, after its li
       : { type: "session_records_inspected", presence: "absent" },
   });
   await act(async () => {});
-  expect(warnings()).toHaveLength(1);
-  expect(warnings()[0].querySelector("input[type=checkbox]")).toBeNull();
-  // The title, then the details block holding the list of sessions and, once an option is ticked, its lines.
-  const content = warnings()[0].querySelector('[data-slot="alert-content"]')!;
-  expect([...content.children].map((node) => node.getAttribute("data-slot"))).toEqual(["alert-title", "alert-details"]);
-  expect(content.querySelector("ul")?.textContent).toContain("Child");
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect(dialog.querySelector("[data-slot=alert-root]")).toBeNull();
+  // The sentence that introduces the list, then the list itself, as plain body text.
+  const list = sessionList("Child");
+  expect(list.parentElement!.querySelector("input[type=checkbox]")).toBeNull();
+  expect(list.previousElementSibling?.tagName).toBe("P");
   act(() => boxes()[0].click());
   act(() => boxes()[1].click());
-  expect(warnings()).toHaveLength(1);
-  expect(warnings()[0].textContent).toContain("Also permanently deletes 2 worktrees and branches Git keeps.");
-  // The list comes first and the lines after it, in the same details block.
-  const details = content.lastElementChild!;
-  expect(details.firstElementChild?.tagName).toBe("UL");
-  expect(details.children[1].textContent).toContain("Also permanently deletes");
+  const forced = dialogParagraph("Also permanently deletes 2 worktrees and branches Git keeps.")!;
+  expect(forced).toBeDefined();
+  // The list comes first and the lines after it, in the same block.
+  expect(list.compareDocumentPosition(forced) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(list.parentElement).toBe(forced.parentElement!.parentElement);
   const described = boxes().flatMap((box) => (box.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean));
   for (const id of described) expect(document.getElementById(id)).not.toBeNull();
-  expect(warnings()[0].textContent).toContain("Also permanently deletes the locked worktree, uncommitted changes included.");
+  expect(dialogParagraph("Also permanently deletes the locked worktree, uncommitted changes included.")).toBeDefined();
   act(() => boxes()[0].click());
-  expect(warnings()[0].textContent).not.toContain("worktrees and branches Git keeps");
+  expect(dialogParagraph("worktrees and branches Git keeps")).toBeUndefined();
 });
 
-it("shows a warning only once an option is ticked where the confirmation has none of its own", async () => {
+it("shows consequence text only once an option is ticked where the confirmation has none of its own", async () => {
   mount({ kind: "archive-session", session: owner }, [owner], [], {
     request: async () => ({ type: "session_branches_inspected", items: [UNMERGED] }),
   });
   await act(async () => {});
-  expect(warnings()).toHaveLength(0);
+  expect(dialogParagraph("Also permanently deletes")).toBeUndefined();
   checkAll();
-  expect(warnings()).toHaveLength(1);
-  // With no sessions to list, the title sums up the consequence and the lines follow it.
-  expect(warnings()[0].querySelector('[data-slot="alert-title"]')?.textContent).toBe("Additional consequences");
+  expect(dialogParagraph("Also permanently deletes")).toBeDefined();
+  expect(document.querySelector("[role=alertdialog] [data-slot=alert-root]")).toBeNull();
+  expect(document.querySelector("[role=alertdialog]")!.textContent).not.toContain("Additional consequences");
   checkAll();
-  expect(warnings()).toHaveLength(0);
+  expect(dialogParagraph("Also permanently deletes")).toBeUndefined();
+});
+
+it.each(CONFIRMATIONS)("is a warning modal when %s: the warning icon in the header, the list as body text, the danger action trailing", (_, dialog, listed) => {
+  mount(dialog, [owner, listed]);
+  const modal = document.querySelector("[role=alertdialog]")!;
+  expect(modal.querySelector("[data-slot=alert-dialog-header] [data-slot=alert-dialog-icon]")).not.toBeNull();
+  expect(modal.querySelector("[data-slot=alert-root]")).toBeNull();
+  expect(sessionList(listed.title ?? "")?.closest("[data-slot=alert-dialog-body]")).not.toBeNull();
+  // Destructive confirmations keep focus on the dialog, and the secondary comes before the primary.
+  if (modal.querySelector("button[type=submit]")?.className.includes("danger")) expect(document.activeElement?.matches("[role=alertdialog]")).toBe(true);
+  const buttons = [...modal.querySelectorAll("[data-slot=alert-dialog-footer] button")];
+  expect(buttons.map((button) => button.textContent)).toEqual(["Cancel", confirmText()]);
+  expect(buttons[1]).toBe(confirmButton());
 });
 
 it("forces no locked worktree once the Trash option is unticked after the locked one was ticked", async () => {
@@ -806,7 +840,7 @@ it("leaves what goes with a project's folder open when the locked option changes
   expect(disclosure("What goes with it (2)").getAttribute("aria-expanded")).toBe("true");
 });
 
-it("puts the one warning under the options, so a line it gains moves no checkbox, and says what moving the records does", async () => {
+it("puts the consequences under the options, so a line they gain moves no checkbox, and says what moving the records does", async () => {
   const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
   mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
     request: async (body) => body.type === "inspect_session_branches"
@@ -814,29 +848,12 @@ it("puts the one warning under the options, so a line it gains moves no checkbox
       : { type: "session_records_inspected", presence: "present" },
   });
   await act(async () => {});
-  const [warning] = warnings();
-  for (const box of boxes()) expect(box.compareDocumentPosition(warning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const list = sessionList("Child");
+  for (const box of boxes()) expect(box.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   const tops = boxes().map((box) => box.closest("label"));
   act(() => boxes()[1].click());
   expect(boxes().map((box) => box.closest("label"))).toEqual(tops);
-  expect(warnings()[0].textContent).toContain("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.");
-});
-
-it("describes the Trash option by the line saying more may go, while it shows", async () => {
-  mount({ kind: "delete-project", project }, [], [], {
-    request: async (body) => {
-      if (body.type === "inspect_project_removal") throw new Error("Connection lost");
-      return { type: "ack" };
-    },
-  });
-  checkAll();
-  await act(async () => {});
-  const ids = (checkbox().getAttribute("aria-describedby") ?? "").split(" ");
-  expect(ids.map((id) => document.getElementById(id)?.textContent).join(" ")).toContain("deleted permanently");
-  // The line is part of the warning, and the option is still described by it.
-  expect(ids.some((id) => document.getElementById(id)?.closest('[data-slot="alert-root"]'))).toBe(true);
-  checkAll();
-  expect((checkbox().getAttribute("aria-describedby") ?? "").split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" ")).not.toContain("deleted permanently");
+  expect(dialogParagraph("Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.")).toBeDefined();
 });
 
 it("validates a project rename before requesting it, retaining excess Unicode text", async () => {

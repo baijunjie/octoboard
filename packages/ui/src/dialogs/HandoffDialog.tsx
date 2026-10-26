@@ -1,11 +1,13 @@
 import React, { useId, useRef, useState } from "react";
 
-import { ErrorAlert } from "../components/ErrorAlert";
-import { FailureAlert } from "../components/FailureAlert";
-import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { useFocusHandoff } from "../components/useFocusHandoff";
-import { useHasPainted } from "../components/useHasPainted";
+import { Button } from "../components/Button";
+import { FailureBody } from "../components/errorParts";
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { InlineReference } from "../components/InlineReference";
+import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
+import { StatusMark } from "../components/StatusMark";
+import { useHasPainted } from "../components/useHasPainted";
+import { retryCanHelp } from "../errorRecovery";
 import { Message, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessionLabel";
@@ -15,7 +17,7 @@ import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, useDialogAction } from "./Dialog";
 import { dialogAround } from "./dialogElement";
 import { LaunchSettingsFields } from "./LaunchSettingsFields";
-import { useCloseWhenBlocked } from "./useCloseWhenBlocked";
+import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
 import { useConfirmIncompleteLaunch } from "./useConfirmIncompleteLaunch";
 import { useLaunchChoice } from "./useLaunchChoice";
 import { useResponsibleBranches } from "./useSessionBranches";
@@ -55,7 +57,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
   const { choice, blocked, unavailable, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
 
   // No other agent could take the session over (one was removed or uninstalled while this was open).
-  useCloseWhenBlocked(blocked, t("dialog.handOff.noOtherAgent"), onClose);
+  const failure = useFailureWhenBlocked(blocked, t("dialog.handOff.noOtherAgent"), t("dialog.handOff.blockedTitle"));
 
   const submit = () => {
     void confirmLaunch(choice.account, () => void run(async () => {
@@ -74,29 +76,28 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
 
   return (
     <Dialog
-      title={<Message id="dialog.handOff.title" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
+      title={t("dialog.handOff.title")}
       onClose={onClose}
+      failure={failure}
       submitLabel={t("dialog.handOff.confirm")}
       busy={busy}
-      submitDisabled={blocked || unavailable !== undefined}
+      submitDisabled={unavailable !== undefined}
       autoFocusSubmit
       onSubmit={submit}
     >
-      {unavailable && <ErrorAlert title={unavailable.title} announce>{unavailable.description}</ErrorAlert>}
-      <p className="text-sm">{t("dialog.handOff.message")}</p>
+      <p className="text-sm"><Message id="dialog.handOff.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} /> {t("dialog.handOff.message")}</p>
       <HandoffMoves session={session} busy={busy} />
       <AgentAccountField
         label={t("dialog.handOff.agent")}
         options={agentOptions}
         value={choice.agent}
         onChange={setPickedAgent}
-        isDisabled={blocked}
         account={account}
+        errorMessage={unavailable}
       />
       <LaunchSettingsFields
         {...launch}
         note={t(project ? "dialog.handOff.launchInheritanceNote" : "dialog.handOff.consoleLaunchInheritanceNote")}
-        isDisabled={blocked}
       />
       {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
           nested in the one beneath it is bounced back to it. */}
@@ -109,9 +110,12 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
  * already knows: the sessions it owns (archived ones included) and its owner, and for a project
  * session the branches it is responsible for, which the daemon's inspection of the branches bound
  * to a session finds. A console session has no branches, so it asks for none. While the handoff
- * runs the list is kept as it was, since the daemon's rebinding would otherwise empty it. A retry
- * of the check that succeeds takes its Alert, and the Try again focused in it, away, so focus goes
- * to the dialog. */
+ * runs the list is kept as it was, since the daemon's rebinding would otherwise empty it. The check
+ * failing leaves the dialog doing its job (the handoff does not depend on it), so the failure is a
+ * mark after the heading, its popover holding the reason and Try again, and the list says nothing of
+ * branches. The failure arrives after the dialog opened, so the dialog's own `StatusAnnouncer` speaks
+ * it, after the opening focus move, and again when a retry fails again. A retry that succeeds takes
+ * the mark, and the Try again focused in its popover, away, so focus goes to the dialog. */
 function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): React.ReactElement {
   const t = useT();
   const headingId = useId();
@@ -119,8 +123,8 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
   const owner = useDaemonStore((s) => session.bound_to ? s.sessions.get(session.bound_to) : undefined);
   const inspected = useResponsibleBranches(session.id, session.role !== "console");
   const rootRef = useRef<HTMLDivElement>(null);
-  const handoff = useFocusHandoff(() => dialogAround(rootRef)?.focus());
-  // The check fails after the dialog opened, so its Alert announces itself.
+  const markId = useId();
+  // The check fails after the dialog opened, so its mark is announced.
   const painted = useHasPainted();
   const live = {
     owned,
@@ -138,25 +142,33 @@ function HandoffMoves({ session, busy }: { session: Session; busy: boolean }): R
     ownerTitle !== undefined ? <li key="owner">{<Message id="dialog.handOff.movesOwner" params={{ owner: <InlineReference dir="auto" wrap>{ownerTitle}</InlineReference> }} />}</li> : undefined,
   ].filter(Boolean);
   return (
-    <div ref={rootRef} className="flex flex-col gap-1 text-sm" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-      <h3 id={headingId} className="font-semibold">{t("dialog.handOff.moves")}</h3>
+    <div ref={rootRef} className="flex flex-col gap-1 text-sm">
+      <div className="flex items-center gap-1">
+        <h3 id={headingId} className="font-semibold">{t("dialog.handOff.moves")}</h3>
+        {inspected.error !== undefined && (
+          <>
+            {/* The check answers as a retry succeeds; focus the mark or its popover held goes to the dialog. */}
+            <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => dialogAround(rootRef)?.focus()} />
+            <StatusMark
+              markId={markId}
+              label={t("dialog.handOff.movesBranchesFailed.mark")}
+              actions={retryCanHelp(inspected.error) ? (close) => (
+                <Button size="sm" variant="secondary" preventFocusOnPress isPending={inspected.pending} onPress={() => { close(); inspected.retry(); }}>
+                  {t("error.tryAgain")}
+                </Button>
+              ) : undefined}
+            >
+              <p>{t("dialog.handOff.movesBranchesFailed")}</p>
+              <FailureBody error={inspected.error} />
+            </StatusMark>
+          </>
+        )}
+      </div>
+      {/* Empty while a retry is out, so a retry that fails again in the same words is written, and so spoken, again. */}
+      <StatusAnnouncer text={painted && inspected.error !== undefined && !inspected.pending ? t("dialog.handOff.movesBranchesFailed") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
       {lines.length > 0
         ? <ul aria-labelledby={headingId} className="list-disc ps-5">{lines}</ul>
         : inspected.error !== undefined ? null : <p>{t("dialog.handOff.movesNothing")}</p>}
-      {/* The check is the dialog's own lookup, so its failure is an Alert under the list it feeds. Its
-          first failure may arrive as the dialog's opening focus move settles, so it waits that out. */}
-      {inspected.error !== undefined && (
-        <FailureAlert
-          className="mt-1"
-          announce={painted}
-          announceDelayMs={inspected.attempt === 0 ? AFTER_FOCUS_MOVE_DELAY_MS : undefined}
-          attempt={inspected.attempt}
-          title={t("dialog.handOff.movesBranchesFailed")}
-          message={inspected.error}
-          pending={inspected.pending}
-          onRetry={inspected.retry}
-        />
-      )}
     </div>
   );
 }

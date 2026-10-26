@@ -1,8 +1,11 @@
 import { SearchField } from "@heroui/react";
 import { FileSearch, FileX } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { ButtonContext } from "react-aria-components";
 
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { IconToggle } from "../components/IconToggle";
+import { StatusMark } from "../components/StatusMark";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { isImeKey } from "../imeKey";
@@ -43,8 +46,9 @@ export function useFileFilterState(): FileFilterState {
 /** Opening the field takes focus; closing it hands focus back to its toggle and drops the keyword and
  * the choice to include ignored files. An empty field closes on blur, while a field holding a filter
  * stays visible. With `ignoredToggle`, the field is followed by the toggle that includes the
- * files Git ignores in the search. */
-export function FileFilterField({ state, label, placeholder, contextKey, ignoredToggle = false }: { state: FileFilterState; label: string; placeholder: string; contextKey?: string; ignoredToggle?: boolean }): React.ReactElement {
+ * files Git ignores in the search. With `incomplete`, a warning mark inside the field, before its Clear button, says the results
+ * may not be every match. */
+export function FileFilterField({ state, label, placeholder, contextKey, ignoredToggle = false, incomplete = false }: { state: FileFilterState; label: string; placeholder: string; contextKey?: string; ignoredToggle?: boolean; incomplete?: boolean }): React.ReactElement {
   const t = useT();
   // The field is taken away while it may still hold keyboard focus — the toggle closing it is
   // pressed without taking focus itself — and a removal fires no blur, so focus would fall to
@@ -53,6 +57,8 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
   // its own (`contents`), so the field is a flex child of the view's column.
   const handoff = useFocusHandoff(() => state.filterToggleRef.current?.focus());
   const input = useRef<HTMLInputElement>(null);
+  // Scopes the hand-off to this field's own mark and its popover, not any mark in the window.
+  const markId = useId();
   const previous = useRef({ open: state.filterOpen, contextKey });
   useEffect(() => {
     if (state.filterOpen && !previous.current.open && previous.current.contextKey === contextKey) input.current?.focus();
@@ -67,11 +73,11 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
   const guardComposition = (event: React.KeyboardEvent) => {
     if (isImeKey(event.nativeEvent)) event.stopPropagation();
   };
-  // Focus moving within the field is not leaving it — the only thing besides the input that takes
-  // focus is the include-ignored toggle (with `ignoredToggle` on), the Clear button being kept out
-  // of the tab order and handing focus back to the input. A `focusout` with nothing to go to is also
-  // the window itself losing focus, which leaves the field where it is: the user is coming back to
-  // it, and taking it away then would move keyboard focus behind their back as well.
+  // Focus moving within the field is not leaving it — besides the input, only the incomplete-search mark
+  // (while `incomplete`) and the include-ignored toggle (with `ignoredToggle` on) take focus, the Clear
+  // button being kept out of the tab order and handing focus back to the input. A `focusout` with nothing
+  // to go to is also the window itself losing focus, which leaves the field where it is: the user is coming
+  // back to it, and taking it away then would move keyboard focus behind their back as well.
   const onBlur = (event: React.FocusEvent<HTMLDivElement>) => {
     if (!document.hasFocus()) return;
     if (state.filter.trim() === "" && !event.currentTarget.contains(event.relatedTarget)) state.onFilterOpenChange(false);
@@ -84,6 +90,18 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
             <SearchField.Group>
               <SearchField.SearchIcon />
               <SearchField.Input ref={input} placeholder={placeholder} />
+              {/* The mark stands before the Clear button, which keeps the trailing end it has with or without
+                  the mark. The field gives its clear button's behaviour to every button inside it
+                  through `ButtonContext`; the mark is not that button. When the search completes the mark
+                  goes, and focus it held goes to the input rather than to the page. */}
+              {incomplete && (
+                <>
+                  <HandOffOnUnmount from={`[data-status-mark-id="${markId}"]`} to={() => { if (input.current?.isConnected) input.current.focus(); }} />
+                  <ButtonContext.Provider value={{}}>
+                    <StatusMark tone="warning" markId={markId} label={t("browser.filter.partial")}>{t("browser.filter.partial.details")}</StatusMark>
+                  </ButtonContext.Provider>
+                </>
+              )}
               {/* HeroUI's close button hardcodes an English `aria-label` ahead of its spread
                   props, which also shadows the name react-aria supplies through the `clear` slot,
                   so the button is named from the catalog here. */}

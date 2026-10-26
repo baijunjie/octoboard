@@ -68,7 +68,9 @@ export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
  * shallow clone's refusal when `shallow` is set), and a pair it does not name forks at `<left>`'s
  * own tip, as a branch made from it does. `missing` are branches the list has that a comparison no
  * longer finds. `gone` are branches deleted once a comparison involving one of them has been made: from then on neither
- * the list nor a new comparison finds them, where `missing` ones are refused from the start. With
+ * the list nor a new comparison finds them, where `missing` ones are refused from the start; `goneAfter` names
+ * branches that go once one pair's comparison (keyed as `comparisons` is) has been made, which leaves the branches of
+ * every other comparison where they are, such as `main` in the comparison of the branch the view opens on. With
  * `comparing: "pending"` a comparison is never answered. With `upstreamsCut` the branch list leaves
  * the main working copy's branch without an upstream and says the lookup was past a budget.
  * `defaultBranch` is the remote default branch of a repository whose main working
@@ -85,11 +87,17 @@ export interface FixtureGit {
   shallow?: boolean;
   missing?: string[];
   gone?: string[];
+  goneAfter?: Record<string, string[]>;
   /** The daemon stopped listing before it reached the end, so every change list, comparison and
-   * commit list is answered `complete: false` and the pane says under the list that it is not whole. */
+   * commit list is answered `complete: false` and the pane warns of the cut-short uncommitted changes with a
+   * mark at the end of the worktree's line (the project's own working copy gets that line for it) and marks the
+   * committed section's heading with a warning triangle. */
   cutShort?: boolean;
   comparing?: "pending";
   upstreamsCut?: boolean;
+  /** The daemon stopped listing local branches at a limit, so the list is answered `complete: false`
+   * with the branches given, and the branch menu ends in a muted note that the others are not listed. */
+  branchesCut?: boolean;
   defaultBranch?: UpstreamInfo;
 }
 

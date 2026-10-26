@@ -34,12 +34,15 @@ export const PanelFrameProvider = PanelFrameContext.Provider;
  */
 export function PanelHeader({
   title,
+  titleMark,
   actions,
   children,
   prioritizeChildren = false,
   hideTitleWhenNarrow = false,
 }: {
   title: string;
+  /** A mark (`StatusMark`) about what the panel shows, right after the title; it stays whole when the title clips. */
+  titleMark?: React.ReactNode;
   /** The kind's own icon controls. */
   actions?: React.ReactNode;
   children?: React.ReactNode;
@@ -50,11 +53,17 @@ export function PanelHeader({
 }): React.ReactElement {
   const t = useT();
   const frame = useContext(PanelFrameContext);
-  const heading = (
+  const headingOnly = (
     <h2 className={`${hideTitleWhenNarrow ? "sr-only docked:@min-[352px]/panel-header:not-sr-only docked:@min-[352px]/panel-header:flex" : "flex"} min-w-0 max-w-40 ${prioritizeChildren ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
       <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>{title}</FadeOverflow>
     </h2>
   );
+  const heading = titleMark ? (
+    <div className="flex min-w-0 items-center gap-1">
+      {headingOnly}
+      {titleMark}
+    </div>
+  ) : headingOnly;
   return (
     <div className={`${hideTitleWhenNarrow ? "@container/panel-header " : ""}${prioritizeChildren ? "grid min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_max-content]" : "flex"} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
       {prioritizeChildren ? (

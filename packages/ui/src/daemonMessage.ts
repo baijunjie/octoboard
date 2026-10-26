@@ -276,14 +276,15 @@ export function hasSharingReason(cause: string | undefined, detail: string | und
 }
 
 /** The catalog key of the line that says what to do about a cause before turning the switch again, or nothing when
- * turning it again is all there is to do (`not_found`) or the warning says what to do itself (`default_moved`). */
-export function sharingFixKey(cause: string | undefined) {
+ * turning it again is all there is to do (`not_found`) or the warning says what to do itself (`default_moved`).
+ * `rawBelow` is for a place that shows the raw reason right after the line rather than behind Details. */
+export function sharingFixKey(cause: string | undefined, rawBelow = false) {
   switch (cause) {
     case "permission_denied": return "daemon.sharing.fix.permission_denied";
     case "busy": return "daemon.sharing.fix.busy";
     case "no_space": return "daemon.sharing.fix.no_space";
     case "conflict": return "daemon.sharing.fix.conflict";
-    case "other": return "daemon.sharing.fix.other";
+    case "other": return rawBelow ? "daemon.sharing.fix.otherBelow" : "daemon.sharing.fix.other";
     default: return undefined;
   }
 }

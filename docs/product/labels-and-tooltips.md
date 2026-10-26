@@ -7,11 +7,11 @@ explanations are kept out of the visible text.
 
 Every tooltip in the window is the application's own, drawn in its own styling and under one set of rules, whatever
 carries it — a control, an indicator or a label too long for its space. The floating surfaces that hold more than a
-label — the popover of a status mark (a failure, a warning or a note, see "Failures marked on a row" in
-`docs/product/error-alerts.md`) or of the "?" help tip (see "The help tip" below), and the rail's account quota panel
-(see "The account quota panel on the rail" in `docs/product/account-quotas.md`) — are drawn the same way, on the same
-surface, with the same shadow and corners (a mark's and a help tip's popover have the tooltip's padding and text size
-too; the quota panel keeps its own width, padding and text sizes, being a panel):
+label — the popover of a status mark (a failure, a warning or a note, see "Failures, warnings and notes marked at their
+point" in `docs/product/error-alerts.md`) or of the "?" help tip (see "The help tip" below), and the rail's account
+quota panel (see "The account quota panel on the rail" in `docs/product/account-quotas.md`) — are drawn the same way, on
+the same surface, with the same shadow and corners (a mark's and a help tip's popover have the tooltip's padding and
+text size too; the quota panel keeps its own width, padding and text sizes, being a panel):
 
 - It opens once the pointer has rested on what carries it for 500 ms. Within half a second of
   another tooltip closing it opens at once instead, so moving from one to the next does not wait again at each one,
@@ -132,12 +132,12 @@ the card lists, each with its own status glyph and that glyph's tooltip (see "To
 
 The **"?" help tip** is a small muted icon button that takes an explanation out of the visible text (see "Explanations
 in help tips" below). It is a tab stop, but it has **no tooltip**: the explanation — plain text, or text with literals
-such as file names set apart as chips — opens in a popover, by the same rules as a status mark's (see "Failures marked
-on a row" in `docs/product/error-alerts.md`). A mouse resting on it opens the popover without moving keyboard focus,
-and it stays open while the pointer moves into it, so its text can be selected and copied with the mouse; a mouse
-click opens nothing. Keyboard focus alone shows nothing: Enter or Space, a finger's or a pen's tap and a screen
-reader's activation open it with keyboard focus inside, and closing it gives focus back to the "?". The name announced
-for the "?" says what it explains ("About automatic pulling"), and names its popover too.
+such as file names set apart as chips — opens in a popover, by the same rules as a status mark's (see "Failures,
+warnings and notes marked at their point" in `docs/product/error-alerts.md`). A mouse resting on it opens the popover
+without moving keyboard focus, and it stays open while the pointer moves into it, so its text can be selected and copied
+with the mouse; a mouse click opens nothing. Keyboard focus alone shows nothing: Enter or Space, a finger's or a pen's
+tap and a screen reader's activation open it with keyboard focus inside, and closing it gives focus back to the "?". The
+name announced for the "?" says what it explains ("About automatic pulling"), and names its popover too.
 
 ## Explanations in help tips
 

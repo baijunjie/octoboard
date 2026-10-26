@@ -32,8 +32,8 @@ What it holds, in this order:
 - **A failure mark**, a red circled `!`, when the last check failed, standing in for the branch or commit glyph at the
   badge's start. It is a button of its own — a tab stop of its own on the sidebar row and in focus mode's header alike —
   named that the Git check failed, with no tooltip, and it opens a popover under the rules of a failure mark (see
-  "Failures marked on a row" in `docs/product/error-alerts.md`). The popover says that Git reported an error the last
-  time the project's repository was checked or pulled, then that Octoboard checks it again on its own and that an error
+  "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). The popover says that Git
+  reported an error the last time the project's repository was checked or pulled, then that Octoboard checks it again on its own and that an error
   that does not go away is to be resolved in the repository with Git, and last, as raw text in a block of its own, the
   message `git` or the operating system itself gave. That message is shown nowhere else: not in the badge's tooltip and
   not in any name. The two sentences are the same for every failure. A press on the mark on a sidebar row never reaches

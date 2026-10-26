@@ -105,7 +105,7 @@ it("does not take the view back to an agent picked earlier that comes back", asy
   expect(selectedTab()).toBe("Claude Code");
 });
 
-it("names each Advanced picker by its sessions and its setting, and describes it by their note and the model list's state", async () => {
+it("names each Advanced picker by its sessions and its setting, and describes it by their note", async () => {
   render(undefined, [], async (body) => listing(body, [], { code: "models_timed_out", params: { agent: "Claude Code" }, message: "" }));
   await openAdvanced();
   const pickers = [["Console sessions", "Model"], ["Console sessions", "Reasoning effort"], ["Project sessions", "Model"], ["Project sessions", "Reasoning effort"]];
@@ -118,13 +118,11 @@ it("names each Advanced picker by its sessions and its setting, and describes it
     (groupPicker(group, name).getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.textContent ?? "");
   expect(describedBy("Console sessions", "Reasoning effort")).toEqual([]);
   expect(describedBy("Project sessions", "Reasoning effort")).toEqual(["For project sessions, settings on the project or session take precedence."]);
-  // The model list's state is one Alert under the table, which describes both Model pickers besides the note on their sessions.
-  const notes = Array.from(document.body.querySelectorAll('[data-slot="alert-description"]')).filter((el) => el.textContent?.includes("took too long to list its models"));
-  expect(notes).toHaveLength(1);
-  const alertId = notes[0].closest('[data-slot="alert-root"]')!.parentElement!.id;
-  expect(groupPicker("Console sessions", "Model").getAttribute("aria-describedby")).toContain(alertId);
-  expect(groupPicker("Project sessions", "Model").getAttribute("aria-describedby")).toContain(alertId);
-  expect(describedBy("Console sessions", "Model")).toHaveLength(1);
+  // The model list's state is a mark inside each Model field, not an Alert, so it describes neither picker; the
+  // project's Model picker is described by the note on its sessions alone.
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(describedBy("Console sessions", "Model")).toEqual([]);
+  expect(describedBy("Project sessions", "Model")).toEqual(["For project sessions, settings on the project or session take precedence."]);
   // The headers that name the pickers are hidden from assistive technology, so they are not read a
   // second time beside the names, and no visible text of the table is outside them.
   for (const [group, name] of pickers) {

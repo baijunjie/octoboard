@@ -49,6 +49,14 @@ The user accepts that HeroUI's accent, used as the solid accent and the focus ri
 surfaces — a selected sidebar row, a control fill and its hover, the window chrome — in exchange for one accent colour
 across the application. A selected segment of a toggle group keeps HeroUI's own selected treatment.
 
+The window's full-width status strips are the one place a solid semantic fill stands behind a line of copy: the update
+notice (solid accent) and the connection banner along the bottom edge while the daemon connection is down (solid
+warning, `--warning` with `--warning-foreground` text). A strip is not an Alert and is not drawn as one: it is a band
+across the window, the state of the whole application rather than of what is on screen, and its buttons are outline or
+ghost buttons retinted to its foreground, none of them a primary. Its content is centred, so its main action comes
+before a dismissal (Later, or the close glyph). Beside the strips, a solid warning or danger fill is only a small
+glyph-sized mark such as the waiting session's disc; no surface holding copy, apart from a button, takes one.
+
 An Alert always has a title, so its indicator lines up with the title's line (see "Errors shown among other
 content"). An Alert's only custom visual treatments are its status background, HeroUI's `--{colour}-soft` for its status, and its
 shadow: HeroUI's `--surface-shadow` keeps its shape but takes the status colour instead of grey, so a tinted Alert has no
@@ -62,7 +70,7 @@ and the agent tabs in the console dialog's Advanced section keep their labels fu
 foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
 layout, selection and keyboard behaviour.
 
-A status mark such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
+A status label such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
 account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's
 change status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
 `InlineReference`. It is the shared `StatusBadge`, the only small badge component. It takes a semantic colour — `default`
@@ -153,14 +161,16 @@ A confirmation dialog opens with focus on its confirm button, so Enter confirms 
 focus on the dialog itself, so an Enter pressed before the user has moved focus onto one of its controls does nothing: a
 destructive one, and a question the user did not ask for (a folder trust prompt, a session request), which can come up
 while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on to. A
+destructive confirmation (removing, deleting, archiving) is a warning modal: the warning icon in its header, the
+consequences as its body text (the sessions it ends or takes along listed in that body), its destructive confirm button
+the danger primary at the trailing edge; it is never an ordinary modal with a warning Alert inside it. A
 confirmation opened by picking a choice in a select returns focus to that select's trigger however it closes (Cancel,
-Escape or the confirm button), and the select shows the old choice until the confirmation succeeds. One that
-turns destructive only once an option is ticked opens unticked, as an ordinary one, with focus on its confirm button.
-A confirmation raised by another dialog's confirm button opens over that dialog and follows the same rule; Escape
-or Cancel closes only it, leaving the dialog beneath open.
-One that asks for a word to be typed opens with focus in that field. A dialog's form ignores the repeats of a held Enter
-or Space, except Space in a text field and Enter in a multi-line one, so the press that opened it cannot go on to submit
-it.
+Escape or the confirm button), and the select shows the old choice until the confirmation succeeds. One that turns
+destructive only once an option is ticked opens unticked, as an ordinary one, with focus on its confirm button. A
+confirmation raised by another dialog's confirm button opens over that dialog and follows the same rule; Escape or
+Cancel closes only it, leaving the dialog beneath open. One that asks for a word to be typed opens with focus in that
+field. A dialog's form ignores the repeats of a held Enter or Space, except Space in a text field and Enter in a
+multi-line one, so the press that opened it cannot go on to submit it.
 
 A form dialog opens with focus in its first text field, so the user can type at once and Enter submits; one with no text
 field opens with focus on its submit button instead. A field that appears later, after a tab or a choice has changed what
@@ -208,9 +218,9 @@ A control inside a collection's **section header** is reached by neither of thos
 walks the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the
 last tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its
 first row. The change list's section heading — the band that folds the section away
-(`packages/ui/src/browser/changeSectionHeading.tsx`) — and the failure mark a heading can carry are such controls, and
+(`packages/ui/src/browser/changeSectionHeading.tsx`) — and the mark a heading can carry are such controls, and
 they are reached by this application extending the collection's own walk: Up and Down step through the rows **and the
-headings between them**, Right from a heading moves to its failure mark and Left back to the band (mirrored in a
+headings between them**, Right from a heading moves to its mark and Left back to the band (mirrored in a
 right-to-left reading direction, where the mark sits on the left), while Home and End
 still move between rows alone. Such a control takes no tab stop of its own and must not take focus on a press
 (`preventFocusOnPress`), or a mouse press on it sends focus to the list's first row; a popover opened from it hands
@@ -229,6 +239,12 @@ Copy explains; a button acts. Replace an instruction pointing the user elsewhere
 and …") with a button that takes them there, opening the target dialog when there is one. One view offers one entry
 for an action: remove a second entry that does the same thing, such as "Add agent…" beside "Manage accounts…" when
 both lead to the same account management view.
+
+**Button order follows the group's alignment.** A trailing-aligned group — a dialog's or a popover's footer, an
+Alert's buttons — puts the secondary buttons first and the primary at the trailing edge (Cancel, then Confirm). A
+start-aligned or centred group — an empty state's row, a status strip, a startup screen's row — puts the primary first
+and the secondary after it. Whatever the alignment, a group has at most one primary button, and a centred row holds at
+most two buttons: a third way out becomes a mark or goes.
 
 Every button is HeroUI's `Button`. A native `<button>` is allowed only where a custom button is needed that HeroUI's
 cannot be, with the reason in a comment there. A hand-built `role="button"` element needs `tabIndex={0}` and its own
@@ -255,13 +271,16 @@ same rule: it keeps focus and is marked `aria-disabled`, a press or Space does n
 `aria-describedby` description. When the control that held focus goes away with the state it belonged to, focus moves
 to the control the state was about, unless the user has already moved it.
 
-A warning that explains why a switch's last change did not finish is part of the switch's description. Its Alert says
-what happened and how to try again, in at most two sentences; any further explanation and the raw entries are in the
-Alert's Details popover, as for every error shown among other content (see "Errors shown among other content"). A
-failure with a single cause says that cause and its fix as its two sentences; one with several says that some files or
-folders could not be changed, and lists the causes in Details. The switch itself is the way to try
-again, so there is no retry button. Only a failure that arrives while the warning's view is shown is announced
-(`role="alert"`); the same warning found already there when the view opens, or after a restart, is not.
+A warning that a switch's last change did not finish does not block anything (turning the switch again is the retry),
+so it is a warning mark right after the switch in its row (see "On the screen: an Alert when it matters, a mark at its
+point otherwise"), and the switch is described by the warning's title, kept as visually hidden text beside it. The
+mark's popover says what happened and how to try again, then any further explanation and the raw entries: a failure
+with a single cause says that cause and its fix, one with several says that some files or folders could not be changed
+and lists the causes, and a fix that points at the raw reason says it is below. The switch itself is the way to try
+again, so there is no retry button. Only a failure that arrives after a change the view saw run is announced, its
+title spoken through the view's `StatusAnnouncer`, unless this window asked for that change, when the error alert
+dialog it opens speaks it instead (see "Where an error is shown"); the same mark found already there when the view opens, or after a
+restart, is not. When the mark goes while it or its popover holds focus, focus moves to the switch.
 
 A disabled select option or menu item that carries a reason stays in the arrow-key walk (`disabledBehavior:
 "selection"` on the menu and on any single-selection section inside it), so a keyboard user reaches it and hears why;
@@ -507,8 +526,9 @@ scroll *this* scroller, it becomes a focusable `region` with an accessible name,
 scroll it. The test is that scroller, not what it contains: a stop inside it carries focus only as far as itself, so
 everything past that stop is still content nothing reaches. A dialog whose controls are all in its footer is the case
 `Dialog` owns, named by the dialog's own title; the screen shown before there is anything to show is another, named
-from the catalog, where the buttons sit after the message and the stack trace between them is a scroller in its own
-right, named from the catalog too.
+from the catalog, where the buttons sit after the message; the crash screen's stack trace, in the popover of the mark after its
+heading, is a scroller in its own right, as is the daemon's message in the daemon-failed screen's, each named "Error details" as
+any diagnostic block is.
 
 Such a region appears only while the scroller overflows, since a tab stop that scrolls nothing is one the user passes
 for no reason — the crash screen's stack trace and the screen's own column both come and go that way. The exception
@@ -564,6 +584,21 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   diagram name, and an inner `role="img"` carries that same name with a text alternative. A formula is not an image:
   its MathML is what is read, and naming the region does not replace that. An inline formula is a region, and a tab
   stop, only while it is wider than the line. While it fits, it is not a tab stop.
+
+### A modal's title is a plain name
+
+Every modal's title — a form dialog, a confirmation, a warning modal, the error alert dialog, a failure modal — is a
+short plain phrase naming what the modal does or what failed ("Switch account", "Delete session", "Cannot open a
+session"), the same words whatever it is opened on. It holds no variable content: no session title, account, project
+or branch name, no path, count or quoted value, and no reference chip (`InlineReference`). What the modal is about goes
+in its body, its first sentence naming it there ("Fix search will be switched to Work."), with everything else that
+follows. The title is the modal's accessible name, read whole each time it opens and each time focus comes back into
+it; a long or variable one wraps into a block that no longer reads as a heading, and puts the name of a subject ahead
+of what is being asked about it.
+
+The rule is for these general modals — forms, confirmations, warnings, errors and failures. A dedicated component
+that shows one piece of content in a modal layer, such as the file viewer, is not one of them: its title is the name of
+the content it shows (the file's name and its status), which is what the viewer is, and it keeps it.
 
 ### An icon-only control: tooltip and `aria-label`
 
@@ -692,8 +727,9 @@ text it replaced was.
 
 What it does not give: the explanation is not part of the surrounding row's accessible name, so a screen reader hears
 it only on reaching the "?". That is why only a principle-level explanation, which operating the control does not
-need, or the extra line one item in a set of like items carries, moves there; every other description, a status and a
-warning among them, stays visible text.
+need, or the extra line one item in a set of like items carries, moves there; every other description stays visible
+text, a status among them; a warning, an error or a note takes its mark or Alert (see "On the screen: an Alert when it
+matters, a mark at its point otherwise"), never a "?".
 
 The permission-approval explanation in Settings' Agent accounts section is an exception: the explanation of how
 requests are handled, when the choice takes effect and Codex's possible extra token cost sits in a `HelpTip` beside
@@ -703,14 +739,14 @@ says only that the choice applies to every account of the agent.
 So is the share-default-config explanation in an owned account's settings dialog: what sharing links, and that idle
 sessions are ended and resumed by a change, sit in a `HelpTip` beside the row's visible label, under which a one-line
 description stays visible. The reason the switch is locked is a status, so it stays visible text under the row while
-the lock lasts.
+the lock lasts: the reason a control is unavailable is its state, not a warning or a note.
 
-Another deliberate exception: an added agent that is not installed is marked in the Settings agent strip by a warning glyph
-after its tab's name, and the explanation sits in a tooltip anchored to the tab rather than in a line of text. The
-status itself stays visible as the glyph; the tooltip opens on hover and on the tab's keyboard focus, in the latter
-case once any scroll that focus set off to reveal the tab has settled, since a scroll under an open tooltip closes it;
-and since nothing links it to the tab, the tab's accessible name carries "not installed" and each owned account's
-visible "not usable" line carries the rest.
+Another deliberate exception: an added agent that is not installed is marked in the Settings agent strip by a warning
+glyph after its tab's name, and the explanation sits in a tooltip anchored to the tab rather than in a status mark's
+popover or a line of text. The status itself stays visible as the glyph; the tooltip opens on hover and on the tab's
+keyboard focus, in the latter case once any scroll that focus set off to reveal the tab has settled, since a scroll
+under an open tooltip closes it; and since nothing links it to the tab, the tab's accessible name carries "not
+installed" and each owned account's visible "not usable" line carries the rest.
 
 ### Hover marquees belong to one text label
 
@@ -791,7 +827,7 @@ the trigger unnamed instead, adding nothing to the name of the row or trail arou
 
 What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
 reaches no tooltip, so a name that lives only there is a name they do not get. (A status mark, a note included, is not one
-of these: it is a popover on a button, which the keyboard reaches; see "A failure that belongs to one row".)
+of these: it is a popover on a button, which the keyboard reaches; see "How a mark is drawn and opened".)
 
 On touch, a mark opens its tooltip's content in a popover when tapped (the mark shape's `touchPopover`, on by default;
 see "A tooltip is the application's own"). It is turned off for every mark that sits inside something answering the
@@ -867,19 +903,45 @@ that state.
 
 ### Where an error is shown
 
-Where a failure is shown follows from how it arises, not from the screen it arises on:
+Where an error or a warning is shown follows from how it arises, not from the screen it arises on:
 
-| The failure | Where it is shown |
-| --- | --- |
-| A form's own validation: a check run synchronously the moment the user submits (empty, malformed, too long, a duplicate of a known name) | Under its field, in the field's `FieldError` |
-| An asynchronous failure of an operation the user started: a submitted form, a switch, a menu or row action, copying, opening | The dedicated error alert dialog, below |
-| A failure that is the state of what the screen shows: a page, pane, section, list or menu that could not load, permissions that cannot be read, a lookup a form makes on its own while the user types (detecting a project folder, looking up a conversation ID, reading the model list) | On the screen, in an Alert: "Errors shown among other content" |
-| A failure belonging to one row, table cell, badge or spot inside a rendered document: a folder in a tree that could not be listed, a repository's fetch error on its sidebar badge, an account whose quota could not be read (in Settings and the rail's quota panel), an import result row that failed, an image in a Markdown paragraph that could not load | A minimal mark: "A failure that belongs to one row" |
+1. **An error the user's own action directly causes** — a submitted form, a Save or a confirm, a switch, a menu or row
+   action, copying, opening — opens the dedicated error alert dialog, below. That includes a submit or a save failing
+   inside a dialog: the error alert dialog opens over it, and the dialog keeps its input.
+2. **An error located at one input field** is the exception to the first and to the third: its error text stands
+   under its field, in the field's `FieldError`, and no dialog opens. That is input validation — a check run
+   synchronously the moment the user submits (empty, malformed, too long, a duplicate of a known name) — and equally a
+   lookup the form makes on its own that finds the value in the field wrong (a path that does not exist or is not a
+   folder, a conversation ID found nowhere) or a value the field holds that cannot be used (an account that is
+   disabled, used up or changing its sharing). A lookup that could not run at all says nothing about the value and
+   stays under the third rule.
+3. **An important error from automatic behaviour** — one the application ran into by itself (a load, a lookup a form
+   makes on its own, a refresh) that blocks what follows, or that a component cannot do its job without — is an Alert
+   on the screen; in place of a whole page, pane or list, the empty-state failure ("A whole subject that failed").
+4. **An error or a warning that is not important** — it does not block what follows — is a mark at the point it
+   concerns; one with no point it can be located at is an Alert in a shared place (the top of a dialog's body, the top
+   of a section).
+5. **A result view showing a failed result** (an import's result whose application settings could not be applied)
+   shows that result as an Alert.
+6. **A destructive confirmation** (removing, deleting, archiving) is a warning modal: the warning icon in its header
+   and the consequences as its body text, the sessions it takes along listed in that body — never an ordinary modal
+   with a warning Alert inside it.
+
+Rules 3 to 5 are "On the screen: an Alert when it matters, a mark at its point otherwise" below; rule 6 is under
+"Keyboard" with the other confirmations.
 
 Once a submit has passed the form's own validation, anything that goes wrong afterwards — a refusal from the daemon
-included, even one about a single field's value — is an asynchronous failure and opens the error alert dialog; the
-form stays open with its values intact. Field validation never opens the dialog, and neither does a failure shown on
-the screen or as a row's mark: those are the error's only presentation.
+included, even one about a single field's value — is a failure of the user's own action and opens the error alert
+dialog; the form stays open with its values intact, under it. Field validation never opens the dialog, and neither
+does a failure shown on the screen or as a mark: those are the error's only presentation, with three exceptions: a
+startup screen's failure is also shown first in an error alert dialog over it; a check the user pressed for
+(Settings' Check for updates) that does not finish is shown in the dialog and still leaves the setting's mark; and a
+long-running change the user started that ends unfinished, and which its own control retries (an account's sharing
+switch), opens the error alert dialog in the window that asked for it and still leaves the mark at that control as its
+lasting state, the dialog alone speaking it. The same change seen ending unfinished from another window, or found so
+later, is the mark alone. A navigation the user starts in a picker (the directory picker's Go, and its Try again)
+that fails is a failure of the user's own action too, even before any listing has been shown: it opens the error alert
+dialog, and the picker's first-listing Alert stays as it was.
 
 A control that records a key combination rather than taking text (Settings' Keyboard shortcuts rows) refuses a
 combination the way a field's validation does: synchronously, in a line drawn as a `FieldError` under the row,
@@ -888,147 +950,219 @@ refusal through `StatusAnnouncer` instead, again on a repeated refusal in the sa
 
 #### The error alert dialog
 
-Every asynchronous failure of an operation the user started opens the dedicated error alert dialog and remains there
-until the user presses its acknowledgement button. Errors never use toasts, timeouts, an outside press, Escape or a
-close button for dismissal. Use HeroUI's `AlertDialog` with its `Icon` set to `status="danger"` and a danger
-acknowledgement button, retaining the library's default visual treatment.
-The alert takes focus and announces its title and explanation through `role="alertdialog"`, without a second live
-announcement inside it. Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it.
-An error above a form leaves that form available after acknowledgement, with its values and retry action intact.
+Every asynchronous refusal or failure reported in reply to an operation the user started opens the dedicated error
+alert dialog and remains there until the user presses its acknowledgement button. Errors never use toasts, timeouts,
+an outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog` with its `Icon` set to
+`status="danger"` and a danger acknowledgement button, retaining the library's default visual treatment. The alert
+takes focus and announces its title and explanation through `role="alertdialog"`, without a second live announcement
+inside it. Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it. An error above
+a form leaves that form available after acknowledgement, with its values and retry action intact.
 
 Distinguish failures the user can resolve from unexpected failures. A recoverable failure explains the specific
 remedy, such as freeing disk space, unlocking a session or correcting a folder's access. An unexpected failure
 preserves its diagnostics, asks the user to take a screenshot and file an issue, and provides the issue entry.
 Do not ask the user to fix a likely application defect or present a known environmental problem as a bug.
-An error alert dialog's recovery action is a secondary button in its footer beside the acknowledgement button,
-never a button inside its body. Its body is the dialog's own prose in the application's own words: the explanation,
-the remedy and any further explanation follow one another without an Alert inside the dialog. What is not written for
-the reader — a message passed through from the system, Git, the daemon or an agent, a stack, a diagnostic block — is
-never part of that prose, not even as a reference chip: it sits behind an "Error details" disclosure under the body,
-each block on a surface of its own. A failure the application has no words for opens with a sentence for its cause
-where the raw text names one it recognises (a full disk, a refused access, a failed connection, or that the operation
-could not be completed) and with "Something unexpected went wrong." only where it is unexpected, its raw text behind
-Error details either way.
-
-A dialog whose purpose a failure ends (a login that failed or timed out) turns into a failure modal of this same
-form, in place of the dialog that was open: the danger icon in its header, a plain title saying what failed, the
-sentence naming its subject and cause as the body, raw text behind Error details, no close button and no Escape, and
-its buttons right-aligned, the secondary (Close) first and the primary (Log in again) trailing, which takes focus. It
-is a dialog of its own rather than the open one with an Alert added inside it, and the alert dialog's mounting and
-the focus move announce it, with no further live announcement.
+An error alert dialog's recovery action is a secondary button in its footer beside the acknowledgement button, never a
+button inside its body. The footer is trailing-aligned, so Report issue and the recovery action come first and the
+acknowledgement button, the dialog's primary, stands at the trailing edge. Its body is the dialog's own prose in the
+application's own words: the explanation, the remedy and any further explanation follow one another without an Alert
+inside the dialog. What is not written for the reader — a message passed through from the system, Git, the daemon or an
+agent, a stack, a diagnostic block — is never part of that prose, not even as a reference chip: it sits behind an
+"Error details" disclosure under the body, each block on a surface of its own. A failure the application has no words
+for opens with a sentence for its cause where the raw text names one it recognises (a full disk, a refused access, a
+failed connection, or that the operation could not be completed) and with "Something unexpected went wrong." only where
+it is unexpected, its raw text behind Error details either way.
 
 A state that must not happen is prevented rather than shown as a screen: disable an entry whose action cannot
-succeed, such as New session when there is no agent to pick. If that state arises while its dialog is open, close
-the dialog and show a plain error alert dialog explaining why, with only acknowledgement and no recovery action.
-This acknowledgement-only presentation retains structured error metadata and rich name references.
+succeed, such as New session when there is no agent to pick. If that state arises while its dialog is open, the dialog
+becomes a failure modal, below, explaining why, with only acknowledgement and no recovery action. This
+acknowledgement-only presentation retains structured error metadata and rich name references.
+
+**A failure that ends a dialog's purpose** — the dialog can no longer do what it was opened for — turns the dialog
+itself into a failure modal in the error alert dialog's form, never an ordinary modal with a danger Alert inside it:
+the danger icon in its header, a title naming the failure, the explanation as sentences in its body, the raw text
+behind **Error details**, and its footer trailing-aligned like the error alert dialog's, secondary buttons first and
+the primary at the trailing edge. It replaces the dialog's content in the same modal; no second dialog opens over a
+dialog that has nothing left to offer. A login that failed or timed out is one: it has no close button and no Escape,
+and its footer is Close then Log in again, which takes focus. The alert dialog's mounting and the focus move announce a
+failure modal, with no further live announcement.
 
 The error alert dialog owns the announcement of the failures it shows; nothing else announces them again. A failure
 shown on the screen announces itself, once, when it appears after the view has first painted (`role="alert"` on its
-title and description only, never on its details or actions); the same failure already there when the view opens is
-not announced. A failure that appears together with a focus move (a dialog opening, a menu handing focus to its Try
+title and first description only, never on its details or actions); the same failure already there when the view opens
+is not announced. An Alert that stands with the marks of the same list (the Git view's uncommitted changes that could
+not be listed) does not announce itself either: the view speaks its title once through its own `StatusAnnouncer`, with
+the marks'. A failure that appears together with a focus move (a dialog opening, a menu handing focus to its Try
 again) holds its alert until the focus move has been spoken, as "Announcing a change" asks of any write near a focus
 move. A failure shown beside other content (in a dialog or a section) stays in place while its retry is out, its Try
 again pending; a retry that fails again is announced again even in the same words, and one that succeeds hands focus
-on as the failure goes, so focus never falls to the page. A failure that stands in place of a pane's or menu's
-subject that has a loading state of its own gives way to it when its retry starts, focus handed first to the pane's
-or menu's own control; one with no loading state to give way to (the report panel's whole-card failure) stays in
-place like the first kind.
-An initial startup explanation is ordinary page content. Follow "Announcing a change" for other live announcements,
-and keep retry and exit actions reachable after acknowledgement.
+on as the failure goes, so focus never falls to the page. A failure that stands in place of a pane's or menu's subject
+that has a loading state of its own gives way to it when its retry starts, focus handed first to the pane's or menu's
+own control; one with no loading state to give way to (the report panel's whole-card failure) stays in place like the
+first kind. An initial startup explanation is ordinary page content. Follow "Announcing a change" for other live
+announcements, and keep retry and exit actions reachable after acknowledgement.
 
 #### Errors shown among other content
 
 An error shown on a screen together with other UI — a form dialog, a settings section, a pane, a popover, a list's
-header, a menu — is one compact Alert that says only what happened, with everything else one press away. Nothing about
-the error sits beside the Alert as loose text, and no part of it is a bare line of danger-, warning- or muted-coloured
-text, an empty-state panel, or a disabled menu item: colour and position alone do not mark an error, it needs the
-Alert's indicator and fill. A failed lookup a form makes on its own sits in an Alert directly under the field it is
-about; a reason a dialog cannot proceed that lies outside its fields sits in an Alert at the top of its body.
+header — that does not block what follows is a mark at the point it concerns (see "On the screen: an Alert when it
+matters, a mark at its point otherwise"); an important one — one that blocks, or that the component cannot do its job
+without — and one with no point is one compact Alert: its title says what happened, its description why, a second line
+the one main thing to do, and everything else is behind **Details**. Nothing about the error sits beside the Alert as
+loose text, and no part of it is a bare line of danger-, warning- or muted-coloured text, an empty-state panel, or a
+disabled menu item: colour and position alone do not mark an error, it needs the Alert's indicator and fill. A failed
+lookup a form makes on its own that stops the form from going on (detecting a project folder, looking up a
+conversation ID) and could not run sits in an Alert directly under the field it is about — one that ran and found the
+field's value wrong is that field's `FieldError` (rule 2) — while one that leaves the form usable (reading the model
+list) is a warning mark after the field's label; a reason a dialog cannot proceed that lies outside its fields sits in
+an Alert at the top of its body.
+
+The Alert holds, beside `Alert.Indicator`: an `Alert.Title` saying what happened, then at most two sentences in the
+application's own words: an `Alert.Description` saying why, when that is known, and a second one with the one main
+thing to do about it. At its end, in the place HeroUI's own Alert puts its action button, stand at most two buttons:
+**Details** when there is more to show, then the recovery action when there is one (Try again, or the action that
+fixes it) at the trailing edge, where the primary button of a trailing-aligned group goes (see "Button order follows
+the group's alignment" under "Buttons"). Details opens a popover holding the rest: first any further explanation in
+the application's own words (a reason per cause, each cause's own fix, further guidance), then what is not written for
+the reader — a message passed through from the system, Git or an agent, a diagnostic block, raw entries, each block on
+a surface of its own (see "References in copy use `InlineReference`"). Raw text is never shown outside Details, and
+the one-sentence description and main remedy are never hidden in it; an error with nothing beyond those two sentences
+has no Details button. A catalog message keeps the same split: its visible summary and remedy carry no raw parameter
+(no system text, no `{detail}`), and any further explanation is a `.details` entry of its own that Details shows
+first. Try again appears only where trying again can change the answer; a failure that is the subject's state (no
+common commit, not a repository, a file outside the scope) has none. The buttons take the Alert's status colour, as
+HeroUI's own Alert examples do: the recovery action is the solid button of that colour (HeroUI's `danger` variant in a
+danger Alert; the same solid treatment from `--warning` / `--warning-foreground` in a warning one, HeroUI having no
+warning button), and Details is the soft button of that colour (`danger-soft`, or its warning counterpart), so neither
+reads as a neutral control dropped onto a coloured box.
+
+Every Alert — an error, a warning — has a title. HeroUI centres the indicator on the title's 24px line, so an Alert
+that opens with its 20px description draws its first line off the glyph's centre; the title is what keeps them
+aligned, not a CSS exception. The title does not merely repeat the description. The Alert wrappers require it in their
+types, and a lint restriction keeps HeroUI's `Alert` from being used outside them.
+
+An Alert holds everything that belongs to it: its title, its description and the items it is about, such as the
+entries a failure lists. Nothing of the Alert sits outside it as loose text. Those items are children of `Alert.Content` after `Alert.Title` and `Alert.Description`, drawn in the
+description's own text style so the Alert keeps HeroUI's stock look; never inside `Alert.Description`, which is a
+single text run. This changes nothing about what goes behind **Details**: further explanation and raw text stay in its
+popover. An error-only screen's instructions are not part of the Alert and stand around it, as below.
+
+The Alert is HeroUI's `Alert`, through one of two wrappers: `ErrorAlert` for danger, and for a warning that carries a
+remedy, **Details** or a recovery action; a warning-status `TintedAlert` otherwise. Either way its status background
+fill and status-coloured shadow (see "One definition per semantic colour") as its only custom visual treatments;
+indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `Alert.Title`
+with its original status colour; `Alert.Description` keeps its default colour. Do not apply `text-foreground` or
+another colour override to either part, override text sizes, or replace `Alert.Title` with a heading element. Neutral
+absence, loading and unsupported content keep their state presentations.
+
+#### A whole subject that failed
 
 A page, pane or list whose whole subject could not be loaded has nothing else to show, so its failure takes the empty
 state's shape (see "An empty state is a glyph, a heading, and what fills it") rather than an Alert: a danger glyph, a
 heading saying what could not be loaded, the line under it in the application's own words (why, and how to recover),
 and in its centred row the recovery action (Try again) as the primary button and **Details** as a secondary one, its
-popover holding only the raw text, as in an Alert. An Alert is for a failure shown among other
-content.
+popover holding what an Alert's Details holds: further explanation in the application's own words, then the raw text.
+An Alert is for a failure shown among other content.
 
-The Alert holds, beside `Alert.Indicator`: an `Alert.Title` saying what happened, and an `Alert.Description` in the
-application's own words of at most two sentences — why, when that is known, and the one main thing to do about it. At its end, in the place
-HeroUI's own Alert puts its action button, stand at most two buttons: **Details** when there is more to show, then the
-recovery action when there is one (Try again, or the action that fixes it) at the trailing edge, where the primary
-button of a trailing-aligned group goes. Details opens a popover holding the rest: first any further
-explanation in the application's own words (a reason per cause, each cause's own fix, further guidance), then what is
-not written for the reader — a message passed through from the system, Git or an agent, a diagnostic block, raw
-entries, each block on a surface of its own (see "References in copy use `InlineReference`"). Raw text is never shown
-outside Details, and the one-sentence description and main remedy are never hidden in it; an error with nothing beyond
-those two sentences has no Details button. A catalog message keeps the same split: its visible summary and remedy carry
-no raw parameter (no system text, no `{detail}`), and any further explanation is a `.details` entry of its own that
-Details shows first. Try again appears only where trying again can change the answer; a failure that is the subject's
-state (no common commit, not a repository, a file outside the scope) has none. The buttons take the Alert's status
-colour, as HeroUI's own Alert examples do: the recovery action is the solid button of that colour (HeroUI's `danger`
-variant in a danger Alert; the same solid treatment from `--warning` / `--warning-foreground` in a warning one, HeroUI
-having no warning button), and Details is the soft button of that colour (`danger-soft`, or its warning counterpart), so
-neither reads as a neutral control dropped onto a coloured box.
+A startup screen whose whole subject failed — the daemon that failed to start, and the crash screen — is a page whose
+whole subject failed like any other: it takes the empty state's shape above, its heading the page's `h1` and the line
+under it in the application's own words. Its row holds at most two buttons: the recovery (Try again, on the crash
+screen) as the primary with Quit beside it, or Quit alone where there is no recovery; Quit stands only where the
+application can quit itself. Its raw text — the daemon's message or the crash's stack — is a mark right after the
+heading, on both screens alike, whose popover holds only that text; it is never on the page. A screen whose only
+content is an explanation with no raw text in it — the startup screen with no daemon address, and its instructions for
+giving one — is the error's own surface, as the error alert dialog is, kept apart on purpose: it is no failure of
+something loaded but a configuration still to be given, so it is not the empty state's shape, and its heading and
+instructions may stand around the Alert. The heading is centred over the column, as is the row of buttons under it;
+the Alert, the instructions and any list in them are start-aligned, so a list's bullets stay beside their text.
 
-Every Alert — an error, a warning, a confirmation's warning — has a title. HeroUI centres the indicator on the title's
-24px line, so an Alert that opens with its 20px description draws its first line off the glyph's centre; the title is
-what keeps them aligned, not a CSS exception. The title does not merely repeat the description. The Alert wrappers
-require it in their types, and a lint restriction keeps HeroUI's `Alert` from being used outside them.
+#### On the screen: an Alert when it matters, a mark at its point otherwise
 
-An Alert holds everything that belongs to it: its title, its description and the items it is about — the list of
-sessions a confirmation takes along, the consequence of each option ticked. Nothing of the Alert sits outside it as
-loose text. Those items are children of `Alert.Content` after `Alert.Title` and `Alert.Description`, drawn in the
-description's own text style so the Alert keeps HeroUI's stock look; never inside `Alert.Description`, which is a
-single text run. This changes nothing about what goes behind **Details**: further explanation and raw text stay in its
-popover. An error-only screen's instructions and diagnostic block are not part of the Alert and stand around it, as
-below.
+Of what is shown on the screen rather than in the error alert dialog (rules 3 to 5 of "Where an error is shown"),
+where an error, a warning or a note is shown follows from whether it matters — not from how much it has to say or how
+busy the layout around it is:
 
-The Alert is HeroUI's `Alert`: `ErrorAlert` for danger status, or a warning-status `TintedAlert` for a warning, with its
-status background fill and status-coloured shadow (see "One definition per semantic colour") as its only custom visual
-treatments; indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `Alert.Title` with its original status colour; `Alert.Description`
-keeps its default colour. Do not apply `text-foreground` or another colour override to either part, override text
-sizes, or replace `Alert.Title` with a heading element. Neutral absence, loading and unsupported content keep their
-state presentations.
+- **An important error from automatic behaviour** — one that blocks what follows (a lookup a form makes on its own
+  failing, which stops the form from going on; a reason a dialog cannot proceed), or one a component cannot do its job
+  without (a list part that could not be read while the rest of the view still shows, such as the Git view's
+  uncommitted changes) — is an Alert even where it can be located, so that it is said outright rather than one press
+  away: a failed lookup directly under the field it is about, a reason that lies outside a dialog's fields at the top
+  of its body, a list part at the top of that list.
+- **Any other error or warning, and a note** — one that does not block what follows — never takes an Alert where it
+  has a point. It is a mark at the point it concerns: `StatusMark`, its glyph right after the name, heading or line it
+  qualifies — a row or an item, a name, one section's heading in a list, a page's heading or a pane's or view's title
+  (the listing or the file it names, while its content is still shown), a line naming what it is about (the Git source
+  block's Worktree line), a checkbox's label — and for a field, after the field's label when it is about the whole
+  field (its list of options that could not be read), and inside the field's group at its trailing end, before the
+  field's own trailing buttons (Clear), when it is about the field's current value or input; for a setting, in the row's control area beside the setting's control —
+  before a button, after a switch. What it has to say is in its popover, opened as "How a mark is drawn and opened"
+  describes; a popover taller than the room beside its mark scrolls inside itself. A warning takes the triangle in the
+  warning colour, an error the circled `!` in the danger colour, and a note, which only informs, the circled `i` in
+  the note's accent colour; a circled `i` is never drawn in the warning colour, nor a triangle in a note's. Nothing of
+  it is written beside the mark as loose text, muted or coloured.
+- **Several of those at one point** are one mark, never marks side by side: its popover lists each as a paragraph of
+  its own, and its name covers them all. An error and a warning at one point are one mark in the more severe tone, the
+  error's.
+- **One of those with no point it can be located at** is an Alert in a shared place: the top of a dialog's body, the
+  top of a section.
+- **A result view showing a failed result** (an import's result whose application settings could not be applied) shows
+  that result as an Alert, as the view's own content.
 
-A screen whose only content is the error — the startup failure and the crash screen — is the error's own surface, as
-the error alert dialog is: its heading, instructions and diagnostic block may stand around the Alert. The heading is
-centred over the column, as is the row of buttons under it; the Alert, the instructions and any list in them are
-start-aligned, so a list's bullets stay beside their text.
+Here and in "How a mark is drawn and opened", a mark is a status mark (`StatusMark`): a button that opens a popover,
+or, with a word and nothing more to say, that glyph and word as plain text. The glyphs elsewhere in this standard that
+carry only a tooltip (an agent icon, a badge, the not-installed agent's warning glyph, the branch badge's failure
+glyph) are indicators, not marks in this sense, and are not placed by this rule.
 
-#### A failure that belongs to one row
+A mark that appears by itself after the view has first painted, as a change of state with nothing else changing around
+it (a setting's last check failing while the view is open), is announced once, its name or the sentence it stands for
+and nothing more: a mark has no live region of its own, so the view speaks it through its own `StatusAnnouncer`, and
+says nothing for a failure the error alert dialog already speaks. A mark that arrives with the content it qualifies (a
+listing, a search's results, a step of a dialog) is read with that content and is not announced apart from it; nor is
+a mark found already there when the view opens.
 
-A failure belonging to one item of a collection, one part of a compact layout (a section of a side pane, such as the
-Git pane's uncommitted changes or its branch list, with the rest of the pane still shown), or one spot in rendered
-content does not break that row, section or sentence into an error block. The item shows a minimal mark
-(`StatusMark`): a danger or warning status glyph with an accessible name, placed **right after the name on a row
-that has one** (a tree folder's, the account name line's), not at the row's trailing edge: the name keeps its clipping
-and fade, so a long name clips and the mark stays visible after its visible text, and a hover marquee, if the name has
-one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes the place of its own
-layout: the status column of a table (an import result), beside the section's heading for a part of a compact layout,
-inline with the text in a document. A failed Git check of a project stands at the start of its Git badge, in place of
-the badge's branch glyph, outside the badge's tooltip trigger and as a tab stop of its own; while a check, pull or push
-runs the refresh glyph takes its place, and the mark comes back when that run ends unless a check in it succeeded. The row's accessible name
-adds the mark's name ("Git check failed") as its own phrase; Git's text is in no name and no tooltip, only in the
-mark's popover. A press on the mark keeps to itself and does not reach the pressable row around it, and when the mark
-goes away while it or its popover holds focus, focus goes to the row (or focus mode's header).
-No sentence of error text is written into the row.
+A whole page, pane or list whose subject failed is not placed by this rule: see "A whole subject that failed".
+
+A menu has no room for a mark: a limit a menu hit is its last item, a note in the menu's muted text, lined up with the
+items' labels and carrying no glyph of the items' kind, that says why the rest is missing ("There are more branches
+than this list can show"), never worded as a failure.
+
+#### How a mark is drawn and opened
+
+This section sets how every mark is drawn and opened, wherever "On the screen: an Alert when it matters, a mark at its
+point otherwise" places it: its popover, its name, the input that opens it, and its in-heading and inline forms.
+
+A failure, a warning or a note belonging to one item of a collection, one part of a compact layout (one section of a
+side pane, such as the Committed section of the Git change list or the Git pane's branch list, with the rest of the
+pane still shown), or one spot in rendered content does not break that row, section or sentence into an error block.
+The item shows a minimal mark (`StatusMark`): a danger, warning or note glyph with an accessible name, placed **right
+after the name on a row that has one** (a tree folder's, the account name line's), not at the row's trailing edge: the
+name keeps its clipping and fade, so a long name clips and the mark stays visible after its visible text, and a hover
+marquee, if the name has one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes
+the place of its own layout: the status column of a table (an import result), beside the section's heading for a part
+of a compact layout, inline with the text in a document. A failed Git check of a project stands at the start of its
+Git badge, in place of the badge's branch glyph, outside the badge's tooltip trigger and as a tab stop of its own; while
+a check, pull or push runs the refresh glyph takes its place, and the mark comes back when that run ends unless a check
+in it succeeded. The row's accessible name adds the mark's name ("Git check failed") as its own phrase; Git's text is
+in no name and no tooltip, only in the mark's popover. A press on the mark keeps to itself and does not reach the
+pressable row around it, and when the mark goes away while it or its popover holds focus, focus goes to the row (or
+focus mode's header). No sentence of error text is written into the row.
 
 **A mark is always a popover, and never also a tooltip.** What an error or a warning carries can hold a button (Try
 again) and raw text to select, which a tooltip cannot, and one mark wiring both surfaces would put two floating things
 on one glyph. A mark whose content is one short line is the same popover with that line as its content, which may be
 drawn richer than the mark's plain-text name (a path as a reference). Its dialog is named by the tone's word (Error,
-Warning or Note), not by the line, which VoiceOver would otherwise read twice. It is drawn on the **tooltip's surface**
-like every floating surface of the application. A mark with a body, a button or raw text is drawn on it too, its content
-laid out inside. The exception is a mark that draws a word beside its glyph and has nothing more to say: the word
-already says it on screen, so it stays the glyph and the word as plain text, with no button and no popover. The popover
-holds the reason in the application's own words, then the main remedy, any further explanation, then the raw text, then
-the recovery action (Try again, at the popover's trailing edge). A mark whose content is one line and raw text holds
-that line, then the raw text in a diagnostic block under it; raw text in a mark is always such a block, never inline
-text or a chip. The glyph is a button named for what failed, with no
-tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is the same button and the
-same popover with nothing to press in it: marks of every tone side by side look alike, take the pointer alike, are each
-a tab stop and open the same way, so they differ only in glyph and colour. Glyphs per tone: circled `!` for danger, a
-triangle for a warning, circled `i` for a note.
+Warning or Note), not by the line, which VoiceOver would otherwise read twice. It is drawn on the **tooltip's
+surface** like every floating surface of the application. A mark with a body, a button or raw text is drawn on it too,
+its content laid out inside. The exception is a mark that draws a word beside its glyph and has nothing more to say:
+the word already says it on screen, so it stays the glyph and the word as plain text, with no button and no popover.
+The popover holds the reason in the application's own words, then the main remedy, any further explanation, then the
+raw text, then the recovery action (Try again, at the popover's trailing edge). A mark whose content is one line and
+raw text holds that line, then the raw text in a diagnostic block under it; raw text in a mark is always such a block,
+never inline text or a chip. The glyph is a button named for what it is about, with no tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is
+the same button and the same popover with nothing to press in it: marks of every tone side by side look alike, take
+the pointer alike, are each reachable from the keyboard (a tab stop, or a step of their collection's own walk) and
+open the same way, so they differ only in glyph and colour. Glyphs per tone: circled `!` for danger, a triangle for a
+warning, circled `i` for a note.
 
 The popover is `Hint` of kind `popover` ("A floating panel that does not take the window" has the input matrix): a
 mouse resting on the mark opens it without moving focus; **a mouse click opens nothing**; a touch or pen tap,
@@ -1101,7 +1235,8 @@ dialog, Alert or popover that holds them, with the summary or label naming them 
 their text, direction and indentation, and long content remains scrollable and reachable from the keyboard, the focus
 ring drawn on the surface. A block that may be taller than its room (a crash's stack) is `tall`: it scrolls vertically
 as well, with the same named region and ring. A `wrap`ped block breaks long lines instead, so it has nothing to scroll
-and no region to name.
+sideways and, unless it is `tall` too, no region to name. A `tall` block is a region and fades only for its height, so
+one whose lines can be wider than its box (a crash's stack, a daemon's startup failure) also wraps.
 Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks
 retain usable text.
 
@@ -1201,10 +1336,12 @@ level below that view's, and it sets no heading ids, since several such document
 
 Every place that has nothing to show takes one shape, through `EmptyPanel`
 (`packages/ui/src/components/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under it,
-optionally the action that fills it and, beside that action, optionally a second way out of the state, in a centred row
-that wraps (the whole shape, and which state takes which part, is `docs/product/empty-states.md`). Nothing builds a
-second one out of centred text, and a state with no glyph is not one of these — HeroUI's bare `EmptyState` is reached
-only through this component.
+and optionally a centred row of at most two buttons that wraps — the action that fills it, then a second way out of
+the state or a failure's **Details** — putting its primary first, as "Button order follows the group's alignment"
+under "Buttons" has it. A startup screen's failure carries its raw text in a mark right after the heading
+(`headingMark`) instead of Details. The whole shape, and which state takes which part, is `docs/product/empty-states.md`.
+Nothing builds a second one out of centred text, and a state with no glyph is not one of these — HeroUI's bare
+`EmptyState` is reached only through this component.
 
 - The heading is a short phrase carrying **no punctuation at all**, a comma inside it included: a title that needs one
   is a sentence, and the part after the comma belongs in the line under it. "No sessions yet", not "No sessions yet,
@@ -1504,8 +1641,8 @@ the actions' leading gap with them. Do not space individual trailing icons with 
 offsets. Verify the shared columns with actions hidden, hovered, focused and open, including right-to-left layout.
 
 WCAG 2.2 SC 2.5.8 also excepts an **Inline** target: one "in a sentence, or its size is otherwise constrained by the
-line-height of non-target text". A status mark standing in running text (the inline form of "A failure that belongs to
-one row") is such a target: it is drawn at the text's size and cannot be larger without growing its line.
+line-height of non-target text". A status mark standing in running text (the inline form in "How a mark is drawn and
+opened") is such a target: it is drawn at the text's size and cannot be larger without growing its line.
 
 The criterion is about controls, so a mark that only opens a tooltip with a mouse is not held to it: a tooltip is not an
 action, and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such
@@ -1589,7 +1726,7 @@ shape, so the tone does not rest on colour. The viewer is a compact layout and h
 after the file path in the viewer's header, ordered failed, warned, then notes; in a compared image change a side's
 own notice stands beside that side's heading instead; a notice about one spot of a Markdown document stays at that
 spot, inside a paragraph (a button is valid there) or before a block's fallback source, lined
-up with its first line. Each mark is named by its sentence and opens it, as "A failure that belongs to one row" says.
+up with its first line. Each mark is named by its sentence and opens it, as "How a mark is drawn and opened" says.
 A subject that cannot be opened at all fills the body with the danger empty-state (`Failure` in
 `packages/ui/src/viewer/viewerStates.tsx`) and no mark, a conflicted file whose read failed included. A conflict is
 said by the title's status chip, not by a mark: what kind of conflict it is is the chip's tooltip, which a tap opens
@@ -1623,8 +1760,7 @@ stacking context). The formula sets `unicode-bidi: isolate` itself (`FormulaView
   `dir` on the group: with it on the input alone, the affix stays on the mirrored side and the text pulls away from it,
   and the two stop reading as one control (`packages/ui/src/settings/CloneDirSetting.tsx`).
 - `dir` sets direction, not alignment. It does not override an inherited `text-align`, so an element that needs both
-  keeps its alignment class as well (`packages/ui/src/ErrorBoundary.tsx`, whose crash stack sits inside a centred
-  wrapper).
+  keeps its alignment class as well.
 
 **A value substituted into a sentence is isolated.** Without it the bidi algorithm reorders the value against the
 sentence around it: `“/Users/dev/app”` reads as `”Users/dev/app/“`, and a trailing full stop or a closing parenthesis

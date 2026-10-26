@@ -96,16 +96,33 @@ for the file viewer's header; a report page's own content lines up with it by de
 what it cannot do" in `docs/product/report-panel.md`).
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
-that could not start or a UI that failed — there is no rail: under the top bar, the content panel spans the window. On
-the screens for a daemon that could not start, for no daemon address being known, and for a UI that failed, the
-message's heading and the row of buttons under it are centred; the rest of the message — its alert, the explanation and
-any list in it, the stack trace — starts at the reading edge. Each of those screens' alerts is titled with what went
-wrong in short — that the daemon could not be connected to, or that an unexpected error occurred — with the detail under
-the title. On the screen for a UI that failed, that detail is the application's own instruction — try again, and if it
-happens again, report it with the error text below — never the error's raw message: the error's name and message head
-the stack trace under the alert instead, and the stack follows them, not repeating that line where the stack already
-begins with it. The error alert shown first, over the screen, says in its body that something unexpected went
-wrong, and holds the same stack trace, headed the same way, under its **Error details**.
+that could not start, for no daemon address being known, or for a UI that failed — there is no rail: under the top
+bar, the content panel spans the window.
+
+The screens for a daemon that could not start and for a UI that failed are each an empty-state failure of the whole
+page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred in the content panel: a red
+circled `!`, a heading that is the page's top-level heading, followed on its line by an error mark (a red circled `!`
+button), one line under it in Octoboard's own words, and a centred row of at most two buttons. The failure's raw text
+is in the popover the heading's mark opens, and never on the page; neither screen holds an alert or a **Details**
+button, and nothing on it but the glyph and the mark is drawn in the danger colour. **Quit** is there only where the
+application can quit itself.
+
+- **A UI that failed**: headed that an unexpected error occurred, its mark named why Octoboard stopped, with the line
+  saying to try again and, if the error comes back, to report it. Its row holds **Try again**, the primary button,
+  then **Quit**. The mark's popover holds the stack trace, headed by the error's name and message, the stack following
+  them without repeating that line where the stack already begins with it.
+- **A daemon that could not start**: headed that the daemon failed to start, its mark named why the daemon did not
+  start, with the line saying Octoboard cannot work without it and that opening Octoboard again tries once more. Its
+  row holds **Quit** alone. The mark's popover holds the daemon's own message, its long lines wrapped.
+
+The error alert shown first, over the screen for a UI that failed, is titled that an unexpected error occurred, and
+its body says that Octoboard hit an error it could not recover from, with the same stack trace, headed the same way,
+under its **Error details**; the one over the screen for a daemon that could not start is described in "Starting up" in
+`docs/product/application-lifecycle.md`.
+
+On the screen for no daemon address being known, the heading and the button under it are centred, and the rest — its
+alert, the explanation and the list in it — starts at the reading edge. Its alert is titled that the daemon could not
+be connected to, with the detail under the title.
 
 ## What an open dialog, menu or popover covers
 
@@ -114,6 +131,21 @@ overlay that covers the whole window: the top bar, the rail and the content pane
 them can be used while it is open. A press on the dimmed area dismisses an ordinary dialog, but never answers or
 closes a confirmation. A confirmation's buttons, close button and Escape still work; an error alert requires its
 acknowledgement button (see "Error alerts" in `docs/product/error-alerts.md`).
+
+**A dialog's title is a plain name** for what it does or what failed — "Switch account", "Delete session", "Cannot open
+a session" — the same words whatever it is opened on, for every form dialog, confirmation, error alert and failure
+modal. It names no session, account, project, branch or path and holds no count: what the dialog is about is named by
+the first sentence of its body ("The session Fix search will be switched to Work."), everything else following it. The
+account settings dialog's title is "Account settings", the body's first line naming the account, followed by its
+plan and login state, and the next its directory (see "The account settings dialog" in
+`docs/product/agent-accounts.md`). A dialog that shows one piece of content rather than asking or reporting anything,
+the file viewer, keeps the name of what it shows as its title (see `docs/product/file-viewer.md`).
+
+**A destructive confirmation is a warning modal**: the warning icon leads its header, and what the action does and
+takes along is its body text — the sessions it ends, archives or deletes along with its subject listed there, and a
+line for each option ticked (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`) — never an
+alert inside the dialog. That is every confirmation whose confirm button is drawn in the danger colour (see below), and
+the archive confirmation, which carries the warning icon even before an option makes it destructive.
 
 **Where keyboard focus starts in a confirmation.** A confirmation opens with keyboard focus on its confirm button, so
 Enter confirms at once. Three kinds start elsewhere:
@@ -148,7 +180,7 @@ action now deletes more, and changes back when no such option is ticked:
   options leave it as it is — moving the project folder to the Trash, and the locked worktrees with it — since the
   message then says the folder goes.
 
-What a ticked option adds is said in the confirmation's message and its one warning, not on the button. While the
+What a ticked option adds is said in the confirmation's message and its consequences, not on the button. While the
 action runs, the button either shows as pending under its label or shows one in-progress text naming the single step
 underway — never several actions combined, and never chosen by an option. Archiving a session, deleting a session,
 deleting all archived sessions and removing a project show as pending under their label; restoring a project's file
@@ -181,13 +213,14 @@ one is open, nothing outside it can be used, and a press outside dismisses it. I
 nothing behind it is dimmed; what it shares with a dialog is that the rest of the window is out of reach until it is
 gone.
 
-**The rail's account quota panel is the exception**: it floats over the content without taking the window around
-it while the mouse has floated it in (opened by a tap or the keyboard it is modal, as a menu is). While it is floated in the rest of the window stays usable, a press outside it closes it and still does what it does
-where it lands, and it closes by itself when a dialog or a menu opens (see "The panel is not modal while the mouse has floated it in" in
+**The rail's account quota panel is the exception**: it floats over the content without taking the window around it
+while the mouse has floated it in (opened by a tap or the keyboard it is modal, as a menu is). While it is floated in
+the rest of the window stays usable, a press outside it closes it and still does what it does where it lands, and it
+closes by itself when a dialog or a menu opens (see "The panel is not modal while the mouse has floated it in" in
 `docs/product/account-quotas.md`). So is a failure or warning mark's popover while the mouse resting on the mark has
 opened it: the rest of the window stays usable, and a press outside closes it and still does what it does where it
-lands. Once the mark is pressed its popover is an ordinary popover (see "Failures marked on a row" in
-`docs/product/error-alerts.md`).
+lands. Once the mark is pressed its popover is an ordinary popover (see "Failures, warnings and notes marked at their
+point" in `docs/product/error-alerts.md`).
 
 **The connection banner's strip is the one part of the window that stays usable.** While the daemon connection is down
 the strip is drawn above a dialog's overlay and above an open menu or popover, so it is not dimmed along with
@@ -672,8 +705,8 @@ Not mirrored:
   `docs/product/report-panel.md`); and the waiting count's overflow label reads "99+".
 - **A literal to type, and program text**: the query parameter and the environment-variable names the startup screen
   gives when it has no daemon address to connect to (`?port=`, `VITE_DAEMON_PORT`, `OCTOBOARD_DAEMON_PORT`) and the
-  command it names, and the stack trace the screen for a failed UI shows, which also keeps its left alignment and so
-  its indentation.
+  command it names, and the stack trace in the heading mark's popover on the screen for a failed UI, which also keeps its left
+  alignment and so its indentation.
 - **The terminal**, which is never mirrored (see "What follows the language" in `docs/product/language.md`).
 - **A report page**, which keeps its own direction; only the panel around it is mirrored (see "What follows the
   language" in `docs/product/language.md`).

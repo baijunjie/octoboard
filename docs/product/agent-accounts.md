@@ -198,11 +198,11 @@ tab in view; the readings already held are shown at once.
 
 **Settings**, the first entry of an account's actions menu, with a gear icon, opens a modal dialog of everything about
 that one account.
-Its heading is the account's name, followed by its plan badge, its login state — the badge as in the table, or, while
-that is not known, "Checking…" while the first reading is on its way and "Unknown" otherwise — the "Usage unavailable"
-mark when its reading failed with nothing read before, and the **Log in** icon button for an account known to be signed
-out. Under the heading stands the account's directory; for the default account a "?" help tip follows it (see "The
-default account" above). For an account the user owns of an agent that is not available, the dialog's body opens with
+It is titled "Account settings", whichever account it is opened on. The first line of its body is the account's name,
+followed by its plan badge, its login state — the badge as in the table, or, while that is not known, "Checking…" while
+the first reading is on its way and "Unknown" otherwise — the "Usage unavailable" mark when its reading failed with
+nothing read before, and the **Log in** icon button for an account known to be signed out. The next line is the
+account's directory; for the default account a "?" help tip follows it (see "The default account" above). For an account the user owns of an agent that is not available, the dialog's body opens with
 a line saying it is not usable until the agent is on `PATH`. Then, one under another:
 
 - **Usage** — the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
@@ -277,7 +277,8 @@ Every account the user owns has a **Share default configuration** row in its acc
 account** (see "The account settings dialog" above): the name with a "?" help tip, a line under it, and the switch at
 the row's end. The line follows the switch: while it is off, "Turning this on links the account's configuration and
 conversation history to the default account's directory."; while it is on, "The account's configuration and conversation
-history are linked to the default account's directory." The default account has none. The switch's accessible name
+history are linked to the default account's directory." The line is left out while a change runs and while the last
+change is incomplete. The default account has none. The switch's accessible name
 identifies the account. A change is carried out at once or not at all (see "When a change is carried out" in
 `docs/product/sharing-the-default-configuration.md`), so the switch is either free to use or unavailable, and says
 which. Unavailable, it looks disabled but stays focusable and is marked unavailable for assistive technology; a press on
@@ -307,14 +308,14 @@ stands under the row's line is the switch's description for assistive technology
 | Sessions of the account working | Unavailable | That sharing cannot be changed while that many of the account's sessions are working, and to wait for them to finish. Which sessions count as working is in "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`. |
 | The account being signed in | Unavailable | That sharing cannot be changed while the account is being signed in. With sessions running too, both lines are shown. |
 | A change running | Unavailable | A progress bar (below). |
-| The last change incomplete | Its position before that change (on, after a moved default directory) | An amber alert (below). |
+| The last change incomplete | Its position before that change (on, after a moved default directory) | Nothing; an amber warning mark follows the switch (below), and the switch is described by the mark's title. |
 
 Text typed into an idle session's terminal but not yet sent is not seen, and is lost when the change ends that session
 (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`); the switch does not warn
 of it.
 
-A reason the account is in use stays under the row's line alongside a progress bar or the alert. The progress bar and
-the alert stand under the row, across its width. The switch is also
+A reason the account is in use stays under the row's line alongside a progress bar or the warning mark. The progress
+bar stands under the row, across its width. The switch is also
 unavailable while this window's own request for a change is still unanswered, and shows the recorded choice meanwhile.
 
 **While a change runs**, a progress bar stands under the row, labelled with the direction, turning sharing on or
@@ -327,32 +328,42 @@ of the account finishes, it is indeterminate and says it is waiting to start. Th
 change starts, together with the phase when that is not the entries, and each later phase is announced as it begins,
 except entering the entries phase, which keeps what was last said.
 
-**When the change ends** the result is shown at the switch at once. A change that completed leaves nothing under the
-row. One that did not complete — whether it failed just now or the daemon was stopped during it — is shown under
-the row as one compact amber alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`):
+**When the change ends** the result is shown at the switch at once. A change that completed leaves nothing beside it.
+One that did not complete — whether it failed just now or the daemon was stopped during it — is shown as an amber
+warning mark right after the switch, in the row, named "Last sharing change", with nothing written beside it (see
+"Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). The mark has no retry button:
+turning the switch is the retry. Its popover holds, in order:
 
 - a title saying that turning sharing on (or off) could not finish, or, after a daemon restart, when nothing is known
   of the failure, that the last attempt to turn it on (or off) did not finish;
-- for a failure, one sentence saying that some files or folders could not be changed. The title and this sentence are
-  the only part of the alert announced to assistive technology, and only when the failure follows a change this view
-  saw running, not for one already there when the section opens;
-- then what to do: turn the switch on (or off) again to try once more, or, after a moved default directory, turn it
-  off, then on again. The alert has no retry button of its own;
-- a **Details** button, present only when there is something behind it, opening a popover that holds, in order: why,
-  in plain language, when that is known — one line per cause, naming the entries it hit compactly, the first by name
-  and the rest as a count ("You do not have permission to change `skills/` and 1 more."), a conversation by the name of
-  a session that records it, each line going on with what to do about its cause; or, when no entry is listed, the
-  reason the change as a whole failed with what to do about it, when it is a named one (see "When a change is carried
-  out" in `docs/product/sharing-the-default-configuration.md`); then, with idle sessions of the account, the line
-  saying that changing sharing ends and resumes them, since a retry does too; then each entry with what it was left
-  as and the raw diagnostic, or, with no entry listed, the one raw reason the change failed.
+- for a failure, why: with the entries all hit by one cause, that cause's line, naming the entries it hit compactly,
+  the first by name and the rest as a count ("You do not have permission to change `skills/` and 1 more."), a
+  conversation by the name of a session that records it; with no entry listed and a named cause of the change as a
+  whole (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`), that reason;
+  otherwise — several causes, or a cause with no line of its own — that some files or folders could not be changed;
+- what to do: where that one cause has a fix of its own, that fix; otherwise to turn the switch on (or off) again to
+  try once more, or, after a moved default directory, to turn it off, then on again;
+- with several causes, one line per cause as above, each going on with what to do about its cause;
+- where a fix stood in the place of the way to try again, the way to try again;
+- with idle sessions of the account, the line saying that changing sharing ends and resumes them, since a retry does
+  too;
+- each entry with what it was left as and the raw diagnostic, or, with no entry listed, the one raw reason the change
+  failed, when there is one.
+
+Where a cause has no line of its own (`other`), what to do about it says that the system's own reason is below, since
+the raw reason follows in the same popover. The switch is described to assistive technology by the popover's title.
+The title alone is announced, and only when the failure follows a change this view saw running — not for a mark
+already there when the dialog opens, nor after a daemon restart, nor in the window that asked for the change, where
+the error alert below speaks it.
 
 The causes and what each covers are in "When a change is carried out" in
-`docs/product/sharing-the-default-configuration.md`. The alert stays while the account's last change is incomplete
+`docs/product/sharing-the-default-configuration.md`. The mark stays while the account's last change is incomplete
 and no change runs; the failure's details are dropped once the next change records its choice, so a retry refused
-or stopped before that keeps them. When the alert goes while keyboard focus is inside it, focus moves to the switch. A failure is shown only there, not in an error alert, the
-window that asked for the change included. A refused request (an account in use, a change already running) is shown
-in an error alert, the switch keeping its position.
+or stopped before that keeps them. When the mark goes while keyboard focus is on it or in its popover, focus moves to
+the switch. In the window that asked for the change, a change that ends without completing also opens an error alert
+saying so, with its reason and what to do, and the mark stays at the switch as its lasting state; every other window,
+and a window that finds the change incomplete later, shows the mark alone. A refused request (an account in use, a
+change already running) is shown in an error alert too, the switch keeping its position.
 
 While the account's last change is incomplete and no change runs, starting a session on it from the window asks the
 user first (see "Starting a session on an account whose last change is incomplete" in

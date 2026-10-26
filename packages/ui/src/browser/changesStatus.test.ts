@@ -95,6 +95,13 @@ it("collects the parts that failed, in the order of the list", () => {
 
 it("is partial when the uncommitted list, the comparison or the commits were cut, and says how many commits are listed when only the newest were", () => {
   expect(status(listed("loaded", { complete: false }), { state: "none" }).partial).toBe(true);
+  // Which part was cut is told apart: the uncommitted one by the worktree line's `cut` notice, the committed one by its own flag.
+  expect(status(listed("loaded", { complete: false }), { state: "none" })).toMatchObject({ committedPartial: false });
+  // The project's own working copy is named only for the mark of its changes cut short.
+  expect(status(listed("loaded", { complete: false }), { state: "none" }).notices[0]).toMatchObject({ id: "worktree", cut: true });
+  expect(status(listed(), { state: "none" }).notices.some((notice) => notice.id === "worktree")).toBe(false);
+  expect(status(listed(), compare(loadedComparison(false)))).toMatchObject({ committedPartial: true });
+  expect(status(listed(), compare(loadedComparison(false))).notices.some((notice) => notice.id === "worktree" && notice.cut)).toBe(false);
   expect(status(listed(), compare(loadedComparison(false))).partial).toBe(true);
   expect(status(listed(), compare(loadedComparison())).partial).toBe(false);
   const commits = (complete: boolean, commitsComplete: boolean): CommitList => ({ state: "loaded", base: "c1", tip: "c2", items: [], count: 100, complete, commitsComplete });

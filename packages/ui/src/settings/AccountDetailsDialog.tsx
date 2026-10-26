@@ -47,16 +47,16 @@ function DisableAccountRow({ agent, account, name }: { agent: Agent; account: st
 
 /**
  * One account's details in a modal of its own, opened from its row's actions menu (`account` null for the agent's
- * default account): everything the row shows in full and what it leaves out. The header names the account, with its
- * plan and login state and the Log in icon (while it is not logged in) after the name, outside the heading, and says
- * under that where its configuration lives, the default account's explanation after the path. Then the account's quota
- * as the rail's panel draws it (the two-layer 5-hour and weekly meter, each model's window after it) with when it was
- * read, and the account's settings as the Settings page's rows are: for an account the user owns, the Share default
- * configuration switch with the lock reason, the progress and the unfinished-change warning it carries, and last the
- * Disable account switch, whose description follows the switch (off or on). The row menu's Settings entry opens it.
- * It has no footer: the header's close button, Escape and a click outside close it. It reads the account from the
- * store as it is now, so a change from another window shows, and closes if the account is removed. `focusSharing` puts focus on the sharing switch on opening, for a request that Settings show that
- * switch.
+ * default account): everything the row shows in full and what it leaves out. The title is plain ("Account settings");
+ * the body's first line names the account, with its plan and login state and the Log in icon (while it is not logged
+ * in) after the name, and the next says where its configuration lives, the default account's explanation after the
+ * path. Then the account's quota as the rail's panel draws it (the two-layer 5-hour and weekly meter, each model's
+ * window after it) with when it was read, and the account's settings as the Settings page's rows are: for an account
+ * the user owns, the Share default configuration switch with the lock reason, the progress and the unfinished-change
+ * warning it carries, and last the Disable account switch, whose description follows the switch (off or on). The row
+ * menu's Settings entry opens it. It has no footer: the header's close button, Escape and a click outside close it. It
+ * reads the account from the store as it is now, so a change from another window shows, and closes if the account is
+ * removed. `focusSharing` puts focus on the sharing switch on opening, for a request that Settings show that switch.
  */
 export function AccountDetailsDialog({ agent, account, focusSharing = false, onLogin, onClose }: {
   agent: Agent;
@@ -99,29 +99,27 @@ export function AccountDetailsDialog({ agent, account, focusSharing = false, onL
   return (
     <Dialog
       size="lg"
-      title={<span dir="auto">{name}</span>}
-      headerTrailing={
-        <>
-          <QuotaPlan quota={quota} />
-          {known
-            ? <LoginStateBadge quota={quota} />
-            : <span className="text-sm font-normal text-app-muted">{t(quota === "loading" ? "settings.accounts.loginChecking" : "settings.accounts.loginUnknown")}</span>}
-          <QuotaFailureMark quota={quota} />
-          <AccountLoginButton agent={agent} account={account} name={name} quota={quota} onLogin={onLogin} fallback={() => body.current?.querySelector<HTMLElement>('input[role="switch"]')} />
-        </>
-      }
-      subtitle={
-        path ? (
-          <div className="flex items-center gap-1">
-            <div className="min-w-0"><MarkedPath path={path} /></div>
-            {!stored && <HelpTip label={t("settings.accounts.defaultHelp")}>{t("settings.accounts.defaultSetup")}</HelpTip>}
-          </div>
-        ) : undefined
-      }
+      title={t("settings.accounts.details.title")}
       onClose={onClose}
       footer={null}
     >
       <div ref={body} className="flex flex-col gap-4">
+        {/* The title is a plain name, so what the badges qualify is the account named here, ahead of them. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+          <span dir="auto" className="min-w-0 font-semibold text-foreground wrap-anywhere">{name}</span>
+          <QuotaPlan quota={quota} />
+          {known
+            ? <LoginStateBadge quota={quota} />
+            : <span className="text-app-muted">{t(quota === "loading" ? "settings.accounts.loginChecking" : "settings.accounts.loginUnknown")}</span>}
+          <QuotaFailureMark quota={quota} />
+          <AccountLoginButton agent={agent} account={account} name={name} quota={quota} onLogin={onLogin} fallback={() => body.current?.querySelector<HTMLElement>('input[role="switch"]')} />
+        </div>
+        {path && (
+          <div className="flex items-center gap-1">
+            <div className="min-w-0"><MarkedPath path={path} /></div>
+            {!stored && <HelpTip label={t("settings.accounts.defaultHelp")}>{t("settings.accounts.defaultSetup")}</HelpTip>}
+          </div>
+        )}
         {stored && unusable && (
           <div className="text-sm text-app-muted">
             <Message id="settings.accounts.notUsable" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference>, ...PATH_VAR_PARAMS }} />

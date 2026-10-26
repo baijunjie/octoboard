@@ -5,6 +5,7 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { MIXED_RESULT, REVIEW } from "../gallery/fixtures/configuration";
+import { press as pressElement } from "../components/detailsTestSupport";
 import { accessibleName } from "../dialogs/dialogTestSupport";
 import { isolate } from "../i18n/isolate";
 import { ConfigurationFileError } from "../platform";
@@ -55,7 +56,7 @@ function settingLines(): ReturnType<typeof settingLinesOf> {
 
 /** Picks `option` in the select of the project's row. */
 async function choose(project: string, option: string): Promise<void> {
-  await act(async () => row(project).querySelector("button")!.click());
+  await act(async () => row(project).querySelector<HTMLButtonElement>("button[aria-haspopup=listbox]")!.click());
   const item = Array.from(document.body.querySelectorAll<HTMLElement>("[role=option]")).find((o) => o.textContent === option);
   await act(async () => item!.click());
 }
@@ -92,9 +93,29 @@ it("groups the projects under a card for their console, with the console's name 
   expect(consoleCard("Side projects").querySelector(":scope > div")!.textContent).toContain("1 project");
   expect(consoleCard("Scratch").textContent).toContain("0 projects");
   expect(consoleCard("Scratch").textContent).toContain("This console has no projects.");
-  // The console's account fallback sits under its name, the project's in its own row.
-  expect(consoleCard("Work laptop").querySelector(":scope > div")!.textContent).toContain("Claude Code account Work is not set up in Octoboard");
-  expect(row("Search API").textContent).toContain("Codex account Personal is not set up in Octoboard");
+});
+
+/** Opens the warning mark inside `scope` the way a press from assistive technology does, gives the popover's
+ * text and closes it again. */
+async function fallbackSentences(scope: Element): Promise<string> {
+  const mark = scope.querySelector<HTMLElement>("button[data-status-mark]")!;
+  pressElement(mark);
+  const dialog = document.body.querySelector(`[role="dialog"][aria-label="${mark.getAttribute("aria-label")}"]`)!;
+  const sentences = dialog.textContent ?? "";
+  await act(async () => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  return sentences;
+}
+
+it("marks a console and a project whose account is not set up with a warning mark after the name, the sentence in its popover", async () => {
+  await reviewing();
+  const heading = consoleCard("Work laptop").querySelector("h3")!;
+  // No loose sentence beside the name; the mark follows the heading directly.
+  expect(consoleCard("Work laptop").querySelector(":scope > div")!.textContent).not.toContain("is not set up");
+  expect(heading.nextElementSibling?.getAttribute("aria-label")).toBe(`Accounts not set up for ${isolate("Work laptop")}`);
+  expect(await fallbackSentences(heading.parentElement!)).toContain("Claude Code account Work is not set up in Octoboard, so the default account is used.");
+  expect(row("Search API").textContent).not.toContain("is not set up");
+  expect(await fallbackSentences(row("Search API"))).toContain("Codex account Personal is not set up in Octoboard");
+  expect(consoleCard("Side projects").querySelector("button[data-status-mark]")).toBeNull();
 });
 
 it("shows a row for every project with where it was found and the labelled paths its choice would use", async () => {
@@ -111,9 +132,30 @@ it("shows a row for every project with where it was found and the labelled paths
   expect(row("Website").textContent).toContain("Found at its exported path");
   expect(row("Search API").textContent).toContain("Found in the default clone directory");
   expect(row("Design System").textContent).toContain("Not found; can be cloned from its remote");
-  expect(row("Notes").textContent).toContain("Not found on the machine running Octoboard");
+  // A project found nowhere has no status line: a warning mark after its name says so. Notes also names an
+  // account that is not set up: the same point, so one mark, which says both.
+  expect(row("Notes").textContent).not.toContain("Not found on the machine");
+  expect(row("Notes").querySelectorAll("button[data-status-mark]")).toHaveLength(1);
+  const label = `${isolate("Notes")} not found, and accounts not set up`;
+  const mark = row("Notes").querySelector<HTMLButtonElement>(`button[aria-label='${label}']`)!;
+  expect(mark).not.toBeNull();
+  act(() => mark.click());
+  const popover = document.querySelector(`[role=dialog][aria-label='${label}']`)?.textContent;
+  expect(popover).toContain("Not found on the machine running Octoboard.");
+  expect(popover).toContain("It is skipped unless you choose a directory for it.");
+  expect(popover).toContain("Codex account Personal is not set up in Octoboard");
   // Leaving a project out places it nowhere: only the exported path is left to show.
   expect(fields("Notes")).toEqual({ "Exported path": "/Users/ana/Documents/Work/Clients/Northwind/Archive/2019/Quarterly-Reports/final-notes" });
+});
+
+it("names only the missing project in its mark when no account of it is missing", async () => {
+  const plain = (body: RequestBody): Promise<Event> =>
+    body.type === "inspect_configuration"
+      ? Promise.resolve({ type: "configuration_inspected", ...REVIEW, consoles: REVIEW.consoles.map((c) => ({ ...c, projects: c.projects.map((p) => ({ ...p, account_fallbacks: [] })) })) })
+      : reply(body);
+  await reviewing({ reply: plain });
+  expect(row("Notes").querySelectorAll("button[data-status-mark]")).toHaveLength(1);
+  expect(row("Notes").querySelector(`button[aria-label='${isolate("Notes")} not found']`)).not.toBeNull();
 });
 
 it("shows no exported path for a project the export recorded by its directory name alone, and still says where it was found", async () => {
@@ -408,7 +450,7 @@ it("stops before any request when a project is to go to a directory that is miss
   });
 });
 
-it("tells each project's result in a table row, with a mark and a popover for a failure, and the accounts that fell back apart", async () => {
+it("tells each project's result in a table row, with a mark and a popover for a failure, and the accounts that fell back as marks after the names", async () => {
   await reviewing();
   await press("Import");
   // A console heads its own group of rows; a project's row, or the console's own line when it failed or came out empty, is found by its name.
@@ -429,9 +471,7 @@ it("tells each project's result in a table row, with a mark and a popover for a 
     const mark = rowOf(project).querySelector<HTMLElement>("button[aria-label$=' failed']")!;
     expect(mark).not.toBeNull();
     expect(mark.textContent).toBe("Failed");
-    await act(async () => {
-      for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) mark.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
-    });
+    pressElement(mark);
     const dialog = document.body.querySelector(`[role="dialog"][aria-label="${mark.getAttribute("aria-label")}"]`)!;
     expect(dialog).not.toBeNull();
     return dialog;
@@ -469,9 +509,10 @@ it("tells each project's result in a table row, with a mark and a popover for a 
   expect(line("Dotfiles")).toContain("Its console could not be created.");
   // So does one that came out empty.
   expect(line("Scratch")).toContain("Created");
-  const section = (title: string) => Array.from(document.body.querySelectorAll("section")).find((s) => s.querySelector(":scope > h3")?.textContent === title)?.textContent ?? "";
-  expect(section("Accounts that fell back to the default account")).toContain("Claude Code account Work, named by the console Work laptop");
-  expect(section("Accounts that fell back to the default account")).toContain("Codex account Personal, named by the project Search API in Work laptop");
+  // The accounts that fell back are marks after the names of the console and of the project, not a section.
+  expect(document.body.textContent).not.toContain("Accounts that fell back");
+  expect(await fallbackSentences(groups[0].querySelector("th")!)).toContain("Claude Code account Work is not set up in Octoboard");
+  expect(await fallbackSentences(rowOf("Search API"))).toContain("Codex account Personal is not set up in Octoboard");
   expect(resultSettingLines()["Automatically pull repositories"]).toEqual({ badge: "On" });
 });
 
@@ -550,6 +591,21 @@ it.each([
   if (raw) expect(explanation.textContent).not.toContain(raw);
   expect(mounted.sent()).toEqual([]);
 });
+
+it.each([
+  { error: new ConfigurationFileError("io", "Permission denied (os error 13)"), remedy: "Make sure the file still exists and that Octoboard may read it" },
+  { error: new ConfigurationFileError("too_large"), remedy: "Choose a configuration file exported by a compatible Octoboard version" },
+])("gives a file that could not be read a reading remedy, never one about writing: $remedy", async ({ error, remedy }) => {
+  mountDialog((onClose) => <ImportConfigurationDialog onClose={onClose} />, reply, {
+    save: vi.fn(),
+    open: vi.fn(async () => Promise.reject(error)),
+  });
+  await press("Choose file");
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  expect(alert.textContent).toContain(remedy);
+  expect(alert.textContent).not.toMatch(/writable|disk space/);
+});
+
 
 it("cannot be dismissed while the import is running", async () => {
   const mounted = await reviewing({ reply: (body) => (body.type === "import_configuration" ? new Promise<Event>(() => {}) : reply(body)) });

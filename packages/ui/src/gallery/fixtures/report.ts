@@ -132,11 +132,24 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Reports that could not be listed again, earlier ones kept",
-    description: "The page already in hand stays readable below one warning Alert, not danger-coloured, between the panel header and the page's bar. It holds the application's generic sentence, with Details (the daemon's raw message) on the right and Try again at the trailing edge in the warning colour.",
+    description: "The page already in hand stays readable with no Alert above it. A small warning mark sits in the panel header right after the title Report, ahead of the pager, named \"Could not load the pages of this session\".",
     state: failedLists,
     pageListErrors: { [stale.id]: listFailure },
     steps: [
       (ui) => ui.press(ui.session("Stale pages")),
+    ],
+  },
+  {
+    id: "report-list-failed-with-pages-details",
+    group: GROUP,
+    category: "exceptional",
+    title: "Reports that could not be listed again, mark opened",
+    description: "The warning mark after Report is hovered, and its popover leads with \"Could not load the pages of this session.\", then the application's generic sentence about the failure, the daemon's raw message under it, and Try again, over the page that stays readable.",
+    state: failedLists,
+    pageListErrors: { [stale.id]: listFailure },
+    steps: [
+      (ui) => ui.press(ui.session("Stale pages")),
+      (ui) => ui.hoverStatusMark(ui.t("report.listFailed")),
     ],
   },
 ];

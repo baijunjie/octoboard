@@ -49,7 +49,7 @@ export function ChangeList({
   onOpen,
   listRef,
   changeView,
-  failures,
+  headingMarks,
 }: {
   items: ChangeItem[];
   /** The key of the change the viewer showed last. */
@@ -59,7 +59,7 @@ export function ChangeList({
   listRef: React.Ref<HTMLDivElement>;
   changeView: ChangeViewState;
   /** `ChangeTree`'s. */
-  failures?: ReadonlyMap<ChangeSection, React.ReactNode>;
+  headingMarks?: ReadonlyMap<ChangeSection, React.ReactNode>;
 }): React.ReactElement {
   const t = useT();
   const shown = useMemo(() => filterChanges(items, changeView.filter), [items, changeView.filter]);
@@ -80,7 +80,7 @@ export function ChangeList({
           layout={changeView.layout}
           collapsed={changeView.collapsed}
           onCollapsedChange={changeView.onCollapsedChange}
-          failures={failures}
+          headingMarks={headingMarks}
         />
       )}
     </>

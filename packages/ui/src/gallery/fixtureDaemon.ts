@@ -829,7 +829,9 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
             .filter((path) => body.include_ignored === true || !isIgnored(files, path))
             .sort();
           const ignored = body.include_ignored === true ? paths.filter((path) => isIgnored(files, path)) : [];
-          return { type: "project_file_matches", project: body.project, query: body.query, paths, ...(ignored.length > 0 && { ignored }), complete: true };
+          // A search that stopped at its limits or met a folder it could not read is not whole, as a listing cut short or failed is not.
+          const complete = !Object.values(files).some((file) => "dir" in file && (file.complete === false || file.error !== undefined));
+          return { type: "project_file_matches", project: body.project, query: body.query, paths, ...(ignored.length > 0 && { ignored }), complete };
         }
         case "read_project_file": {
           const files = body.worktree === undefined ? projectFiles(body.project) : scenario.worktreeFiles?.[body.worktree] ?? {};

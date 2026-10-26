@@ -37,17 +37,28 @@ it("preselects the agent detected for a typed directory, and only the latest ans
   expect(agentValue()).toBe("grok");
 });
 
-it("sets the refused directory as danger-toned code under the field", async () => {
+it.each(["path_not_found", "path_not_a_directory"])("shows %s as the Directory field's own error, with the path as danger-toned code", async (code) => {
   const pending = render();
   type(input("Directory"), "~/code/missing");
   await settle(500);
-  await act(async () => pending[0].reject(new DaemonRequestError("plain", "path_not_found", { path: "/Users/dev/code/missing" })));
-  const code = document.body.querySelector('[role="alert"] code');
-  expect(code?.textContent).toBe("/Users/dev/code/missing");
-  expect(code?.getAttribute("data-color")).toBe("danger");
-  // The Alert describes the field it is under.
+  await act(async () => pending[0].reject(new DaemonRequestError("plain", code, { path: "/Users/dev/code/missing" })));
+  const error = document.body.querySelector('[data-slot="field-error"] [role="alert"]');
+  expect(error?.querySelector("code")?.textContent).toBe("/Users/dev/code/missing");
+  expect(error?.querySelector("code")?.getAttribute("data-color")).toBe("danger");
+  expect(input("Directory").getAttribute("aria-invalid")).toBe("true");
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(input("Name").disabled).toBe(true);
+});
+
+it("keeps an Alert under the Directory field when the check could not run", async () => {
+  const pending = render();
+  type(input("Directory"), "~/code/a");
+  await settle(500);
+  await act(async () => pending[0].reject(new DaemonRequestError("plain", "directory_unreachable", { path: "/Users/dev/code/a" })));
   const alert = document.body.querySelector('[data-slot="alert-root"]')!.parentElement!;
   expect(input("Directory").getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
+  expect(document.body.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent ?? "").toBe("");
+  expect(input("Name").disabled).toBe(true);
 });
 
 it("keeps the form locked while the answer for the path as it stands is out", async () => {

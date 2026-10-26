@@ -1,19 +1,17 @@
-import { CircleAlert, CircleCheck, CircleMinus, CircleSlash, Info, type LucideIcon } from "lucide-react";
+import { CircleCheck, CircleMinus, CircleSlash, type LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
-import { AGENT_LABEL } from "../agents";
 import { CodedFailureBody } from "../components/errorParts";
-import { InlineReference } from "../components/InlineReference";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusMark } from "../components/StatusMark";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { Message, useT } from "../i18n/react";
-import type { Event, ImportChoiceKind, ImportedProject, ImportFailure } from "../protocol";
+import type { AccountFallback, Event, ImportChoiceKind, ImportedProject, ImportFailure } from "../protocol";
 import { isolate } from "../i18n/isolate";
 import { useFailureNode, useFailureText } from "./failureText";
 import { outcomeOf } from "./importPlan";
-import { BOOLEAN_SETTINGS, CARD_CLASS, SettingLine } from "./importParts";
+import { BOOLEAN_SETTINGS, CARD_CLASS, FallbackMark, SettingLine } from "./importParts";
 
 export type Imported = Extract<Event, { type: "configuration_imported" }>;
 
@@ -50,8 +48,9 @@ interface Line {
  * it that its projects do not already say: it failed, or it was created with nothing in it. */
 interface Group {
   console: string;
+  fallbacks: AccountFallback[];
   own: Line | undefined;
-  projects: (Line & { project: string })[];
+  projects: (Line & { project: string; fallbacks: AccountFallback[] })[];
 }
 
 /** One cell. The cell that is dropped when stacked (`empty`) is only ever the last column's, so no
@@ -95,9 +94,10 @@ function Cell({
  * What an import came to, as the daemon reported it: a summary of the counts, an alert when the
  * application settings could not be applied, a table with the projects grouped under their console's
  * name (a console that failed or came out empty has its own result on its header row; a project says
- * what came of it: created and how it was placed, left out, failed and why, not tried), every account
- * reference that fell back to a default account under a heading of its own, and, at the end, a card
- * of the application settings that were applied. The summary gives the totals and the table the
+ * what came of it: created and how it was placed, left out, failed and why, not tried), a warning mark
+ * after the name of every console or project whose account references fell back to a default account
+ * (every console and project has its name in the table, so each fallback has its place), and, at the end,
+ * a card of the application settings that were applied. The summary gives the totals and the table the
  * items, so neither repeats the other. `shortcuts` says what came of the document's keyboard
  * shortcuts, when they were applied here.
  */
@@ -105,7 +105,6 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
   const t = useT();
   const failureNode = useFailureNode();
   const failureText = useFailureText();
-  const fallbacksId = useId();
   const outcome = outcomeOf(result.consoles);
   const applied = result.settings_applied;
   const settingsHeadingId = useId();
@@ -114,6 +113,7 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
   // Every project in the order of the document, under its console.
   const groups: Group[] = result.consoles.map((console) => ({
     console: console.name,
+    fallbacks: console.account_fallbacks,
     own:
       console.status === "failed"
         ? { status: "failed", detail: console.error ? failureBody(console.error) : "" }
@@ -122,6 +122,7 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
           : undefined,
     projects: console.projects.map((project) => ({
       project: project.name,
+      fallbacks: project.account_fallbacks,
       status: project.status,
       detail:
         project.status === "created"
@@ -224,7 +225,10 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
                     className="block py-0.5 text-start font-semibold text-foreground [overflow-wrap:anywhere] @xl:table-cell @xl:px-2 @xl:pt-4 @xl:pb-2 @xl:align-top"
                     dir="auto"
                   >
-                    {group.console}
+                    <span className="inline-flex max-w-full items-center gap-1">
+                      <span className="min-w-0">{group.console}</span>
+                      <FallbackMark subject={group.console} fallbacks={group.fallbacks} />
+                    </span>
                   </th>
                   {group.own && (
                     <>
@@ -237,7 +241,12 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
                 </tr>
                 {group.projects.map((line, p) => (
                   <tr key={p} role="row" className="group/row block groove-b py-2 ps-4 last:border-b-0 @xl:table-row @xl:py-0 @xl:ps-0">
-                    <Cell label={t(COLUMNS[0].key)} indent>{line.project}</Cell>
+                    <Cell label={t(COLUMNS[0].key)} indent>
+                      <span className="inline-flex max-w-full items-center gap-1">
+                        <span className="min-w-0">{line.project}</span>
+                        <FallbackMark subject={line.project} fallbacks={line.fallbacks} />
+                      </span>
+                    </Cell>
                     <Cell label={t(COLUMNS[1].key)}>{outcomeCell(line, line.project)}</Cell>
                     <Cell label={t(COLUMNS[2].key)} empty={line.status === "failed" || line.detail === ""}>
                       {line.status !== "failed" && line.detail}
@@ -248,39 +257,6 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
             ))}
           </table>
         </div>
-      )}
-      {outcome.fallbacks.length > 0 && (
-        <section aria-labelledby={fallbacksId} className="flex flex-col gap-2">
-          <h3 id={fallbacksId} className="flex items-center gap-2 text-base font-semibold text-foreground">
-            <CircleAlert aria-hidden="true" className="size-4 shrink-0 text-warning-soft-foreground" />
-            {t("configuration.import.result.fallbacks")}
-          </h3>
-          <p className="flex items-start gap-2 text-sm">
-            <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-soft-foreground" />
-            <span className="min-w-0"><Message id="configuration.import.result.fallbacks.intro" /></span>
-          </p>
-          <ul className="flex flex-col gap-1">
-            {outcome.fallbacks.map((fallback, index) => {
-              const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineReference>;
-              return (
-                <li key={index} className="[overflow-wrap:anywhere]" dir="auto">
-                  {fallback.project === undefined
-                    ? <Message id="configuration.import.result.fallback.console" params={{
-                      agent,
-                      name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference>,
-                      console: <InlineReference dir="auto" wrap>{fallback.console}</InlineReference>,
-                    }} />
-                    : <Message id="configuration.import.result.fallback.project" params={{
-                      agent,
-                      name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference>,
-                      project: <InlineReference dir="auto" wrap>{fallback.project}</InlineReference>,
-                      console: <InlineReference dir="auto" wrap>{fallback.console}</InlineReference>,
-                    }} />}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
       )}
       {applied && (
         <section aria-labelledby={settingsHeadingId} className={CARD_CLASS}>

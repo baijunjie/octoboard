@@ -2,6 +2,7 @@
 import { act } from "react";
 import { expect, it } from "vitest";
 
+import { press } from "../components/detailsTestSupport";
 import { projectOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Agent, ModelsUnavailable, ProjectAccount } from "../protocol";
@@ -403,15 +404,23 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   await click(buttonText("Advanced"));
   expect(document.body.textContent).toContain("Loading the models this agent offers");
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
-  const description = pickerNamed("Model").getAttribute("aria-describedby")?.split(" ").map((id) => document.getElementById(id)).find((node) => node?.textContent?.includes("claude took too long to list its models."));
-  expect(description).toBeDefined();
-  const agent = description!.querySelector("[data-inline-reference]")!;
+  // The reason is a mark inside the Model field, not text under it, and nothing describes the field by it.
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  const mark = pickerNamed("Model").closest("[data-slot=select]")!.querySelector<HTMLElement>("button[data-status-mark]")!;
+  expect(mark.getAttribute("aria-label")).toBe("Could not load the models");
+  expect(pickerNamed("Model").getAttribute("aria-describedby")).toBeNull();
+  await settle(200);
+  const status = document.body.querySelector('[role="status"]')?.textContent;
+  press(mark);
+  const sentence = document.querySelector("[data-status-mark-popover] p")!;
+  expect(sentence.textContent).toBe("claude took too long to list its models.");
+  const agent = sentence.querySelector("[data-inline-reference]")!;
   expect(agent.textContent).toBe("claude");
   expect(agent.getAttribute("dir")).toBe("auto");
   expect(agent.querySelector("code")).toBeNull();
   expect(agent.textContent).not.toMatch(/[\u2066-\u2069]/);
-  await settle(200);
-  expect(document.body.querySelector('[role="status"]')?.textContent).toBe(`${isolate("claude")} took too long to list its models.`);
+  expect(status).toBe(`${isolate("claude")} took too long to list its models.`);
+  act(() => void document.querySelector("[data-status-mark-popover]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["retired, Not in the list"]);
 });

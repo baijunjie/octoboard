@@ -23,7 +23,7 @@ function fakeDaemon(): Daemon {
 }
 
 /** Renders a confirmation and takes it down when the test finishes. */
-function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean }): void {
+function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean; subject?: React.ReactNode }): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -96,4 +96,17 @@ it("titles the alert of a rejected confirmation with the failure title it was gi
   await act(async () => document.querySelector<HTMLButtonElement>("button[type=submit]")!.click());
   expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not archive the session"]);
   onTestFinished(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+});
+
+it("keeps the space between the subject and the message in the message's own text node, and none without a subject", () => {
+  mount({ subject: <>The thing <b>X</b> goes.</> });
+  const sentence = document.body.querySelector("[role=alertdialog] p")!;
+  const whitespaceOnly = Array.from(sentence.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE && node.textContent!.trim() === "");
+  expect(whitespaceOnly).toEqual([]);
+  expect(sentence.textContent).toBe("The thing X goes. Archive it?");
+});
+
+it("starts the message without a space when there is no subject", () => {
+  mount({});
+  expect(document.body.querySelector("[role=alertdialog] p")!.textContent).toBe("Archive it?");
 });

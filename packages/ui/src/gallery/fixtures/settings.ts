@@ -360,18 +360,19 @@ function sharingHelpState(agent: Agent): Scenario["state"] {
   };
 }
 
-/** What turning sharing off for Work left unfinished: a directory entry, and a conversation two
- * sessions of this scenario record, so the alert can show their titles. */
+/** What turning sharing off for Work left unfinished: a directory entry, a conversation two sessions of this
+ * scenario record (so the popover can show their titles), a busy entry, and one the system gave no known cause for. */
 const SHARING_FAILURE_ITEMS: NonNullable<AccountSharing["failure"]>["items"] = [
   { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" },
   { item: "abc", left: "unchanged", cause: "permission_denied", detail: "permission denied", sessions: ["s-web-1", "s-web-2"] },
   { item: "plugins/", left: "unchanged", cause: "busy", detail: "resource busy" },
+  { item: "settings.json", left: "backed_up", cause: "other", detail: "input/output error" },
 ];
 
-const SHARING_FAILURE_DETAIL = "`skills/` left unchanged (permission denied); the conversation `abc` of session s-web-1, s-web-2 left in the default directory (permission denied); `plugins/` left unchanged (resource busy)";
+const SHARING_FAILURE_DETAIL = "`skills/` left unchanged (permission denied); the conversation `abc` of session s-web-1, s-web-2 left in the default directory (permission denied); `plugins/` left unchanged (resource busy); `settings.json` backed up, with nothing linked in its place (input/output error)";
 
 /** Turning sharing off for Work failed: the choice is recorded as off and incomplete, and the daemon still holds the
- * failure. */
+ * failure; the account has 2 idle sessions, which the popover says a change ends. */
 const sharingFailedState: Scenario["state"] = {
   ...browserState,
   settings: {
@@ -381,12 +382,12 @@ const sharingFailedState: Scenario["state"] = {
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work", share_default_config: false, share_default_config_incomplete: true },
     ],
   },
-  accountSharing: accountSharingOf([{ account: "a-work", failure: { share: false, items: SHARING_FAILURE_ITEMS, detail: SHARING_FAILURE_DETAIL } }]),
+  accountSharing: accountSharingOf([{ account: "a-work", idle_sessions: 2, failure: { share: false, items: SHARING_FAILURE_ITEMS, detail: SHARING_FAILURE_DETAIL } }]),
 };
 
-/** Turning sharing on for Work failed because the default account's directory has moved since sharing was turned on:
- * no entry is named, and the raw reason is all Details holds. The failure was not rolled back, so the recorded
- * choice, on, is where the switch sits. */
+/** Turning sharing on for Work failed because the default account's directory has moved since sharing was
+ * turned on: no entry is named, and the raw reason is all the popover holds below the advice. The failure was
+ * not rolled back, so the recorded choice, on, is where the switch sits. */
 const sharingDefaultMovedState: Scenario["state"] = {
   ...sharingAccounts({ share: true, incomplete: true }, { share: false }),
   accountSharing: accountSharingOf([{
@@ -419,6 +420,21 @@ const SHARING_REMOVAL_ERROR = {
     detail: "`skills/` left unchanged (permission denied); `settings.json` backed up, with nothing linked in its place (permission denied)",
   },
   message: "ending the sharing of the default configuration with account `Client` did not complete: `skills/` left unchanged (permission denied); `settings.json` backed up, with nothing linked in its place (permission denied)",
+};
+
+/** Work turns sharing on and the change does not finish. */
+const SHARING_TURN_ON_ERROR = {
+  code: "account_sharing_failed",
+  params: {
+    account: "a-work",
+    name: "Work",
+    cause: "permission_denied",
+    items: JSON.stringify([
+      { item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" },
+    ]),
+    detail: "`skills/` left unchanged (permission denied)",
+  },
+  message: "sharing the default configuration with account `Work` did not complete: `skills/` left unchanged (permission denied)",
 };
 
 export const settingsScenarios: Scenario[] = [
@@ -636,7 +652,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account details, an account the user owns",
-    description: "Work's settings dialog, opened from its ⋮ menu, in a modal with no footer button. The heading is the name alone; the Pro plan badge and the \"Logged in\" badge sit beside it, and the config directory is the line under it. The Usage section has \"Updated 7 minutes ago\" at the end of its heading and the rail's meters: Session, as the two-layer bar with Weekly · all models under it, each line saying what remains and when it resets, then Fable weekly with its own bar. Below, two rows with a description under each label and the control at the end: Share default configuration, with its help button and its switch, off, whose description says turning it on links the account's configuration and history to the default account's directory, and Disable account, with its switch, off, whose description says that once on, the account is left out of the account choices.",
+    description: "Work's settings dialog, opened from its ⋮ menu, in a modal titled Account settings, with no footer button. The body starts with the bold name Work, followed on the same line by the Pro plan badge and the \"Logged in\" badge, and the config directory is the line under it. The Usage section has \"Updated 7 minutes ago\" at the end of its heading and the rail's meters: Session, as the two-layer bar with Weekly · all models under it, each line saying what remains and when it resets, then Fable weekly with its own bar. Below, two rows with a description under each label and the control at the end: Share default configuration, with its help button and its switch, off, whose description says turning it on links the account's configuration and history to the default account's directory, and Disable account, with its switch, off, whose description says that once on, the account is left out of the account choices.",
     state: detailsWorkState,
     steps: accountDetails("Work"),
   },
@@ -645,7 +661,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account details, the default account",
-    description: "The default account's settings dialog: the heading is Default, with the Max badge and \"Logged in\" beside it, and the config directory is the line under it, ending right after the path with the small \"?\" that explains the default account. Usage shows all three windows. The only row is Disable account: the default account has no Share default configuration row, and the permission approval is set on the tab, not here.",
+    description: "The default account's settings dialog, titled Account settings: the body starts with the bold name Default, followed by the Max badge and \"Logged in\", and the config directory is the line under it, ending right after the path with the small \"?\" that explains the default account. Usage shows all three windows. The only row is Disable account: the default account has no Share default configuration row, and the permission approval is set on the tab, not here.",
     state: quotaState,
     steps: accountDetails(defaultAccount),
   },
@@ -654,7 +670,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account details, an account not logged in",
-    description: "Work's settings dialog, which has never been logged in: beside the name the soft warning \"Not logged in\" badge and the Log in icon button, and the Usage section has no meters but says \"Not logged in yet.\" with \"Log in to use this account.\" under it. The Share default configuration and Disable account rows are as usual.",
+    description: "Work's settings dialog, which has never been logged in: after the name, in the body's first line, the soft warning \"Not logged in\" badge and the Log in icon button, and the Usage section has no meters but says \"Not logged in yet.\" with \"Log in to use this account.\" under it. The Share default configuration and Disable account rows are as usual.",
     state: notSignedInState,
     steps: accountDetails("Work"),
   },
@@ -663,7 +679,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Account details, the agent is not installed",
-    description: "Personal's settings dialog on the Codex tab, whose agent is not installed: beside the name the login state reads \"Unknown\", and under the line with the config directory a line says it is not usable until Codex is on PATH, both as chips. The Usage section is a dash, the account having no reading.",
+    description: "Personal's settings dialog on the Codex tab, whose agent is not installed: after the name, in the body's first line, the login state reads \"Unknown\", and under the line with the config directory a line says it is not usable until Codex is on PATH, both as chips. The Usage section is a dash, the account having no reading.",
     state: unavailableQuotaState,
     steps: [...openAccounts, (ui) => ui.press(ui.t("agents.notInstalled", { agent: AGENT_LABEL.codex })), openDetails("Personal", "codex")],
   },
@@ -963,6 +979,20 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-account-edit",
+    group: GROUP,
+    category: "normal",
+    title: "Edit an account",
+    description: "Edit on Work opens the form under the plain title Edit account. Its first sentence says to edit the name and config directory of the account, with the agent and the account's name as chips, and the Name and Config directory fields below hold Work's values.",
+    state: quotaState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: AGENT_LABEL.claude })),
+      (ui) => ui.press(ui.t("common.edit")),
+    ],
+  },
+  {
     id: "settings-account-rename-default",
     group: GROUP,
     category: "normal",
@@ -1119,7 +1149,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Approve everything confirmation",
-    description: "Choosing Approve everything in the Permission approval row opens a destructive confirmation instead of saving: its title asks whether to approve everything in every Claude Code account, with the agent's name as a chip, the message says every tool will run without asking in every account's sessions, and the danger-coloured button repeats the choice. Cancelling leaves the row on Automatic.",
+    description: "Choosing Approve everything in the Permission approval row opens a warning modal instead of saving: a warning icon and the plain title Approve everything, a body that says every tool will run without asking you in every Claude Code account's sessions (the agent's name as a chip), including commands that change or delete files, and the danger-coloured button repeating the choice. Cancelling leaves the row on Automatic.",
     state: quotaState,
     steps: bypassSteps,
   },
@@ -1219,7 +1249,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Sharing change could not be finished",
-    description: "In Work's settings dialog, turning sharing off did not finish, so the switch sits at its position before the change, on, and the row shows no state description. Under the row one warning alert (not danger-coloured) holds everything about the failure; nothing of it sits outside the warning box. The visible copy is at most two sentences: the title, \"Could not finish turning sharing off\", then \"Some files or folders could not be changed.\", and the one main thing to do, to turn the switch off again to try once more. At the end of the box is a Details button for the rest; there is no Try again button and no separate error alert.",
+    description: "In Work's settings dialog, turning sharing off did not finish, so the switch sits at its position before the change, on, and the row shows no state description. A warning triangle named \"Last sharing change\" sits right of the switch in the same row, with nothing written beside it, and nothing about the failure is under the row (no alert, no Details button, no Try again). The row keeps its label and switch on their lines at the dialog's width, the triangle not wrapping under the switch. Its popover is in the next scenario.",
     state: sharingFailedState,
     steps: accountDetails("Work"),
   },
@@ -1227,37 +1257,37 @@ export const settingsScenarios: Scenario[] = [
     id: "settings-accounts-sharing-failed-details",
     group: GROUP,
     category: "exceptional",
-    title: "Sharing change could not be finished, details open",
-    description: "The same failure as above with the Details popover open, holding first the further explanation, the reasons grouped by cause (no permission to change skills/ and 1 more, followed by \"Check that the files and folders involved can be changed and are not locked.\", and plugins/ in use, followed by \"Close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool.\", each one compact line with its fix run on after it), then the raw side: each unfinished entry is one tight row, its chip and what it was left as in words (skills/ and plugins/ left unchanged; the conversation abc, with the titles of the sessions that recorded it, Fix the summary layout and Update the dependencies, joined as a list, left in the default directory) followed by the system's original reason (permission denied, resource busy) as small inline code on the same row, not a separate diagnostic block.",
+    title: "Sharing change could not be finished, several causes, popover open",
+    description: "The triangle right of the switch is pressed, so its popover is open with focus inside it. In order: the title, \"Could not finish turning sharing off\"; \"Some files or folders could not be changed.\"; the way to try again, turning the switch off again; one compact line per cause (no permission to change skills/ and 1 more, plugins/ in use, and \"Could not change settings.json.\", whose fix reads that the system's own reason is below), each followed by its fix; the note that changing sharing ends the account’s 2 idle sessions and resumes them afterwards; then the raw side: each unfinished entry one tight row, its chip and what it was left as in words (the conversation abc with the titles of the sessions that recorded it, Fix the summary layout and Update the dependencies, joined as a list), followed by the system's original reason as small inline code on the same row.",
     state: sharingFailedState,
-    steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("error.details"))],
+    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
-    id: "settings-accounts-sharing-default-moved",
+    id: "settings-accounts-sharing-default-moved-details",
     group: GROUP,
     category: "exceptional",
-    title: "Sharing change failed, the default directory has moved",
-    description: "In Work's settings dialog the switch sits at its recorded position, on, and the row shows no state description. Under the row one warning alert holds the title \"Could not finish turning sharing on\", the single reason that the default account's directory has moved since sharing was turned on (no entry is named) and the advice to turn the switch off, then on again, and a Details button. Opened, it holds only the raw reason, alone in a block on its own tinted surface, not as inline code.",
+    title: "Sharing change failed, the default directory has moved, popover open",
+    description: "The triangle right of Work's switch (on, its recorded position) is pressed. The popover holds the title \"Could not finish turning sharing on\", the single reason that the default account's directory has moved since sharing was turned on (no entry is named), and the advice to turn the switch off, then on again; below them only the raw reason, alone in a block on its own tinted surface, not as inline code.",
     state: sharingDefaultMovedState,
-    steps: accountDetails("Work"),
+    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
-    id: "settings-accounts-sharing-no-space",
+    id: "settings-accounts-sharing-no-space-details",
     group: GROUP,
     category: "exceptional",
-    title: "Sharing change failed, not enough disk space",
-    description: "In Work's settings dialog, turning sharing on did not finish, so the switch sits at its position before the change, off, and the row shows no state description. Under the row the warning alert holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as its two visible sentences (no entry is named), and a Details button. Opened, it holds the advice to turn the switch on again to try once more, then the raw reason alone in a block on its own tinted surface.",
+    title: "Sharing change failed, not enough disk space, popover open",
+    description: "Turning sharing on did not finish, so Work's switch sits at its position before the change, off, and the triangle right of it is pressed. The popover holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as the two sentences after it (no entry is named), then the advice to turn the switch on again to try once more, then the raw reason alone in a block on its own tinted surface.",
     state: sharingNoSpaceState,
-    steps: accountDetails("Work"),
+    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
-    id: "settings-accounts-sharing-incomplete",
+    id: "settings-accounts-sharing-incomplete-details",
     group: GROUP,
     category: "exceptional",
-    title: "Sharing change left unfinished by a restart",
-    description: "In Work's settings dialog the choice is recorded as on, but the daemon was restarted in the middle of the change, so the switch sits at its position before the change, off, and the row shows no state description. Under the row a warning alert holds the title, \"The last attempt to turn sharing on did not finish\", with the advice to turn the switch on again on a line below it, inside the box. There is no Try again button and no Details button, since no entries are known after a restart.",
+    title: "Sharing change left unfinished by a restart, popover open",
+    description: "The choice is recorded as on, but the daemon was restarted in the middle of the change, so Work's switch sits at its position before the change, off, with the triangle right of it pressed. The popover is short: the title, \"The last attempt to turn sharing on did not finish\", and the advice to turn the switch on again. There is no reason, no cause line and no raw block, since no entries are known after a restart.",
     state: sharingIncompleteState,
-    steps: accountDetails("Work"),
+    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
     id: "settings-accounts-sharing-refused",
@@ -1271,6 +1301,16 @@ export const settingsScenarios: Scenario[] = [
       params: { account: "a-work", name: "Work", sessions: "1", signing_in: "false" },
       message: "account `Work` is in use: 1 of its sessions is working",
     },
+    steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
+  },
+  {
+    id: "settings-accounts-sharing-unfinished-asked",
+    group: GROUP,
+    category: "exceptional",
+    title: "Sharing change the user asked for could not be finished",
+    description: "In Work's settings dialog the switch was pressed to turn sharing on and the change did not finish. The window that asked is told in an error alert dialog over the settings dialog, which says what could not be finished for Work and why, with the raw entries behind its Error details; the switch sits at its position before the change, off, and the warning triangle \"Last sharing change\" right of it stays as the lasting state once the alert is acknowledged. The same failure seen only through another window shows the triangle alone (the scenarios before this one).",
+    state: sharingState,
+    accountSharingError: SHARING_TURN_ON_ERROR,
     steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
   },
   {
@@ -1357,7 +1397,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Remove account confirmation",
-    description: "The account name appears as a chip in the confirmation title.",
+    description: "A warning modal titled Remove account: the account name is a chip in the first sentence of the body.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1454,7 +1494,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Remove a trusted folder confirmation",
-    description: "Remove on the first folder asks first: the title is \"Remove trusted folder\" followed by the home-abbreviated path (~/code) as a chip, the message says trust confirmations under it are asked about again unless the project's own permission or another trusted folder covers them and then what is kept, and the confirming button is destructive.",
+    description: "Remove on the first folder asks first: the title is the plain \"Remove trusted folder\", the body's first sentence names the home-abbreviated path (~/code) as a chip, and the message says trust confirmations under it are asked about again unless the project's own permission or another trusted folder covers them and then what is kept, and the confirming button is destructive.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

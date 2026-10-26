@@ -95,7 +95,7 @@ export class DaemonClient {
     // here instead — only when it was open, since requests queued against a socket that never
     // opened are flushed by the new one.
     if (this.socket?.readyState === WebSocket.OPEN) {
-      this.failPending(t("connection.error.connectionClosed"));
+      this.failPending(t("connection.error.connectionReplaced"));
     }
     this.socket?.close();
     const socket = new WebSocket(this.url);

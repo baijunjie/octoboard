@@ -243,6 +243,14 @@ export const gitScenarios: Scenario[] = [
     steps: openSwitch,
   },
   {
+    id: "git-switch-branch-cut-short", group: "Projects", category: "exceptional",
+    title: "Local branches, the list cut off",
+    description: "The branch menu lists the four branches the daemon returned, then a last item that is a muted note with no glyph, its text lined up with the branch labels: \"There are more branches than this list can show. The others are not listed.\" It cannot be pressed, though the arrow keys stop on it.",
+    ...switchFixture,
+    git: { ...switchGit, branchesCut: true },
+    steps: openSwitch,
+  },
+  {
     id: "git-switch-branch-error", group: "Projects", category: "exceptional",
     title: "Branch switch failed",
     description: "A refused switch is reported in the error alert dialog, which requires OK: it says only that Git could not switch branches and what to do, and Git's own message sits only in the Error details disclosure, closed here. The branch badge stays on main.",
@@ -255,7 +263,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Restore file changes confirmation",
-    description: "The named project's warning distinguishes tracked edits and staged new files from untracked and ignored files. Cancel leaves the project intact; confirming restores the fixture's tracked file and retains its notes and ignored cache.",
+    description: "The title is the plain Restore file changes and the first sentence names the project as a chip; the message distinguishes tracked edits and staged new files from untracked and ignored files. Cancel leaves the project intact; confirming restores the fixture's tracked file and retains its notes and ignored cache.",
     ...restoreFixture,
     projectRestores: { [restoreProject.id]: RESTORED_PROJECT },
     steps: openRestore,

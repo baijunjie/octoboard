@@ -63,7 +63,7 @@ await import("../style.css");
 const { createFixtureDaemon } = await import("./fixtureDaemon");
 const { installReportPageFixture } = await import("./reportPageFixture");
 
-const { DaemonFailedMessage, NoAddressMessage, StartupScreen } = startup;
+const { DaemonFailedScreen, NoAddressMessage, StartupScreen } = startup;
 
 /** What a file the gallery's open dialog hands back holds unless the scenario gives one: a document
  * of the right format with nothing in it. */
@@ -168,7 +168,7 @@ function screen(): React.ReactElement {
     case "noAddress":
       return <StartupScreen message={<NoAddressMessage />} />;
     case "daemonFailed":
-      return <StartupScreen message={<DaemonFailedMessage error={scenario.startup.error} />} />;
+      return <DaemonFailedScreen error={scenario.startup.error} />;
     case "crash":
       return <Crash stack={scenario.startup.stack} />;
   }

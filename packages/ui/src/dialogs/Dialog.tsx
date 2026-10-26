@@ -7,8 +7,10 @@ import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { TitledControl } from "../components/TitledControl";
 import { useLatest } from "../components/useLatest";
 import { useT } from "../i18n/react";
+import type { AcknowledgementView } from "../errorAlerts";
 import { reportError } from "../reportError";
 import { dialogAround } from "./dialogElement";
+import { ErrorAlertBody, alertTitle } from "./ErrorAlertBody";
 import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
 import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
@@ -169,10 +171,9 @@ let openDialogs = 0;
  * Cancel when there is nothing to submit yet (a dialog with its own `footer` puts `autoFocus` on its own
  * button).
  */
-export function Dialog({
+function DialogFrame({
   title,
   headerLeading,
-  headerTrailing,
   subtitle,
   onClose,
   children,
@@ -184,6 +185,7 @@ export function Dialog({
   onSubmit,
   size = "md",
   alert,
+  failing,
   resetKey,
   dismissable = true,
 }: {
@@ -191,9 +193,6 @@ export function Dialog({
   title: string | React.ReactElement;
   /** Controls beside the title, outside the heading's accessible name. */
   headerLeading?: React.ReactNode;
-  /** Controls and badges after the title on its line, outside the heading's accessible name (the plan and login state,
-   * a Log in button); the subtitle takes the line under them. */
-  headerTrailing?: React.ReactNode;
   /** A line under the title that belongs to it (where a compared change is from): in the header, so
    * it reads after the title and is never clipped by the body's scroller. It brings its own height. */
   subtitle?: React.ReactElement;
@@ -205,6 +204,8 @@ export function Dialog({
   size?: "sm" | "md" | "lg" | "wide" | "viewer";
   /** A confirmation that interrupts the user: HeroUI's `AlertDialog`, announced as an alert dialog. */
   alert?: boolean;
+  /** The dialog is a failure modal, announced and described as an alert dialog whatever frame it is in. */
+  failing?: boolean;
   /** An error requires its acknowledgement button, with no implicit dismissal. */
   dismissable?: boolean;
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
@@ -253,6 +254,7 @@ export function Dialog({
   useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable ? onClose : () => {});
 
   const Frame = alert ? AlertDialog : Modal;
+  const alerting = alert || failing;
   // An alert dialog is described by its whole body, so a screen reader announces what is asked
   // together with the title; react-aria only wires up a `slot="description"` Text, which this body
   // is not.
@@ -311,12 +313,7 @@ export function Dialog({
           anywhere, since a name with no place to break would run out of the dialog. */}
       <Frame.Header className={`${size === "viewer" ? "mx-6 mt-6 " : ""}${headerLeading ? "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 gap-y-1 pe-6" : subtitle ? "gap-1 pe-6" : "pe-6"}`}>
         {headerLeading}
-        {headerTrailing ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            {heading}
-            {headerTrailing}
-          </div>
-        ) : heading}
+        {heading}
         {subtitle}
       </Frame.Header>
       {body}
@@ -338,7 +335,8 @@ export function Dialog({
           there. */}
       <Frame.Container size={size === "viewer" || size === "wide" ? "lg" : size} className={size === "viewer" ? "max-docked:p-4" : undefined}>
         <Frame.Dialog
-          aria-describedby={alert ? bodyId : undefined}
+          {...(failing && { role: "alertdialog" })}
+          aria-describedby={alerting ? bodyId : undefined}
           className={
             size === "viewer"
               ? "control-fills overflow-hidden p-0 h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[calc(100vw-32px)] max-w-none docked:h-[calc(100dvh-80px-var(--bottom-chrome-height))] docked:w-[min(1440px,calc(100vw-80px))]"
@@ -382,5 +380,37 @@ export function Dialog({
         </Frame.Dialog>
       </Frame.Container>
     </Frame.Backdrop>
+  );
+}
+
+type DialogFrameProps = Parameters<typeof DialogFrame>[0];
+
+/**
+ * The frame every dialog shares (see `DialogFrame`'s props). With `failure` the dialog turns into a failure modal in
+ * place: a failure that ends the dialog's purpose replaces its content, in the same modal, with the error alert
+ * dialog's form — the danger icon, the failure's title, its explanation and "Error details", and the acknowledgement
+ * as the only button, which calls `onClose`. It is an acknowledgement-only failure: there is no Report issue button,
+ * and the type of `failure` leaves out an unexpected failure, whose report-a-bug guidance would have nothing to act on
+ * here. Only that acknowledgement closes it. The dialog's own title, body, footer and submit are not shown.
+ */
+export function Dialog({ failure, ...props }: DialogFrameProps & {
+  failure?: AcknowledgementView;
+}): React.ReactElement {
+  const t = useT();
+  if (!failure) return <DialogFrame {...(props as DialogFrameProps)} />;
+  return (
+    <DialogFrame
+      failing
+      size={props.size}
+      alert={props.alert}
+      resetKey={failure.message}
+      dismissable={false}
+      onClose={props.onClose}
+      headerLeading={<AlertDialog.Icon status="danger" />}
+      title={alertTitle(t, failure)}
+      footer={<Button autoFocus variant="danger" onPress={props.onClose}>{t("error.acknowledge")}</Button>}
+    >
+      <ErrorAlertBody alert={failure} />
+    </DialogFrame>
   );
 }

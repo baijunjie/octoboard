@@ -1,14 +1,16 @@
 import React, { useLayoutEffect, useState } from "react";
 
-import { accountDisabledUnavailable, handoffBlock, sharingChangeRuns, switchEntries, switchEntryBlock } from "../accountChoices";
+import { accountDisabledUnavailable, handoffBlock, incompleteAccount, sharingChangeRuns, switchEntries, switchEntryBlock } from "../accountChoices";
 import { inheritedSessionLaunch, launchWithOverrides } from "../agents";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { PathText } from "../components/PathText";
+import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { StatusMark } from "../components/StatusMark";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import type { Agent, Console, Project, Session } from "../protocol";
+import type { Account, Agent, Console, Project, Session } from "../protocol";
 import { accountUsage } from "../quota/accountUsage";
-import { quotaUsedUpCopy } from "../quota/quotaCopy";
+import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import type { SessionRequest } from "../store";
 import { useDaemonStore } from "../store";
 import { useNow } from "../useNow";
@@ -44,6 +46,33 @@ type OnReport = (state: RequestFormState | undefined) => void;
  * with the values of a form. */
 export function isChangeRequest(request: SessionRequest): request is SwitchRequest | HandoffRequest {
   return request.action === "switch" || request.action === "handoff";
+}
+
+/** The warning mark of an account whose last sharing change did not finish (`incompleteAccount`): a session
+ * launched on it may find its configuration and conversations incomplete. Where the dialog is the
+ * confirmation, as here, this is all it says; the user's own resume asks first instead
+ * (`useConfirmIncompleteLaunch`). `inline` is the form for a mark in a sentence; `markId` scopes a focus
+ * hand-off to this mark. */
+export function IncompleteSharingMark({ account, inline, markId }: { account: Account; inline?: boolean; markId?: string }): React.ReactElement {
+  const t = useT();
+  return (
+    <StatusMark tone="warning" inline={inline} markId={markId} label={t("dialog.sessionRequest.incomplete.mark")}>
+      <p>{t("dialog.sessionRequest.incompleteTitle", { account: isolate(account.name) })}</p>
+      <p>{t("dialog.sessionRequest.incomplete")}</p>
+    </StatusMark>
+  );
+}
+
+/** Says once that `account`, which the dialog marks, has a sharing change that did not finish, where the
+ * mark appears after the dialog opened (the account's change ended unfinished, or the user chose it).
+ * A mark the dialog opened with is part of what it opened with and stays unspoken; a mark that moves
+ * to another incomplete account while the announcer stays is a new one and is spoken. Mounted for as
+ * long as the request is, whether or not there is a mark, and keyed by the request so that the next
+ * request in a queue starts afresh. */
+export function IncompleteSharingAnnouncer({ account }: { account: Account | undefined }): React.ReactElement {
+  const t = useT();
+  const [openedWith] = useState(account?.id);
+  return <StatusAnnouncer text={account && account.id !== openedWith ? t("dialog.sessionRequest.incompleteTitle", { account: isolate(account.name) }) : undefined} />;
 }
 
 /** The key of the default account among the options of the account picker. */
@@ -85,22 +114,30 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
   const blockOf = (entry: (typeof entries)[number]) =>
     switchEntryBlock(t, entry, { switching: session?.switching_account === true, ownChanging }) ?? (entry.disabled && !entry.current ? accountDisabledUnavailable(t) : undefined);
   const chosen = entries.find((entry) => entry.account === account);
+  const incomplete = incompleteAccount(accounts, sharing, account);
   const missing = session !== undefined && chosen === undefined;
   const chosenBlock = chosen && blockOf(chosen);
   const chosenDisabled = chosen !== undefined && !chosen.current && chosen.disabled;
-  // The menu leaves Switch account out for a session that is still starting or archived.
-  const sessionBlock = session?.status === "archived"
-    ? t("dialog.sessionRequest.switch.archived")
-    : session?.status === "starting"
-      ? t("dialog.sessionRequest.switch.starting")
-      : undefined;
+  // The menu leaves Switch account out for a session that is still starting or archived; an archived one ends the
+  // dialog's purpose and is the dialog's own failure (`useSessionRequestDialogProps`).
+  const sessionBlock = session?.status === "starting" ? t("dialog.sessionRequest.switch.starting") : undefined;
   const notOffered = session !== undefined && (sessionBlock !== undefined || chosen === undefined || chosen.current || chosen.exhaustedBy !== undefined || chosenBlock !== undefined);
   useReportForm({ requestId: request.requestId, edits: { account, ...changed }, unavailable: notOffered }, onReport);
   if (!session) return null;
 
-  const usedUp = !chosenDisabled && chosen && !chosen.current && chosen.exhaustedBy && chosen.quota
-    ? quotaUsedUpCopy(t, chosen.quota, chosen.name, chosen.exhaustedBy, now)
-    : undefined;
+  // What is wrong with the account chosen is that field's error. A hold on the session itself (an account switch
+  // running, its own account's sharing changing) is not about the field: it stays an Alert.
+  const sharingBlock = chosenBlock && chosen?.changingSharing && session.switching_account !== true ? chosenBlock.detail : undefined;
+  const accountError = missing
+    ? t("dialog.sessionRequest.switch.accountGone")
+    : chosen?.current
+      ? t("dialog.sessionRequest.switch.alreadyOn", { account: isolate(chosen.name) })
+      : chosenDisabled
+        ? t("accountChoice.disabled.description", { name: isolate(chosen.name) })
+        : chosen && chosen.exhaustedBy && chosen.quota
+          ? quotaUsedUpMessage(t, chosen.quota, chosen.name, chosen.exhaustedBy, now)
+          : sharingBlock;
+  const sessionHold = !chosenDisabled && sharingBlock === undefined ? chosenBlock?.detail : undefined;
   const options = entries.filter((entry) => entry.current || !entry.disabled || entry.account === account).map((entry): Option<string> => {
     const usage = accountUsage(t, session.agent, entry.quota, entry.current ? undefined : entry.exhaustedBy, now);
     const block = blockOf(entry);
@@ -121,12 +158,8 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
 
   return (
     <>
-      {missing && <ErrorAlert title={t("dialog.sessionRequest.switch.accountGone")} announce />}
-      {chosen?.current && <ErrorAlert title={t("dialog.sessionRequest.switch.alreadyOn", { account: isolate(chosen.name) })} announce />}
-      {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
-      {chosenDisabled
-        ? <ErrorAlert title={t("accountChoice.disabled.title")} announce>{t("accountChoice.disabled.description", { name: isolate(chosen.name) })}</ErrorAlert>
-        : chosenBlock && <ErrorAlert title={chosenBlock.detail} announce />}
+      <IncompleteSharingAnnouncer account={incomplete} />
+      {sessionHold && <ErrorAlert title={sessionHold} announce />}
       {sessionBlock && <ErrorAlert title={sessionBlock} announce />}
       {/* Nothing to show as chosen while the account asked for is gone, so the optional picker then;
           its clear button has nothing to clear. One slot, so the picker keeps its focus once the
@@ -140,6 +173,7 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
             placeholder={t("dialog.sessionRequest.switch.account")}
             onChange={(key: string | null) => key !== null && setAccount(key === DEFAULT_ACCOUNT_KEY ? null : key)}
             isDisabled={isDisabled}
+            errorMessage={accountError}
           />
         )
         : (
@@ -149,6 +183,8 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
             value={account ?? DEFAULT_ACCOUNT_KEY}
             onChange={(key: string) => setAccount(key === DEFAULT_ACCOUNT_KEY ? null : key)}
             isDisabled={isDisabled}
+            errorMessage={accountError}
+            mark={incomplete ? (markId) => <IncompleteSharingMark account={incomplete} markId={markId} /> : undefined}
           />
         )}
       <LaunchSettingsFields
@@ -203,6 +239,9 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
     effort: request.effort,
   });
   const sessionBlock = original && handoffBlock(t, original, ownChanging);
+  const accounts = useDaemonStore((state) => state.settings.accounts);
+  const sharing = useDaemonStore((state) => state.accountSharing);
+  const incomplete = presetGone ? undefined : incompleteAccount(accounts, sharing, choice.account);
   useReportForm({
     requestId: request.requestId,
     edits: { agent: choice.agent, account: choice.account, ...overrides },
@@ -212,16 +251,16 @@ function HandoffFields({ request, onReport, console: parentConsole, project, ori
 
   return (
     <>
+      <IncompleteSharingAnnouncer account={incomplete} />
       {sessionBlock && <ErrorAlert title={sessionBlock.detail} announce />}
-      {presetGone && <ErrorAlert title={t("dialog.sessionRequest.handoff.presetGone")} announce />}
-      {unavailable && !presetGone && <ErrorAlert title={unavailable.title} announce>{unavailable.description}</ErrorAlert>}
       <AgentAccountField
         label={t("dialog.handOff.agent")}
         options={agentOptions}
         value={choice.agent}
         onChange={setPickedAgent}
         isDisabled={locked}
-        account={account}
+        account={account && { ...account, mark: incomplete ? (markId) => <IncompleteSharingMark account={incomplete} markId={markId} /> : undefined }}
+        errorMessage={presetGone ? t("dialog.sessionRequest.handoff.presetGone") : unavailable}
         placeholders={presetGone ? { agent: t("dialog.sessionRequest.handoff.agentPlaceholder"), account: t("dialog.sessionRequest.handoff.accountPlaceholder") } : undefined}
       />
       <LaunchSettingsFields

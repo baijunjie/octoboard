@@ -90,7 +90,7 @@ Inside a sentence — a used-up account's reason, an alert — a window is named
 **Weekly · all models**), "Fable weekly limit", "monthly limit", and a credit pool named **Credits** as "credit limit".
 Every place that names a window follows this: the meters in Settings and the rail's quota panel, the account pickers'
 and the Switch account submenu's descriptions of an account, the selected session's quota indicator, the menu bar
-icon and its quota submenus, the used-up alerts, and the daemon's refusal of a used-up account (see "Opening a
+icon and its quota submenus, the used-up errors in dialogs, and the daemon's refusal of a used-up account (see "Opening a
 session" in `docs/product/sessions.md`). The UI's other languages name the windows by the same rule, in their own
 words.
 
@@ -187,7 +187,7 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 | Its agent is not available, or not yet determined | Nothing about a quota, no plan either; in Settings, a dash in the table's Usage cell and in the account settings dialog's Usage. |
 | Not read yet | "Reading usage…" in place of the windows, in the table's Usage cell and in the account settings dialog. |
 | Read | The plan, the windows and how long ago they were read. |
-| Never read successfully, and the last reading failed | No windows, and a red failure mark named "Usage unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and beside the name in the account settings dialog's heading; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures marked on a row" in `docs/product/error-alerts.md` for how the popover opens). |
+| Never read successfully, and the last reading failed | No windows, and a red failure mark named "Usage unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and on the account settings dialog's first line, after the account's name and its badges; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md` for how the popover opens). |
 | Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. In Settings the account settings dialog shows them so; the table's Usage cell draws them as its bar, followed by the out-of-date mark. |
 | Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings the table's Usage cell holds a dash and the account's **Not logged in** badge says why (see "The accounts table" in `docs/product/agent-accounts.md`); its account settings dialog says, in place of the windows, that it is not logged in yet and to log in to use it. |
 
@@ -234,8 +234,8 @@ The window does not offer what the daemon would refuse:
 - opening a session with defaults uses another account of the agent, or is unavailable when none is left (see "Opening
   a session with defaults" in `docs/product/sessions.md`);
 - a session row's **Switch account** submenu disables a used-up account (see "Session rows" in
-  `docs/product/sidebar-session-rows.md`), and the switch confirmation refuses one (see "Confirming a switch" in
-  `docs/product/switching-session-accounts.md`).
+  `docs/product/sidebar-session-rows.md`), and the switch confirmation refuses one on Confirm, in an error alert (see
+  "Confirming a switch" in `docs/product/switching-session-accounts.md`).
 
 Where it is said in short, under an account's name in a picker or a menu, it is shown on two lines: "Limit reached", and
 beneath it the countdown to the window's reset as in "How an account's quota is shown" above ("resets in 1h 57m"),
@@ -483,8 +483,8 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
 
 ### Opening the panel
 
-The panel opens by the input the device has, as a status mark's popover does (see "Failures marked on a row" in
-`docs/product/error-alerts.md`):
+The panel opens by the input the device has, as a status mark's popover does (see "Failures, warnings and notes marked
+at their point" in `docs/product/error-alerts.md`):
 
 - **Resting the mouse on the button** for 250 ms floats the panel in; a pointer that only crosses the button shows
   nothing. The panel stays while the mouse is on the button or on the panel, and goes 150 ms after the mouse has left
@@ -525,9 +525,10 @@ After it closes by Escape or a press outside, a mouse still resting on the butto
 left the button and come back.
 
 An account's failure or warning mark (see "Quota states" above) opens its popover from inside the panel, by the mouse
-resting on it or a tap, and that popover counts as part of the panel: a press inside it, its own opening, and
-the mouse crossing from the panel into it do not close the panel. How it opens and closes is in "Failures marked on a
-row" in `docs/product/error-alerts.md`; which of it and the panel Escape closes is in the Escape item above.
+resting on it or a tap, and that popover counts as part of the panel: a press inside it, its own opening, and the mouse
+crossing from the panel into it do not close the panel. How it opens and closes is in "Failures, warnings and notes
+marked at their point" in `docs/product/error-alerts.md`; which of it and the panel Escape closes is in the Escape item
+above.
 
 On closing, keyboard focus goes back to what held it when the panel opened — the button, after a keyboard opening —
 unless the close itself put focus somewhere else. A panel floated in by the mouse moved no focus, so closing it moves

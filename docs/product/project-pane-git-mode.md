@@ -12,10 +12,11 @@ general in `docs/product/file-viewer.md`.
 
 Failures to read the repository, load branches, list changes or compare commits are shown in the pane alone: one
 that leaves nothing to show takes the place of what failed as an empty-state failure, and one of a part while the rest
-is shown is a mark on that part, whose popover holds its reason and **Try again**; none of them opens an error alert
-(see "Failures shown on the screen" and "Failures marked on a row" in `docs/product/error-alerts.md`). A worktree
-found gone while its changes are listed is not such a failure and is not shown as one (see "Uncommitted changes" in
-`docs/product/project-pane-git-change-list.md`).
+is shown is a mark on that part, whose popover holds its reason and **Try again** — except the uncommitted changes',
+which span several sections of the change list and so are a compact alert at its top; none of them opens an error
+alert (see "Failures shown on the screen" and "Failures, warnings and notes marked at their point" in
+`docs/product/error-alerts.md`). A worktree found gone while its changes are listed is not such a failure and is not
+shown as one (see "Uncommitted changes" in `docs/product/project-pane-git-change-list.md`).
 
 ## Reading only
 
@@ -44,11 +45,14 @@ side, in every state of the Git mode, in this order: the one that shows and hide
 by folder**, and **Group by commit** (see "Filtering by file name", "Flat or grouped by folder" and "Grouped by
 commit" in `docs/product/project-pane-git-change-list.md`).
 
-At the top of the view, the **branch selector** (see "The branch selector" below), the worktree identity when shown,
-then the lines saying what the list is made of and what could not be read share one area, with no divider between
-them. Below is the **change list**, the branch's uncommitted and committed changes together (see
-`docs/product/project-pane-git-change-list.md`). The view reads the repository only while it is on screen (see
-"Keeping the list up to date" in that doc).
+At the top of the view, the **branch selector** (see "The branch selector" below), the **Worktree line** when shown,
+then the lines saying what the list is made of and what could not be read share one area, with no divider between them.
+The Worktree line names the worktree the uncommitted changes are read from, with a button copying its path; it is shown
+when that is another worktree than the one holding the project's folder, and for that one too while its uncommitted
+changes are cut short, ending then on the warning mark about them (see "Uncommitted changes" and "What the list says
+instead" in `docs/product/project-pane-git-change-list.md`). Below is the **change list**, the branch's uncommitted and
+committed changes together (see `docs/product/project-pane-git-change-list.md`). The view reads the repository only
+while it is on screen (see "Keeping the list up to date" in that doc).
 
 ## The repository and its worktrees
 

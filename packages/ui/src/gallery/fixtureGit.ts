@@ -105,6 +105,9 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
    * of the branches gone: a comparison of any other branch, the default one's with its upstream
    * included, does not take them away. */
   let compared = false;
+  /** The branches gone once the comparison of the pair that names them has been made (`goneAfter`). */
+  const goneAfterPair = new Set<string>();
+  const isGone = (name: string) => (compared && git?.gone?.includes(name)) === true || goneAfterPair.has(name);
   /** The daemon's refusal of a change whose patch has no lines to expand. */
   const noBodies = (): never => fail({ code: "invalid_change", params: {}, message: "no patch to expand" });
   /** The worktree a request is answered from: the one it names, else the project's own, as the
@@ -256,13 +259,12 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         };
       }
       case "list_project_branches": {
-        const gone = compared ? (git?.gone ?? []) : [];
-        const listed = (git?.branches ?? []).filter((branch) => !gone.includes(branch.name));
+        const listed = (git?.branches ?? []).filter((branch) => !isGone(branch.name));
         // A lookup past its budgets leaves the main branch without an upstream and the list without a default branch, and the list says so.
         if (git?.upstreamsCut) {
           return { type: "project_branches", project: body.project, branches: listed.map(({ upstream: _upstream, ...branch }) => branch), complete: true, upstreams_complete: false };
         }
-        return { type: "project_branches", project: body.project, branches: listed, complete: true, ...(git?.defaultBranch ? { default_branch: git.defaultBranch } : {}) };
+        return { type: "project_branches", project: body.project, branches: listed, complete: !git?.branchesCut, ...(git?.defaultBranch ? { default_branch: git.defaultBranch } : {}) };
       }
       case "compare_project_branches": {
         const resolve = (name: string, remote: boolean) => {
@@ -272,7 +274,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
             return { branch: name, commit, remote: true };
           }
           const branch = git?.branches?.find((b) => b.name === name);
-          if (!branch || git?.missing?.includes(name) || (compared && git?.gone?.includes(name))) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });
+          if (!branch || git?.missing?.includes(name) || isGone(name)) return fail({ code: "unknown_branch", params: { branch: name }, message: `there is no local branch ${name}` });
           return { branch: name, commit: branch.commit };
         };
         if (git?.comparing === "pending") return new Promise<Event>(() => {});
@@ -281,6 +283,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
         const right = resolve(body.right, false);
         compared ||= [body.left, body.right].some((name) => git?.gone?.includes(name));
         const key = `${body.left_empty ? "" : body.left}..${body.right}`;
+        for (const name of git?.goneAfter?.[key] ?? []) goneAfterPair.add(name);
         const fork = forkOf(key, left.commit, right.commit);
         if (fork === null) {
           const params = { left: body.left, right: body.right };

@@ -99,3 +99,14 @@ it("keeps focus off the confirm button for each prompt in the queue", async () =
   await confirm();
   expect(document.activeElement).toBe(dialog());
 });
+
+// What trusting lets the project's own configuration do is part of the question, said in plain text
+// after it rather than as a warning-toned callout.
+it("says the caution as plain body text, in order, with no alert frame", () => {
+  mount([prompt]);
+  const paragraphs = [...document.body.querySelectorAll("[role=alertdialog] p")].map((p) => p.textContent);
+  expect(paragraphs.at(-1)).toContain("pre-approve tool permissions");
+  expect(paragraphs).not.toContain("The project's own configuration takes effect.");
+  expect(document.body.querySelector("[data-slot=alert-root]")).toBeNull();
+  expect(document.body.textContent).not.toContain("Caution:");
+});

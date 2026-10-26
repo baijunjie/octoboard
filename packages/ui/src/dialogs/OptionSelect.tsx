@@ -1,7 +1,10 @@
-import { Description, Label, ListBox, Select } from "@heroui/react";
-import React, { useId } from "react";
+import { Description, FieldError, Label, ListBox, Select } from "@heroui/react";
+import React, { useId, useRef } from "react";
+import { ButtonContext } from "react-aria-components";
 
+import { CodeToneContext } from "../components/codeTone";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { MotionListBox } from "../components/MotionListBox";
 import { ReasonText, type Reason } from "../components/ReasonText";
 import { StatusBadge } from "../components/StatusBadge";
@@ -77,6 +80,20 @@ function FadeLabel({ label, badge, lang, className, as }: {
  * for a select repeated down a list whose rows already show what each one is about. With
  * `labelledBy` as well, those elements name it instead, in the order given.
  *
+ * With `mark`, given the `markId` its `StatusMark` has to carry, a warning or an error about the field's
+ * current value stands inside it at its trailing end, before the clear button. The trigger is a button,
+ * which cannot hold another, so the mark is laid over the room the trigger keeps free for it. With
+ * `labelMark`, built likewise, one about the whole field (its list of options) stands right after the
+ * label, beside it rather than inside it, so that the field's accessible name stays the label's text.
+ * When either mark goes while it or its popover holds focus, focus moves to the trigger once the render
+ * is committed, unless the trigger is disabled by then: a caller that disables the select with the
+ * mark's going hands focus on itself (`useFocusHandoff`), from `<body>`, where focus falls from the
+ * removed mark.
+ *
+ * With `errorMessage` the field is marked invalid and says what is wrong with it right under the select, in its
+ * `FieldError`, as `TextInput` does. A `joined` half is not a field of its own: the group draws the message, and the
+ * half only takes `isInvalid` and the `describedBy` of the message.
+ *
  * With `placeholder` the choice is optional: `value` may be `null`, which shows the placeholder
  * instead of an option and stands for "nothing chosen", and once something is chosen a clear
  * button (and Backspace or Delete on the focused control) puts it back to `null`, passed to
@@ -95,6 +112,10 @@ export function OptionSelect<T extends string>({
   description,
   describedBy,
   labelledBy,
+  errorMessage,
+  isInvalid,
+  mark,
+  labelMark,
 }: {
   label: string;
   options: Option<T>[];
@@ -109,18 +130,38 @@ export function OptionSelect<T extends string>({
   describedBy?: string;
   /** With `hideLabel`, the ids of elements elsewhere on the page that name the field. */
   labelledBy?: string;
+  /** Marks the field invalid and says what is wrong with it under the field. */
+  errorMessage?: React.ReactNode;
+  /** Marks the field invalid where something else draws the message (`errorMessage` implies it). */
+  isInvalid?: boolean;
   /** A status badge after the placeholder, for a placeholder that names what the empty choice stands for.
    * It completes the placeholder, so it is drawn as an option's `badgeInLabel` badge is. */
   placeholderBadge?: string;
+  /** A `StatusMark` about the field's current value, drawn inside it, built with the `markId` it is given,
+   * which scopes the focus hand-off to it. */
+  mark?: (markId: string) => React.ReactElement;
+  /** A `StatusMark` about the whole field, drawn after its visible label (so not with `inline`, `joined` or
+   * `hideLabel`), built with the `markId` it is given as `mark` is. */
+  labelMark?: (markId: string) => React.ReactElement;
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
 )): React.ReactElement {
   const descriptionId = useId();
+  const markId = useId();
+  const labelMarkId = useId();
+  const trigger = useRef<HTMLButtonElement | null>(null);
   const current = options.find((option) => option.value === value);
   const badge = current ? current.badge : placeholderBadge;
   const badgeInLabel = current ? current.badgeInLabel : true;
+  const invalid = isInvalid === true || (errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "");
   const hasReason = options.some((option) => option.reason);
+  // The hand-off runs before the commit sets the sibling trigger's `disabled`, so the trigger is asked
+  // after it: one disabled in the same render is not focused (WebKit would blur it as it is disabled)
+  // and focus falls to `<body>` for the caller to take, and focus a caller has placed meanwhile stays.
+  const handOffToTrigger = (id: string) => (
+    <HandOffOnUnmount from={`[data-status-mark-id="${id}"]`} to={() => queueMicrotask(() => { const target = trigger.current; if (target?.isConnected && !target.disabled && (!document.activeElement || document.activeElement === document.body)) target.focus(); })} />
+  );
   return (
     // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
     <Select
@@ -137,6 +178,9 @@ export function OptionSelect<T extends string>({
       // children alone change. Keep the association stable for notes that appear dynamically.
       aria-describedby={[description ? descriptionId : undefined, describedBy].filter(Boolean).join(" ") || undefined}
       isDisabled={isDisabled}
+      isInvalid={invalid}
+      // As in `TextInput`: whether the dialog goes ahead is its own decision, not the browser's.
+      validationBehavior="aria"
       value={value}
       placeholder={placeholder}
       // Clearing arrives as a `null` key. Without a placeholder the caller has no way to take it,
@@ -155,31 +199,55 @@ export function OptionSelect<T extends string>({
       // `useListState`, which reads it — hence the cast.
       {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof Select>)}
     >
-      {!inline && !joined && !hideLabel && <Label>{label}</Label>}
-      {/* Joined: the two parts square the corners they meet at and touch. Nothing is drawn between
-          them: a gap shows the dialog's surface through at about 1.3:1 in the light theme, and a
-          border would sit close to this variant's fill in the dark one, and HeroUI's own input
-          group draws no boundary between its parts either. */}
-      <Select.Trigger
-        data-marquee-scope
-        className={
-          joined === "start"
-            ? "w-full flex-1 rounded-e-none"
-            : joined === "end"
-              ? "w-full flex-1 rounded-s-none"
-              : undefined
-        }
-      >
-        <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
-          {() => <>
-            {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? placeholder} badge={badgeInLabel ? badge : undefined} />
-            {badge && !badgeInLabel && <StatusBadge>{badge}</StatusBadge>}
-          </>}
-        </Select.Value>
-        {placeholder !== undefined && <Select.ClearButton />}
-        <Select.Indicator />
-      </Select.Trigger>
+      {!inline && !joined && !hideLabel && (labelMark ? (
+        <div className="flex items-center gap-1">
+          <Label>{label}</Label>
+          {handOffToTrigger(labelMarkId)}
+          {/* The select's `ButtonContext` is for its trigger; reset around the mark as for `mark` below. */}
+          <ButtonContext.Provider value={{}}>{labelMark(labelMarkId)}</ButtonContext.Provider>
+        </div>
+      ) : <Label>{label}</Label>)}
+      {/* The trigger and the mark share a box, as the mark is laid over the trigger's trailing room. */}
+      <div className="relative">
+        {/* Joined: the two parts square the corners they meet at and touch. Nothing is drawn between
+            them: a gap shows the dialog's surface through at about 1.3:1 in the light theme, and a
+            border would sit close to this variant's fill in the dark one, and HeroUI's own input
+            group draws no boundary between its parts either. */}
+        <Select.Trigger
+          ref={trigger}
+          data-marquee-scope
+          className={
+            joined === "start"
+              ? "w-full flex-1 rounded-e-none"
+              : joined === "end"
+                ? "w-full flex-1 rounded-s-none"
+                : "w-full"
+          }
+        >
+          <Select.Value className="flex min-w-0 flex-1 items-center gap-2 text-clip">
+            {() => <>
+              {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
+              <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? placeholder} badge={badgeInLabel ? badge : undefined} />
+              {badge && !badgeInLabel && <StatusBadge>{badge}</StatusBadge>}
+            </>}
+          </Select.Value>
+          {/* The room for the mark, after the value and before the clear button. */}
+          {mark && <span aria-hidden="true" className="w-6 shrink-0" />}
+          {placeholder !== undefined && <Select.ClearButton />}
+          <Select.Indicator />
+        </Select.Trigger>
+        {mark && (
+          <>
+            {handOffToTrigger(markId)}
+            {/* The select gives its trigger's behaviour to every button inside it through `ButtonContext`;
+                the mark is not that button, so it is reset around the mark. The select's other contexts (text,
+                label, list state) are not reset and still reach the popover's body, which holds no such parts. */}
+            <ButtonContext.Provider value={{}}>
+              <span className={`absolute inset-y-0 flex items-center ${placeholder !== undefined ? "end-12" : "end-7"}`}>{mark(markId)}</span>
+            </ButtonContext.Provider>
+          </>
+        )}
+      </div>
       <Select.Popover
         // Options with a reason widen the popover to fit it; the others keep the trigger's width.
         placement={hasReason ? "bottom start" : undefined}
@@ -221,6 +289,15 @@ export function OptionSelect<T extends string>({
         </MotionListBox>
       </Select.Popover>
       {description && <Description id={descriptionId}>{description}</Description>}
+      {errorMessage !== undefined && (
+        // Renders nothing while the field is valid; the alert is on an element of its own because react-aria drops a
+        // `role` given to the error itself (see `TextInput`).
+        <FieldError>
+          <CodeToneContext.Provider value="danger">
+            <span role="alert">{invalid ? errorMessage : null}</span>
+          </CodeToneContext.Provider>
+        </FieldError>
+      )}
     </Select>
   );
 }

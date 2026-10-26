@@ -34,7 +34,7 @@ export function hasApprovalChoice(agent: Agent): agent is keyof typeof APPROVAL_
 
 /** What a choice that needs confirming says before it is saved. */
 interface ApprovalConfirmation {
-  title: React.ReactElement;
+  title: string;
   message: React.ReactNode;
   confirmLabel: string;
 }
@@ -125,7 +125,7 @@ function ClaudeApprovalModeSelect(): React.ReactElement {
       choices={APPROVAL_CHOICES.claude.map(({ value, label }) => ({ value, label: t(label) }))}
       save={(value) => request({ type: "set_claude_approval_mode", mode: value })}
       confirmation={(value) => value === "bypass" ? {
-        title: <Message id="settings.accounts.approval.bypassTitle" params={{ agent }} />,
+        title: t("settings.accounts.approval.bypassTitle"),
         message: <p><Message id="settings.accounts.approval.bypassMessage" params={{ agent }} /></p>,
         confirmLabel: t("settings.accounts.approval.claudeBypass"),
       } : null}

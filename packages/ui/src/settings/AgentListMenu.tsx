@@ -140,7 +140,7 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
   ].filter((use): use is React.ReactNode => use !== false);
   return (
     <ConfirmDialog
-      title={<Message id="settings.accounts.removeAgentTitle" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} />}
+      title={t("settings.accounts.removeAgent")}
       message={
         <>
           <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>

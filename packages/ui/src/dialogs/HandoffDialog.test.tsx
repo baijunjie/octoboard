@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { press } from "../components/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
@@ -107,75 +108,94 @@ it("asks for no branches of a console session and says when nothing moves", asyn
   expect(document.body.textContent).toContain("it is responsible for no branches, owns no sessions and reports to no session");
 });
 
-it("says the branches could not be checked rather than that nothing moves", async () => {
+const mark = () => document.body.querySelector<HTMLElement>('button[aria-label="Branches to move unknown"]');
+const popoverRetry = () => [...document.body.querySelectorAll<HTMLElement>("[data-status-mark-popover] button")].find((button) => button.textContent === "Try again");
+const announcements = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).filter((text) => text?.includes("Could not check"));
+
+it("says the branches could not be checked rather than that nothing moves, in a mark after the heading", async () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
   const { request } = mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "fail");
   await elapse(0);
   const text = (document.body.textContent ?? "").replace(/[\u2066-\u2069]/g, "");
-  expect(text).toContain("Could not check which branches it is responsible for");
   expect(text).not.toContain("it is responsible for no branches");
-  // The failed check is an Alert under the list it feeds, not a line of the list.
-  const alert = document.body.querySelector('[data-slot="alert-root"]')!;
-  expect(alert.querySelector('[data-slot="alert-title"]')?.textContent).toContain("Could not check which branches it is responsible for");
-  expect(alert.querySelector('[data-slot="alert-description"]')?.textContent).toContain("Something unexpected went wrong.");
-  // It arrived after the dialog opened, so the Alert announces itself once the dialog's opening
-  // focus move is past; Try again is inside it and asks again.
-  expect(document.body.querySelector('[role="alert"]')).toBeNull();
+  // A mark right after the heading, not an Alert and not a line of text beside it.
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  expect(text).not.toContain("Could not check which branches it is responsible for");
+  const heading = document.body.querySelector("h3")!;
+  expect(heading.textContent).toBe("Moves to the new session");
+  expect(heading.nextElementSibling).toBe(mark());
+  expect(document.body.querySelector("li")).toBeNull();
+  // The popover holds the sentence, the failure's own sentence and Try again.
+  press(mark()!);
+  const popover = document.body.querySelector('[role="dialog"][aria-label="Branches to move unknown"]')!;
+  expect(popover).not.toBeNull();
+  expect(popover.textContent).toContain("Could not check which branches it is responsible for");
+  expect(popover.textContent).toContain("Something unexpected went wrong.");
+  expect(popoverRetry()).toBeDefined();
+  // It arrived after the dialog opened, so the dialog speaks it once, after the opening focus move.
+  expect(announcements()).toEqual([]);
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
-  const announcement = document.body.querySelector('[role="alert"]')!;
-  expect(announcement.textContent).toContain("Could not check which branches it is responsible for");
-  expect(announcement.textContent).toContain("Something unexpected went wrong.");
-  const retry = [...document.body.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
+  expect(announcements()).toEqual(["Could not check which branches it is responsible for."]);
   const asked = () => request.mock.calls.filter(([body]) => body.type === "inspect_session_branches").length;
   expect(asked()).toBe(1);
-  act(() => retry.focus());
-  await act(async () => retry.click());
+  const spoken: string[] = [];
+  const observer = new MutationObserver((records) => records.forEach((record) => record.addedNodes.forEach((node) => {
+    if (node.textContent?.includes("Could not check")) spoken.push(node.textContent);
+  })));
+  observer.observe(document.body, { childList: true, subtree: true });
+  onTestFinished(() => observer.disconnect());
+  await act(async () => popoverRetry()!.click());
   expect(asked()).toBe(2);
-  // The failure stays while the retry is out and the button is the same one, so focus is not dropped to the page.
-  expect(document.activeElement).toBe(retry);
   await elapse(0);
-  expect(retry.isConnected).toBe(true);
-  expect(document.activeElement).toBe(retry);
-  expect(document.body.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
-  // The retry failed with the same words, which are announced again by a fresh alert.
-  expect(document.body.querySelector('[role="alert"]')).not.toBe(announcement);
-  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain("Something unexpected went wrong.");
-  expect(document.body.querySelector("li")?.textContent ?? "").not.toContain("Could not check");
-  expect(document.body.querySelector("h3")?.textContent).toBe("Moves to the new session");
+  // The retry failed again in the same words: the mark stays, and the sentence is written, so spoken, again.
+  expect(mark()).not.toBeNull();
+  expect(announcements()).toEqual(["Could not check which branches it is responsible for."]);
+  expect(spoken).toEqual(["Could not check which branches it is responsible for."]);
 });
 
-it("keeps focus inside the dialog when a retry of the check succeeds and takes the Alert away", async () => {
+it("keeps focus inside the dialog when a retry of the check succeeds and takes the mark away", async () => {
   mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "failTwice");
   await settle();
-  const retryButton = () => [...document.body.querySelectorAll('[data-slot="alert-root"] button')].find((button) => button.textContent === "Try again") as HTMLButtonElement;
   const dialog = document.body.querySelector('[role="dialog"]')!;
-  act(() => retryButton().focus());
-  await act(async () => retryButton().click());
+  act(() => mark()!.focus());
+  press(mark()!);
+  await act(async () => popoverRetry()!.click());
   await settle();
-  // The retry failed again: the Alert and its button stay, with focus on the button.
-  expect(document.activeElement).toBe(retryButton());
-  await act(async () => retryButton().click());
+  // The retry failed again: the mark stays.
+  expect(mark()).not.toBeNull();
+  act(() => mark()!.focus());
+  press(mark()!);
+  await act(async () => popoverRetry()!.click());
   await settle();
-  // The retry succeeded: the Alert, and the button holding focus, are gone, and focus did not fall to the page.
-  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  // The retry succeeded: the mark, which held focus, is gone, and focus did not fall to the page.
+  expect(mark()).toBeNull();
   expect(document.activeElement).not.toBe(document.body);
   expect(dialog.contains(document.activeElement)).toBe(true);
 });
 
-it("closes and reports a plain alert, with no action, when no other agent can be picked", async () => {
+it("turns into an acknowledgement-only failure modal when no other agent can be picked", async () => {
   const { request, onClose, toastError } = mount(hub, [], [], { codex: "unavailable", grok: "unavailable" });
   await settle();
-  expect(onClose).toHaveBeenCalled();
-  expect(toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "No other agent is available to take this session over.", recovery: "none" }));
+  const dialog = document.body.querySelector('[role="alertdialog"]');
+  expect(dialog?.textContent).toContain("No other agent is available to take this session over.");
+  expect(dialog?.querySelector("form")).toBeNull();
+  expect(dialog?.querySelector('[data-slot="alert-dialog-icon"], [data-slot="modal-icon"]')).not.toBeNull();
+  // Only the acknowledgement is offered, and it is the one thing that closes the dialog.
+  expect(Array.from(dialog?.querySelectorAll("button") ?? []).map((button) => button.textContent)).toEqual(["OK"]);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(toastError).not.toHaveBeenCalled();
   expect(request.mock.calls.some(([body]) => body.type === "hand_off_session")).toBe(false);
+  await act(async () => buttons().find((b) => b.textContent === "OK")?.click());
+  expect(onClose).toHaveBeenCalledOnce();
 });
 
-it("also closes when the only other agents are not added", async () => {
+it("also turns into the failure modal when the only other agents are not added", async () => {
   const { onClose, toastError } = mount(hub, [], [], { claude: "available", codex: "available", grok: "available" }, ["claude"]);
   await settle();
-  expect(onClose).toHaveBeenCalled();
-  expect(toastError).toHaveBeenCalledOnce();
+  expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No other agent is available");
+  expect(onClose).not.toHaveBeenCalled();
+  expect(toastError).not.toHaveBeenCalled();
 });
 
 it("shows the receiving agent's only account in an account picker, its usage drawn in the option", async () => {

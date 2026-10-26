@@ -1,13 +1,16 @@
 import { Spinner, Tabs } from "@heroui/react";
 import { FolderX, RefreshCw, SearchX } from "lucide-react";
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Key } from "react-aria-components";
 
 import { Button } from "../components/Button";
 import { CenteredEmptyPanel } from "../components/EmptyPanel";
 import { PaneFailure } from "../components/PaneFailure";
+import { StatusMark } from "../components/StatusMark";
 import { useHasPainted } from "../components/useHasPainted";
 import { handFocusOff } from "../components/handFocusOff";
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
+import { handFocusToRegionStart } from "../components/regionFocus";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { FADE_SIZE } from "../components/scrollFade";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
@@ -27,7 +30,6 @@ import { buildFileResults, resultDirectories } from "./filesView";
 import { FileTree } from "./FileTree";
 import { focusRow } from "./focusRow";
 import { GitView } from "./GitView";
-import { PaneNote } from "./paneNote";
 import { buildTree, fileEvidence, hasOpenFolder, listingSaysDirectory, neighbours, parentPath, rereadFor, rowKey, type DirListing, type FileEvidence } from "./tree";
 import { RowPathScope } from "./RowActions";
 import { ROW_HEIGHT } from "./treeRow";
@@ -38,7 +40,7 @@ import { useGitReview } from "./useGitReview";
 
 /** The key of the top-level folder a row of the tree is under, the row that stays on screen when
  * every folder folds; none for a row that is itself at the top level. Rows are keyed by path
- * (`rowKey`), or, for a status row (loading, empty, cut short), by the folder it speaks of. */
+ * (`rowKey`), or, for a status row (loading, empty), by the folder it speaks of. */
 function topLevelFolderKey(key: string): string | undefined {
   const isPath = key.startsWith(rowKey(""));
   const path = isPath ? key.slice(rowKey("").length) : /^status:[a-z]+:(.*)$/.exec(key)?.[1];
@@ -117,6 +119,7 @@ export function ProjectBrowser({
   useEffect(() => setGitModeWorktree(project.id, mode === "git" ? git.worktree : undefined), [project.id, mode, git.worktree]);
   const treeRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef<HTMLButtonElement>(null);
+  const partialMarkId = useId();
   // The hand-off covers the header's controls too: Collapse all disables itself as it is pressed,
   // which blurs it to `<body>`, and it hands focus to Refresh beside it.
   const filesFocus = useFocusHandoff(() => refreshRef.current?.focus());
@@ -278,6 +281,13 @@ export function ProjectBrowser({
           <PanelHeader
             prioritizeChildren
             title={project.name}
+            titleMark={mode === "files" && !searching && root?.state === "loaded" && !root.complete ? (
+              <>
+                {/* The mark goes when the root lists completely; focus it or its popover held goes to the header's first control. */}
+                <HandOffOnUnmount from={`[data-status-mark-id="${partialMarkId}"]`} to={() => handFocusToRegionStart("panel-files")} />
+                <StatusMark tone="warning" markId={partialMarkId} label={t("browser.partial")} />
+              </>
+            ) : undefined}
             actions={
               <div className="contents" onFocus={filesFocus.onFocus} onBlur={filesFocus.onBlur}>
                 <BrowserViewControls
@@ -302,7 +312,7 @@ export function ProjectBrowser({
               </Tabs.List>
             </Tabs.ListContainer>
           </PanelHeader>
-          <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
+          <FileFilterField contextKey={tab} state={activeFilter} ignoredToggle={mode === "files"} incomplete={mode === "files" && searching && search.result.state === "loaded" && !search.result.complete} label={t("browser.filter.label")} placeholder={t(mode === "files" ? "browser.filter.placeholder" : "git.filter.placeholder")} />
           {mode === "files" ? <Tabs.Panel key="files" id="files" className="mt-0 flex min-h-0 flex-1 flex-col p-0">
             <WhenPainted>
               {(painted) => (
@@ -328,25 +338,19 @@ export function ProjectBrowser({
                       }}
                     />
                   ) : tree.nodes.length === 0 && (searching || root?.state === "loaded" && root.complete) ? (
-                    <>
-                      <CenteredEmptyPanel icon={searching ? SearchX : FolderX} message={t(searching ? "browser.filter.noMatch" : "browser.empty")} />
-                      {searching && search.result.state === "loaded" && !search.result.complete && <PaneNote divided>{t("browser.filter.partial")}</PaneNote>}
-                    </>
+                    <CenteredEmptyPanel icon={searching ? SearchX : FolderX} message={t(searching ? "browser.filter.noMatch" : "browser.empty")} />
                   ) : (
-                    <>
-                      <RowPathScope.Provider value={{ project: project.id }}>
-                        <FileTree
-                          nodes={tree.nodes}
-                          expanded={expandedKeys}
-                          label={t("browser.tree.label")}
-                          onExpandedChange={onExpandedChange}
-                          onOpenFile={openFile}
-                          onRetry={(dir) => dirs.refresh([dir])}
-                          treeRef={treeRef}
-                        />
-                      </RowPathScope.Provider>
-                      {(searching ? search.result.state === "loaded" && !search.result.complete : root?.state === "loaded" && !root.complete) && <PaneNote divided>{t(searching ? "browser.filter.partial" : "browser.partial")}</PaneNote>}
-                    </>
+                    <RowPathScope.Provider value={{ project: project.id }}>
+                      <FileTree
+                        nodes={tree.nodes}
+                        expanded={expandedKeys}
+                        label={t("browser.tree.label")}
+                        onExpandedChange={onExpandedChange}
+                        onOpenFile={openFile}
+                        onRetry={(dir) => dirs.refresh([dir])}
+                        treeRef={treeRef}
+                      />
+                    </RowPathScope.Provider>
                   )}
                 </div>
               )}

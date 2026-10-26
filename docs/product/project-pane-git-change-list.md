@@ -59,7 +59,9 @@ The uncommitted sections are read from the worktree that has the branch checked 
   worktree path", turning to "Copied" once pressed (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). It
   copies the worktree's path relative to the project's folder when the worktree lies inside that folder, and its
   absolute path otherwise, either as the window shows paths (see "A row's actions" in `docs/product/project-pane.md`).
-  A copy that fails raises an error alert saying the worktree's path could not be copied.
+  A copy that fails raises an error alert saying the worktree's path could not be copied. The worktree holding the
+  project's folder has that line too, with its folder's name and the copy button, while its uncommitted changes are cut
+  short, as the warning about them is marked at the end of it (see "What the list says instead" below).
 - **A worktree in which the project's folder is not a directory** — missing there, or reached only through a symbolic
   link — has a line in the branch selector's area saying the project's folder is not in the worktree the branch is
   checked out in, below the worktree name where one is shown.
@@ -170,10 +172,10 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   commits changed is a row under each of them.
 - **A commit that changed nothing in the project's folder** has no row.
 - **At most the 100 newest commits** are read. Only when the branch really has more than 100 commits since the fork — or,
-  listed with its whole history, in all — does a line under the list say that only that many newest commits are listed (see "What the list says instead" below).
+  listed with its whole history, in all — does the Committed heading's warning mark say that only that many newest commits are listed (see "What the list says instead" below).
   The commits' changes together are held to one change list's limit — 10,000 changes or 2 MiB of paths: past it, the
   last commit listed holds only the changes read before the limit, older commits are left out, a commit none of whose
-  changes fit is not listed at all, and the line saying not every change is shown appears.
+  changes fit is not listed at all, and the Committed heading's warning mark says not every change is shown.
 - A subdirectory project compared within its own folder (see "Committed changes" above) lists only the commits that
   touch that folder, and the 100 are counted among those.
 - The commits are read only while Group by commit is on, from the same fork and tip as the comparison on screen, and
@@ -388,24 +390,48 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
   grouped by commit, the commits — is said in a line above the list and announced instead.
 - **No changes**, when the branch has nothing uncommitted and nothing committed to list; the lines above the list still
   say what it is made of.
-- **Not every change is shown**, under the list, when a part of it was cut short: at most 10,000 changes, or 2 MiB of
-  paths, are listed in each of the uncommitted changes, the committed changes, and the commits' changes together —
-  those Git reported first, not a chosen subset. A worktree whose whole `git status` output is more than 8 MiB has its
-  uncommitted changes not listed at all, and says so.
-- **Only the newest commits are listed**, with how many, in a line under the list, grouped by commit, only when the
-  branch has more than 100 commits since the fork, or in all when listed with its whole history (see "Grouped by
-  commit" above).
-- **A failure** of a part — the uncommitted changes could not be listed (a worktree found gone is not one: see
-  "Uncommitted changes" above), the branch could not be compared (a branch
-  that no longer exists or is broken, or two branches with no commit in common, say), or the commits could not be
-  listed — is **a red mark on the heading of the section it could not fill**, named as what could not be listed or
-  compared, while the rest of the list is shown. Its popover holds the reason, what to do about it, any details and
-  **Try again** (see "Failures marked on a row" in `docs/product/error-alerts.md`). The uncommitted changes' mark is on
-  the first uncommitted section listed, or on an Unstaged heading with no rows under it when none is; the comparison's
-  or the commits' is on the Committed heading, kept with no rows under it when nothing committed is listed. A mark that
-  appears after the view was drawn is announced to assistive technology once; one there as the view opens is not.
+- **A part cut short** is an amber warning, and nothing about it is written under the list. At most 10,000
+  changes, or 2 MiB of paths, are listed in each of the uncommitted changes, the committed changes, and the commits'
+  changes together — those Git reported first, not a chosen subset.
+  - **Uncommitted changes cut short** are warned of as a whole, not on a section's heading: they are cut as one list,
+    which cannot say which of the uncommitted sections lost entries. The warning is about the worktree they are read
+    from, so an amber warning mark ends that worktree's line in the branch selector's area, after its name and copy
+    button, within the line's text (see "Uncommitted changes" above, and "Failures, warnings and notes marked at their point" in
+    `docs/product/error-alerts.md`). It is named that not every uncommitted change is listed; its popover says that
+    the worktree has more uncommitted changes than the list can show, often because generated files are not ignored,
+    and what to do: add files that should not be tracked to `.gitignore`, or commit or discard some of the changes,
+    then refresh. It has no recovery action. It stands for as long as the uncommitted changes are listed cut short, a
+    filter that matches nothing included. A worktree whose whole `git status` output is more than 8 MiB has its
+    uncommitted changes not listed at all, and says so.
+  - **Committed changes cut short**, or, grouped by commit, only the newest commits being listed — only when the
+    branch has more than 100 commits since the fork, or in all when listed with its whole history (see "Grouped by
+    commit" above) — put an amber warning mark named that committed changes are cut short on the Committed heading, in
+    the place a failure's mark takes (below), its popover saying that not every change is shown, that only the newest
+    commits are listed with how many, or both. A Committed heading whose part failed shows only the failure's mark.
+
+  The warning of a part cut short comes with the list it is about and is not announced to assistive technology on its
+  own.
+- **A failure** of a part while the rest of the list is shown:
+  - **The uncommitted changes could not be listed** (a worktree found gone is not one: see "Uncommitted changes"
+    above): they are listed as one list across their sections, so the failure is about them as a whole, not on a
+    section's heading. A red compact alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`)
+    stands at the top of the list — below the lines above the list, above its sections — titled that the changes in
+    this worktree could not be listed, with the failure's sentence, what to do about it, **Details** where there is
+    more, and **Try again** where trying again can help.
+  - **The branch could not be compared** (a branch that no longer exists or is broken, or two branches with no commit
+    in common, say), or **the commits could not be listed**: a red mark on the Committed heading, kept with no rows
+    under it when nothing committed is listed, named as what could not be compared or listed. Its popover holds the
+    reason, what to do about it, any details and **Try again** where trying again can help (see "Failures, warnings
+    and notes marked at their point" in `docs/product/error-alerts.md`).
+
+  Neither announces itself: one that appears after the view was drawn is said to assistive technology once, by its
+  title or name, through the view's status region; one there as the view opens is not.
+
   When nothing is listed and exactly one part failed, that failure takes the list's place instead, as an empty-state
-  failure with **Try again**; with more than one, each is a mark on its heading. None of them opens an error alert.
+  failure with **Try again**. When nothing is listed and more than one part failed, they take the list's place
+  together as one empty-state failure, saying that the changes could not be listed because neither the uncommitted
+  nor the committed part could be read, with each part's reason under **Details**, and **Try again** unless reading
+  again could help neither. None of them opens an error alert.
   Changes that kept moving while they were listed, after two more tries, say so; Refresh tries again. Try again on
   the empty-state failure, pressed from the keyboard, hands keyboard focus to the header's Refresh.
 - **The repository could not be read** takes the whole view's place as an empty-state failure, with Try again.
@@ -452,10 +478,15 @@ it.
 
 Any other branch the comparison is of — the default branch, as read from the worktrees, or the base of whichever
 branch is shown — is not dropped: the comparison on screen stays on the commits it was made at. Once a complete branch
-list no longer has the branch or its base, a line under the others says that branch no longer exists and that the
-comparison still uses the commits it was made at, announced to assistive technology as it appears; a default branch
-that is gone is named as no longer existing in the selector too, and nothing compares it again on its own. A branch
-list cut short says nothing of a branch it does not have. Refresh then fails, saying there is no such branch. A remote
+list newer than the comparison no longer has the branch or its base, that is said at the branch's name. A base that is
+gone has an amber warning mark named that the branch was deleted right after its name in the **Forked from** line (see
+"Committed changes" above), within the line's text; its popover says that the branch no longer exists and that the
+comparison still uses the commits it was made at (see "Failures, warnings and notes marked at their point" in
+`docs/product/error-alerts.md`). A branch compared that is gone — the default branch — has no mark: the branch
+selector names it as no longer existing, by the status badge after its name (see "The branch selector" in
+`docs/product/project-pane-git-mode.md`), and nothing compares it again on its own. A branch found gone while the view
+is open is said once through the view's status region; one already gone when the view opened is not. A branch list cut short
+says nothing of a branch it does not have. Refresh then fails, saying there is no such branch. A remote
 branch that was the base is not reported this way: a branch list that no longer has it gives the main working copy's
 branch another base, or its whole history, which is then compared (see "Committed changes" above). A change opened
 from the comparison still on screen reads from its commits for as long as the repository has them (see "Errors" in

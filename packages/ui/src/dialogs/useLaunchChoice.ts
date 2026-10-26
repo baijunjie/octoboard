@@ -6,7 +6,7 @@ import { agentIconPickerOptions } from "../components/AgentIcon";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Console, Project } from "../protocol";
-import { quotaUsedUpCopy } from "../quota/quotaCopy";
+import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import { useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { accountOption } from "./accountOptions";
@@ -117,13 +117,14 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     blocked,
     /** The preset's agent or account can no longer be picked, and the user has not picked since. */
     presetGone,
-    /** Why the chosen account cannot run a session, when it is disabled, its quota is used up or its sharing change runs. */
+    /** Why the chosen account cannot run a session, when it is disabled, its quota is used up or its sharing change
+     * runs: the error text of the account field. */
     unavailable: disabled && chosenEntry
-      ? { title: t("accountChoice.disabled.title"), description: t("accountChoice.disabled.description", { name: isolate(chosenEntry.name) }) }
+      ? t("accountChoice.disabled.description", { name: isolate(chosenEntry.name) })
       : exhaustedBy && chosenEntry?.quota
-        ? quotaUsedUpCopy(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
+        ? quotaUsedUpMessage(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
         : changingSharing && chosenEntry
-          ? { title: t("accountChoice.sharingChange.title"), description: t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) }) }
+          ? t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) })
           : undefined,
     overrides,
     agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude),

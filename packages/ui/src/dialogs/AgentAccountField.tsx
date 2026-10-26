@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useId, useRef } from "react";
 
 import { useFocusHandoff } from "../components/useFocusHandoff";
 
@@ -7,10 +7,12 @@ import { OptionSelect, type Option } from "./OptionSelect";
 
 /** An agent picker, joined to an account picker with it when `account` is given. The agent and its
  * account read as one setting, so they are one input group under one label: the agent at the start
- * settles which accounts the part at the end offers. Without `account` — an agent with nothing to
+ * settles which accounts the part at the end offers. The account's `mark` is a status mark inside that part
+ * (see `OptionSelect`). Without `account` — an agent with nothing to
  * choose between — it is the agent picker alone. `help` is a help tip at the end of the label's line.
  * With `placeholders` neither picker holds a value, each showing its placeholder instead, for a choice
- * that has to be made again (what was asked for is gone); any pick then reaches `onChange`. */
+ * that has to be made again (what was asked for is gone); any pick then reaches `onChange`. With `errorMessage` the
+ * pair is marked invalid and the message stands under it (see `LabelledGroup`): why the chosen account cannot be used. */
 export function AgentAccountField<T extends string>({
   label,
   help,
@@ -21,22 +23,26 @@ export function AgentAccountField<T extends string>({
   placeholders,
   isDisabled,
   description,
+  errorMessage,
 }: {
   label: string;
   help?: React.ReactNode;
   options: Option<T>[];
   value: T;
   onChange: (value: T) => void;
-  account?: { label: string; options: Option<string>[]; value: string; onChange: (value: string) => void };
+  account?: { label: string; options: Option<string>[]; value: string; onChange: (value: string) => void; mark?: (markId: string) => React.ReactElement };
   placeholders?: { agent: string; account: string };
   isDisabled?: boolean;
   description?: React.ReactNode;
+  errorMessage?: React.ReactNode;
 }): React.ReactElement {
+  const errorId = useId();
   const controls = useRef<HTMLDivElement>(null);
+  const invalid = errorMessage ? { isInvalid: true, describedBy: errorId } : undefined;
   const agentTrigger = () => controls.current?.querySelector<HTMLElement>('[data-slot="select-trigger"]');
   const focusHandoff = useFocusHandoff(() => agentTrigger()?.focus());
   return (
-    <LabelledGroup label={label} help={help} description={account ? description : undefined} isDisabled={isDisabled}>
+    <LabelledGroup label={label} help={help} description={account ? description : undefined} isDisabled={isDisabled} errorMessage={errorMessage} errorId={errorId}>
       <div ref={controls} {...focusHandoff} className="flex items-stretch">
         {/* Keeping the agent picker mounted lets its popover restore focus when the next agent
             has no accounts to choose between. */}
@@ -52,9 +58,10 @@ export function AgentAccountField<T extends string>({
               onChange={(next: T | null) => next !== null && onChange(next)}
               isDisabled={isDisabled}
               description={account ? undefined : description}
+              {...invalid}
             />
           )
-          : <OptionSelect joined={account ? "start" : undefined} hideLabel label={label} options={options} value={value} onChange={onChange} isDisabled={isDisabled} description={account ? undefined : description} />}
+          : <OptionSelect joined={account ? "start" : undefined} hideLabel label={label} options={options} value={value} onChange={onChange} isDisabled={isDisabled} description={account ? undefined : description} {...invalid} />}
         {account && (placeholders
           ? (
             <OptionSelect
@@ -65,9 +72,11 @@ export function AgentAccountField<T extends string>({
               placeholder={placeholders.account}
               onChange={(next: string | null) => next !== null && account.onChange(next)}
               isDisabled={isDisabled}
+              mark={account.mark}
+              {...invalid}
             />
           )
-          : <OptionSelect joined="end" label={account.label} options={account.options} value={account.value} onChange={account.onChange} isDisabled={isDisabled} />)}
+          : <OptionSelect joined="end" label={account.label} options={account.options} value={account.value} onChange={account.onChange} isDisabled={isDisabled} mark={account.mark} {...invalid} />)}
       </div>
     </LabelledGroup>
   );

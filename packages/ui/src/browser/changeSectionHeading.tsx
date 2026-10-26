@@ -124,7 +124,7 @@ export function ChangeSectionHeading({
   collapsed,
   onCollapsedChange,
   topDivider,
-  failure,
+  mark,
 }: {
   section: ChangeSection;
   count: number;
@@ -133,9 +133,9 @@ export function ChangeSectionHeading({
   onCollapsedChange: (collapsed: ReadonlySet<string>) => void;
   /** The first heading shares the selector's divider; adjacent headings share the preceding band's. */
   topDivider: boolean;
-  /** The mark of this section's failure to be listed, at the band's trailing end, outside the
-   * button that folds the section: a control cannot sit inside one. */
-  failure?: React.ReactNode;
+  /** The mark of this section's failure to be listed or of its list being cut short, at the band's
+   * trailing end, outside the button that folds the section: a control cannot sit inside one. */
+  mark?: React.ReactNode;
 }): React.ReactElement {
   const button = useRef<HTMLButtonElement>(null);
   const key = sectionKey(section);
@@ -163,7 +163,7 @@ export function ChangeSectionHeading({
       excludeFromTabOrder
       preventFocusOnPress
       onPress={toggle}
-      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${failure ? "pe-10" : ""} data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset`}
+      className={`flex h-full w-full min-w-0 items-center gap-2 border-t border-transparent ${topDivider ? "groove-t" : ""} px-(--pane-inset) text-start outline-none ${mark ? "pe-10" : ""} data-[focus-visible]:ring-2 data-[focus-visible]:ring-focus data-[focus-visible]:ring-inset`}
     >
       {/* The chevron mirrors under right-to-left while it points along the text. */}
       {isCollapsed ? (
@@ -174,17 +174,17 @@ export function ChangeSectionHeading({
       <SectionHeadingText section={section} count={count} />
     </Button>
   );
-  if (!failure) return band;
+  if (!mark) return band;
   return (
     <div className="relative h-full w-full min-w-0">
       {band}
-      <div className="absolute inset-y-0 end-(--pane-inset) flex items-center">{failure}</div>
+      <div className="absolute inset-y-0 end-(--pane-inset) flex items-center">{mark}</div>
     </div>
   );
 }
 
 /**
- * Up and Down across a section heading, and Right and Left between its band and its failure mark
+ * Up and Down across a section heading, and Right and Left between its band and its mark
  * (`moveAlongHeading`), for the capture phase of an element around a change list.
  *
  * A react-aria collection manages focus itself: the list is one tab stop, Up and Down walk its
@@ -242,7 +242,7 @@ function moveAcrossSectionHeadings(event: React.KeyboardEvent<HTMLElement>): voi
 }
 
 /**
- * Right from a heading's band to the failure mark at its end, and Left back, the key that runs along
+ * Right from a heading's band to the mark at its end, and Left back, the key that runs along
  * the heading as a control inside a row of the collection is reached along the row; under a
  * right-to-left reading direction the mark stands at the other side, so the keys swap. Any other
  * target, or a heading with no mark, is left to the collection, which a row answers with its own

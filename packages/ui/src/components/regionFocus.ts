@@ -103,3 +103,12 @@ export function focusAfterLoss(focusTerminal: () => void): void {
     if (focusRegion(region, focusTerminal)) return;
   }
 }
+
+/** Where focus goes when something inside `region` goes while it (or a popover it opened) holds focus: the region's
+ * first control. React suspends focus events during removal, so it waits until the surviving control can observe its
+ * focus and draw its ring; another hand-off in the same commit takes precedence. */
+export function handFocusToRegionStart(region: Region): void {
+  queueMicrotask(() => {
+    if (document.activeElement === document.body) focusAfterLoss(() => focusFirstIn(region));
+  });
+}

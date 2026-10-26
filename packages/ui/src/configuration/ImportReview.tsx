@@ -1,12 +1,12 @@
 import { Checkbox, Label } from "@heroui/react";
-import { CircleAlert, CircleCheck, CloudDownload, Info, type LucideIcon } from "lucide-react";
+import { CircleCheck, CloudDownload, Info, type LucideIcon } from "lucide-react";
 import React, { useId, useState } from "react";
 
 import { Button } from "../components/Button";
-import { AGENT_LABEL } from "../agents";
 import { InlineReference } from "../components/InlineReference";
 import { TILDE_PARAMS } from "../components/literalParams";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { StatusMark } from "../components/StatusMark";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
 import { LabelledGroup } from "../dialogs/LabelledGroup";
 import { OptionSelect } from "../dialogs/OptionSelect";
@@ -15,7 +15,7 @@ import type { PlainMessageKey } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { sameValue } from "../sameValue";
-import type { AccountFallback, Event, InspectedConsole, InspectedProject } from "../protocol";
+import type { Event, InspectedConsole, InspectedProject } from "../protocol";
 import {
   applyToAll,
   availableFor,
@@ -29,7 +29,7 @@ import {
   type ReviewState,
   type RowState,
 } from "./importPlan";
-import { BOOLEAN_SETTINGS, CARD_CLASS, SettingLine } from "./importParts";
+import { BOOLEAN_SETTINGS, CARD_CLASS, FallbackLines, FallbackMark, SettingLine } from "./importParts";
 
 export type Inspection = Extract<Event, { type: "configuration_inspected" }>;
 
@@ -41,12 +41,12 @@ const CHOICE_LABEL: Record<RowState["choice"], PlainMessageKey> = {
   skip: "configuration.import.choice.skip",
 };
 
-/** Where the daemon found the project on its own host, which is what its preselected choice follows. */
-const STATE: Record<OfferedChoice | "none", { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
+/** Where the daemon found the project on its own host, which is what its preselected choice follows. A project
+ * found nowhere has no line: its name carries a warning mark instead. */
+const STATE: Record<OfferedChoice, { label: PlainMessageKey; icon: LucideIcon; tone: string }> = {
   exported_path: { label: "configuration.import.project.state.exportedPath", icon: CircleCheck, tone: "text-success-soft-foreground" },
   default_clone_dir: { label: "configuration.import.project.state.defaultCloneDir", icon: CircleCheck, tone: "text-success-soft-foreground" },
   clone: { label: "configuration.import.project.state.clone", icon: CloudDownload, tone: "text-accent-soft-foreground" },
-  none: { label: "configuration.import.project.state.none", icon: CircleAlert, tone: "text-warning-soft-foreground" },
 };
 
 const APPLY_ALL: {
@@ -73,18 +73,6 @@ function BooleanSettingLine({ label, wanted, current, consequence }: { label: st
     </SettingLine>
   ) : (
     <SettingLine label={label} badge={t("configuration.import.settings.badge.turnsOff")} />
-  );
-}
-
-/** An account reference that names no account of this machine, and what happens to it. */
-function FallbackNote({ fallback }: { fallback: AccountFallback }): React.ReactElement {
-  return (
-    <p className="flex items-start gap-2 text-sm">
-      <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning-soft-foreground" />
-      <span className="min-w-0">
-        <Message id="configuration.import.fallback" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[fallback.agent]}</InlineReference>, name: <InlineReference dir="auto" wrap>{fallback.name}</InlineReference> }} />
-      </span>
-    </p>
   );
 }
 
@@ -116,7 +104,7 @@ function ProjectRow({
   const target = targetOf(project, row);
   const inPlace = row.choice === "exported_path" && target === project.path;
   const recordedPath = hasRecordedPath(project.path);
-  const state = STATE[project.default ?? "none"];
+  const state = project.default ? STATE[project.default] : undefined;
   // Placed where it was exported, the 'Placed in' line alone says both.
   const fields: [string, string][] = [];
   if (recordedPath && !inPlace) fields.push([t("configuration.import.project.field.exportedPath"), project.path]);
@@ -129,13 +117,29 @@ function ProjectRow({
     <li className="@container flex flex-col gap-2 groove-b px-4 py-3 last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <div className="flex min-w-40 flex-1 flex-col gap-0.5">
-          <span className="font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">
-            {project.name}
+          <span className="flex items-center gap-1">
+            <span className="min-w-0 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">
+              {project.name}
+            </span>
+            {!state && (
+              // A project not found that also has account fallbacks is still one point: one mark, naming both.
+              <StatusMark
+                tone="warning"
+                label={t(project.account_fallbacks.length > 0 ? "configuration.import.project.state.noneAndFallbacksMark" : "configuration.import.project.state.noneMark", { project: isolate(project.name) })}
+              >
+                <p dir="auto"><Message id="configuration.import.project.state.none" /></p>
+                <p dir="auto">{t("configuration.import.project.state.noneRemedy")}</p>
+                <FallbackLines fallbacks={project.account_fallbacks} />
+              </StatusMark>
+            )}
+            {state && <FallbackMark subject={project.name} fallbacks={project.account_fallbacks} />}
           </span>
-          <span className="flex items-center gap-1.5 text-sm text-app-muted">
-            <state.icon aria-hidden="true" className={`size-3.5 shrink-0 ${state.tone}`} />
-            <Message id={state.label} />
-          </span>
+          {state && (
+            <span className="flex items-center gap-1.5 text-sm text-app-muted">
+              <state.icon aria-hidden="true" className={`size-3.5 shrink-0 ${state.tone}`} />
+              <Message id={state.label} />
+            </span>
+          )}
         </div>
         <div className="w-full @md:w-56">
           <OptionSelect
@@ -170,9 +174,6 @@ function ProjectRow({
           }
         />
       )}
-      {project.account_fallbacks.map((fallback) => (
-        <FallbackNote key={`${fallback.agent}:${fallback.name}`} fallback={fallback} />
-      ))}
       {picking && (
         <DirectoryPicker
           title={t("dialog.chooseDirectory")}
@@ -206,15 +207,15 @@ function ConsoleGroup({
   return (
     <section aria-labelledby={headingId} className={CARD_CLASS}>
       <div className="flex flex-col gap-1.5 groove-b px-4 py-3">
-        <div className="flex flex-wrap items-baseline gap-x-2">
-          <h3 id={headingId} className="text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
-            {console.name}
-          </h3>
+        <div className="flex flex-wrap items-center gap-x-2">
+          <div className="flex min-w-0 items-center gap-1">
+            <h3 id={headingId} className="min-w-0 text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
+              {console.name}
+            </h3>
+            <FallbackMark subject={console.name} fallbacks={console.account_fallbacks} />
+          </div>
           <span className="text-sm text-app-muted">{t("configuration.import.console.projects", { count: console.projects.length })}</span>
         </div>
-        {console.account_fallbacks.map((fallback) => (
-          <FallbackNote key={`${fallback.agent}:${fallback.name}`} fallback={fallback} />
-        ))}
       </div>
       {console.projects.length === 0 ? (
         <p className="px-4 py-3 text-sm text-app-muted">{t("configuration.import.console.noProjects")}</p>
@@ -247,8 +248,9 @@ function ConsoleGroup({
 
 /**
  * The step between reading a document and applying it: a card for every console, with a row for each
- * of its projects (the choices that project's state allows and the directory the chosen one would use)
- * and the account references that would fall back to a default account, then, when the document
+ * of its projects (the choices that project's state allows and the directory the chosen one would use),
+ * a warning mark after the name of a console or project whose account references would fall back to a
+ * default account (and, after a project's name, one saying the project was not found), then, when the document
  * carries application settings, a card saying what applying them would change and a checkbox to
  * apply them. The state of every choice is the caller's (`review`), so applying sends what is on
  * screen. A choice can be applied to every project it is available for at once, which is how a

@@ -7,6 +7,13 @@ import { DetailsButton } from "./DetailsButton";
 import { TitledControl } from "./TitledControl";
 import { useAnnouncement } from "./useAnnouncement";
 
+/** `ErrorAlert`'s announcement of a failure panel. */
+interface Announcement {
+  announce?: boolean;
+  announceKey?: number;
+  announceDelayMs?: number;
+}
+
 /** HeroUI's `EmptyState` with the shape every empty list in the app takes: a glyph, a heading
  * saying what is missing, an optional line explaining it and the action that fills it when there is
  * one. `compact` is a row, for a list nested inside another (a project with no sessions); with an
@@ -22,7 +29,9 @@ import { useAnnouncement } from "./useAnnouncement";
  * whose subject could not be loaded): a danger glyph, the heading saying what could not be loaded,
  * and in the centred row the recovery `action` and Details, the button that opens `details` in a
  * popover (further explanation in the application's own words, then raw text). `remedy` is the one
- * main thing to do, a second line under the first. `announce`, `announceKey` and `announceDelayMs` are
+ * main thing to do, a second line under the first. A startup screen, whose row is kept for its recovery and
+ * Quit, passes `headingMark` instead of `details`: the mark follows the heading and the row holds the actions
+ * alone. `announce`, `announceKey` and `announceDelayMs` are
  * `ErrorAlert`'s: the heading and the first line, and nothing else, are spoken as an alert. */
 export function EmptyPanel({
   icon: Icon,
@@ -33,6 +42,7 @@ export function EmptyPanel({
   action,
   secondaryAction,
   details,
+  headingMark,
   compact,
   silent,
   tone,
@@ -45,9 +55,9 @@ export function EmptyPanel({
   /** The full panel's heading level: the level of the heading naming whatever the panel stands in
    * for, so the two read as one thing in the view's outline rather than the panel opening a section
    * of its own. The default suits a pane's own title and a dialog's, both `h2`; the sidebar's
-   * `SectionHeading` is an `h3`, so a panel inside one of those sections passes 3. A compact row
-   * has no heading. */
-  headingLevel?: 2 | 3;
+   * `SectionHeading` is an `h3`, so a panel inside one of those sections passes 3, and a panel that
+   * is the whole page (a startup failure) passes 1. A compact row has no heading. */
+  headingLevel?: 1 | 2 | 3;
   /** The full panel's line under the heading, explaining what the heading leaves out; a compact
    * row has no room for one. It sits in a `p`, so it takes phrasing content only. */
   description?: React.ReactNode;
@@ -56,11 +66,8 @@ export function EmptyPanel({
   compact?: boolean;
   /** The full panel's tone: `danger` for a failure. */
   tone?: "danger";
-  announce?: boolean;
-  announceKey?: number;
-  announceDelayMs?: number;
 } & (
-  | {
+  | ({
     /** `icon` shows only on the full panel's button; a compact row already leads with its glyph.
      * `isPending` keeps the button where it is, unavailable, while what it started runs; `landing`
      * marks it as the F6 landing of its region. */
@@ -72,14 +79,37 @@ export function EmptyPanel({
       landing?: boolean;
       onPress: () => void;
     };
-    /** A second way out beside the action, quieter than it, for a full panel only. */
-    secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
-    /** What a failure's Details button opens (further explanation, then raw text), in the centred
-     * row after the actions; with none there is no Details button. The full panel only, and like the actions never with `silent`. */
-    details?: React.ReactNode;
     silent?: never;
-  }
-  | { action?: never; secondaryAction?: never; details?: never; silent?: true }
+  } & (
+    // A row holds at most two buttons: the action and one more, a second way out or a failure's Details. A heading
+    // mark takes the place of Details, and with it the panel cannot announce, since the mark would sit
+    // inside the announced element.
+    | (Announcement & { headingMark?: never } & (
+      | {
+        /** A second way out beside the action, quieter than it, for a full panel only. */
+        secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
+        details?: never;
+      }
+      | {
+        secondaryAction?: never;
+        /** What a failure's Details button opens (further explanation, then raw text), in the centred
+         * row after the action; with none there is no Details button. The full panel only, and like the actions never with `silent`. */
+        details?: React.ReactNode;
+      }
+    ))
+    | {
+      secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
+      details?: never;
+      /** A mark (`StatusMark`) right after the heading, on its line, holding a startup screen's raw error
+       * text, whose row is kept for its recovery and Quit. The full panel only, never with `silent`,
+       * `announce` or `details`. */
+      headingMark?: React.ReactNode;
+      announce?: false;
+      announceKey?: never;
+      announceDelayMs?: never;
+    }
+  ))
+  | (Announcement & { action?: never; secondaryAction?: never; details?: never; headingMark?: never; silent?: true })
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
@@ -142,7 +172,14 @@ export function EmptyPanel({
           explaining line's size and colour both, leaving the weight as the only thing telling the
           two apart — too little to read as a heading. */}
       <div key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-center gap-3">
-        <Heading className="text-base font-semibold text-foreground">{message}</Heading>
+        {headingMark ? (
+          <div className="flex min-w-0 max-w-full items-center justify-center gap-1.5">
+            <Heading className="min-w-0 text-base font-semibold text-foreground">{message}</Heading>
+            {headingMark}
+          </div>
+        ) : (
+          <Heading className="text-base font-semibold text-foreground">{message}</Heading>
+        )}
         {description && <p className="max-w-sm text-sm break-words text-app-muted">{description}</p>}
       </div>
       {remedy && <p className="-mt-3 max-w-sm text-sm break-words text-app-muted">{remedy}</p>}

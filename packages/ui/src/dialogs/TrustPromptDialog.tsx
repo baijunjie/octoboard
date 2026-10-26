@@ -5,7 +5,6 @@ import React, { useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { InlineReference } from "../components/InlineReference";
-import { TintedAlert } from "../components/TintedAlert";
 import { DaemonRequestError } from "../daemon-client";
 import { Message, useT } from "../i18n/react";
 import { TRUST_NOT_WAITING, TRUST_REFUSED_CODES, type Agent } from "../protocol";
@@ -32,7 +31,7 @@ function Caution({ agent }: { agent: Agent }): React.ReactElement {
 
 /** What the trust dialog says: which agent asks, the question with the project's path, what
  * agreeing does (the agent records its own trust, and the permission Octoboard records is shared by
- * every agent), for Codex that its record covers the whole repository, and the caution set apart.
+ * every agent), for Codex that its record covers the whole repository, and the caution, in plain text like the rest.
  * The folder-wide choice is the checkbox under all of it (`TrustDirCheckbox`). */
 function TrustPromptMessage({
   prompt,
@@ -41,7 +40,6 @@ function TrustPromptMessage({
   prompt: TrustPrompt;
   sessionTitle: string | undefined;
 }): React.ReactElement {
-  const t = useT();
   // Shown as Settings lists trusted folders, with the home directory as `~`, so the folder named
   // here reads the same as the row it adds there.
   const home = useDaemonStore((s) => s.homeDir);
@@ -55,20 +53,7 @@ function TrustPromptMessage({
       </p>
       <p><Message id="dialog.trust.behavior" params={{ agent }} /></p>
       {prompt.agent === "codex" && <p><Message id="dialog.trust.codexRoot" params={{ agent }} /></p>}
-      {/* HeroUI's own warning tint rather than its default surface, which is the dialog's own fill and
-          leaves the callout unmarked. */}
-      <TintedAlert
-        status="warning"
-        title={(
-          <>
-            {/* The icon is presentational, so the word that makes this a caution is spoken instead,
-                ahead of the title. */}
-            <span className="sr-only">{t("dialog.trust.cautionLabel")} </span>
-            {t("dialog.trust.cautionTitle")}
-          </>
-        )}
-        description={<Caution agent={prompt.agent} />}
-      />
+      <p><Caution agent={prompt.agent} /></p>
     </>
   );
 }

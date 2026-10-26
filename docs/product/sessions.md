@@ -85,6 +85,9 @@ the same action open a dialog before anything is launched. New session under a p
 project. The sidebar's **+** buttons can also open a session without the dialog, on the values the dialog would open
 on; see "Opening a session with defaults" below.
 
+The dialog is titled "Open session" for a project session and "Open console session" for a console session; the first
+sentence of its body names the project, or the console, the session will be opened in.
+
 A project session's dialog opens with two tabs at its head, **New conversation**, selected by default, and **Resume
 conversation**: the **Resume conversation** tab starts with a required **Session ID** field alone, and shows the
 fields that follow only once the conversation is found; its agent and account are never picked there, and it has no
@@ -118,23 +121,23 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   account the field would open on, or would fall to when the user turns to another agent without having picked one
   of its accounts, is used up, the field takes the first account of the same agent that is not, in the picker's order.
   When the chosen account is used up all the same — every account of the agent is, the agent's only account among
-  them, or a reading arrives while the dialog is open — a danger callout at the top of the
-  dialog's body names the account, the quota it has used up and when it resets, and the dialog cannot be submitted
-  until another agent or account is chosen or the account is no longer used up.
+  them, or a reading arrives while the dialog is open — the field says under its pickers, which are marked invalid,
+  that the account cannot be used for now, naming the quota it has reached and when it resets, and the dialog cannot
+  be submitted until another agent or account is chosen or the account is no longer used up.
   An account whose sharing of the default configuration is being changed, which the daemon refuses a session on
   meanwhile (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`), is treated
   the same way while the change runs: it is listed but cannot be picked, its usage bar staying and a short note under
   its name saying why, with the full reason as its description for assistive technology in place of what remains of
   its quota; the field passes over it as it passes over a used-up account; and when the chosen account is one all
-  the same, a danger callout at the top of the dialog's body says that its sharing is being changed, to choose
-  another account or wait, and the dialog cannot be submitted until then.
+  the same, the field says under its pickers that its sharing is being changed, to choose another account or wait,
+  and the dialog cannot be submitted until then.
   A turned-off account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the field
   passes over it as it passes over a used-up account. Only when the account the field ends on is turned off all the
   same — every account of the agent is unavailable, the account was turned off while the dialog is open, or the
   **Resume conversation** tab settles on it — is it listed, and then it cannot be picked: its usage bar stays and a
-  short note under its name reads "Disabled", with the full reason as its description for assistive technology; a
-  danger callout at the top of the dialog's body says that the account is turned off, to choose another account or
-  turn it back on in Settings, and the dialog cannot be submitted until then. An account that is turned off is
+  short note under its name reads "Disabled", with the full reason as its description for assistive technology; the
+  field says under its pickers that the account is turned off, to choose another account or turn it back on in
+  Settings, and the dialog cannot be submitted until then. An account that is turned off is
   described as turned off, whatever its quota or its sharing.
   An account whose last change of sharing is incomplete can be picked, and submitting on it asks the user first (see
   "Starting a session on an account whose last change is incomplete" in
@@ -157,8 +160,9 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
   has none either, and shows a line saying the session reports to that console session instead, which is the binding
   it gets (see `docs/product/focus-mode.md`). Should that fixed console session become unavailable — archived or gone —
-  the dialog closes without opening a session. An error acknowledgement identifies the unavailable owner, with its
-  name set apart as a chip, and offers only OK; dismissing it returns focus to an available control. A console session
+  no session is opened, and the dialog turns into a failure modal titled that a session cannot be opened, which
+  identifies the unavailable owner, with its name set apart as a chip, and offers only its acknowledgement, which
+  closes the dialog (see "The failure modal" in `docs/product/error-alerts.md`). A console session
   chosen in the optional Report to picker becoming unavailable instead returns that choice to no console session,
   keeping the form open. The **Resume conversation** tab has no such field, since a resumed session is never bound
   (see "Resuming a conversation by its session ID" below).
@@ -179,7 +183,7 @@ behind it (see "The launch environment" in `docs/product/launching-agents.md`). 
 launch: it closes as soon as the session is recorded, and the session's terminal says it is starting until the agent
 is up (see "Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded —
 an unknown owner, an unavailable agent or one that is not added, a used-up account, a model the agent does not offer, the refusals about a conversation to resume
-below — is still shown in the dialog, which stays open. A session an agent opens with `new_session`, and the session
+below — is still shown while the dialog is open, in an error alert over it, and the dialog stays open. A session an agent opens with `new_session`, and the session
 an approved request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting*
 the same way, but the agent's call, or the approval, is answered only once the launch has settled, with the launch's
 own refusal when it fails.
@@ -231,9 +235,9 @@ defaults" below). Where the window says why:
   `docs/product/sidebar.md`).
 
 If this state comes about while the session dialog is open — the last such agent removed or found unavailable
-meanwhile — the dialog closes at once, with nothing opened, and an error alert says that no agent is available to open
-a session; that alert offers nothing but its acknowledgement (see "Recovery and unexpected errors" in
-`docs/product/error-alerts.md`).
+meanwhile — nothing is opened, and the dialog turns into a failure modal titled that a session cannot be opened,
+saying that no agent is available to open a session, with nothing but its acknowledgement, which closes the dialog
+(see "The failure modal" in `docs/product/error-alerts.md`).
 
 **The daemon refuses to open a session of an agent that is not added.** Whatever opens it — the dialog, a session
 opened with defaults, `open_session`, a console or project session's `new_session` (with
@@ -517,12 +521,15 @@ reopened, one interrupted meanwhile is resumed, and one whose process starts mea
 | An interrupted session of this project | **Name**, showing the session's name, and its agent and account, all locked | **Resume** — resumes that session (see "Resuming or going to a session of this project from the tab" below) |
 | A session of this project that is starting or whose process is running | **Name**, showing the session's name, and its agent and account, all locked | **Go to session** — selects that session (see "Resuming or going to a session of this project from the tab" below) |
 | A session of another project, or a console session, in any state | none; an alert directly under the field names that session and where it is (see "Naming a session outside the project" in this section) | disabled |
-| Nowhere | none; an alert directly under the field says no conversation with that ID was found in any account | disabled |
+| Nowhere | none; the field's own error says under it that no conversation with that ID was found in any account, the field marked invalid | disabled |
 
-A lookup that fails shows its failure in an alert directly under the field, with no fields after it, and the submit
-button stays disabled. Each of these alerts — a session held elsewhere, no conversation found, a failed lookup — is titled that this
-conversation could not be resumed, with what was found or the failure under the title. They are the lookup's outcome, not a verdict on what was typed: the field is not marked
-invalid, and each is announced to assistive technology as it appears (see "Failures shown on the screen" in
+A conversation found nowhere is a verdict on the ID in the field, so it is the field's error, shown as the answer
+arrives without waiting for a submit, and announced as a field's error is. A lookup that fails — it could not be made,
+so it says nothing about the ID — shows its failure in an alert directly under the field instead, with no fields after
+it, and the submit button stays disabled. Each of these alerts — a session held elsewhere, a holder no longer offered
+(below), a failed lookup — is titled that this conversation could not be resumed, with what was found or the failure
+under the title. They are the lookup's outcome, not a verdict on what was typed: the field is not marked invalid, and
+each is announced to assistive technology as it appears (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`).
 The locked Agent field holds that agent alone; its account half shows the account that holds the conversation whenever
 it has a name to show, including when it is the agent's sole default account.
@@ -536,9 +543,12 @@ approximately. A login shell environment that cannot be captured leaves the defa
 lookup's failure only when no stored account holds the conversation either.
 
 If the agent or account holding the record is not offered, or stops being offered while the dialog is open — the
-agent is uninstalled or no longer added, or the account is removed — the fields after the ID go, an error under the
+agent is uninstalled or no longer added, or the account is removed — the fields after the ID go, an alert under the
 field says that the agent or account holding the conversation is no longer available, and the submit button is
-disabled; no other agent or account is used in its place.
+disabled; no other agent or account is used in its place. An account holding the record that is offered but cannot
+open a session — turned off, used up, or having its sharing changed — keeps the fields, and its locked Agent field
+says why under it, marked invalid, as the **Agent** field does (see "Opening a session" above); the submit button is
+disabled meanwhile.
 
 **Naming a session outside the project.** The error for a conversation held outside the project names the session
 that holds it by its displayed name (see "Displayed names" in `docs/product/session-titles.md`), and where it is: the

@@ -4,7 +4,7 @@ import { DaemonRequestError } from "./daemon-client";
 export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session"
-  | "configuration" | "image" | "clipboard" | "file" | "gitFailure" | "gitHistory" | "branch"
+  | "configuration" | "image" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
@@ -14,7 +14,9 @@ export type ErrorRecovery =
 
 /** A local failure whose user remedy is known without inspecting its translated message. Its message is the
  * application's own words; `detail` is the raw text it carries (what the system said), which is never part of the
- * message and is shown apart from it, behind Details. */
+ * message and is shown apart from it, behind Details. An operating-system signature in it or its cause still takes
+ * over `recovery` (see `classifyError`), and those name remedies for writing (access, disk space): a failed read
+ * passes `fileRead`, which always wins. */
 export class ActionableError extends DaemonRequestError {
   readonly detail?: string;
   constructor(message: string, readonly recovery: ErrorRecovery, options?: ErrorOptions & { code?: string; params?: MessageParams; detail?: string }) {
@@ -134,7 +136,9 @@ export function additionalRecovery(error: unknown): ErrorRecovery | undefined {
 
 export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorClassification {
   const explicit = recovery ?? (error instanceof ActionableError ? error.recovery : undefined);
-  if (explicit === "issueLink" || explicit === "openExternal") return { kind: "actionable", recovery: explicit };
+  // A file that could not be read keeps its own remedy over the one an operating-system signature names: the
+  // signature's access and disk-space remedies are about writing, which reading a file never needed.
+  if (explicit === "issueLink" || explicit === "openExternal" || explicit === "fileRead") return { kind: "actionable", recovery: explicit };
   if (isNotRestored(error)) return { kind: "actionable", recovery: "notRestored" };
   const remedy = environmentRecovery(error) ?? explicit;
   if (remedy) return { kind: "actionable", recovery: remedy };

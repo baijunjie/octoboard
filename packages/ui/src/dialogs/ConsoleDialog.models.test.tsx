@@ -5,8 +5,9 @@ import { expect, it } from "vitest";
 import { consoleOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { Event, RequestBody } from "../protocol";
-import { openDetails } from "../components/detailsTestSupport";
-import { work, personal, MODELS, listing, render, click, clickButton, choose, sent, asked, openAdvanced, clickTab, pickerNamed, clearButton, stored, optionTexts } from "./consoleDialogTestSupport";
+import { press } from "../components/detailsTestSupport";
+import { accessibleName } from "./dialogTestSupport";
+import { work, personal, MODELS, listing, render, click, clickButton, choose, sent, asked, openAdvanced, clickTab, groupPicker, pickerNamed, clearButton, stored, optionTexts } from "./consoleDialogTestSupport";
 
 const locked = (name: string) => (pickerNamed(name) as HTMLButtonElement).disabled;
 
@@ -81,38 +82,43 @@ it.each([
 ])("says why there is no list for %s, and leaves the form usable", async (code, params, summary, reason) => {
   const request = render(stored, [], async (body) => listing(body, [], { code, params, message: "daemon words" }));
   await openAdvanced();
-  const descriptions = Array.from(document.body.querySelectorAll('[data-slot="alert-description"]')).filter((node) => node.textContent === summary);
-  // One Alert under the table, however many Model pickers it describes.
-  expect(descriptions).toHaveLength(1);
-  for (const description of descriptions) {
-    expect(description.textContent).not.toMatch(/[\u2066-\u2069]/);
-    expect(description.querySelector("pre")).toBeNull();
-    const reference = description.querySelector("[data-inline-reference]");
-    if ("binary" in params) {
-      expect(reference?.textContent).toBe(params.binary);
-      expect(reference?.getAttribute("dir")).toBe("ltr");
-      expect(reference?.querySelector("code")?.textContent).toBe(params.binary);
-    } else if ("agent" in params) {
-      expect(reference?.textContent).toBe(params.agent);
-      expect(reference?.getAttribute("dir")).toBe("auto");
-      expect(reference?.querySelector("code")).toBeNull();
-    } else expect(reference).toBeNull();
-    if (reference) expect(reference.getAttribute("data-size")).toBe("xs");
+  // No Alert under the table: the failure is a warning mark after the Model setting's name, in the row header and,
+  // stacked, above each picker (the layout shows one set), outside the pickers and their names.
+  expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
+  const marks = Array.from(document.body.querySelectorAll<HTMLElement>("button[data-status-mark][aria-label='Could not load the models']"));
+  expect(marks).toHaveLength(3);
+  for (const mark of marks) {
+    expect(mark.querySelector("svg")!.getAttribute("class")).toContain("text-warning-soft-foreground");
+    expect(mark.closest("[data-slot=select]")).toBeNull();
   }
-  expect(document.body.querySelector('[data-slot="alert-root"] pre')).toBeNull();
+  for (const group of ["Console sessions", "Project sessions"]) {
+    expect(accessibleName(groupPicker(group, "Model"))).not.toContain("Could not load");
+  }
+  expect(document.body.querySelector("pre")).toBeNull();
   const statuses = await exposedStatusesAfterFirstWrite();
-  // What the region says is the Alert's sentence alone: neither the remedy nor the detail.
+  // What the region says is the failure's sentence alone: neither the remedy nor the detail.
   expect(statuses.map((node) => node.textContent)).toEqual([reason]);
   expect(statuses[0].querySelector("[data-inline-reference], code, pre")).toBeNull();
-  // The diagnostics are behind the Alert's Details button: in its popover once opened, which is closed again
-  // before the rest, since an open popover hides what is behind it.
+  // The popover holds the sentence, then the diagnostics, and is closed again before the rest, since an
+  // open popover hides what is behind it.
+  press(marks[0]);
+  const description = document.querySelector("[data-status-mark-popover] p")!;
+  expect(description.textContent).toBe(summary);
+  expect(description.textContent).not.toMatch(/[\u2066-\u2069]/);
+  const reference = description.querySelector("[data-inline-reference]");
+  if ("binary" in params) {
+    expect(reference?.textContent).toBe(params.binary);
+    expect(reference?.getAttribute("dir")).toBe("ltr");
+    expect(reference?.querySelector("code")?.textContent).toBe(params.binary);
+  } else if ("agent" in params) {
+    expect(reference?.textContent).toBe(params.agent);
+    expect(reference?.getAttribute("dir")).toBe("auto");
+    expect(reference?.querySelector("code")).toBeNull();
+  } else expect(reference).toBeNull();
+  if (reference) expect(reference.getAttribute("data-size")).toBe("xs");
   const detail = "detail" in params ? params.detail : undefined;
-  if (detail) {
-    const alert = document.body.querySelector<HTMLElement>('[data-slot="alert-root"]')!;
-    const dialog = openDetails(alert);
-    expect(Array.from(dialog.querySelectorAll("pre")).map((node) => node.textContent)).toEqual([detail]);
-    act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  }
+  expect(Array.from(document.querySelectorAll("[data-status-mark-popover] pre")).map((node) => node.textContent)).toEqual(detail ? [detail] : []);
+  act(() => void document.querySelector("[data-status-mark-popover]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await click(pickerNamed("Model"));
   expect(optionTexts()).toEqual(["alpha, Not in the list"]);
   await click(pickerNamed("Model"));
@@ -130,7 +136,8 @@ it("shows the generic sentence for a reason the catalogue does not know, with th
   const statuses = await exposedStatusesAfterFirstWrite();
   expect(statuses.map((node) => node.textContent)).toEqual(["Something unexpected went wrong."]);
   expect(document.body.textContent).not.toContain("daemon words");
-  expect(openDetails(document.body.querySelector('[data-slot="alert-root"]')!).textContent).toBe("daemon words");
+  press(document.body.querySelector("button[data-status-mark][aria-label='Could not load the models']")!);
+  expect(document.querySelector("[data-status-mark-popover] pre")?.textContent).toBe("daemon words");
 });
 
 it("narrows the effort picker to the chosen model's levels", async () => {
@@ -180,5 +187,7 @@ it("names the daemon's own alias for the best model from the catalogue and every
 it("says so when the daemon answers the question with something else", async () => {
   render(undefined, [], async () => ({ type: "ack" }) as Event);
   await openAdvanced();
-  expect(document.body.textContent).toContain("The daemon answered with something unexpected.");
+  expect((await exposedStatusesAfterFirstWrite()).map((node) => node.textContent)).toEqual(["The daemon answered with something unexpected."]);
+  press(document.body.querySelector("button[data-status-mark][aria-label='Could not load the models']")!);
+  expect(document.querySelector("[data-status-mark-popover]")?.textContent).toContain("The daemon answered with something unexpected.");
 });

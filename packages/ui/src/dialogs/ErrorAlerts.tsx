@@ -4,9 +4,9 @@ import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "
 import { Button } from "../components/Button";
 import { appConfig } from "../appConfig";
 import { ExternalLink } from "../components/ExternalLink";
-import { RecoveryGuidance, recoveryAction } from "../components/ErrorGuidance";
+import { recoveryAction } from "../components/ErrorGuidance";
 import { InlineReference } from "../components/InlineReference";
-import { DetailsDisclosure, DiagnosticDetails } from "../components/ErrorDetailsDisclosure";
+import { DiagnosticBlock } from "../components/DiagnosticBlock";
 import { errorAlerts } from "../errorAlerts";
 import { diagnosticText } from "../errorText";
 import { Message, useT } from "../i18n/react";
@@ -15,6 +15,7 @@ import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
 import { DaemonProvider, type Daemon } from "../store";
 import { dialogAround } from "./dialogElement";
 import { Dialog } from "./Dialog";
+import { ErrorAlertBody, alertTitle } from "./ErrorAlertBody";
 
 export const issueUrl = appConfig.issueUrl;
 
@@ -35,11 +36,15 @@ export function useIssueReport(): { guidance: React.ReactElement; link: React.Re
       if (!platform?.links) throw new Error("External links are unavailable.");
       await platform.links.open(issueUrl);
     } catch (cause) {
+      // Not unexpected, so no diagnostics are worked out for it: what the system said is its "Error details",
+      // the message alone, since a stack of the UI's own code says nothing about why the browser did not open.
+      const reason = cause instanceof Error ? cause.message : diagnosticText(cause);
       errorAlerts.report({
         message: t("error.issue.openFailed"),
         error: cause,
         recovery: "issueLink",
         content: <><p>{t("error.issue.openFailed")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{issueUrl}</p></>,
+        details: reason ? <DiagnosticBlock>{reason}</DiagnosticBlock> : undefined,
       }, { immediate: true });
     } finally {
       reporting.current = false;
@@ -63,7 +68,6 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
   useLayoutEffect(() => { dialogAround(acknowledge)?.focus(); }, [error?.id]);
   if (!error) return null;
   const unexpected = error.classification.kind === "unexpected";
-  const diagnostics = [error.error, ...(error.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== error.message);
   // A button for the remedy when it is the one remedy of every failure the alert is about.
   const action = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
   const dialog = (
@@ -72,7 +76,7 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
       alert
       dismissable={false}
       headerLeading={<AlertDialog.Icon status="danger" />}
-      title={error.title ?? t(unexpected ? "error.unexpected.title" : "error.title")}
+      title={alertTitle(t, error)}
       onClose={() => {}}
       resetKey={error.message}
       footer={<>
@@ -86,14 +90,7 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
         <Button ref={acknowledge} variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>
       </>}
     >
-      <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{error.content ?? error.message}</div>
-      {error.classification.kind === "unexpected"
-        ? <>
-          <p>{issue.guidance}</p>
-          {error.details === undefined && diagnostics.length > 0 && <DiagnosticDetails text={[...new Set(diagnostics)].join("\n\n")} />}
-        </>
-        : !error.failures?.length && error.classification.recovery !== "none" && <p><RecoveryGuidance recovery={error.classification.recovery} /></p>}
-      {error.details ? <DetailsDisclosure>{error.details}</DetailsDisclosure> : null}
+      <ErrorAlertBody alert={error} issueGuidance={issue.guidance} />
     </Dialog>
   );
   return daemon ? <DaemonProvider value={daemon}>{dialog}</DaemonProvider> : dialog;

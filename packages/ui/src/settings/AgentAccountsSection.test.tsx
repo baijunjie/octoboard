@@ -126,7 +126,7 @@ it("keeps the confirmation open and the choice unchanged when saving Approve eve
   request.mockRejectedValueOnce(new Error("save refused"));
   act(() => [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Approve everything")!.click());
   await act(async () => {});
-  expect(document.body.textContent).toContain("Approve everything in every Claude Code account?");
+  expect(document.body.textContent).toContain("in every Claude Code account's sessions");
   expect(select.value).toBe("inherit");
 });
 
@@ -137,11 +137,11 @@ it("saves Approve everything only once the warning, which names the agent, is co
   expect(request).not.toHaveBeenCalled();
   const buttons = () => [...document.querySelectorAll<HTMLButtonElement>("button")];
   const press = (label: string) => act(() => buttons().find((b) => b.textContent === label)!.click());
-  expect(document.body.textContent).toContain("Approve everything in every Claude Code account?");
+  expect(document.querySelector('[role="alertdialog"] h2')?.textContent).toBe("Approve everything");
   expect(document.body.textContent).toContain("in every Claude Code account's sessions");
   press("Cancel");
   expect(request).not.toHaveBeenCalled();
-  expect(document.body.textContent).not.toContain("Approve everything in every");
+  expect(document.body.textContent).not.toContain("in every Claude Code account's sessions");
   change(select, "bypass");
   press("Approve everything");
   await act(async () => {});
@@ -493,6 +493,9 @@ it("opens the details of an account from the first entry of its actions menu, gi
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
   const dialog = await openDetailsOf(container, "codex-work");
   expect(dialog.textContent).toContain("codex-work");
+  expect(dialog.querySelector("h2")?.textContent).toBe("Account settings");
+  // The body leads with the account's name.
+  expect(dialog.querySelector("[data-slot=modal-body]")?.textContent).toMatch(/^codex-work/);
   expect(dialog.textContent).not.toContain("Codex account");
   expect(dialog.textContent).toContain("/home/dev/.codex-work");
   // No footer: the header's close button closes it.
@@ -622,7 +625,7 @@ it("asks before removing an agent, says its accounts are kept, and removes it on
   await openTabMenu(container, "Codex");
   await chooseItem("Remove agent");
   const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]')!;
-  expect(dialog.textContent).toContain("Remove Codex?");
+  expect(dialog.querySelector("h2")?.textContent).toBe("Remove agent");
   expect(dialog.textContent).toContain("Its accounts are kept");
   expect(dialog.textContent).not.toContain("still use");
   expect(request).not.toHaveBeenCalled();
@@ -651,7 +654,7 @@ it("names what still uses the agent when removing it, and says it keeps its sett
   expect(text).toContain("keep that setting");
   expect(text).not.toMatch(/[()]/);
   // The names stand as chips, with no brackets around them.
-  expect([...dialog.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Codex", "Codex", "Codex", "Main", "Site", "Fix build"]);
+  expect([...dialog.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent?.replace(/[\u2066-\u2069]/g, ""))).toEqual(["Codex", "Codex", "Main", "Site", "Fix build"]);
 });
 
 it.each(["agent", "account"] as const)("puts focus on the section's entry once a removed %s's confirmation closes, not where it stood when the menu opened", async (removed) => {

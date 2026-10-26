@@ -133,13 +133,6 @@ describe("outcomeOf", () => {
       projectsNotAttempted: 1,
     });
   });
-
-  it("collects every account that fell back with the console or project that held it", () => {
-    expect(outcomeOf(imported).fallbacks).toEqual([
-      { agent: "claude", name: "Work", console: "A" },
-      { agent: "codex", name: "Personal", console: "A", project: "a1" },
-    ]);
-  });
 });
 
 describe("the keyboard shortcuts of a document", () => {

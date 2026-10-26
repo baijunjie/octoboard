@@ -91,7 +91,10 @@ While the list is being read, the submenu shows a loading state. No local branch
 item. A failed read shows, in the submenu in place of its items, one alert with its reason and **Try again**, which
 reloads without closing the menu; it opens no error alert. Keyboard focus inside the submenu moves to Try again when the
 read fails, and back to the submenu when the reload starts. At most 10,000
-branches, or as many as 2 MiB of encoded names hold, are listed; a truncated list carries an incomplete-list notice.
+branches, or as many as 2 MiB of encoded names hold, are listed; a truncated list ends with a note, after the
+branches, saying that there are more branches than the list can show and the others are not listed. The note is muted
+text with no glyph, lined up with the branches' names; it is reached and read with the arrow keys like the items, but
+choosing it does nothing and it is not worded as a failure.
 
 Selecting another branch closes the menus and switches immediately, without confirmation. It changes the project's
 own worktree, including a linked worktree, regardless of which worktree the Git pane is reviewing. It never creates

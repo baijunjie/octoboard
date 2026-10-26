@@ -15,30 +15,34 @@ screen, render it with `DiagnosticBlock` (`packages/ui/src/components/Diagnostic
 text sits on a surface of its own, never straight on the dialog, Alert or popover around it, and the component also
 carries that text's accessibility (a named horizontal scroll region reachable by keyboard, the focus ring drawn on the
 surface), which hand-written copies drifted away from. A disclosure's summary or other label stays outside the block,
-its id passed as `labelledBy`; without one the region is named "Error details". Two variants exist for text that does
-not fit the default: `tall` also scrolls vertically (up to 40% of the viewport, a crash's stack), and `wrap` breaks long
-lines and has no scroll region at all (a message in prose-like lines, such as the daemon's startup failure). A change
-to how raw text looks goes into the component, not into one caller.
+its id passed as `labelledBy`; without one the region is named "Error details". Two variants, which combine, exist for
+text that does not fit the default: `tall` also scrolls vertically (up to 40% of the viewport, a crash's stack), and
+`wrap` breaks long lines instead of scrolling sideways (a message in prose-like lines, such as the daemon's startup
+failure). On its own `wrap` has no scroll region at all, so wherever the block's height is bounded — any popover,
+the Details popover included — a wrapped block takes `tall` too, or long text overflows the popover's surface. A
+change to how raw text looks goes into the component, not into one caller.
 
-## A confirmation's options sit outside its warning, and the dialog has one warning, under them
+## A confirmation's options sit apart from its consequences, which are one block under them
 
 This is the user's design rule for every confirmation in `packages/ui` that offers options, such as taking more
 along with what is deleted:
 
-- A checkbox never goes inside a warning box. It is a plain block of its own: its label says what ticking it deletes
-  (and how many), its `Description` note is kept short so it does not repeat the consequence line below, and the
-  items it covers go under it in a Details disclosure that starts collapsed.
-- The dialog never shows two warning boxes. It has one, in `ConfirmDialog`'s `warning` slot, which renders it under
-  the options and over the buttons, so a line it gains never moves a checkbox. A warning the dialog shows before any
-  option is ticked (the sessions it takes along) is that same box, not one above the options.
-- Every option, whatever it covers, adds its consequence line to that box while it is ticked. If the dialog had no
-  warning, the box appears with the first ticked option and goes away when none are.
+- A checkbox never goes inside the consequences. It is a plain block of its own: its label says what ticking it
+  deletes (and how many), its note is kept short so it does not repeat the consequence line below, and the items it
+  covers go under it in a Details disclosure that starts collapsed.
+- The consequences are one block, passed as `ConfirmDialog`'s `consequences`, which renders it as body text under the
+  options and over the buttons, so a line it gains never moves a checkbox; passing it makes the dialog a warning
+  modal (see `docs/ui-accessibility.md`, "Where an error is shown"), never a modal with a warning box in its body. What
+  the dialog says it takes along before any option is ticked (the sessions it ends) is that same block, not one above
+  the options.
+- Every option, whatever it covers, adds its consequence line to that block while it is ticked. If the dialog had
+  nothing else to say, the block appears with the first ticked option and goes away when none are.
 - A disclosure stays the way the user left it. Never collapse it or remount it because something else in the dialog
   changed.
 
-The box is `ConfirmWarning` in `packages/ui/src/dialogs/RequestedDialog.tsx`, whose `lines` are the ticked options'
-consequences; the remove-project dialog's Trash option, in `packages/ui/src/dialogs/BranchCleanupOptions.tsx`, shows
-the option's shape.
+The block is `ConfirmConsequences` in `packages/ui/src/dialogs/RequestedDialog.tsx`, whose `lines` are the ticked
+options' consequences; the remove-project dialog's Trash option, in `packages/ui/src/dialogs/BranchCleanupOptions.tsx`,
+shows the option's shape.
 
 ## Read the project's placeholder standard before adding or changing a field
 
@@ -114,6 +118,14 @@ has mounted without one, give `Description` a stable `useId` and set the field's
 while the note exists: react-aria's slot association does not recover when only the children change. Preserve the mounted
 control so the note appearing does not lose keyboard focus; verify the association through absent → present →
 absent notes.
+
+The one checkbox that cannot keep it there is one with a mark (`StatusMark`) after its label. The mark stays outside
+react-aria's `<label>` — inside it, it is interactive content in a label and its name joins the checkbox's — and it
+has to follow the label's text, which it cannot do beside a checkbox that holds its `Description`: that checkbox
+fills the row, so the mark lands at the row's far end. Make the checkbox `w-fit`, put the mark beside it in a row of
+their own, and move the note under that row as a `Description` with its own `useId`, set in the checkbox's
+`aria-describedby` and indented under the label by hand. A dialog option gets all of this from `ConfirmOption`'s
+`mark` (`packages/ui/src/dialogs/ConfirmOption.tsx`).
 
 ## A modal whose content is one body is a `Dialog`; one made of panels keeps its own frame
 

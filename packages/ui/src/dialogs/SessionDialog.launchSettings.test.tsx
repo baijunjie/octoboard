@@ -115,7 +115,8 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
   }, { kind: "choose" }, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   answerSessionModels(daemon);
-  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Open console session in Main");
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Open console session");
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("The session will be opened in the console Main.");
   expect(document.body.textContent).not.toContain("Report to");
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
   expect(name.placeholder).toBe(`${parentConsole.name} session`);

@@ -55,6 +55,13 @@ export interface ToastRequest {
   session?: string;
 }
 
+/** The error toast `toastError` raises for `message`, with the daemon's code and params kept when it is an error that has them. */
+export function errorToast(message: string | Error, session?: string): ToastRequest {
+  const presentation = typeof message === "string" ? message : errorPresentation(message);
+  return { kind: "error", message: errorText(message), session, error: message,
+    ...(typeof presentation !== "string" && { daemonError: presentation }) };
+}
+
 /** A session waiting at its agent's folder-trust confirmation for the user's say-so. */
 export interface TrustPrompt {
   session: string;
@@ -752,11 +759,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
         const message = daemonMessage(currentLanguage(), err.code, err.params, err.message, store.getState());
         throw new DaemonRequestError(message, err.code, err.params);
       }),
-    toastError: (message, session) => {
-      const presentation = typeof message === "string" ? message : errorPresentation(message);
-      emitToast({ kind: "error", message: errorText(message), session, error: message,
-        ...(typeof presentation !== "string" && { daemonError: presentation }) });
-    },
+    toastError: (message, session) => emitToast(errorToast(message, session)),
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);

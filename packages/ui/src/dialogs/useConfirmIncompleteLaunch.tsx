@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { incompleteAccount } from "../accountChoices";
-import { isolate } from "../i18n/isolate";
-import { useT } from "../i18n/react";
+import { InlineReference } from "../components/InlineReference";
+import { Message, useT } from "../i18n/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
 import { useDaemon } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -63,8 +63,8 @@ export function useConfirmIncompleteLaunch(closeOwner?: () => void): {
   };
   const confirmation = asked && (
     <ConfirmDialog
-      title={t("dialog.incompleteLaunch.title", { account: isolate(asked.name) })}
-      message={t("dialog.incompleteLaunch.message")}
+      title={t("dialog.incompleteLaunch.title")}
+      message={<p><Message id="dialog.incompleteLaunch.message" params={{ account: <InlineReference dir="auto" wrap>{asked.name}</InlineReference> }} /></p>}
       confirmLabel={t("dialog.incompleteLaunch.confirm")}
       onCancel={cancel}
       hideCancel

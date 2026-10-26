@@ -54,7 +54,8 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
   )!;
   expect(trigger).toBeDefined();
   await act(async () => trigger.click());
-  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Open console session in Main");
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Open console session");
+  expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain("The session will be opened in the console Main.");
   expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "open_session")).toBe(false);
   await act(async () => Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === "Open")!.click());
   expect(daemon.request).toHaveBeenCalledWith({

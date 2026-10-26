@@ -32,24 +32,25 @@ export function SharingFailureReason({ cause, detail, withFix = true }: { cause?
 
 /** One cause of a sharing failure as a line naming the entries it hit ("You do not have permission to change
  * skills/ and 2 more."), a conversation by the name of a session that records it, and, unless `withFix` is false,
- * going on with what to do about it. */
-export function SharingCauseLine({ group, withFix = true }: { group: { cause: SharingEntryCause; items: SharingFailureItem[] }; withFix?: boolean }): React.ReactElement {
+ * going on with what to do about it (`rawBelow` as for `sharingFixKey`). */
+export function SharingCauseLine({ group, withFix = true, rawBelow = false }: { group: { cause: SharingEntryCause; items: SharingFailureItem[] }; withFix?: boolean; rawBelow?: boolean }): React.ReactElement {
   const title = useSessionTitles(group.items);
   const chips = group.items.map((item, at) => {
     const label = sharingItemLabel(item, title);
     return <InlineReference key={at} dir={label.session ? "auto" : "ltr"} monospace={!label.session} wrap>{label.text}</InlineReference>;
   });
   const phrase = chips.length === 1 ? chips[0] : <Message id="daemon.sharing.items" params={{ first: chips[0], count: chips.length - 1 }} />;
-  return <SharingReason reason={<Message id={sharingCauseKey(group.cause)} params={{ items: phrase, count: chips.length } as never} />} fix={withFix ? sharingFixKey(group.cause) : undefined} />;
+  return <SharingReason reason={<Message id={sharingCauseKey(group.cause)} params={{ items: phrase, count: chips.length } as never} />} fix={withFix ? sharingFixKey(group.cause, rawBelow) : undefined} />;
 }
 
 /** What a sharing failure left, said short: one line per cause naming the entries it hit ("You do not have permission
  * to change skills/ and 2 more."), a conversation by the name of a session that records it. Each line goes on with
- * what to do about its cause. It is the further explanation at the top of Details, above the raw entries. */
-export function SharingCauseSummary({ items }: { items: SharingFailureItem[] }): React.ReactElement {
+ * what to do about its cause. It is the further explanation above the raw entries, at the top of Details or, with
+ * `rawBelow`, of a popover that holds them too. */
+export function SharingCauseSummary({ items, rawBelow = false }: { items: SharingFailureItem[]; rawBelow?: boolean }): React.ReactElement {
   return (
     <span className="flex min-w-0 flex-col gap-1">
-      {sharingCauseGroups(items).map((group) => <span key={group.cause}><SharingCauseLine group={group} /></span>)}
+      {sharingCauseGroups(items).map((group) => <span key={group.cause}><SharingCauseLine group={group} rawBelow={rawBelow} /></span>)}
     </span>
   );
 }

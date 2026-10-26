@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../errorAlerts";
 import { sessionOf } from "../gallery/fixtures/builders";
 import type { Account, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -31,22 +32,34 @@ function render(settings: Partial<Settings>, ui: React.ReactElement) {
 
 const confirm = () => Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === "Switch")!;
 const switching = sessionOf("s-1", "c-1", "p-1", "Fix search", "idle");
-const switchDialog = (account: string | null) => (
-  <SwitchAccountDialog session={switching} account={account} accountName="Work" onClose={() => {}} onSwitchAccounts={() => {}} />
+const switchDialog = (account: string | null, onSwitchAccounts: () => void = () => {}) => (
+  <SwitchAccountDialog session={account === null ? { ...switching, account_id: "claude-work" } : switching} account={account} accountName="Work" onClose={() => {}} onSwitchAccounts={onSwitchAccounts} />
 );
 
-it("holds Confirm of a switch whose target is turned off, saying so, and frees it once it is back on", () => {
-  const { store } = render({ accounts: [{ ...work, disabled: true }] }, switchDialog("claude-work"));
-  expect(document.body.textContent).toContain("Account is disabled");
-  expect(confirm().disabled).toBe(true);
+it("says in the error alert dialog that a switch's target was turned off, switching nothing, and switches once it is back on", async () => {
+  const onSwitchAccounts = vi.fn();
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
+  const { store } = render({ accounts: [{ ...work, disabled: true }] }, switchDialog("claude-work", onSwitchAccounts));
+  await act(async () => confirm().click());
+  expect(report).toHaveBeenCalledTimes(1);
+  expect(report.mock.calls[0]![0].message).toContain("Work");
+  expect(onSwitchAccounts).not.toHaveBeenCalled();
+  expect(confirm()).toBeDefined();
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [work] } }));
-  expect(document.body.textContent).not.toContain("Account is disabled");
-  expect(confirm().disabled).toBe(false);
+  await act(async () => confirm().click());
+  expect(report).toHaveBeenCalledTimes(1);
+  expect(onSwitchAccounts).toHaveBeenCalledTimes(1);
 });
 
-it("holds Confirm of a switch to a default account that is turned off", () => {
-  render({ accounts: [work], disabled_default_accounts: ["claude"] }, switchDialog(null));
-  expect(confirm().disabled).toBe(true);
+it("refuses a switch to a default account that is turned off in the error alert dialog", async () => {
+  const onSwitchAccounts = vi.fn();
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
+  render({ accounts: [work], disabled_default_accounts: ["claude"] }, switchDialog(null, onSwitchAccounts));
+  await act(async () => confirm().click());
+  expect(report).toHaveBeenCalledTimes(1);
+  expect(onSwitchAccounts).not.toHaveBeenCalled();
 });
 
 function openConsoleOptions(settings: Partial<Settings>, pinned: string | null) {

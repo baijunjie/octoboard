@@ -263,8 +263,9 @@ its row, never inline. With no entry listed, the reason the change as a whole fa
 of the lines when it is one of the named causes, followed in the same way by what to do about it; when it is not
 (`other`, none, or one this client does not know) but there is an original diagnostic, a line saying to see the details
 stands there alone. Error details holds the original diagnostic. No raw diagnostic is shown outside Error details. At
-the account's switch the same lines, entries and diagnostic are all behind the alert's Details button, with no line
-pointing at it, each entry's system text again a block under its row (see "Sharing the default configuration" in
+the account's switch the same lines, entries and diagnostic are all in the popover of the warning mark after the
+switch, the raw entries and diagnostic last, each entry's system text again a block under its row, so a line that would
+point at the details says instead that the system's own reason is below (see "Sharing the default configuration" in
 `docs/product/agent-accounts.md`).
 
 | Cause | What the window says to do |
@@ -273,14 +274,15 @@ pointing at it, each entry's system text again a block under its row (see "Shari
 | `busy` | close other programs using the files involved, such as an agent in a terminal, an editor or a sync tool |
 | `no_space` | free up disk space |
 | `conflict` | move or rename the conflicting items |
-| `other` | see the details |
+| `other` | see the details (at the account's switch: the system's own reason is below) |
 | `not_found`, `default_moved` | nothing is added |
 
-A failed change of the switch is shown at the account's switch, in every window and nowhere else (see "Sharing the
-default configuration" in `docs/product/agent-accounts.md`). A failure that refuses removing or repointing the
-account is shown in an error alert (see `docs/product/error-alerts.md`): its short explanation says that the change
-did not finish and nothing was rolled back, followed by the entries as above; its next step is to resolve what is
-reported, then turn the account's switch off again to try once more.
+A failed change of the switch is shown at the account's switch, in every window, and the window that asked for the
+change also opens an error alert for it, titled "Could not change sharing" (see "Sharing the default configuration" in
+`docs/product/agent-accounts.md`). A failure that refuses removing or repointing the account is shown in an error
+alert (see `docs/product/error-alerts.md`): its short explanation says that the change did not finish and nothing was
+rolled back, followed by the entries as above; its next step is to resolve what is reported, then try once more with
+the account's switch.
 
 A refusal is shown in an error alert: `account_in_use` says how many of the account's sessions are working, or that
 it is being signed in, and `account_still_sharing` that sharing cannot be turned off while one of its sessions is
@@ -309,15 +311,15 @@ A failure is not kept across a daemon restart: an account whose last change is i
 
 The daemon starts sessions on an account whose last change is incomplete as on any other, its directory left as it
 stands. The window asks first: when the user starts a session on such an account while no change of it runs (a running
-change refuses the launch, see "When a change is carried out" above), a confirmation asks whether to start on the
-account, named in its title, and says that the account's last sharing change did not finish, so its configuration and
-conversations may be incomplete. It has no Cancel button: its buttons are **View in Settings** and **Start anyway**, the
+change refuses the launch, see "When a change is carried out" above), a confirmation, titled to start on this
+account, asks whether to, its body naming the account and saying that the account's last sharing change did not
+finish, so its configuration and conversations may be incomplete. It has no Cancel button: its buttons are **View in Settings** and **Start anyway**, the
 primary one, on which keyboard focus starts. Closing it — with the dialog's close button or Escape — cancels the launch
 and sends nothing; when it stands over another dialog, Escape closes only the question, leaving that dialog open. **View
 in Settings** sends nothing either: it closes the question, and the dialog it was asked from when there is one (the
 session dialog, the handoff dialog, the switch confirmation), and opens Settings on its Agent accounts section, on the
 account's agent's tab, with the account's settings dialog open in front and its sharing switch scrolled into view and
-focused; the alert under the switch says what did not finish (see "Sharing the default configuration" in
+focused; the warning mark after the switch says what did not finish (see "Sharing the default configuration" in
 `docs/product/agent-accounts.md`). When the account is no longer found there, or its agent is not on the list,
 Settings opens on the section all the same, with no account settings dialog. **Start anyway** closes the question at once and
 sends the request as it would have gone without it; its refusal or failure is shown where it would have been.
@@ -338,9 +340,9 @@ An account whose last change is complete is never asked about, nor is the defaul
 launch Octoboard starts by itself, such as the resumes around a change (see "When a change is carried out" above),
 does not ask, and neither does approving a session another session asked for with `request_session`, whose account
 Octoboard picks. Approving another session's request to resume a conversation does not ask either: where the session
-it would reopen, resume or open runs on such an account, that request's own confirmation carries a warning saying
-the same instead (see "The confirmation dialog" in `docs/product/requests-to-resume-a-conversation.md`), and an
-automatic approval warns nothing.
+it would reopen, resume or open runs on such an account, that request's own confirmation carries a warning mark at
+the account saying the same instead (see "The confirmation dialog" in
+`docs/product/requests-to-resume-a-conversation.md`), and an automatic approval warns nothing.
 
 ## Repair before every launch
 

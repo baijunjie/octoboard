@@ -1,10 +1,12 @@
 import { Description, Disclosure } from "@heroui/react";
-import React, { useId, useState } from "react";
+import React, { useRef, useState } from "react";
 
 import type { LaunchPair } from "../agents";
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
-import { FailureAlert } from "../components/FailureAlert";
+import { FailureBody } from "../components/errorParts";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
+import { StatusMark } from "../components/StatusMark";
+import { useFocusHandoff } from "../components/useFocusHandoff";
 import { daemonMessage } from "../daemonMessage";
 import { DaemonRequestError } from "../daemon-client";
 import { failureSummaryText } from "../errorText";
@@ -25,9 +27,9 @@ function modelName(t: Translate, model: AgentModel): string {
 /** What the launch pickers of one agent and account need to know of the models it offers, asked of
  * the daemon while `enabled` (see `useAgentModels`). While the answer is out the pickers are locked,
  * showing what is stored; when the daemon has no list the model picker offers the stored value alone
- * and `modelAlert` says why, an Alert for the caller to put directly under the model field (the list
- * is a lookup the form makes on its own). `modelText` is what the status region speaks: the loading note,
- * or the Alert's sentence alone as plain text. */
+ * and `modelFailure` says why, which the picker draws as a warning mark after the field's label (the
+ * dialog goes on without the list). `modelText` is what the status region speaks: the loading note, or the failure's
+ * sentence alone as plain text. */
 export function useLaunchModels(agent: Agent, account: string | null, enabled: boolean) {
   const t = useT();
   const language = useCurrentLanguage();
@@ -41,16 +43,13 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   );
   // Why there are no models, with what it names set as code where the message has such params.
   const reason = unavailable ? new DaemonRequestError(unavailableText ?? unavailable.message, unavailable.code, unavailable.params) : error;
-  // The region says the sentence the Alert's description says; the raw message, the remedy and the
-  // details belong behind the Alert.
+  // The region says the sentence the mark's popover opens with; the raw message, the remedy and the
+  // details belong in the popover.
   const reasonText = useDaemonStore((s) => (reason === undefined ? undefined : failureSummaryText(t, language, reason, s)));
   const modelText = loading ? t("dialog.agentSettings.modelsLoading") : reasonText;
   const modelDescription = loading ? modelText : undefined;
-  const modelAlertId = useId();
-  const modelAlert = !loading && reason !== undefined ? (
-    <FailureAlert id={modelAlertId} announce={false} title={t("dialog.agentSettings.modelsFailedTitle")} message={reason} />
-  ) : undefined;
-  return { loading, models, modelText, modelDescription, modelAlert, modelAlertId: modelAlert ? modelAlertId : undefined };
+  const modelFailure = loading ? undefined : reason;
+  return { loading, models, modelText, modelDescription, modelFailure };
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
@@ -62,6 +61,20 @@ function inherited(t: Translate, value: string | null): { placeholder: string; p
     placeholder: t("dialog.agentSettings.sameAsConsole"),
     placeholderBadge: value || t("dialog.agentSettings.inheritOwn"),
   };
+}
+
+/** The warning mark of a Model field whose list of models could not be read: it concerns the whole field,
+ * so it stands after the field's label. Nothing when the list is there. `markId` is the id the field's
+ * focus hand-off knows it by (`OptionSelect`'s `labelMark`). */
+export function ModelsFailureMark({ launch, markId }: { launch: LaunchModels; markId?: string }): React.ReactElement | null {
+  const t = useT();
+  const failure = launch.modelFailure;
+  if (failure === undefined) return null;
+  return (
+    <StatusMark tone="warning" inline markId={markId} label={t("dialog.agentSettings.modelsFailedMark")}>
+      <FailureBody error={failure} />
+    </StatusMark>
+  );
 }
 
 /** The props `ModelPicker` and `EffortPicker` have in common. */
@@ -84,7 +97,8 @@ type PickerProps = {
 );
 
 /** The Model picker of one pair of settings, empty while unset. It carries the note on the model list
- * while it loads; why there is none is `LaunchModels.modelAlert`, under the field, which describes the picker. */
+ * while it loads; why there is none is `LaunchModels.modelFailure`, a warning mark after the field's label
+ * (`ModelsFailureMark`, which a caller that hides the label places beside its own). */
 export function ModelPicker({
   launch,
   model,
@@ -114,7 +128,8 @@ export function ModelPicker({
       placeholderBadge={inheritedText?.placeholderBadge}
       isDisabled={isDisabled || launch.loading}
       description={launch.modelDescription}
-      describedBy={[describedBy, launch.modelAlertId].filter(Boolean).join(" ") || undefined}
+      describedBy={describedBy}
+      labelMark={launch.modelFailure === undefined ? undefined : (markId) => <ModelsFailureMark launch={launch} markId={markId} />}
     />
   );
 }
@@ -174,10 +189,7 @@ function LaunchPickers({
 }): React.ReactElement {
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <ModelPicker launch={launch} model={model} onChange={onModelChange} inherit={inherit} isDisabled={isDisabled} />
-        {launch.modelAlert}
-      </div>
+      <ModelPicker launch={launch} model={model} onChange={onModelChange} inherit={inherit} isDisabled={isDisabled} />
       <EffortPicker launch={launch} model={model} effort={effort} onChange={onEffortChange} inherit={inherit} isDisabled={isDisabled} />
     </>
   );
@@ -272,18 +284,31 @@ export function LaunchSettingsFields({
   const expanded = controlledExpanded ?? ownExpanded;
   const setExpanded = onExpandedChange ?? setOwnExpanded;
   const launch = useLaunchModels(agent, account, expanded);
+  const pickers = useRef<HTMLDivElement>(null);
+  // A reload (the account the form refers to going away elsewhere) takes the Model field's mark away and locks
+  // its picker in the same render, so focus that was on the mark has no enabled picker to go to: it goes to the
+  // Model picker if that is operable, and else to the section's trigger, which stays operable.
+  const focusHandoff = useFocusHandoff(() => {
+    const modelTrigger = pickers.current?.querySelector<HTMLElement>("[data-slot=select-trigger]");
+    const target = modelTrigger && !modelTrigger.matches(":disabled")
+      ? modelTrigger
+      : pickers.current?.closest("[data-slot=disclosure]")?.querySelector<HTMLElement>("[data-slot=disclosure-trigger]");
+    target?.focus();
+  });
   return (
     <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
       {note && <Description>{note}</Description>}
-      <LaunchPickers
-        launch={launch}
-        model={model}
-        effort={effort}
-        onModelChange={onModelChange}
-        onEffortChange={onEffortChange}
-        inherit={inherit}
-        isDisabled={isDisabled}
-      />
+      <div ref={pickers} {...focusHandoff} className="flex flex-col gap-4">
+        <LaunchPickers
+          launch={launch}
+          model={model}
+          effort={effort}
+          onModelChange={onModelChange}
+          onEffortChange={onEffortChange}
+          inherit={inherit}
+          isDisabled={isDisabled}
+        />
+      </div>
       {children}
     </AdvancedSection>
   );

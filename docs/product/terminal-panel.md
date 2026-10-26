@@ -82,8 +82,9 @@ It is for the pointer alone; from the keyboard a terminal is closed through the 
 under the field; the name is saved trimmed, and from then on the shell's own titles no longer change it.
 
 **Closing** a terminal whose shell is busy (see "Busy shells" in `docs/product/shell-terminals.md`) asks first: a
-confirmation titled "Close *title*?" says something is still running in the terminal and closing it ends what runs
-there, with a destructive Close terminal button and Cancel; in its title the terminal's title is set apart as a chip.
+confirmation titled "Close terminal" names the terminal in its first sentence, its title set apart as a chip, and
+says something is still running in the terminal and closing it ends what runs there, with a destructive Close terminal
+button and Cancel.
 An idle running shell, or one that has exited, closes at once without asking. What closing does to the shell and its jobs is in "Closing a shell terminal" in
 `docs/product/shell-terminals.md`.
 

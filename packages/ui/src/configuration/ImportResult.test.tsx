@@ -4,7 +4,7 @@ import { isolate } from "../i18n/isolate";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { openDetails } from "../components/detailsTestSupport";
+import { openDetails, press } from "../components/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
@@ -296,7 +296,7 @@ it("tells what came of the keyboard shortcuts in the settings card, and the ones
   expect(settingLines(container)["Keyboard shortcuts"]).toEqual({ badge: "Defaults" });
 });
 
-it("places the settings card after the table and the fallbacks", () => {
+it("marks a console and a project whose account fell back with a warning mark after the name in the table, the sentence in its popover, and lists no section of them", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -304,14 +304,20 @@ it("places the settings card after the table and the fallbacks", () => {
     act(() => root.unmount());
     container.remove();
   });
-  const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [{ agent: "claude" as const, name: "Work" }], projects: [project(1)] }];
+  const consoles = [
+    { name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [{ agent: "claude" as const, name: "Work" }], projects: [{ ...project(1), account_fallbacks: [{ agent: "codex" as const, name: "Personal" }] }, { ...project(2), status: "left_out" as const, via: null, account_fallbacks: [{ agent: "codex" as const, name: "Other" }] }] },
+    { name: "Broken", status: "failed" as const, console: null, error: null, account_fallbacks: [{ agent: "claude" as const, name: "Gone" }], projects: [] },
+  ];
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, settings_applied: { auto_pull_repositories: true } }} /></DaemonProvider>));
-  const sectionTitled = (title: string) => [...container.querySelectorAll("section")].find((section) => section.querySelector(":scope > h3")?.textContent === title)!;
-  const order = [container.querySelector("table")!, sectionTitled("Accounts that fell back to the default account"), sectionTitled("Application settings applied")];
-  const headings = [...container.querySelectorAll("h3")].map((h) => h.textContent);
-  expect(headings).toEqual(["Accounts that fell back to the default account", "Application settings applied"]);
-  expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(order[1].compareDocumentPosition(order[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Application settings applied"]);
+  const marks = [...container.querySelectorAll("table button[data-status-mark]")].filter((button) => button.getAttribute("aria-label")!.startsWith("Accounts not set up for"));
+  expect(marks.map((mark) => mark.getAttribute("aria-label"))).toEqual(["C", "P1", "P2", "Broken"].map((name) => `Accounts not set up for ${isolate(name)}`));
+  // Each sits right after the name it qualifies.
+  expect(marks[0].previousElementSibling?.textContent).toBe("C");
+  expect(marks[2].previousElementSibling?.textContent).toBe("P2");
+  expect(container.querySelector("table")!.textContent).not.toContain("is not set up");
+  press(marks[1]);
+  expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("Codex account Personal is not set up in Octoboard, so the default account is used.");
 });
 
 it("marks a failed line with the glyph and the word Failed, named after what failed, whose popover holds the reason, and writes no error text into the table", () => {
@@ -335,8 +341,6 @@ it("marks a failed line with the glyph and the word Failed, named after what fai
   expect(mark.textContent).toBe("Failed");
   expect(mark.querySelector("svg")).not.toBeNull();
   expect(table.textContent).not.toContain("/missing");
-  act(() => {
-    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) mark.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
-  });
+  press(mark);
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain("/missing");
 });

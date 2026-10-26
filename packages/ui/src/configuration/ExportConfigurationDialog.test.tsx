@@ -47,11 +47,39 @@ it("leaves full project paths out by default, with no warning about them, before
   expect(sent()).toEqual([]);
 });
 
-it("states that the file carries project paths, and whose, once they are asked for", async () => {
+const pathsMark = () => document.body.querySelector<HTMLElement>("button[data-status-mark][aria-label='Paths in the file']");
+
+it("marks that the file carries project paths, and whose, beside the option once they are asked for, outside its label", async () => {
+  mount();
+  expect(pathsMark()).toBeNull();
+  await act(async () => pathsBox().click());
+  const mark = pathsMark()!;
+  expect(mark).not.toBeNull();
+  // Not inside the checkbox's label: the checkbox is named by its label alone.
+  expect(mark.closest("label")).toBeNull();
+  expect(Array.from(pathsBox().labels ?? []).every((label) => !label.textContent?.includes("Paths in the file"))).toBe(true);
+  expect(pathsBox().labels?.[0]?.textContent).toBe("Include full project paths");
+  expect(document.body.querySelector("[data-slot=alert-root]")).toBeNull();
+  await act(async () => mark.click());
+  const popover = document.body.querySelector("[data-status-mark-popover]")!;
+  expect(popover.textContent).toContain("The file contains project paths");
+  expect(popover.textContent).toContain("the machine running Octoboard, which may not be the device you are using now");
+  // The mark's press leaves the option as it was.
+  expect(pathsBox().checked).toBe(true);
+});
+
+it("puts the mark right after the checkbox and its note under them, the note describing the checkbox", async () => {
   mount();
   await act(async () => pathsBox().click());
-  expect(text()).toContain("The file contains project paths");
-  expect(text()).toContain("the machine running Octoboard, which may not be the device you are using now");
+  const label = pathsBox().closest("label")!;
+  const mark = pathsMark()!;
+  const hint = document.getElementById(pathsBox().getAttribute("aria-describedby")!.split(" ")[0]!)!;
+  expect(hint.textContent).toContain("Without them, the file records only each project's directory name");
+  expect(label.contains(hint)).toBe(false);
+  // The checkbox ends at its label, so the mark follows it at once; the note comes after both.
+  expect(label.closest("[data-slot=checkbox]")?.nextElementSibling?.contains(mark)).toBe(true);
+  expect(mark.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(label.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 it("asks for the paths only when the box is checked", async () => {

@@ -14,7 +14,7 @@ import { useNativeMenuLabels } from "./lifecycle/useNativeMenuLabels";
 import { useNativeWindowTheme } from "./lifecycle/useNativeWindowTheme";
 import { selectPlatform } from "./platform";
 import { PlatformProvider } from "./platform/react";
-import { DaemonFailedMessage, NoAddressMessage, StartupScreen } from "./StartupScreen";
+import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon, DaemonProvider } from "./store";
 import { ThemeProvider } from "./theme";
 import { UpdatesProvider } from "./updates/UpdatesProvider";
@@ -72,7 +72,7 @@ function screen(): React.ReactElement {
     // The daemon failed to start before the window even opened, and the shell passed the message
     // along via `?error=` instead of `?port=` — there is nothing to connect to, same as the
     // missing-address case below, just with a specific reason instead of a generic one.
-    return <StartupScreen message={<DaemonFailedMessage error={startupError} />} />;
+    return <DaemonFailedScreen error={startupError} />;
   }
   if (!daemon) {
     // No shell handed us a `?port=`, no `VITE_DAEMON_PORT` was set, and the page's own origin is

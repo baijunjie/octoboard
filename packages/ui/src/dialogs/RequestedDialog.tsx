@@ -8,7 +8,6 @@ import { InlineReference } from "../components/InlineReference";
 import { SessionAgentIcon } from "../components/SessionAgentIcon";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
-import { TintedAlert } from "../components/TintedAlert";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
 import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Project, type Session, type SessionBranchItem } from "../protocol";
@@ -30,22 +29,18 @@ import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
-import { useBranchCleanup, useProjectRemovalCleanup, type WarningLine } from "./BranchCleanupOptions";
+import { useBranchCleanup, useProjectRemovalCleanup, type ConsequenceLine } from "./BranchCleanupOptions";
 import { ConfirmOption } from "./ConfirmOption";
 import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
 import { PROJECT_NAME_LIMIT } from "./textLength";
 
-/** The one warning a confirmation shows, under its options, for what it is about to take along. Its
- * title is `title` when there is one, over the list of sessions when there is one to show — each with
- * its agent's icon and title, plus a status glyph for live sessions; archived sessions are already
- * identified by the warning's wording — and with only `lines` it sums up the consequence instead.
- * The details inside the Alert are that list and, under it, `lines`: one more consequence for each
- * option the user has ticked, a line with an `id` for an option to be described by. With neither a
- * title nor a line it is not there at all, so a dialog never shows a second warning. HeroUI's own
- * warning tint rather than its default surface, which is the dialog's own fill and leaves the
- * callout unmarked. */
-function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: WarningLine[] }): React.ReactElement | null {
+/** What a confirmation says it is about to take along, as body text under its options: `title` when
+ * there is one, over the list of sessions when there is one to show — each with its agent's icon and
+ * title, plus a status glyph for live sessions; archived sessions are already identified by the
+ * wording of the title — and `lines`: one more consequence for each option the user has ticked.
+ * Nothing at all when there is neither a title nor a line. */
+function ConfirmConsequences({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: ConsequenceLine[] }): React.ReactElement | null {
   const t = useT();
   const sessionsRef = useListMotion<HTMLUListElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
@@ -53,16 +48,18 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
   const linesRef = useListMotion<HTMLDivElement>();
   if (!title && lines.length === 0) return null;
   return (
-    <TintedAlert status="warning" title={title ?? t("dialog.confirm.consequences")}>
+    <div className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
+      {title && <p>{title}</p>}
       {sessions && (
-        <ul ref={sessionsRef} className="relative mt-1 flex min-w-0 flex-col gap-1">
+        <ul ref={sessionsRef} className="relative flex min-w-0 flex-col gap-1">
           {sessions.map((session) => (
             <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
               {/* The list items are not pressable, so a tap on a mark opens the popover. */}
               {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />}
               <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
-              {/* The icon is decorative, and nothing else here names the agent. */}
-              <span className="sr-only">{sessionAgentLabel(t, session, accounts, defaultNames)}</span>
+              {/* The icon is decorative, and nothing else here names the agent. The comma keeps the name apart from the
+                  title when the row is read as one phrase: a hidden element's trailing space is dropped in rendering. */}
+              <span className="sr-only">{`${sessionAgentLabel(t, session, accounts, defaultNames)}, `}</span>
               <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
                 {sessionDisplayTitle(t, session)}
               </FadeOverflow>
@@ -71,10 +68,10 @@ function ConfirmWarning({ title, sessions, lines = [] }: { title?: string; sessi
         </ul>
       )}
       {/* Always mounted, so a line added or removed by an option moves in and out. */}
-      <div ref={linesRef} className={`relative flex min-w-0 flex-col gap-1 ${lines.length > 0 ? (sessions ? "mt-2" : "mt-1") : ""}`}>
-        {lines.map((line) => <p key={line.key} id={line.id} data-list-motion={line.key}>{line.text}</p>)}
+      <div ref={linesRef} className="relative flex min-w-0 flex-col gap-1">
+        {lines.map((line) => <p key={line.key} data-list-motion={line.key}>{line.text}</p>)}
       </div>
-    </TintedAlert>
+    </div>
   );
 }
 
@@ -90,9 +87,10 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   const cleanup = useProjectRemovalCleanup(project.id, trash, setTrash);
   return (
     <ConfirmDialog
-      title={<Message id="dialog.removeProject.title" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
+      title={t("dialog.removeProject.title")}
+      subject={<Message id="dialog.removeProject.subject" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
       message={t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}
-      warning={<ConfirmWarning title={running.length > 0 ? t("dialog.removeProject.running", { count: running.length }) : undefined} sessions={running.length > 0 ? running : undefined} lines={cleanup.consequences} />}
+      consequences={<ConfirmConsequences title={running.length > 0 ? t("dialog.removeProject.running", { count: running.length }) : undefined} sessions={running.length > 0 ? running : undefined} lines={cleanup.consequences} />}
       confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
       destructive
       waiting={cleanup.pending}
@@ -132,9 +130,10 @@ function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
   const cleanup = useBranchCleanup([session.id, ...withIt.map((s) => s.id)], branches);
   return (
     <ConfirmDialog
-      title={<Message id="dialog.archiveSession.title" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
+      title={t("dialog.archiveSession.title")}
+      subject={<Message id="dialog.archiveSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
       message={t(sessionStatusKind(session) === "background" ? "dialog.archiveSession.messageBackground" : "dialog.archiveSession.message")}
-      warning={<ConfirmWarning title={withIt.length > 0 ? t("dialog.archiveSession.boundAndEnded", { count: withIt.length }) : undefined} sessions={withIt.length > 0 ? withIt : undefined} lines={cleanup.consequences} />}
+      consequences={<ConfirmConsequences title={withIt.length > 0 ? t("dialog.archiveSession.boundAndEnded", { count: withIt.length }) : undefined} sessions={withIt.length > 0 ? withIt : undefined} lines={cleanup.consequences} />}
       confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
       destructive={cleanup.forcing}
       waiting={cleanup.pending}
@@ -230,10 +229,11 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
   const moveRecords = canTrash && trash;
   return (
     <ConfirmDialog
-      title={<Message id="dialog.deleteSession.title" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
+      title={t("dialog.deleteSession.title")}
+      subject={<Message id="dialog.deleteSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
       message={t("dialog.deleteSession.message")}
-      warning={(
-        <ConfirmWarning
+      consequences={(
+        <ConfirmConsequences
           title={withIt.length > 0 ? t("dialog.deleteSession.bound", { count: withIt.length }) : undefined}
           sessions={withIt.length > 0 ? withIt : undefined}
           lines={[...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: t(withIt.length > 0 ? "dialog.deleteSession.trashRecordsLineBound" : "dialog.deleteSession.trashRecordsLine") }] : [])]}
@@ -286,10 +286,10 @@ function DeleteArchivedDialog({
   const moveRecords = canTrash && trash;
   return (
     <ConfirmDialog
-      title={t("dialog.deleteArchived.title", { count: dialog.count })}
+      title={t("dialog.deleteArchived.title")}
       message={t("dialog.deleteArchived.message", { count: dialog.count })}
-      warning={(
-        <ConfirmWarning
+      consequences={(
+        <ConfirmConsequences
           title={withThem > 0 ? t("dialog.deleteArchived.bound", { count: withThem }) : undefined}
           lines={[...cleanup.consequences, ...(moveRecords ? [{ key: "records", text: t("dialog.deleteArchived.trashRecordsLine") }] : [])]}
         />
@@ -363,7 +363,8 @@ export function RequestedDialog({
     case "delete-console":
       return (
         <ConfirmDialog
-          title={<Message id="dialog.deleteConsole.title" params={{ name: <InlineReference dir="auto" wrap>{dialog.console.name}</InlineReference> }} />}
+          title={t("dialog.deleteConsole.title")}
+          subject={<Message id="dialog.deleteConsole.subject" params={{ name: <InlineReference dir="auto" wrap>{dialog.console.name}</InlineReference> }} />}
           message={t("dialog.deleteConsole.message")}
           confirmLabel={t("common.delete")}
           typeToConfirm={t("dialog.typeToConfirm.delete")}
@@ -382,7 +383,8 @@ export function RequestedDialog({
     case "restore-project-changes":
       return (
         <ConfirmDialog
-          title={<Message id="dialog.restoreProjectChanges.title" params={{ name: <InlineReference dir="auto" wrap>{dialog.project.name}</InlineReference> }} />}
+          title={t("dialog.restoreProjectChanges.title")}
+          subject={<Message id="dialog.restoreProjectChanges.subject" params={{ name: <InlineReference dir="auto" wrap>{dialog.project.name}</InlineReference> }} />}
           message={t("dialog.restoreProjectChanges.message")}
           confirmLabel={t("dialog.restoreProjectChanges.confirm")}
           pendingLabel={t("dialog.restoreProjectChanges.pending")}

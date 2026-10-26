@@ -102,6 +102,14 @@ const filterFiles: FixtureFiles = {
   "node_modules/serverless": { dir: true },
   "node_modules/serverless/server.js": { text: "module.exports = {};\n" },
 };
+/** `filterFiles` with a folder the search cannot read, which makes every search of it incomplete. */
+const incompleteSearchFiles: FixtureFiles = { ...filterFiles, locked: unreadableDir("locked") };
+const searchFor = (query: string) => [
+  ...openFiles,
+  (ui: Ui) => ui.press(ui.t("browser.filter.show")),
+  (ui: Ui) => ui.type(query),
+  (ui: Ui) => ui.wait(400),
+];
 /** A project with ignored entries among the tracked ones, folders and a file at its top level. */
 const ignoredTreeFiles: FixtureFiles = {
   ...SAMPLE_FILES,
@@ -293,10 +301,10 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Folders that are empty, unreadable or cut short",
-    description: "Under the opened folders: \"Empty folder\" in muted italics; the unreadable folder stays drawn closed (closed chevron), with a danger-coloured circled \"!\" named Could not list this folder right after its name, nothing beneath it and no sentence of error text in the row; and \"Not every entry is shown\" for the cut-short one, over the entries it did list.",
+    description: "Under the opened folders: \"Empty folder\" in muted italics; the unreadable folder stays drawn closed (closed chevron), with a danger-coloured circled \"!\" named Could not list this folder right after its name, nothing beneath it and no sentence of error text in the row; and the cut-short one, open over the entries it did list, with a warning triangle right after its own name and no extra row among its entries. The project root itself is whole here; a cut-short root is marked at the pane's title, in the next scenarios.",
     state,
     files: {
-      "": { dir: true, complete: false },
+      "": { dir: true },
       empty: { dir: true },
       locked: unreadableDir("locked"),
       many: { dir: true, complete: false },
@@ -304,6 +312,42 @@ export const projectFilesScenarios: Scenario[] = [
       "notes.md": { text: "Notes\n" },
     },
     steps: [...openFiles, (ui) => ui.press("empty"), (ui) => ui.press("locked"), (ui) => ui.press("many"), (ui) => ui.wait(300)],
+  },
+  {
+    id: "files-root-cut-short",
+    group: GROUP,
+    category: "exceptional",
+    title: "A project folder listed only in part",
+    description: "The daemon stopped listing the project's own folder early, so the tree holds what it did list and a warning triangle stands right after the pane's title, in the header row, with no sentence under the tree. Its popover is shown in the next scenario.",
+    state,
+    files: { ...SAMPLE_FILES, "": { dir: true, complete: false } },
+    steps: openFiles,
+  },
+  {
+    id: "files-root-cut-short-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "Why a project folder is listed only in part, from a resting mouse",
+    description: "The mouse rests on the warning triangle after the pane's title: its popover opens above it with no click and no focus taken, saying not every entry of this folder is shown. The tree stays as it is.",
+    state,
+    files: { ...SAMPLE_FILES, "": { dir: true, complete: false } },
+    steps: [...openFiles, (ui) => ui.hoverStatusMark(ui.t("browser.partial"))],
+  },
+  {
+    id: "files-folder-cut-short-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "Why a folder is listed only in part, from a resting mouse",
+    description: "The mouse rests on the warning triangle right after the open folder many's name: its popover opens above it with no click and no focus taken, saying not every entry of this folder is shown. The folder's entries stay listed beneath it with no row of their own saying so.",
+    state,
+    files: {
+      "": { dir: true },
+      many: { dir: true, complete: false },
+      "many/a.txt": { text: "a\n" },
+      "many/b.txt": { text: "b\n" },
+      "notes.md": { text: "Notes\n" },
+    },
+    steps: [...openFiles, (ui) => ui.press("many"), (ui) => ui.hoverStatusMark(ui.t("browser.partial"))],
   },
   {
     id: "files-folder-failure-reason",
@@ -332,6 +376,36 @@ export const projectFilesScenarios: Scenario[] = [
       "notes.md": { text: "Notes\n" },
     },
     steps: [...openFiles, (ui) => ui.press("locked"), (ui) => ui.hoverStatusMark(ui.t("browser.tree.errorLabel"))],
+  },
+  {
+    id: "files-filter-incomplete",
+    group: GROUP,
+    category: "exceptional",
+    title: "Matching files from a search that is not whole",
+    description: "The matches are listed as usual, and a warning triangle sits inside the filter field, right before its Clear (x) button, which stays in place; the Include ignored files toggle is beside the field, and no sentence is added under the list. Its name is \"The search is incomplete\"; the popover it opens is shown in the next scenario.",
+    state,
+    files: incompleteSearchFiles,
+    steps: searchFor(" SERVER "),
+  },
+  {
+    id: "files-filter-incomplete-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "Why a search is not whole, from a resting mouse",
+    description: "The mouse rests on the warning triangle inside the filter field, before Clear: its popover opens above it with no click and no focus taken, saying the search stopped at its limits or could not read some files or folders, so not every match may be listed. The matches stay listed beneath. A touch or a key press opens the same popover with focus inside.",
+    state,
+    files: incompleteSearchFiles,
+    steps: [...searchFor(" SERVER "), (ui) => ui.hoverStatusMark(ui.t("browser.filter.partial"))],
+  },
+  {
+    id: "files-filter-incomplete-empty",
+    group: GROUP,
+    category: "exceptional",
+    title: "No matching files from a search that is not whole",
+    description: "The empty state says there are no matching files, and the warning triangle inside the filter field, before its Clear button, says the search may have missed some, so the emptiness is not final.",
+    state,
+    files: incompleteSearchFiles,
+    steps: searchFor("no-such-file"),
   },
   {
     id: "files-empty",

@@ -132,6 +132,45 @@ it("leaves the tree on Option+Tab and Option+Shift+Tab from where Tab and Shift+
   }
 });
 
+const partialFolder = (complete = false): TreeNode => ({
+  type: "directory",
+  key: rowKey("src"),
+  path: "src",
+  entry: { name: "src", kind: "directory", size: 0, version: "v1", target: null },
+  children: [fileNode("src/a.ts", false)],
+  partial: complete ? undefined : true,
+});
+
+it("marks an open folder whose listing was cut short with a warning mark right after its name, not a row beneath it", () => {
+  const container = render([partialFolder()], openFailed);
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  const mark = row.querySelector<HTMLButtonElement>("button[aria-label='Not every entry of this folder is shown.']")!;
+  expect(mark).not.toBeNull();
+  expect(row.getAttribute("aria-expanded")).toBe("true");
+  const name = [...row.querySelectorAll("span")].find((span) => span.textContent === "src")!;
+  expect(name.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(container.textContent).not.toContain("Not every entry");
+  expect(container.querySelectorAll("[role=row]")).toHaveLength(2);
+});
+
+it("walks from an open cut-short folder's row to its mark with ArrowRight, on to the row's actions, and back with Left, without folding the folder", () => {
+  const onExpandedChange = vi.fn();
+  const container = render([partialFolder()], { ...openFailed, onExpandedChange });
+  const row = container.querySelector<HTMLElement>(`[role=row][data-key="${rowKey("src")}"]`)!;
+  const mark = row.querySelector<HTMLButtonElement>("button[aria-label='Not every entry of this folder is shown.']")!;
+  const actions = row.querySelector<HTMLButtonElement>("button[aria-haspopup]")!;
+  act(() => row.focus());
+  press(row, "ArrowRight");
+  expect(document.activeElement).toBe(mark);
+  press(mark, "ArrowRight");
+  expect(document.activeElement).toBe(actions);
+  press(actions, "ArrowLeft");
+  expect(document.activeElement).toBe(mark);
+  press(mark, "ArrowLeft");
+  expect(document.activeElement).toBe(row);
+  expect(onExpandedChange).not.toHaveBeenCalled();
+});
+
 // What the menu does with the path is `RowActions`' own, pinned in `RowActions.test.tsx`; what the
 // tree has to answer for is that reaching the menu is not reaching the file.
 it("opens the menu without opening the file, and gives directories actions while status rows have none", () => {
@@ -406,6 +445,22 @@ it("keeps focus on the folder's row when a failure arrives while a row beneath i
   expect(document.activeElement).toBe(child);
   failNow();
   expect(container.querySelector(`[data-key="${rowKey("src/child.ts")}"]`)).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector(`[role=row][data-key="${rowKey("src")}"]`)));
+});
+
+it("hands focus to the row when the cut-short mark it held goes with the listing completing", async () => {
+  function Folder() {
+    const [partial, setPartial] = useState(true);
+    completeNow = () => act(() => setPartial(false));
+    return <FileTree nodes={[partialFolder(!partial)]} expanded={openFailed.expanded} label="Files" onExpandedChange={() => {}} onOpenFile={() => {}} onRetry={() => {}} treeRef={() => {}} />;
+  }
+  let completeNow = () => {};
+  const container = mountRows(<Folder />);
+  const mark = container.querySelector<HTMLButtonElement>("button[aria-label='Not every entry of this folder is shown.']")!;
+  act(() => mark.focus());
+  expect(document.activeElement).toBe(mark);
+  completeNow();
+  expect(container.querySelector("button[aria-label='Not every entry of this folder is shown.']")).toBeNull();
   await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector(`[role=row][data-key="${rowKey("src")}"]`)));
 });
 

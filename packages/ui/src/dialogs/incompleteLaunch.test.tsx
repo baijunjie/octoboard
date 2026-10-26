@@ -86,7 +86,8 @@ it("opening a new session on an incomplete account asks first, and sends the sam
   const { request } = render([half("claude")], sessionDialog);
   await press("Open");
   expect(sent(request, "open_session")).toHaveLength(0);
-  expect(document.body.querySelector(ASKING)?.textContent).toContain("The last sharing change of this account did not finish");
+  expect(document.body.querySelector(`${ASKING} h2`)?.textContent).toBe("Start on this account");
+  expect(document.body.querySelector(ASKING)?.textContent).toContain("The last sharing change of Half did not finish");
   await press("Start anyway");
   await settle();
   expect(sent(request, "open_session")).toEqual([[expect.objectContaining({ type: "open_session", account: "claude-half" })]]);

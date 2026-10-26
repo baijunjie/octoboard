@@ -41,9 +41,10 @@ Two things happen on every daemon start:
 
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
 processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a
-screen that states why the daemon could not start and offers to quit — a failed start never leaves a window with no
-explanation. The daemon's own reason is shown there as raw text in a block of its own, its long lines wrapped; the
-error alert shown over the screen says the daemon did not start, with the same reason in a block under its **Error
+screen that says the daemon failed to start and offers to quit — a failed start never leaves a window with no
+explanation. The daemon's own reason is not on that screen itself but in the popover of the mark after its heading
+(the screen is described in "The window chrome and the content panel" in `docs/product/window-layout.md`); the error
+alert shown over the screen says the daemon did not start, with the same reason in a block under its **Error
 details**. With no daemon running there is nothing to keep running, so closing the window quits whatever that
 setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
 Unix user, whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
@@ -106,7 +107,9 @@ own window.
 
 A dropped connection is retried automatically a couple of times with a short backoff. While that is happening a
 banner says so. Once the attempts are spent, the banner offers a Retry button; nothing retries forever on its own.
-Each new connection re-reads the whole state, so nothing has to be replayed by hand.
+Each new connection re-reads the whole state, so nothing has to be replayed by hand. A request still waiting for its
+reply when the connection closes, or when it is reopened, is never sent again on the new connection: it fails, saying
+that the connection closed, or that it was reopened before the reply arrived.
 
 **Retry with a dialog or a menu open.** Nothing drawn over the content panel — a dialog, a menu, a popover — covers
 the banner: a press where Retry is drawn retries the connection, and what was open stays open, so a pointer never has
@@ -118,7 +121,7 @@ the restriction while a menu is open are in "Moving focus between regions with F
 Failures a user has to know about use the acknowledgement dialog described in "Error alerts" in
 `docs/product/error-alerts.md`, including a daemon process that exits unexpectedly, a failed report-page submission,
 and the failure of a dialog's own action. Session notices that are not failures use toasts; see `docs/product/toasts.md`.
-What is wrong with one field is said under that field instead (see "Validation under a field" in
+What is wrong with one field is said under that field instead (see "Errors under a field" in
 `docs/product/error-alerts.md`).
 
 ## Closing the window

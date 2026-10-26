@@ -87,8 +87,8 @@ const FILE_GIT_WORKFLOW: GitWorkflowSettings = { development: "branch", rebase_b
 
 /** A document of a laptop's layout set up on a machine where it sits elsewhere: one project at its
  * recorded path, one found under the default clone directory, one to be cloned and one that nothing
- * places (whose recorded path is long enough to break over lines), a second console whose only
- * project can be cloned, and one with no project. */
+ * places (whose recorded path is long enough to break over lines, and whose account falls back too),
+ * a second console whose only project can be cloned, and one with no project. */
 export const REVIEW: Omit<Inspection, "type"> = {
   settings: {
     auto_pull_repositories: true,
@@ -140,7 +140,11 @@ export const REVIEW: Omit<Inspection, "type"> = {
           offers: { exported_path: null, default_clone_dir: null, clone: "/Users/dev/Projects/design-system" },
           default: "clone",
         }),
-        project({ name: "Notes", path: "/Users/ana/Documents/Work/Clients/Northwind/Archive/2019/Quarterly-Reports/final-notes" }),
+        project({
+          name: "Notes",
+          path: "/Users/ana/Documents/Work/Clients/Northwind/Archive/2019/Quarterly-Reports/final-notes",
+          account_fallbacks: [{ agent: "codex", name: "Personal" }],
+        }),
       ],
     },
     {
@@ -311,6 +315,40 @@ const CLEAN_RESULT: Omit<Imported, "type"> = {
   ],
 };
 
+/** A console and its one project, both naming accounts this machine does not have, and where the project is
+ * found at its recorded path: so the only thing the import has to report is the fallbacks. */
+const FALLBACKS_ONLY: Omit<Inspection, "type"> = {
+  consoles: [
+    {
+      name: "Documentation",
+      account_fallbacks: [{ agent: "claude", name: "Work" }],
+      projects: [
+        project({
+          name: "Style Guide",
+          path: "/Users/dev/code/style-guide",
+          offers: { exported_path: "/Users/dev/code/style-guide", default_clone_dir: null, clone: null },
+          default: "exported_path",
+          account_fallbacks: [{ agent: "codex", name: "Personal" }],
+        }),
+      ],
+    },
+  ],
+};
+
+/** `FALLBACKS_ONLY` imported with its defaults. */
+const FALLBACKS_ONLY_RESULT: Omit<Imported, "type"> = {
+  consoles: [
+    {
+      name: "Documentation",
+      status: "created",
+      console: "c-new-1",
+      error: null,
+      account_fallbacks: [{ agent: "claude", name: "Work" }],
+      projects: [{ name: "Style Guide", status: "created", via: "exported_path", project: "p-new-1", error: null, account_fallbacks: [{ agent: "codex", name: "Personal" }] }],
+    },
+  ],
+};
+
 /** `WITH_SETTING_OFF` imported with its defaults and the settings asked for: the project nothing
  * placed is left out, and the settings could not be written. */
 const SETTINGS_FAILED_RESULT: Omit<Imported, "type"> = {
@@ -416,11 +454,12 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, with full project paths included",
-    description: "Checking Include full project paths brings up the warning titled \"The file contains project paths\", saying under it that the file carries the paths on the machine running Octoboard.",
+    description: "Checking Include full project paths puts a warning triangle beside the checkbox, after its label and outside it (the checkbox's name stays \"Include full project paths\"), named \"Paths in the file\", and its popover, opened here, leads with the sentence \"The file contains project paths.\" and says the file records each project's full directory path on the machine running Octoboard, which can reveal details such as a user name, so the file is to be shared only with people the user trusts. Nothing is written loose beside the option.",
     state,
     steps: [
       ...exportFromSettings,
       (ui) => ui.press(ui.t("configuration.export.paths.include")),
+      (ui) => ui.hoverStatusMark(ui.t("configuration.export.paths.mark")),
     ],
   },
   {
@@ -462,7 +501,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Export, the file could not be written",
-    description: "The error alert dialog, over the export dialog and titled \"Could not export the configuration\", says only \"Could not save the file.\" and what to do about it. The system's own text, Permission denied (os error 13), appears nowhere in the sentences and sits only in the Error details disclosure, closed here: open it to read it in its block.",
+    description: "The error alert dialog, over the export dialog and titled \"Could not export the configuration\", says only \"Could not save the file.\" and a remedy about writing (file permissions, a writable disk or another folder), nothing about reading the file. The system's own text, Permission denied (os error 13), appears nowhere in the sentences and sits only in the Error details disclosure, closed here: open it to read it in its block.",
     state,
     configuration: { saveError: "Permission denied (os error 13)" },
     steps: [
@@ -488,7 +527,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, the file could not be read",
-    description: "The error alert dialog, over the import dialog and titled \"Could not import the configuration\", says only \"Could not read the file.\" and what to do about it. The system's own text, Permission denied (os error 13), sits only in the Error details disclosure, closed here.",
+    description: "The error alert dialog, over the import dialog and titled \"Could not import the configuration\", says only \"Could not read the file.\" and a remedy about reading (that the file still exists and Octoboard may read it, where to grant access, or choosing another file), nothing about writing or disk space. Compare the next two, whose remedy is to choose a different file. The system's own text, Permission denied (os error 13), sits only in the Error details disclosure, closed here.",
     state,
     configuration: { readError: "Permission denied (os error 13)" },
     steps: [
@@ -501,6 +540,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, a file too large to be a configuration",
+    description: "The remedy asks for a configuration file exported by a compatible Octoboard version, not about access to the file, which was read.",
     state,
     configuration: { readError: { kind: "too_large" } },
     steps: [
@@ -513,6 +553,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, a file that is not text",
+    description: "The remedy asks for a configuration file exported by a compatible Octoboard version, not about access to the file, which was read.",
     state,
     configuration: { readError: { kind: "not_text" } },
     steps: [
@@ -582,7 +623,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review",
-    description: "Cards for two consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps. Account fallbacks sit under a console's name and at the end of a project's row; the last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line, lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
+    description: "Cards for three consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps and no state line under its name. A warning triangle follows the name of the Work laptop console in its heading and the name of Search API in its row, where an account the file names is not set up here (the popover is in the next scenario); no sentence or alert repeats it. The not-found project, Notes, carries one warning triangle after its name, \"Notes not found, and accounts not set up\": the project is missing and its account falls back too, which are one point and so one mark (its popover is in a scenario below). The last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line, lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -595,7 +636,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of one console's document",
-    description: "A single console's document has one card and no application-settings card. \"Default clone directory (0)\" is disabled because no project offers it, and the clone note follows the card.",
+    description: "A single console's document has one card and no application-settings card. \"Default clone directory (0)\" is disabled because no project offers it, and the clone note follows the card. The project nothing places, Releases, has no state line, only a warning triangle after its name.",
     state,
     configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
     steps: [
@@ -608,7 +649,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review of a document exported without full paths",
-    description: "A project recorded only by its directory's name has no \"Exported path\" line: found in the default clone directory (only \"Placed in\"), can be cloned, or not found, with nothing to place it.",
+    description: "A project recorded only by its directory's name has no \"Exported path\" line: found in the default clone directory (only \"Placed in\"), can be cloned, or not found, with nothing to place it: that one has no state line under its name, only a warning triangle after it.",
     state,
     configuration: { file: FILE, inspection: NO_PATHS },
     steps: [
@@ -643,6 +684,34 @@ export const configurationScenarios: Scenario[] = [
       ...importFromSettings,
       chooseFile,
       applySettings,
+    ],
+  },
+  {
+    id: "configuration-import-review-fallback-details",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review, why a project's account is not used",
+    description: "The mouse rests on the warning triangle after the Search API name: its popover opens above it with no click and no focus taken, saying that the Codex account Personal is not set up here, so the default account is used. The triangle after the Work laptop heading opens the same kind of popover for the console's own account. A touch or a key press opens it with focus inside.",
+    state,
+    configuration: reviewing(),
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      (ui) => ui.hoverStatusMark(ui.t("configuration.import.fallbacks.label", { subject: "Search API" })),
+    ],
+  },
+  {
+    id: "configuration-import-review-not-found-details",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review, why a project is skipped",
+    description: "The mouse rests on the one warning triangle after the Notes name, \"Notes not found, and accounts not set up\": its popover opens above it with no click and no focus taken, listing each state as its own paragraph: the project is not found on the machine running Octoboard, it is skipped unless a directory is chosen for it, and then the account that falls back to the default. There is no second triangle beside it and the row has no state line under the name.",
+    state,
+    configuration: reviewing(),
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      (ui) => ui.hoverStatusMark(ui.t("configuration.import.project.state.noneAndFallbacksMark", { project: "Notes" })),
     ],
   },
   {
@@ -713,7 +782,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
-    description: "The table groups projects under their console, with a console's own result on its header row when it failed (\"Side projects\") or came out empty (\"Scratch\"); a failed project's result is a button opening the reason, and its Detail is empty. Below come the fallback accounts and the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. Phone width stacks each row into labelled blocks under the console's name; a short height exposes scrolling.",
+    description: "The table groups projects under their console, with a console's own result on its header row when it failed (\"Side projects\") or came out empty (\"Scratch\"); a failed project's result is a button opening the reason, and its Detail is empty. A warning triangle follows the Work laptop name in its header row and the Search API name in its row, for the accounts that fell back to the default; no alert or section lists them. Below the table comes the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. Phone width stacks each row into labelled blocks under the console's name; a short height exposes scrolling.",
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -735,6 +804,35 @@ export const configurationScenarios: Scenario[] = [
       chooseFile,
       applySettings,
       importNow,
+    ],
+  },
+  {
+    id: "configuration-import-result-fallbacks",
+    group: GROUP,
+    category: "normal",
+    title: "Import result, accounts that fell back to the default",
+    description: "Everything was created, so the only thing to report is the fallbacks: a warning triangle follows the Documentation name in its header row and the Style Guide name in its row, and nothing else (no alert, no list of accounts) stands above or below the table. Their popovers are in the next scenario.",
+    state,
+    configuration: { file: FILE, inspection: FALLBACKS_ONLY, imported: FALLBACKS_ONLY_RESULT },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      importNow,
+    ],
+  },
+  {
+    id: "configuration-import-result-fallbacks-details",
+    group: GROUP,
+    category: "normal",
+    title: "Import result, why a console's accounts fell back",
+    description: "The mouse rests on the warning triangle after the Documentation name in the result's header row: its popover opens above it with no click and no focus taken, saying that the Claude Code account Work is not set up here, so the default account is used. The table stays as it is under the popover.",
+    state,
+    configuration: { file: FILE, inspection: FALLBACKS_ONLY, imported: FALLBACKS_ONLY_RESULT },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+      importNow,
+      (ui) => ui.hoverStatusMark(ui.t("configuration.import.fallbacks.label", { subject: "Documentation" })),
     ],
   },
   {

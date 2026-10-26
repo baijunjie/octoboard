@@ -9,6 +9,7 @@ import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
+import type { FixtureFile } from "./fixtures/projectFiles";
 import { quotaOf, quotaWindow } from "./fixtures/quotas";
 import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
@@ -237,6 +238,17 @@ describe("the fixture daemon's project file trees", () => {
     await expect(daemon.request({ type: "search_project_files", project: "web", query: "" })).resolves.toMatchObject({
       paths: ["Server.md", "server-docs/notes.md", "src/server.ts"], complete: true,
     });
+  });
+
+  it("answers a search incomplete where a folder is unreadable or its listing is cut short", async () => {
+    const files = { "": { dir: true }, "server.ts": { text: "" } } as const;
+    const incomplete = async (extra: Record<string, FixtureFile>) => {
+      const daemon = createFixtureDaemon({ id: "project-search-incomplete", group: "Project pane: files", category: "normal", title: "", files: { ...files, ...extra } });
+      return daemon.request({ type: "search_project_files", project: "web", query: "server" });
+    };
+    await expect(incomplete({})).resolves.toMatchObject({ paths: ["server.ts"], complete: true });
+    await expect(incomplete({ locked: { dir: true, error: { code: "permission_denied", params: {}, message: "denied" } } })).resolves.toMatchObject({ paths: ["server.ts"], complete: false });
+    await expect(incomplete({ many: { dir: true, complete: false } })).resolves.toMatchObject({ paths: ["server.ts"], complete: false });
   });
 
   it("marks what Git ignores, and everything beneath it, in listings and in a search that includes it", async () => {

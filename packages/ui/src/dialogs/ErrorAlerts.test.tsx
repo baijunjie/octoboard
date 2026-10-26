@@ -125,6 +125,11 @@ it("immediately shows an actionable manual URL fallback if opening an Issue fail
   expect(alert.textContent).toContain("The Issue page could not be opened.");
   expect(alert.textContent).toContain(issueUrl);
   expect(alert.textContent).toContain("open it manually");
+  // The system's reason is not part of the alert's words; it is behind Error details, on a surface of its own.
+  const details = alert.querySelector("details")!;
+  expect(details.querySelector("summary")?.textContent).toBe("Error details");
+  expect(details.querySelector(".app-code")?.textContent).toContain("Browser unavailable");
+  expect(alert.textContent?.replace(details.textContent ?? "", "")).not.toContain("Browser unavailable");
   expect([...alert.querySelectorAll("a")].some((link) => link.textContent === "Report issue")).toBe(false);
   expect(errorAlerts.getSnapshot()).toHaveLength(2);
   act(() => errorAlerts.acknowledge());
@@ -227,6 +232,7 @@ it("shows a failed account-switch batch as prose: the target once, a short reaso
   mount();
   await act(async () => { await runAccountSwitchBatch(store, ["one", "two"], "a-1", { accountName: "Work", switchOne }); });
   const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  expect(alert.querySelector("h2")?.textContent).toBe("Could not switch account");
   expect(alert.textContent).toContain("2 sessions could not move to Work");
   expect(alert.textContent?.match(/They stay on their current account\./g)).toHaveLength(1);
   expect(alert.textContent).toContain("Session one");

@@ -371,11 +371,8 @@ export function ShellTerminalPanel({
             ring={false}
           />
           <ConfirmDialog
-            title={(
-              <span ref={(element) => { if (element) confirmScope.current = element; }}>
-                <Message id="shellTerminal.closeBusy.title" params={{ title: <InlineReference dir="auto" wrap>{terminals.find((terminal) => terminal.id === confirmClose.id)!.title}</InlineReference> }} />
-              </span>
-            )}
+            title={<span ref={(element) => { if (element) confirmScope.current = element; }}>{t("shellTerminal.closeBusy.title")}</span>}
+            subject={<Message id="shellTerminal.closeBusy.subject" params={{ title: <InlineReference dir="auto" wrap>{terminals.find((terminal) => terminal.id === confirmClose.id)!.title}</InlineReference> }} />}
             message={t("shellTerminal.closeBusy.message")}
             confirmLabel={t("shellTerminal.close")}
             destructive

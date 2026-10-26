@@ -93,10 +93,11 @@ export function reportSwitchFailures(failures: SwitchFailure[], accountName: str
   errorAlerts.report({
     // Plain text, which tells two batches to different accounts apart.
     message: [t("dialog.switchAccount.failed", { count, account: accountName }), ...failures.map(({ session, error }) => `${session.id}: ${errorText(error)}`)].join("\n"),
-    title: <Message id="dialog.switchAccount.failed" params={{ count, account: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
+    title: <Message id="dialog.switchAccount.failedTitle" />,
     failures: failures.map(({ error }) => ({ error })),
     content: (
       <div className="flex min-w-0 flex-col gap-3 whitespace-normal">
+        <p><Message id="dialog.switchAccount.failed" params={{ count, account: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} /></p>
         <p><Message id="dialog.switchAccount.failedIntro" params={{ count }} /></p>
         <ul className="flex flex-col gap-2">
           {failures.map(({ session, error }) => (

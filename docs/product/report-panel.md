@@ -72,11 +72,14 @@ started over from its markup, with anything typed into its form and not submitte
   pages are first being listed, the card shows its header alone.
 - The pages are listed when the console session's panel is shown, and again whenever the window reloads its state
   from the daemon (a reconnect, or catching up after falling behind). **A listing that fails** is shown in the panel,
-  with the reason and **Try again**, which lists them again: with no pages to show, an empty-state failure under the
-  header fills the card; with pages already there, a compact amber alert sits above the page, which stays usable. Each
-  failure is announced to assistive technology, a repeated one again, and it opens no error alert (see "Failures shown
-  on the screen" in `docs/product/error-alerts.md`). The failure goes once a listing succeeds; when it goes while it holds
-  keyboard focus, focus moves to the panel's first enabled control.
+  with the reason and **Try again**, which lists them again, and opens no error alert. With no pages to show, an
+  empty-state failure under the header fills the card; it is announced to assistive technology, a repeated one again
+  (see "Failures shown on the screen" in `docs/product/error-alerts.md`). With pages already there, the page stays
+  usable and the failure is an amber warning mark right after the panel's title, named that the pages could not be
+  listed; its popover holds what happened, what to do, any details and, where trying again can help, **Try again** (see
+  "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). The panel's status region
+  says it once as it appears. The failure goes once a listing succeeds; when it goes while it, or the mark's popover,
+  holds keyboard focus, focus moves to the panel's first enabled control.
 
 When the page holding keyboard focus is replaced — by following a new page or paging through history — focus moves
 to the report panel's first enabled header control, with a visible focus ring. If a modal dialog is open, focus

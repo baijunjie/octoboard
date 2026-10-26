@@ -38,16 +38,20 @@ For a single directory, the form asks the daemon about the path as soon as it is
 when typed): the path must be an existing directory, and its agent is read and preselected in the Default agent field,
 which stays changeable; see "The project's default agent". While the answer for the current path is outstanding the
 form says it is checking, and the fields below the path (name, description, tags, default agent) and the submit button
-are disabled; a refusal such as "not a directory" is shown in an alert directly under the path field and keeps them
-disabled. Only the latest path's answer counts, and a changed path is read again and its result preselected anew.
+are disabled. An answer that finds the path itself wrong — it does not exist, or is not a directory — is the path
+field's own error: it is said under the field, which is marked invalid, as soon as the answer arrives, without waiting
+for a submit, and keeps them disabled. Any other failure of the check, one that says nothing about the path because the
+check could not run, is shown in an alert directly under the path field instead and keeps them disabled too. Only the
+latest path's answer counts, and a changed path is read again and its result preselected anew.
 
 For a git URL, the form first checks the repository: once the URL stops changing, the daemon fetches the remote's tip
 commit without file contents or history into a scratch directory, which proves the remote can be read with the user's
 credentials and shows its top-level names. Every field below the URL (clone into, name, description, tags, default
 agent) and the submit button stay disabled until that check has succeeded for the URL as it stands, an empty one included; while it
 runs the form says it is checking, and a failure is shown in an alert directly under the URL field, saying the
-repository could not be read with git's own reason behind Details, and keeps them disabled. Both alerts are titled that the location could not be checked, with the refusal or failure under the title. Neither
-alert opens an error alert (see "Failures shown on the screen" in
+repository could not be read with git's own reason behind Details, and keeps them disabled. Both alerts are titled
+that the location could not be checked, with the failure under the title. Neither the path field's error nor either
+alert opens an error alert (see "Errors under a field" and "Failures shown on the screen" in
 `docs/product/error-alerts.md`). A success enables them and preselects the detected agent. The check is bounded by a
 timeout, and its scratch directory is removed when it ends.
 
@@ -303,12 +307,21 @@ directory not created yet), it lists the nearest ancestor that does exist instea
 home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
 
 A listing can fail, and that is a normal path rather than an edge case: a packaged application is granted file access
-per volume by macOS, and the user may decline the prompt or leave it unanswered. The failure is shown in the browser
-itself, in an alert under the path field saying the directory could not be listed, with the reason — naming the path,
-and the hint that per-volume access has to be granted — and **Try again**, which asks for the same directory again; it
-opens no error alert. Whatever was listed before stays on screen so the browser can be navigated back out of, and the
-alert goes once a listing succeeds. The same failure can surface when a session is opened: a project directory the daemon
-cannot reach is reported as such rather than silently starting the agent somewhere else.
+per volume by macOS, and the user may decline the prompt or leave it unanswered. The reason names the path and gives
+the hint that per-volume access has to be granted. Where the failure is shown depends on who asked for the listing:
+
+- **The listing made as the browser opens**, when it fails, leaves the browser with nothing to show, so the failure is
+  shown in the browser itself, in an alert under the path field saying the directory could not be listed, with the
+  reason and **Try again**, which asks for the same directory again; it opens no error alert. The alert goes once a
+  listing succeeds.
+- **A navigation the user starts** — **Go**, **Try again**, opening an entry or the parent-directory entry — that
+  fails opens the error alert titled "Could not open the directory" (see "The error alert" in
+  `docs/product/error-alerts.md`), whether a listing stands or
+  not, and the browser stays as it was: it keeps the listing it had, so it can be navigated from as before, or, with
+  none yet, the alert of the listing made as it opened.
+
+The same failure can surface when a session is opened: a project directory the daemon cannot reach is reported as such
+rather than silently starting the agent somewhere else.
 
 ## Hosts
 

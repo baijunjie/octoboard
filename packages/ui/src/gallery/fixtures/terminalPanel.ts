@@ -237,7 +237,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Closing a terminal that is busy",
     description:
-      "Closing the shown tab, whose shell is running pnpm dev, asks first: the title reads Close, then the terminal's name as a chip, with the warning that closing ends what runs there, and a destructive Close terminal. An idle or exited tab closes without asking.",
+      "Closing the shown tab, whose shell is running pnpm dev, asks first: a warning modal titled Close terminal whose first sentence names the terminal as a chip, then the warning that closing ends what runs there, and a destructive Close terminal button. An idle or exited tab closes without asking.",
     state: stateOf([shellTerminalOf("sh-1", web, "zsh", 0), shellTerminalOf("sh-2", web, "pnpm dev", 1, { busy: true })]),
     preferences: TERMINAL_ONLY,
     steps: [openWebsite, (ui) => headerMenu(ui, "pnpm dev"), (ui) => ui.press(ui.t("shellTerminal.close"))],

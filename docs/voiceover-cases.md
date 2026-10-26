@@ -140,6 +140,7 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E6 | Local main `cd10ab4e7020142bbabec5b052c447f5bf27c368` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo20261025h7gwl`; real daemon and throwaway files/Git repository. NAME-5, SA-N, FOCUS-3 and ALERT-1; no real agent or quota. |
 | E7 | Local main `2d8e1a705888dbe319da3fc2c0e0951d6f9766d5` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo6-20261025-fyq175xi`; WARN-1 and WARN-2, real daemon and Git data with fixture Codex CLI/records, no Safari or gallery. |
 | E8 | Local main `9d199cb42573568a07d618034494a95c75a0a2c7` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo8-20261025-2j89ms59`; FOCUS-4, bare Error and Note viewer-header marks with real daemon/throwaway files; no agent, browser or gallery. |
+| E9 | Branch `fix/startup-error-details` at `f37fc3d925f35eb78f1048ea4767df369a1f6b1d` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo9-ddnbws96`; WARN-3, WARN-4 and WARN-5, real daemon with isolated HOME/TMPDIR/agent directories, fixture Codex CLI and dated records, throwaway real Git repositories and worktrees; no Safari or gallery. |
 
 E4's tree equals main `429be4556`, which carries the Settings opener fix `39c1ec3f3` and the login success announcement
 fix `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they are not durable
@@ -195,6 +196,24 @@ build-time identifier, scratch signing identifier, isolated daemon database/lock
 storage were checked before driving the window. Temporary processes, bundle, data, captures and logs were cleaned up
 after transcription.
 
+E9 was built from a commit of an unmerged branch, `git archive`d into a scratch copy (not a worktree); only packaging
+metadata was changed in the copy (identifier and native product name), and the UI was built with its original product
+name. The bundle was ad-hoc signed with its unique identifier; no Developer ID, notarization or update signing. It used
+macOS 26.2 (25C56) on arm64, English application text, mixed English/Simplified Chinese VoiceOver output and the light
+application appearance, confirmed from a screenshot of its own window. The caption panel was enabled but was not the
+reader and was not toggled. Before any shortcut or global input, the user explicitly authorized Command-F5 (on and off)
+through System Events, other System Events keys, `cliclick` and real pointer input for this round; each global input
+and each VoiceOver cursor move was preceded by a frontmost-PID check for the isolated application. Accessibility
+actions were preferred; the archive row's inner buttons were not exposed as separate accessibility children, so two
+guarded Tabs, one guarded hover and a guarded Enter opened its Delete confirmation, which is setup, not evidence about
+the dialog. The first background recorder expired after its 10-minute bound and a second was started; speech from other
+applications picked up during setup was excluded, and every quoted phrase was correlated with a deliberate action in the
+isolated application. VoiceOver started off and was restored off with the authorized shortcut; its AppleScript
+permission was already available, and no other VoiceOver preference, permission or volume setting was changed. Sessions,
+binding, hooks, branch-reference validation, inspections and archiving went through the real daemon; Codex records were
+synthetic dated rollouts, with no login or model use. Temporary processes, bundle, scratch copy, data, captures, logs,
+identifier-specific WebKit and cache storage and the LaunchServices registration were removed after transcription.
+
 Every `StatusAnnouncer` in the SA cases renders an unnamed `sr-only` `role="status"` with no explicit `aria-live`,
 `aria-atomic` or `aria-relevant` props. For E1 to E5, the captured effective native mapping is a group with the
 application-status subrole (empty-group subrole while empty), role description "application status", empty own name,
@@ -236,8 +255,11 @@ mapping.
 | [PLAIN-1 Text change in a mounted plain status](#plain-1-text-change-in-a-mounted-plain-status) | `role="status"` replaced in place inside a modal | Pass (first build) |
 | [PLAIN-2 Persistent visible status with an action](#plain-2-persistent-visible-status-with-an-action) | plain `role="status"` filled in place | Pass |
 | [ALERT-1 A conflicted file read fails](#alert-1-a-conflicted-file-read-fails) | delayed `PaneFailure` alert inside the viewer | Pass for file-not-found |
-| [WARN-1 Deletion warning order and checked option descriptions](#warn-1-deletion-warning-order-and-checked-option-descriptions) | warning title, session list and consequence text; checkbox name and hint | Pass |
-| [WARN-2 Trust prompt caution prefix and description](#warn-2-trust-prompt-caution-prefix-and-description) | hidden caution prefix, visible title, then agent-specific text | Pass in packaged app with fixture Codex CLI |
+| [WARN-1 Deletion warning order and checked option descriptions](#warn-1-deletion-warning-order-and-checked-option-descriptions) | warning title, session list and consequence text; checkbox name and hint | Pass (history; superseded by WARN-3) |
+| [WARN-2 Trust prompt caution prefix and description](#warn-2-trust-prompt-caution-prefix-and-description) | hidden caution prefix, visible title, then agent-specific text | Pass in packaged app with fixture Codex CLI (history; superseded by WARN-5) |
+| [WARN-3 Deletion warning modal with option notes outside the checkbox](#warn-3-deletion-warning-modal-with-option-notes-outside-the-checkbox) | warning modal: plain body, session list and consequences; checkbox name and an external note through `aria-describedby` | Pass for focus and sequential reading; opening announcement unconfirmed |
+| [WARN-4 Remove project with running sessions and a lookup-failure mark](#warn-4-remove-project-with-running-sessions-and-a-lookup-failure-mark) | warning modal with running sessions; external note; a separate mark after the checkbox | Pass |
+| [WARN-5 Trust prompt caution as plain body text](#warn-5-trust-prompt-caution-as-plain-body-text) | the caution as one plain paragraph, no prefix or title | Pass for sequential reading; opening announcement unconfirmed |
 | [Known not to work](#known-not-to-work) | nine failing or negative observations (KNW-1 to KNW-9; each names the case that replaced it) | **Fail** (history) |
 | [OPEN-1 Import result dialog rename](#open-1-import-result-dialog-rename) | focus move onto a renamed dialog | Unconfirmed |
 
@@ -1014,6 +1036,9 @@ mapping.
   remove-project confirmation's trash option does give its checkbox a description, through its inspection-failed line
   (`describedBy` in `BranchCleanupOptions.tsx`); that description was not heard. It does not cover plural cleanup
   counts, live sessions, another dialog's options, deletion execution or recovering records from the Trash.
+- **Superseded by.** WARN-3 (E9). The confirmation became a warning modal whose consequences are plain body text with
+  no `TintedAlert`, and `ConfirmOption`'s note moved outside the checkbox, linked by `aria-describedby`; the trash
+  option's inspection-failed line became a mark (WARN-4). This case no longer matches the product and stays as history.
 
 ### WARN-2 Trust prompt caution prefix and description
 
@@ -1052,6 +1077,216 @@ mapping.
 - **Reuse scope.** Covers this hidden caution prefix plus visible title followed by the Codex-specific description in
   the packaged trust dialog. It does not establish the Claude Code or Grok descriptions, other languages, accepting
   trust, folder-wide persistence or any real agent's sandbox behavior.
+- **Superseded by.** WARN-5 (E9). The caution is now one plain paragraph, with no `TintedAlert`, hidden prefix or
+  title. This case no longer matches the product and stays as history.
+
+### WARN-3 Deletion warning modal with option notes outside the checkbox
+
+- **Location and state change.** Delete an archived console owner with two archived bound project sessions. Before and
+  after archiving, the real daemon's inspections reported one uncommitted worktree and one locked worktree (with their
+  checked-out branches), and the agent-record inspection reported `present`. Tick the force-remove, locked-worktree and
+  agent-record options, let the update settle, focus each checkbox anew, then read from Close through the body, the
+  list and the consequences. No deletion was confirmed.
+- **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`, `ConfirmConsequences`),
+  `packages/ui/src/dialogs/ConfirmDialog.tsx` (`ConfirmDialog`) and `packages/ui/src/dialogs/Dialog.tsx` (`Dialog`): a
+  warning modal, the warning icon in its header, a plain title, the subject in the body's first sentence, and the
+  session list and consequence paragraphs as plain body text with no `TintedAlert`.
+  `packages/ui/src/dialogs/ConfirmOption.tsx` (`ConfirmOption`) keeps the `Label` inside the `Checkbox` and renders the
+  note as a `Description` outside it, linked by an explicit `aria-describedby` to its `useId`;
+  `packages/ui/src/dialogs/BranchCleanupOptions.tsx` (`BranchOption`) is one such caller. Durable reading and focus; no
+  `StatusAnnouncer`.
+- **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Delete session`,
+  `AXARIALive=assertive`, `AXARIAAtomic=0`, `AXARIARelevant=additions text`. The scrolling body is an
+  `AXLandmarkRegion` named `Delete session` holding the plain paragraphs and list; the heading is level 2; no named
+  warning glyph is exposed; the body has no inner alert or status region. Each checkbox's title is its label alone,
+  `AXValue=1`, with empty sampled `AXDescription` and `AXHelp`; each note is a separate following static text. The
+  speech on focus establishes that the note is read; literal HTML ID strings were not extracted.
+- **Result, checked options.** Pass. Focusing each checkbox spoke its label, its note and its state:
+
+  ```json
+  [
+    "Also force-remove the worktree or branch Git keeps Its uncommitted changes or unmerged commits cannot be recovered. 已勾选 checkbox",
+    "Also delete the locked worktree It goes despite its lock and cannot be recovered. 已勾选 checkbox",
+    "Also move the agent's own session records to the Trash The sessions can then no longer be resumed in the agent itself. You can recover the records from the Trash. 已勾选 checkbox"
+  ]
+  ```
+
+- **Result, sequential reading.** Pass. From Close, the substantive phrases in order (each separate note is reached
+  again by the cursor after its checkbox):
+
+  ```json
+  [
+    "标题级别2 Delete session",
+    "Delete session region",
+    "The session Fixture turn | Verification project｜Verification owner will be deleted permanently.The project's files are kept.",
+    "Also force-remove the worktree or branch Git keeps Its uncommitted changes or unmerged commits cannot be recovered. 已勾选 checkbox",
+    "Also force-remove the worktree or branch  Git  keeps",
+    "Its uncommitted changes or unmerged commits cannot be recovered.",
+    "Details Also force-remove the worktree or branch Git keeps Its uncommitted changes or unmerged commits cannot be recovered. 已折叠 button",
+    "Also delete the locked worktree It goes despite its lock and cannot be recovered. 已勾选 checkbox",
+    "Also delete the locked worktree",
+    "It goes despite its lock and cannot be recovered.",
+    "Details Also delete the locked worktree It goes despite its lock and cannot be recovered. 已折叠 button",
+    "Also move the agent's own session records to the Trash The sessions can then no longer be resumed in the agent itself. You can recover the records from the Trash. 已勾选 checkbox",
+    "Also move the agent's own session records to the Trash",
+    "The sessions can then no longer be resumed in the agent itself. You can recover the records from the Trash.",
+    "2 archived sessions under it are deleted with it",
+    "Codex (Default)Fixture turn | Verification project｜Verification child 2",
+    "Codex (Default)Fixture turn | Verification project｜Verification child 1",
+    "Also permanently deletes the worktree or branch  Git  keeps.",
+    "Also permanently deletes the locked worktree, uncommitted changes included.",
+    "Also moves the agent's own records of this session and of the sessions deleted with it to the Trash.",
+    "的结尾 Delete session region",
+    "Cancel button",
+    "Delete all button",
+    "的结尾 Delete session web alert dialog"
+  ]
+  ```
+
+  Unlike E7, the first consequence was one phrase, with double spaces around `Git`. The sessions were listed child 2
+  then child 1, and speech followed that order. Consequence sentences updated while ticking were heard but not counted
+  as checkbox reads. This is manual reading, not a claim that the whole dialog was spoken automatically in this order.
+- **Result, opening announcement.** Unconfirmed: the automatic speech on opening was not reliably captured. Not a
+  failure.
+- **Two joins in the heard text, changed after this pass.** "permanently.The project's" (the subject and the message,
+  which were separated by a text node that was only a space) and "Codex (Default)Fixture turn" (a session row's hidden
+  agent name directly before its title; E7 heard the same join). The same branch, before it merged, put the space into
+  the message's own text node and ended the hidden agent name with a comma ("Codex (Default), "), since a hidden
+  element's trailing space is dropped in rendering. That changes the text only, not any item under "What \"matches a
+  case\" means"; the new phrases were not heard.
+- **Capture.** AppleScript last phrase, by background polling at a requested 25 ms and by direct reads after guarded
+  cursor commands; the native tree with all three options checked.
+- **Environment.** E9. Real daemon and UI, fixture Codex processes, synthetic dated Codex records, real bound session
+  records and real Git worktrees, uncommitted and locked, kept on archiving. No gallery or database seed supplied the
+  dialog.
+- **Date.** 2026-10-26.
+- **Reuse scope.** Covers this warning modal's plain structure (title, subject sentence, session list, consequence
+  paragraphs) and `ConfirmOption`'s external note read through `aria-describedby` on checkbox focus, with one
+  uncommitted worktree Git keeps, one locked worktree, two archived bound sessions and the records option. It does not
+  separately establish Archive, Delete archived, plural cleanup counts, another language, deletion or recovery, or the
+  announcement on opening.
+
+### WARN-4 Remove project with running sessions and a lookup-failure mark
+
+- **Location and state change.** Remove project, for a project with two real fixture sessions still `working`. Read the
+  unticked Trash option and the body. Then tick Trash, with a deliberately malformed Git configuration in the throwaway
+  repository making the real worktree inspection fail (an earlier attempt with a renamed directory gave an empty
+  successful lookup and is not evidence of the failure), read the settled ticked checkbox and the separate mark, and
+  press the mark. Cancel the removal; the configuration and path were restored before cleanup.
+- **Mechanism.** `RequestedDialog.tsx` (`DeleteProjectDialog`, `ConfirmConsequences`), `ConfirmDialog.tsx`,
+  `Dialog.tsx`, `ConfirmOption.tsx`, `BranchCleanupOptions.tsx` (`useProjectRemovalCleanup`) and
+  `packages/ui/src/components/StatusMark.tsx` (`StatusMark`): the warning mark is a 24 px button after the checkbox,
+  outside its label; the failure adds no description to the checkbox. The note is linked as in WARN-3.
+- **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Remove project`, live
+  assertive, atomic 0, relevant additions text; a plain level-2 heading, the subject and body as static text, the
+  sessions as an `AXList` with each working status a named image and each agent name static text. The checkbox's title
+  is `Also move the project folder to the Trash`, `AXValue` 0 then 1, with empty sampled `AXDescription` and `AXHelp`
+  and the note a separate static text. The failed inspection exposed a distinct `AXButton`, title and description
+  `Other worktrees unknown`, right after the checkbox and before the note in native order, with a native frame of
+  25 × 24; pressed, it opens an `AXApplicationDialog` of the same name holding the explanation. It is not part of the
+  checkbox's name.
+- **Result, checkbox focus.** Pass, unticked and then ticked with the lookup failed; no failure text joins either:
+
+  ```json
+  [
+    "Also move the project folder to the Trash The whole folder goes, including anything not committed toGit. You can recover it from the Trash. 未勾选 checkbox",
+    "Also move the project folder to the Trash The whole folder goes, including anything not committed toGit. You can recover it from the Trash. 已勾选 checkbox"
+  ]
+  ```
+
+  `toGit` is the native output. The note's DOM keeps the space before the `Git` reference (sequential reading below
+  splits it there); VoiceOver's reading of the description drops it.
+- **Result, sequential reading, Trash unticked.** Pass:
+
+  ```json
+  [
+    "标题级别2 Remove project",
+    "The project  Verification running project  will be removed.Its sessions are deleted with it. Files on disk are kept.",
+    "Also move the project folder to the Trash The whole folder goes, including anything not committed toGit. You can recover it from the Trash. 未勾选 checkbox",
+    "Also move the project folder to the Trash",
+    "The whole folder goes, including anything not committed to",
+    "Git",
+    ". You can recover it from the Trash.",
+    "2 sessions are still running and will be ended",
+    "Working Working  可点按  image",
+    "Codex (Default)Fixture turn | Verification project｜Running fixture 2",
+    "Working Working  可点按  image",
+    "Codex (Default)Fixture turn | Verification project｜Running fixture 1",
+    "Cancel button",
+    "End and remove button"
+  ]
+  ```
+
+- **Result, the mark.** Pass. Its focus, then pressing it:
+
+  ```json
+  [
+    "Other worktrees unknown 已折叠 button",
+    "Worktrees of the repository outside the project folder may be moved to the Trash with it, and its branches deleted permanently. Other worktrees unknown web dialog"
+  ]
+  ```
+
+- **Result, opening.** Once, on opening, the first recorder caught this automatic phrase; it is not a guarantee for
+  every opening:
+
+  ```text
+  Remove project The project Verification running project will be removed. Its sessions are deleted with it. Files on disk are kept. Also move the project folder to the Trash The whole folder goes, including anything not committed toGit. You can recover it from the Trash.2 sessions are still running and will be ended web alert dialog
+  ```
+
+  The join "Trash.2 sessions" is between two separate blocks of the body in the dialog's own description.
+- **Joins changed after this pass.** "removed.Its" and "Codex (Default)Fixture turn", changed as WARN-3 says; not
+  heard again.
+- **Capture.** As WARN-3. The ticked checkbox and the mark were focused again from Cancel first, so an unchanged focus
+  could not leave a stale last phrase.
+- **Environment.** E9.
+- **Date.** 2026-10-26.
+- **Reuse scope.** Covers this Remove project state with two working sessions, the external note, the separate
+  failed-inspection mark after the checkbox and its press-opened explanation. Opening the mark by hover or by focus,
+  carrying out the removal and force-removing locked worktrees were not tested.
+
+### WARN-5 Trust prompt caution as plain body text
+
+- **Location and state change.** Open a session in an untrusted throwaway Git project. The credential-free fixture
+  Codex CLI writes exactly `Trust this folder?`, `› 1. Trust and continue`, `  2. Quit` to its real PTY and waits; the
+  real daemon emitted `trust_prompt` for that session and project and offered the parent folder. Read from Close through
+  the body, the caution and the folder-wide checkbox; finish with Not now, never Trust and continue.
+- **Mechanism.** `packages/ui/src/dialogs/TrustPromptDialog.tsx` (`useTrustPromptDialogProps`, `TrustPromptMessage`,
+  `Caution`), `ConfirmDialog.tsx`, `Dialog.tsx`: the caution is the agent-specific sentence in one plain `p` after the
+  prompt's other paragraphs, with no hidden prefix, no title of its own, no `TintedAlert` and no `StatusAnnouncer`.
+- **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Trust this folder?`, live
+  assertive, atomic 0, relevant additions text; a plain level-2 heading. The caution paragraph's static-text children
+  run from `Trusting lets ` through the two inline `Codex` references to its end. Neither `Caution:` nor `The project's
+  own configuration takes effect` occurs in the prompt's native subtree, and the caution holds no alert or status.
+- **Result, sequential reading.** Pass. The phrases as heard (path breaks and double spaces are native):
+
+  ```json
+  [
+    "标题级别2 Trust this folder?",
+    "Codex  is asking whether to trust the folder  /private/tmp/",
+    "octoboard-vo9-ddnbws96",
+    "/fixtures/trust-fixture for session Trust fixture .",
+    "If you agree,  Octoboard  presses  Codex 's own confirmation, and",
+    "Codex",
+    " records the trust, so it does not ask again here.  Octoboard",
+    "also records a permission every agent shares, so a later trust confirmation for this project is pressed without asking.",
+    "Codex records the trust for the root of the git repository this folder is in. If this project is a subfolder or a linked worktree, that covers more than this project.",
+    "Trusting lets  Codex load this project's own configuration, hooks and command rules, which can run code even without a model request. This confirmation does not change \nCodex's sandbox or approval policy, though the project's own configuration can.",
+    "Trust every project under /private/tmp/octoboard-vo9-ddnbws96/fixtures This records the folder instead of this project, and covers every project under it, at any depth, including ones added there later, for every agent. 未勾选 checkbox",
+    "Trust every project under  /private/tmp/octoboard-vo9-ddnbws96/fixtures",
+    "This records the folder instead of this project, and covers every project under it, at any depth, including ones added there later, for every agent."
+  ]
+  ```
+
+  The caution was one phrase, with its internal newline, and nothing before it named it a caution.
+- **Result, opening announcement.** Unconfirmed: the automatic speech on opening was not reliably captured. Not a
+  failure.
+- **Capture.** AppleScript last phrase read directly after guarded cursor commands, the native tree, and the daemon's
+  actual `trust_prompt` event; no fixture WebSocket reply to the UI.
+- **Environment.** E9. Evidence for Octoboard's prompt and its reading, not for real Codex's current output, login or
+  trust policy.
+- **Date.** 2026-10-26.
+- **Reuse scope.** Covers the Codex-specific plain caution in the packaged trust dialog. It does not establish the
+  Claude Code or Grok cautions, another language or appearance, accepting trust or its persistence.
 
 ### Known not to work
 
@@ -1226,10 +1461,13 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   Note, with one sentence in the opening phrase and focus returned on Escape. Warning, the restricted-change rich path
   line, other custom-body marks and the generic `Hint` touch wrapper were not heard. Touch VoiceOver requires iOS/iPadOS
   and is outside this desktop pass.
-- WARN-1 establishes the deletion warning's reading order and the checked boxes' label and hint reading. WARN-2
-  establishes the Codex trust caution in the packaged app. Earlier Safari/gallery readings of these warnings are not
-  used as passing cases. The new run does not cover plural cleanup counts, live-session warnings or the other agents'
-  trust descriptions; it does not verify deletion execution, real agent records or trusting a folder in a real agent.
+- WARN-3 to WARN-5 (E9) establish the warning modals' plain body and the external option notes on focus and in
+  sequential reading, the Remove project mark and the Codex trust caution as plain text; they replace WARN-1 and
+  WARN-2, which stay as history. The automatic announcement on opening a warning modal or the trust prompt was not
+  reliably captured and stays unconfirmed. Earlier Safari/gallery readings of these warnings are not used as passing
+  cases. Plural cleanup counts, Archive and Delete archived, the other agents' cautions, deletion execution, real agent
+  records and trusting a folder in a real agent are not covered. A checkbox note holding an inline reference is read on
+  focus without the space before the reference ("committed toGit"), although the DOM keeps it.
 - Hover-opened status-mark and quota content was reached through the VoiceOver item chooser in FOCUS-3. Sequential
   navigation did not reach that content in the attempted walks; it is not certified by the successful chooser route.
   Since `9d199cb42` a bare mark's hover panel is named by its tone, so the chooser listing by sentence ("Shown without

@@ -10,10 +10,11 @@ import type { BranchList } from "./useBranchList";
 import type { CommittedState, UncommittedState } from "./useGitReview";
 
 /** A line above the list, as the words it is made of; paths and branches are in display form, except
- * the worktree's `root`, a wire path, which the line's copy button turns into display form itself. */
+ * the worktree's `root`, a wire path, which the line's copy button turns into display form itself. `cut` is
+ * whether its uncommitted changes were cut short, which the line ends on a mark for. */
 export type ChangesNotice =
   | { id: "unborn" }
-  | { id: "worktree"; name: string; root: string }
+  | { id: "worktree"; name: string; root: string; cut?: true }
   | { id: "scopeMissing" }
   | { id: "noRemote"; branch: string }
   | { id: "noBase" }
@@ -56,6 +57,8 @@ export interface ChangesStatus {
   goneBranches: string[];
   /** Whether what is listed stops short of everything: some part of it was cut. */
   partial: boolean;
+  /** Whether the committed changes (the comparison's, or the commits') were cut. */
+  committedPartial: boolean;
   /** How many commits are listed when only the newest were, none when all were. */
   commitsCut: number | undefined;
 }
@@ -72,9 +75,12 @@ export function changesStatus({
   const notices: ChangesNotice[] = [];
   const failures: ChangesFailure[] = [];
   let listingCommits = false;
+  const partialUncommitted = uncommitted.state === "listed" && uncommitted.list.state === "loaded" && !uncommitted.list.complete;
   if (uncommitted.state === "listed") {
     const { worktree, own, list } = uncommitted;
-    if (!own) notices.push({ id: "worktree", name: wireBaseName(worktree.root), root: worktree.root });
+    // The worktree is named when it is not the project's own; the project's own is named too when its changes were
+    // cut short, since the warning is about it and its line is where the warning's mark goes.
+    if (!own || partialUncommitted) notices.push({ id: "worktree", name: wireBaseName(worktree.root), root: worktree.root, ...(partialUncommitted && { cut: true as const }) });
     if (worktree.head === null) notices.push({ id: "unborn" });
     if (!worktree.scope_present) notices.push({ id: "scopeMissing" });
     if (list.state === "error") failures.push({ key: "uncommitted", title: "git.error.list", line: "git.changes.listError", message: list.message });
@@ -108,14 +114,13 @@ export function changesStatus({
 
   const shown = committed.state === "compare" && committed.comparison.state === "loaded" ? committed.comparison : undefined;
   const commitList = committed.state === "compare" ? committed.commits : undefined;
-  const partial =
-    (uncommitted.state === "listed" && uncommitted.list.state === "loaded" && !uncommitted.list.complete) ||
-    (commitList === undefined ? shown !== undefined && !shown.complete : commitList.state === "loaded" && !commitList.complete);
+  const committedPartial = commitList === undefined ? shown !== undefined && !shown.complete : commitList.state === "loaded" && !commitList.complete;
   return {
     notices,
     failures,
     goneBranches: shown ? comparisonNews(branches, shown).gone.map(displayWirePath) : [],
-    partial,
+    partial: partialUncommitted || committedPartial,
+    committedPartial,
     commitsCut: commitList?.state === "loaded" && !commitList.commitsComplete ? commitList.count : undefined,
   };
 }

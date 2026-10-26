@@ -14,6 +14,7 @@ import {
   projectSessionAgent,
 } from "../agents";
 import { agentIconPickerOptions, AgentIcon } from "../components/AgentIcon";
+import { DaemonErrorMessage } from "../components/DaemonErrorMessage";
 import { FailureAlert } from "../components/FailureAlert";
 import { HelpTip } from "../components/HelpTip";
 import { InlineReference } from "../components/InlineReference";
@@ -62,6 +63,9 @@ const INHERIT: ProjectAccount = { kind: "inherit" };
 /** How long the path or URL must stay unchanged before the daemon is asked about it; a repository
  * is asked about later, since each ask reaches over the network. */
 const DETECT_DELAY_MS = { local: 400, git: 800 };
+
+/** The refusals of a directory's check that say the path entered is wrong, where any other says the check could not run. */
+const LOCATION_PROBLEMS: ReadonlySet<string> = new Set(["path_not_found", "path_not_a_directory"]);
 
 export function ProjectDialog({
   consoleId,
@@ -147,9 +151,11 @@ export function ProjectDialog({
   // entered now has arrived: a failure keeps them locked, and a git URL is asked about from the
   // first character, so it stays locked while empty too.
   const detectionAlertId = useId();
-  const detectionAlert = detection.status === "failed" ? (
-    // A lookup the form makes on its own, so its failure is an Alert directly under the field it is about,
-    // which describes that field.
+  // The lookup found the location wrong (no such path, not a directory): that is the location field's own error.
+  const locationProblem = source === "local" && detection.status === "failed" && typeof detection.error !== "string" && LOCATION_PROBLEMS.has(detection.error.code) ? detection.error : undefined;
+  const detectionAlert = detection.status === "failed" && !locationProblem ? (
+    // A lookup the form makes on its own that could not run, so its failure is an Alert directly under the field
+    // it is about, which describes that field.
     <FailureAlert id={detectionAlertId} announce title={t("dialog.project.detectFailedTitle")} message={detection.error} />
   ) : undefined;
   const locked = !editing && (source === "git" ? detection.status !== "ready" : detection.status === "checking" || detection.status === "failed");
@@ -292,7 +298,7 @@ export function ProjectDialog({
               autoFocus
               placeholder={source === "git" ? defaultCloneDir : t("dialog.project.directoryExample")}
               description={source === "local" && detection.status === "checking" ? t("dialog.project.pathChecking") : undefined}
-              errorMessage={shown(pathError)}
+              errorMessage={shown(pathError) ?? (locationProblem && <DaemonErrorMessage error={locationProblem} part="summary" />)}
               describedBy={source === "local" && !shown(pathError) && detectionAlert ? detectionAlertId : undefined}
               isDisabled={source === "git" && locked}
               trailing={

@@ -1,5 +1,4 @@
 import type {
-  AccountFallback,
   ImportChoiceKind,
   ImportedConsole,
   InspectedConsole,
@@ -123,14 +122,7 @@ export function resolutionsOf(review: ReviewState): ProjectResolution[] {
   );
 }
 
-/** An account reference that fell back to its agent's default account, with whose it was. */
-export interface PlacedFallback extends AccountFallback {
-  console: string;
-  /** The project holding the reference; absent when the console holds it. */
-  project?: string;
-}
-
-/** What an import came to, counted and collected from the daemon's result. */
+/** What an import came to, counted from the daemon's result. */
 export interface ImportOutcome {
   consolesCreated: number;
   consolesFailed: number;
@@ -138,7 +130,6 @@ export interface ImportOutcome {
   projectsLeftOut: number;
   projectsFailed: number;
   projectsNotAttempted: number;
-  fallbacks: PlacedFallback[];
 }
 
 export function outcomeOf(consoles: ImportedConsole[]): ImportOutcome {
@@ -149,20 +140,15 @@ export function outcomeOf(consoles: ImportedConsole[]): ImportOutcome {
     projectsLeftOut: 0,
     projectsFailed: 0,
     projectsNotAttempted: 0,
-    fallbacks: [],
   };
   for (const console of consoles) {
     if (console.status === "created") outcome.consolesCreated += 1;
     else outcome.consolesFailed += 1;
-    outcome.fallbacks.push(...console.account_fallbacks.map((fallback) => ({ ...fallback, console: console.name })));
     for (const project of console.projects) {
       if (project.status === "created") outcome.projectsCreated += 1;
       else if (project.status === "left_out") outcome.projectsLeftOut += 1;
       else if (project.status === "failed") outcome.projectsFailed += 1;
       else outcome.projectsNotAttempted += 1;
-      outcome.fallbacks.push(
-        ...project.account_fallbacks.map((fallback) => ({ ...fallback, console: console.name, project: project.name })),
-      );
     }
   }
   return outcome;

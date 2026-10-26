@@ -14,6 +14,7 @@ import {
   type LaunchPair,
 } from "../agents";
 import { AgentIcon } from "../components/AgentIcon";
+import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { StatusBadge } from "../components/StatusBadge";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -21,7 +22,7 @@ import { useListMotion } from "../components/useListMotion";
 import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
 import { useDaemonStore } from "../store";
-import { AdvancedSection, EffortPicker, type LaunchModels, ModelPicker, useLaunchModels } from "./LaunchSettingsFields";
+import { AdvancedSection, EffortPicker, type LaunchModels, ModelPicker, ModelsFailureMark, useLaunchModels } from "./LaunchSettingsFields";
 
 type LaunchField =
   | (typeof AGENT_CONSOLE_MODEL_FIELD)[Agent]
@@ -127,9 +128,10 @@ export function ConsoleLaunchFields({
  * above it. The headers are for the eye alone, hidden from assistive technology: each picker is
  * named by the two it sits under, its kind first. The project pickers are also described by their
  * override note below the table. Both Model pickers are described by the model list note while it loads,
- * which they carry; why there is none is one Alert below the table.
+ * which they carry; why there is none is a warning mark after the Model setting's name, in the row header
+ * (stacked, above each picker).
  */
-function LaunchMatrix({
+export function LaunchMatrix({
   launch,
   consoleSessions,
   projectSessions,
@@ -159,15 +161,38 @@ function LaunchMatrix({
   const cell = "flex min-w-0 flex-col gap-1.5";
   const settingName = "text-sm md:hidden";
   const kindHeading = "text-sm font-medium text-foreground md:font-normal md:text-inherit";
-  const rowHeader = "hidden text-sm md:col-start-1 md:flex md:h-9 md:items-center md:self-start";
+  const rowHeader = "hidden text-sm md:col-start-1 md:flex md:h-9 md:items-center md:gap-1 md:self-start";
+  // The mark on the Model setting's name, a button, stands beside the name rather than in it: the name is what
+  // the pickers are labelled by, and is hidden from assistive technology, which the mark must not be.
+  const modelMarkId = `${id}-model-mark`;
+  const modelMark = <ModelsFailureMark launch={launch} markId={modelMarkId} />;
+  const consoleModelCell = useRef<HTMLDivElement>(null);
+  // When the mark goes while it holds focus, the console's Model picker takes it, as a labelled field's trigger does. The
+  // hand-off sits before the first of the mark's places, so it runs while the others are still in the document.
+  const modelMarkHandOff = launch.modelFailure !== undefined && (
+    <HandOffOnUnmount
+      from={`[data-status-mark-id="${modelMarkId}"]`}
+      to={() => queueMicrotask(() => {
+        const target = consoleModelCell.current?.querySelector<HTMLButtonElement>('[data-slot="select-trigger"]');
+        if (target?.isConnected && !target.disabled && (!document.activeElement || document.activeElement === document.body)) target.focus();
+      })}
+    />
+  );
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-x-6 gap-y-3 md:grid-cols-[max-content_repeat(2,minmax(0,1fr))]">
-        <div id={modelRowId} aria-hidden="true" className={`${rowHeader} md:row-start-2`}>{model}</div>
+        <div className={`${rowHeader} md:row-start-2`}>
+          <span id={modelRowId} aria-hidden="true">{model}</span>
+          {modelMarkHandOff}
+          {modelMark}
+        </div>
         <div id={effortRowId} aria-hidden="true" className={`${rowHeader} md:row-start-3`}>{effort}</div>
         <div id={consoleKindId} aria-hidden="true" className={`${kindHeading} md:col-start-2 md:row-start-1`}>{t("dialog.console.launchConsole")}</div>
-        <div className={`${cell} md:col-start-2 md:row-start-2`}>
-          <span aria-hidden="true" className={settingName}>{model}</span>
+        <div ref={consoleModelCell} className={`${cell} md:col-start-2 md:row-start-2`}>
+          <span className={`${settingName} flex items-center gap-1`}>
+            <span aria-hidden="true">{model}</span>
+            {modelMark}
+          </span>
           <ModelPicker launch={launch} model={consoleSessions.model} onChange={(value) => onConsoleChange("model", value)} hideLabel labelledBy={`${consoleKindId} ${modelRowId}`} />
         </div>
         <div className={`${cell} md:col-start-2 md:row-start-3`}>
@@ -176,7 +201,10 @@ function LaunchMatrix({
         </div>
         <div id={projectKindId} aria-hidden="true" className={`mt-1 md:mt-0 ${kindHeading} md:col-start-3 md:row-start-1`}>{t("dialog.console.launchProject")}</div>
         <div className={`${cell} md:col-start-3 md:row-start-2`}>
-          <span aria-hidden="true" className={settingName}>{model}</span>
+          <span className={`${settingName} flex items-center gap-1`}>
+            <span aria-hidden="true">{model}</span>
+            {modelMark}
+          </span>
           <ModelPicker launch={launch} model={projectSessions.model} onChange={(value) => onProjectChange("model", value)} hideLabel labelledBy={`${projectKindId} ${modelRowId}`} describedBy={projectNoteId} />
         </div>
         <div className={`${cell} md:col-start-3 md:row-start-3`}>
@@ -184,7 +212,6 @@ function LaunchMatrix({
           <EffortPicker launch={launch} model={projectSessions.model} effort={projectSessions.effort} onChange={(value) => onProjectChange("effort", value)} hideLabel labelledBy={`${projectKindId} ${effortRowId}`} describedBy={projectNoteId} />
         </div>
       </div>
-      {launch.modelAlert}
       <Description id={projectNoteId}>{t("dialog.console.projectLaunchOverridesNote")}</Description>
     </div>
   );

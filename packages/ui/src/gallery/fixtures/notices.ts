@@ -143,13 +143,27 @@ const handoffRequest = handoffRequestOn("a-team");
 // The quotas with Team's session window used up.
 const teamUsedUpQuotas = moveQuotas.map((quota) => quota.account === "a-team" ? quotaOf("codex", "a-team", "pro", [quotaWindow("session", 100, 125), quotaWindow("weekly", 41, 3 * 24 * 60 + 60)]) : quota);
 
+// The states of the scenarios on an account whose last sharing change did not finish: Client, reopening Verify the
+// migration on it, and a switch to it.
+const reopenOnIncompleteAccount = resumeState("s-api-1", requestOf({
+  session: "s-api-1",
+  action: "reopen",
+  role: "project",
+  console: console_.id,
+  project: web.id,
+  agent: "claude",
+  target: incompleteTarget.id,
+  reopenedOwners: [],
+}), resumeSettings);
+const switchToIncompleteAccount = moveState(switchRequestTo("a-client"), { accounts: moveAccounts.map((account) => account.id === "a-client" ? { ...account, share_default_config_incomplete: true } : account) });
+
 export const noticeScenarios: Scenario[] = [
   {
     id: "trust-prompt",
     group: TRUST,
     category: "normal",
     title: "Queued trust prompts for all agents",
-    description: "Claude Code and Codex offer their projects' parent folders, while the Grok Build project is the home directory itself, whose parent is too broad to offer. The warning, titled \"The project's own configuration takes effect\", has its configuration-file token take its tone while the project path stays neutral. Each agent has its own caution, and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while the hands stay raised until trust is answered in the terminal.",
+    description: "Claude Code and Codex offer their projects' parent folders, while the Grok Build project is the home directory itself, whose parent is too broad to offer. The caution is plain body text, with no Alert and no \"Caution:\" prefix: a single sentence for that agent, whose configuration-file token and the project path are neutral chips. Each agent has its own caution, and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while the hands stay raised until trust is answered in the terminal.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api, grokProject],
@@ -344,17 +358,17 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to reopen a session on an account whose sharing change did not finish",
-    description: "Reopening Verify the migration would launch it on Client, whose last sharing change did not finish, so a warning sits between the question and the buttons, titled with the account's name (\"The last sharing change of Client did not finish\") and saying under it that its configuration and conversations may be incomplete. The buttons stay Refuse and Reopen session: the dialog itself is the confirmation.",
-    state: resumeState("s-api-1", requestOf({
-      session: "s-api-1",
-      action: "reopen",
-      role: "project",
-      console: console_.id,
-      project: web.id,
-      agent: "claude",
-      target: incompleteTarget.id,
-      reopenedOwners: [],
-    }), resumeSettings),
+    description: "Reopening Verify the migration would launch it on Client, whose last sharing change did not finish. A small warning mark sits in the question right after the account's chip, Client; no alert stands between the question and the buttons, which stay Refuse and Reopen session: the dialog itself is the confirmation.",
+    state: reopenOnIncompleteAccount,
+  },
+  {
+    id: "session-request-reopen-incomplete-details",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to reopen a session on an account whose sharing change did not finish, mark opened",
+    description: "The warning mark after Client in the question is hovered, and its popover reads \"The last sharing change of Client did not finish.\" with \"Its configuration and conversations may be incomplete.\" under it. The dialog stays open behind it with its buttons unchanged.",
+    state: reopenOnIncompleteAccount,
+    steps: [(ui) => ui.hoverStatusMark(ui.t("dialog.sessionRequest.incomplete.mark"))],
   },
   {
     id: "session-request-reopen-unknown",
@@ -379,7 +393,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to switch to an account whose usage limit is reached",
-    description: "The account asked for, Work, has its session limit reached. The picker still stands on Work, and an error above it says the usage limit is reached and when it resets. Confirm is disabled until another account is chosen.",
+    description: "The account asked for, Work, has its session limit reached. The picker still stands on Work and the Switch to field is marked invalid, with its own error under the picker saying the usage limit is reached and when it resets. Confirm is disabled until another account is chosen.",
     state: moveState(switchRequestTo("a-work")),
   },
   {
@@ -387,7 +401,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to switch to an account whose sharing change is running",
-    description: "The account asked for, Client, is having its sharing changed. The picker stands on Client, and an error above it says its sharing is changing, so the session cannot move to it yet. Confirm is disabled until another account is chosen.",
+    description: "The account asked for, Client, is having its sharing changed. The picker stands on Client and the Switch to field is marked invalid, with its own error under the picker saying it is unavailable while its sharing is being changed. Confirm is disabled until another account is chosen.",
     state: moveState(switchRequestTo("a-client"), { accountSharing: [{ account: "a-client", progress: { share: true, phase: "changing", done: 2, total: 9, item: "skills/" } }] }),
   },
   {
@@ -395,7 +409,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to switch to an account that is turned off",
-    description: "The account asked for, Personal, was turned off in Settings while the request waited (a request for an account that is already off is refused before it is asked). An error above the picker, titled Account is disabled, says a session cannot use Personal and to choose another account or turn it back on in Settings. The picker stands on Personal, whose entry in the open list reads Unavailable while this account is disabled. Confirm is disabled until another account is chosen.",
+    description: "The account asked for, Personal, was turned off in Settings while the request waited (a request for an account that is already off is refused before it is asked). The picker stands on Personal and the Switch to field is marked invalid, with its own error under the picker saying a session cannot use Personal and to choose another account or turn it back on in Settings; its entry in the open list reads Unavailable while this account is disabled. Confirm is disabled until another account is chosen.",
     state: moveState(switchRequestTo("a-personal"), { accounts: moveAccounts.map((account) => account.id === "a-personal" ? { ...account, disabled: true } : account) }),
   },
   {
@@ -403,16 +417,41 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to switch to an account that no longer exists",
-    description: "The account asked for was removed after the request was made. The picker is empty with its placeholder, and an error above it says the account no longer exists and asks to choose another. Confirm is disabled until one is chosen.",
+    description: "The account asked for was removed after the request was made. The picker is empty with its placeholder and the Switch to field is marked invalid, with its own error under it saying the account no longer exists and asking to choose another. Confirm is disabled until one is chosen.",
     state: moveState(switchRequestTo("a-removed")),
+  },
+  {
+    id: "session-request-switch-already-on",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch a session to the account it is on already",
+    description: "The account asked for, Default, is the one the session already runs on. The picker stands on it and the Switch to field is marked invalid, with its own error under the picker saying the session is on Default already. Confirm is disabled until another account is chosen.",
+    state: moveState(switchRequestTo(null)),
   },
   {
     id: "session-request-switch-incomplete",
     group: TRUST,
     category: "exceptional",
     title: "Request to switch to an account whose sharing change did not finish",
-    description: "The account asked for, Client, had its last sharing change left unfinished, so a warning line sits between the form and the buttons, naming the account and saying its configuration and conversations may be incomplete. Confirm stays Switch account and is enabled: the dialog itself is the confirmation.",
-    state: moveState(switchRequestTo("a-client"), { accounts: moveAccounts.map((account) => account.id === "a-client" ? { ...account, share_default_config_incomplete: true } : account) }),
+    description: "The account asked for, Client, had its last sharing change left unfinished. A small warning mark sits inside the Switch to picker at the end of the field, beside the chevron; no warning line stands between the form and the buttons. Confirm stays Switch account and is enabled: the dialog itself is the confirmation.",
+    state: switchToIncompleteAccount,
+  },
+  {
+    id: "session-request-switch-incomplete-details",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch to an account whose sharing change did not finish, mark opened",
+    description: "The warning mark inside the Switch to picker is hovered, and its popover reads \"The last sharing change of Client did not finish.\" with \"Its configuration and conversations may be incomplete.\" under it, over the form and the picker.",
+    state: switchToIncompleteAccount,
+    steps: [(ui) => ui.hoverStatusMark(ui.t("dialog.sessionRequest.incomplete.mark"))],
+  },
+  {
+    id: "session-request-handoff-incomplete",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to hand off to an account whose sharing change did not finish",
+    description: "The account asked for, Team, had its last sharing change left unfinished. A small warning mark sits inside the account part of the joined Hand off to picker, at its end; no warning line stands above the buttons. Confirm stays Hand off session and is enabled: the dialog itself is the confirmation.",
+    state: moveState(handoffRequestOn("a-team"), { target: idleOwnedSession, accounts: moveAccounts.map((account) => account.id === "a-team" ? { ...account, share_default_config_incomplete: true } : account) }),
   },
   {
     id: "session-request-switch-starting",
@@ -427,7 +466,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to switch a session that was archived",
-    description: "The session to switch was archived while the request waited. An error above the picker says an archived session cannot be switched, and Confirm is disabled, though Personal is chosen and available.",
+    description: "The session to switch was archived while the request waited. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot switch the account, a sentence saying an archived session cannot be switched, and OK as its only button, which refuses the request.",
     state: moveState(switchRequestTo("a-personal"), { target: archivedOwnedSession }),
   },
   {
@@ -435,7 +474,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to hand off to an account whose usage limit is reached",
-    description: "The account asked for, Team, has its session limit reached. The picker still stands on Team, and an error above it says the usage limit is reached and when it resets. Confirm is disabled until another account is chosen.",
+    description: "The account asked for, Team, has its session limit reached. The picker still stands on Team and the Hand off to field is marked invalid, with its own error under the agent and account pair saying the usage limit is reached and when it resets. Confirm is disabled until another account is chosen.",
     state: moveState(handoffRequestOn("a-team"), { target: idleOwnedSession, quotas: teamUsedUpQuotas }),
   },
   {
@@ -443,7 +482,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to hand off to an account that no longer exists",
-    description: "The account asked for was removed after the request was made, so the question names it by its id. The agent and the account pickers are both empty, each with its placeholder, and an error above them asks to choose again. Confirm is disabled until an agent or account is chosen.",
+    description: "The account asked for was removed after the request was made, so the question names it by its id. The agent and the account pickers are both empty, each with its placeholder, and the Hand off to field is marked invalid, with its own error under the pair saying the agent or account is no longer available and asking to choose again. Confirm is disabled until an agent or account is chosen.",
     state: moveState(handoffRequestOn("a-removed"), { target: idleOwnedSession }),
   },
   {
@@ -557,11 +596,11 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Issue form could not be opened",
-    description: "The opener failure takes precedence over the original unexpected error. Its actionable recovery supplies the manual issue URL, alone on its line as plain monospace text without a chip, and has no recursive Report issue link. OK returns to the original failure.",
+    description: "The opener failure takes precedence over the original unexpected error. Its actionable recovery supplies the manual issue URL, alone on its line as plain monospace text without a chip, and has no recursive Report issue link. Error details is open and holds only the system's reason (\"The operating system could not open the default browser\") on a surface of its own as one line that scrolls sideways, never the application's own sentence or a stack. OK returns to the original failure.",
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions }),
     externalLinks: { error: "The operating system could not open the default browser" },
     toasts: [{ kind: "error", code: "internal_error", params: { detail: "Unexpected session state while applying an update" }, message: "Unexpected session state while applying an update" }],
-    steps: [(ui) => ui.press(ui.t("error.issue.report"))],
+    steps: [(ui) => ui.press(ui.t("error.issue.report")), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "toast-session-branches-not-removed",

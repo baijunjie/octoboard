@@ -58,7 +58,7 @@ function sameMessage(before: ErrorPresentation | undefined, next: ErrorPresentat
 function sameNode(before: TreeNode, next: TreeNode): boolean {
   if (before.type === "directory" && next.type === "directory") {
     const sameChildren = before.children.length === next.children.length && before.children.every((child, i) => child === next.children[i]);
-    return sameEntry(before.entry, next.entry) && sameChildren && sameMessage(before.failure, next.failure);
+    return sameEntry(before.entry, next.entry) && sameChildren && sameMessage(before.failure, next.failure) && before.partial === next.partial;
   }
   if (before.type === "file" && next.type === "file") {
     return sameEntry(before.entry, next.entry) && before.missing === next.missing && before.selected === next.selected;
@@ -245,13 +245,14 @@ function FileNodeRow({ node, onRetry, children }: {
   const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   const name = wireBaseName(node.path);
-  // A failure arriving takes the rows beneath the folder with it, and Try again takes the mark away:
-  // focus that fell to the page with either goes to the folder's row instead.
-  const failed = node.type === "directory" && node.failure !== undefined;
-  const wasFailed = useRef(failed);
+  // A failure arriving takes the rows beneath the folder with it, Try again takes the mark away, and so does a
+  // listing that is no longer cut short: focus that fell to the page with any of them goes to the folder's row instead.
+  const listing = node.type !== "directory" ? undefined : node.failure !== undefined ? { kind: "failed" as const, message: node.failure } : node.partial ? { kind: "partial" as const } : undefined;
+  const markKind = listing?.kind;
+  const hadMark = useRef(markKind);
   useEffect(() => {
-    if (wasFailed.current === failed) return;
-    wasFailed.current = failed;
+    if (hadMark.current === markKind) return;
+    hadMark.current = markKind;
     const row = rowRef.current;
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const active = document.activeElement;
@@ -259,18 +260,23 @@ function FileNodeRow({ node, onRetry, children }: {
       const lost = !active || active === document.body || active.getAttribute("role") === "treegrid";
       if (lost && row?.isConnected) row.focus();
     }));
-  }, [failed]);
+  }, [markKind]);
   if (node.type === "directory") {
     const link = node.entry.kind === "symlink";
     const ignored = node.entry.ignored === true;
+    const mark = listing?.kind === "failed"
+      ? <ListingFailureMark message={listing.message} onRetry={() => onRetry(node.path)} />
+      : listing?.kind === "partial"
+        ? <StatusMark tone="warning" label={t("browser.partial")} />
+        : undefined;
     return (
       <TreeItem data-list-motion={node.key} id={node.key} textValue={name} aria-label={ignored ? t("browser.tree.row.ignored", { name: isolate(name) }) : undefined} hasChildItems data-ignored={ignored || undefined} data-listing-failed={node.failure !== undefined || undefined} className={`${ROW_CLASS} ${IGNORED_ROW_CLASS}`} ref={rowRef}>
         <TreeItemContent>
           {({ isExpanded }) => (
-            <DirectoryRow name={name} isExpanded={isExpanded} link={link} nameGrows={node.failure === undefined}>
-              {node.failure !== undefined && (
+            <DirectoryRow name={name} isExpanded={isExpanded} link={link} nameGrows={!mark}>
+              {mark && (
                 <>
-                  <ListingFailureMark message={node.failure} onRetry={() => onRetry(node.path)} />
+                  {mark}
                   <span className="min-w-0 flex-1" />
                 </>
               )}
@@ -341,10 +347,10 @@ function ListingFailureMark({ message, onRetry }: { message: ErrorPresentation; 
   );
 }
 
-/** A row that says what a directory's listing is: still loading, empty or cut short. */
+/** A row that says what a directory's listing is: still loading or empty. */
 function StatusItem({ node }: { node: Extract<TreeNode, { type: "status" }> }): React.ReactElement {
   const t = useT();
-  const text = node.status === "loading" ? t("browser.tree.loading") : node.status === "empty" ? t("browser.tree.empty") : t("browser.tree.partial");
+  const text = node.status === "loading" ? t("browser.tree.loading") : t("browser.tree.empty");
   return (
     <TreeItem data-list-motion={node.key} id={node.key} textValue={text} className={ROW_CLASS}>
       <TreeItemContent>

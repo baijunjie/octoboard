@@ -4,14 +4,14 @@ import React, { useState } from "react";
 import { accountDisabled } from "../accountChoices";
 import { canSwitchTo } from "../accountSwitchBatch";
 import { AGENT_LABEL } from "../agents";
-import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineReference } from "../components/InlineReference";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import type { Session } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
-import { quotaUsedUpCopy } from "../quota/quotaCopy";
-import { exhaustedQuotaWindow } from "../quota/quotaFormat";
+import { quotaUsedUpMessage } from "../quota/quotaCopy";
+import { exhaustedQuotaWindow, quotaUsedUpSentence } from "../quota/quotaFormat";
+import { errorAlerts } from "../errorAlerts";
 import { sessionDisplayTitle } from "../sessionLabel";
 import { sessionWithDescendants } from "../sidebar/order";
 import { useDaemon, useDaemonStore } from "../store";
@@ -46,7 +46,8 @@ export function SwitchAccountDialog({
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const now = useNow();
   // The account being switched to may have been turned off, or have no quota left, since the dialog opened: the
-  // daemon refuses the switch either way, so Confirm is held.
+  // daemon would refuse the switch either way, so Confirm says why in the error alert dialog and leaves the dialog
+  // open.
   const disabled = accountDisabled(accounts, disabledDefaults, session.agent, account);
   const quota = accountQuotaOf(quotas, session.agent, account);
   const exhaustedBy = exhaustedQuotaWindow(quota, now);
@@ -61,26 +62,34 @@ export function SwitchAccountDialog({
   );
   const counts = { session: targetsIn(sessions, "session").length, console: targetsIn(sessions, "console").length };
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
-  const usedUp = !disabled && exhaustedBy && quota && quotaUsedUpCopy(t, quota, accountName, exhaustedBy, now);
   const agent = <InlineReference dir="auto" wrap>{AGENT_LABEL[session.agent]}</InlineReference>;
   const several = scope === "console" || counts.session > 1;
   return (
     <ConfirmDialog
-      title={<Message id="dialog.switchAccount.title" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, account: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />}
-      message={<>
-        {disabled && <ErrorAlert title={t("accountChoice.disabled.title")} announce>{t("accountChoice.disabled.description", { name: isolate(accountName) })}</ErrorAlert>}
-        {usedUp && <ErrorAlert title={usedUp.title} announce>{usedUp.description}</ErrorAlert>}
-        <p>{t(several ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>
-      </>}
+      title={t("dialog.switchAccount.title")}
+      subject={<Message id="dialog.switchAccount.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, account: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />}
+      message={<p>{t(several ? "dialog.switchAccount.messageAll" : session.has_conversation ? "dialog.switchAccount.message" : "dialog.switchAccount.messageFresh")}</p>}
       confirmLabel={t("dialog.switchAccount.confirm")}
       // Nothing left to switch in the chosen scope (its sessions began switching after the dialog opened).
-      confirmDisabled={disabled || exhaustedBy !== undefined || counts[scope] === 0}
+      confirmDisabled={counts[scope] === 0}
       onCancel={onClose}
       // The set is read once Confirm is pressed, and fixed from then on: sessions opened later never join it.
-      onConfirm={() => confirmLaunch(account, () => {
-        onSwitchAccounts(targetsIn(store.getState().sessions, scope).map((target) => target.id), account, accountName);
-        onClose();
-      })}
+      onConfirm={() => {
+        const refusal = disabled
+          ? {
+            message: t("accountChoice.disabled.description", { name: isolate(accountName) }),
+            content: <Message id="accountChoice.disabled.description" params={{ name: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
+          }
+          : quota && exhaustedBy && { message: quotaUsedUpSentence(t, quota, accountName, exhaustedBy, now), content: quotaUsedUpMessage(t, quota, accountName, exhaustedBy, now) };
+        if (refusal) {
+          errorAlerts.report({ ...refusal, title: <Message id="dialog.switchAccount.failedTitle" />, recovery: "none", details: null });
+          return Promise.resolve();
+        }
+        return confirmLaunch(account, () => {
+          onSwitchAccounts(targetsIn(store.getState().sessions, scope).map((target) => target.id), account, accountName);
+          onClose();
+        });
+      }}
       extraControl={
         <>
           <RadioGroup variant="secondary" value={scope} onChange={(value) => setScope(value as Scope)}>

@@ -12,7 +12,8 @@ switched onto a used-up account (see "A used-up account" in `docs/product/accoun
 
 ## Confirming a switch
 
-The confirmation asks which sessions to switch, as two options of a radio group; the first is selected by default:
+The confirmation is titled "Switch account"; its body's first sentence names the session and the account it will be
+switched to. It asks which sessions to switch, as two options of a radio group; the first is selected by default:
 
 - **This session and its sub-sessions** — the session and every session under it: those bound to it, those bound to
   them, and so on to any depth, reached through archived sessions as well.
@@ -24,13 +25,13 @@ account and sessions already being switched (see "While a session is switching" 
 how many sessions it would switch, kept up to date while the confirmation is open, and Confirm is disabled while the
 chosen option has none. Neither choice changes the console's or projects' account defaults for future sessions.
 
-When the target account is used up (see "A used-up account" in `docs/product/account-quotas.md`), a danger callout at
-the top of the confirmation names the account, the quota it has used up and when it resets, and Confirm is disabled
-until the account is no longer used up. When the target account is turned off — it can be turned off after the
-confirmation has opened — a danger callout there says instead that the account is turned off, so a session cannot use
-it, and to choose another account or turn it back on in Settings, and Confirm is disabled until it is turned back on.
-The submenu already disables a used-up account and leaves out a turned-off one (see "Session rows" in
-`docs/product/sidebar-session-rows.md`).
+The submenu disables a used-up account and leaves out a turned-off one (see "Session rows" in
+`docs/product/sidebar-session-rows.md`), so the target account can only become unusable after the confirmation has
+opened. Confirm stays available all the same, and pressing it then switches nothing: an error alert titled that the
+account could not be switched opens over the confirmation, which stays open. It says that the account is turned off,
+so a session cannot use it, and to choose another account or turn it back on in Settings; or, for a used-up account
+(see "A used-up account" in `docs/product/account-quotas.md`), that the account cannot be used for now, naming the
+quota it has reached and when it resets. It is a known refusal, with no request to report an issue.
 
 When the target account's last change of sharing is incomplete, Confirm first asks the user whether to start on it,
 and nothing is switched when that is cancelled (see "Starting a session on an account whose last change is incomplete"
@@ -52,8 +53,9 @@ alert alone.
 The failures of one confirmed set are reported together, in one error alert (see "Recovery and unexpected errors" in
 `docs/product/error-alerts.md`):
 
-- **The title** says how many sessions could not move, and to which account, the account's name as a name chip. One
-  sentence after it says, once for all of them, that they stay on their current account.
+- **The title** says that the account could not be switched. The body's first sentence says how many sessions could
+  not move, and to which account, the account's name as a name chip; the next says, once for all of them, that they
+  stay on their current account.
 - **One row per failed session**: its displayed name and only the short reason, a path in it as a reference chip. A
   conversation that could not be moved is worded for where it failed: the copy did not complete; the copy was made but
   the target's record of the Codex thread could not be updated; or the copy did not complete and an older item could
@@ -182,20 +184,34 @@ stopped on a usage limit included, nor the exceptions (see "Continuing after a s
   those of the account chosen. Its note says that a value the user changes stays the session's own from then on. Only
   values the user changed are sent with the approval.
 
-**Switch account cannot be pressed**, and an alert at the top of the dialog says why, while:
+**Switch account cannot be pressed** while what is chosen cannot be switched to, and the dialog says why. What is
+wrong with the account chosen is said under the **Switch to** picker, which is marked invalid:
 
-- the account the call asked for no longer exists — the picker then shows no account chosen, until the user picks one;
+- the account the call asked for no longer exists — the picker then shows no account chosen, until the user picks one,
+  and says so, asking for another;
 - the account chosen is the one the session is on already;
-- the account chosen is turned off — a danger callout says that the account is turned off, so a session cannot use it,
-  and to choose another account or turn it back on in Settings (and the used-up alert is not shown then);
-- the account chosen is used up — the alert names the account, the quota it has used up and when it resets;
-- the account chosen is not offered for one of the other reasons above;
-- the session is archived, or still starting.
+- the account chosen is turned off — that the account is turned off, so a session cannot use it, and to choose
+  another account or turn it back on in Settings;
+- the account chosen is used up — that the account cannot be used for now, naming the quota it has reached and when
+  it resets;
+- the account chosen has a sharing change running.
 
-Where the chosen account's last change of sharing is incomplete, the dialog carries a warning line saying so instead of
-asking again on confirming (see "Starting a session on an account whose last change is incomplete" in
-`docs/product/sharing-the-default-configuration.md`). A window that does not know the session shows no form, and its
-approval is for the account the call asked for.
+What holds the session itself, whichever account is chosen — a switch already holding it, its own account's sharing
+changing, or the session still starting — is said in an alert at the top of the dialog instead.
+
+**A session archived while the request waits** cannot be switched whatever is chosen: the dialog turns into a failure
+modal titled that the account cannot be switched, saying that the session is archived, so its account cannot be
+switched, with nothing but its acknowledgement, which refuses the request (see "The failure modal" in
+`docs/product/error-alerts.md`).
+
+Where the chosen account's last change of sharing is incomplete and no change of it is running, an amber warning mark
+inside the account picker, named that sharing may be incomplete, says so instead of asking again on
+confirming: its popover says that the account's last sharing change did not finish, so its configuration and
+conversations may be incomplete (see "Starting a session on an account whose last change is incomplete" in
+`docs/product/sharing-the-default-configuration.md`). A mark that appears after the dialog opened — the account's
+change ended unfinished meanwhile, or the user chose such an account — is announced once; one the dialog opened with
+is not, and the next request in the queue starts afresh. A window that does not know the session shows no form, and
+so no mark, and its approval is for the account the call asked for.
 
 **On approval the switch is made with what the form ended on**, as described from "What a switch does" on. Each model
 or reasoning effort the user changed is checked as opening a session checks it, against the account the session is
