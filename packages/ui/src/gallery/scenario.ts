@@ -200,6 +200,11 @@ export interface Scenario {
   /** `"pending"`: `create_shell_terminal` is never answered, so a start stays in flight and the
    * Terminal panel keeps its "Starting terminal…" state. */
   shellTerminalStart?: "pending";
+  /** Why a worktree whose `scope_present` is false has no usable copy of the project's folder, which the refusal of
+   * `create_shell_terminal` there says as the daemon does: not there (default), or `link`, part of
+   * its path in that worktree being a symbolic link. The daemon finds a link only below the worktree's root, so a
+   * scenario with `link` gives `git` a non-empty `scope`. */
+  scopeUnavailable?: "link";
   /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run: with a busy session or shell terminal
    * the confirmation they hold the quit up with is on screen, and with none the quit goes straight to the shell. The
    * platform has no exit capability otherwise; what the shell does with the quit is nothing (confirming ends nothing)

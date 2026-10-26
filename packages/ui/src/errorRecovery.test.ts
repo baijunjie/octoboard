@@ -7,7 +7,7 @@ import { errorPresentation } from "./errorPresentation";
 import { ActionableError, classifyError } from "./errorRecovery";
 
 it.each([
-  ["path_not_found", "path"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
+  ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
   ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"],
   ["connection_closed", "connection"], ["not_a_git_repository", "repository"],
   ["conversation_unresumable", "unresumable"], ["codex_unarchive_failed", "unarchive"],
@@ -23,6 +23,14 @@ it.each([
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);
+  expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+});
+
+it.each([
+  ["missing", "sourceGone"], ["link", "sourceLink"], ["not_a_directory", "sourceNotFolder"], ["other", "sourceUnreadable"],
+  ["a_future_cause", "sourceUnreadable"], [undefined, "sourceGone"],
+])("gives a source_unavailable whose cause is %s its own remedy", (cause, recovery) => {
+  const error = new DaemonRequestError("localized text", "source_unavailable", { path: "/p", detail: "x", ...(cause && { cause }) });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
 });
 

@@ -16,6 +16,16 @@ export interface FixtureError {
   message: string;
 }
 
+/** What `source_unavailable`'s `cause` says about why a directory a request is scoped to cannot be read. */
+export type SourceUnavailableCause = "missing" | "link" | "not_a_directory" | "other";
+
+/** A `source_unavailable` as the daemon sends it, with the `cause` its remedy is worded by. `detail` is the daemon's own
+ * text for a scope that is not in another worktree or is reached through a link there, and for a folder that is not a
+ * folder ("not a directory"); for any other failure (including the project's own folder gone) it is the system's text. */
+export function sourceUnavailable(path: string, cause: SourceUnavailableCause, detail: string): FixtureError {
+  return { code: "source_unavailable", params: { path, cause, detail }, message: `${path} is unavailable: ${detail}` };
+}
+
 /** One path of a fixture project: a directory (cut short when `complete` is false), a file's text,
  * an image's bytes or a binary of no known type and the size it reports; with `error`, what reading
  * it (listing it, for a directory) is answered with. With `ignored`, Git ignores it, and so
@@ -151,6 +161,26 @@ export const projectFilesScenarios: Scenario[] = [
     description: "File manager is pressed on a file that has been removed from the disk, so the host refuses it and the error alert opens over the viewer, titled \"Could not open in the file manager\" and saying the file does not exist any more; its remedy says it may have been moved, renamed or deleted and, if moved or renamed, to find it in the project's files and try again from there, not to pick one with Browse.",
     state,
     projectPathActionError: { code: "file_not_found", params: { path: "src/main.ts" }, message: "src/main.ts does not exist" },
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.press(ui.t("viewer.openInFileManager")), (ui) => ui.wait(300)],
+  },
+  {
+    id: "files-viewer-error-folder-gone",
+    group: "File viewer",
+    category: "exceptional",
+    title: "File viewer with an error alert, the project's folder gone",
+    description: "File manager is pressed on a file while the project's own folder has been removed from the disk, so the host refuses it and the error alert opens over the viewer, titled \"Could not open in the file manager\" and saying the folder /Users/dev/code/website cannot be read. Its remedy says the folder may have been moved, renamed or deleted, or be missing from the branch checked out there, and to restore it at that path and try again, without a Browse button or a dialog; the system's reason is behind Error details, closed.",
+    state,
+    projectPathActionError: sourceUnavailable("/Users/dev/code/website", "missing", "No such file or directory (os error 2)"),
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.press(ui.t("viewer.openInFileManager")), (ui) => ui.wait(300)],
+  },
+  {
+    id: "files-viewer-error-folder-not-folder",
+    group: "File viewer",
+    category: "exceptional",
+    title: "File viewer with an error alert, a file where the project's folder was",
+    description: "File manager is pressed on a file while something that is not a folder sits at the project's own folder, so the host refuses it and the error alert opens over the viewer, titled \"Could not open in the file manager\" and saying the folder /Users/dev/code/website cannot be read. Its remedy says something other than a folder is at that path and to put the folder back there; it does not suggest the folder was moved or deleted. The system's reason is behind Error details, closed.",
+    state,
+    projectPathActionError: sourceUnavailable("/Users/dev/code/website", "not_a_directory", "not a directory"),
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.press(ui.t("viewer.openInFileManager")), (ui) => ui.wait(300)],
   },
   {
@@ -426,11 +456,7 @@ export const projectFilesScenarios: Scenario[] = [
     files: {
       "": {
         dir: true,
-        error: {
-          code: "source_unavailable",
-          params: { path: "/Users/dev/code/website", detail: "No such file or directory (os error 2)" },
-          message: "The directory /Users/dev/code/website is not available: No such file or directory (os error 2)",
-        },
+        error: sourceUnavailable("/Users/dev/code/website", "missing", "No such file or directory (os error 2)"),
       },
     },
     steps: openFiles,

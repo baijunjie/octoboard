@@ -2,11 +2,12 @@
 
 ## A new daemon error code is classified in the UI in the same change, or the window calls it a bug
 
-The window classifies a daemon error by its code alone (`classifyError` in `packages/ui/src/errorRecovery.ts`). If the
-code is not in that file's `GROUPS`, the window shows it as an unexpected failure. That alert says the failure may be a
-bug and asks the user to file an Issue, even when the refusal is deliberate and the user can fix the cause. No type
-check or test links the codes the daemon returns to that table, so nothing fails when a new code is missing from it.
-So when daemon code starts returning a new error code, the same change adds, in `packages/ui`:
+The window classifies a daemon error by its code (`classifyError` in `packages/ui/src/errorRecovery.ts`), and for a few
+codes by their `cause` param as well. If the code is not in that file's `GROUPS`, the window shows it as an unexpected
+failure. That alert says the failure may be a bug and asks the user to file an Issue, even when the refusal is
+deliberate and the user can fix the cause. No type check or test links the codes the daemon returns to that table, so
+nothing fails when a new code is missing from it. So when daemon code starts returning a new error code, the same change
+adds, in `packages/ui`:
 
 - `daemon.<code>` in every message catalog under `packages/ui/src/i18n/messages/`. It says what happened, and no
   remedy beyond a code-specific step as set out below. Its params are listed in `packages/ui/src/daemonMessage.ts`. A
@@ -20,6 +21,16 @@ So when daemon code starts returning a new error code, the same change adds, in 
   in `RECOVERY_CODES` (`packages/ui/src/daemonMessage.ts`), with `daemon.<code>.summary` saying what happened,
   `daemon.<code>.recovery` that step, and `daemon.<code>` both sentences, for text-only consumers. An alert whose body
   is the daemon's own message then shows that step in place of the group's remedy.
+- Where one code covers several situations the user fixes in different ways (a folder gone, a link in the way, a file
+  where a folder should be), the daemon sends a fixed-vocabulary `cause` param, and `classifyError` picks the remedy
+  from a table keyed by it (`SOURCE_CAUSE_RECOVERY`, `RELOCATION_CAUSE_RECOVERY`), each remedy an `ErrorRecovery` of its
+  own. Map it there, never with an explicit `recovery` at the call sites: every route that raises the code then gets it,
+  the easily missed ones too (opening a terminal path link reads through the same browse requests). Decide, and cover in
+  `errorRecovery.test.ts`, what a `cause` the window does not know and an error with no `cause` each get; nothing else
+  makes you, and either can otherwise land on a remedy that does not fit or on the unexpected alert. Name the param
+  `cause`, never `reason`, `reason_code` or `title`: when the failure ends a launch, `report_failed_launch`
+  (`apps/daemon/src/coordinator.rs`) writes those over the failure's own params. `reason` is also the daemon's English
+  text, which the window scans for an operating-system error signature.
 - Where the remedy is done in Settings' Agent accounts section, a case in `recoveryAction`
   (`packages/ui/src/components/ErrorGuidance.tsx`). The alert then offers the button, and the recovery text says only
   what to do there, without naming the path to it. See `docs/product/error-alerts.md`, section "Recovery and unexpected

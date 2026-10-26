@@ -26,9 +26,12 @@ A project may have any number of shell terminals. Each belongs to one project; a
 **Where it starts.** A shell terminal starts in the project's directory, or, when a worktree of the project's
 repository is chosen, in the project's place in that worktree. The start is refused when the project does not exist
 (including one removed while the shell was starting, whose terminal is then ended), when the chosen worktree is not
-one of the project's repository's, when the project has no place in that worktree, and when the directory cannot be
-reached. The directory is recorded with its symbolic links resolved. After that the shell goes wherever the user
-takes it; the recorded directory does not follow.
+one of the project's repository's, when the project has no place in that worktree, when the path to that place goes
+through a symbolic link anywhere below the worktree's root, when what is at the directory's path is not a folder, and
+when the directory cannot be reached for another reason. In Octoboard's window a refusal of the directory raises an
+error alert whose remedy follows why it was refused (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`). The directory is recorded with its symbolic links resolved. After that the shell goes
+wherever the user takes it; the recorded directory does not follow.
 
 **What runs.** The shell is the user's login shell, `$SHELL` (`/bin/zsh` when that is unset), started as a login shell
 (`-l`).

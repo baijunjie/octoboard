@@ -636,9 +636,11 @@ const DETACHED_GIT = withWorktrees(SAMPLE_GIT, [{ ...WORKTREES[0], branch: null 
  * out and there is no branch to choose. */
 const BRANCHLESS_GIT: FixtureGit = { worktrees: [{ ...WORKTREES[0], branch: null }], changes: { "wt-main": [] }, branches: [] };
 
-/** The side worktree has no copy of the project's folder, as a sparse checkout leaves it. */
+/** The side worktree has no copy of the project's folder, as a sparse checkout leaves it. The project is a subfolder
+ * of the repository, so its place in the side worktree is a path of its own below that worktree's root. */
 const SPARSE_GIT: FixtureGit = {
   ...SAMPLE_GIT,
+  scope: "apps/web",
   worktrees: [WORKTREES[0], { ...WORKTREES[1], scope_present: false }, WORKTREES[2]],
   changes: { ...SAMPLE_GIT.changes, "wt-side": [] },
 };
@@ -894,6 +896,29 @@ const reviewScenarios: Scenario[] = [
     preferences,
     git: SPARSE_GIT,
     steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-scope-missing-terminal",
+    group: GROUP,
+    category: "exceptional",
+    title: "A terminal started in a worktree that lacks the project's folder",
+    description: "The Changes tab shows the side worktree, which has no copy of the project's folder, and Show terminal panel is pressed: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read. Its remedy says the folder may have been moved, renamed or deleted, or be missing from the branch checked out there, and to restore it at that path and try again; the system's reason is behind Error details, closed.",
+    state,
+    preferences,
+    git: SPARSE_GIT,
+    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
+  },
+  {
+    id: "git-changes-scope-link-terminal",
+    group: GROUP,
+    category: "exceptional",
+    title: "A terminal started in a worktree whose project folder is a link",
+    description: "As with the worktree lacking the project's folder, Show terminal panel is pressed on the side worktree and the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read. Its remedy says that part of that path is a symbolic link, which Octoboard does not follow in a worktree, and to replace the link with a real folder; it does not suggest the folder was deleted. The system's reason is behind Error details, closed. The Changes tab behind it says, as it does for a missing folder, that the folder isn't in the worktree: that is the app's current wording, since the worktree list cannot tell a missing folder from a link.",
+    state,
+    preferences,
+    git: SPARSE_GIT,
+    scopeUnavailable: "link",
+    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
   },
   {
     id: "git-changes-listing-commits",

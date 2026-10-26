@@ -387,6 +387,17 @@ For example:
 - An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location. A file or
   folder that File manager or Default application no longer finds instead says it may have been moved, renamed or
   deleted (see "A row's actions" in `docs/product/project-pane.md`).
+- A folder a request is scoped to that cannot be read (`source_unavailable`) — the project's own directory, or its
+  place in a worktree of its repository — is not something the user typed or picked, so its remedy asks for it to be
+  put back rather than corrected, worded by the cause the daemon names. The alert's sentence says the folder cannot
+  be read, naming its path; the daemon's reason is under Error details.
+  - **missing**: it may have been moved, renamed or deleted, or be absent from the branch checked out there; restore
+    it at that path, then try again. A daemon that names no cause gets this remedy too.
+  - **link**: part of that path is a symbolic link, which Octoboard does not follow in a worktree; replace the link
+    with a real folder, then try again.
+  - **not a directory**: something other than a folder is at that path; put the folder back there, then try again.
+  - **any other cause**, or one the window does not know: make sure the folder is still there and its disk is
+    connected, then try again.
 - An account name already in use asks for an unused name for that agent; an occupied destination asks for a different
   destination while preserving the existing folder.
 - A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.
@@ -394,15 +405,16 @@ For example:
   failed — asks the user to open the project's terminal from its action menu, resolve the Git error, including remote
   access or an unfinished Git operation, then retry. It offers no **Report issue**.
 
-Known domain failures, the causes the daemon names for some of them (such as why a session's conversation could not
-be moved to another account; see "When a switch fails" in `docs/product/switching-session-accounts.md`), and
-recognized operating-system causes provide the remedy; a recognized operating-system cause takes precedence over the
-others, except for a switch's copy that failed and could not put back an older item: that is classified by the item
-put aside, and the operating-system cause's remedy is given as well; and except for a file the user picked that could
-not be read, which keeps its own remedy for reading a file (see "In the window" in
-`docs/product/configuration-export-and-import.md`), whatever operating-system cause it names. A failure whose named cause is not one the window
-knows stays unexpected. An unfamiliar failure does not get generic retry advice merely because it occurred during a
-familiar operation.
+Known domain failures, the causes the daemon names for some of them (such as why a session's conversation could not be
+moved to another account, see "When a switch fails" in `docs/product/switching-session-accounts.md`; or why a folder a
+request is scoped to cannot be read), and recognized operating-system causes provide the remedy; a recognized
+operating-system cause takes precedence over the others, except for a switch's copy that failed and could not put back
+an older item: that is classified by the item put aside, and the operating-system cause's remedy is given as well; and
+except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "In the
+window" in `docs/product/configuration-export-and-import.md`), whatever operating-system cause it names. A failure whose
+named cause is not one the window knows stays unexpected, except a folder a request is scoped to that cannot be read,
+which gets the remedy for any other cause (see above). An unfamiliar failure does not get generic retry advice merely
+because it occurred during a familiar operation.
 
 **An alert whose body is the daemon's message, where that message already says what to do**, adds no remedy line of
 its kind after it: the message's own step is the remedy — "Reopen it first." for an archived session in a handoff, the

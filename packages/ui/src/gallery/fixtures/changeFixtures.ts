@@ -78,6 +78,9 @@ export const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
  * branch; a cut lookup leaves it out as it does the upstream. */
 export interface FixtureGit {
   worktrees: WorktreeInfo[];
+  /** The project's folder relative to its worktree's root, as `get_project_source` says; empty (default) when the
+   * project is the whole worktree. Its place in another worktree is that worktree's root joined with it. */
+  scope?: string;
   changes: Record<string, FixtureChange[] | FixtureError>;
   gitError?: string;
   branches?: BranchInfo[];

@@ -8,9 +8,11 @@ import type { ToastRequest } from "../store";
 import type { Agent, RequestBody } from "../protocol";
 import { exportedDocument } from "./fixtureConfiguration";
 import { createFixtureDaemon } from "./fixtureDaemon";
+import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import type { FixtureFile } from "./fixtures/projectFiles";
+import { SAMPLE_GIT } from "./fixtures/projectGit";
 import { quotaOf, quotaWindow } from "./fixtures/quotas";
 import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
@@ -1333,7 +1335,7 @@ describe("the fixture daemon's account login and default account name", () => {
 });
 
 describe("the fixture daemon's shell terminals", () => {
-  const daemonWithProject = () => createFixtureDaemon({ id: "shells", group: "Terminal", category: "normal", title: "", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")] }) });
+  const daemonWithProject = (extra: Partial<Scenario> = {}) => createFixtureDaemon({ id: "shells", group: "Terminal", category: "normal", title: "", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")] }), ...extra });
 
   it("creates a running, idle terminal, renames it and closes it", async () => {
     const daemon = daemonWithProject();
@@ -1365,8 +1367,37 @@ describe("the fixture daemon's shell terminals", () => {
   it("refuses a worktree the repository does not have, and one whose scope is missing", async () => {
     const daemon = daemonWithProject();
     await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "w1" })).rejects.toMatchObject({ code: "worktree_unavailable" });
-    await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({ code: "source_unavailable" });
+    await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({
+      code: "source_unavailable",
+      params: { path: "/Users/dev/.worktrees/search-api/review", cause: "missing", detail: "the project's directory is not in this worktree" },
+    });
     expect(daemon.store.getState().shellTerminals.size).toBe(0);
+  });
+
+  it("says a worktree's folder is a link when the scenario does", async () => {
+    const daemon = daemonWithProject({ scopeUnavailable: "link" });
+    await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({
+      code: "source_unavailable",
+      params: { cause: "link", detail: "the path to the project's directory goes through a link in this worktree" },
+    });
+  });
+
+  it("refuses the project's place in another worktree at the worktree's root joined with the scope", async () => {
+    const daemon = daemonWithProject({ scopeUnavailable: "link", git: { ...SAMPLE_GIT, scope: "apps/web" } });
+    await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({
+      code: "source_unavailable",
+      params: { path: "/Users/dev/.worktrees/search-api/review/apps/web", cause: "link" },
+    });
+    const source = await daemon.request({ type: "get_project_source", project: "p" });
+    if (source.type !== "project_source") throw new Error("expected project_source");
+    expect(source.source).toMatchObject({ root: "/Users/dev/code/search-api/apps/web", git: { scope: "apps/web" } });
+  });
+
+  it("starts a terminal in the project's place in a worktree that has it", async () => {
+    const daemon = daemonWithProject({ git: { ...SAMPLE_GIT, scope: "apps/web" } });
+    const started = await daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-side" });
+    if (started.type !== "shell_terminal_created") throw new Error("expected shell_terminal_created");
+    expect(started.shell_terminal.cwd).toBe("/Users/dev/code/search-api-experiments/apps/web");
   });
 
   it("leaves a start unanswered when the scenario says so", async () => {

@@ -330,9 +330,9 @@ menu at the pointer** (Control-click also works in the desktop app).
   an error alert titled for the action — that it could not open in the file manager, or in the default application —
   with the reason. When the file or folder is no longer there, its remedy says it may have been moved, renamed or
   deleted, and that one moved or renamed can be found in the project's files and the action tried again from there; a
-  project directory or worktree place that is itself gone gets the general remedy of a missing path instead (see
-  "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The viewer's own header actions follow "The
-  header" in `docs/product/file-viewer.md`.
+  project directory or worktree place that itself cannot be read gets the remedy of a folder a request is scoped to,
+  worded by why it cannot be read (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The
+  viewer's own header actions follow "The header" in `docs/product/file-viewer.md`.
 - **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
   change it is the path the row names, which for a rename is its new path — the old one only where the new side is
   absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-change-list.md`).

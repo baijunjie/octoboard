@@ -46,7 +46,7 @@ pub fn resolve_root(path: &str) -> Result<ProjectRoot> {
     let canonical = fs::canonicalize(path).map_err(|err| io_failure(Path::new(path), &err))?;
     let metadata = fs::metadata(&canonical).map_err(|err| io_failure(&canonical, &err))?;
     if !metadata.is_dir() {
-        return Err(unavailable(&canonical, "not a directory"));
+        return Err(unavailable(&canonical, NOT_A_DIRECTORY, "not a directory"));
     }
     Ok(ProjectRoot {
         id: file_id(&metadata),
@@ -330,6 +330,7 @@ pub fn scope_root(root: &Path, scope: &RelPath) -> Result<ProjectRoot> {
         Err(err) if err.kind() == io::ErrorKind::NotFound => {
             return Err(unavailable(
                 &candidate,
+                MISSING,
                 "the project's directory is not in this worktree",
             ))
         }
@@ -339,12 +340,13 @@ pub fn scope_root(root: &Path, scope: &RelPath) -> Result<ProjectRoot> {
     if !canonical.components().eq(candidate.components()) {
         return Err(unavailable(
             &candidate,
-            "the project's directory is a link in this worktree",
+            LINK,
+            "the path to the project's directory goes through a link in this worktree",
         ));
     }
     let metadata = fs::metadata(&canonical).map_err(|err| io_failure(&canonical, &err))?;
     if !metadata.is_dir() {
-        return Err(unavailable(&candidate, "not a directory"));
+        return Err(unavailable(&candidate, NOT_A_DIRECTORY, "not a directory"));
     }
     Ok(ProjectRoot {
         id: file_id(&metadata),
@@ -352,14 +354,22 @@ pub fn scope_root(root: &Path, scope: &RelPath) -> Result<ProjectRoot> {
     })
 }
 
-/// A source directory that cannot be read from: gone, or not a directory any more. Its `path` is
-/// absolute, as a wire path.
-fn unavailable(path: &Path, detail: &str) -> anyhow::Error {
+// The `cause` of a `source_unavailable`, which a client picks its remedy by: the directory is not
+// there, is reached through a symbolic link where none may be, is something other than a directory,
+// or could not be read for another cause, which only `detail` names.
+const MISSING: &str = "missing";
+const LINK: &str = "link";
+const NOT_A_DIRECTORY: &str = "not_a_directory";
+const OTHER: &str = "other";
+
+/// A source directory that cannot be read from, for the `cause` given. Its `path` is absolute, as a
+/// wire path.
+fn unavailable(path: &Path, cause: &str, detail: &str) -> anyhow::Error {
     let shown = wire_path::encode(path.as_os_str().as_bytes());
     CodedError::raised(
         error_code::SOURCE_UNAVAILABLE,
         format!("{shown} is unavailable: {detail}"),
-        &[("path", &shown), ("detail", detail)],
+        &[("path", &shown), ("cause", cause), ("detail", detail)],
     )
 }
 
@@ -373,7 +383,12 @@ fn io_failure(path: &Path, err: &io::Error) -> anyhow::Error {
             &[("path", &shown), ("detail", &err.to_string())],
         );
     }
-    unavailable(path, &err.to_string())
+    let cause = if err.kind() == io::ErrorKind::NotFound {
+        MISSING
+    } else {
+        OTHER
+    };
+    unavailable(path, cause, &err.to_string())
 }
 
 #[cfg(test)]

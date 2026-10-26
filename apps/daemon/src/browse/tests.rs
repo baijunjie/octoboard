@@ -256,6 +256,14 @@ pub(super) fn code<T: std::fmt::Debug>(result: anyhow::Result<T>) -> &'static st
         .code
 }
 
+/// The `cause` param of the `source_unavailable` `result` failed with.
+fn unavailable_cause<T: std::fmt::Debug>(result: anyhow::Result<T>) -> String {
+    let err = result.expect_err("a refusal");
+    let coded = err.downcast_ref::<CodedError>().unwrap();
+    assert_eq!(coded.code, error_code::SOURCE_UNAVAILABLE);
+    coded.params["cause"].clone()
+}
+
 pub(super) fn canonical(path: &Path) -> String {
     wire_path::encode(std::fs::canonicalize(path).unwrap().as_os_str().as_bytes())
 }
@@ -375,8 +383,13 @@ fn a_subdirectory_maps_into_another_worktree_and_never_broadens() {
         .unwrap();
     assert!(!linked_entry.scope_present);
     assert_eq!(
-        code(fixture.read(&project, Some(&linked_entry.id), "top.txt", ReadFrom::Live)),
-        error_code::SOURCE_UNAVAILABLE,
+        unavailable_cause(fixture.read(
+            &project,
+            Some(&linked_entry.id),
+            "top.txt",
+            ReadFrom::Live
+        )),
+        "link",
         "a link in another worktree must not widen the scope to its root"
     );
     let other_id = &git_info
@@ -406,8 +419,8 @@ fn a_subdirectory_maps_into_another_worktree_and_never_broadens() {
         error_code::FILE_NOT_FOUND
     );
     assert_eq!(
-        code(fixture.list(&project, Some(&bare_entry.id), "")),
-        error_code::SOURCE_UNAVAILABLE
+        unavailable_cause(fixture.list(&project, Some(&bare_entry.id), "")),
+        "missing"
     );
     assert_eq!(
         code(fixture.read(&project, Some("1:2"), "a.txt", ReadFrom::Live)),
@@ -795,6 +808,7 @@ fn missing_and_unreadable_sources_are_told_apart() {
     std::fs::write(project_dir.join("locked.txt"), b"x").unwrap();
     std::fs::create_dir(project_dir.join("locked-dir")).unwrap();
     std::fs::write(project_dir.join("locked-dir/inner.txt"), b"x").unwrap();
+    std::fs::write(project_dir.join("plain.txt"), b"x").unwrap();
     // SAFETY: a plain query of this process's effective user.
     if unsafe { libc::geteuid() } == 0 {
         // Permissions do not stop the superuser, so there is nothing to refuse.
@@ -807,6 +821,7 @@ fn missing_and_unreadable_sources_are_told_apart() {
     chmod(&project_dir.join("locked-dir"), 0o000);
     let project = fixture.project("p", &project_dir);
     let gone = fixture.project("gone", &project_dir.join("never-existed"));
+    let file = fixture.project("file", &project_dir.join("plain.txt"));
 
     let locked = fixture.read(&project, None, "locked.txt", ReadFrom::Live);
     let locked_dir = fixture.read(&project, None, "locked-dir/inner.txt", ReadFrom::Live);
@@ -822,8 +837,12 @@ fn missing_and_unreadable_sources_are_told_apart() {
         error_code::UNSUPPORTED_FILE_TYPE
     );
     assert_eq!(
-        code(fixture.read(&gone, None, "a.txt", ReadFrom::Live)),
-        error_code::SOURCE_UNAVAILABLE
+        unavailable_cause(fixture.read(&gone, None, "a.txt", ReadFrom::Live)),
+        "missing"
+    );
+    assert_eq!(
+        unavailable_cause(fixture.read(&file, None, "a.txt", ReadFrom::Live)),
+        "not_a_directory"
     );
     assert_eq!(
         code(fixture.source_result(&gone)),

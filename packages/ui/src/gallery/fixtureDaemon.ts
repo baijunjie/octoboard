@@ -15,7 +15,7 @@ import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies } from "./fixtureGit";
 import { refuseUnfillable } from "./banner";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
-import { SAMPLE_FILES, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
+import { SAMPLE_FILES, sourceUnavailable, type FixtureError, type FixtureFile, type FixtureFiles, type SourceUnavailableCause } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
 
 /** How long after the app subscribes to toasts the scenario's own are raised, for the stack to be
@@ -28,6 +28,12 @@ const TOAST_DELAY_MS = 300;
 export type FixtureDaemon = Daemon & { readonly scenarioToastsRaised: Promise<void> };
 
 const HOME = "/Users/dev";
+
+/** What the daemon sends for the project's place in another worktree when it cannot be used, by why. */
+const SCOPE_UNAVAILABLE: Record<"missing" | "link", { cause: SourceUnavailableCause; detail: string }> = {
+  missing: { cause: "missing", detail: "the project's directory is not in this worktree" },
+  link: { cause: "link", detail: "the path to the project's directory goes through a link in this worktree" },
+};
 
 /** What the CLI said when a login the scenario ends as `failed` did not go through. */
 const LOGIN_FAILURE_DETAIL = [
@@ -1094,16 +1100,22 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const project = store.getState().projects.get(body.project);
           if (!project) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           if (scenario.shellTerminalStart === "pending") return new Promise<Event>(() => {});
-          // The project's folder is the first worktree of the repository (as `get_project_source` says),
-          // and its place in another is that worktree's root: a fixture project's scope is the whole worktree.
+          // A project's place in another worktree is that worktree's root joined with the repository's `scope`, as
+          // `get_project_source` builds the project's own: the refusal names that place, and a terminal started there starts in it.
           const target = body.worktree === undefined ? undefined : git?.worktrees.find((worktree) => worktree.id === body.worktree);
           if (body.worktree !== undefined && !target) return fail({ code: "worktree_unavailable", params: { worktree: body.worktree }, message: `worktree ${body.worktree} is gone` });
-          if (target && !target.scope_present) return fail({ code: "source_unavailable", params: { path: target.root, detail: "No such file or directory (os error 2)" }, message: `The directory ${target.root} is not available: No such file or directory (os error 2)` });
+          const placeIn = (worktree: { root: string }) => (git?.scope ? `${worktree.root}/${git.scope}` : worktree.root);
+          // `scope_present` is false when the project's folder in that worktree is not there or is reached through a link
+          // (`scopeUnavailable` says which, and the error carries the daemon's own wording of it).
+          if (target && !target.scope_present) {
+            const { cause, detail } = SCOPE_UNAVAILABLE[scenario.scopeUnavailable ?? "missing"];
+            return fail(sourceUnavailable(placeIn(target), cause, detail));
+          }
           const shellTerminal: ShellTerminal = {
             id: `shell-gallery-${++createdShellTerminalCount}`,
             project_id: project.id,
             worktree: body.worktree ?? null,
-            cwd: target?.root ?? project.path,
+            cwd: target ? placeIn(target) : project.path,
             title: "zsh",
             renamed: false,
             state: "running",

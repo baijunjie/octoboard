@@ -224,10 +224,11 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
   return (body: RequestBody): Event | Promise<Event> | undefined => {
     switch (body.type) {
       case "get_project_source": {
-        // The project's folder is the worktree holding it, as the daemon names it; a project in no
-        // repository is the sample's own folder.
+        // The project's folder is the `scope` below the root of the worktree holding it, as the daemon names it; a
+        // project in no repository is the sample's own folder.
         const own = git?.worktrees[0];
-        const root = own?.root ?? "/Users/dev/code/search-api";
+        const scope = git?.scope ?? "";
+        const root = scope && own ? `${own.root}/${scope}` : (own?.root ?? "/Users/dev/code/search-api");
         const main = git?.worktrees.find((worktree) => worktree.main) ?? own;
         return {
           type: "project_source",
@@ -238,7 +239,7 @@ export function createGitReplies(git: FixtureGit | null | undefined, fail: (erro
             root_id: "fixture",
             git:
               git && !git.gitError && own && main
-                ? { repository: "repo", common_dir: `${main.root}/.git`, worktree: own.id, scope: "", worktrees: git.worktrees }
+                ? { repository: "repo", common_dir: `${main.root}/.git`, worktree: own.id, scope, worktrees: git.worktrees }
                 : null,
             git_error: git?.gitError ?? null,
           },

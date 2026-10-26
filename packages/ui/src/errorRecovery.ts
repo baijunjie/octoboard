@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
-  | "hostPathGone" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "hostPathGone" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
@@ -27,7 +27,10 @@ export class ActionableError extends DaemonRequestError {
 }
 
 const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
-  path: ["path_not_absolute", "path_not_found", "path_not_a_directory", "invalid_path", "directory_unreachable", "source_unavailable", "file_not_found", "config_dir_not_absolute", "config_dir_unreachable", "no_repositories_found", "repository_name_missing"],
+  path: ["path_not_absolute", "path_not_found", "path_not_a_directory", "invalid_path", "directory_unreachable", "file_not_found", "config_dir_not_absolute", "config_dir_unreachable", "no_repositories_found", "repository_name_missing"],
+  // The project's directory, or its place in a worktree, that a request is scoped to: nothing the user typed or picked
+  // with Browse, so it is put back rather than corrected. Its `cause` picks a closer remedy (`SOURCE_CAUSE_RECOVERY`).
+  sourceGone: ["source_unavailable"],
   repository: ["not_a_git_repository"],
   trash: ["project_directory_trash_failed", "project_directory_shared", "project_directory_protected"],
   stopProcess: ["session_did_not_stop"],
@@ -126,6 +129,12 @@ const RELOCATION_CAUSE_RECOVERY: Record<string, ErrorRecovery> = {
   sqlite_home: "sqliteHome", symlink: "symlink", not_restored: "notRestored",
 };
 
+/** The remedy of a `source_unavailable` by its `cause`; with none, the code's group's (`sourceGone`), as from a daemon
+ * that does not send one. */
+const SOURCE_CAUSE_RECOVERY: Record<string, ErrorRecovery> = {
+  missing: "sourceGone", link: "sourceLink", not_a_directory: "sourceNotFolder", other: "sourceUnreadable",
+};
+
 /** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */
 function isNotRestored(error: unknown): boolean {
   return error instanceof DaemonRequestError && error.code === "relocation_failed" && error.params.cause === "not_restored";
@@ -148,6 +157,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   if (remedy) return { kind: "actionable", recovery: remedy };
   if (error instanceof DaemonRequestError) {
     const code = error.code === "launch_failed" ? error.params.reason_code : error.code;
+    if (code === "source_unavailable" && error.params.cause) return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[error.params.cause] ?? "sourceUnreadable" };
     const domain = code && DOMAIN_RECOVERY.get(code);
     if (domain) return { kind: "actionable", recovery: domain };
     const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[error.params.cause] : undefined;
