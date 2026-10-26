@@ -28,9 +28,9 @@ whose binary does not resolve there is shown as not detected; one whose availabi
 being checked. Not detected does not establish that the tool is uninstalled. Status is conveyed by text and a glyph
 as well as colour, and each status update is announced to assistive technology with the tool's name.
 
-A hint below the card explains that opening a session requires installing at least one supported tool and making
-it available on `PATH`. **New console stays enabled regardless of these statuses**: creating a console starts no
-agent. Session availability rules are in "Opening a session" in `docs/product/sessions.md`.
+A hint below the card explains that opening a session requires installing at least one supported tool and making it
+available on `PATH`. **New console stays enabled regardless of these statuses**: creating a console starts no agent.
+Session availability rules are in "When no agent can open a session" in `docs/product/opening-sessions.md`.
 
 When the window is too short to fit the screen, its content scrolls vertically so the actions, list and hint remain
 reachable. On narrow windows, the action row and tool row contents wrap rather than being cut off.
@@ -42,8 +42,8 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
   `docs/product/window-layout.md`). So there is no sidebar to float in on hover either, no drawer to open below
   1168 px, and no panel to float in.
 - **No terminal.** None of the terminal's empty states appears here: the panel asking for a session to be selected, or
-  the panel offering **Add project**, **New session** or **New console session** for the current scope (see "With no session
-  selected" and "A console with nothing in it" in `docs/product/session-terminal.md`).
+  the panel offering **Add project**, **New session** or **New console session** for the current scope (see "With no
+  session selected" and "A console with nothing in it" in `docs/product/session-terminal.md`).
 - **No toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the panel toggles, at the
   bar's end, are there only while the right pane has an owner (see "The sidebar toggle and the panel toggles" in
   `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled**: every place
@@ -71,10 +71,10 @@ console appears, the panes come back exactly as the user had left them — a sid
 - The content area itself becomes a Tab stop only when it overflows, so the keyboard can scroll it; the tool rows
   and their badges do not add Tab stops. `F6` continues to land on New console even while the area scrolls.
 - Wherever the window would hand keyboard focus to the terminal — the connection banner's Retry going away, a toast
-  being dealt with — it hands focus to the New console button instead, and leaves focus on nothing when it is already
-  on nothing. This is the rule the terminal itself follows with no session selected and nothing to offer in its place,
-  which hands focus to the top bar (see "With no session selected" in `docs/product/session-terminal.md`); here the top bar has no enabled
-  control to take it.
+  being dealt with — it hands focus to the New console button instead, and leaves focus on nothing when it is already on
+  nothing. This is the rule the terminal itself follows with no session selected and nothing to offer in its place,
+  which hands focus to the top bar (see "With no session selected" in `docs/product/session-terminal.md`); here the top
+  bar has no enabled control to take it.
 - **When the first console is created** from the welcome screen's New console, focus moves to the first control in the
   top bar a keyboard can reach. The hand-off is New console's alone: consoles arriving through Import configuration…
   appear while its dialog is still open on the import's result, and get no such hand-off.

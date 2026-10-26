@@ -5087,9 +5087,10 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
 
 /// Refuses to open a session whose resolved agent has been *determined* unavailable — never while
 /// that determination is still pending, which the launch's own refusal of a missing binary already
-/// covers; see "Opening a session" in `docs/product/sessions.md`. Checked here, ahead of
-/// everything that follows, so this is also what a console session's own `new_session` tool is
-/// refused through — it calls this same function.
+/// covers; see "When the agent or the account cannot open a session" in
+/// `docs/product/opening-sessions.md`. Checked here, ahead of everything that follows, so this is
+/// also what a console session's own `new_session` tool is refused through — it calls this same
+/// function.
 fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: Agent) -> Result<()> {
     if agent_is_available(state, agent) {
         return Ok(());
@@ -5280,10 +5281,10 @@ fn duration_label(millis: i64) -> String {
     }
 }
 
-/// Refuses to open a session of an agent that is not on the added list; see "Opening a session" in
-/// `docs/product/sessions.md`. An undecided list refuses nothing. Only a session being opened is
-/// checked, so a live session of an agent removed since keeps running, and resuming, restarting or
-/// reopening an existing session never comes here.
+/// Refuses to open a session of an agent that is not on the added list; see "When the agent or the
+/// account cannot open a session" in `docs/product/opening-sessions.md`. An undecided list refuses
+/// nothing. Only a session being opened is checked, so a live session of an agent removed since
+/// keeps running, and resuming, restarting or reopening an existing session never comes here.
 fn refuse_unless_agent_added(state: &Arc<AppState>, agent: Agent) -> Result<()> {
     if agent_is_added(state, agent)? {
         return Ok(());

@@ -32,7 +32,7 @@ a second recipe for a role that already has a token, or overrides a HeroUI compo
 | Role | Source |
 | --- | --- |
 | Solid fill and the text on it (a primary button, a count badge, a selected segment, the resize line) | HeroUI `--{colour}` and `--{colour}-foreground` |
-| Soft fill (an Alert's background, a chip's and a badge's fill) | HeroUI `--{colour}-soft`; the neutral fill of a chip or badge is the foreground at 8% in light and 10% in dark, translucent so it deepens on a grey surface, and an Alert's neutral fill is the secondary text colour at 16%, HeroUI's `--default-soft` all but vanishing on a white surface (1.09:1) |
+| Soft fill (an Alert's background, a chip's and a badge's fill) | HeroUI `--{colour}-soft`; the neutral fill of a chip or badge is the one below, and an Alert's neutral fill is the secondary text colour at 16%, HeroUI's `--default-soft` all but vanishing on a white surface (1.09:1) |
 | An icon or glyph of that meaning on a surface (a failure mark, a status dot, a lock, a Git badge, the session context badge's ring and its card's meter fill); a destructive menu item's icon takes its label's `--danger`, as HeroUI colours that label | HeroUI `--{colour}-soft-foreground`, the role HeroUI itself gives an Alert's and a Toast's indicator |
 | Text in that colour (a chip's and a badge's text, +N / −M line counts, the diff viewer's added and removed text) | The project's tint text token: HeroUI's soft foreground pulled toward the foreground just enough to keep 4.5:1 on every surface (neutral: HeroUI's `--default-foreground`, which has no token) |
 | A hairline edge (a bordered badge) | The project's tint edge token, mixed from HeroUI's solid colour |
@@ -57,24 +57,23 @@ ghost buttons retinted to its foreground, none of them a primary. Its content is
 before a dismissal (Later, or the close glyph). Beside the strips, a solid warning or danger fill is only a small
 glyph-sized mark such as the waiting session's disc; no surface holding copy, apart from a button, takes one.
 
-An Alert always has a title, so its indicator lines up with the title's line (see "Errors shown among other
-content"). An Alert's only custom visual treatments are its status background, HeroUI's `--{colour}-soft` for its status, and its
-shadow: HeroUI's `--surface-shadow` keeps its shape but takes the status colour instead of grey, so a tinted Alert has no
-grey rim. All other
-styles and component structure stay stock HeroUI 3, as specified under "Errors shown among other content". The stock
-`Alert.Description` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own text on HeroUI's
-own fill, not recoloured.
+An Alert's only custom visual treatments are its status background, HeroUI's `--{colour}-soft` for its status, and its
+shadow: HeroUI's `--surface-shadow` keeps its shape but takes the status colour instead of grey, so a tinted Alert has
+no grey rim. All other styles and component structure stay stock HeroUI 3, as specified under "Errors shown among other
+content". The stock `Alert.Description` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own
+text on HeroUI's own fill, not recoloured.
 
-Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch
-and the agent tabs in the console dialog's Advanced section keep their labels fully opaque on hover and use the
-foreground colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the component's
-layout, selection and keyboard behaviour.
+Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch and
+the agent tabs in the console dialog's Advanced section keep their labels fully opaque on hover and use the foreground
+colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the
+component's layout, selection and keyboard behaviour.
 
 A status label such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
-account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's
-change status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
-`InlineReference`. It is the shared `StatusBadge`, the only small badge component. It takes a semantic colour — `default`
-(neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and one of two variants:
+account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's change
+status or size, "Read-only"), is a badge after the name, never parenthesised text in the name's own style and never an
+`InlineReference`. It is the shared `StatusBadge`, the only small badge component. It takes a semantic colour —
+`default` (neutral), `accent`, `success`, `warning`, `danger` or `help` (the project's purple, for help and hints) — and
+one of two variants:
 
 - **Borderless** (`variant="soft"`), the usual choice for a state: login state, a tool's installed state, a file's
   change status, "Read-only".
@@ -119,15 +118,17 @@ letting HeroUI fade the whole row: the reason is the text that explains the disa
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
 neutral "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
-(`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table
-marks such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu
-bar icon's quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the
-menu's appearance, while the account's heading says "Limit reached" in words. A veil over the row is not used for that state: it would take its text below AA.
+(`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table marks
+such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu bar icon's
+quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the menu's appearance,
+while the account's heading says "Limit reached" in words. A veil over the row is not used for that state: it would take
+its text below AA.
 
-A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the button's own is
-covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in `packages/ui/src/components/inactiveVeil.ts`),
-until the mouse enters the panel or the panel closes. The veiled text falls below AA by the user's decision, as a
-passing cue that is mouse-only and visual only; it looks unlike the used-up state, which recedes without a veil.
+A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the
+button's own is covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in
+`packages/ui/src/components/inactiveVeil.ts`), until the mouse enters the panel or the panel closes. The veiled text
+falls below AA by the user's decision, as a passing cue that is mouse-only and visual only; it looks unlike the used-up
+state, which recedes without a veil.
 
 A notice toast (HeroUI's accent variant) tints its indicator with the title's `--accent-soft-foreground`, as HeroUI
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
@@ -154,10 +155,10 @@ Every interactive control is reachable from the keyboard and operable with Enter
 behavior under "Buttons" below and a choice inside a dialog's form. A control that holds a choice there (a checkbox, a
 radio, a switch, a closed select, a tab) takes Space, and the arrow keys where it has them, while Enter submits the
 dialog from it, as Enter does from a text field. The platform does this for the native ones (a checkbox, a radio, a
-switch), and the dialog does it for a closed select, a tab and a radio that is not a native input, so that having
-picked an agent the user presses Enter to go ahead rather than to open the picker again. A button that acts (Cancel, a disclosure) keeps Enter, and so does an open popover's
-list. So a dialog whose confirm button carries weight does not also rely on Enter to settle a choice one of these
-controls holds.
+switch), and the dialog does it for a closed select, a tab and a radio that is not a native input, so that having picked
+an agent the user presses Enter to go ahead rather than to open the picker again. A button that acts (Cancel, a
+disclosure) keeps Enter, and so does an open popover's list. So a dialog whose confirm button carries weight does not
+also rely on Enter to settle a choice one of these controls holds.
 
 A confirmation dialog opens with focus on its confirm button, so Enter confirms it at once. Two kinds do not, and keep
 focus on the dialog itself, so an Enter pressed before the user has moved focus onto one of its controls does nothing: a
@@ -175,8 +176,8 @@ field. A dialog's form ignores the repeats of a held Enter or Space, except Spac
 multi-line one, so the press that opened it cannot go on to submit it.
 
 A form dialog opens with focus in its first text field, so the user can type at once and Enter submits; one with no text
-field opens with focus on its submit button instead. A field that appears later, after a tab or a choice has changed what
-the form holds, does not take focus, so it never pulls it off the control the user is on.
+field opens with focus on its submit button instead. A field that appears later, after a tab or a choice has changed
+what the form holds, does not take focus, so it never pulls it off the control the user is on.
 
 ### Reaching a control with Tab
 
@@ -216,17 +217,16 @@ that text. So a control belonging to such a row joins the floating group rather 
 file viewer's detail row floats Copy path and the view controls to its end, rather than placing a button beside
 the path it copies (`packages/ui/src/viewer/FileViewer.tsx`).
 
-A control inside a collection's **section header** is reached by neither of those: react-aria's keyboard delegate
-walks the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the
-last tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its
-first row. The change list's section heading — the band that folds the section away
-(`packages/ui/src/browser/changeSectionHeading.tsx`) — and the mark a heading can carry are such controls, and
-they are reached by this application extending the collection's own walk: Up and Down step through the rows **and the
-headings between them**, Right from a heading moves to its mark and Left back to the band (mirrored in a
-right-to-left reading direction, where the mark sits on the left), while Home and End
-still move between rows alone. Such a control takes no tab stop of its own and must not take focus on a press
-(`preventFocusOnPress`), or a mouse press on it sends focus to the list's first row; a popover opened from it hands
-focus back to its heading when it closes.
+A control inside a collection's **section header** is reached by neither of those: react-aria's keyboard delegate walks
+the collection's items alone, so the arrow keys never land on a header, Tab inside the collection jumps to the last
+tabbable element and leaves, and focus arriving anywhere in the collection that is not a row is moved to its first row.
+The change list's section heading — the band that folds the section away
+(`packages/ui/src/browser/changeSectionHeading.tsx`) — and the mark a heading can carry are such controls, and they are
+reached by this application extending the collection's own walk: Up and Down step through the rows **and the headings
+between them**, Right from a heading moves to its mark and Left back to the band (mirrored in a right-to-left reading
+direction, where the mark sits on the left), while Home and End still move between rows alone. Such a control takes no
+tab stop of its own and must not take focus on a press (`preventFocusOnPress`), or a mouse press on it sends focus to
+the list's first row; a popover opened from it hands focus back to its heading when it closes.
 
 The band is react-aria's `rowheader` inside a `role="row"`, not an `<h1>`-`<h6>`, so the rule under "A visual heading
 is a heading element" does not reach it: it is a row of the change list's treegrid, where that markup is what the
@@ -273,15 +273,15 @@ same rule: it keeps focus and is marked `aria-disabled`, a press or Space does n
 `aria-describedby` description. When the control that held focus goes away with the state it belonged to, focus moves
 to the control the state was about, unless the user has already moved it.
 
-A warning that a switch's last change did not finish does not block anything (turning the switch again is the retry),
-so it is a warning mark right after the switch in its row (see "On the screen: an Alert when it matters, a mark at its
+A warning that a switch's last change did not finish does not block anything (turning the switch again is the retry), so
+it is a warning mark right after the switch in its row (see "On the screen: an Alert when it matters, a mark at its
 point otherwise"), and the switch is described by the warning's title, kept as visually hidden text beside it. The
-mark's popover says what happened and how to try again, then any further explanation and the raw entries: a failure
-with a single cause says that cause and its fix, one with several says that some files or folders could not be changed
-and lists the causes, and a fix that points at the raw reason says it is below. The switch itself is the way to try
-again, so there is no retry button. Only a failure that arrives after a change the view saw run is announced, its
-title spoken through the view's `StatusAnnouncer`, unless this window asked for that change, when the error alert
-dialog it opens speaks it instead (see "Where an error is shown"); the same mark found already there when the view opens, or after a
+mark's popover says what happened and how to try again, then any further explanation and the raw entries: a failure with
+a single cause says that cause and its fix, one with several says that some files or folders could not be changed and
+lists the causes, and a fix that points at the raw reason says it is below. The switch itself is the way to try again,
+so there is no retry button. Only a failure that arrives after a change the view saw run is announced, its title spoken
+through the view's `StatusAnnouncer`, unless this window asked for that change, when the error alert dialog it opens
+speaks it instead (see "Where an error is shown"); the same mark found already there when the view opens, or after a
 restart, is not. When the mark goes while it or its popover holds focus, focus moves to the switch.
 
 A disabled select option or menu item that carries a reason stays in the arrow-key walk (`disabledBehavior:
@@ -306,24 +306,23 @@ is made by hand from the code frame (`focusFirstSeparatorControl`, `moveAlongCon
 
 The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycling
 (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it. Every new region of the window that
-holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's region order and `shown`,
-or F6 skips it and a keyboard user in the terminal has no way to reach it. A right pane panel is the exception: it
-reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order). While the Terminal panel
-is maximized it comes first among the panels, and the agent area it covers (the agent terminal or the archive view,
-made `inert`) is not a stop. A panel floating over the agent terminal in a window too narrow to dock the right pane
-covers it the same way: the agent terminal is `inert` and not a stop while the panel is shown, focus moves into the
-panel when it is opened and back to the agent terminal when it closes (after a tap, never into a text field; see
-"Focus moved by a change the user did not make"), Escape closes it (standing aside inside a shell
-terminal, as below), and the dimmed strip beside it is a "Close panel" button. A region lands F6 on its first control unless a control in it carries
+holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's region order and
+`shown`, or F6 skips it and a keyboard user in the terminal has no way to reach it. A right pane panel is the exception:
+it reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order). While the Terminal panel
+is maximized it comes first among the panels, and the agent area it covers (the agent terminal or the archive view, made
+`inert`) is not a stop. A panel floating over the agent terminal in a window too narrow to dock the right pane covers it
+the same way: the agent terminal is `inert` and not a stop while the panel is shown, focus moves into the panel when it
+is opened and back to the agent terminal when it closes (after a tap, never into a text field; see "Focus moved by a
+change the user did not make"), Escape closes it (standing aside inside a shell terminal, as below), and the dimmed
+strip beside it is a "Close panel" button. A region lands F6 on its first control unless a control in it carries
 `data-region-landing` (a Files panel that failed to load lands on Try again, not on its header's Close panel). `shown`
 follows whether a region holds a control, not whether its element is in the document: the terminal counts while a
-session is selected, and also while its empty state offers a creation action for the current context or the Add
-agent button (agents are installed but none is added), since that button is then the one thing to do there; with only
-its empty line (nothing installed) it is skipped. An archived session's terminal is covered by its history and made
-`inert`, so the region lands on the history instead: its message list, or while there is none, its first control,
-and failing that the floating bar's Reopen. A region whose focus goes through a method
-of its own rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside
-it, which is how the cycle tells the two apart.
+session is selected, and also while its empty state offers a creation action for the current context or the Add agent
+button (agents are installed but none is added), since that button is then the one thing to do there; with only its
+empty line (nothing installed) it is skipped. An archived session's terminal is covered by its history and made `inert`,
+so the region lands on the history instead: its message list, or while there is none, its first control, and failing
+that the floating bar's Reopen. A region whose focus goes through a method of its own rather than its first control (the
+terminal's) is only a stop when that method actually leaves focus inside it, which is how the cycle tells the two apart.
 
 A shell terminal in the Terminal panel keeps Tab the same way, so the same holds for it: the Terminal panel is its own
 region, and F6 lands on the shown terminal's input, on its cover's Reconnect while that is offered, or on New terminal
@@ -336,10 +335,10 @@ needs an equivalent reachable another way; Close terminal in the panel's header 
 ### A floating panel that does not take the window
 
 A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel, and the
-popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both the same
-input logic. It is not a region: it is reached through its button, the way a menu is. Its dialog is named by what the
-panel is (Quota, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver reads
-both a dialog's name and its content as focus enters it, so a dialog named by its own text is read twice.
+popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both
+the same input logic. It is not a region: it is reached through its button, the way a menu is. Its dialog is named by
+what the panel is (Quota, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver
+reads both a dialog's name and its content as focus enters it, so a dialog named by its own text is read twice.
 
 **The input matrix**, by what the input can do:
 
@@ -364,10 +363,10 @@ terminal or an editor before the surface decides where focus goes.
   into the press form, remounted so that it behaves as if press-opened from scratch (focus returns to the trigger).
 - **Escape.** While hover-opened the surface marks itself `data-escape-topmost`, so the drawer and floating-pane Escape
   handling stands aside while it exists, and its Escape and outside press are watched on the document, since
-  react-aria's non-modal popover does neither. Opened by hover it holds no focus, so the key belongs to where focus is: Escape is left
-  alone when focus is in a terminal (the agent's, whose program takes Escape as an interrupt, or a shell's) or a text
-  field holding text, and while an input method is composing. A press-opened surface took focus, so it takes Escape
-  (react-aria's own).
+  react-aria's non-modal popover does neither. Opened by hover it holds no focus, so the key belongs to where focus is:
+  Escape is left alone when focus is in a terminal (the agent's, whose program takes Escape as an interrupt, or a
+  shell's) or a text field holding text, and while an input method is composing. A press-opened surface took focus, so
+  it takes Escape (react-aria's own).
 - **Closing.** After a close that is not the grace's own (Escape, an outside press, an action such as Try again) a
   pointer still resting on the trigger does not open it again: the hover is armed again once the pointer has moved off
   the trigger and the surface and comes back.
@@ -404,14 +403,14 @@ value and raw submission unchanged.
 
 HeroUI controls draw their own focus ring.
 
-A scrollable tab list leaves enough inner padding for the full focus ring and its offset on every
-side. `Tabs.ListContainer` clips its child list through a scroll container, so this clearance belongs
-to `Tabs.List` itself; padding outside the scroller does not protect the ring. Each tab also needs matching horizontal
-scroll margin so keyboard navigation reveals the ring as well as the tab border. Suppress the tab
-scroller’s fade mask while a tab has visible keyboard focus, so it cannot fade out the ring.
+A scrollable tab list leaves enough inner padding for the full focus ring and its offset on every side.
+`Tabs.ListContainer` clips its child list through a scroll container, so this clearance belongs to `Tabs.List` itself;
+padding outside the scroller does not protect the ring. Each tab also needs matching horizontal scroll margin so
+keyboard navigation reveals the ring as well as the tab border. Suppress the tab scroller’s fade mask while a tab has
+visible keyboard focus, so it cannot fade out the ring.
 
-An invalid, focused HeroUI `Input` keeps its outline offset at zero so the error outline meets the
-focus ring. This overrides WebKit's native inset without changing the component's colours or ring.
+An invalid, focused HeroUI `Input` keeps its outline offset at zero so the error outline meets the focus ring. This
+overrides WebKit's native inset without changing the component's colours or ring.
 
 ### A hand-built focusable element
 
@@ -435,14 +434,13 @@ into that root (`[data-expand-button][data-focus-visible]` and `[data-separator-
 ### Focus moved by a change the user did not make
 
 A hand-off that runs because what held focus went away — a pane hidden, a panel closed, a region unmounted by a daemon
-event — also
-calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the move, so
-they have to be able to see where focus went, and the previous input was often a pointer press, which leaves the
-destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where the
-ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render, and so does
-`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one hand-off through it
-whose trigger is really a press — the change filter field closed from the header's toggle, which takes no focus
-itself — knowingly: focus lands on a control the user did not aim it at either way.
+event — also calls `setInteractionModality("keyboard")` before it focuses the destination. The user did not ask for the
+move, so they have to be able to see where focus went, and the previous input was often a pointer press, which leaves
+the destination without a ring. `handFocusOff` takes a `showRing` flag for the hand-off whose trigger is a press, where
+the ring follows how the press came; `HandOffOnUnmount` always sets it, its trigger being a render, and so does
+`useFocusHandoff`, whose trigger is the render that took the control away. That covers the one hand-off through it whose
+trigger is really a press — the change filter field closed from the header's toggle, which takes no focus itself —
+knowingly: focus lands on a control the user did not aim it at either way.
 
 After a tap (`interactionIsTouch` in `packages/ui/src/touchInput.ts`: the last press was a finger; a mouse, a trackpad
 or any key counts as not, so an iPad with a keyboard keeps the desktop rules) two things change. An automatic move does
@@ -471,19 +469,20 @@ control that did not have focus still takes none.
 A dialog opened from a control that never took focus, is disabled, or is gone by the time it closes cannot always hand
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
 accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
-or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on. Three
-hand-offs repair it. The login hand-off (`useLoginFocusReturn` in `packages/ui/src/settings/AgentAccountsSection.tsx`):
-the row's own Log in button is shown only while the account reads as signed out and is disabled while a login runs, so
-after a success focus goes to the row's actions, and after a cancel to the Log in button once it is enabled again, else
-to the actions. The console dialog's Settings (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener
-that opened it, so closing Settings by its backdrop returns focus there even when Manage accounts was activated without
-taking focus. A Shell terminal closed through its busy confirmation is repaired once the confirmation goes
-(`focusAfterConfirmedClose` in `packages/ui/src/terminal/ShellTerminalPanel.tsx`): when the terminal's tab or view that
-the dialog gave focus back to has gone with it, focus goes to the shown tab after a close asked from a menu, or to the
-shown terminal after one asked from the terminal itself; the ring is turned on only as it moves focus, so a close the
-daemon refuses leaves focus where the dialog put it back, ringed or not as the press was. All three wait at least a frame
-past React Aria's restore and leave a restore that landed right alone; they act where focus is on `<body>`, and the
-login hand-off also where it is on its going button.
+or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on.
+Three hand-offs repair it. The login hand-off (`useLoginFocusReturn` in
+`packages/ui/src/settings/AgentAccountsSection.tsx`): the row's own Log in button is shown only while the account reads
+as signed out and is disabled while a login runs, so after a success focus goes to the row's actions, and after a cancel
+to the Log in button once it is enabled again, else to the actions. The console dialog's Settings
+(`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener that opened it, so closing Settings by its
+backdrop returns focus there even when Manage accounts was activated without taking focus. A Shell terminal closed
+through its busy confirmation is repaired once the confirmation goes (`focusAfterConfirmedClose` in
+`packages/ui/src/terminal/ShellTerminalPanel.tsx`): when the terminal's tab or view that the dialog gave focus back to
+has gone with it, focus goes to the shown tab after a close asked from a menu, or to the shown terminal after one asked
+from the terminal itself; the ring is turned on only as it moves focus, so a close the daemon refuses leaves focus where
+the dialog put it back, ringed or not as the press was. All three wait at least a frame past React Aria's restore and
+leave a restore that landed right alone; they act where focus is on `<body>`, and the login hand-off also where it is on
+its going button.
 
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
@@ -496,14 +495,13 @@ with its submit refused puts its autofocus on Cancel instead of the disabled but
 
 ### Focus scrolled to the edge of a scroller that fades there
 
-A scroller whose edges are faded gives the scroller a `scroll-padding-block` of at least the fade's own size. A
-browser scrolls a control only far enough to reach the container's edge, which is exactly where the fade sits, so the
-control the user was sent to arrives underneath it: seen here on the first invalid field a submit sends focus to,
-which the fade covered at the window heights where that field was the one scrolled to. The padding is on the scroller
-rather than on what it holds, so nothing put inside has to know about it. Every scroller that takes the fade gets it,
-a dialog's body and a list in a popover alike, and neither shape of the project's own capability leaves it to the
-site: the padding comes with the fade. A fade the library draws for its own component is the one exception, and not
-one to copy — a HeroUI `Tabs.ListContainer` uses its own 64 px fade. Suppress that mask while a tab has visible
+A scroller whose edges are faded gives the scroller a `scroll-padding-block` of at least the fade's own size. A browser
+scrolls a control only far enough to reach the container's edge, which is exactly where the fade sits, so the control
+the user was sent to arrives underneath it (the first invalid field a submit sends focus to, for one). The padding is on
+the scroller rather than on what it holds, so nothing put inside has to know about it. Every scroller that takes the
+fade gets it, a dialog's body and a list in a popover alike, and neither shape of the project's own capability leaves it
+to the site: the padding comes with the fade. A fade the library draws for its own component is the one exception, and
+not one to copy — a HeroUI `Tabs.ListContainer` uses its own 64 px fade. Suppress that mask while a tab has visible
 keyboard focus, as specified under "Visible focus", so the revealed tab and its full ring stay visible.
 
 Where a sticky heading occupies the top of a faded list, the top scroll padding includes both the heading's height
@@ -514,12 +512,12 @@ end of a horizontal scroller, so the scroller's end scroll padding is the fade's
 width (`FadedScroller`'s `endInset`), or a focused switch would scroll to just under the pinned column. That scroller
 draws no fade mask (`fade={false}`), since a mask would dim the pinned column itself.
 
-A control inside such a heading sits within that padding while it is pinned, so focusing it would scroll the list by
-the padding's depth on every focus move — seen on the Projects heading's Funnel X and Collapse all, the list jumping
-as Tab moved through them. The heading's controls are exempted: their scroll area is moved down by the padding's
-depth (`scroll-margin-block`), which Chromium honours, and since WebKit's own focus scroll ignores scroll margins and
-runs after the focus event, the list's position is held for a moment from that event while focus stays in the heading
-and the control was already in view. A heading not yet in view is still revealed.
+A control inside such a heading sits within that padding while it is pinned, so focusing it would scroll the list by the
+padding's depth on every focus move (the Projects heading's Funnel X and Collapse all are such controls). The heading's
+controls are exempted: their scroll area is moved down by the padding's depth (`scroll-margin-block`), which Chromium
+honours, and since WebKit's own focus scroll ignores scroll margins and runs after the focus event, the list's position
+is held for a moment from that event while focus stays in the heading and the control was already in view. A heading not
+yet in view is still revealed.
 
 ### A scroller nothing else on screen scrolls takes focus itself
 
@@ -527,10 +525,10 @@ A faded edge says there is more, so the keyboard has to be able to reach it. Whe
 scroll *this* scroller, it becomes a focusable `region` with an accessible name, and the arrow keys and Page Down then
 scroll it. The test is that scroller, not what it contains: a stop inside it carries focus only as far as itself, so
 everything past that stop is still content nothing reaches. A dialog whose controls are all in its footer is the case
-`Dialog` owns, named by the dialog's own title; the screen shown before there is anything to show is another, named
-from the catalog, where the buttons sit after the message; the crash screen's stack trace, in the popover of the mark after its
-heading, is a scroller in its own right, as is the daemon's message in the daemon-failed screen's, each named "Error details" as
-any diagnostic block is.
+`Dialog` owns, named by the dialog's own title; the screen shown before there is anything to show is another, named from
+the catalog, where the buttons sit after the message; the crash screen's stack trace, in the popover of the mark after
+its heading, is a scroller in its own right, as is the daemon's message in the daemon-failed screen's, each named "Error
+details" as any diagnostic block is.
 
 Such a region appears only while the scroller overflows, since a tab stop that scrolls nothing is one the user passes
 for no reason — the crash screen's stack trace and the screen's own column both come and go that way. The exception
@@ -652,25 +650,24 @@ indicator that means something on its own is a named `role="img"`.
 **One component, one look.** Every floating hint of the application is `Hint` (`components/Hint.tsx`), whatever it
 carries: a plain tooltip, the touch popover, a status mark's popover with or without a body, the rail's quota panel.
 `kind` says what carries the trigger — `control` (a react-aria control as the child), `indicator` (a non-control mark),
-`anchored` (the caller's hover) or `popover` (the caller draws the trigger from the wiring `Hint` hands it) — and
-all four are drawn with one definition, HeroUI's `tooltip` class plus `control-fills` (`TOOLTIP_SURFACE`): the same
-surface, shadow, radius and offset, and for text hints (a tooltip, a mark's popover) its padding and text size too
-(measured 8 px, 12 px, 12 px radius). Width is what the content needs, up to the class's 320 px cap. The quota panel
-is a panel, not a hint: it shares the surface, shadow and radius, and keeps its own width, edge-to-edge padding and
-text sizes.
-The element underneath is chosen by whether the content is interactive, which the caller says with `kind` and which is
-never sniffed from the content: the first three are tooltips (`role="tooltip"`, react-aria's `Tooltip`, described to
-the trigger, opened by hover and keyboard focus, nothing on a mouse click), and `popover` is a dialog popover, because a
-tooltip can hold neither focus nor a button, so content with a Try again or raw text to select cannot be one. It opens
-by a mouse resting on the trigger (non-modal, no focus moved) and by a tap, a pen, assistive technology or the
-keyboard (modal, focus inside), never by a mouse click. `TitledControl`, `IndicatorTooltip` and `AnchoredTooltip` are
-`Hint` of the first three kinds under shorter names; "one wrapper" below is `Hint`'s three tooltip kinds.
+`anchored` (the caller's hover) or `popover` (the caller draws the trigger from the wiring `Hint` hands it) — and all
+four are drawn with one definition, HeroUI's `tooltip` class plus `control-fills` (`TOOLTIP_SURFACE`): the same surface,
+shadow, radius and offset, and for text hints (a tooltip, a mark's popover) its padding and text size too (measured 8
+px, 12 px, 12 px radius). Width is what the content needs, up to the class's 320 px cap. The quota panel is a panel, not
+a hint: it shares the surface, shadow and radius, and keeps its own width, edge-to-edge padding and text sizes. The
+element underneath is chosen by whether the content is interactive, which the caller says with `kind` and which is never
+sniffed from the content: the first three are tooltips (`role="tooltip"`, react-aria's `Tooltip`, described to the
+trigger, opened by hover and keyboard focus, nothing on a mouse click), and `popover` is a dialog popover, because a
+tooltip can hold neither focus nor a button, so content with a Try again or raw text to select cannot be one. It follows
+the input matrix of "A floating panel that does not take the window". `TitledControl`, `IndicatorTooltip` and
+`AnchoredTooltip` are `Hint` of the first three kinds under shorter names; "one wrapper" below is `Hint`'s three tooltip
+kinds.
 
 **One wrapper, and the input chooses the surface.** Every tooltip in the window goes through `Hint` (none through
 HeroUI's `Tooltip` directly), in one of three kinds: the control kind (`TitledControl`, a react-aria control as the
-child), the indicator kind (`IndicatorTooltip`, a non-control indicator) and the anchored kind (`AnchoredTooltip`,
-the caller's hover). What shows follows the input of the interaction, not the
-device, so a touch-screen laptop or a tablet with a trackpad gets what the input it used answers:
+child), the indicator kind (`IndicatorTooltip`, a non-control indicator) and the anchored kind (`AnchoredTooltip`, the
+caller's hover). What shows follows the input of the interaction, not the device, so a touch-screen laptop or a tablet
+with a trackpad gets what the input it used answers:
 
 - a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
 - a touch or pen press opens the same content in a **touch popover**, where the shape allows it. The popover is drawn
@@ -699,7 +696,7 @@ wrapper knows statically:
 The mark shape is also the one trigger that fits a control whose hover is sent to a hidden input, so it takes no tooltip
 trigger from context (focus mode's include-console-sessions switch). That use turns the popover off, as a tap on the
 switch toggles it, and the shape's mouse-press cancel does not stop the switch: react-aria's press takes its own focus
-and toggles on the click (tested).
+and toggles on the click.
 
 A mark that opens a touch popover is a touch target (see "Pointer target size").
 
@@ -719,13 +716,11 @@ text it replaced was.
 - The explanation is in a popover, `Hint` of kind `popover`, as a status mark's content is, not in a tooltip: it can
   run to several lines, and a mouse has to be able to select and copy it, which a tooltip, closing the instant the
   pointer leaves its trigger, never allows. The popover follows the input matrix of "A floating panel that does not
-  take the window": a mouse resting on the "?" opens it without moving focus, and it stays open while the pointer moves
-  into it; a mouse click opens nothing; a touch or pen tap, Enter or Space and an assistive technology's activation
-  open it with focus inside, closed by an outside press or Escape with focus returned to the "?".
+  take the window", with focus returned to the "?" when it closes.
 - It sits beside the label it explains, never inside it: a button nested in a `<label>` is nested interactive
   content, and its name would become part of the label's.
-- The explanation may carry inline references (a file name such as `CLAUDE.md`); it reaches assistive technology the same
-  way as plain text.
+- The explanation may carry inline references (a file name such as `CLAUDE.md`); it reaches assistive technology the
+  same way as plain text.
 
 What it does not give: the explanation is not part of the surrounding row's accessible name, so a screen reader hears
 it only on reaching the "?". That is why only a principle-level explanation, which operating the control does not
@@ -757,9 +752,9 @@ within a row, card or header have independent hover regions; pointing at neighbo
 or an action button must not start their marquees. A branch and its upstream counts may scroll together when they
 form one text line, as may a changed file's name and the folder or rename detail after it.
 
-Each run scrolls at reading speed, holds at the far edge for three seconds, then returns to its
-resting position in about 200 milliseconds. The first reading pass starts after a 600 millisecond
-hover delay; subsequent passes wait three seconds at rest. Leaving the hover region resets the label to rest immediately.
+Each run scrolls at reading speed, holds at the far edge for three seconds, then returns to its resting position in
+about 200 milliseconds. The first reading pass starts after a 600 millisecond hover delay; subsequent passes wait three
+seconds at rest. Leaving the hover region resets the label to rest immediately.
 
 An entire menu item, selector, fixed-owner indicator, picked tag or diff's collapsed-line text control may trigger
 its single text label as one interaction target. Such a scope must contain only that label; a picked tag's remove
@@ -806,16 +801,16 @@ session's archive and creation dates, `SessionRelativeTime`); a clipped path lab
 through the anchored shape, as in the Switch account submenu. The time keeps its `role="img"` name, which the menu
 item's own name takes in after the title, so the dates are still read there.
 
-**A tooltip is worded from the string that already names the mark**, not from one of its own: the same string where
-it names the mark on its own, so the two cannot drift apart (a session's agent mark shows that string's two parts, the
+**A tooltip is worded from the string that already names the mark**, not from one of its own: the same string where it
+names the mark on its own, so the two cannot drift apart (a session's agent mark shows that string's two parts, the
 agent and its account, as text and a `StatusBadge`, reading the same once the badge's comma is spoken; where it also
 lists the model and the effort, the account joins them as a labelled list under the agent, since a bare value such as
-"high" does not say what it is, and the labels are the tooltip's own keys); its own key only where the only string naming it folds
-it into the name of what carries it ("{name}, a session is waiting for you"), since reusing that would make the
-tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate. The session context
-mark's card is the one accepted exception: it follows a card design with its own title ("Context window") and its own
-compact "used / limit", "used" and "left" lines, while the trigger's name is one sentence of exact counts; the "used"
-line is the one string the two share.
+"high" does not say what it is, and the labels are the tooltip's own keys); its own key only where the only string
+naming it folds it into the name of what carries it ("{name}, a session is waiting for you"), since reusing that would
+make the tooltip repeat the row's visible name, and composing it out of a fragment is worse to translate. The session
+context mark's card is the one accepted exception: it follows a card design with its own title ("Context window") and
+its own compact "used / limit", "used" and "left" lines, while the trigger's name is one sentence of exact counts; the
+"used" line is the one string the two share.
 
 The anchored shape takes the hover from its caller rather than listening for one itself, so it can be scoped to a
 single mark wherever that mark can carry the pointer handlers: the Git mode's change row hands it the hover from the
@@ -827,9 +822,9 @@ nested inside it: react-aria describes the trigger, so a name one level in leave
 wrapper that is nothing to assistive technology. An indicator whose meaning already reaches it some other way leaves
 the trigger unnamed instead, adding nothing to the name of the row or trail around it.
 
-What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard
-reaches no tooltip, so a name that lives only there is a name they do not get. (A status mark, a note included, is not one
-of these: it is a popover on a button, which the keyboard reaches; see "How a mark is drawn and opened".)
+What is left over is a shortfall kept on purpose, marked at its code: a sighted user who works from the keyboard reaches
+no tooltip, so a name that lives only there is a name they do not get. (A status mark, a note included, is not one of
+these: it is a popover on a button, which the keyboard reaches; see "How a mark is drawn and opened".)
 
 On touch, a mark opens its tooltip's content in a popover when tapped (the mark shape's `touchPopover`, on by default;
 see "A tooltip is the application's own"). It is turned off for every mark that sits inside something answering the
@@ -864,8 +859,8 @@ the surface around it does not forbid selection. It is accepted there because th
   `aria-expanded` and, only while that panel is in the document, `aria-controls` pointing at it. It carries the right
   pane's `data-pane-toggle` marker, since it is what floats the pane in, so the pane's pointer watch counts it as part
   of the pane.
-- A button whose name and icon swap with its state (the Terminal panel's Maximize / Restore) names the action and carries no
-  `aria-pressed` or `aria-expanded`, or assistive technology would announce the state twice.
+- A button whose name and icon swap with its state (the Terminal panel's Maximize / Restore) names the action and
+  carries no `aria-pressed` or `aria-expanded`, or assistive technology would announce the state twice.
 - The selected row of a hand-built list or tree carries `aria-current` (as the sidebar rows do).
 - HeroUI's `Tabs` and `ListBox` mark their selection themselves with `aria-selected` and get no `aria-current` on top.
 
@@ -891,13 +886,13 @@ A line of the menu bar icon's menu that only shows information (a heading, an ac
 window) is a menu item with a view of its own, not a plain disabled item: AppKit dims a disabled item's text whatever
 colour it names, so the view draws its own text in the system's label colours, and it never highlights.
 
-The menu item is the one accessibility element: its title is the whole phrase, read once ("5h 82% remaining · resets
-in 1h 57m"); a line that draws two windows as one meter (5h over Weekly) has the two phrases joined as a list in the
-UI's language for its title, still read once. It stays a disabled menu item, so assistive technology reports it as dimmed. Nothing inside the view is
-an element: the view, its texts, its bar and a heading's picture are all marked non-element, and the texts are drawn by
-a view rather than set in `NSTextField`s, since marking a text field non-element leaves its cell exposed as a static
-text of its own. The view takes no role or label and the item keeps its title, or the phrase would be exposed twice, or
-the line would have no title for menu search.
+The menu item is the one accessibility element: its title is the whole phrase, read once ("5h 82% remaining · resets in
+1h 57m"); a line that draws two windows as one meter (5h over Weekly) has the two phrases joined as a list in the UI's
+language for its title, still read once. It stays a disabled menu item, so assistive technology reports it as dimmed.
+Nothing inside the view is an element: the view, its texts, its bar and a heading's picture are all marked non-element,
+and the texts are drawn by a view rather than set in `NSTextField`s, since marking a text field non-element leaves its
+cell exposed as a static text of its own. The view takes no role or label and the item keeps its title, or the phrase
+would be exposed twice, or the line would have no title for menu search.
 
 A decoration drawn over the menu bar icon itself, such as the raised hand while a session waits for the user, is
 likewise marked non-element, view and cell: the menu's **Waiting for you** heading is what tells assistive technology
@@ -924,13 +919,10 @@ Where an error or a warning is shown follows from how it arises, not from the sc
    concerns; one with no point it can be located at is an Alert in a shared place (the top of a dialog's body, the top
    of a section).
 5. **A result view showing a failed result** (an import's result whose application settings could not be applied)
-   shows that result as an Alert.
-6. **A destructive confirmation** (removing, deleting, archiving) is a warning modal: the warning icon in its header
-   and the consequences as its body text, the sessions it takes along listed in that body — never an ordinary modal
-   with a warning Alert inside it.
+   shows that result as an Alert, as the view's own content.
+6. **A destructive confirmation** (removing, deleting, archiving) is a warning modal, as "Keyboard" sets out.
 
-Rules 3 to 5 are "On the screen: an Alert when it matters, a mark at its point otherwise" below; rule 6 is under
-"Keyboard" with the other confirmations.
+Rules 3 and 4 are "On the screen: an Alert when it matters, a mark at its point otherwise" below.
 
 Once a submit has passed the form's own validation, anything that goes wrong afterwards — a refusal from the daemon
 included, even one about a single field's value — is a failure of the user's own action and opens the error alert
@@ -1043,19 +1035,20 @@ that opens with its 20px description draws its first line off the glyph's centre
 aligned, not a CSS exception. The title does not merely repeat the description. The Alert wrappers require it in their
 types, and a lint restriction keeps HeroUI's `Alert` from being used outside them.
 
-An Alert holds everything that belongs to it: its title, its description and the items it is about, such as the
-entries a failure lists. Nothing of the Alert sits outside it as loose text. Those items are children of `Alert.Content` after `Alert.Title` and `Alert.Description`, drawn in the
-description's own text style so the Alert keeps HeroUI's stock look; never inside `Alert.Description`, which is a
-single text run. This changes nothing about what goes behind **Details**: further explanation and raw text stay in its
-popover. An error-only screen's instructions are not part of the Alert and stand around it, as below.
+An Alert holds everything that belongs to it: its title, its description and the items it is about, such as the entries
+a failure lists. Nothing of the Alert sits outside it as loose text. Those items are children of `Alert.Content` after
+`Alert.Title` and `Alert.Description`, drawn in the description's own text style so the Alert keeps HeroUI's stock look;
+never inside `Alert.Description`, which is a single text run. This changes nothing about what goes behind **Details**:
+further explanation and raw text stay in its popover. An error-only screen's instructions are not part of the Alert and
+stand around it, as below.
 
 The Alert is HeroUI's `Alert`, through one of two wrappers: `ErrorAlert` for danger, and for a warning that carries a
-remedy, **Details** or a recovery action; a warning-status `TintedAlert` otherwise. Either way its status background
-fill and status-coloured shadow (see "One definition per semantic colour") as its only custom visual treatments;
-indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `Alert.Title`
-with its original status colour; `Alert.Description` keeps its default colour. Do not apply `text-foreground` or
-another colour override to either part, override text sizes, or replace `Alert.Title` with a heading element. Neutral
-absence, loading and unsupported content keep their state presentations.
+remedy, **Details** or a recovery action; a warning-status `TintedAlert` otherwise. Either way it takes its status
+background fill and status-coloured shadow (see "Confirmed visual choices") as its only custom visual treatments;
+indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `Alert.Title` with
+its original status colour; `Alert.Description` keeps its default colour. Do not apply `text-foreground` or another
+colour override to either part, override text sizes, or replace `Alert.Title` with a heading element. Neutral absence,
+loading and unsupported content keep their state presentations.
 
 #### A whole subject that failed
 
@@ -1080,7 +1073,7 @@ the Alert, the instructions and any list in them are start-aligned, so a list's 
 
 #### On the screen: an Alert when it matters, a mark at its point otherwise
 
-Of what is shown on the screen rather than in the error alert dialog (rules 3 to 5 of "Where an error is shown"),
+Of what is shown on the screen rather than in the error alert dialog (rules 3 and 4 of "Where an error is shown"),
 where an error, a warning or a note is shown follows from whether it matters — not from how much it has to say or how
 busy the layout around it is:
 
@@ -1090,25 +1083,23 @@ busy the layout around it is:
   uncommitted changes) — is an Alert even where it can be located, so that it is said outright rather than one press
   away: a failed lookup directly under the field it is about, a reason that lies outside a dialog's fields at the top
   of its body, a list part at the top of that list.
-- **Any other error or warning, and a note** — one that does not block what follows — never takes an Alert where it
-  has a point. It is a mark at the point it concerns: `StatusMark`, its glyph right after the name, heading or line it
+- **Any other error or warning, and a note** — one that does not block what follows — never takes an Alert where it has
+  a point. It is a mark at the point it concerns: `StatusMark`, its glyph right after the name, heading or line it
   qualifies — a row or an item, a name, one section's heading in a list, a page's heading or a pane's or view's title
   (the listing or the file it names, while its content is still shown), a line naming what it is about (the Git source
-  block's Worktree line), a checkbox's label — and for a field, after the field's label when it is about the whole
-  field (its list of options that could not be read), and inside the field's group at its trailing end, before the
-  field's own trailing buttons (Clear), when it is about the field's current value or input; for a setting, in the row's control area beside the setting's control —
-  before a button, after a switch. What it has to say is in its popover, opened as "How a mark is drawn and opened"
-  describes; a popover taller than the room beside its mark scrolls inside itself. A warning takes the triangle in the
-  warning colour, an error the circled `!` in the danger colour, and a note, which only informs, the circled `i` in
-  the note's accent colour; a circled `i` is never drawn in the warning colour, nor a triangle in a note's. Nothing of
-  it is written beside the mark as loose text, muted or coloured.
+  block's Worktree line), a checkbox's label — and for a field, after the field's label when it is about the whole field
+  (its list of options that could not be read), and inside the field's group at its trailing end, before the field's own
+  trailing buttons (Clear), when it is about the field's current value or input; for a setting, in the row's control
+  area beside the setting's control — before a button, after a switch. What it has to say is in its popover, opened as
+  "How a mark is drawn and opened" describes; a popover taller than the room beside its mark scrolls inside itself. A
+  warning takes the triangle in the warning colour, an error the circled `!` in the danger colour, and a note, which
+  only informs, the circled `i` in the note's accent colour; a circled `i` is never drawn in the warning colour, nor a
+  triangle in a note's. Nothing of it is written beside the mark as loose text, muted or coloured.
 - **Several of those at one point** are one mark, never marks side by side: its popover lists each as a paragraph of
   its own, and its name covers them all. An error and a warning at one point are one mark in the more severe tone, the
   error's.
 - **One of those with no point it can be located at** is an Alert in a shared place: the top of a dialog's body, the
   top of a section.
-- **A result view showing a failed result** (an import's result whose application settings could not be applied) shows
-  that result as an Alert, as the view's own content.
 
 Here and in "How a mark is drawn and opened", a mark is a status mark (`StatusMark`): a button that opens a popover,
 or, with a word and nothing more to say, that glyph and word as plain text. The glyphs elsewhere in this standard that
@@ -1153,25 +1144,22 @@ focus mode's header). No sentence of error text is written into the row.
 again) and raw text to select, which a tooltip cannot, and one mark wiring both surfaces would put two floating things
 on one glyph. A mark whose content is one short line is the same popover with that line as its content, which may be
 drawn richer than the mark's plain-text name (a path as a reference). Its dialog is named by the tone's word (Error,
-Warning or Note), not by the line, which VoiceOver would otherwise read twice. It is drawn on the **tooltip's
-surface** like every floating surface of the application. A mark with a body, a button or raw text is drawn on it too,
-its content laid out inside. The exception is a mark that draws a word beside its glyph and has nothing more to say:
-the word already says it on screen, so it stays the glyph and the word as plain text, with no button and no popover.
-The popover holds the reason in the application's own words, then the main remedy, any further explanation, then the
-raw text, then the recovery action (Try again, at the popover's trailing edge). A mark whose content is one line and
-raw text holds that line, then the raw text in a diagnostic block under it; raw text in a mark is always such a block,
-never inline text or a chip. The glyph is a button named for what it is about, with no tooltip (the popover says everything one would). A note (an informational mark, circled `i`) is
-the same button and the same popover with nothing to press in it: marks of every tone side by side look alike, take
-the pointer alike, are each reachable from the keyboard (a tab stop, or a step of their collection's own walk) and
-open the same way, so they differ only in glyph and colour. Glyphs per tone: circled `!` for danger, a triangle for a
-warning, circled `i` for a note.
+Warning or Note), not by the line, which VoiceOver would otherwise read twice. It is drawn on the **tooltip's surface**
+like every floating surface of the application. A mark with a body, a button or raw text is drawn on it too, its content
+laid out inside. The exception is a mark that draws a word beside its glyph and has nothing more to say: the word
+already says it on screen, so it stays the glyph and the word as plain text, with no button and no popover. The popover
+holds the reason in the application's own words, then the main remedy, any further explanation, then the raw text, then
+the recovery action (Try again, at the popover's trailing edge). A mark whose content is one line and raw text holds
+that line, then the raw text in a diagnostic block under it; raw text in a mark is always such a block, never inline
+text or a chip. The glyph is a button named for what it is about, with no tooltip (the popover says everything one
+would). A note (an informational mark, circled `i`) is the same button and the same popover with nothing to press in it:
+marks of every tone side by side look alike, take the pointer alike, are each reachable from the keyboard (a tab stop,
+or a step of their collection's own walk) and open the same way, so they differ only in glyph and colour. Glyphs per
+tone: circled `!` for danger, a triangle for a warning, circled `i` for a note.
 
-The popover is `Hint` of kind `popover` ("A floating panel that does not take the window" has the input matrix): a
-mouse resting on the mark opens it without moving focus; **a mouse click opens nothing**; a touch or pen tap,
-assistive technology and the keyboard (Enter, Space) open it with focus moved in. The popover's buttons and text are
-reached with the mouse by moving the pointer into the hover-opened popover, which stays open. After any close
-(Escape, an outside press, Try again) a pointer still resting on the mark does not open it again until it has left and
-come back.
+The popover is `Hint` of kind `popover` and follows the input matrix of "A floating panel that does not take the
+window": **a mouse click opens nothing**, and its buttons and text are reached with the mouse by moving the pointer into
+the hover-opened popover, which stays open.
 
 Where the row's other outcomes are each a glyph and a word in a status column (an import result's Created, Left
 out, Not attempted), the failed outcome is the same shape (its glyph and the word Failed) and that pair, where there is
@@ -1182,15 +1170,15 @@ which takes it only when focus was on the mark or the page body, as for a press 
 no focus, so closing it moves none.
 
 In a tree, a folder whose listing failed carries the mark on **the folder's own row**, after its name, and is drawn
-**collapsed** (`aria-expanded="false"`, the arrow closed) with nothing beneath it: react-aria decides a row's
-expanded state from the children it holds, so an expanded row with none would be a leaf, without `aria-expanded` or
-Left to collapse, and nothing is ever drawn that way. Opening it again (a press or Enter on the row, the arrow) asks for
-the listing again, as Try again in the mark's popover does, and a press on the mark does not. Right (Left, right to
-left) on the row walks to the mark instead of expanding, taken before react-aria's row handler (a capture listener
-on the document, since React's root listener runs ahead of anything on the row), then on to the row's actions button,
-and the opposite key goes back, as along any row; Tab leaves the tree, as it does for every tree row. The folder stays among what the user expanded, so it
-is open again once it lists. A failure arriving while the folder is open, and Try again, take rows or the mark away,
-so focus that fell to the page or the tree goes to the folder's row.
+**collapsed** (`aria-expanded="false"`, the arrow closed) with nothing beneath it: react-aria decides a row's expanded
+state from the children it holds, so an expanded row with none would be a leaf, without `aria-expanded` or Left to
+collapse, and nothing is ever drawn that way. Opening it again (a press or Enter on the row, the arrow) asks for the
+listing again, as Try again in the mark's popover does, and a press on the mark does not. Right (Left, right to left) on
+the row walks to the mark instead of expanding, taken before react-aria's row handler (a capture listener on the
+document, since React's root listener runs ahead of anything on the row), then on to the row's actions button, and the
+opposite key goes back, as along any row; Tab leaves the tree, as it does for every tree row. The folder stays among
+what the user expanded, so it is open again once it lists. A failure arriving while the folder is open, and Try again,
+take rows or the mark away, so focus that fell to the page or the tree goes to the folder's row.
 
 **The inline form** is the mark inside running text (a Markdown image that could not load, a formula that could not be
 drawn): the glyph takes the text's size, the trigger is a button whose box is square (sized from the glyph, so its round
@@ -1222,25 +1210,24 @@ its own is plain text.
   monospace font, without a chip). So is a run of names joined only by a connector such as `・` or `｜`, with no
   words around them. When such a joined run is itself referenced within a sentence, it is one reference and takes
   one chip around the whole run, never one chip per name.
-- Whole entity and control labels, structured entity/path rows, and foreign source, terminal and report layouts
-  keep their established presentation. A focus card's model line — the account, then the model and reasoning effort,
-  beside the agent mark — is such a whole metadata label: plain text without chips. Its model and effort are the
-  same isolated string the card's accessible name ends with; the account is not repeated there, the name already
-  carrying it with the agent. So is the agent's name heading the agent mark's tooltip: it names the mark rather than being referenced
-  within prose.
+- Whole entity and control labels, structured entity/path rows, and foreign source, terminal and report layouts keep
+  their established presentation. A focus card's model line — the account, then the model and reasoning effort, beside
+  the agent mark — is such a whole metadata label: plain text without chips. Its model and effort are the same isolated
+  string the card's accessible name ends with; the account is not repeated there, the name already carrying it with the
+  agent. So is the agent's name heading the agent mark's tooltip: it names the mark rather than being referenced within
+  prose.
 
-Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain
-readable text without chip markup. Isolate references at the sentence boundary where needed, as specified under
-"Text direction"; collection keys, `textValue`, sorting, defaults and submitted values stay raw.
-Raw diagnostics shown as a block of their own sit on a secondary `Surface` of their own, never straight on the
-dialog, Alert or popover that holds them, with the summary or label naming them outside that surface; they preserve
-their text, direction and indentation, and long content remains scrollable and reachable from the keyboard, the focus
-ring drawn on the surface. A block that may be taller than its room (a crash's stack) is `tall`: it scrolls vertically
-as well, with the same named region and ring. A `wrap`ped block breaks long lines instead, so it has nothing to scroll
-sideways and, unless it is `tall` too, no region to name. A `tall` block is a region and fades only for its height, so
-one whose lines can be wider than its box (a crash's stack, a daemon's startup failure) also wraps.
-Keep structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks
-retain usable text.
+Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain readable
+text without chip markup. Isolate references at the sentence boundary where needed, as specified under "Text direction";
+collection keys, `textValue`, sorting, defaults and submitted values stay raw. Raw diagnostics shown as a block of their
+own sit on a secondary `Surface` of their own, never straight on the dialog, Alert or popover that holds them, with the
+summary or label naming them outside that surface; they preserve their text, direction and indentation, and long content
+remains scrollable and reachable from the keyboard, the focus ring drawn on the surface. A block that may be taller than
+its room (a crash's stack) is `tall`: it scrolls vertically as well, with the same named region and ring. A `wrap`ped
+block breaks long lines instead, so it has nothing to scroll sideways and, unless it is `tall` too, no region to name. A
+`tall` block is a region and fades only for its height, so one whose lines can be wider than its box (a crash's stack, a
+daemon's startup failure) also wraps. Keep structured error metadata separate from the plain error message, so
+notifications and unknown-error fallbacks retain usable text.
 
 #### A chip's size follows the line it sits in
 
@@ -1256,23 +1243,22 @@ only in padding, the tint drawn around the text:
 | `lg` | 3px, 10px | Content area + 6px |
 
 The drawn height must stay below the copy's line height, so that chips on wrapped lines never touch and no line is
-stretched: a size larger than the largest that fits is never used. In 12px text on 16px lines (field errors,
-secondary descriptions, tooltips) only `xs` fits; in 14px text on 20px lines (body copy, labels, Alert descriptions)
-up to `sm`; in 16px text on 24px lines (dialog headings) up to `md`; in 14px text on 24px lines (Alert titles) up to
-`lg`. `xs`
-is the default, safe in every copy style of the UI, and is what copy uses unless it has a reason for more. No size
-changes the chip's font.
+stretched: a size larger than the largest that fits is never used. In 12px text on 16px lines (field errors, secondary
+descriptions, tooltips) only `xs` fits; in 14px text on 20px lines (body copy, labels, Alert descriptions) up to `sm`;
+in 16px text on 24px lines (dialog headings) up to `md`; in 14px text on 24px lines (Alert titles) up to `lg`. `xs` is
+the default, safe in every copy style of the UI, and is what copy uses unless it has a reason for more. No size changes
+the chip's font.
 
 A chip that moves to the next line whole (`unbroken`, an `inline-block`) is as tall as its line box, so it touches the
 next line's chip unless it tightens its own line height to the content area, which the component does for it.
 
-A path's length, monospace font or position does not select its size. Technical literals keep their monospace code
-child while the chip's background uses the same font metrics as a name chip. Keep a sentence in ordinary inline flow
-rather than making its text runs and chips separate flex items that stretch to different heights. When a technical
-value completes a sentence, fill it through that sentence's localized placeholder; do not retain a separate paragraph
-or a colon-led block just because the value used to be shown as code. Long values wrap at slashes or anywhere they
-need to, within the available width; they do not select a smaller size. Sizes belong to the shared component rather
-than caller-level font, line-height or padding overrides.
+A path's length, monospace font or position does not select its size. Technical literals keep their monospace code child
+while the chip's background uses the same font metrics as a name chip. Keep a sentence in ordinary inline flow rather
+than making its text runs and chips separate flex items that stretch to different heights. When a technical value
+completes a sentence, fill it through that sentence's localized placeholder; do not keep a separate paragraph or a
+colon-led block for the value. Long values wrap at slashes or anywhere they need to, within the available width; they do
+not select a smaller size. Sizes belong to the shared component rather than caller-level font, line-height or padding
+overrides.
 
 The `monospace` option preserves a semantic `code` child without introducing a second visual component. Paths and
 URLs can wrap after slashes, and longer uninterrupted literals can wrap anywhere. A typed confirmation word referenced
@@ -1284,14 +1270,14 @@ input fields and source or Markdown content also retain their own layouts.
 
 Inline references retain HeroUI's colours, soft fill and shape; the help hue is the project's purple extension. Their
 fill and text come from the tint tokens shared with `StatusBadge` (see "Confirmed visual choices"); the neutral chip is
-the neutral tint (the foreground at 8% in light and 10% in dark) rather than HeroUI's `--default-soft`, which all but
-vanishes on a white surface (1.09:1). `CodeBlock` uses the shared Typography wrapper for multi-line diagnostics. Outside
-an Alert, both default to neutral and may choose a colour. The Alert wrappers supply `CodeToneContext`, passing each status
-straight through as the chip's colour: default stays neutral, and accent, success, warning and danger use their matching
-colours. A chip drawn off that fill — in the Alert's Details popover — leaves the tone and keeps its own colour. The
-nearest status context takes precedence over an explicit colour, including field errors and toast titles. Do not
-hand-colour individual literals within a status message. HeroUI's Alert parts remain the indicator, content, title and
-description primitives. Syntax-highlighted source and foreign renderer markup retain their own palettes.
+the neutral fill rather than HeroUI's `--default-soft`. `CodeBlock` uses the shared Typography wrapper for multi-line
+diagnostics. Outside an Alert, both default to neutral and may choose a colour. The Alert wrappers supply
+`CodeToneContext`, passing each status straight through as the chip's colour: default stays neutral, and accent,
+success, warning and danger use their matching colours. A chip drawn off that fill — in the Alert's Details popover —
+leaves the tone and keeps its own colour. The nearest status context takes precedence over an explicit colour, including
+field errors and toast titles. Do not hand-colour individual literals within a status message. HeroUI's Alert parts
+remain the indicator, content, title and description primitives. Syntax-highlighted source and foreign renderer markup
+retain their own palettes.
 
 ### External links
 
@@ -1302,18 +1288,17 @@ open a new tab with `noopener noreferrer`; the desktop app uses its platform lin
 opener produces the dedicated actionable error alert rather than navigating the desktop window.
 
 Ordinary prose links use the shared text appearance: the surrounding font size and line height, link colour and an
-underline. A control label mentioned within copy uses the shared chip appearance, without
-quotation marks. A chip that only names a separate control remains non-interactive; a chip is never itself a link.
-A footer may instead provide one external action using the
-shared button appearance, which applies HeroUI's secondary-button styles to the anchor; its reference in the body
-is a plain chip. Do not make both the reference and the separate control interactive. All appearances retain a visible keyboard focus
-ring, and a pending open keeps the label and icon visible while preventing repeated activation. Callers may not
-remove the icon or substitute arbitrary local colours, padding or typography.
+underline. A control label mentioned within copy uses the shared chip appearance, without quotation marks. A chip that
+only names a separate control remains non-interactive; a chip is never itself a link. A footer may instead provide one
+external action using the shared button appearance, which applies HeroUI's secondary-button styles to the anchor; its
+reference in the body is a plain chip. Do not make both the reference and the separate control interactive. All
+appearances retain a visible keyboard focus ring, and a pending open keeps the label and icon visible while preventing
+repeated activation. Callers may not remove the icon or substitute arbitrary local colours, padding or typography.
 
-Native menu items that open a browser use the same external-link indicator within their menu primitive. Links
-rendered from Markdown retain the document's text and title, with the external indicator added to outbound
-destinations and the document renderer's measured link palette. Relative paths and document fragments keep their file-viewer navigation. Raw terminal output and
-foreign renderer markup retain their renderer's content model.
+Native menu items that open a browser use the same external-link indicator within their menu primitive. Links rendered
+from Markdown retain the document's text and title, with the external indicator added to outbound destinations and the
+document renderer's measured link palette. Relative paths and document fragments keep their file-viewer navigation. Raw
+terminal output and foreign renderer markup retain their renderer's content model.
 
 ### A visual heading is a heading element
 
@@ -1338,28 +1323,28 @@ level below that view's, and it sets no heading ids, since several such document
 
 Every place that has nothing to show takes one shape, through `EmptyPanel`
 (`packages/ui/src/components/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under it,
-and optionally a centred row of at most two buttons that wraps — the action that fills it, then a second way out of
-the state or a failure's **Details** — putting its primary first, as "Button order follows the group's alignment"
-under "Buttons" has it. A startup screen's failure carries its raw text in a mark right after the heading
-(`headingMark`) instead of Details. The whole shape, and which state takes which part, is `docs/product/empty-states.md`.
-Nothing builds a second one out of centred text, and a state with no glyph is not one of these — HeroUI's bare
-`EmptyState` is reached only through this component.
+and optionally a centred row of at most two buttons that wraps — the action that fills it, then a second way out of the
+state or a failure's **Details** — putting its primary first, as "Button order follows the group's alignment" under
+"Buttons" has it. A startup screen's failure carries its raw text in a mark right after the heading (`headingMark`)
+instead of Details. The whole shape, and which state takes which part, is `docs/product/empty-states.md`. Nothing builds
+a second one out of centred text, and a state with no glyph is not one of these — HeroUI's bare `EmptyState` is reached
+only through this component.
 
 - The heading is a short phrase carrying **no punctuation at all**, a comma inside it included: a title that needs one
   is a sentence, and the part after the comma belongs in the line under it. "No sessions yet", not "No sessions yet,
   start one from the project row".
 - A normal absence, such as no agent having been added, uses a neutral or purpose glyph, never a warning glyph.
-- The line under it says only what the heading cannot: why it is empty or a bare fact about
-  the subject (the size of a body that cannot be drawn). It never restates the heading, and a state that has nothing
-  more to say carries no line at all. A button takes the user where the thing is made; the line does not give
-  navigation instructions. A second way out is a different action, not another entry for the same destination.
+- The line under it says only what the heading cannot: why it is empty or a bare fact about the subject (the size of a
+  body that cannot be drawn). It never restates the heading, and a state that has nothing more to say carries no line at
+  all. A button takes the user where the thing is made; the line does not give navigation instructions. A second way out
+  is a different action, not another entry for the same destination.
 - The `compact` row, for a sidebar list in either normal or focus mode and for other nested lists, has no room for
   that line. Its message is plain text rather than a heading; where the list has one creation action, the whole row
   performs it. The main content's full panel carries the current action without a competing full panel in the sidebar.
-- A load failure that leaves the whole place with nothing to show takes this shape too, as its error presentation:
-  a danger glyph, a heading saying what could not be loaded, and Try again and Details in the row (see "Errors shown
-  among other content"); its copy follows the "Errors" section of `.claude/skills/knowledge-i18n-copy/SKILL.md`. It is
-  told from an absence by its danger glyph and its retry. What the subject *is* is a state of the subject, not a failed load,
+- A load failure that leaves the whole place with nothing to show takes this shape too, as its error presentation: a
+  danger glyph, a heading saying what could not be loaded, and Try again and Details in the row (see "Errors shown among
+  other content"); its copy follows the "Errors" section of `.claude/skills/knowledge-i18n-copy/SKILL.md`. It is told
+  from an absence by its danger glyph and its retry. What the subject *is* is a state of the subject, not a failed load,
   even when the panel warns about it: a project that is in no repository, a worktree that is gone, a repository Git
   itself refuses, are all empty states, since no retry would change the answer.
 
@@ -1425,9 +1410,9 @@ element, an error from `role="alert"`.
 - The file viewer's notices are announced only when they arrive after the viewer has painted, once, from a
   `StatusAnnouncer` with the viewer's first-announcement delay; one present from the first paint is not said, and a
   surface that already speaks the same state (an unchanged change, an expanded diff's notes) says it in place of the
-  notice. Each such region passes `clearAfterRead`, which empties it `READ_TIME_MS` after the write: the mark is named by
-  the same sentence, and reading the page line by line meets it only on the mark. A conflicted file's failed read is an
-  error and is announced by its `Failure` as an alert, like any read failure.
+  notice. Each such region passes `clearAfterRead`, which empties it `READ_TIME_MS` after the write: the mark is named
+  by the same sentence, and reading the page line by line meets it only on the mark. A conflicted file's failed read is
+  an error and is announced by its `Failure` as an alert, like any read failure.
 - A status region for content that a disclosure folds away is mounted outside the folded body, and only while the
   disclosure is open. The body stays mounted while folded, so a region inside it would be past its first write delay
   when the disclosure opens again, and the text kept from before would be written in the very render that shows the
@@ -1443,31 +1428,29 @@ element, an error from `role="alert"`.
   `display:none` or `hidden`, which takes it out of the accessibility tree and so loses the first text it receives. An
   account row's login announcement is the instance (`AccountLoginAnnouncer` in
   `packages/ui/src/settings/AccountLogin.tsx`, mounted by `AccountTableRow` in
-  `packages/ui/src/settings/AccountsTable.tsx`): a `StatusAnnouncer` that lives as long as the row and says once
-  that the account is logged in, while the row shows the same result visibly in its "Logged in" badge; it names the
-  account, since
-  nothing around it does. It follows the modal rule and the unattended-window rule above: it is written
+  `packages/ui/src/settings/AccountsTable.tsx`): a `StatusAnnouncer` that lives as long as the row and says once that
+  the account is logged in, while the row shows the same result visibly in its "Logged in" badge; it names the account,
+  since nothing around it does. It follows the modal rule and the unattended-window rule above: it is written
   `AFTER_FOCUS_MOVE_DELAY_MS` after the success, a wait that outlasts the dialog closing and focus returning to the row,
-  and only while the window is attended. A region that was written under the closing modal, or while the window was
-  unattended, was not spoken in the real-device checks; see the failing patterns in [VoiceOver verification
-  cases](voiceover-cases.md).
-- A dialog whose footer changes with its state puts focus on the state's main action each time the state changes.
-  The login dialog is the instance (`packages/ui/src/settings/AccountLoginDialog.tsx`): focus is on Cancel login while
-  the login runs and on Log in again once it ends or is refused. Its progress text is a `StatusAnnouncer` with
+  and only while the window is attended. A region written under the closing modal, or while the window is unattended, is
+  not spoken; see the failing patterns in [VoiceOver verification cases](voiceover-cases.md).
+- A dialog whose footer changes with its state puts focus on the state's main action each time the state changes. The
+  login dialog is the instance (`packages/ui/src/settings/AccountLoginDialog.tsx`): focus is on Cancel login while the
+  login runs and on Log in again once it ends or is refused. Its progress text is a `StatusAnnouncer` with
   `firstWriteDelayMs` set to `AFTER_FOCUS_MOVE_DELAY_MS`, mounted with the dialog, while the visible line is
-  `aria-hidden`, so the text is spoken once and not twice.
-  The rule is about a state the user waits on, not a footer button relabelled by what the user is typing: there focus
-  stays in the field, and a `StatusAnnouncer` says what the new state is. The new-session dialog's Resume tab is the
-  instance (`packages/ui/src/dialogs/ResumeConversationFields.tsx`): the lookup of the typed Session ID turns the
-  submit into Open, Reopen, Resume or Go to session while focus stays in the ID input.
+  `aria-hidden`, so the text is spoken once and not twice. The rule is about a state the user waits on, not a footer
+  button relabelled by what the user is typing: there focus stays in the field, and a `StatusAnnouncer` says what the
+  new state is. The new-session dialog's Resume tab is the instance
+  (`packages/ui/src/dialogs/ResumeConversationFields.tsx`): the lookup of the typed Session ID turns the submit into
+  Open, Reopen, Resume or Go to session while focus stays in the ID input.
 - HeroUI's `Alert` renders no role at all, its name notwithstanding. An error that can appear in one after the user has
   moved on puts `role="alert"` on an element of your own inside it.
 
 ### Reusing VoiceOver verification
 
-Whether a new announcement needs a listening pass in the packaged macOS application is decided by
-[VoiceOver verification cases](voiceover-cases.md): a caller that matches a passing case, and passes the automated and
-browser checks listed there, needs none. The same document holds the recorded results, including the connection banner's
+Whether a new announcement needs a listening pass in the packaged macOS application is decided by [VoiceOver
+verification cases](voiceover-cases.md): a caller that matches a passing case, and passes the automated and browser
+checks listed there, needs none. The same document holds the recorded results, including the connection banner's
 confirmation and the patterns known not to work.
 
 ## Contrast
@@ -1480,9 +1463,13 @@ confirmation and the patterns known not to work.
 
 ### Do not change how a HeroUI component looks
 
-Keep HeroUI's default appearance, including placeholder colours and hover opacity. A contrast measurement alone does
-not justify changing its colours, theme tokens, borders, frames or outlines. Use the component's own supported variants
-and slots; layout and sizing adaptations do not authorize replacing its visual treatment.
+Keep HeroUI's default appearance, including its text and placeholder colours, hover opacity and the default fill,
+foreground and shadow of the variant or status chosen for a dialog or popover; the Alert's status background fill
+under "Confirmed visual choices" is the one approved exception. A contrast measurement alone does not justify changing
+its colours, theme tokens, borders, frames or outlines, so add no colour or opacity override to make a default component
+pass the custom-style thresholds. Use the component's own supported variants and slots; layout and sizing adaptations
+do not authorize replacing its visual treatment. Application-authored text on a custom surface is checked against its
+actual background in both appearances.
 
 ### Form controls on a surface
 
@@ -1492,11 +1479,11 @@ the surface in both appearances.
 
 ### Hand-built rows and cards
 
-A hand-built card that its content already identifies has no outline of its own: it is set apart by the short two-layer panel
-shadow (`shadow-(--panel-shadow)`, as the focus-mode session cards are), with a transparent border holding the place a
-selected state's border takes. That edge is decorative and is not held to 3:1; a panel card's hairline (`panel-edge`)
-and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state takes the
-accent icon colour (`--accent-soft-foreground`, see "One definition per semantic colour"), which reaches 3:1.
+A hand-built card that its content already identifies has no outline of its own: it is set apart by the short two-layer
+panel shadow (`shadow-(--panel-shadow)`, as the focus-mode session cards are), with a transparent border holding the
+place a selected state's border takes. That edge is decorative and is not held to 3:1; a panel card's hairline
+(`panel-edge`) and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state
+takes the accent icon colour (`--accent-soft-foreground`, see "One definition per semantic colour"), which reaches 3:1.
 
 An unarchived locked session communicates its state through a persistent warning-coloured lock button with an Unlock
 accessible name and tooltip. Hovering or keyboard-focusing the button changes the glyph to an open lock; unlocking
@@ -1537,41 +1524,38 @@ used-up account is not: it is meant to recede, a step fainter than the agent col
 
 ### Row action menu buttons
 
-File, Git, project and session rows, focus cards and pane headers use `ActionMenu`'s shared trigger
-for their ellipsis menu. Keep its 24-by-24-pixel target, 16-pixel glyph, rounded corners and focus
-ring consistent. A caller changes the trigger's layout or content only when its placement needs it;
-it does not choose separate colours for the same ellipsis action.
+File, Git, project and session rows, focus cards and pane headers use `ActionMenu`'s shared trigger for their ellipsis
+menu. Keep its 24-by-24-pixel target, 16-pixel glyph, rounded corners and focus ring consistent. A caller changes the
+trigger's layout or content only when its placement needs it; it does not choose separate colours for the same ellipsis
+action.
 
-- At rest, the trigger is transparent with a muted glyph. A row's selection reveals its
-  actions without painting each button as active.
-- While hovered or while its menu is open, the trigger uses `bg-default` and a foreground glyph.
-  Its wrapper supplies the shared `sidebar-fills` family so Files, Git and sidebar menus use the
-  same translucent hover tint, independent of the surrounding pane's control fills. Keep this
-  subtle tint; do not replace it with a solid muted fill or an inverted glyph.
-- The glyph must reach 3:1 against its actual background in every state. The hover tint does not
-  need 3:1 against the row: the glyph identifies the control, rather than a filled boundary.
-- Keyboard focus keeps the existing focus ring. Revealing an action must not leave it dimmed once
-  its visibility transition finishes.
+- At rest, the trigger is transparent with a muted glyph. A row's selection reveals its actions without painting each
+  button as active.
+- While hovered or while its menu is open, the trigger uses `bg-default` and a foreground glyph. Its wrapper supplies
+  the shared `sidebar-fills` family so Files, Git and sidebar menus use the same translucent hover tint, independent of
+  the surrounding pane's control fills. Keep this subtle tint; do not replace it with a solid muted fill or an inverted
+  glyph.
+- The glyph must reach 3:1 against its actual background in every state. The hover tint does not need 3:1 against the
+  row: the glyph identifies the control, rather than a filled boundary.
+- Keyboard focus keeps the existing focus ring. Revealing an action must not leave it dimmed once its visibility
+  transition finishes.
 - Closing a menu that was opened from the focused trigger by the keyboard returns focus to that same trigger while its
   row survives. A menu opened with the Menu key, Shift+F10 or a right-click goes through the context-menu path and
   returns focus to where it stood when the menu opened instead: the row, for a key pressed on the row; the Actions
   button, for one pressed while the button had focus.
 
-Measure both appearances on the rendered resting, hovered and selected surfaces. Read the final
-computed colours after transitions settle, composite translucent ancestor fills, and check the
-glyph separately from the button fill. The row's own hover tint is not the button's hover feedback.
-
-### HeroUI's own text colours
-
-HeroUI's stock text and placeholder colours retain the library's default treatment, even where a measurement falls
-below the custom-style thresholds. Do not add colour or opacity overrides to make its default components pass those
-thresholds. Application-authored text on a custom surface is checked against its actual background in both appearances.
+Measure both appearances on the rendered resting, hovered and selected surfaces. Read the final computed colours after
+transitions settle, composite translucent ancestor fills, and check the glyph separately from the button fill. The row's
+own hover tint is not the button's hover feedback.
 
 ### Where to fix a shortfall
 
 - Fix a shortfall in application-authored styling at its custom part or shared application token.
 - When an application-authored surface causes a shortfall, adjust that surface rather than overriding the HeroUI
   component's default appearance.
+- Check an application-authored surface with the text and controls actually rendered on it, at rest and while hovered
+  or selected, compositing translucent fills over their actual backgrounds, and prefer a surface that works with
+  HeroUI's default controls.
 - Do not treat an existing component override as permission to add another one.
 
 ### Finding every rule that draws a colour
@@ -1582,13 +1566,6 @@ rule supplies a colour before changing application-authored styling. HeroUI's co
 input inherits a placeholder colour from preflight rather than a component-specific rule. That inheritance does not
 make the default placeholder an application-authored style.
 
-### Surface-filled components in a dialog or popover
-
-Choose the component's supported variant or status for a dialog or popover and keep that variant's default fill,
-foreground and shadow, except for the Alert's explicitly approved status background fill under "Confirmed visual
-choices". Do not replace those defaults solely because their measured contrast or separation falls below a
-custom-style threshold. Any additional application-authored surface follows the custom-style requirements.
-
 ### Auditing a change to a colour token or a surface
 
 A change to an application-authored colour token or surface can touch every screen, so its audit covers every gallery
@@ -1596,24 +1573,15 @@ scenario it affects in both appearances. HeroUI's default visual treatment is no
 measures what a pass over text and glyphs misses:
 
 - Every fill — a chip, a tertiary button, a ghost button's hover — against the surface it sits on.
-- An animated state at its faintest frame. An `animate-pulse` glyph sank to about 2:1; animate such a glyph without
-  lowering its opacity.
+- An animated state at its faintest frame. A glyph is animated without lowering its opacity (an `animate-pulse` glyph
+  sinks to about 2:1).
 - A translucent fill (HeroUI's soft chip is 15% of its colour) as drawn: composite it over each surface it actually
-  lands on — a selected and a hovered row, a dialog's `--overlay` — and measure the label against that. Measuring
-  against the bare surface or the fill's own colour overstated one chip's contrast and missed a 4.5:1 failure on
-  selected rows.
+  lands on — a selected and a hovered row, a dialog's `--overlay` — and measure the label against that; measuring
+  against the bare surface or the fill's own colour overstates the contrast.
 
 A ratio read off a capture of the packaged window carries the display's own colour profile, so it says which side of a
-threshold a pair lands on and nothing finer: the selected toggle's fill read 3.26:1 light and 5.0:1 dark against its
+threshold a pair lands on and nothing finer: the selected toggle's fill reads 3.26:1 light and 5.0:1 dark against its
 siblings where the tokens give 3.67:1 and 4.58:1. Take a recorded ratio from the tokens, never from a capture.
-
-### A region with a surface colour of its own
-
-An application-authored surface must be checked with the text and controls actually rendered on it. Prefer a surface
-that works with HeroUI's default controls, and use the component's supported variant for that context. If custom
-styling causes a shortfall, fix the custom surface or styling rather than changing the component's default colours or
-visual treatment. Application-authored labels, glyphs and state indicators are checked at rest and while hovered or
-selected, compositing translucent fills over their actual backgrounds.
 
 ### A glyph or tint on the window material
 
@@ -1630,17 +1598,16 @@ its smallest icon-only button is 32. The application uses `components/Button.tsx
 HeroUI with `size="xs"`: 24px height, a 24px square for icon-only buttons, 12px text and 14px icons.
 Compact actions use that size rather than per-call sizing styles.
 
-Icon buttons in sidebar rows, cards and headers, the right pane and the file viewer share a 24-by-24-pixel target
-and a 4-pixel gap, defined by `--row-control-size` and `--row-control-gap` in `packages/ui/src/style.css`.
-Use the shared `RowIconGroup` for adjacent
-icons and `RowIconSlot` for a marker's matching horizontal column; the marker keeps its own glyph size and does not
-increase the text line's height. Leading glyphs use the 16-pixel `--row-leading-icon-size` column through
-`RowIconSlot`'s leading placement. In a focus card, the binding dot precedes the title in reading order and shares
-its horizontal centre with the status and agent glyphs. All three lines use `RowIconLine` with the same 8-pixel
-`--row-leading-icon-gap`, so their text starts in one column; an unbound title keeps the empty leading slot.
-`RowControls` keeps persistent pins and markers outside the hidden actions' clip and collapses
-the actions' leading gap with them. Do not space individual trailing icons with the text row's gap or add local
-offsets. Verify the shared columns with actions hidden, hovered, focused and open, including right-to-left layout.
+Icon buttons in sidebar rows, cards and headers, the right pane and the file viewer share a 24-by-24-pixel target and a
+4-pixel gap, defined by `--row-control-size` and `--row-control-gap` in `packages/ui/src/style.css`. Use the shared
+`RowIconGroup` for adjacent icons and `RowIconSlot` for a marker's matching horizontal column; the marker keeps its own
+glyph size and does not increase the text line's height. Leading glyphs use the 16-pixel `--row-leading-icon-size`
+column through `RowIconSlot`'s leading placement. In a focus card, the binding dot precedes the title in reading order
+and shares its horizontal centre with the status and agent glyphs. All three lines use `RowIconLine` with the same
+8-pixel `--row-leading-icon-gap`, so their text starts in one column; an unbound title keeps the empty leading slot.
+`RowControls` keeps persistent pins and markers outside the hidden actions' clip and collapses the actions' leading gap
+with them. Do not space individual trailing icons with the text row's gap or add local offsets. Verify the shared
+columns with actions hidden, hovered, focused and open, including right-to-left layout.
 
 WCAG 2.2 SC 2.5.8 also excepts an **Inline** target: one "in a sentence, or its size is otherwise constrained by the
 line-height of non-target text". A status mark standing in running text (the inline form in "How a mark is drawn and
@@ -1653,10 +1620,10 @@ status letter — and the press under them, where there is one, belongs to the r
 
 A mark whose tap opens a touch popover (`IndicatorTooltip`, `touchPopover` on) is an activation on touch, so it is held
 to it there: `.touch-target` in `style.css` grows its hit area to 24 by 24 on a device that has a coarse pointer
-(`any-pointer: coarse`, which a hybrid device's mouse falls under too) with an `::after` that never shrinks a larger mark,
-changes nothing drawn and sits behind the mark's own content so it takes no hover from it. Where two such marks
-sit closer than 24 pixels, their grown areas overlap and the later one wins the overlap. The marks that keep the
-row's own target instead have the popover off.
+(`any-pointer: coarse`, which a hybrid device's mouse falls under too) with an `::after` that never shrinks a larger
+mark, changes nothing drawn and sits behind the mark's own content so it takes no hover from it. Where two such marks
+sit closer than 24 pixels, their grown areas overlap and the later one wins the overlap. The marks that keep the row's
+own target instead have the popover off.
 
 Neither exception in the criterion is easy to rely on here. *Spacing* needs a 24-pixel circle centred on the target to
 touch no other target, which a small control placed over a larger one (a delete badge on a corner) fails by
@@ -1699,10 +1666,10 @@ A status or state that differs in colour also differs in glyph, shape or text.
 in and whose accessible name and tooltip say what pressing will do, so the name alternates with the state (see
 "Two-state icon toggles" in `docs/product/labels-and-tooltips.md`). Nothing distinguishes the pressed button from the
 unpressed one by fill: `.icon-toggle` in `packages/ui/src/style.css` resets HeroUI's selected tokens back to the
-resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's two pane toggles were
-built this way, and the sidebar's still is; the Git mode's two view toggles — the one that shows and hides the change filter field, and
+resting ones, and `aria-pressed` carries the state for assistive technology. The window chrome's pane toggles (the
+sidebar's among them), the Git mode's two view toggles — the one that shows and hides the change filter field, and
 group by folder — the Files mode's filter toggle and include-ignored toggle, and the viewer's three view controls
-now are too.
+are built this way.
 
 A two-state control that is also what shows and hides a region carries `aria-expanded` beside its `aria-pressed`, the
 two saying the same thing in the two vocabularies: the Git mode's filter toggle is pressed while its field is on
@@ -1711,32 +1678,32 @@ no `aria-controls`; "Expanded and selected" above asks only for `aria-expanded`.
 keyboard focus back to the toggle when it was holding it, the toggle being pressed without taking focus itself; the
 hand-off's ring follows how the press came, as "Focus moved by a change the user did not make" above has it.
 
-The right pane's panel kind toggles are the exception, after Claude's desktop app: each keeps one icon, and its open
-state is a filled chip behind the icon (the rail's current-console fill), a shape rather than a tint, with
-`aria-expanded` for assistive technology. A grip on a resize handle is a hover cue like a hover tint: light while
-hovered or focused, below 3:1, with the focus ring carrying keyboard focus, and the strong colour, at 3:1, only while
-pressed. Its "Resize" tooltip opens on pointer hover only and is not tied to the separator, whose own
-accessible name already says what it does; a focused grip shows itself and its ring instead.
+The right pane's panel kind toggles are the exception: each keeps one icon, and its open state is a filled chip behind
+the icon (the rail's current-console fill), a shape rather than a tint, with `aria-expanded` for assistive technology. A
+grip on a resize handle is a hover cue like a hover tint: light while hovered or focused, below 3:1, with the focus ring
+carrying keyboard focus, and the strong colour, at 3:1, only while pressed. Its "Resize" tooltip opens on pointer hover
+only and is not tied to the separator, whose own accessible name already says what it does; a focused grip shows itself
+and its ring instead.
 
 **A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said about
 content that is still shown — are status marks (`StatusMark`) in three tones (`packages/ui/src/viewer/notices.tsx`): an
 explanation of how the content is drawn (a note, the circled `i`), a warning about the content itself (the triangle),
-and a part of it the viewer could not show (danger, the circled `!`). A read that fails while what the viewer shows
-is still true is a warning, not a failure: a change with no differences whose content could not be read for display
-keeps "No differences" and carries the triangle, since only the preview of its content is lost. The glyphs differ in
-shape, so the tone does not rest on colour. The viewer is a compact layout and holds no Alert: a notice about the whole file or change is one mark
-after the file path in the viewer's header, ordered failed, warned, then notes; in a compared image change a side's
-own notice stands beside that side's heading instead; a notice about one spot of a Markdown document stays at that
-spot, inside a paragraph (a button is valid there) or before a block's fallback source, lined
-up with its first line. Each mark is named by its sentence and opens it, as "How a mark is drawn and opened" says.
-A subject that cannot be opened at all fills the body with the danger empty-state (`Failure` in
-`packages/ui/src/viewer/viewerStates.tsx`) and no mark, a conflicted file whose read failed included. A conflict is
-said by the title's status chip, not by a mark: what kind of conflict it is is the chip's tooltip, which a tap opens
-too, and part of the heading's name, built from the catalog with the rest of it, since the drawn chip is hidden
-from assistive technology.
-A viewer with nothing to draw takes neither: it fills the body with a centred glyph and sentence (`NothingToShow`).
+and a part of it the viewer could not show (danger, the circled `!`). A read that fails while what the viewer shows is
+still true is a warning, not a failure: a change with no differences whose content could not be read for display keeps
+"No differences" and carries the triangle, since only the preview of its content is lost. The glyphs differ in shape, so
+the tone does not rest on colour. The viewer is a compact layout and holds no Alert: a notice about the whole file or
+change is one mark after the file path in the viewer's header, ordered failed, warned, then notes; in a compared image
+change a side's own notice stands beside that side's heading instead; a notice about one spot of a Markdown document
+stays at that spot, inside a paragraph (a button is valid there) or before a block's fallback source, lined up with its
+first line. Each mark is named by its sentence and opens it, as "How a mark is drawn and opened" says. A subject that
+cannot be opened at all fills the body with the danger empty-state (`Failure` in
+`packages/ui/src/viewer/viewerStates.tsx`) and no mark, a conflicted file whose read failed included. A conflict is said
+by the title's status chip, not by a mark: what kind of conflict it is is the chip's tooltip, which a tap opens too, and
+part of the heading's name, built from the catalog with the rest of it, since the drawn chip is hidden from assistive
+technology. A viewer with nothing to draw takes neither: it fills the body with a centred empty state
+(`CenteredEmptyPanel` in `packages/ui/src/components/EmptyPanel.tsx`).
 
-**One kept shortfall is left, and it is a single control**: the settings dialog's three-way appearance choice, which
+**One shortfall is kept, and it is a single control**: the settings dialog's three-way appearance choice, which
 is a toggle group where the selected button differs by fill colour only. Which button is selected is also carried by
 its position and by `aria-pressed`, and the fill difference meets 1.4.11's 3:1 for a state. The reasoning and the
 measured ratios sit in the comment above `.toggle-button-group .toggle-button` in `packages/ui/src/style.css`; a
@@ -1744,15 +1711,15 @@ two-state choice does not belong in that group, because the icon form above has 
 
 ## Text direction
 
-Under a right-to-left language the window mirrors, and what mirrors with it is settled per part in "Right-to-left
-layout" in `docs/product/window-layout.md`. What follows is the rule behind that list and how to meet it in code; it is
+Under a right-to-left language the window mirrors, and what mirrors with it is settled per part in
+`docs/product/right-to-left-layout.md`. What follows is the rule behind that list and how to meet it in code; it is
 WCAG 2.2 A 1.3.2, since a value read in the wrong order says something else.
 
-**Prose follows the interface; a value keeps its own order.** A sentence takes the document's direction. A value that
-is not prose — a path, a URL, a branch name, a commit id, a shell command, a port, a keyboard shortcut, a count written
-as `1 / 12`, a literal to type, a diagram, a formula — reads left to right in every language, and the element that
-*draws* it says so with `dir="ltr"`.
-`TextFieldDescription` puts only the count/limit ratio inside an LTR `bdi`, leaving the translated unit outside it.
+**Prose follows the interface; a value keeps its own order.** A sentence takes the document's direction. A value that is
+not prose — a path, a URL, a branch name, a commit id, a shell command, a port, a keyboard shortcut, a count written as
+`1 / 12`, a literal to type, a diagram, a formula — reads left to right in every language, and the element that *draws*
+it says so with `dir="ltr"`. `TextFieldDescription` puts only the count/limit ratio inside an LTR `bdi`, leaving the
+translated unit outside it.
 
 An inline formula sits inside a paragraph, so that element is also a bidi isolate: `dir` on it is not always enough
 once a utility class resets `unicode-bidi`, and Tailwind's `isolate` does not do this job (`isolation: isolate` is a
@@ -1810,16 +1777,16 @@ should not (see "The UI state gallery" in `packages/ui/README.md`).
 
 ## Motion
 
-An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's
-`motion-safe:` / `motion-reduce:` variants). Motion driven from script reads `prefersReducedMotion()` before it starts
-and subscribes with `onReducedMotion()` (`packages/ui/src/reducedMotion.ts`) to cut a running effect short, leaving it
-at its end state, when the preference turns on. Overlays that react-aria opens and closes (menus, popovers, tooltips,
-select and combo box lists, dialogs, toasts) appear and go at once: one rule in `packages/ui/src/style.css` stops the
-enter and exit animation of every element marked `data-entering` / `data-exiting`, which HeroUI leaves running for its
-popover-level overlays, so a new overlay needs no guard of its own. The few stock transitions HeroUI leaves unguarded
-(a select's chevron turning as its list opens, a combo box trigger's hover and press fade, and a checkbox's checkmark
-drawing itself in) are guarded there too, and `packages/ui/src/style.test.ts`
-fails on any other an imported HeroUI sheet brings.
+An animation or transition that is not essential stops under `prefers-reduced-motion: reduce` (Tailwind's `motion-safe:`
+/ `motion-reduce:` variants). Motion driven from script reads `prefersReducedMotion()` before it starts and subscribes
+with `onReducedMotion()` (`packages/ui/src/reducedMotion.ts`) to cut a running effect short, leaving it at its end
+state, when the preference turns on. Overlays that react-aria opens and closes (menus, popovers, tooltips, select and
+combo box lists, dialogs, toasts) appear and go at once: one rule in `packages/ui/src/style.css` stops the enter and
+exit animation of every element marked `data-entering` / `data-exiting`, which HeroUI leaves running for its
+popover-level overlays, so a new overlay needs no guard of its own. The few stock transitions HeroUI leaves unguarded (a
+select's chevron turning as its list opens, a combo box trigger's hover and press fade, and a checkbox's checkmark
+drawing itself in) are guarded there too, and `packages/ui/src/style.test.ts` fails on any other an imported HeroUI
+sheet brings.
 
 ### Dynamic collections
 
@@ -1839,33 +1806,32 @@ hands focus to the strip's shown tab, or into the panel when no tab is left, wit
 closed through a confirmation its context menu asked for, once the confirmation has gone.
 
 Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations, and
-neither does every item of a row changing width at once (the text zoomed).
-Virtualized collections keep virtualization and animate only surviving rendered identities whose layout changes.
-In a tree, rows that appear or vanish because their parent expands or folds move with the fold and play no entry or
-exit; only rows added to or removed from a parent that stays expanded do. Pass the tree's parents and expanded rows
-to the list motion so it can tell the two apart. Static choices, a replacement page or directory listing, and fixed result snapshots do not require collection
-motion. Collections whose component already provides the same behavior, such as the toast stack, keep that behavior.
-With reduced motion requested, update positions immediately, cancel any entry or movement already running and
-remove exit copies.
+neither does every item of a row changing width at once (the text zoomed). Virtualized collections keep virtualization
+and animate only surviving rendered identities whose layout changes. In a tree, rows that appear or vanish because their
+parent expands or folds move with the fold and play no entry or exit; only rows added to or removed from a parent that
+stays expanded do. Pass the tree's parents and expanded rows to the list motion so it can tell the two apart. Static
+choices, a replacement page or directory listing, and fixed result snapshots do not require collection motion.
+Collections whose component already provides the same behavior, such as the toast stack, keep that behavior. With
+reduced motion requested, update positions immediately, cancel any entry or movement already running and remove exit
+copies.
 
-Use `useListMotion` from `packages/ui/src/components/useListMotion.ts`, marking items with `data-list-motion`.
-Its descendant mode supports semantic wrappers and `display: contents`; its virtualized mode follows rendered
-identities without replacing the collection's layout transforms or focus management. Browser collections use
-`useBrowserListMotion` to preserve their existing scroll and focus refs. Keep animation timing and preference
-handling in the shared implementation rather than writing a separate transition at each caller.
-A content-width, start-aligned tab strip passes `contentWidth`: its own width changes with its tabs, which would
-otherwise read as a resize and animate nothing, and positions are measured from its reading-start edge. A caller that
-moves items with inline transforms during a drag calls `releaseListMotion(item)` as it lets go, before clearing the
-transforms, so the dropped item slides on from where it is drawn instead of moving twice. A divider that is hidden
-after the last item uses `[&:not(:has(~[data-list-motion]))]:border-b-0`, not `last:`, because exit copies are
-appended after the last real item; a row whose following siblings may carry no motion key (such as a shared row
-component used both with and without one) uses `[&:not(:has(~:not([data-list-motion-exit])))]:border-b-0` instead,
-which skips only the exit copies.
-Where the content below a collection would visibly jump, or be drawn over by departing copies, as items come and go,
-the collection passes `fitHeight` to `useListMotion` (a virtualized or content-width collection cannot): its height
-then follows the change with the position-change easing, clipped at its top and bottom edges, so the content below
-glides with it. Such a collection is a positioned (`relative`) container, so that its clip reaches the absolutely
-placed exit copies, and sizes by its border box (`box-sizing: border-box`, as Tailwind's base styles give).
-For a lazily mounted choice popup, use `MotionListBox` inside the popup so the observer mounts with the list and
-captures its initial positions before the first live choice update. Apply the same motion rule to choices that
-refresh while the popup remains open; a static choice list simply has no movement to animate.
+Use `useListMotion` from `packages/ui/src/components/useListMotion.ts`, marking items with `data-list-motion`. Its
+descendant mode supports semantic wrappers and `display: contents`; its virtualized mode follows rendered identities
+without replacing the collection's layout transforms or focus management. Browser collections use `useBrowserListMotion`
+to preserve their existing scroll and focus refs. Keep animation timing and preference handling in the shared
+implementation rather than writing a separate transition at each caller. A content-width, start-aligned tab strip passes
+`contentWidth`: its own width changes with its tabs, which would otherwise read as a resize and animate nothing, and
+positions are measured from its reading-start edge. A caller that moves items with inline transforms during a drag calls
+`releaseListMotion(item)` as it lets go, before clearing the transforms, so the dropped item slides on from where it is
+drawn instead of moving twice. A divider that is hidden after the last item uses
+`[&:not(:has(~[data-list-motion]))]:border-b-0`, not `last:`, because exit copies are appended after the last real item;
+a row whose following siblings may carry no motion key (such as a shared row component used both with and without one)
+uses `[&:not(:has(~:not([data-list-motion-exit])))]:border-b-0` instead, which skips only the exit copies. Where the
+content below a collection would visibly jump, or be drawn over by departing copies, as items come and go, the
+collection passes `fitHeight` to `useListMotion` (a virtualized or content-width collection cannot): its height then
+follows the change with the position-change easing, clipped at its top and bottom edges, so the content below glides
+with it. Such a collection is a positioned (`relative`) container, so that its clip reaches the absolutely placed exit
+copies, and sizes by its border box (`box-sizing: border-box`, as Tailwind's base styles give). For a lazily mounted
+choice popup, use `MotionListBox` inside the popup so the observer mounts with the list and captures its initial
+positions before the first live choice update. Apply the same motion rule to choices that refresh while the popup
+remains open; a static choice list simply has no movement to animate.

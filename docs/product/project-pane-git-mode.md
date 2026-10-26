@@ -72,8 +72,8 @@ prunable. Two of them matter to the view:
 - **The worktree holding the project's folder**: the checkout the project's folder is in, which may be a linked
   worktree. The branch checked out there is the view's default branch (see "The branch selector" below).
 - **The worktree that has the chosen branch checked out**, which is where its uncommitted changes are read from (see
-  "Uncommitted changes" in `docs/product/project-pane-git-change-list.md`). Showing them checks nothing out, moves no session and leaves the Files mode on the
-  project's own folder.
+  "Uncommitted changes" in `docs/product/project-pane-git-change-list.md`). Showing them checks nothing out, moves no
+  session and leaves the Files mode on the project's own folder.
 
 The worktrees are read when the Git mode is first shown after the project pane is put in the right pane, on Refresh,
 after the connection to the daemon comes back, when the worktree the changes are read from is found gone, when the
@@ -124,12 +124,12 @@ from the repository (see "Committed changes" in `docs/product/project-pane-git-c
   `docs/product/project-pane-git-change-list.md`).
 
 The branches are read while the Git mode is on screen, once the repository is found: when the Git mode is first shown
-after the project pane is put in the right pane, and then the way the uncommitted changes are listed again (see
-"Keeping the list up to date" in `docs/product/project-pane-git-change-list.md`) — every 10 seconds while it is on screen and the window is visible, when it comes
-back more than 5 seconds after the last reading, on Refresh, and after the connection to the daemon comes back; and, as
-the worktrees are, when one of the project's sessions is selected and when the worktree the changes are read from is
-found gone. A branch created, moved or deleted in the meantime
-shows in the selector then.
+after the project pane is put in the right pane, and then the way the uncommitted changes are listed again (see "Keeping
+the list up to date" in `docs/product/project-pane-git-change-list.md`) — every 10 seconds while it is on screen and the
+window is visible, when it comes back more than 5 seconds after the last reading, on Refresh, and after the connection
+to the daemon comes back; and, as the worktrees are, when one of the project's sessions is selected and when the
+worktree the changes are read from is found gone. A branch created, moved or deleted in the meantime shows in the
+selector then.
 
 When the branches cannot be read, the view says so: in place of the change list, as an empty-state failure with
 **Try again**, while no branch is shown and no list of branches has been read yet; otherwise as a red mark beside the
@@ -173,15 +173,16 @@ When the selector is set:
 
 ## What is remembered
 
-**Per project, for as long as the window is open**: the chosen branch (dropped once the repository no longer has it:
-see "The branch selector" above), the selected change, the sections folded away
-(see "Folding a section" in `docs/product/project-pane-git-change-list.md`), the commit rows folded away (see "Grouped
-by commit" in that doc) and, grouped by folder, the folders folded away. Reloading the window, or restarting the application, starts every project on its default
-branch, with no change selected and every section, commit and folder unfolded. Selecting one of the project's sessions sets the branch anew, once for that selection; the pane put back in
-the right pane while the same session stays selected keeps it as it is (see "Following the selected session" above).
-Change lists, branch lists, comparisons, commit lists and their contents are never stored. Whether the filter field is
-on screen, and the text in it, last only while the project's pane stays in the right pane, and the text only until the
-field is closed (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`).
+**Per project, for as long as the window is open**: the chosen branch (dropped once the repository no longer has it: see
+"The branch selector" above), the selected change, the sections folded away (see "Folding a section" in
+`docs/product/project-pane-git-change-list.md`), the commit rows folded away (see "Grouped by commit" in that doc) and,
+grouped by folder, the folders folded away. Reloading the window, or restarting the application, starts every project on
+its default branch, with no change selected and every section, commit and folder unfolded. Selecting one of the
+project's sessions sets the branch anew, once for that selection; the pane put back in the right pane while the same
+session stays selected keeps it as it is (see "Following the selected session" above). Change lists, branch lists,
+comparisons, commit lists and their contents are never stored. Whether the filter field is on screen, and the text in
+it, last only while the project's pane stays in the right pane, and the text only until the field is closed (see
+"Filtering by file name" in `docs/product/project-pane-git-change-list.md`).
 
 **Per project, across restarts**: whether the Changes tab's list is grouped by folder (see "Flat or grouped by folder"
 in `docs/product/project-pane-git-change-list.md`), and whether its committed changes are grouped by commit (see

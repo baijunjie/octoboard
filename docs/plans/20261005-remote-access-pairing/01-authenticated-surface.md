@@ -21,15 +21,15 @@
 
 ## Handoff
 
-- Before the external surface can be reached at a network address, the raised-hand notification paragraph of
-  `docs/product/sessions.md` and the "A browser, blocked" row of the Notifications table in `docs/product/settings.md`
-  have to be rewritten. Both assume every browser page is a secure context, which holds today only because the daemon
-  refuses any `Host` but a loopback one. A page reached at a network address over plain `http` is not one, and Chrome
-  still exposes `window.Notification` on such an origin: the platform adapter's `typeof Notification` guard therefore
-  reports the capability present and the rail's bell appears, while the permission can never be granted and no site
-  setting turns it on — so the row's "allowed again from the browser's own settings for the site" becomes wrong
-  guidance rather than incomplete guidance. The docs have to say what a browser outside loopback gets, with this
-  milestone's TLS as the reason the served page is a secure context at all.
+- Before the external surface can be reached at a network address, the "The raised hand" section of
+  `docs/product/session-statuses.md` and the "A browser, blocked" row of the Notifications table in
+  `docs/product/settings.md` have to be rewritten. Both assume every browser page is a secure context, which holds today
+  only because the daemon refuses any `Host` but a loopback one. A page reached at a network address over plain `http`
+  is not one, and Chrome still exposes `window.Notification` on such an origin: the platform adapter's `typeof
+  Notification` guard therefore reports the capability present and the rail's bell appears, while the permission can
+  never be granted and no site setting turns it on — so the row's "allowed again from the browser's own settings for the
+  site" becomes wrong guidance rather than incomplete guidance. The docs have to say what a browser outside loopback
+  gets, with this milestone's TLS as the reason the served page is a secure context at all.
 
 ## Notes for the developer
 

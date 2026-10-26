@@ -47,11 +47,11 @@ latest path's answer counts, and a changed path is read again and its result pre
 For a git URL, the form first checks the repository: once the URL stops changing, the daemon fetches the remote's tip
 commit without file contents or history into a scratch directory, which proves the remote can be read with the user's
 credentials and shows its top-level names. Every field below the URL (clone into, name, description, tags, default
-agent) and the submit button stay disabled until that check has succeeded for the URL as it stands, an empty one included; while it
-runs the form says it is checking, and a failure is shown in an alert directly under the URL field, saying the
-repository could not be read with git's own reason behind Details, and keeps them disabled. Both alerts are titled
-that the location could not be checked, with the failure under the title. Neither the path field's error nor either
-alert opens an error alert (see "Errors under a field" and "Failures shown on the screen" in
+agent) and the submit button stay disabled until that check has succeeded for the URL as it stands, an empty one
+included; while it runs the form says it is checking, and a failure is shown in an alert directly under the URL field,
+saying the repository could not be read with git's own reason behind Details, and keeps them disabled. Both alerts are
+titled that the location could not be checked, with the failure under the title. Neither the path field's error nor
+either alert opens an error alert (see "Errors under a field" and "Failures shown on the screen" in
 `docs/product/error-alerts.md`). A success enables them and preselects the detected agent. The check is bounded by a
 timeout, and its scratch directory is removed when it ends.
 
@@ -137,14 +137,14 @@ its own project. Octoboard writes it into no instruction file and into no text a
 
 A project may carry its own default agent, or leave it unset to follow its console's default agent for project sessions
 (see `docs/product/consoles.md`). The selection order for a new session is in "Which agent a session uses" in
-`docs/product/sessions.md`.
+`docs/product/opening-sessions.md`.
 
 The project dialog, both when associating and when editing a project, offers "unset" as a "Same as console" choice
-listed first and preselected for a new project (a parent directory preselects "Detect from files" instead); a badge after
-it names the agent the console's default for project sessions currently resolves to — the console's default for console
-sessions while the one for project sessions is unset — with that agent's icon shown dimmed, or it is a bare "Same as
-console" when the console is not known. Choosing a specific agent stores it as the project's own default. The agents listed
-follow "Which agents the agent pickers list" in `docs/product/consoles.md`.
+listed first and preselected for a new project (a parent directory preselects "Detect from files" instead); a badge
+after it names the agent the console's default for project sessions currently resolves to — the console's default for
+console sessions while the one for project sessions is unset — with that agent's icon shown dimmed, or it is a bare
+"Same as console" when the console is not known. Choosing a specific agent stores it as the project's own default. The
+agents listed follow "Which agents the agent pickers list" in `docs/product/consoles.md`.
 
 Associating a project with no default agent given looks at the directory's top level once and stores the agent it is
 set up for as the project's own default, shown and editable in Project settings like any chosen one. For a single
@@ -177,35 +177,35 @@ names and effort levels are each agent's own, and a session reads only the set o
   `docs/product/consoles.md` — which is a choice of its own here, available even where the console names an account; or
   a **named account** of that agent. The last two take the place of the console's for sessions of that agent opened
   under the project afterwards. The order a session resolves its account in, and which sessions reach the project's
-  setting at all, are in "Which account a session uses" in `docs/product/sessions.md`, and what an account is in "Agent
-  config directories" in `docs/product/consoles.md`. Removing an account in Settings puts every project that named it
-  back to inheriting its console's reference, and leaves a project on the agent's default account as it is.
+  setting at all, are in "Which account a session uses" in `docs/product/opening-sessions.md`, and what an account is in
+  "Agent config directories" in `docs/product/consoles.md`. Removing an account in Settings puts every project that
+  named it back to inheriting its console's reference, and leaves a project on the agent's default account as it is.
 - **The model and the reasoning effort**, each left unset, fall back separately to the console's project session
   value for that agent, else to the agent's own default; the console's console session values never apply. See
   `docs/product/model-and-reasoning-effort.md`.
 
 The project dialog, both when associating and when editing a project, joins the account picker to the **Default agent**
 field as a single field, the way the session dialog joins its Agent field to one, and holds the same collapsed
-**Advanced** section, with the project's Git workflow group below the model and effort (see "Reading and changing
-them" in `docs/product/git-workflow-settings.md`). All of it but the Git workflow group belongs to the agent the Default agent field
-currently settles on — the agent picked, or the agent "Same as console" names while the field is on it — so switching
-that field shows another agent's set, and what was set for an agent no longer shown is kept and still saved. The account
-picker lists, in this order, the inherited entry, "Same as console", with a badge naming the account the console
-resolves to for that agent (the agent's default account when the console pins none); the agent's default account, named
-as it is everywhere else; and then that agent's own accounts. It is offered only when that agent has an account of its
-own. A project whose named account is no longer stored shows the inherited entry, and keeps what it has stored until
-another entry is picked. A turned-off account — the default account or one of the agent's own (see "Turning an account
-off" in `docs/product/agent-accounts.md`) — is left out of the picker, except the one the project named when the dialog
-opened and the one picked in it now: as in the console dialog, since a project's account is a lasting preference, that
-one stays listed and pickable, with a short note "Disabled" under its name and, as its description for assistive
-technology, that sessions cannot open on it until it is turned back on. "Same as console" carries no such mark, its
-badge naming the console's account as usual. A project that names a turned-off account keeps it; the sessions that would
-run on it are refused until then.
+**Advanced** section, with the project's Git workflow group below the model and effort (see "Reading and changing them"
+in `docs/product/git-workflow-settings.md`). All of it but the Git workflow group belongs to the agent the Default agent
+field currently settles on — the agent picked, or the agent "Same as console" names while the field is on it — so
+switching that field shows another agent's set, and what was set for an agent no longer shown is kept and still saved.
+The account picker lists, in this order, the inherited entry, "Same as console", with a badge naming the account the
+console resolves to for that agent (the agent's default account when the console pins none); the agent's default
+account, named as it is everywhere else; and then that agent's own accounts. It is offered only when that agent has an
+account of its own. A project whose named account is no longer stored shows the inherited entry, and keeps what it has
+stored until another entry is picked. A turned-off account — the default account or one of the agent's own (see "Turning
+an account off" in `docs/product/agent-accounts.md`) — is left out of the picker, except the one the project named when
+the dialog opened and the one picked in it now: as in the console dialog, since a project's account is a lasting
+preference, that one stays listed and pickable, with a short note "Disabled" under its name and, as its description for
+assistive technology, that sessions cannot open on it until it is turned back on. "Same as console" carries no such
+mark, its badge naming the console's account as usual. A project that names a turned-off account keeps it; the sessions
+that would run on it are refused until then.
 
 While a new project on a **parent directory** is set to "Detect from files" the account picker is not shown and the
-Advanced section holds the Git workflow group alone, since no agent is settled — each repository found is detected on its
-own — and any account, model or effort set before the source changed is not stored. The Advanced section stays open or
-closed as it was when the Default agent field or the source changes.
+Advanced section holds the Git workflow group alone, since no agent is settled — each repository found is detected on
+its own — and any account, model or effort set before the source changed is not stored. The Advanced section stays open
+or closed as it was when the Default agent field or the source changes.
 
 A project the console session associates takes the accounts, models and efforts its call gives, and otherwise inherits
 its console's account for every agent and leaves every model and effort unset. A parent-directory association gives
@@ -254,10 +254,10 @@ a repository with no remote left.
 ## Editing a project
 
 Only the name, the description, the default agent, the account, the model and the reasoning effort, the tags and the
-project's own git workflow settings can be changed, besides pinning and unpinning the project. The name is changed from the
-project's Rename or Project settings, everything else from Project settings, which opens the project dialog under that
-title (see "Project rows" in `docs/product/sidebar-project-rows.md`). The description field follows the name, and the
-tags field sits between the description and the default agent: typing in it offers the tags already in use that the
+project's own git workflow settings can be changed, besides pinning and unpinning the project. The name is changed from
+the project's Rename or Project settings, everything else from Project settings, which opens the project dialog under
+that title (see "Project rows" in `docs/product/sidebar-project-rows.md`). The description field follows the name, and
+the tags field sits between the description and the default agent: typing in it offers the tags already in use that the
 project lacks, in a list that opens below the field and stays open after a pick so several can be added in a row, and
 Enter adds what was typed as a tag, or the highlighted suggestion if there is one; leaving the field adds it too. The
 tags the project carries show inside the field, ahead of the text input, and wrap onto more lines as they grow, the
@@ -299,10 +299,14 @@ listing always comes from the host the projects live on, never from the applicat
 In the browser, the listed directory's subdirectories are one list, with a parent-directory entry at its top except at
 the filesystem root — muted, marked with an up-arrow icon and labelled as the parent directory, which is also what it is
 announced as to assistive technology — each directory marked with a folder icon, and a "git" badge at the end of each
-entry that is a git repository. Clicking an entry, or pressing Enter on it, lists that directory. The list is a single
+entry that is a git repository. Under each directory's name its path is shown in small muted text, the host's home
+directory written as `~`, cut from its start when too long so the directory's own name stays visible; the full path is
+its tooltip while it is cut or written with `~`. A directory is announced to assistive technology by its name, with
+"git" for a repository, and its path as its description. While the entries scroll, the parent-directory entry stays
+pinned at the top of the list. Clicking an entry, or pressing Enter on it, lists that directory. The list is a single
 Tab stop: the arrow keys, Home and End move between its entries. A directory with no subdirectories shows an entry
-saying so, in the compact empty-state row (see "The compact row" in `docs/product/empty-states.md`), which does nothing and
-is skipped by the arrow keys. When the browser is opened on a path that does not exist (such as a default clone
+saying so, in the compact empty-state row (see "The compact row" in `docs/product/empty-states.md`), which does nothing
+and is skipped by the arrow keys. When the browser is opened on a path that does not exist (such as a default clone
 directory not created yet), it lists the nearest ancestor that does exist instead (a `~/` path goes no higher than the
 home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
 

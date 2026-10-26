@@ -1,14 +1,13 @@
 # Report panel
 
-The **report panel** is the panel the window's right pane holds while a **console session** owns it, to the right of
-the terminal (to its left under a right-to-left language, see "Right-to-left layout" in
-`docs/product/window-layout.md`). It is the console session's one kind of panel, the Report panel, a card like any
-other in the right pane, with its own toggle in the top bar (see `docs/product/right-pane-panels.md`).
-It belongs to the console session rather than to its console: each console session has its own pages, and the panel
-shows those of the selected console session, so two console sessions in one console do not share a history. Selecting
-a console session gives it the right pane, where the report panel shows while it is open; when the right pane shows
-something else instead — a project's Files panel, or nothing — is in "What the right pane shows" in
-`docs/product/window-layout.md`. How the panel is opened, closed and floated in is in
+The **report panel** is the panel the window's right pane holds while a **console session** owns it, to the right of the
+terminal (to its left under a right-to-left language, see `docs/product/right-to-left-layout.md`). It is the console
+session's one kind of panel, the Report panel, a card like any other in the right pane, with its own toggle in the top
+bar (see `docs/product/right-pane-panels.md`). It belongs to the console session rather than to its console: each
+console session has its own pages, and the panel shows those of the selected console session, so two console sessions in
+one console do not share a history. Selecting a console session gives it the right pane, where the report panel shows
+while it is open; when the right pane shows something else instead — a project's Files panel, or nothing — is in "What
+the right pane shows" in `docs/product/window-layout.md`. How the panel is opened, closed and floated in is in
 `docs/product/right-pane-panels.md`, and how wide the pane is and how the user resizes it in
 `docs/product/window-layout.md`.
 
@@ -52,14 +51,14 @@ and so with its console, which deletes its console sessions (see "Deleting a con
 has pushed.
 
 The panel's header (see "A panel's header" in `docs/product/right-pane-panels.md`) carries, after its title, left to
-right (mirrored under a right-to-left language, except for what "Right-to-left layout" in
-`docs/product/window-layout.md` lists as keeping its order): ◀ and ▶ to step one page back and one forward, and
-between them the position as "current / total", counted from 1 with the oldest page first. A thin row under the
-header carries the page's creation time formatted for the UI's current language (see "What follows the language" in
-`docs/product/language.md`) and — on any page but the newest — a "Read-only" badge. The position, the total and the badge all count the selected console session's pages
-only. The place the user has paged to is not kept: whenever the report panel gives way in the right pane — another
-session selected, or Browse files putting a project's Files panel in its place — coming back to it shows its newest page again,
-started over from its markup, with anything typed into its form and not submitted gone.
+right (mirrored under a right-to-left language, except for what `docs/product/right-to-left-layout.md` lists as keeping
+its order): ◀ and ▶ to step one page back and one forward, and between them the position as "current / total", counted
+from 1 with the oldest page first. A thin row under the header carries the page's creation time formatted for the UI's
+current language (see "What follows the language" in `docs/product/language.md`) and — on any page but the newest — a
+"Read-only" badge. The position, the total and the badge all count the selected console session's pages only. The place
+the user has paged to is not kept: whenever the report panel gives way in the right pane — another session selected, or
+Browse files putting a project's Files panel in its place — coming back to it shows its newest page again, started over
+from its markup, with anything typed into its form and not submitted gone.
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
   to it.
@@ -209,8 +208,8 @@ page keeps the browser's own handling of the keys.
 
 The keys are passed on only as the exact combinations they are bound to, as the window matches them (see "How a
 combination is written and matched" in `docs/product/keyboard-shortcuts.md`). Changing one of these four shortcuts
-starts the page the panel shows over again from its markup, so anything typed into its form and not submitted is gone; setting a shortcut to
-the keys it already has does not.
+starts the page the panel shows over again from its markup, so anything typed into its form and not submitted is gone;
+setting a shortcut to the keys it already has does not.
 
 ## Right-click inside a page
 

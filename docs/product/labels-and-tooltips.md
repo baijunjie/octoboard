@@ -9,9 +9,9 @@ Every tooltip in the window is the application's own, drawn in its own styling a
 carries it — a control, an indicator or a label too long for its space. The floating surfaces that hold more than a
 label — the popover of a status mark (a failure, a warning or a note, see "Failures, warnings and notes marked at their
 point" in `docs/product/error-alerts.md`) or of the "?" help tip (see "The help tip" below), and the rail's account
-quota panel (see "The account quota panel on the rail" in `docs/product/account-quotas.md`) — are drawn the same way, on
-the same surface, with the same shadow and corners (a mark's and a help tip's popover have the tooltip's padding and
-text size too; the quota panel keeps its own width, padding and text sizes, being a panel):
+quota panel (see `docs/product/account-quota-panel.md`) — are drawn the same way, on the same surface, with the same
+shadow and corners (a mark's and a help tip's popover have the tooltip's padding and text size too; the quota panel
+keeps its own width, padding and text sizes, being a panel):
 
 - It opens once the pointer has rested on what carries it for 500 ms. Within half a second of
   another tooltip closing it opens at once instead, so moving from one to the next does not wait again at each one,
@@ -23,32 +23,31 @@ text size too; the quota panel keeps its own width, padding and text sizes, bein
 - It goes the moment the pointer leaves what carries it, with no lingering, and it goes when what it sits over is
   scrolled. It takes no pointer input of its own, so a press lands on whatever is under it.
 - Where the system asks for reduced motion, it appears and goes at once, without fading or scaling.
-- A tooltip on clipped text or a change row's status letter closes on any pointer press or key press in the window,
-  even while waiting to open. It stays closed until the pointer leaves and returns, including when the press opens
-  a dialog without moving the pointer. The tooltip showing an OSC 8 hyperlink's target in a session's terminal also
-  closes on any pointer press or key press (see "Links in the output" in `docs/product/session-terminal.md`). So does
-  the tooltip on the tab of an added agent that is not installed, in Settings, Escape included, and it stays closed
-  until the pointer is off the tab and the tab has lost keyboard focus, or until keyboard focus arrives on the tab
-  again (see "Tooltips on indicators" below).
+- A tooltip on clipped text or a change row's status letter closes on any pointer press or key press in the window, even
+  while waiting to open. It stays closed until the pointer leaves and returns, including when the press opens a dialog
+  without moving the pointer. The tooltip showing an OSC 8 hyperlink's target in a session's terminal also closes on any
+  pointer press or key press (see `docs/product/terminal-links.md`). So does the tooltip on the tab of an added agent
+  that is not installed, in Settings, Escape included, and it stays closed until the pointer is off the tab and the tab
+  has lost keyboard focus, or until keyboard focus arrives on the tab again (see "Tooltips on indicators" below).
 - **A touch has no hover, so on a touch screen the same text opens in a popover.** Which of the two shows follows the
-  input of the interaction, not the device: a mouse hover and keyboard focus open the tooltip, and a finger's or a
-  pen's press opens the popover, on a phone, on a tablet with a trackpad and on a touch-screen laptop alike. A mouse
-  press opens nothing extra, and neither does a keyboard press, since keyboard focus has the tooltip open already. The popover is drawn like the tooltip (the same surface,
-  padding, text size and width) and takes focus while open; a tap outside it or Escape closes it — that tap does
-  nothing else — and focus goes back to what held it. It opens on a mark that only carries a tooltip (which marks, see
-  "Tooltips on indicators" below). It does not open on a control that has an action of its
-  own, where a tap runs the action (an icon-only button, a menu trigger, a switch), nor on a mark inside a row, a
-  button or an option, where the tap belongs to what holds the mark, nor on clipped text or a change row's status
+  input of the interaction, not the device: a mouse hover and keyboard focus open the tooltip, and a finger's or a pen's
+  press opens the popover, on a phone, on a tablet with a trackpad and on a touch-screen laptop alike. A mouse press
+  opens nothing extra, and neither does a keyboard press, since keyboard focus has the tooltip open already. The popover
+  is drawn like the tooltip (the same surface, padding, text size and width) and takes focus while open; a tap outside
+  it or Escape closes it — that tap does nothing else — and focus goes back to what held it. It opens on a mark that
+  only carries a tooltip (which marks, see "Tooltips on indicators" below). It does not open on a control that has an
+  action of its own, where a tap runs the action (an icon-only button, a menu trigger, a switch), nor on a mark inside a
+  row, a button or an option, where the tap belongs to what holds the mark, nor on clipped text or a change row's status
   letter. Where a tap opens none, a touch screen has no route to the text.
 - Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
   long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
   its characters, which is its word boundary.
 
-Two places show the operating system's own tooltip instead, which follows the system's styling and timing: a link
-inside a Markdown document in the file viewer, where — for a web or mail address, or a path in the project — the
-address it leads to is also what assistive technology is given as the link's description (see "A Markdown file as a
-document" in `docs/product/file-viewer.md`), and the separators standing for the lines a diff leaves out (see
-"Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
+Two places show the operating system's own tooltip instead, which follows the system's styling and timing: a link inside
+a Markdown document in the file viewer, where — for a web or mail address, or a path in the project — the address it
+leads to is also what assistive technology is given as the link's description (see
+`docs/product/markdown-documents.md`), and the separators standing for the lines a diff leaves out (see "Expanding the
+collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
 
 ## Tooltips on icon-only controls
 
@@ -97,8 +96,8 @@ application buttons below. These are:
   `docs/product/file-viewer.md`);
 - the file viewer's three view controls, the Files mode's two — its file-name filter toggle and the include-ignored
   toggle in its filter field — and the Git mode's three view toggles — the one that shows and hides the change filter
-  field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state (see
-  "Two-state icon toggles" below);
+  field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state
+  (see "Two-state icon toggles" below);
 - the two controls of the console dialog's Avatar field (see "Avatar" in
   `docs/product/consoles.md`) — the round control itself, named for choosing an image while it is empty
   and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
@@ -106,10 +105,10 @@ application buttons below. These are:
   config directories" in `docs/product/consoles.md`);
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
-The rail's **Account usage** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting
-the mouse on it floats its panel in instead (see "Opening the panel" in `docs/product/account-quotas.md`),
-and its accessible name, which states the selected session's quota when the button shows one, is described in "The
-selected session's quota indicator" in `docs/product/account-quotas.md`.
+The rail's **Account usage** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting the
+mouse on it floats its panel in instead (see "Opening the panel" in `docs/product/account-quota-panel.md`), and its
+accessible name, which states the selected session's quota when the button shows one, is described in "The selected
+session's quota indicator" in `docs/product/account-quotas.md`.
 
 The **expand arrow** before a folder's row in the Files mode's tree and in the Git mode's change list, and before a
 commit row there, is an exception too: it has **no tooltip** and no hover fill of its own, being a bare arrow glyph.
@@ -166,10 +165,11 @@ and why the switch cannot be turned now stays under that line (see "Sharing the 
 
 One status is a deliberate exception: an added agent that is not installed, in Settings' Agent accounts section. The
 status itself stays visible, as a warning glyph after the agent's name on its tab, and each account the user owns of
-that agent still says visibly, in its account settings dialog, that it is not usable; only the glyph's explanation — that the agent is not installed and
-its accounts are not usable until it is on `PATH` — sits in a tooltip on the tab, which opens on hover and on keyboard
-focus (see "Tooltips on indicators" below, and "The agent strip" in `docs/product/agent-accounts.md`). An agent that is
-not added has no tab and so no such status. That tooltip is not a "?" help tip.
+that agent still says visibly, in its account settings dialog, that it is not usable; only the glyph's explanation —
+that the agent is not installed and its accounts are not usable until it is on `PATH` — sits in a tooltip on the tab,
+which opens on hover and on keyboard focus (see "Tooltips on indicators" below, and "The agent strip" in
+`docs/product/agent-accounts.md`). An agent that is not added has no tab and so no such status. That tooltip is not a
+"?" help tip.
 
 An explanation can be split: the part of either kind above goes into the help tip, and the rest stays visible. The help
 tip sits at the end of the line it explains, beside the label rather than inside it, so the name announced for that
@@ -188,8 +188,9 @@ Help tips are used in these places:
   "Detect from files" looks for in each repository and what happens to one it cannot decide on (see "The project's
   default agent" in `docs/product/projects.md`);
 - each agent's **default account** in Settings' Agent accounts section, right after its directory in its account
-  settings dialog: that it is the agent's own default configuration directory, which new sessions use when no account is chosen
-  and whose configuration other accounts can share (see "The default account" in `docs/product/agent-accounts.md`);
+  settings dialog: that it is the agent's own default configuration directory, which new sessions use when no account is
+  chosen and whose configuration other accounts can share (see "The default account" in
+  `docs/product/agent-accounts.md`);
 - the name of Claude Code's and Codex's **Permission approval** row in Settings' Agent accounts section (see "Approval
   modes" in `docs/product/agent-accounts.md`);
 - the **Share default configuration** row of an account's settings dialog: what is linked to the default account's
@@ -201,12 +202,12 @@ Help tips are used in these places:
 ## Two-state icon toggles
 
 A control that switches a view between two states is **one icon button**, not a set of choices side by side. These are
-the sidebar toggle (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), the file viewer's three view
-controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's two — its file-name filter toggle and
-the toggle in its filter field that includes ignored files (see "Filtering by file name" in
-`docs/product/project-pane.md`) — and the Git mode's three — the toggle of its change
-filter field (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat
-or grouped by folder" in the same doc) and Group by commit (see "Grouped by commit" in the same doc). For all of them:
+the sidebar toggle (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), the file
+viewer's three view controls (see "The header" in `docs/product/file-viewer.md`), the Files mode's two — its file-name
+filter toggle and the toggle in its filter field that includes ignored files (see "Filtering by file name" in
+`docs/product/project-pane.md`) — and the Git mode's three — the toggle of its change filter field (see "Filtering by
+file name" in `docs/product/project-pane-git-change-list.md`), Group by folder (see "Flat or grouped by folder" in the
+same doc) and Group by commit (see "Grouped by commit" in the same doc). For all of them:
 
 - Pressing the button switches the state, and its icon becomes the other state's.
 - **The icon shows the state the view is in; the name says what pressing will do**, so the name alternates with the
@@ -259,24 +260,23 @@ keyboard focus; where the mark sits in something that answers a press, the press
 there does — pressing a session's status glyph on its sidebar row selects the session, as pressing the row does, and
 pressing a change row's status letter opens the change. So such a mark is no dead spot in what carries it.
 
-On a touch screen a tap on a mark opens its tooltip's content in a popover (see "How a tooltip behaves" above) where
-the tap has nothing else to do: the status glyph on the top bar's breadcrumb, the status glyph and agent icon of each
+On a touch screen a tap on a mark opens its tooltip's content in a popover (see "How a tooltip behaves" above) where the
+tap has nothing else to do: the status glyph on the top bar's breadcrumb, the status glyph and agent icon of each
 session a confirmation lists, the branch badge in a project's focus mode header and the context-size chip beside the
-Session history's heading (see "The context-size chip" in `docs/product/session-context.md`) and the Conflicted tag
-in the file viewer's title. On a device with a touch screen such a mark answers a press, and a hover, across at least 24 by 24 pixels,
-even where it is drawn smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
-the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
-and an archive view row, the relative time on a focus mode card or archived row and on an item of a View archive
-submenu, the branch badge on a project's sidebar row, the activity marker, and the responsible-session badge in the
-Git mode's branch lists. A touch has no route to what such a mark's tooltip says;
+Session history's heading (see "The context-size chip" in `docs/product/session-context.md`) and the Conflicted tag in
+the file viewer's title. On a device with a touch screen such a mark answers a press, and a hover, across at least 24 by
+24 pixels, even where it is drawn smaller. A mark inside a row, a button or an option opens none, as the tap there
+selects, folds, switches or chooses: the status glyph, agent icon, context-size chip and binding badge on a sidebar row,
+a focus mode card or archived row and an archive view row, the relative time on a focus mode card or archived row and on
+an item of a View archive submenu, the branch badge on a project's sidebar row, the activity marker, and the
+responsible-session badge in the Git mode's branch lists. A touch has no route to what such a mark's tooltip says;
 assistive technology has it in the accessible name of what holds the mark.
 
 These are:
 
 - a session's status glyph on its sidebar row, on the top bar's breadcrumb and on each non-archived session a
-  confirmation lists among the ones it affects, whose tooltip says the status in the same words as everywhere else
-  it is named — the placements where no status text sits beside the glyph (see "Session statuses" in
-  `docs/product/sessions.md`);
+  confirmation lists among the ones it affects, whose tooltip says the status in the same words as everywhere else it is
+  named — the placements where no status text sits beside the glyph (see `docs/product/session-statuses.md`);
 - the activity marker, the mark standing for what is going on beneath a **collapsed project's row** in the sidebar
   (see "Project rows" in `docs/product/sidebar-project-rows.md`) and inside focus mode's **console-switch chip** (see
   "The switch strip" in `docs/product/focus-mode.md`), whose tooltip says which activity it stands for, in the same
@@ -318,11 +318,12 @@ These are:
 The warning glyph after the name of an added agent that is not installed, on its tab in Settings' Agent accounts
 section, is a mark too, but not one of these: its tooltip belongs to the tab around it, which is a control, and is
 placed against the tab rather than the glyph. It opens while the pointer is anywhere on the tab and while the tab has
-keyboard focus, but not when a mouse press is what focuses the tab. On keyboard focus it shows once the strip and the section have stopped scrolling
-the tab into view, since a scroll under an open tooltip closes it; a press or a key before then cancels it. For how a
-press or a key closes it see "How a tooltip behaves" above. Nothing links the tooltip to the tab for assistive
-technology: the tab's accessible name says the agent is not installed, and a line in the settings dialog of each of
-the agent's own accounts says it is not usable (see "The agent strip" in `docs/product/agent-accounts.md`).
+keyboard focus, but not when a mouse press is what focuses the tab. On keyboard focus it shows once the strip and the
+section have stopped scrolling the tab into view, since a scroll under an open tooltip closes it; a press or a key
+before then cancels it. For how a press or a key closes it see "How a tooltip behaves" above. Nothing links the tooltip
+to the tab for assistive technology: the tab's accessible name says the agent is not installed, and a line in the
+settings dialog of each of the agent's own accounts says it is not usable (see "The agent strip" in
+`docs/product/agent-accounts.md`).
 
 ## Names too long for their space
 
@@ -345,10 +346,10 @@ archive is for — shown while the pointer is on the label and not on keyboard f
 document whether or not it is cut, so assistive technology is given it either way. The diff separator's tooltip
 follows the operating system's rules instead.
 
-**A path is cut at its start instead**, so that its last folder stays in view (see "Right-to-left layout" in
-`docs/product/window-layout.md`); every other label is cut at its end. Everything this section says holds for a label
-cut at its start, mirrored: it rests pinned to its end, fades at its start, and carries its full text as its tooltip
-while it is cut.
+**A path is cut at its start instead**, so that its last folder stays in view (see
+`docs/product/right-to-left-layout.md`); every other label is cut at its end. Everything this section says holds for a
+label cut at its start, mirrored: it rests pinned to its end, fades at its start, and carries its full text as its
+tooltip while it is cut.
 
 A project's branch name in its branch badge also follows these fade and marquee rules. The badge's tooltip is not
 one of this section's, though: the whole badge carries one tooltip describing the branch and its counts, shown whether
@@ -362,11 +363,11 @@ or not the branch name is cut (see "The branch badge" in `docs/product/project-g
   marquee.
   Pointing at a status or agent icon, a branch glyph or upstream count, a row or header button, or the surrounding
   space starts none of those labels. Context-size chips and time fields remain separate from the model line's marquee.
-- An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer
-  is anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its
-  trigger, and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while
-  the pointer is anywhere over it, its tags moving together rather than each on its own. A fixed session-owner label and a diff's collapsed-line label
-  run over their text controls.
+- An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer is
+  anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its trigger,
+  and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while the pointer
+  is anywhere over it, its tags moving together rather than each on its own. A fixed session-owner label and a diff's
+  collapsed-line label run over their text controls.
 - After an initial pause of about 600 ms the text scrolls at reading speed, about 60 px a second, toward the edge it
   is cut at — a label cut at its end scrolls forward through its text, one cut at its start scrolls back toward its
   beginning. It pauses there for three seconds, returns to where it rests in about 200 ms, then waits three seconds

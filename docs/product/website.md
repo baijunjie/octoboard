@@ -296,24 +296,24 @@ as well.
 
 ## Product preview
 
-The preview shows the actual application's interface populated with fictional data and identifies itself as a
-sample. Three buttons select the project overview, focus mode, or code review; the project overview is the
-initial scene. All three scenes show the same ongoing development and integration snapshot for the restaurant
-meal deal promotion across the eight independent example projects named in "Homepage and navigation". They show
-the coordinating and project sessions, a project in focus mode with its files and shell terminal, and a selected order-validation
-diff. Choosing a scene resets the demonstration to that view of the shared snapshot. The coordinator's terminal gives
-the same progress summary in every scene.
+The preview shows the actual application's interface populated with fictional data and identifies itself as a sample.
+Three buttons select the project overview, focus mode, or code review; the project overview is the initial scene. All
+three scenes show the same ongoing development and integration snapshot for the restaurant meal deal promotion across
+the eight independent example projects named in "Homepage and navigation". They show the coordinating and project
+sessions, a project in focus mode with its files and shell terminal, and a selected order-validation diff. Choosing a
+scene resets the demonstration to that view of the shared snapshot. The coordinator's terminal gives the same progress
+summary in every scene.
 
 The focus-mode scene opens Restaurant order API's project focus mode, including its three sessions bound to the
 coordinator. Its working Codex session is selected. On desktop, the Files and Terminal panels open together beside
 the agent terminal, with Files above Terminal. The Terminal panel contains a sample `zsh` shell whose `pwd` and
 `git branch --show-current` output match the project's directory and branch.
 
-Seven sessions, including the coordinator, are working. The sessions for Promotion console and Checkout register
-await instructions after completing their current checks, with integration feedback still pending. Restaurant order API's
-order-validation review session awaits instructions while a test watcher (`pnpm test --watch`) runs in the
-background, so it shows as working in background. Its order-checking session waits for the user to confirm the
-discount rule. These statuses retain their application meanings in `docs/product/sessions.md`, "Session statuses".
+Seven sessions, including the coordinator, are working. The sessions for Promotion console and Checkout register await
+instructions after completing their current checks, with integration feedback still pending. Restaurant order API's
+order-validation review session awaits instructions while a test watcher (`pnpm test --watch`) runs in the background,
+so it shows as working in background. Its order-checking session waits for the user to confirm the discount rule. These
+statuses retain their application meanings in `docs/product/session-statuses.md`.
 
 Each session's agent terminal imitates its agent's own terminal interface: Claude Code, Codex and Grok Build each
 have a distinct header, prompt, tool-call rows, input area and hints. These looks are approximations and name no
@@ -360,10 +360,10 @@ active offer, reserve available stock and prevent repeated requests from creatin
 tests and promotion rules.
 These files and check counts are demonstration data.
 
-Every agent counts as installed in the preview, and the rail's account quota panel shows sample readings of each
-agent's default account: Claude Code on the Max plan and Codex on the Plus plan, each with a five-hour and an account-wide weekly
-window, and Grok Build on SuperGrok with a weekly credit pool. Their reset times count from when the preview loaded,
-so no visit finds a reset already past. These readings are demonstration data.
+Every agent counts as installed in the preview, and the rail's account quota panel shows sample readings of each agent's
+default account: Claude Code on the Max plan and Codex on the Plus plan, each with a five-hour and an account-wide
+weekly window, and Grok Build on SuperGrok with a weekly credit pool. Their reset times count from when the preview
+loaded, so no visit finds a reset already past. These readings are demonstration data.
 
 The homepage embeds a complete desktop viewport scaled to fit its available width. The preview reserves its final
 responsive height while loading, keeping section-link destinations stable as it initializes. The application fills the
@@ -378,11 +378,10 @@ text entry, selection and scrolling intact. Devices without hover show no fade.
 The standalone link opens the selected scene and language in a new tab at `preview/website-preview.html`, relative
 to the site's deployment root. The standalone preview displays its sample-data label above the application.
 
-On devices whose primary pointer is touch, both previews keep text-entry fields read-only so tapping or automatically focusing
-the terminal or another text field does not open the software keyboard. Buttons, menus, selection and scrolling
+On devices whose primary pointer is touch, both previews keep text-entry fields read-only so tapping or automatically
+focusing the terminal or another text field does not open the software keyboard. Buttons, menus, selection and scrolling
 remain interactive. Devices whose primary pointer is a mouse or trackpad retain keyboard text entry, including
-touchscreen desktops. This restriction applies only to
-the website previews, not to the application itself.
+touchscreen desktops. This restriction applies only to the website previews, not to the application itself.
 
 Vertical mouse-wheel and trackpad gestures scroll the embedded list, terminal, code or report under the pointer
 while it has room to scroll in that direction. At its top or bottom boundary, continuing in the same direction
@@ -445,11 +444,11 @@ macOS app as an early prototype still in development. The site does not give an 
 Status: not implemented — the Linux server and the Windows, iOS and Android apps. Each appears with a platform icon
 and no download or availability date.
 
-Linux is a planned server, not another app version beside Windows, iOS, and Android, and not a Linux desktop app.
-The platform introduction describes it as a server accessed from another machine's browser (see "Two deployment
-forms" in `docs/architecture.md`). It is not available. The Linux row has its own server-specific planned status.
-Windows, iOS, and Android remain planned and not available, and those rows use the shared planned badge. The homepage
-Markdown includes the same introduction and the same status for each row.
+Linux is a planned server, not another app version beside Windows, iOS, and Android, and not a Linux desktop app. The
+platform introduction describes it as a server accessed from another machine's browser. It is not available. The Linux
+row has its own server-specific planned status. Windows, iOS, and Android remain planned and not available, and those
+rows use the shared planned badge. The homepage Markdown includes the same introduction and the same status for each
+row.
 
 ## Motion and accessibility
 
@@ -509,11 +508,9 @@ website terms page; the software's license is linked separately from the privacy
 Status: not implemented. The privacy page says that remote host support is planned and does not describe a workflow.
 
 Remote host support runs in one direction only: the daemon the user is talking to reaching a second machine to run
-sessions there. The server form runs the other way — one daemon, on a server, with the user's browser on another
-machine (see "Two deployment forms" in `docs/architecture.md`) — and is not what this section or the privacy page's
-remote-host disclosure describe. The homepage's platform information describes that planned server (see
-"Platform availability"). The privacy page does not. The site's local-data
-statements describe the machine the daemon runs on, which
-in the server form is the server rather than the machine in front of the user, and a privacy page covering that form
-has to say that the interface then travels over the network between the server and the user's browser. That addition
-has not been written.
+sessions there. The server form runs the other way — one daemon, on a server, with the user's browser on another machine
+— and is not what this section or the privacy page's remote-host disclosure describe. The homepage's platform
+information describes that planned server (see "Platform availability"). The privacy page does not. The site's
+local-data statements describe the machine the daemon runs on, which in the server form is the server rather than the
+machine in front of the user, and a privacy page covering that form has to say that the interface then travels over the
+network between the server and the user's browser. That addition has not been written.

@@ -33,15 +33,16 @@ What it holds, in this order:
   badge's start. It is a button of its own — a tab stop of its own on the sidebar row and in focus mode's header alike —
   named that the Git check failed, with no tooltip, and it opens a popover under the rules of a failure mark (see
   "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). The popover says that Git
-  reported an error the last time the project's repository was checked or pulled, then that Octoboard checks it again on its own and that an error
-  that does not go away is to be resolved in the repository with Git, and last, as raw text in a block of its own, the
-  message `git` or the operating system itself gave. That message is shown nowhere else: not in the badge's tooltip and
-  not in any name. The two sentences are the same for every failure. A press on the mark on a sidebar row never reaches
-  the row, so it does not fold the project. A failed check does not blank the rest of the badge: the branch and the
-  counts are still read from the repository and shown beside the mark; a failed read with no branch and no counts shows
-  the mark alone.
+  reported an error the last time the project's repository was checked or pulled, then that Octoboard checks it again on
+  its own and that an error that does not go away is to be resolved in the repository with Git, and last, as raw text in
+  a block of its own, the message `git` or the operating system itself gave. That message is shown nowhere else: not in
+  the badge's tooltip and not in any name. The two sentences are the same for every failure. A press on the mark on a
+  sidebar row never reaches the row, so it does not fold the project. A failed check does not blank the rest of the
+  badge: the branch and the counts are still read from the repository and shown beside the mark; a failed read with no
+  branch and no counts shows the mark alone.
 - **The branch name** — or the short commit id, when `HEAD` is detached. A repository with no commit yet says so in its
-  place, and nothing stands there when the branch could not be read at all, the failure mark carrying the reason instead.
+  place, and nothing stands there when the branch could not be read at all, the failure mark carrying the reason
+  instead.
 - **How far the branch is ahead of its upstream**, after an up arrow, and **how far behind**, after a down arrow, each
   shown only while it is not zero and each number written in the current language. A branch with no upstream shows
   neither. During a push, the ahead count's arrow scrolls continuously upward; during a pull, the behind count's

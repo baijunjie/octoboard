@@ -109,15 +109,14 @@ typography is that `Text` — `Paragraph`, `Heading`, `Typography` and `Code`, w
 that fragment as a plain element instead (a `<span>` carrying the same classes), or wrap it in
 `<TextContext.Provider value={{}}>`.
 
-A field's explanatory note is HeroUI's `Description`, as a **direct child of the field** and a sibling of the part
-that holds the control and label (`Checkbox.Content`). HeroUI styles it only in that position — the rules are keyed
-on `& > [data-slot="description"]` (`packages/ui/node_modules/@heroui/styles/dist/components/`), which is what
-indents it under the label — and react-aria normally folds its id into the control's `aria-describedby` on its own.
-Keep using `Description`, rather than a hand-rolled note. For a `Select` whose note can first appear after the field
-has mounted without one, give `Description` a stable `useId` and set the field's `aria-describedby` to that id only
-while the note exists: react-aria's slot association does not recover when only the children change. Preserve the mounted
-control so the note appearing does not lose keyboard focus; verify the association through absent → present →
-absent notes.
+A field's explanatory note is HeroUI's `Description`, as a **direct child of the field** and a sibling of the part that
+holds the control and label (`Checkbox.Content`). HeroUI styles it only in that position — the rules are keyed on
+`& > [data-slot="description"]` (`packages/ui/node_modules/@heroui/styles/dist/components/`), which is what indents it
+under the label — and react-aria normally folds its id into the control's `aria-describedby` on its own. Keep using
+`Description`, rather than a hand-rolled note. For a `Select` whose note can first appear after the field has mounted
+without one, give `Description` a stable `useId` and set the field's `aria-describedby` to that id only while the note
+exists: react-aria's slot association does not recover when only the children change. Preserve the mounted control so
+the note appearing does not lose keyboard focus; verify the association through absent → present → absent notes.
 
 The one checkbox that cannot keep it there is one with a mark (`StatusMark`) after its label. The mark stays outside
 react-aria's `<label>` — inside it, it is interactive content in a label and its name joins the checkbox's — and it

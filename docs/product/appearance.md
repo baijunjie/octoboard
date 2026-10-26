@@ -24,9 +24,9 @@ Everything the window shows follows the chosen appearance, including:
   they were given; the Powerline branch, line-number and lock symbols are adjusted like any other character. So
   output from an agent whose own colour scheme assumes the other appearance (pale greys and blues meant for a dark
   background, for instance) stays readable rather than all but vanishing.
-- **A Grok Build session's own theme**, which is picked from the appearance in force when the session is launched
-  and does not follow later appearance changes while it runs (see "Per-agent specifics a user will notice" in
-  `docs/product/launching-agents.md`).
+- **A Grok Build session's own theme**, which is picked from the appearance in force when the session is launched and
+  does not follow later appearance changes while it runs (see "Grok Build's theme" in
+  `docs/product/per-agent-launch-specifics.md`).
 - **A console session's colour**, shown in its own sidebar row and as the binding badge on every project
   session bound to it (see "The binding badge" in `docs/product/sidebar-session-rows.md`).
   Each colour in the fixed palette of console session colours has its own light and dark value, so in either
@@ -39,20 +39,19 @@ Everything the window shows follows the chosen appearance, including:
   rail. In the macOS application it is the system's translucent sidebar material, drawn in the chosen appearance; in a
   browser it is an opaque colour of the appearance's own (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`).
-- **Code in a project pane's file viewer**, highlighted in a high-contrast colour scheme of its own for each
-  appearance, every colour of which meets 4.5:1 against the code's background. That background is the colour
-  scheme's own: white in the light appearance, near-black in the dark one. What sets the reading area apart from the
-  surrounding dialog — white in light, lighter than the reading area in dark — is a narrow band of its own round the
-  area, not the area's fill. The background fills the whole code area, including space beyond the text,
-  and a file shown as plain text sits on it too;
+- **Code in a project pane's file viewer**, highlighted in a high-contrast colour scheme of its own for each appearance,
+  every colour of which meets 4.5:1 against the code's background. That background is the colour scheme's own: white in
+  the light appearance, near-black in the dark one. What sets the reading area apart from the surrounding dialog — white
+  in light, lighter than the reading area in dark — is a narrow band of its own round the area, not the area's fill. The
+  background fills the whole code area, including space beyond the text, and a file shown as plain text sits on it too;
   a file shown as an image sits on a checkerboard drawn in the appearance's colours (see "What it shows" in
-  `docs/product/file-viewer.md`). A diff there (see "Opening a change" in `docs/product/project-pane-git-change-viewer.md`) is
-  highlighted in the same scheme, with added and removed lines tinted and marked `+` and `-`, and a changed word within
-  a line underlined rather than tinted, so that every colour still meets 4.5:1 on the tinted lines. A rendered
-  Markdown document (see "A Markdown file as a document" in `docs/product/file-viewer.md`) sits on that background
-  too, whichever Markdown style is chosen, its links underlined as well as coloured, in the link colour (see "The
-  link colour" below), which meets 4.5:1 on it in either appearance. A diagram
-  in that document is drawn in the same ink and paper as the highlighted code.
+  `docs/product/file-viewer.md`). A diff there (see "Opening a change" in
+  `docs/product/project-pane-git-change-viewer.md`) is highlighted in the same scheme, with added and removed lines
+  tinted and marked `+` and `-`, and a changed word within a line underlined rather than tinted, so that every colour
+  still meets 4.5:1 on the tinted lines. A rendered Markdown document (see `docs/product/markdown-documents.md`) sits on
+  that background too, whichever Markdown style is chosen, its links underlined as well as coloured, in the link colour
+  (see "The link colour" below), which meets 4.5:1 on it in either appearance. A diagram in that document is drawn in
+  the same ink and paper as the highlighted code.
 - **A console's default avatar**, whose fills have their own light and dark values (see "Avatar" in
   `docs/product/consoles.md`).
 - **The native window's own appearance** in the macOS application — the window's close, minimise and zoom buttons
@@ -75,12 +74,11 @@ How a launch avoids showing the window before the appearance has been applied is
 
 ## Where the choice is stored
 
-The choice is remembered **per client**, in that client's own browser storage. The daemon does not store it,
-and it is not among the files under `~/.octoboard` (see "Files Octoboard owns" in
-`docs/product/application-lifecycle.md`). The one thing a client tells the daemon is what the choice has resolved to,
-light or dark, sent with a request that launches a session so that a Grok Build session's theme matches the terminal;
-the daemon uses it for that launch alone and keeps nothing of it (see "Per-agent specifics a user will notice" in
-`docs/product/launching-agents.md`).
+The choice is remembered **per client**, in that client's own browser storage. The daemon does not store it, and it is
+not among the files under `~/.octoboard` (see "Files Octoboard owns" in `docs/product/application-lifecycle.md`). The
+one thing a client tells the daemon is what the choice has resolved to, light or dark, sent with a request that launches
+a session so that a Grok Build session's theme matches the terminal; the daemon uses it for that launch alone and keeps
+nothing of it (see "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`).
 
 So the choice does not travel. A desktop window and a browser tab, or two machines reaching the same
 daemon, each keep their own; a client whose storage has been cleared is back to System.

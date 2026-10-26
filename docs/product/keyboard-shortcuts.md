@@ -10,10 +10,10 @@ there are, how they are changed and how a key press is matched against them.
 
 ## How a combination is written and matched
 
-**A command's shortcut is one key with a set of modifiers, and it is matched exactly**: the key, and those modifiers with none
-more and none fewer. The key is the physical key, by its position on the keyboard, so a keyboard layout does not move a
-shortcut and a held Shift does not change which key it is. A key cap is labelled with the key's name on a US layout:
-`F` for the F key, `,` for the comma key.
+**A command's shortcut is one key with a set of modifiers, and it is matched exactly**: the key, and those modifiers
+with none more and none fewer. The key is the physical key, by its position on the keyboard, so a keyboard layout does
+not move a shortcut and a held Shift does not change which key it is. A key cap is labelled with the key's name on a US
+layout: `F` for the F key, `,` for the comma key.
 
 The modifiers are written the same on every platform:
 
@@ -26,10 +26,9 @@ The modifiers are written the same on every platform:
 
 So a default means the same thing on every platform, and a shortcut carried from one machine to another in a
 configuration file (see "The shortcuts as data" below) is the same combination there. Wherever a shortcut is shown its
-key caps read in the order the other modifier, Alt, Shift, the primary modifier — ⌃ ⌥ ⇧ ⌘ on an Apple keyboard —
-and then the key, and keep that order under a right-to-left language (see
-"Right-to-left layout" in `docs/product/window-layout.md`). Where the Keyboard shortcuts section tells assistive
-technology a combination, it says it in words, as "Shift+Command+F".
+key caps read in the order the other modifier, Alt, Shift, the primary modifier — ⌃ ⌥ ⇧ ⌘ on an Apple keyboard — and
+then the key, and keep that order under a right-to-left language (see `docs/product/right-to-left-layout.md`). Where the
+Keyboard shortcuts section tells assistive technology a combination, it says it in words, as "Shift+Command+F".
 
 ## What is listed
 

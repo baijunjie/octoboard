@@ -12,908 +12,97 @@ own binary and shows it as it is. What it adds to each launch, and what it guara
 | Console session | the console's working directory | the console sessions section |
 | Project session | the project's directory | under that project |
 
-**A console may hold any number of console sessions running at once.** Opening, resuming or reopening
-one never checks what else is running in the console, and the sidebar lists every one of them that is
-not archived, each as its own row, in the console sessions section above the project list (see "The
-console sessions section and the project list" in `docs/product/sidebar.md`).
+**A console may hold any number of console sessions running at once.** Opening, resuming or reopening one never checks
+what else is running in the console, and the sidebar lists every one of them that is not archived, each as its own row,
+in the console sessions section above the project list (see "The console sessions section and the project list" in
+`docs/product/sidebar.md`).
 
 A console session's row follows a session row exactly — the same status glyph, its agent's icon, its title, a pin button
 when pinned, and selecting it resumes it when it is interrupted, as selecting an interrupted session's row does. Its
 action menu offers **Lock**/**Unlock**, **Pin**/**Unpin**, **Focus mode** (see `docs/product/focus-mode.md`),
-**Rename**, **Copy session ID** (see "Session rows" in
-`docs/product/sidebar-session-rows.md`), **Colour** (see "The binding badge" in `docs/product/sidebar-session-rows.md`),
-**Switch account**, **Hand off** and **Archive** — **Delete** in its
-place while the console session has never been used (see "Deleting an unused session" in
+**Rename**, **Copy session ID** (see "Session rows" in `docs/product/sidebar-session-rows.md`), **Colour** (see "The
+binding badge" in `docs/product/sidebar-session-rows.md`), **Switch account**, **Hand off** and **Archive** — **Delete**
+in its place while the console session has never been used (see "Deleting an unused session" in
 `docs/product/deleting-sessions.md`); there is no Resume item, for the same reason. A console session's title is
-renameable, like a project session's; its default is under **Name** in "Opening a session" below.
+renameable, like a project session's; its default is under **Name** in "The session dialog" in
+`docs/product/opening-sessions.md`.
 
 The user archives a console session from its own row's menu, as any session is archived; the console session can also
 archive itself once every session under it is archived (see "A session archiving itself" in
 `docs/product/hub-orchestration.md`). Archiving it moves it among the console's archived console sessions; these are not
-reached from any one row, but from the console's own menu, which offers **View archive** — a submenu of the
-console's newest archived console sessions, each of which can be selected, and the way to the archive view of all of
-them (see "The console header" in `docs/product/sidebar.md`). The console header's **New console session** button opens
-the session dialog described in "Opening a session" below — whereas resuming or reopening a console session keeps its
-recorded agent and account; only switching accounts changes its account (see "Agent config directories" in
-`docs/product/consoles.md` and `docs/product/switching-session-accounts.md`).
+reached from any one row, but from the console's own menu, which offers **View archive** — a submenu of the console's
+newest archived console sessions, each of which can be selected, and the way to the archive view of all of them (see
+"The console header" in `docs/product/sidebar.md`). The console header's **New console session** button opens the
+session dialog described in "The session dialog" in `docs/product/opening-sessions.md` — whereas resuming or reopening a
+console session keeps its recorded agent and account; only switching accounts changes its account (see "Agent config
+directories" in `docs/product/consoles.md` and `docs/product/switching-session-accounts.md`).
 
-A console session carries no project; it runs in the console's working directory. It is given
-Octoboard's orchestration tools and dispatches work to sessions in the console's projects — see
-`docs/product/hub-orchestration.md`. Because it belongs to no project, archived console sessions
-belong to the console rather than to any project.
+A console session carries no project; it runs in the console's working directory. It is given Octoboard's orchestration
+tools and dispatches work to sessions in the console's projects — see `docs/product/hub-orchestration.md`. Because it
+belongs to no project, archived console sessions belong to the console rather than to any project.
 
-A project session bound to a console session carries that console session's **binding badge**
-wherever it is listed, and the console session's own row shows the same colour (see "The binding
-badge" in `docs/product/sidebar-session-rows.md`).
+A project session bound to a console session carries that console session's **binding badge** wherever it is listed, and
+the console session's own row shows the same colour (see "The binding badge" in `docs/product/sidebar-session-rows.md`).
 
-An **unbound** project session — one the user opened by hand without choosing a console session under **Report to**
-(see "Opening a session" below), or one started on another session's request that the user approved — is given a
-narrower set of the orchestration tools, scoped to its own project: it can start sessions there, which are bound to it
-and report to it, and drive them (see "The unbound project session's tools" in `docs/product/hub-orchestration.md`). A
-session it starts carries no binding badge and cannot start sessions of its own. A session's **owner** is the session
-it is bound to: a console session or a project session (an unbound session's own owner is the user). An owner can hand
-a session of its own to another owner, or release it, leaving it unbound, and an unbound project session can bind itself
-to one; bound to a console session while keeping the sessions it started, it is a **lead session**. None of these asks
-the user, who can release a bound session too, and orchestration stays at most two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md` and
-`docs/product/changing-session-owners.md`).
-Every session, of whatever kind, can also list the other running sessions, in every console and project, and share
-information with any of them; it takes work only from its owner, and what comes from another session is information to
-weigh (see `docs/product/information-between-sessions.md`). Every session can also ask the user
-to start a session that is nobody's, in any project or a console session, which reports to the user (see
-`docs/product/session-requests.md`).
+An **unbound** project session — one the user opened by hand without choosing a console session under **Report to** (see
+"The session dialog" in `docs/product/opening-sessions.md`), or one started on another session's request that the user
+approved — is given a narrower set of the orchestration tools, scoped to its own project: it can start sessions there,
+which are bound to it and report to it, and drive them (see "The unbound project session's tools" in
+`docs/product/hub-orchestration.md`). A session it starts carries no binding badge and cannot start sessions of its own.
+A session's **owner** is the session it is bound to: a console session or a project session (an unbound session's own
+owner is the user). An owner can hand a session of its own to another owner, or release it, leaving it unbound, and an
+unbound project session can bind itself to one; bound to a console session while keeping the sessions it started, it is
+a **lead session**. None of these asks the user, who can release a bound session too, and orchestration stays at most
+two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md` and
+`docs/product/changing-session-owners.md`). Every session, of whatever kind, can also list the other running sessions,
+in every console and project, and share information with any of them; it takes work only from its owner, and what comes
+from another session is information to weigh (see `docs/product/information-between-sessions.md`). Every session can
+also ask the user to start a session that is nobody's, in any project or a console session, which reports to the user
+(see `docs/product/session-requests.md`).
 
 Selecting a session also gives the window's right pane, beside the terminal, to the session's own owner: a console
 session, whose **report panel** it holds (see `docs/product/report-panel.md`), or a project session's project, whose
-**Files panel** it holds (see `docs/product/project-pane.md`). When the right pane shows something else is in "What the right pane shows" in
-`docs/product/window-layout.md`.
+**Files panel** it holds (see `docs/product/project-pane.md`). When the right pane shows something else is in "What the
+right pane shows" in `docs/product/window-layout.md`.
 
 ## Where sessions are listed
 
-Sessions are listed in the sidebar, one console at a time: its console sessions in the console
-sessions section, a project session under its project. Archived sessions are not listed among the
-others; they are reached from their project's action menu or, for a console session, the console header's
-action menu, and from the archive view. Everything about the sidebar — its rows and menus, the order sessions
-are listed in, pinning, the archive view and how selecting a session works — is in
-`docs/product/sidebar.md`, `docs/product/sidebar-project-rows.md`, `docs/product/sidebar-session-rows.md`,
-`docs/product/order-of-projects-and-sessions.md` and `docs/product/archive-view.md`; focus mode is in
-`docs/product/focus-mode.md`.
+Sessions are listed in the sidebar, one console at a time: its console sessions in the console sessions section, a
+project session under its project. Archived sessions are not listed among the others; they are reached from their
+project's action menu or, for a console session, the console header's action menu, and from the archive view. Everything
+about the sidebar — its rows and menus, the order sessions are listed in, pinning, the archive view and how selecting a
+session works — is in `docs/product/sidebar.md`, `docs/product/sidebar-project-rows.md`,
+`docs/product/sidebar-session-rows.md`, `docs/product/order-of-projects-and-sessions.md` and
+`docs/product/archive-view.md`; focus mode is in `docs/product/focus-mode.md`.
 
 ## Opening a session
 
-New console session from the console header, the console sessions section's empty row, and the terminal's offer of
-the same action open a dialog before anything is launched. New session under a project opens the same dialog for that
-project. The sidebar's **+** buttons can also open a session without the dialog, on the values the dialog would open
-on; see "Opening a session with defaults" below.
-
-The dialog is titled "Open session" for a project session and "Open console session" for a console session; the first
-sentence of its body names the project, or the console, the session will be opened in.
-
-A project session's dialog opens with two tabs at its head, **New conversation**, selected by default, and **Resume
-conversation**: the **Resume conversation** tab starts with a required **Session ID** field alone, and shows the
-fields that follow only once the conversation is found; its agent and account are never picked there, and it has no
-**Report to** field (see "Resuming a conversation by its session ID" below). What is typed or
-picked is kept across a switch between the tabs, while the Advanced section folds back closed. The dialog for a console
-session has no tabs, and neither has the dialog opened from a console session's focus mode, whose session always starts
-a new conversation.
-
-A dialog without tabs, and the **New conversation** tab, offer these fields in this order:
-
-- **Name** (optional) — the empty field previews the default name: the project's name for a project session, or the
-  console's name for a console session, followed by the session label in the UI's current language. Leaving it empty
-  uses that default when the session is created, with no numeric suffix; multiple sessions can have the same name.
-  The field stays empty until the user enters a custom name. The dialog removes surrounding whitespace from an
-  entered name and uses the default when nothing remains; a custom name gets no session label added. Renaming the
-  parent or changing the UI's language affects future defaults; existing sessions keep their created names. A task
-  title can still appear before either kind of created name, as described in "Displayed names" in
-  `docs/product/session-titles.md`.
-- **Agent** — an agent picker joined to an account picker, as in the project dialog. The agent picker lists the
-  agents that can be picked, in the order of the added agents, with their icons and names, and otherwise only the one
-  it holds (see "Which agents the agent pickers list" in `docs/product/consoles.md`). The field opens on the default
-  resolved in "Which agent a session uses" below when that agent can be picked, otherwise on the first agent that can,
-  whenever there is one.
-  The account picker offers only that agent's accounts, with its default account first, and is shown even when the
-  default account is the agent's only one, offering that account alone. It opens on the account "Which account a
-  session uses" below describes.
-  There is no inheritance entry: both pickers settle concrete choices for this session.
-  Each account in the picker carries a compact usage bar (see "In an account picker" in
-  `docs/product/account-quotas.md`). A used-up account (see "A used-up account" in `docs/product/account-quotas.md`)
-  is listed but cannot be picked, with a short note under its name saying it is used up and when it resets. When the
-  account the field would open on, or would fall to when the user turns to another agent without having picked one
-  of its accounts, is used up, the field takes the first account of the same agent that is not, in the picker's order.
-  When the chosen account is used up all the same — every account of the agent is, the agent's only account among
-  them, or a reading arrives while the dialog is open — the field says under its pickers, which are marked invalid,
-  that the account cannot be used for now, naming the quota it has reached and when it resets, and the dialog cannot
-  be submitted until another agent or account is chosen or the account is no longer used up.
-  An account whose sharing of the default configuration is being changed, which the daemon refuses a session on
-  meanwhile (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`), is treated
-  the same way while the change runs: it is listed but cannot be picked, its usage bar staying and a short note under
-  its name saying why, with the full reason as its description for assistive technology in place of what remains of
-  its quota; the field passes over it as it passes over a used-up account; and when the chosen account is one all
-  the same, the field says under its pickers that its sharing is being changed, to choose another account or wait,
-  and the dialog cannot be submitted until then.
-  A turned-off account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the field
-  passes over it as it passes over a used-up account. Only when the account the field ends on is turned off all the
-  same — every account of the agent is unavailable, the account was turned off while the dialog is open, or the
-  **Resume conversation** tab settles on it — is it listed, and then it cannot be picked: its usage bar stays and a
-  short note under its name reads "Disabled", with the full reason as its description for assistive technology; the
-  field says under its pickers that the account is turned off, to choose another account or turn it back on in
-  Settings, and the dialog cannot be submitted until then. An account that is turned off is
-  described as turned off, whatever its quota or its sharing.
-  An account whose last change of sharing is incomplete can be picked, and submitting on it asks the user first (see
-  "Starting a session on an account whose last change is incomplete" in
-  `docs/product/sharing-the-default-configuration.md`).
-  Switching agents retains each agent's account choice separately. If a remembered account is removed while the dialog
-  is open, that agent stays selected and its account falls back to the account the field would open on for that agent
-  (see "Which account a session uses" below); with its last named account removed, the picker stays, offering the
-  default account. Switching agents returns focus to the Agent picker.
-- **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
-  sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its colour, the same one the session's binding badge
-  will carry (see "The binding badge" in `docs/product/sidebar-session-rows.md`), or none. A chosen console session
-  receives this session's reports, instead of the session staying outside the orchestration. A console with no such
-  console session shows no choice at all, and the session is unbound. A session still starting is not offered because
-  its launch may yet fail and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding
-  can change afterwards — the owner hands the session to another, an unbound session binds itself to one, or the owner
-  or the user releases the session, leaving it unbound; see `docs/product/changing-session-owners.md`. A session the
-  console session itself starts is always bound to it, and one a project session starts is bound to that project
-  session; one started on another session's request is bound to nobody; see "Which sessions an owner drives" in
-  `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session** offer outside focus
-  mode. Opened from a project's focus mode the dialog has no such field and the session is always unbound; opened from a console session's focus mode it
-  has none either, and shows a line saying the session reports to that console session instead, which is the binding
-  it gets (see `docs/product/focus-mode.md`). Should that fixed console session become unavailable — archived or gone —
-  no session is opened, and the dialog turns into a failure modal titled that a session cannot be opened, which
-  identifies the unavailable owner, with its name set apart as a chip, and offers only its acknowledgement, which
-  closes the dialog (see "The failure modal" in `docs/product/error-alerts.md`). A console session
-  chosen in the optional Report to picker becoming unavailable instead returns that choice to no console session,
-  keeping the form open. The **Resume conversation** tab has no such field, since a resumed session is never bound
-  (see "Resuming a conversation by its session ID" below).
-
-After these fields, the collapsed **Advanced** section offers the model and reasoning effort for this session. It
-initially shows what the session would inherit for the selected agent (see "Which model and reasoning effort a session
-uses" below); untouched values keep following it, and changes apply only to this session, including when resumed.
-The choices, clearing and account-specific lists are described in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`.
-
-A console session has no project or Report to field and is never bound to another session. Opening it with the daemon
-protocol's `open_session` accepts an explicit agent and account as the dialog does. Its `title` is stored trimmed, and
-one that is absent, `null` or blank uses the parent's current name alone: the console's name for a console session,
-or the project's name for a project session. The daemon words no default name in the UI's language; the UI supplies its
-localized default explicitly when no custom name was entered.
-
-**Every new session is listed at once as *starting*,** before its agent has been launched, and the launch goes on
-behind it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the
-launch: it closes as soon as the session is recorded, and the session's terminal says it is starting until the agent
-is up (see "Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded —
-an unknown owner, an unavailable agent or one that is not added, a used-up account, a model the agent does not offer, the refusals about a conversation to resume
-below — is still shown while the dialog is open, in an error alert over it, and the dialog stays open. A session an agent opens with `new_session`, and the session
-an approved request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting*
-the same way, but the agent's call, or the approval, is answered only once the launch has settled, with the launch's
-own refusal when it fails.
-
-The dialog takes no task: once up, a session the user opens by hand is in *awaiting instructions*, sitting at the
-agent's prompt, and is given its work by typing into its terminal. Only a session started with `new_session` — by a
-console session or a project session — or on another session's request that the user approved is handed an opening
-prompt, the brief it is started with (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md` and
-"On approval" in `docs/product/session-requests.md`); once up, it is in *working*.
-
-A session in a folder its agent has not been told to trust can first stop on that agent's own trust confirmation,
-before it takes up its task or reaches its prompt. A resumed session can stop on it as well; since a session left
-interrupted is relaunched only when it is selected or resumed, that is when its confirmation appears. Octoboard presses
-that confirmation for the user once they have given permission — for that project, or for a folder its directory lies
-under, whichever agent asked — or asks them first; see `docs/product/folder-trust.md`.
-
-If the launch itself fails — the directory cannot be reached, the agent binary is not on the user's `PATH`, the user's
-shell environment could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), or, for
-Grok Build only, the account the session would hold pins a directory that is not an initialized Grok home (see "Agent
-config directories" in `docs/product/consoles.md`) or the launch would run under Grok's own sandbox (see "Per-agent
-specifics a user will notice" in `docs/product/launching-agents.md`) — the *starting* session is removed again and no
-session is left behind. For a session opened from the dialog, or with defaults (see "Opening a session with defaults"
-below), the failure is reported in an error alert titled "Could not start the session", whose first line names the
-session, and which gives the reason, worded from the failure's own code in the UI's language, with any raw text the
-cause carried under **Error details** (see "The error alert" in `docs/product/error-alerts.md`); for a shell environment
-capture that ran out of time, the explanation is laid out beneath that line — the command that did not finish and its
-time limit, the likely cause, and what to fix. Should the session's record itself fail to be removed, it is left
-*interrupted* instead, and the error alert is shown all the same. For `new_session` and an approved session request the
-failure is reported through that call instead (see "When an approval cannot be carried out" in
-`docs/product/session-requests.md` for the latter). A missing config directory does not fail a brand new session for the
-other two agents: it has no conversation to lose, so Claude Code creates the directory itself and Octoboard creates it
-for Codex.
-
-**When no agent is both added and installed, the window offers no way to open a session, before any of that** (an
-agent counts as installed until it has been determined unavailable; see "Which agents the agent pickers list" in
-`docs/product/consoles.md`). Every way into the session dialog is disabled: the console header's **+**, each project
-row's **+**, the **+** of either focus mode's header and of each project in a console session's focus mode; the
-project's empty row saying there are no sessions yet is plain text rather than a button, in the project list and in
-a project's focus mode alike; and no **+** offers to open a session with defaults (see "Opening a session with
-defaults" below). Where the window says why:
-
-- when some supported agent is installed, or not yet determined unavailable, but none of those is added, the
-  terminal's empty panel, where it would otherwise offer a new session, says that no agent is added and offers **Add
-  agent…** (see "A console with nothing in it" in `docs/product/session-terminal.md`), and the console sessions
-  section, with room for less, says only that no agent is added;
-- when every agent has been determined unavailable, the terminal's empty panel, where it would otherwise offer a new
-  session, says that no agent was found and how to make one available, and the console sessions section says only
-  that no agent was found on the user's `PATH` (see "The console sessions section and the project list" in
-  `docs/product/sidebar.md`).
-
-If this state comes about while the session dialog is open — the last such agent removed or found unavailable
-meanwhile — nothing is opened, and the dialog turns into a failure modal titled that a session cannot be opened,
-saying that no agent is available to open a session, with nothing but its acknowledgement, which closes the dialog
-(see "The failure modal" in `docs/product/error-alerts.md`).
-
-**The daemon refuses to open a session of an agent that is not added.** Whatever opens it — the dialog, a session
-opened with defaults, `open_session`, a console or project session's `new_session` (with
-`resume_agent_session_id` too), or an approved session request — a new session whose agent, once resolved (see "Which
-agent a session uses" below), is not on the list of added agents is refused with `agent_not_added`, and nothing is
-recorded. The refusal names the agent and says it is not added, pointing to Settings → Agent accounts; in the window it
-is shown in an error alert offering **Add agent…** (see "Recovery and unexpected errors" in
-`docs/product/error-alerts.md`). A session request is refused that way before the user is asked, and again on
-approval should the agent have been removed meanwhile (see `docs/product/session-requests.md`). Handing a session off
-to an agent that is not added is refused the same way (see "What can be handed off" in
-`docs/product/handing-off-sessions.md`). While the list is undecided (see "Added agents" in
-`docs/product/agent-accounts.md`) nothing is refused for it; a list the user has emptied refuses every agent. An agent
-that has been determined unavailable is refused as unavailable (`agent_not_available`) rather than as not added. Only
-a session being opened is checked: a session of an agent removed since keeps running, and resuming, reopening or
-restarting it is never refused for this.
-
-**The daemon refuses to open a session on a turned-off account** (see "Turning an account off" in
-`docs/product/agent-accounts.md`). Whatever opens it — the same openings as for a used-up account below — a new
-session whose account, once resolved (see "Which account a session uses" below), named or inherited, is turned off is
-refused with `account_disabled`, and nothing is recorded; the user's own request is refused too. It is checked before
-the quota, so a turned-off account is refused as turned off whatever its quota says. The refusal carries `agent` and
-`account` (the account's name; the default account under the name the user gave it, else `Default`). In the window it
-is shown in an error alert, in the UI's language, saying the account is turned off, so a session cannot be opened on
-it; the next step is to choose another account, or to turn this one back on, and the alert has a **Manage accounts…**
-button (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). An agent's tool call is refused with a
-reason in English naming the account and the agent and saying to choose another account or turn it back on in
-Settings. A session request is refused that way before the user is asked, and again on approval should the account
-have been turned off by then (see `docs/product/session-requests.md`). Only a session being opened is checked: a
-session already on the account keeps running, and resuming, reopening or restarting it is never refused for this.
-
-**The daemon refuses to open a session on a used-up account.** Whatever opens it — the dialog, a session opened with
-defaults, `open_session`, a console or project session's `new_session` (with `resume_agent_session_id` too), a
-handoff's receiving session, or an approved session request — a new session whose account, once resolved (see "Which
-account a session uses" below), is used up by the reading the daemon holds at that moment (see "A used-up account" in
-`docs/product/account-quotas.md`) is refused with `account_quota_exhausted`, and nothing is recorded; the user's own
-request is refused too. The refusal carries `agent`, `account` (the account's name), `window` (the used-up window's
-name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Credits`, or a window's own label when it
-carries one), `window_kind` (session, weekly or credit period), `window_minutes` (its length, when known),
-`model_weekly` (when the same reading also has a model's own weekly window) and, when the agent gives a reset time, `resets_at` in
-milliseconds since the epoch. In the window it is shown in an error alert, in the UI's language, saying the account
-cannot run a session because it has reached that limit, the window named as everywhere else in the UI (see "Quota
-windows" in `docs/product/account-quotas.md`): Claude Code's "session limit", Codex's "5h limit", Claude Code's
-account-wide weekly window as "weekly limit for all models" when the reading also has a model's own weekly window, and
-so on; a refusal that does not say what the window is names it as a limit of its `window` name. The alert also says,
-when known, how long until it resets, counted from when the alert is shown; the next step is to choose another account
-that has not reached its limit, or to try again once the usage limit resets. An agent's tool call is refused with a reason in English
-naming the account, the agent and the window (the five-hour window as "session" for Claude Code and "5h" for Codex,
-Claude Code's account-wide weekly window as "Weekly · all models" when the reading also has a model's own weekly
-window, any other by its `window` name), about how long until it resets when known, and saying to choose another
-account or wait for the reset. A session request is refused that way before the user is asked, and again on approval
-should the account be used up by then (see `docs/product/session-requests.md`); an owner's handoff the user is asked
-to approve is refused for it only on approval, since its form lets the user choose another account (see "The user's
-approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). Only a session being opened is
-checked: a session already on the account keeps running, and resuming, reopening or restarting it is never refused for
-this.
-
-With every agent determined unavailable, a console session's `new_session` tool is refused as well, with a reason it
-can report that says the same (see "The console session's tools" in `docs/product/hub-orchestration.md`). Nothing is
-refused for an agent being unavailable while availability is still being determined: a session then opens or fails
-exactly as described above.
-
-### Opening a session with defaults
-
-While the platform's primary modifier is held — ⌘ on macOS, Ctrl elsewhere, each without the other — every sidebar
-**+** that opens the session dialog turns into its quick form: it shows a bolt in place of the plus, and its tooltip
-and accessible name say it opens the session **with defaults**. Pressing it then opens the session at once, without
-the dialog. These are:
-
-- the console header's **+**, New console session (see "The console header" in `docs/product/sidebar.md`);
-- each project row's **+** (see "Project rows" in `docs/product/sidebar-project-rows.md`);
-- the header's **+** in a project's focus mode (see "A project's focus mode" in `docs/product/focus-mode.md`);
-- in a console session's focus mode, each project's own **+** and the header's **+** menu of projects, where the
-  project chosen is opened with defaults (see "A console session's focus mode" in `docs/product/focus-mode.md`).
-
-The empty rows' and the terminal's **New session** and **New console session** offers have no quick form; they always
-open the dialog.
-
-A **+** button pressed with the modifier opens with defaults even when the hold had not been noticed before the press.
-A project chosen from the console session focus mode's menu opened with the pointer follows whether the modifier is
-held at the moment it is chosen. Keyboard creation in focus mode follows "Creating sessions from the keyboard" in
-`docs/product/focus-mode.md`. The hold ends when the key is released, when the window loses focus and when the page is
-hidden; a modifier already down while the window was in the background is picked up once the pointer moves or a key
-is pressed.
-
-The session opened is the one the dialog would open if submitted untouched:
-
-- the localized default name (see **Name** above);
-- the agent and account the dialog opens on (see "Which agent a session uses" and "Which account a session uses"
-  below), sent as the session's own choice;
-- no model or reasoning effort of its own, so both follow the parent;
-- a new conversation, never a resumed one;
-- **unbound** — from the project list too, where the dialog's **Report to** starts on no console session — except in a
-  console session's focus mode, where it is bound to that console session, as the dialog opened there binds it.
-
-It is listed as *starting* and selected, as a session opened from the dialog is, and a launch failure is reported the
-same way (see above). A refusal is shown in an error alert titled "Could not open a session". When the console
-session it would be bound to is no longer available — archived or gone — nothing is sent, and an error alert titled
-"Cannot open a session" says so, with the same message the dialog shows in that case, then the remedy: if that session
-was archived, choose **View archive**, then **Reopen** on it; otherwise start a session with **New session**. It is a
-known failure (`quick_create_owner_gone`) and asks for no report. The other cases below in which nothing is sent are
-titled "Cannot open a session" too. Only one session opens with defaults at a time: further presses are ignored until
-the daemon has answered the previous one. If the sidebar has switched to another console by the time
-the answer arrives, the session is still opened but not selected.
-
-When no agent is both added and installed, no **+** shows its quick form, and every one of them is disabled (see
-"Opening a session" above).
-
-When the account the dialog would open on is used up, turned off, or having its sharing of the default configuration
-changed, the session opened with defaults takes another account of the same agent, as the dialog does (see **Agent**
-above). When no account of the agent is left that is none of these, and the one it would open on is turned off,
-nothing is sent and an error alert says the account is turned off, as the daemon's `account_disabled` refusal does
-(see "Opening a session" above); when the one it would open on is having its sharing changed instead, nothing is sent
-and an error alert says the account's sharing is being changed, as the daemon's `account_sharing_in_progress` refusal
-does. When the account it opens on has an incomplete last change of sharing, the user is asked first, and cancelling
-opens nothing (see "Starting a session on an account whose last change is incomplete" in
-`docs/product/sharing-the-default-configuration.md`). When no account of that agent can open a session, each being used
-up or turned off, there is nothing to open with defaults:
-
-- the **+** in its quick form looks disabled but stays focusable and under the pointer; its accessible name stays its
-  action, while its tooltip, and its description for assistive technology, say in short that the default agent's
-  accounts are unavailable, without naming the agent;
-- pressing it — or pressing a **+** with the modifier before the hold was noticed — opens nothing and shows an error
-  alert: when the account it would open on is turned off, the alert for a turned-off account above; otherwise one that
-  names the button's action and says it is unavailable because none of the default agent's accounts can open a session
-  right now, each having reached its usage limit or being turned off, with the advice to choose another agent in the
-  new session dialog, or to try again once a usage limit resets or an account is turned back on;
-- in the **+** menu of projects in a console session's focus mode, held in its quick form, each such project is
-  disabled, with a short note under its name saying the default agent's accounts are unavailable; it stays reachable
-  with the arrow keys, and its accessible name ends with that note.
-
-Without the modifier, the same **+** opens the dialog as usual.
-
-### Which agent a session uses
-
-In descending priority:
-
-1. the agent chosen for this session when it was opened;
-2. the project's default agent;
-3. the console's default agent for project sessions;
-4. the console's default agent for console sessions.
-
-A console session has no project, so it uses the agent chosen for that session, or the console's default agent for
-console sessions when none is given; the default for project sessions never applies to it. Both console defaults are
-in `docs/product/consoles.md`. Console sessions of different agents can run alongside each
-other in the same console, and all read the same instruction file, described in "The console session's instruction
-file" in `docs/product/launching-agents.md`.
-
-The same order settles the agent everywhere a session's agent is not given outright: the session dialog's initial
-choice, a session opened with defaults, and a session of a project associated with "Detect from files" whose directory
-named no agent (see "The project's default agent" in `docs/product/projects.md`). A session that a project session
-starts itself without naming an agent — with `new_session`, or with `request_session` in the caller's own console —
-runs the caller's own agent instead, and so does a console session's request for a console session in its own console;
-either falls back to this order only when that agent cannot open a session. A session a console session starts in a
-project, and a session request for another console, follow this order (see "The agent and account of a session a
-session starts" in `docs/product/hub-orchestration.md`).
-
-A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent —
-session records belong to a specific agent and cannot be moved across agents.
-
-### Which account a session uses
-
-The account of the session's agent, in descending priority:
-
-1. the account chosen for this session when it was opened;
-2. the project's account for that agent, where the project does not leave it to its console — a project set to **the
-   agent's default account** ends the chain there, whatever the console names;
-3. the console's account for that agent;
-4. that agent's default account.
-
-A console session carries no project, so after its own account choice its chain goes straight to the console's
-reference. A project leaves the account to the console for every agent it inherits for, which is how every project
-starts (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). While **Automatically
-select an account** is off (see that section in `docs/product/settings.md`), a session opened without changing the
-account picker runs under the project's account for its agent, or the console's, or the agent's default account when
-neither pins anything. The session's account is named in its agent icon's tooltip and its accessible session name
-(see "Session rows" in `docs/product/sidebar-session-rows.md`), and on the line beside the agent icon of its focus mode
-card (see "What both views show" in `docs/product/focus-mode.md`) and of its row in the archive view (see "The archive
-view" in `docs/product/archive-view.md`); wherever the agent's name is shown, it carries no
-account suffix.
-
-While the switch is on, a new session whose account was not named uses the account of that session's agent whose weekly
-quota resets soonest, among the accounts that can still open a session. An account the session names still wins,
-including an explicit choice of the agent's default account, which does not fall through to a project pin. On
-`open_session`, `null` is that explicit choice of the default account, not the absence of a choice. Where an agent's
-tool names an account, `default` is the same choice; leaving `account` out, or sending it blank, is not.
-
-Who makes the pick:
-
-- The new-session dialog computes it, shows it in the account picker, and sends it as the session's own choice. The
-  user can still pick another account. Until the user does, the account shown follows the dialog's clock (see "A
-  used-up account" in `docs/product/account-quotas.md`). The handoff dialog does the same for the receiving session
-  (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
-- Opening a session with defaults uses the same account the dialog would open on, and sends it the same way (see
-  "Opening a session with defaults" above).
-- `new_session` and `request_session`, when `account` is left out or blank, have the daemon make the same pick, in the
-  caller's own console and in another console (see "The agent and account of a session a session starts" in
-  `docs/product/hub-orchestration.md`).
-- The **Resume conversation** tab does not follow the pick. It sends the agent and account that hold the conversation,
-  shown locked, when that account can still be selected (see "Resuming a conversation by its session ID" below).
-- `handoff_session`, when `account` is left out or blank, has the daemon make the same pick for the receiving session
-  (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
-
-When the switch is on but no account ranks, the account is the one it would be while the switch is off. The
-new-session dialog, the handoff dialog and a session opened with defaults open on the account the project or console
-resolves to, then another account of that agent when that one is used up or turned off. For `new_session` and `request_session` the
-fallback is in "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`: in the
-caller's own console, the caller's own account only when the session is of the caller's own agent and that account can
-still open a session, otherwise the project's for the agent, else the console's; in another console, the project's,
-else the console's, and never the caller's. `handoff_session` falls back as `new_session` does in the caller's own
-console, a session the caller owns always being in it.
-
-The dialog and the daemon rank the same way:
-
-- Candidates are that agent's accounts that can still open a session. An account is not a candidate when it is used up
-  (see "A used-up account" in `docs/product/account-quotas.md`): a five-hour, account-wide weekly, or credit-pool window
-  at 100% or more, whose reset is still ahead or absent, drops the whole account. A model-specific weekly limit never
-  does that, and it does not drive this pick either. Nor is an account a candidate while it is turned off (see
-  "Turning an account off" in `docs/product/agent-accounts.md`), whatever its quota.
-- The default account is a candidate ahead of that agent's stored accounts, in the order they are kept.
-- The window that ranks is an account-wide weekly window, or a credit pool whose period is about a week (6 to 8 days,
-  the ends included), the window "Quota windows" in `docs/product/account-quotas.md` calls **Weekly**. A five-hour
-  window, a model-specific weekly window, and a monthly credit pool do not rank. How much of the five-hour window
-  remains is not a key.
-- The share used must be a finite number below 100, and the reset must be strictly in the future. A reset that has
-  passed or is missing does not rank.
-- On one account, the soonest such reset wins, then the larger remainder.
-- Across accounts, the soonest reset wins, so quota about to reset is spent first; a larger remainder breaks a tie;
-  an equal tie keeps the earlier candidate. One percent left that resets in an hour is chosen over ninety percent that
-  resets in three days.
-- An account used up on its five-hour window is not chosen even when its weekly window resets soon.
-- The reading used is the one held for that account under the directory it points at now. A reading taken under
-  another directory does not count (see "Which accounts have a quota" in `docs/product/account-quotas.md`).
-
-### Which model and reasoning effort a session uses
-
-A session uses its own model and reasoning effort choices, each independently, or inherits the current defaults for
-its agent: a project session from its project, else its console's project session pair; a console session from its
-console's console session pair. The inheritance, explicit clearing and persistence
-rules are in `docs/product/model-and-reasoning-effort.md`. How the resolved values reach the agent is in "The model
-and reasoning effort" in `docs/product/launching-agents.md`.
-
-### Resuming a conversation by its session ID
-
-A project session can be opened on a conversation that already exists, given its session ID — the one the agent's own
-resume command takes — instead of starting a new one: a conversation the user had with the agent outside Octoboard
-(Claude Code, Codex or Grok Build run in a terminal), or one a session of the same project already holds, which is
-then reopened, resumed or gone to rather than continued a second time, since one conversation is never shared by two
-sessions. The session
-dialog's **Resume conversation** tab, beside the default **New conversation** tab at the head of the dialog, does
-this. The tabs are offered for a project session only, from the project list, the terminal's **New session** offer and
-a project's focus mode alike: the dialog for a console session has none, and neither has the dialog opened from a
-console session's focus mode, whose session always reports to that console session. A session started with
-`new_session` never resumes one. A session can ask the user to do what the tab does, with the same limits, through
-`request_resume_session` (see `docs/product/requests-to-resume-a-conversation.md`).
-
-The tab first shows the required **Session ID** field alone. The fields after it appear only once the lookup of a
-valid ID has answered, and depend on what holds the conversation (see "Finding the conversation" below). **The agent
-and account are never picked**: they are found from the ID and shown as a locked Agent field. It has no **Report to**
-field either, since a resumed session is never bound; the **New conversation** tab still shows the choice made there
-before. The ID is acted on only when the dialog is submitted from the **Resume conversation** tab; one typed there and
-then left for the **New conversation** tab is not.
-
-**The ID must be a UUID.** The field takes the hyphenated form the agents show (such as
-`123e4567-e89b-12d3-a456-426614174000`), in either letter case. An empty field, or anything else, stops the submit
-and is reported under the field — asking for the session ID of the conversation to resume when it is empty, and
-giving an example ID otherwise — and focus moves to the field. From then on the message follows what is typed.
-
-#### Finding the conversation
-
-Once the field holds a valid ID and typing pauses, the daemon is asked where the conversation is held, and the answer
-settles which fields follow the ID and what the submit button is and does. Until it answers, a spinner shows at the end
-of the ID field and the submit button is disabled. Changing the ID asks again; only the answer for the ID in the field
-counts. What was found is announced to assistive technology; it is not shown as a line of text.
-
-A session that records the ID as its agent's conversation is looked for first, whatever its agent, and decides the
-answer on its own; only when no session records it are the agents' own records searched. The session found is judged
-by its state at that moment in the window, and the tab follows it while the dialog is open: one archived meanwhile is
-reopened, one interrupted meanwhile is resumed, and one whose process starts meanwhile is gone to.
-
-| Where the conversation is | Fields after the Session ID | Submit button |
-|---|---|---|
-| No session; an agent's own record | **Name**, editable, as on the **New conversation** tab; the agent and account that hold the record, locked; the Advanced section for that agent and account | **Open** — opens a new session resuming it (see "Opening a new session on a found conversation" below) |
-| An archived session of this project | **Name**, filled in with the session's name and editable; its agent and account, locked | **Reopen** — reopens that session (see "Reopening an archived session from the tab" below) |
-| An interrupted session of this project | **Name**, showing the session's name, and its agent and account, all locked | **Resume** — resumes that session (see "Resuming or going to a session of this project from the tab" below) |
-| A session of this project that is starting or whose process is running | **Name**, showing the session's name, and its agent and account, all locked | **Go to session** — selects that session (see "Resuming or going to a session of this project from the tab" below) |
-| A session of another project, or a console session, in any state | none; an alert directly under the field names that session and where it is (see "Naming a session outside the project" in this section) | disabled |
-| Nowhere | none; the field's own error says under it that no conversation with that ID was found in any account, the field marked invalid | disabled |
-
-A conversation found nowhere is a verdict on the ID in the field, so it is the field's error, shown as the answer
-arrives without waiting for a submit, and announced as a field's error is. A lookup that fails — it could not be made,
-so it says nothing about the ID — shows its failure in an alert directly under the field instead, with no fields after
-it, and the submit button stays disabled. Each of these alerts — a session held elsewhere, a holder no longer offered
-(below), a failed lookup — is titled that this conversation could not be resumed, with what was found or the failure
-under the title. They are the lookup's outcome, not a verdict on what was typed: the field is not marked invalid, and
-each is announced to assistive technology as it appears (see "Failures shown on the screen" in
-`docs/product/error-alerts.md`).
-The locked Agent field holds that agent alone; its account half shows the account that holds the conversation whenever
-it has a name to show, including when it is the agent's sole default account.
-
-**Which records are searched.** Every agent that is available and added, in its default account and in every stored
-account of it, each in the config directory a launch of that account would use: the account's own directory, or for
-the default account the directory the agent defaults to under the user's login shell environment (see "Agent config
-directories" in `docs/product/consoles.md`). When several accounts hold a record of the conversation, the one whose
-record was written to last wins; for Grok Build that is judged by when its session directory last changed, so only
-approximately. A login shell environment that cannot be captured leaves the default accounts out of the search, and is reported as the
-lookup's failure only when no stored account holds the conversation either.
-
-If the agent or account holding the record is not offered, or stops being offered while the dialog is open — the
-agent is uninstalled or no longer added, or the account is removed — the fields after the ID go, an alert under the
-field says that the agent or account holding the conversation is no longer available, and the submit button is
-disabled; no other agent or account is used in its place. An account holding the record that is offered but cannot
-open a session — turned off, used up, or having its sharing changed — keeps the fields, and its locked Agent field
-says why under it, marked invalid, as the **Agent** field does (see "Opening a session" above); the submit button is
-disabled meanwhile.
-
-**Naming a session outside the project.** The error for a conversation held outside the project names the session
-that holds it by its displayed name (see "Displayed names" in `docs/product/session-titles.md`), and where it is: the
-project it belongs to for another project's session, or the console for a console session. When the window does not
-know that session, or its project or console, the error says only that the conversation belongs to a session outside
-this project.
-
-#### Reopening an archived session from the tab
-
-**Reopen** reopens the archived session exactly as its **Reopen** action does (see "Archiving, interruption and
-resuming" in `docs/product/archiving-and-resuming-sessions.md`): with its own agent, account, model and reasoning
-effort, its terminal saying it is being resumed. The conversation is never opened in a second session. The session is
-then selected and the dialog closes. There is no Advanced section, since the session keeps its own launch settings.
-The **Name** field opens on the session's current name; the session is renamed once it is reopened only when the field
-holds, after surrounding whitespace is removed, a name that is not empty and differs from it (see "Renaming a
-session" below), and an emptied field keeps the session's name. A refusal of the reopen, such as a conversation that
-can no longer be resumed, is shown in an error alert and the dialog stays open; a reopen that finds the session
-already running counts as done. A rename that fails after the reopen is reported in an error alert, and the session
-stays reopened.
-
-#### Resuming or going to a session of this project from the tab
-
-A session of this project that is not archived keeps its own name, agent, account and launch settings: the **Name**
-field and the agent and account are locked, there is no Advanced section, and no new session is opened.
-
-- **An interrupted session** — **Resume** resumes that same session exactly as its terminal's "Resume" does (see
-  "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), then selects it and
-  closes the dialog. A refusal of the resume is shown in an error alert and the dialog stays open; a resume that finds
-  the session already running counts as done.
-- **A session starting or whose process is running** — **Go to session** selects that session and closes the dialog.
-
-#### Opening a new session on a found conversation
-
-Open starts a new project session that resumes the conversation, on the agent and account that hold its record, with
-the name typed and the model and reasoning effort of the Advanced section, which are passed to the agent when it
-resumes the conversation. In the daemon protocol, `open_session` takes the ID as `resume_agent_session_id`, trimmed,
-blank read as absent, together with the session's `agent` and `account`; the dialog sends the account it found, `null`
-for the default account.
-
-- **A resumed session is a plain, unbound project session.** `open_session` refuses a request that names both a
-  conversation to resume and a session to report to (`conflicting_fields`).
-- **The ID must be a UUID.** `open_session` takes any spelling of a UUID, trimmed, and keeps it lowercase and
-  hyphenated; anything else is refused (`resume_id_invalid`).
-- **A conversation already in Octoboard is refused.** No two sessions share one conversation: an ID that a session
-  already records as its agent's conversation, live or archived, is refused. A session of the same project is named,
-  and the user is told to resume or reopen that session instead (`conversation_in_session`); a session outside the
-  project — of another project, or a console session — is refused with that session's id
-  (`conversation_outside_project`, with `session`); the error alert says only that the conversation belongs to a
-  session outside the project, and the lookup the dialog then asks again names that session (see "Finding the
-  conversation" above). The check is made again once the new session is recorded, so two requests for the same
-  conversation cannot both succeed.
-- **The conversation must be in the session's account directory.** It is looked for in the config directory of the
-  account the session will use (see "Which account a session uses" above), as in the search above. With no record of
-  it there, the open is refused, naming the agent and the directory but not the ID, which is in the field above
-  (`conversation_to_resume_not_found`). For the default account, a login shell environment that could not be captured
-  refuses the open as well (see "The launch environment" in `docs/product/launching-agents.md`).
-- Every refusal comes before anything is recorded or launched: no session appears, and the reason is shown in an error
-  alert, the dialog staying open with what was entered. `open_session` also refuses an ID for a console session
-  (`resume_for_console_session`).
-- **The refusals about the conversation** — an ID that is not a conversation ID (`resume_id_invalid`), a conversation
-  already in a session (`conversation_in_session`, `conversation_outside_project`) and one not found
-  (`conversation_to_resume_not_found`) — are shown in an error alert like any other failure of the open; once it is
-  acknowledged, keyboard focus is back on the Session ID field. A conversation not found leaves the tab as it is, its
-  fields kept, so **Open** can be tried again. Any other of these refusals means the answer the tab holds may be stale,
-  so the lookup is asked again: while it runs the fields after the ID go and the spinner shows, and the new answer
-  decides the fields and the submit button as in "Finding the conversation" above.
-
-A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session
-opened from the dialog. It **has a conversation from the moment it is opened**, not from its first turn: interrupted
-before the user has typed anything, it resumes that conversation rather than starting a fresh one; it is never unused,
-so it is archived rather than deleted (see "Deleting an unused session" in `docs/product/deleting-sessions.md`);
-switching its account copies that conversation; and its relaunch is refused when its pinned config directory has gone
-(see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). Octoboard's status
-hooks and tools are injected as on any resume, so its status is tracked and its tools are there; whether the role
-description takes effect in it is in "What is injected on every launch" in `docs/product/launching-agents.md`.
-
-#### Locating a conversation in the daemon protocol
-
-`locate_conversation_to_resume` takes `project` (a project id) and `agent_session_id`, and is answered with
-`conversation_located`, whose `location` is tagged by `kind`:
-
-| `kind` | Fields | Meaning |
-|---|---|---|
-| `archived_session` | `session` | An archived session of `project` records the conversation. |
-| `live_session` | `session` | A session of `project` that is not archived records it. |
-| `outside_project` | `session` | A session of another project, or a console session, records it, in any state; `session` is its id. |
-| `record` | `agent`, `account` | No session records it; that agent's own records hold it in that account (an account id, or `null` for the agent's default account). |
-| `not_found` | — | No session records it and no searched account holds it. |
-
-The search is the one described in "Finding the conversation" above. An `agent_session_id` that is not a UUID is
-refused with `resume_id_invalid` (any spelling of a UUID is taken, as `open_session` takes it), a `project` that does
-not exist with `unknown_project`; a login shell environment that cannot be captured is the error only when nothing was
-found. The request only reads what is stored and on disk.
+Opening a session — the session dialog, opening one with defaults, what refuses it, and which agent, account, model and
+reasoning effort it uses — is described in `docs/product/opening-sessions.md`; opening one on an existing conversation
+by its session ID, in `docs/product/resuming-a-conversation-by-its-session-id.md`.
 
 ## Session statuses
 
-| Status | Wire value | Glyph | Meaning |
-|---|---|---|---|
-| Starting | `starting` | a muted arc turning | A newly opened session — from the dialog, by an agent's `new_session`, or by an approved session request — whose agent is still being launched; it has no process yet. It becomes *awaiting instructions*, or *working* for a session started with a brief, once the process is up, and is removed again if the launch fails (see "Opening a session"). |
-| Working | `working` | an accent-coloured dot pulsing a fading copy of itself outward | The agent is executing a turn. |
-| Waiting for the user | `waiting_user` | a raised hand that waves now and then | The agent is waiting on a permission decision, including its folder-trust confirmation, or has asked the user a question through its own ask-the-user tool; or Octoboard is asking the user on the agent's behalf while the agent's call waits, which is a session request (see "Waiting for the answer" in `docs/product/session-requests.md`). |
-| Awaiting instructions | `idle` | a green speech bubble | The process is running and sitting at its prompt. |
-| Working in background | `idle`, with a non-empty `background_tasks` | the *working* glyph as a hollow green ring: a green ring pulsing a fading copy of itself outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
-| Switching account | any status except `archived`, with `switching_account` true | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change and which the order of sessions still goes by. |
-| Interrupted | `interrupted` | a pause sign | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
-| Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
-
-*Working*, *waiting for the user*, *awaiting instructions* and *working in background* mean a process is running, and
-*starting* means one is about to be; the last two mean none is, and both can be resumed.
-
-The glyph stands for the status wherever one is shown — the sidebar's rows, focus mode's cards, the top bar's
-breadcrumb and a confirmation's list of the sessions it affects. In a confirmation, archived sessions omit the
-status glyph; the warning identifies them as archived. The waving hand and the outward pulse stand still
-where the system asks for reduced motion, leaving the working glyph a plain accent-coloured dot and the *working in
-background* glyph a plain hollow green ring; working and awaiting instructions still differ by shape as well as by
-colour. The starting arc, which *switching account* shares, stands still there too and differs from the rest by shape.
-*Working in background* is the *working* glyph drawn as a hollow ring in *awaiting instructions*' green: it is told
-apart from *working*'s filled dot by shape as well as by colour, and from *awaiting instructions* by shape.
-
-**How the status reaches a user who does not read the glyph** differs by placement:
-
-- On a **sidebar row** and on a **focus mode's card** the glyph adds nothing of its own for assistive technology: the
-  row's own accessible name says the status, and a card shows it in words beside the glyph.
-- On the **top bar's breadcrumb** and in a **confirmation's list of the sessions it affects** nothing around the glyph
-  says the status, so the glyph itself is named after it.
-- Every placement where no status text sits beside the glyph gives it a **tooltip** saying the status in the same
-  words — the **sidebar's rows**, the **top bar's breadcrumb** and a **confirmation's list** (see "Tooltips on
-  indicators" in `docs/product/labels-and-tooltips.md`). Focus mode's cards say the status in words already and
-  carry none.
-
-Transitions:
-
-- Opening a session puts it in *starting*; once its process is up it moves to *working* when it is handed an opening
-  prompt (a session started with `new_session`, or on another session's request that the user approved), and to
-  *awaiting instructions* otherwise, unless the agent's own first report has already moved it on (see "Opening a
-  session"). A launch that fails removes the session.
-- While the process runs, reports from the agent move the session between *working*, *waiting for the user* and
-  *awaiting instructions* — except while a folder-trust confirmation, Codex action prompt, a screen of the agent's
-  that only the user can answer or a session request holds it at *waiting for the user* (see "What the statuses are
-  derived from" below). A Claude Code session that would be
-  *awaiting instructions* reads as *working in background* while it has work left running there (see "Working in
-  background" below).
-- The process ending for any reason other than archiving — the agent exiting on its own, a crash, the application
-  quitting — leaves the session *interrupted*.
-- Archiving leaves the session *archived*. User-initiated archiving of an owner also ends and archives the sessions under it;
-  agent-initiated archiving is refused while any descendant has a process running (see "Archiving, interruption and
-  resuming" in `docs/product/archiving-and-resuming-sessions.md`).
-- Resuming an *interrupted* or *archived* session puts it in *awaiting instructions*, whichever of the two it came
-  from. A resume that is refused or fails to launch leaves the session exactly where it was, archived included. Resuming a session
-  whose owner is *archived* first does the same to its archived owners, the topmost first.
-- Switching a session to another account of its agent ends and relaunches its process without archiving it: it reads
-  as *interrupted* while the process is down and comes back in *awaiting instructions* — working again where it is
-  sent the prompt to continue its turn (see "Continuing after a switch" in
-  `docs/product/switching-session-accounts.md`) — and a switch that fails leaves it *interrupted* on the account it had
-  (see `docs/product/switching-session-accounts.md`).
-- An agent's report never moves a session out of *interrupted* or *archived*: whether a stopped session is one or the
-  other is Octoboard's own record, not the agent's.
-
-### What the statuses are derived from
-
-Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Only the
-session's own events count: those of a subagent it runs never change its status, on any agent, and on Claude Code
-neither do those of its internal helper agents. Seven things besides those events bear on a running session's status,
-and only these seven.
-
-- While a **Claude Code** session is *working* or *waiting for the user*, Octoboard also reads that session's own
-  transcript file — the machine-readable record the agent keeps of the conversation, still not its rendered output —
-  and, while it is *working*, the activity glyph its terminal title starts with, because neither a turn the user
-  cancels nor a declined prompt is reported by any hook event; see "Cancelling a Claude Code turn" and "Declining a
-  Claude Code prompt or question" in `docs/product/turns-hooks-do-not-report.md`.
-- While a **Grok Build** session is *working*, Octoboard also reads the spinner its terminal title starts with, because
-  a turn cancelled before its first token is reported by no hook event; see "Cancelling a Grok Build turn before its
-  first token" in `docs/product/turns-hooks-do-not-report.md`.
-- While a **Codex** session has a turn open, Octoboard also reads that session's own rollout file — the record Codex
-  keeps of the session, again not its rendered output — because a turn that ends in an error is reported by no hook
-  event at all; see "A Codex turn that ends in an error" in `docs/product/turns-hooks-do-not-report.md`.
-- A **Codex** terminal title showing `Action Required` holds the session at *waiting for the user*, including
-  a prompt for one of Codex's subagents. Both phases of its blinking indicator keep the hand up; other hook reports
-  cannot lower it while that title remains. See "The raised hand" below for its limits.
-- A recognised folder-trust confirmation that needs the user holds its session at *waiting for the user*, even
-  before the agent's first hook report. Its raised hand follows the confirmation rather than the dialog; see
-  "What happens when a confirmation comes up" in `docs/product/folder-trust.md`.
-- A screen of the agent's own that only the user can answer and that no hook reports — such as Claude Code's "Resume
-  this conversation?" or a view of its background agents, Codex's sign-in screen, or Grok Build's usage-limit screen —
-  holds its session at *waiting for the user* for as long as the session's rendered screen shows it, whatever the
-  agent's hook reports say meanwhile; once it is gone the session shows the agent's last reported status again. Which
-  screens are recognised is in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
-- A session request — a `request_session` or `request_resume_session` call, or an owner's `switch_session_account` or
-  `handoff_session` call the user is asked to approve — waiting for the user's answer holds
-  its session at *waiting for the user* for the whole wait, whatever the agent's own events say meanwhile; when the
-  request ends the session goes back to where its agent was last seen to be (see "Waiting for the answer" in
-  `docs/product/session-requests.md`).
-
-A session's end is not taken from a hook either: the process is observed directly.
-
-Where an agent reports nothing, the status simply stays at its last reported value. The known cases, which are
-limitations of what the agents expose rather than of this one:
-
-- A turn that ends with the agent asking a question **as plain prose** is indistinguishable from a finished turn on
-  all three agents, so such a session reads as *awaiting instructions* rather than waiting for the user.
-- Grok Build's bash mode (`!`) fires no tool or turn events, so work done through it never shows in the status; Grok's
-  turn-end backstop was seen to follow about a minute later in one run (see "When a session does not report" in
-  `docs/product/reporting-to-owners.md`), but it finds the session already awaiting instructions.
-- A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok
-  Build but not by Codex, which has no such event; a Codex session asking that way reads as *working* unless its
-  terminal title signals `Action Required`.
-- Work left running in the background is followed for **Claude Code only**. A Grok Build or Codex session whose turn
-  ends with work still running reads as *awaiting instructions*, never *working in background*.
-
-Part of the Grok Build case above is Octoboard's own attribution rule rather than a limit of what the agent exposes.
-Grok Build's turn-end backstop carries no turn id, so the daemon attributes it by clock. An ending that names its own
-turn, or a cancellation, arms one expected backstop (a flag, not a count), and the next clock-attributed signal spends
-it whether or not a turn is open. When an ending's own backstop never arrives, the flag stays armed, so a later turn
-whose only ending is its backstop would have that backstop discarded: the session would keep reading as working and,
-if it is bound to an owner, no report would be synthesized for that turn. Whether Grok produces that sequence in
-practice was not checked (in one run an ending followed within a second by a new prompt got no backstop).
-
-### Working in background
-
-A Claude Code turn can end while work it started is still running in the background — a shell command sent there
-(by the user, or by Claude Code when it runs past the tool's time limit), a Monitor, an MCP tool call still waiting, or
-a background agent. Claude Code lists that work as the turn ends, and as its background subagents start and stop
-between turns, and the session then reads as *working in background* instead of *awaiting instructions* until none of
-it is left. On the wire it is still `idle`; what sets it apart is the session's `background_tasks`, one entry per piece
-of work: `id`, and `type` and `description` where Claude Code gives them.
-
-**How the list is kept:**
-
-- Every turn end Claude Code reports carries the complete list of what is still running, and replaces the one before;
-  a turn end listing nothing empties it. A turn that ends in an error empties it too.
-- When a piece of work finishes, Claude Code tells the session so in a turn of its own, naming it; that work leaves the
-  list, and the session reads as *working* for that turn as for any other.
-- Between turns, while the session is at its prompt, a background subagent's own starts and stops keep the list
-  current, since a subagent can wake to its own background work without the session taking a turn. A subagent that
-  starts or resumes joins the list; one that stops leaves it, and the rest of the list becomes everything Claude Code
-  reports as still running across the whole session at that moment. A subagent's activity never changes the
-  session's status: while one works between turns the session keeps reading as *working in background*, not
-  *working*. Inside a turn these starts and stops change nothing, the turn's end listing everything. Only a named
-  subagent counts; Claude Code's internal helper agents are never listed. A subagent listed because it started
-  carries its description only if an earlier report had named it.
-- A subagent stop that would leave nothing running takes effect only after about **2 seconds**, so one subagent
-  handing over to the next does not make the session flash to *awaiting instructions* in between; a turn end, a
-  subagent starting, or another subagent stop within that time decides the list instead.
-- The list goes when the session's process ends — archived, interrupted, switched to another account or handed off —
-  and the work goes with the process, as it does when the agent exits on its own (see "Archiving, interruption and
-  resuming" in `docs/product/archiving-and-resuming-sessions.md`).
-- It is given only while the session is at its prompt: in any other status the session shows that status and no
-  list, and what was last listed shows again if it comes back to its prompt without a new turn end.
-- Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code
-  2.1.303), so the session keeps reading as *working in background*.
-
-**In every other respect it is a session awaiting instructions.** It takes a message straight away (see "Messages held
-until a session can take them" in `docs/product/message-delivery.md`), and it can be handed off (see "What can be
-handed off" in `docs/product/handing-off-sessions.md`). Unlike one awaiting instructions with nothing left running,
-archiving it asks for confirmation first (see "Archiving, interruption and resuming" in
-`docs/product/archiving-and-resuming-sessions.md`), quitting the application asks too (see "Quitting" in
-`docs/product/application-lifecycle.md`), and a turn that ends this way is not reported to its owner (see "When a
-session does not report" in `docs/product/reporting-to-owners.md`).
-
-**It has its own glyph and name** wherever a session's status is shown or said — its row, focus mode's card, the top
-bar's breadcrumb, a confirmation's list of sessions, the row's accessible name and the glyph's tooltip. **For activity
-summaries, it counts as working**: a console's badge on the rail and a collapsed project's activity marker (see
-"The console switcher" in `docs/product/console-switcher.md` and "Project rows" in
-`docs/product/sidebar-project-rows.md`), and a switch strip chip (see "The switch strip" in
-`docs/product/focus-mode.md`). Project and session lists ranked by status give it a separate place, following
-"Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu
-lists it in a group of its own, after **Working** (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
-
-Every session record the session tools give carries the list (see "Session records" in
-`docs/product/what-every-session-reads.md`).
-
-### The raised hand
-
-*Waiting for the user* is the raised hand, and it is made findable rather than left on the session's
-own row:
-
-- The session's row shows the raised hand. Its project row shows one while the project is collapsed,
-  and its console's avatar on the rail carries one, the rail showing every console at once, so a
-  waiting session can be found whatever the sidebar is showing (see "The console switcher" in
-  `docs/product/console-switcher.md` and "Project rows" in `docs/product/sidebar-project-rows.md`). In a console
-  session's focus mode, a console session's chip in the switch strip shows one too while it or a session bound to it is
-  waiting (see "The switch strip" in `docs/product/focus-mode.md`).
-- A system notification fires once as a session enters that state, naming the session by its title
-  and the project it runs in — or the console whose console session it is. A session that is answered and later
-  waits again notifies again. No notification permission is asked for: the application posts the
-  notification directly, and macOS showed no permission prompt. The banner was seen while Octoboard
-  was not the frontmost application; while it was frontmost, no banner was seen. A notification that
-  cannot be shown is not reported as having failed — the sidebar's own marker carries the same signal.
-- The Dock badge carries how many sessions are waiting, counted across every console, and clears
-  when none is. While the window is closed into the background Octoboard has no Dock icon; the count
-  is still kept and shows once it returns to the Dock (see "Closing the window" in
-  `docs/product/application-lifecycle.md`). The menu bar icon's menu lists the waiting sessions too
-  (see "The icon's menu" in `docs/product/menu-bar-icon.md`), and the icon itself carries an orange dot while
-  any is waiting (see "The icon's look" in `docs/product/menu-bar-icon.md`).
-- The rail carries the same count, as a raised hand and the number, shown only while at least one
-  session is waiting. Pressing it selects the next waiting session after the selected one — console by
-  console in the order the consoles were created, its console sessions before its projects' sessions,
-  and both in the sidebar's order (see "Order of projects and sessions" in
-  `docs/product/order-of-projects-and-sessions.md`) — and wraps from the last back to the first; when the selected
-  session is not waiting, it selects the first. The sidebar follows the session it selects (see "Selecting a session" in
-  `docs/product/sidebar.md`).
-
-**Where the hand is the agent's own, the user answers in the session's terminal**, and the status leaves *waiting for
-the user* on the agent's next event, when its Codex action title clears or when the screen that held it is no longer
-shown — or, where the answer was a decline and no
-event follows, on the decline showing up in the agent's own record of the conversation, which only Claude Code
-sessions are read for (see "Declining a Claude Code prompt or question" in
-`docs/product/turns-hooks-do-not-report.md`). Nobody can answer for them: a session driving others — a console
-session, or a project session that started sessions — is told to leave such a session alone, a message addressed to it
-is held until the user is done — see "Messages held until a session can take them" in
-`docs/product/message-delivery.md` — and an interrupt of its turn is refused (see "When a key is sent" in
-`docs/product/interrupting-turns.md`).
-
-**A granted tool permission prompt reported through hooks lowers the hand only once the call it let through has
-finished.** The user answering *yes* is itself reported by no event, so the next event the session produces is normally
-the end of that tool call — the hand
-stays up from the moment the prompt appeared until the call is done, which is a moment for a file write and minutes for
-a build or a test run. For that whole time the session reads as *waiting for the user* everywhere the hand is shown, it
-counts in the rail's waiting count and the Dock badge, and a message addressed to it goes on being held. There is no
-earlier signal to read: the delay is in what the agents report, not in how often Octoboard looks. Measured on Codex
-0.160.0 and on Claude Code 2.1.274; Grok Build was not measured. A prompt the user *declines* is not delayed this way:
-the decline ends the turn, and the hand comes down right after the answer.
-
-A hand raised for a folder-trust confirmation can be answered in its trust dialog or the terminal; see "What happens
-when a confirmation comes up" in `docs/product/folder-trust.md`.
-
-A hand Octoboard raised for a waiting session request is answered in that request's dialog instead, so a message
-addressed to such a session is not held (see "Waiting for the answer" in `docs/product/session-requests.md`).
-
-Where Codex's effective approval mode enables **automatic approval review** (`auto_review`) — from the explicit
-choice made for Codex or the account's own configuration (see "Approval modes" in `docs/product/agent-accounts.md`) — a permission event
-alone raises no hand: requests Codex resolves itself keep the session reading as *working*. If a manual prompt
-does reach the terminal, its `Action Required` title raises the hand, including a prompt labelled as belonging to
-a Codex subagent. Messages addressed to the session are held while that signal is present. When Codex changes the
-title back after the answer, the session returns to its last hook-reported status and queued messages are released
-if that status permits delivery, without waiting for another hook event.
-
-The title does not override a hook-reported wait after it clears: ordinary approvals whose last hook status is
-still *waiting for the user* keep the hand up until the tool finishes, as described above. This detection relies on
-Codex's activity title, which every launch keeps on: each launch sets the items of Codex's terminal title for that
-launch, overriding the user's and the project's own `tui.terminal_title` inside Octoboard's terminal, so the signal
-does not depend on how the user has configured their titles (see "Per-agent specifics a user will notice" in
-`docs/product/launching-agents.md`). The user's Codex configuration files are not changed.
+The statuses a session goes through, their glyphs, what they are derived from and the raised hand are described in
+`docs/product/session-statuses.md`.
 
 ## Locking a session
 
-Locking is the user's protection against archiving or deleting a session. Every session starts unlocked,
-including sessions already stored without a lock setting. The lock is shared by every client, survives a daemon
-restart, and stays set when the session is resumed or reopened. Locking does not change its position in a list,
-its status, or its binding. The controls are described in "Session lock controls" in
-`docs/product/sidebar-session-rows.md`.
-Agents have no tool to lock or unlock a session.
+Locking is the user's protection against archiving or deleting a session. Every session starts unlocked, including
+sessions already stored without a lock setting. The lock is shared by every client, survives a daemon restart, and stays
+set when the session is resumed or reopened. Locking does not change its position in a list, its status, or its binding.
+The controls are described in "Session lock controls" in `docs/product/sidebar-session-rows.md`. Agents have no tool to
+lock or unlock a session.
 
-An archive or deletion that includes a locked session is refused with `session_locked`, identifying that session,
-and changes nothing. This covers the session itself, an owner's sessions at both levels, deleting archived sessions
-in bulk, removing a project, and deleting a console. A locked descendant blocks archiving or deleting its owner,
-even when the descendant is already archived. A bulk operation is refused as a whole rather than skipping locks.
-Unlock the protected session before retrying. A completion report still reaches its owner but does not archive
-a protected session or owner (see "Automatic archiving" in `docs/product/reporting-to-owners.md`).
+An archive or deletion that includes a locked session is refused with `session_locked`, identifying that session, and
+changes nothing. This covers the session itself, an owner's sessions at both levels, deleting archived sessions in bulk,
+removing a project, and deleting a console. A locked descendant blocks archiving or deleting its owner, even when the
+descendant is already archived. A bulk operation is refused as a whole rather than skipping locks. Unlock the protected
+session before retrying. A completion report still reaches its owner but does not archive a protected session or owner
+(see "Automatic archiving" in `docs/product/reporting-to-owners.md`).
 
-While an archive or deletion is in progress, changing any session's lock is refused with `session_lock_busy`;
-retry after that operation finishes. A failed lock change leaves the stored lock unchanged.
+While an archive or deletion is in progress, changing any session's lock is refused with `session_lock_busy`; retry
+after that operation finishes. A failed lock change leaves the stored lock unchanged.
 
 ## Archiving, interruption and resuming
 
@@ -922,10 +111,10 @@ resumed, and how long archived sessions are kept are described in `docs/product/
 
 ## Renaming a session
 
-A session that is not archived offers **Rename** in its action menu; an archived session's menu has no Rename item.
-The rename field contains the created name alone; an empty name is rejected. The daemon's `rename_session` request
-and an owner's `rename_session` tool still accept archived sessions. An agent's terminal title remains separate
-(see "Displayed names" in `docs/product/session-titles.md`).
+A session that is not archived offers **Rename** in its action menu; an archived session's menu has no Rename item. The
+rename field contains the created name alone; an empty name is rejected. The daemon's `rename_session` request and an
+owner's `rename_session` tool still accept archived sessions. An agent's terminal title remains separate (see "Displayed
+names" in `docs/product/session-titles.md`).
 
 ## The terminal
 

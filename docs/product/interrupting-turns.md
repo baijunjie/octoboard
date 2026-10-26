@@ -1,10 +1,9 @@
 # Interrupting a session's turn
 
-An owner can stop the turn a session it owns is in the middle of, as the user pressing the agent's interrupt key in
-the terminal would. The session keeps its process and its conversation and goes back to *awaiting instructions*,
-for the owner to redirect it with `send_message`. This is not the *interrupted* status: that is a session whose
-process has ended (see "Session statuses" in `docs/product/sessions.md`), and an interrupted turn leaves the process
-running.
+An owner can stop the turn a session it owns is in the middle of, as the user pressing the agent's interrupt key in the
+terminal would. The session keeps its process and its conversation and goes back to *awaiting instructions*, for the
+owner to redirect it with `send_message`. This is not the *interrupted* status: that is a session whose process has
+ended (see `docs/product/session-statuses.md`), and an interrupted turn leaves the process running.
 
 ## Who can interrupt a turn
 

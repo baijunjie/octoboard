@@ -24,27 +24,27 @@ order:
 10. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
-`Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. It works from inside a report page too (see "Escape and F6 inside a page" in
-`docs/product/report-panel.md`). With focus in none of the regions, `F6` goes to the first region shown and
-`Shift+F6` to the last.
+`Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. It works from inside a
+report page too (see "Escape and F6 inside a page" in `docs/product/report-panel.md`). With focus in none of the
+regions, `F6` goes to the first region shown and `Shift+F6` to the last.
 
 The rail's account quota panel is not a region and does not change the cycle: both keys work as usual while the mouse
-has floated it in. A panel opened by a tap or the keyboard is modal, as a menu is, so the keys wait until it closes
-(see "Opening the panel" in `docs/product/account-quotas.md`).
+has floated it in. A panel opened by a tap or the keyboard is modal, as a menu is, so the keys wait until it closes (see
+"Opening the panel" in `docs/product/account-quota-panel.md`).
 
-**A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed,
-a pane that is only floating in, the right pane's panels when nothing owns the pane or none of its panels is open, a
-panel with nothing to take focus (a Files panel while it is still loading, see "Loading the project pane" in
+**A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed, a
+pane that is only floating in, the right pane's panels when nothing owns the pane or none of its panels is open, a panel
+with nothing to take focus (a Files panel while it is still loading, see "Loading the project pane" in
 `docs/product/project-pane.md`), the terminal and the archive view while a maximized Terminal panel covers them (see
 "Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`) or a panel floats over them below 782 px (see
-"Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal when no session is selected —
-unless its area is then offering a creation action, which makes it a stop (see "A console with nothing in it" in
-`docs/product/session-terminal.md`) — or while the archive view covers it.
-With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of them
-being on screen, and the welcome screen is the only stop between the rail and the update notice or the connection
-banner; with a console the welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and wider,
-or its drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and
-one that is still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
+"Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal when no
+session is selected — unless its area is then offering a creation action, which makes it a stop (see "A console with
+nothing in it" in `docs/product/session-terminal.md`) — or while the archive view covers it. With no console the
+sidebar, the archive view, the terminal and the right pane are all skipped together, none of them being on screen, and
+the welcome screen is the only stop between the rail and the update notice or the connection banner; with a console the
+welcome screen is the one skipped. The sidebar counts as shown when it is docked in the row at 1168 px and wider, or its
+drawer is open below that. A docked sidebar column that is still easing closed already counts as hidden, and one that is
+still easing open already counts as shown (see "The sidebar toggle and the panel toggles" in
 `docs/product/window-layout.md`). A right pane panel counts as shown while it is open, docked in the pane's column or
 maximized, or, below 782 px, while it floats over the terminal.
 
@@ -67,10 +67,10 @@ Where focus lands in each region:
 
 Pressing Retry from the keyboard works as with the mouse. If Retry holds focus when it goes away — because a retry
 begins or the banner disappears — focus returns to an open modal dialog: to the control it left while that control is
-still available in the dialog, otherwise to the dialog itself. With no modal dialog open, focus goes to the terminal
-— or, where the terminal cannot take it, where it goes instead (see "With no session selected" in `docs/product/session-terminal.md` and
-"Keyboard focus" in `docs/product/welcome-screen.md`). Pressing Retry with the mouse leaves keyboard focus where it
-was.
+still available in the dialog, otherwise to the dialog itself. With no modal dialog open, focus goes to the terminal —
+or, where the terminal cannot take it, where it goes instead (see "With no session selected" in
+`docs/product/session-terminal.md` and "Keyboard focus" in `docs/product/welcome-screen.md`). Pressing Retry with the
+mouse leaves keyboard focus where it was.
 
 The control focus lands on shows its focus ring, even when the last input before `F6` was the mouse.
 

@@ -22,17 +22,16 @@ own menu and the archive view.
 ## The console header
 
 The top of the sidebar names the console being shown, followed by a **+** button, **New console session**, then its
-action menu. The **+** opens the session dialog before launching anything (see "Opening a session" in
-`docs/product/sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
-"Opening a session with defaults" in `docs/product/sessions.md`). The menu offers **Add project**, **Console settings**,
-**View archive** and, after a separator, **Delete console** (see "Associating a project" in
+action menu. The **+** opens the session dialog before launching anything (see "The session dialog" in
+`docs/product/opening-sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
+"Opening a session with defaults" in `docs/product/opening-sessions.md`). The menu offers **Add project**, **Console
+settings**, **View archive** and, after a separator, **Delete console** (see "Associating a project" in
 `docs/product/projects.md`, and "Editing a console" and "Deleting a console" in `docs/product/consoles.md`; deleting
-asks for a typed confirmation first). **View archive** is a submenu of the console's archive preview
-(see "The archive view" in `docs/product/archive-view.md` for what it lists and how each item looks); choosing one
-selects it (see "Selecting a session" below). After them, **View all** opens the archive view of all of them whenever
-the console has an archived console session (see "The archive view" in `docs/product/archive-view.md`). A console with
-no archived console session shows only a disabled item saying so. The console's avatar is not repeated here; the rail
-marks it.
+asks for a typed confirmation first). **View archive** is a submenu of the console's archive preview (see "The archive
+view" in `docs/product/archive-view.md` for what it lists and how each item looks); choosing one selects it (see
+"Selecting a session" below). After them, **View all** opens the archive view of all of them whenever the console has an
+archived console session (see "The archive view" in `docs/product/archive-view.md`). A console with no archived console
+session shows only a disabled item saying so. The console's avatar is not repeated here; the rail marks it.
 
 ## The console sessions section and the project list
 
@@ -45,20 +44,21 @@ one does, and what its row's menu offers are in "Console sessions and project se
 The console sessions heading appends the number of console sessions listed in parentheses, including interrupted
 sessions and excluding archived ones. It shows zero when none are listed.
 
-The section's heading carries no action buttons or menu. Archived console sessions are reached from the console's own menu (see "The console header" above), not from the section or from any
-one row. With no console session at all, the section shows an empty row saying so; the whole row is a button that
-does what the console header's **+** button does (see "Empty rows" below).
+The section's heading carries no action buttons or menu. Archived console sessions are reached from the console's own
+menu (see "The console header" above), not from the section or from any one row. With no console session at all, the
+section shows an empty row saying so; the whole row is a button that does what the console header's **+** button does
+(see "Empty rows" below).
 
-With no agent both added and installed, the section instead carries an empty row, and the console header's **+**
-button is disabled, since no session can be opened from the window (see "Opening a session" in
-`docs/product/sessions.md`, which gives the full rule). When an installed agent waits to be added, the row carries the
-bot icon and says that no agent is added; otherwise it carries a warning icon and says that no agent was found on the
-user's `PATH`. It says that much and no more, and offers nothing to press: the terminal's empty panel, where it would
-otherwise offer a new session, says the rest, with **Add agent…** when an agent waits to be added (see "A console with
-nothing in it" in `docs/product/session-terminal.md`); the welcome screen's supported-tool list and hint are described in "What the
-welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section lists — a console
-session left interrupted from before an agent went off the `PATH` still has its row — and it takes the place of the "no
-console session" row.
+With no agent both added and installed, the section instead carries an empty row, and the console header's **+** button
+is disabled, since no session can be opened from the window (see "When no agent can open a session" in
+`docs/product/opening-sessions.md`, which gives the full rule). When an installed agent waits to be added, the row
+carries the bot icon and says that no agent is added; otherwise it carries a warning icon and says that no agent was
+found on the user's `PATH`. It says that much and no more, and offers nothing to press: the terminal's empty panel,
+where it would otherwise offer a new session, says the rest, with **Add agent…** when an agent waits to be added (see "A
+console with nothing in it" in `docs/product/session-terminal.md`); the welcome screen's supported-tool list and hint
+are described in "What the welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section
+lists — a console session left interrupted from before an agent went off the `PATH` still has its row — and it takes the
+place of the "no console session" row.
 
 Below it, a **Projects** heading and the console's projects (see "Order of projects and sessions" in
 `docs/product/order-of-projects-and-sessions.md`). With no project, an empty row saying the console has none yet takes
@@ -100,13 +100,13 @@ mark, so it is not told apart by colour alone. Opening and closing it with the m
   focus and are not Tab stops, and neither the keyword nor a single tag can be dropped from here. The way to drop
   the filter from the heading is Clear filter, which drops the keyword and every picked tag together; the popover
   changes them one at a time, and the search field's own clear button clears only the keyword.
-- The strip is one label, under the rules of "Names too long for their space" in
-  `docs/product/labels-and-tooltips.md`: it never wraps onto a further line and no entry in it is cut or fades on its
-  own. When it does not fit it is cut at its end and fades there; it does not scroll sideways. While the mouse
-  pointer is anywhere over the strip, the whole strip runs as one marquee, all its entries moving together. While cut,
-  it carries the whole filter as its tooltip, the same entries in the same order as plain text, but wrapped onto as
-  many lines as the tooltip's width needs; a single entry longer than a line is broken inside it. A strip that fits has no tooltip. For assistive technology the keyword and the picked tags are two groups, named **Filter keyword**
-  and **Selected tags**.
+- The strip is one label, under the rules of "Names too long for their space" in `docs/product/labels-and-tooltips.md`:
+  it never wraps onto a further line and no entry in it is cut or fades on its own. When it does not fit it is cut at
+  its end and fades there; it does not scroll sideways. While the mouse pointer is anywhere over the strip, the whole
+  strip runs as one marquee, all its entries moving together. While cut, it carries the whole filter as its tooltip, the
+  same entries in the same order as plain text, but wrapped onto as many lines as the tooltip's width needs; a single
+  entry longer than a line is broken inside it. A strip that fits has no tooltip. For assistive technology the keyword
+  and the picked tags are two groups, named **Filter keyword** and **Selected tags**.
 - Clicking Clear filter with the mouse leaves keyboard focus where it was; pressing it with the keyboard keeps focus
   on it.
 - The tags offered are the distinct tags of the console's projects, in alphabetical order, so a tag that no project
@@ -134,11 +134,12 @@ the filter button followed by this button.
   changes (see "Project rows" in `docs/product/sidebar-project-rows.md`). A press records the opposite action, subject
   to the all-expanded or all-collapsed reconciliation below.
 - A project's initial expanded or collapsed state, and when it expands or collapses on its own as its sessions change,
-  follow "Project rows" in `docs/product/sidebar-project-rows.md`; the state is kept per window without being stored. The button's choice is kept the same way, separately for each console:
-  switching to another console shows that console's own, and switching back, or entering and leaving focus mode, keeps
-  it. It is not stored, so reloading the window starts each console's button over. On first show, if any project of the
-  console is expanded the button offers Collapse all projects; if every project of the console is collapsed it offers to
-  expand projects with unarchived sessions.
+  follow "Project rows" in `docs/product/sidebar-project-rows.md`; the state is kept per window without being stored.
+  The button's choice is kept the same way, separately for each console: switching to another console shows that
+  console's own, and switching back, or entering and leaving focus mode, keeps it. It is not stored, so reloading the
+  window starts each console's button over. On first show, if any project of the console is expanded the button offers
+  Collapse all projects; if every project of the console is collapsed it offers to expand projects with unarchived
+  sessions.
 - Expanding or collapsing a project from its own row does not change the button while the console still has both
   expanded and collapsed projects. The button changes on its own only when every project of the console is expanded,
   when it offers Collapse all projects, or every project of the console is collapsed, when it offers to expand
@@ -159,11 +160,12 @@ compact row" in `docs/product/empty-states.md`: where there is one thing to do a
 is the button that does it, and the row takes its accessible name and its tooltip from that action.
 
 The rows with nothing to do about them are not buttons and carry no tooltip: the one saying no project matches the
-filter (see "Filtering the project list" above), the one saying no agent is added or none was found on the user's `PATH` (see
-"The console sessions section and the project list" above), and a project's row saying it has no sessions yet while no
-agent is both added and installed (see "Opening a session" in `docs/product/sessions.md`). Focus mode's empty lists use the same compact rows (see "What
-both views show" in `docs/product/focus-mode.md`). The terminal's empty state is a full panel carrying the next action
-for the current scope (see "A console with nothing in it" in `docs/product/session-terminal.md`).
+filter (see "Filtering the project list" above), the one saying no agent is added or none was found on the user's `PATH`
+(see "The console sessions section and the project list" above), and a project's row saying it has no sessions yet while
+no agent is both added and installed (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
+Focus mode's empty lists use the same compact rows (see "What both views show" in `docs/product/focus-mode.md`). The
+terminal's empty state is a full panel carrying the next action for the current scope (see "A console with nothing in
+it" in `docs/product/session-terminal.md`).
 
 ## Rows, names and keyboard focus
 
@@ -175,8 +177,8 @@ for the current scope (see "A console with nothing in it" in `docs/product/sessi
 - A row's **+**, Delete or Archive (see "Session rows" in `docs/product/sidebar-session-rows.md`) and action-menu
   buttons show while the row is hovered, holds keyboard focus, is the selected session, or has its menu open; they are
   still reached with Tab when hidden, and show once one of them has focus. They fade and open out as they appear, and
-  fade and close up as they go, briefly — at once where the system asks for reduced motion. On a device whose primary input cannot hover — a phone, or a tablet's
-  touch screen — they always show.
+  fade and close up as they go, briefly — at once where the system asks for reduced motion. On a device whose primary
+  input cannot hover — a phone, or a tablet's touch screen — they always show.
 - **Right-clicking** (or Control-clicking on macOS) a row that has an action menu opens that menu at the pointer, with
   the same entries as its action-menu button. This holds for a project row, a session row (a console session's
   included), the sidebar's header, a console's avatar on the rail (see "The console switcher" in
@@ -201,20 +203,20 @@ for the current scope (see "A console with nothing in it" in `docs/product/sessi
 ## Selecting a session
 
 Selecting a session shows its terminal; selecting an interrupted one resumes it, except by Next or Previous console
-session (`Ctrl+Tab` or `Ctrl+Shift+Tab` by default) in a console session's focus mode, which only shows an interrupted console session (see "The switch
-strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it: it is shown still archived,
-with its history in place of its terminal (see `docs/product/session-history.md`), and pressing Reopen reopens it
-(see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant
-sessions" in `docs/product/session-terminal.md`). Selecting a session also
-gives the window's right pane to its own owner: a console session's report panel, a project session's project's Files
-panel (see "What the right pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a project or console "View
-archive" submenu, focus mode and its switch strip, the archive view, the rail's waiting
-count, or the menu bar icon's menu (see "Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar
-follows it**: it switches to the session's console, showing the session selected rather than the one remembered for
-that console (see "What switching console shows" in `docs/product/console-switcher.md`), and leaves focus mode when the
-session does not belong to what focus mode is on (see "Leaving focus mode, and what is remembered" in
-`docs/product/focus-mode.md`). Back and Forward return to earlier selections without resuming anything (see
-`docs/product/navigation-history.md`).
+session (`Ctrl+Tab` or `Ctrl+Shift+Tab` by default) in a console session's focus mode, which only shows an interrupted
+console session (see "The switch strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it:
+it is shown still archived, with its history in place of its terminal (see `docs/product/session-history.md`), and
+pressing Reopen reopens it (see "Archiving, interruption and resuming" in
+`docs/product/archiving-and-resuming-sessions.md` and "Interrupted, archived and dormant sessions" in
+`docs/product/session-terminal.md`). Selecting a session also gives the window's right pane to its own owner: a console
+session's report panel, a project session's project's Files panel (see "What the right pane shows" in
+`docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a project or console "View archive"
+submenu, focus mode and its switch strip, the archive view, the rail's waiting count, or the menu bar icon's menu (see
+"Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar follows it**: it switches to the session's
+console, showing the session selected rather than the one remembered for that console (see "What switching console
+shows" in `docs/product/console-switcher.md`), and leaves focus mode when the session does not belong to what focus mode
+is on (see "Leaving focus mode, and what is remembered" in `docs/product/focus-mode.md`). Back and Forward return to
+earlier selections without resuming anything (see `docs/product/navigation-history.md`).
 
 A session is selected automatically only when this application is the one that opened it through the session dialog,
 for either a console or a project session, and that closes the archive view if it is
@@ -223,8 +225,9 @@ daemon opened, is listed unselected and is put on screen by the user selecting i
 
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
 is selected in its place, and the terminal's area shows its empty state: the panel asking for a session to be selected,
-or the next creation action for the current scope (see "With no session selected" in `docs/product/session-terminal.md`). The one exception is the session going with the last console: there is then no terminal at all, and the content panel shows
-the welcome screen (see `docs/product/welcome-screen.md`).
+or the next creation action for the current scope (see "With no session selected" in
+`docs/product/session-terminal.md`). The one exception is the session going with the last console: there is then no
+terminal at all, and the content panel shows the welcome screen (see `docs/product/welcome-screen.md`).
 
 ## How the sidebar's view changes
 

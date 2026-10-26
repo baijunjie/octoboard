@@ -12,7 +12,7 @@ const ICON_CLASS = "size-4 shrink-0";
  * something around it already says the status. */
 type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
 
-/** The glyph itself, one per status in the "Session statuses" table of docs/product/sessions.md, as
+/** The glyph itself, one per status in the status table of docs/product/session-statuses.md, as
  * lucide glyphs and dots rather than emoji (the project keeps user-facing UI free of decorative
  * emoji, the same convention `CLAUDE.md` sets for committed prose). Idle is a speech bubble
  * (sitting at the prompt, waiting to be told), starting a turning arc (the agent is still being

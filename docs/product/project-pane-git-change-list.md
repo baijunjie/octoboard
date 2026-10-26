@@ -87,19 +87,19 @@ What the branch has committed is compared with its **base**:
   1. the remote-tracking branch it is set to track, when what it tracks is a remote branch the repository has;
   2. otherwise the branch of the same name on one of the repository's configured remotes — `origin`'s when that has
      one, else the first such remote's in byte order of the remotes' names;
-  3. otherwise (a branch never pushed) the repository's **remote default branch** — the branch the `HEAD` of a configured remote points at
-     (`origin/HEAD` after a clone, or `git remote set-head`), `origin`'s when that has one, else the first such
-     remote's in byte order of the remotes' names, among those whose `HEAD` points at a remote branch the repository
-     has;
+  3. otherwise (a branch never pushed) the repository's **remote default branch** — the branch the `HEAD` of a
+     configured remote points at (`origin/HEAD` after a clone, or `git remote set-head`), `origin`'s when that has one,
+     else the first such remote's in byte order of the remotes' names, among those whose `HEAD` points at a remote
+     branch the repository has;
   4. otherwise none — a repository with no remote default branch — and **its whole history** is listed (see below).
 
   The remote branch is as the repository last fetched it — the branch badge's check fetches, for one (see "When a
-  project is checked" in `docs/product/project-git-status.md`); the Git mode never does. A branch list read later that shows the
-  remote branch (or the remote default branch) at another commit, or gives the branch a remote branch where it had
-  none or another one, or another remote default branch, has it compared again (see "Keeping the list up to date"
-  below). Until a branch list that has the branch is in, and when the repository could not be asked which remote
-  branch (or remote default branch) it has — the lookup past the daemon's limits, or Git unable to say which branch
-  the main working copy has checked out — the branch has no Committed section, and nothing says so.
+  project is checked" in `docs/product/project-git-status.md`); the Git mode never does. A branch list read later that
+  shows the remote branch (or the remote default branch) at another commit, or gives the branch a remote branch where it
+  had none or another one, or another remote default branch, has it compared again (see "Keeping the list up to date"
+  below). Until a branch list that has the branch is in, and when the repository could not be asked which remote branch
+  (or remote default branch) it has — the lookup past the daemon's limits, or Git unable to say which branch the main
+  working copy has checked out — the branch has no Committed section, and nothing says so.
 
 The comparison:
 
@@ -154,10 +154,11 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   changes are one level in, under its row; grouped by folder, the folders are inside each commit (see "Flat or grouped
   by folder" below).
 - **A commit row** has an expand arrow, as a folder's row does, then the first seven characters of the commit's id in
-  muted monospace text, its subject — which fades out where it is too long, with its whole text as its tooltip, the count
-  staying in view — and how many changes it holds. A subject is cut to its first 200 characters. Assistive technology
-  hears the row named by the same three, in that order — the id, the subject and the count — and is told whether it is
-  unfolded. A commit row has no button of its own actions, and typing the first characters of its id moves to it.
+  muted monospace text, its subject — which fades out where it is too long, with its whole text as its tooltip, the
+  count staying in view — and how many changes it holds. A subject is cut to its first 200 characters. Assistive
+  technology hears the row named by the same three, in that order — the id, the subject and the count — and is told
+  whether it is unfolded. A commit row has no button of its own actions, and typing the first characters of its id moves
+  to it.
 - **Commit rows scroll with the rows**: only the section's heading band stays at the top of the list (see "Folding a
   section" below).
 - **A commit row folds and unfolds its changes**: its arrow or a click on it does, and from the keyboard **Left** folds
@@ -171,11 +172,12 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   history — is compared with the empty tree. A file several
   commits changed is a row under each of them.
 - **A commit that changed nothing in the project's folder** has no row.
-- **At most the 100 newest commits** are read. Only when the branch really has more than 100 commits since the fork — or,
-  listed with its whole history, in all — does the Committed heading's warning mark say that only that many newest commits are listed (see "What the list says instead" below).
-  The commits' changes together are held to one change list's limit — 10,000 changes or 2 MiB of paths: past it, the
-  last commit listed holds only the changes read before the limit, older commits are left out, a commit none of whose
-  changes fit is not listed at all, and the Committed heading's warning mark says not every change is shown.
+- **At most the 100 newest commits** are read. Only when the branch really has more than 100 commits since the fork —
+  or, listed with its whole history, in all — does the Committed heading's warning mark say that only that many newest
+  commits are listed (see "What the list says instead" below). The commits' changes together are held to one change
+  list's limit — 10,000 changes or 2 MiB of paths: past it, the last commit listed holds only the changes read before
+  the limit, older commits are left out, a commit none of whose changes fit is not listed at all, and the Committed
+  heading's warning mark says not every change is shown.
 - A subdirectory project compared within its own folder (see "Committed changes" above) lists only the commits that
   touch that folder, and the 100 are counted among those.
 - The commits are read only while Group by commit is on, from the same fork and tip as the comparison on screen, and
@@ -186,11 +188,11 @@ project keeps its own choice across reloads and restarts (see "What is remembere
 
 ## Rows and the keyboard
 
-Each row shows an icon, a status letter, the file's name, and then the folder it is in — or, for a rename, where it came from,
-and for a rename across the project's boundary, where it came from or went, outside the project. Grouped by folder a
-row drops the folder, which its parent row carries instead, and keeps the rest (see "Flat or grouped by folder"
-below). After them come the lines the change adds and removes, where they are counted (see "Line counts" below), and
-at the row's end is the button of its own actions (see "A row's actions" in `docs/product/project-pane.md`).
+Each row shows an icon, a status letter, the file's name, and then the folder it is in — or, for a rename, where it came
+from, and for a rename across the project's boundary, where it came from or went, outside the project. Grouped by folder
+a row drops the folder, which its parent row carries instead, and keeps the rest (see "Flat or grouped by folder"
+below). After them come the lines the change adds and removes, where they are counted (see "Line counts" below), and at
+the row's end is the button of its own actions (see "A row's actions" in `docs/product/project-pane.md`).
 
 **The icon says what the row's path is**, judged on the side the path is taken from — the new side where the change
 has one inside the project, the old side otherwise, as for a deletion:
@@ -218,11 +220,11 @@ A committed change is only ever A, M, D, R or T.
 
 **The letter says in a tooltip what it stands for**: resting the mouse on it shows the status named in words, in the
 same capitalised wording the file viewer's header carries as an opened change's tag (see "Opening a change" in
-`docs/product/project-pane-git-change-viewer.md`). The letter is the only part of the row that opens it, and it opens
-on the mouse alone, after the usual wait: the letter is no tab stop and adds none to the row, so the tooltip never
-shows on keyboard focus (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). The letter itself
-stays out of the accessibility tree, as the icon does, which costs nothing: assistive technology hears a row as its name, its status in
-words and what follows the name, its line counts included.
+`docs/product/project-pane-git-change-viewer.md`). The letter is the only part of the row that opens it, and it opens on
+the mouse alone, after the usual wait: the letter is no tab stop and adds none to the row, so the tooltip never shows on
+keyboard focus (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). The letter itself stays out of
+the accessibility tree, as the icon does, which costs nothing: assistive technology hears a row as its name, its status
+in words and what follows the name, its line counts included.
 
 A name and what follows it are one line, which fades out as a whole where the row cuts it and runs as one marquee
 while the pointer is over it (see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). While it
@@ -366,9 +368,9 @@ field is hidden, "Hide the filter" while it is shown (see "Two-state icon toggle
 - **Only the file's name is matched** — the last part of its path, as its row shows it — ignoring case and any
   whitespace around the text; the folders it is in are not, so `src` does not keep every file under `src/`. A rename
   is matched by its new name. An empty field, or one holding only whitespace, shows every change.
-- **It narrows what is shown, not what is listed.** The sections' and the commit rows' counts are of the rows shown,
-  a section or a commit with no match is left out, and grouped by folder only the folders leading to a match remain. What the list holds, and when it
-  is listed again, is unchanged; a list listed again is narrowed by the same text.
+- **It narrows what is shown, not what is listed.** The sections' and the commit rows' counts are of the rows shown, a
+  section or a commit with no match is left out, and grouped by folder only the folders leading to a match remain. What
+  the list holds, and when it is listed again, is unchanged; a list listed again is narrowed by the same text.
 - **When nothing matches**, the list's place says there are no matching changes (announced to assistive technology
   as it appears), and the field stays, so the text can be changed or cleared. Clearing it brings the whole list back.
 - The field has a **clear** button, and **Escape** in it clears it; the field itself stays, keyboard focus not having
@@ -396,12 +398,12 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
   - **Uncommitted changes cut short** are warned of as a whole, not on a section's heading: they are cut as one list,
     which cannot say which of the uncommitted sections lost entries. The warning is about the worktree they are read
     from, so an amber warning mark ends that worktree's line in the branch selector's area, after its name and copy
-    button, within the line's text (see "Uncommitted changes" above, and "Failures, warnings and notes marked at their point" in
-    `docs/product/error-alerts.md`). It is named that not every uncommitted change is listed; its popover says that
-    the worktree has more uncommitted changes than the list can show, often because generated files are not ignored,
-    and what to do: add files that should not be tracked to `.gitignore`, or commit or discard some of the changes,
-    then refresh. It has no recovery action. It stands for as long as the uncommitted changes are listed cut short, a
-    filter that matches nothing included. A worktree whose whole `git status` output is more than 8 MiB has its
+    button, within the line's text (see "Uncommitted changes" above, and "Failures, warnings and notes marked at their
+    point" in `docs/product/error-alerts.md`). It is named that not every uncommitted change is listed; its popover says
+    that the worktree has more uncommitted changes than the list can show, often because generated files are not
+    ignored, and what to do: add files that should not be tracked to `.gitignore`, or commit or discard some of the
+    changes, then refresh. It has no recovery action. It stands for as long as the uncommitted changes are listed cut
+    short, a filter that matches nothing included. A worktree whose whole `git status` output is more than 8 MiB has its
     uncommitted changes not listed at all, and says so.
   - **Committed changes cut short**, or, grouped by commit, only the newest commits being listed — only when the
     branch has more than 100 commits since the fork, or in all when listed with its whole history (see "Grouped by
@@ -476,18 +478,18 @@ branch, with no change selected and the viewer closed (see "The branch selector"
 `docs/product/project-pane-git-mode.md`), so nothing of the gone branch stays on screen, and Refresh does not fail for
 it.
 
-Any other branch the comparison is of — the default branch, as read from the worktrees, or the base of whichever
-branch is shown — is not dropped: the comparison on screen stays on the commits it was made at. Once a complete branch
-list newer than the comparison no longer has the branch or its base, that is said at the branch's name. A base that is
-gone has an amber warning mark named that the branch was deleted right after its name in the **Forked from** line (see
+Any other branch the comparison is of — the default branch, as read from the worktrees, or the base of whichever branch
+is shown — is not dropped: the comparison on screen stays on the commits it was made at. Once a complete branch list
+newer than the comparison no longer has the branch or its base, that is said at the branch's name. A base that is gone
+has an amber warning mark named that the branch was deleted right after its name in the **Forked from** line (see
 "Committed changes" above), within the line's text; its popover says that the branch no longer exists and that the
 comparison still uses the commits it was made at (see "Failures, warnings and notes marked at their point" in
-`docs/product/error-alerts.md`). A branch compared that is gone — the default branch — has no mark: the branch
-selector names it as no longer existing, by the status badge after its name (see "The branch selector" in
+`docs/product/error-alerts.md`). A branch compared that is gone — the default branch — has no mark: the branch selector
+names it as no longer existing, by the status badge after its name (see "The branch selector" in
 `docs/product/project-pane-git-mode.md`), and nothing compares it again on its own. A branch found gone while the view
-is open is said once through the view's status region; one already gone when the view opened is not. A branch list cut short
-says nothing of a branch it does not have. Refresh then fails, saying there is no such branch. A remote
-branch that was the base is not reported this way: a branch list that no longer has it gives the main working copy's
-branch another base, or its whole history, which is then compared (see "Committed changes" above). A change opened
-from the comparison still on screen reads from its commits for as long as the repository has them (see "Errors" in
+is open is said once through the view's status region; one already gone when the view opened is not. A branch list cut
+short says nothing of a branch it does not have. Refresh then fails, saying there is no such branch. A remote branch
+that was the base is not reported this way: a branch list that no longer has it gives the main working copy's branch
+another base, or its whole history, which is then compared (see "Committed changes" above). A change opened from the
+comparison still on screen reads from its commits for as long as the repository has them (see "Errors" in
 `docs/product/project-pane-git-change-viewer.md`).

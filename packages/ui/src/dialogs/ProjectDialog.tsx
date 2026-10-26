@@ -246,7 +246,7 @@ export function ProjectDialog({
   };
 
   // `""` is "Same as console": the project sets none and follows its console's project session
-  // agent (the "Which agent a session uses" section of docs/product/sessions.md); the option names
+  // agent (the "Which agent a session uses" section of docs/product/opening-sessions.md); the option names
   // that agent in a badge, its icon faded, so it says what it resolves to.
   const defaultAgentOptions: Option<Agent | "" | "detect">[] = [
     ...(addsParent ? [{ value: "detect" as const, label: t("dialog.project.agentDetect") }] : []),

@@ -22,9 +22,9 @@ sessions, its console sessions included, so a raised hand in a console that is n
 | A green speech bubble | otherwise, at least one session is running and awaiting instructions, or still starting |
 | none | no session has a running process or is starting |
 
-A session *working in background* counts as working here (see "Working in background" in `docs/product/sessions.md`).
-The centre and ripple use the same blue as a working session's glyph. The ripple stands still where the system asks
-for reduced motion, leaving the theme background disc, green rim and blue centre.
+A session *working in background* counts as working here (see "Working in background" in
+`docs/product/session-statuses.md`). The centre and ripple use the same blue as a working session's glyph. The ripple
+stands still where the system asks for reduced motion, leaving the theme background disc, green rim and blue centre.
 
 The name assistive technology announces for an avatar is the console's name together with what its badge means, and
 **the avatar's tooltip is that same text** — the bare console name while nothing is going on. When that tooltip opens,
@@ -52,8 +52,8 @@ switches the whole window to that console, not only the sidebar:
   the console, or with the remembered one no longer existing, nothing is selected, and the terminal's area shows its
   empty state for that console (see "With no session selected" in `docs/product/session-terminal.md`); a console just
   created always shows that.
-- **The right pane goes to that session's own owner** — a console session with its report panel, a project
-  session's project with its Files panel — and with nothing selected there is no right pane (see "What the right pane shows" in
+- **The right pane goes to that session's own owner** — a console session with its report panel, a project session's
+  project with its Files panel — and with nothing selected there is no right pane (see "What the right pane shows" in
   `docs/product/window-layout.md`).
 - **Focus mode is left**, and an **open archive view closes**.
 

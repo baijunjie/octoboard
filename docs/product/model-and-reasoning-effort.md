@@ -30,8 +30,8 @@ Octoboard — including whatever the agent's own configuration pins. It is not a
 A value none of the defaults above sets has this meaning too.
 
 Where defaults are set is in "Editing a console" in `docs/product/consoles.md` and "Editing a project" in
-`docs/product/projects.md`; opening a session is in "Opening a session" in `docs/product/sessions.md`; how each value
-reaches the agent, and what each agent does with one it cannot honour, is in "The model and reasoning effort" in
+`docs/product/projects.md`; opening a session is in `docs/product/opening-sessions.md`; how each value reaches the
+agent, and what each agent does with one it cannot honour, is in "The model and reasoning effort" in
 `docs/product/launching-agents.md`.
 
 ## The Advanced section
@@ -40,36 +40,33 @@ The console dialog, project dialog and dialog that opens a console or project se
 collapsed when the dialog opens. The handoff dialog holds one too, which works as the session dialog's does for the
 session that takes over (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
-In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the
-agent the dialog's agent field currently settles on; the project dialog's also holds the project's Git workflow group
-below them, alone while no agent is settled (see "The project's account, model and reasoning effort" in
-`docs/product/projects.md`). In the session dialog, a note explains that unchanged values follow
-the project settings, or the console settings for a console session; the handoff dialog carries the same inheritance
-note for its receiving session. The session dialog's **Resume conversation** tab never lets the agent be picked: it
-shows the section only once the conversation
-is found in an agent's own records, for the agent and account that hold it (see "Resuming a conversation by its session ID" in
-`docs/product/sessions.md`). In the session
-dialog, untouched fields show the values the session would inherit — for a project session each from its project, else
-its console's project session pair; for a console session the console's console session pair — and keep following
-them; changing a field applies only to that session, including its later resumes. Switching agents shows the other
-agent's values and retains edits separately, but only the selected agent's edits apply to the opened session. Changing
-accounts keeps those edits.
+In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the agent
+the dialog's agent field currently settles on; the project dialog's also holds the project's Git workflow group below
+them, alone while no agent is settled (see "The project's account, model and reasoning effort" in
+`docs/product/projects.md`). In the session dialog, a note explains that unchanged values follow the project settings,
+or the console settings for a console session; the handoff dialog carries the same inheritance note for its receiving
+session. The session dialog's **Resume conversation** tab never lets the agent be picked: it shows the section only once
+the conversation is found in an agent's own records, for the agent and account that hold it (see
+`docs/product/resuming-a-conversation-by-its-session-id.md`). In the session dialog, untouched fields show the values
+the session would inherit — for a project session each from its project, else its console's project session pair; for a
+console session the console's console session pair — and keep following them; changing a field applies only to that
+session, including its later resumes. Switching agents shows the other agent's values and retains edits separately, but
+only the selected agent's edits apply to the opened session. Changing accounts keeps those edits.
 
 In the console dialog it holds a row of tabs, one per agent that can be picked, in the order of the added agents (see
 "Which agents the agent pickers list" in `docs/product/consoles.md`), each with the agent's icon and name, as wide as
 its content, the tabs starting at the row's start; the row of tabs and the shown tab's content sit together inside a
-bordered frame. An agent that cannot be picked has a tab, with the Not installed or Not added badge after its name,
-only while the console stores a console session or project session value for
-it, until every one of them is cleared. Until the user picks a tab, the one shown follows the agent the Default agent
-group's Console sessions field holds; a picked tab stays shown until that tab goes away, which forgets the pick. From
-a window 768 px wide up, each tab holds a table: a column for each kind of session, headed **Console sessions** and **Project
-sessions**, and a **Model** row and a **Reasoning effort** row, named in a leading column, with a picker in each cell.
-Below the whole table, a note explains that a project session's project or session settings take precedence. In a narrower
-window the cells stack: each kind under its own heading, then its Model and Reasoning effort pickers, each with the
-setting's name above it. Either way, Tab moves
-through one kind's pickers before the other's: Console sessions' Model and Reasoning effort, then Project sessions'.
-Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame and outside
-it, since it applies whichever tab is shown, is the console session instructions field (see "Console session
+bordered frame. An agent that cannot be picked has a tab, with the Not installed or Not added badge after its name, only
+while the console stores a console session or project session value for it, until every one of them is cleared. Until
+the user picks a tab, the one shown follows the agent the Default agent group's Console sessions field holds; a picked
+tab stays shown until that tab goes away, which forgets the pick. From a window 768 px wide up, each tab holds a table:
+a column for each kind of session, headed **Console sessions** and **Project sessions**, and a **Model** row and a
+**Reasoning effort** row, named in a leading column, with a picker in each cell. Below the whole table, a note explains
+that a project session's project or session settings take precedence. In a narrower window the cells stack: each kind
+under its own heading, then its Model and Reasoning effort pickers, each with the setting's name above it. Either way,
+Tab moves through one kind's pickers before the other's: Console sessions' Model and Reasoning effort, then Project
+sessions'. Edits on one tab are kept while another is shown, and each value is saved only when changed. Below the frame
+and outside it, since it applies whichever tab is shown, is the console session instructions field (see "Console session
 instructions" in `docs/product/consoles.md`).
 
 An unset picker is empty, showing a placeholder instead of a value. The placeholder stands for the agent's own setting,
@@ -111,7 +108,7 @@ A catalogue belongs to an account, so the list is asked for the account that age
 console dialog the account the dialog is currently set to for the agent whose tab is shown, and in the project dialog
 the project's own account for that agent — the agent's default account included — else the one its console resolves to;
 in the session dialog the account currently selected for that session (see "The project's account, model and reasoning
-effort" in `docs/product/projects.md` and "Which account a session uses" in `docs/product/sessions.md`).
+effort" in `docs/product/projects.md` and "Which account a session uses" in `docs/product/opening-sessions.md`).
 
 Nothing is asked of the agent until the Advanced section is opened for the first time, and it is asked again whenever
 the agent or that account changes; an answer to a question the dialog has since moved off is dropped. An answer is

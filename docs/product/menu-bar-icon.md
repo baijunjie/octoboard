@@ -1,15 +1,15 @@
 # Menu bar icon
 
-The macOS application puts an icon in the system menu bar: an octopus, which carries an orange dot while a session waits for
-the user, with a quota indicator for the selected session when one is available (see "The icon's look" below).
-It is there for as long as the application runs — while the window is shown, while it is closed into the background,
-and on the screen shown when the daemon
-failed to start — and whatever the user chose about keeping Octoboard running when the window is closed (see
-"Closing the window" in `docs/product/application-lifecycle.md`). A browser has no such icon.
+The macOS application puts an icon in the system menu bar: an octopus, which carries an orange dot while a session waits
+for the user, with a quota indicator for the selected session when one is available (see "The icon's look" below). It is
+there for as long as the application runs — while the window is shown, while it is closed into the background, and on
+the screen shown when the daemon failed to start — and whatever the user chose about keeping Octoboard running when the
+window is closed (see "Closing the window" in `docs/product/application-lifecycle.md`). A browser has no such icon.
 
 ## The icon's look
 
-The icon has two attention states. In both, the octopus is monochrome, and macOS tints it to suit a light or dark menu bar:
+The icon has two attention states. In both, the octopus is monochrome, and macOS tints it to suit a light or dark menu
+bar:
 
 - **The octopus alone**, while no session is waiting for the user.
 - **The octopus with an orange dot** at its upper-right corner, separated from the octopus by a clear margin,
@@ -27,45 +27,46 @@ looks:
 
 - **Two layers**, when the account has both a five-hour and an account-wide weekly window: two **outlined capsules**,
   each with a hollow unfilled portion — about **18 × 3.3 pt** for the five-hour window and, about 0.8 pt beneath it,
-  about **18 × 2.5 pt** for the weekly window. The five-hour capsule, the gap and the weekly capsule stand 4 : 1 : 3, the
-  same proportion as the rail's two layers.
-- **One bar** otherwise: an **outlined capsule** of about **18 × 4.1 pt**, with a hollow unfilled portion; its outline is
-  a fifth of its height, as on the rail's single bar.
+  about **18 × 2.5 pt** for the weekly window. The five-hour capsule, the gap and the weekly capsule stand 4 : 1 : 3,
+  the same proportion as the rail's two layers.
+- **One bar** otherwise: an **outlined capsule** of about **18 × 4.1 pt**, with a hollow unfilled portion; its outline
+  is a fifth of its height, as on the rail's single bar.
 
 The attention dot stays at the upper right, clear of the bars. Without a readable quota the bars disappear; without
 attention or a quota the original octopus returns.
 
 The account, the windows drawn and the hiding rules are the same as "The selected session's quota indicator" in
 `docs/product/account-quotas.md`. The icon has **no tooltip**. With a quota, its accessible name identifies the agent
-and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one
-it names only Octoboard. Selecting another session updates the indicator even if no session data changed, and a
-session's account switch, account edits, availability changes and new readings update it too, as does a window's
-reset time passing, after which that window is drawn full (see "How an account's quota is shown" in
-`docs/product/account-quotas.md`). The bars fill from the
-left in every UI language: the menu bar belongs to the system, not to the window, whose layout is what a right-to-left
-language mirrors (see "Right-to-left layout" in `docs/product/window-layout.md`).
+and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one it
+names only Octoboard. Selecting another session updates the indicator even if no session data changed, and a session's
+account switch, account edits, availability changes and new readings update it too, as does a window's reset time
+passing, after which that window is drawn full (see "How an account's quota is shown" in
+`docs/product/account-quotas.md`). The bars fill from the left in every UI language: the menu bar belongs to the system,
+not to the window, whose layout is what a right-to-left language mirrors (see `docs/product/right-to-left-layout.md`).
 
-The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The
-icon's menu" below) changes the look and its label only when it reaches the menu, so the icon and the menu always
-agree on whether a session is waiting; the octopus's dot clearance and the orange dot always appear and go together. Until
-the window's UI has sent its first menu — and throughout on the screen shown when the daemon failed to start — the icon
-is the octopus alone.
+The look changes together with the menu: a change that has to wait for an open menu to close (see the end of "The icon's
+menu" below) changes the look and its label only when it reaches the menu, so the icon and the menu always agree on
+whether a session is waiting; the octopus's dot clearance and the orange dot always appear and go together. Until the
+window's UI has sent its first menu — and throughout on the screen shown when the daemon failed to start — the icon is
+the octopus alone.
 
 ## Clicking the icon
 
 A click on the icon, left or right, opens the icon's menu, described below. A click does nothing else: the window
 comes back through the menu's **Open Octoboard** or one of its sessions.
 
+For about the first 0.6 seconds after the window is closed from native fullscreen, a click on the icon, left or right,
+is lost and opens nothing; macOS swallows it while it leaves fullscreen.
+
 ## The icon's menu
 
 From top to bottom:
 
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
-   status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Working in
-   background (n)**, then **Awaiting instructions (n)**. A group with no session is left out. Sessions still
-   starting, interrupted and archived sessions are never listed. A session working in background (see "Working in
-   background" in `docs/product/sessions.md`) is listed in its own group, not under **Working** or **Awaiting
-   instructions**.
+   status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Working in background
+   (n)**, then **Awaiting instructions (n)**. A group with no session is left out. Sessions still starting, interrupted
+   and archived sessions are never listed. A session working in background (see "Working in background" in
+   `docs/product/session-statuses.md`) is listed in its own group, not under **Working** or **Awaiting instructions**.
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
      colour, with its status glyph to the left of the text. Its glyph and text sit where the session lines below place
      their agent marks and titles — the same left edges and the same line height, the glyph centred on the text — as
@@ -87,9 +88,9 @@ From top to bottom:
      projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). Every console is included, not only
      the one the sidebar shows.
    - Each session reads as its title and where it is — the project it runs in, or the console whose console session it
-     is — worded as its system notification names it (see "The raised hand" in `docs/product/sessions.md`). A session
-     titled after its project reads as the title alone rather than naming it twice. Like every other place, it reads
-     the terminal title without the glyphs an agent animates at its start (see "Leading activity glyphs" in
+     is — worded as its system notification names it (see "The raised hand" in `docs/product/session-statuses.md`). A
+     session titled after its project reads as the title alone rather than naming it twice. Like every other place, it
+     reads the terminal title without the glyphs an agent animates at its start (see "Leading activity glyphs" in
      `docs/product/session-titles.md`).
    - A session's line is kept to at most **60** display columns, East Asian wide characters and emoji counting as two
      and every other character as one. The place it names is cut first to at most **24** columns, then the title to
@@ -125,23 +126,22 @@ From top to bottom:
      written in the UI's language, and no picture marks it. Accounts still being read or with no windows keep only
      their reading, unavailable or login note below the header;
    - under the header, each window is one row, except as the next point says: its name on the left, as in "Quota
-     windows" in `docs/product/account-quotas.md` ("5h", "Session"), "N% remaining · resets in <countdown>" ("82% remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a
-     window with no reset time) right-aligned in the secondary text colour, and a bar of what remains directly
-     below, on a translucent grey track. The bar is orange for Claude Code and blue for Codex, each one fixed colour
-     whether the menu is light or dark (their contrast against the track is not measured), and the text colour for
-     Grok Build. The bars of an account whose quota is used up, in this row and in the meter row below, are instead a
-     neutral grey, the one the rail's quota panel draws such bars in, for the menu's current appearance (the menu's
-     secondary text colour when that grey cannot be read). A row whose text needs more room than the submenu's usual
-     width widens the submenu rather than being cut short. A row is read by assistive technology once, as one phrase
-     ("5h 82% remaining · resets in 1h 57m"), by its menu item alone: neither the name, the detail nor the bar is read
-     on its own;
-   - an account with both a five-hour and an account-wide weekly window shows the two as **one meter row**, in
-     the five-hour window's place: its name and detail with its bar, **2.5 pt** beneath that bar a thinner one,
-     **4.5 pt** tall against the five-hour bar's **6 pt** (three quarters, as on every two-layer bar), for the weekly
-     window, and beneath it the weekly window's name and detail, both in the
-     secondary text colour. Assistive technology reads the row once, as the two windows' phrases joined ("5h 82%
-     remaining · resets in 1h 57m, Weekly 40% remaining · resets in 2d 3h"). Every other window keeps a row of its own, and the
-     order of windows is unchanged;
+     windows" in `docs/product/account-quotas.md` ("5h", "Session"), "N% remaining · resets in <countdown>" ("82%
+     remaining · resets in 1h 57m", "resets now" once the time has passed, no countdown for a window with no reset time)
+     right-aligned in the secondary text colour, and a bar of what remains directly below, on a translucent grey track.
+     The bar is orange for Claude Code and blue for Codex, each one fixed colour whether the menu is light or dark, and
+     the text colour for Grok Build. The bars of an account whose quota is used up, in this row and in the meter row
+     below, are instead a neutral grey, the one the rail's quota panel draws such bars in, for the menu's current
+     appearance (the menu's secondary text colour when that grey cannot be read). A row whose text needs more room than
+     the submenu's usual width widens the submenu rather than being cut short. A row is read by assistive technology
+     once, as one phrase ("5h 82% remaining · resets in 1h 57m"), by its menu item alone: neither the name, the detail
+     nor the bar is read on its own;
+   - an account with both a five-hour and an account-wide weekly window shows the two as **one meter row**, in the
+     five-hour window's place: its name and detail with its bar, **2.5 pt** beneath that bar a thinner one, **4.5 pt**
+     tall against the five-hour bar's **6 pt** (three quarters, as on every two-layer bar), for the weekly window, and
+     beneath it the weekly window's name and detail, both in the secondary text colour. Assistive technology reads the
+     row once, as the two windows' phrases joined ("5h 82% remaining · resets in 1h 57m, Weekly 40% remaining · resets
+     in 2d 3h"). Every other window keeps a row of its own, and the order of windows is unchanged;
    - a row, a header and a note are not dimmed the way a menu line that cannot be chosen is: the window's name is at
      full strength, and none ever highlights under the pointer. Their text and the bar's track take the system's
      colours for the menu they are drawn in, light or dark. A header and a note are each read by assistive
@@ -209,53 +209,3 @@ opened only brings the window back.
 Quit Octoboard is a quit like `Cmd+Q`: while a session or a busy shell terminal holds a quit up it asks the same
 confirmation, bringing a window closed into the background back to ask it, and otherwise it quits at once (see
 "Quitting" in `docs/product/application-lifecycle.md`, which says what holds a quit up).
-
-## What has been tried by hand
-
-A closed window below means one closed into the background, which is what closing it does only while the user has
-turned that on (see "Closing the window" in `docs/product/application-lifecycle.md`).
-
-**Observed** in the packaged application: the menu's groups and session lines (seen under Simplified Chinese); the
-menu updating within about 1.5 seconds of a session changing while the window was closed; opening and dismissing the
-menu without choosing anything leaving a closed window closed; choosing a session bringing the window back with that
-session selected; and Open Octoboard. What was seen of Quit Octoboard is under "Quitting" in
-`docs/product/application-lifecycle.md`. Also observed, with a quota submenu popped up natively over a light-looking
-desktop (not opened from the icon's own menu): a Codex account's two window rows with the name at full strength, the
-detail right-aligned in grey and a bar whose fill is the remaining share (72% over a gray track), a Grok Build row at
-0% as a bare rounded track, and a note under an account with no quota. After the texts were drawn rather than set in
-text fields, a Claude Code account's window rows were seen again, again in a submenu popped up natively, with the
-same look and size, and read once each by assistive technology, as a menu item whose title is the whole phrase. How
-the current build renders the texts (their inset and vibrancy) has still to be seen live. Under Simplified
-Chinese, in a light menu: the three session headings — **Waiting for you**, **Working**, **Awaiting instructions** —
-each with its status glyph (the hand, the blue dot, the speech bubble) to the left of its text, lined up with the
-session lines below: the glyphs' centres on the same vertical line as the agent marks' centres, the heading text on
-the same left edge as the session titles, and each glyph centred vertically on its text to within half a point.
-
-**Not yet observed** in the packaged application: the headings' styling as described above (their colour, weight, not
-being dimmed, never highlighting, and how assistive technology reads them), **No sessions running**, and the account
-headers in a submenu; the session lines' agent marks and the headings' status glyphs in a dark menu; either look on a
-light menu bar, and the octopus alone while the icon is highlighted with its menu open; opening the menu asking for
-a refresh of the quotas; a menu changing between light and dark while the app runs; a quota detail row never
-highlighting under the pointer; a row widened by a long window name; a used-up account's grey bars; the meter row that joins an account's five-hour
-and weekly windows (the window rows observed above were seen before it existed); the window names as each agent's own
-interface words them (a Claude Code account's **Session** and **Weekly · all models**, a Codex account's **5h**), the
-rows observed above having been seen under the earlier **5-hour** name; and the opener bars staying in view in a menu
-whose session lines would make it wider than 640 pt.
-
-**Observed in native previews and probes:** an AppKit image-view preview showed the original icon without a quota
-and capsules at 0%, 65% and 100% in light and dark appearances. A native menu
-probe showed the quota opener bars in light and dark menus, both resting and highlighted, verified Right Arrow
-opening a submenu, and confirmed that assistive technology reads the whole quota label. These probes did not
-launch the packaged application.
-
-**Observed in a packaged application with preview fixtures:** the full-size octopus with its larger capsule and
-enlarged orange dot at the upper right in the system menu bar. Clicking that application's own icon opened its native dark
-menu, showing Claude at 65% and Codex at 88% as capsules aligned at the right before the submenu arrows. The native
-quota submenu showed the account-wide weekly window at 65% before Fable weekly at 10%. These checks did not
-establish packaged-app behavior during an in-place theme change, keyboard submenu opening or quota-label
-accessibility; the latter two were checked in the native probe above. The orange dot without a readable quota and
-its behavior during waiting-state changes have not yet been observed in the packaged application.
-
-**Observed caveat:** for about the first 0.6 seconds after closing the window from native fullscreen, a click on the
-icon is lost — a right click does not even open the menu — apparently swallowed by macOS during its exit from
-fullscreen. From about 0.65 seconds on, every click was answered.

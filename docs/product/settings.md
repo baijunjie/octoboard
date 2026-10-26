@@ -3,21 +3,21 @@
 Settings is a large dialog over the whole window. A list of sections runs down its left side and the selected section's
 settings fill the right under the section's heading, one row per setting: on the left its name and a line of text under
 it saying what it does — a trusted folder's row has its path alone — and on the right its control. Under a right-to-left
-language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
-as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on the
-**Automatically pull repositories** and **Revert gate** rows in Git (see "Git" below), and in Agent accounts on the **Start
-usage windows automatically** row (see "Start usage windows automatically" below), on each agent's Permission approval
-row, on the accounts table's Disable heading and, in an account's settings dialog, after the default account's
-directory and on the sharing row (see "Approval modes", "The accounts table", "The account settings dialog" and
-"Sharing the default configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
-`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Agent accounts**,
-**Agent behavior**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration**
-and **About**; the dialog opens on General unless it was asked to open on another section.
+language the sides swap (see `docs/product/right-to-left-layout.md`). A section that explains itself as a whole does so
+in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on the **Automatically pull
+repositories** and **Revert gate** rows in Git (see "Git" below), and in Agent accounts on the **Start usage windows
+automatically** row (see "Start usage windows automatically" below), on each agent's Permission approval row, on the
+accounts table's Disable heading and, in an account's settings dialog, after the default account's directory and on the
+sharing row (see "Approval modes", "The accounts table", "The account settings dialog" and "Sharing the default
+configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
+`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Agent accounts**, **Agent
+behavior**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration** and
+**About**; the dialog opens on General unless it was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
 archived sessions whose conversation is gone, automatic account selection, the ordering of the sidebar by status, the
-application-wide git workflow settings, the agent accounts (without their directories) and the trusted folders, and change
-all but the last two (see "Application settings: `get_settings` and `update_settings`" in
+application-wide git workflow settings, the agent accounts (without their directories) and the trusted folders, and
+change all but the last two (see "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md`).
 
 ## In a narrow window
@@ -64,7 +64,7 @@ Settings opens from:
   it on the Agent accounts section above the console dialog, left open beneath it (see "Agent config directories" in
   `docs/product/consoles.md`);
 - the **Manage accounts…** button in the rail's account quota panel, which closes the panel and opens it on the Agent
-  accounts section (see "The account quota panel on the rail" in `docs/product/account-quotas.md`);
+  accounts section (see `docs/product/account-quota-panel.md`);
 - the **Add agent…** button of the "No agent added" states — the terminal's empty panel (see "A console with nothing
   in it" in `docs/product/session-terminal.md`) and the rail's account quota panel, which it closes first — which
   opens it on the Agent accounts section with the Add agent dialog in front (see "Adding an agent" in
@@ -74,10 +74,10 @@ Settings opens from:
 
 When the Add agent dialog is put in front, that dialog holds keyboard focus rather than the selected section's tab. A
 request to open Settings on a section while it is already open moves it to that section and closes the account add,
-edit, rename and remove forms, an account's settings dialog and the agent-removal form. It also closes the Add agent dialog unless the request is
-for that dialog. When the destination is not behind a login dialog, focus goes to the requested section's tab, or,
-when Add agent is requested, to that dialog in front of the Agent accounts section. The login dialog keeps its
-lifecycle (see `docs/product/logging-accounts-in.md`).
+edit, rename and remove forms, an account's settings dialog and the agent-removal form. It also closes the Add agent
+dialog unless the request is for that dialog. When the destination is not behind a login dialog, focus goes to the
+requested section's tab, or, when Add agent is requested, to that dialog in front of the Agent accounts section. The
+login dialog keeps its lifecycle (see `docs/product/logging-accounts-in.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal, unless a dialog is open beneath it: focus then stays in that
@@ -131,8 +131,8 @@ becomes the language sessions are told are in `docs/product/language.md`.
 
 How a rendered Markdown document in the project pane's file viewer looks, chosen from a drop-down of the styles:
 **Tailwind**, **GitHub**, **Newsprint** and **LaTeX**. The styles are named for what they are modelled on, so their
-names are proper names, the same in every language. What each style looks like, which one is the default and where
-the choice is kept are in "A Markdown file as a document" in `docs/product/file-viewer.md`.
+names are proper names, the same in every language. What each style looks like, which one is the default and where the
+choice is kept are in `docs/product/markdown-documents.md`.
 
 ### Order the sidebar by status
 
@@ -253,38 +253,37 @@ application settings a full export carries" in `docs/product/configuration-expor
 ## Agent accounts
 
 The agents the user has added and every account of each, grouped by agent, with the means to add, reorder and remove
-agents, to add, edit, rename and remove accounts, to turn an account off and on, to sign an account in, each
-agent's permission approval, each account's plan quota and each account's details, and the two switches **Automatically select an account** and **Start usage windows automatically**. Where those
-switches sit, and what the rest of the section shows and offers, are in `docs/product/agent-accounts.md`.
+agents, to add, edit, rename and remove accounts, to turn an account off and on, to sign an account in, each agent's
+permission approval, each account's plan quota and each account's details, and the two switches **Automatically select
+an account** and **Start usage windows automatically**. Where those switches sit, and what the rest of the section shows
+and offers, are in `docs/product/agent-accounts.md`.
 
 ### Automatically select an account
 
 A switch, **off to begin with** — installations from before the switch existed included: whether a new session whose
-account was not named uses the account of its agent whose weekly quota resets soonest. While the switch is off the
-row's description says what turning it on will do, and while it is on it says what is happening now: a new session uses
-the account whose weekly limit resets soonest, so usage left before a reset is not wasted. The daemon
-stores it as `auto_select_account` and keeps it, so every window shows the same. Unlike the switches in Agent
-behavior, a console session may read and change it, and a full configuration export carries it (see "Application
-settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings
-a full export carries" in `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies
-the choice, are in "Which account a session uses" in `docs/product/sessions.md`. Turning it on or off changes no
-session already open.
+account was not named uses the account of its agent whose weekly quota resets soonest. While the switch is off the row's
+description says what turning it on will do, and while it is on it says what is happening now: a new session uses the
+account whose weekly limit resets soonest, so usage left before a reset is not wasted. The daemon stores it as
+`auto_select_account` and keeps it, so every window shows the same. Unlike the switches in Agent behavior, a console
+session may read and change it, and a full configuration export carries it (see "Application settings: `get_settings`
+and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
+`docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies the choice, are in "Which
+account a session uses" in `docs/product/opening-sessions.md`. Turning it on or off changes no session already open.
 
 ### Start usage windows automatically
 
 A switch, **off to begin with** — installations from before the switch existed included: whether Octoboard starts a
-usage window that has reset but not begun counting by sending one small request on its account. While the switch is
-off the row's description says that once it is on, a usage window starts counting once it resets, and while it is on
-that a usage window starts counting once it resets; either way it adds that this counts a little toward the
-account's usage limits. A "?" help tip at the end of the row's name ("About starting usage windows automatically") holds the
-why and how: a usage window that has reset does not start counting until the account's next request, so until then it
-shows no countdown and the longer it waits the later its next reset comes; with the switch on, one small request is sent
-on that account with the agent's cheapest model to start it. The daemon stores it as
-`auto_start_quota_windows` and keeps it, so every window shows the same. A console session can neither read nor change
-it, since it spends the user's quota (see "Who reads and changes what" in `docs/product/agent-settings-tools.md`); a
-full configuration export carries it (see "The application settings a full export carries" in
-`docs/product/configuration-export-and-import.md`). When a request is sent, what it is and what it leaves behind are in
-"Starting a window that has not begun counting" in `docs/product/account-quotas.md`.
+usage window that has reset but not begun counting by sending one small request on its account. While the switch is off
+the row's description says that once it is on, a usage window starts counting once it resets, and while it is on that a
+usage window starts counting once it resets; either way it adds that this counts a little toward the account's usage
+limits. A "?" help tip at the end of the row's name ("About starting usage windows automatically") holds the why and
+how: a usage window that has reset does not start counting until the account's next request, so until then it shows no
+countdown and the longer it waits the later its next reset comes; with the switch on, one small request is sent on that
+account with the agent's cheapest model to start it. The daemon stores it as `auto_start_quota_windows` and keeps it, so
+every window shows the same. A console session can neither read nor change it, since it spends the user's quota (see
+"Who reads and changes what" in `docs/product/agent-settings-tools.md`); a full configuration export carries it (see
+"The application settings a full export carries" in `docs/product/configuration-export-and-import.md`). When a request
+is sent, what it is and what it leaves behind are in `docs/product/starting-usage-windows.md`.
 
 ## Agent behavior
 
@@ -357,72 +356,13 @@ opening paragraph says, what the list shows and what removing a folder does are 
 
 ## Permissions
 
-The two macOS privacy permissions the agents running in Octoboard's terminals can need: **Screen Recording**, which
-agents use to take screenshots of what they built, and **Accessibility**, which lets them drive another application's
-interface. macOS attributes such a request to the application responsible for the process that made it, which is
-Octoboard rather than the agent, so the system's own prompt names Octoboard, appears in the middle of a task and says
-nothing about why — and Octoboard cannot intercept a prompt one of its agents raised. This section is therefore the
-place to grant them deliberately beforehand, and a paragraph above the rows says as much — shown only together with the
-rows, so not outside the macOS application, not when the read of the grants failed and not before the first read is
-in. A grant the user gave another application does not count for Octoboard; macOS ties a grant
-to one application. These two are the only macOS permissions Octoboard ever asks for.
-
-One row per permission, naming it, what agents use it for and its current state. What the row offers follows that
-state:
-
-| State | What the row shows |
-|---|---|
-| Granted | A large **Granted** badge in the success colour, with a circled check before its label, at the row's end in place of a control; the row's description says nothing more about the state. |
-| Not granted | That it is not granted, with a **Grant…** button. Pressing it raises the system's permission prompt; this is the only thing in Octoboard that ever raises one. |
-| A request made in this window came back without the grant | That it is not granted and where to switch it on, with an **Open System Settings** button in place of Grant…, which opens that permission's own pane in System Settings. |
-
-The wording of that last state differs per permission: for Screen Recording it says macOS will not ask a second time,
-which is what macOS does — a prompt the user refused is never raised again, and a later request is answered with a
-silent no; for Accessibility it says to switch Octoboard on in System Settings, since that permission is never granted
-in place at all.
-
-**Accessibility is granted in System Settings, not from the prompt.** Its Grant… button raises the system's dialog
-asking to let Octoboard control the computer, whose effect is that Octoboard appears in System Settings' own list, so
-the user only flips a switch there instead of adding the application by hand. The request reports back at once, while
-that dialog is still coming up, and normally reports the permission not granted, so the row moves to the System Settings
-wording straight after the press. Screen Recording's Grant… button instead waits for the user to answer the prompt, and
-is marked pending until they have.
-
-**A change made outside Octoboard is picked up when the window comes back.** The grants are read again every time the
-window regains focus, so one granted or revoked in System Settings — the only way Accessibility is ever granted — takes
-effect in this section on the user's return. For assistive technology the section has one status region of its own,
-not shown on screen, which says every row's state in one announcement, row by row: the permission's name, its state,
-and the restart line (below) where that row shows it. It speaks about 1.5 seconds after the rows appear, when the
-user switches to this section. After a change it speaks
-about 1.5 seconds after the user is back in the window: the wait counts only time the window is visible and has focus,
-and starts over each time the user comes back. A reading that changes nothing says nothing again, and a state replaced
-while it waits is never said. The rows' own states stay readable where they stand but are not status regions
-themselves.
-
-**Screen Recording reaches a process only at launch.** A grant made while Octoboard is already running does not reach
-it, so a row that is granted but was not when this Octoboard started adds a line asking the user to restart Octoboard
-for it to take effect. There is no restart button: the user quits Octoboard and opens it again, which goes through the
-ordinary quit (see "Quitting" in `docs/product/application-lifecycle.md`).
-
-**Nothing about these permissions is stored.** Every row's state comes from macOS alone. macOS cannot tell a permission
-that was never asked for from one the user refused, so a permission that is not granted starts at not granted with
-the Grant… button, and the System Settings wording appears only after a request made in this window has come back
-without the grant. Switching to another Settings section and back puts the Grant… button back; pressing it brings the
-guidance back with it —
-answered by macOS with a silent no for Screen Recording, and with that dialog again for Accessibility, which macOS
-keeps no refusal for.
-
-**Outside the macOS application** — in a browser, or a desktop shell not running on macOS — the section is a single
-line saying that permissions can only be managed in the macOS application. Where a desktop shell is there but the read
-of the grants fails, the section is instead a red alert titled that the permissions could not be read, saying that the system did not
-report which have been granted, which
-opens no error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Until the first read comes
-back the section shows neither line and nothing else either.
+One row for each of the two macOS privacy permissions the agents can need, Screen Recording and Accessibility, to grant
+it ahead of time. What the section shows and what each row offers are in `docs/product/macos-privacy-permissions.md`.
 
 ## Notifications
 
 Whether Octoboard may show a system notification when a session starts waiting for the user (see "The raised hand" in
-`docs/product/sessions.md`). The row says what the current state is:
+`docs/product/session-statuses.md`). The row says what the current state is:
 
 | Client | What the row shows |
 |---|---|

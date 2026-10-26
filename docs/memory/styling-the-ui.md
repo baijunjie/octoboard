@@ -2,15 +2,14 @@
 
 ## Keep a HeroUI component's default look through supported variants and slots
 
-A HeroUI component in `packages/ui` keeps its default look, configured through its supported variants and slots.
-Do not override its colours, placeholder colours, opacity, borders or shape merely to meet a WCAG contrast threshold;
-the priority is settled in the "Conformance level and exceptions" section of `docs/ui-accessibility.md`. Layout and
-sizing adaptations (filling a column, truncating) may stay when needed without redrawing the component. So when asked
-to strip custom styling, separate those adaptations from appearance overrides rather than removing them wholesale:
-dropping a sizing override with the look ones broke the layout. Equally, what a composite the project builds on top
-of a HeroUI component adds around it to mark out its own region — such as a frame around a picker's scrolling list —
-is the composite's own design, not a redrawn HeroUI default, so work that restores HeroUI's look leaves it in place;
-only styling that changes how a HeroUI part itself looks counts as an override.
+A HeroUI component in `packages/ui` keeps its default look (the priority is the "Conformance level and exceptions"
+section of `docs/ui-accessibility.md`), but layout and sizing adaptations (filling a column, truncating) may stay
+without redrawing the component. So when asked to strip custom styling, separate those adaptations from appearance
+overrides rather than removing them wholesale: dropping a sizing override with the look ones broke the layout.
+Equally, what a composite the project builds on top of a HeroUI component adds around it to mark out its own region —
+such as a frame around a picker's scrolling list — is the composite's own design, not a redrawn HeroUI default, so
+work that restores HeroUI's look leaves it in place; only styling that changes how a HeroUI part itself looks counts
+as an override.
 
 What the component imposes visually lives in a stylesheet of its own,
 `packages/ui/node_modules/@heroui/styles/dist/components/<name>.css`, which `packages/ui/src/style.css` imports
@@ -21,12 +20,12 @@ such a child looks unlike its own classes suggest. A base rule there covers the 
 text size or colour (`.empty-state` is `@apply p-2 text-sm text-muted`) every child inherits both; HeroUI's own rules
 correct only the parts it styles by slot, never a child of the project's. Giving that child its own size or colour is
 a correction of what it inherited on project-authored content rather than a change to the HeroUI component's look.
-That custom content follows the WCAG 2.2 AA requirements in `docs/ui-accessibility.md`, checked in both appearances.
 
-`style.css` imports only the sheets of the components the app renders, so a component newly taken from
-`@heroui/react` renders unstyled until its sheet, and those of the components it is built from, are added there;
+`style.css` imports only the sheets of the components the app renders, so a component newly taken from `@heroui/react`
+renders unstyled until its sheet, and those of the components it is built from, are added there;
 `packages/ui/src/style.test.ts` names what is missing. When upgrading `@heroui/styles`, also move the `tw-animate-css`
-pin in `packages/ui/package.json` to the version `@heroui/styles` itself depends on; the same test fails until it matches.
+pin in `packages/ui/package.json` to the version `@heroui/styles` itself depends on; the same test fails until it
+matches.
 
 ## A Tailwind class name has to stand in the source as literal text
 
@@ -140,8 +139,8 @@ In `packages/ui`, a line that divides a pane's parts or rows is a groove utility
 left to HeroUI's own components and to the few lines the "The window chrome and the content panel" section of
 `docs/product/window-layout.md` lists as not grooves, and to a frame a composite puts around a region of its own (the
 list in `packages/ui/src/dialogs/DirectoryPicker.tsx`, the panel in `packages/ui/src/dialogs/ConsoleLaunchFields.tsx`):
-neither a divider nor a card outline, it keeps `border border-separator`. A card takes no decorative outline border, and its shadow
-depends on whether it floats:
+neither a divider nor a card outline, it keeps `border border-separator`. A card takes no decorative outline border, and
+its shadow depends on whether it floats:
 
 - A card lying in the layout takes the short two-layer `shadow-(--panel-shadow)`, as the "Hand-built rows and cards"
   section of `docs/ui-accessibility.md` sets out — unless it is a panel card, below.
@@ -149,9 +148,10 @@ depends on whether it floats:
   shadow (`shadow-lg`, `shadow-xl`) and drops only its outline border; it never takes the short shadow or the panel
   card's shadow in its place.
 - A panel card — the sidebar's floating card or drawer, and every card of the right pane, docked or floating — looks
-  exactly like the sidebar's floating card: `panel-edge` for its hairline plus the light
-  `shadow-(--panel-card-shadow)`, whether it lies in the layout or floats. A new one takes `PANEL_CARD_CLASS`
-  (`packages/ui/src/layout/paneOverlay.tsx`) rather than values chosen to match it. The same holds for any surface meant to look like an existing one: reuse that surface's own class or
-  tokens, never a re-derived near-match — next to the original the difference shows, and the user rejects it.
+  exactly like the sidebar's floating card: `panel-edge` for its hairline plus the light `shadow-(--panel-card-shadow)`,
+  whether it lies in the layout or floats. A new one takes `PANEL_CARD_CLASS` (`packages/ui/src/layout/paneOverlay.tsx`)
+  rather than values chosen to match it. The same holds for any surface meant to look like an existing one: reuse that
+  surface's own class or tokens, never a re-derived near-match — next to the original the difference shows, and the user
+  rejects it.
 
 Borders that identify a control or show a selected state are not decorative and stay, at their 3:1 colour.

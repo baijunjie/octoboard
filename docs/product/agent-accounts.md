@@ -6,10 +6,10 @@ named config directory of an agent, where it keeps its login and conversation hi
 the user's `PATH` for its accounts to be usable. Below that paragraph sit **Automatically select an account** and,
 directly under it, **Start usage windows automatically** (see those sections in `docs/product/settings.md`), switches
 for the whole application, not controls on one agent's tab. They stay there while agents are listed, while the
-added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends
-in the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how consoles, projects and sessions use
-one are in "Agent config directories" in `docs/product/consoles.md`; signing an account in from this section is in
-`docs/product/logging-accounts-in.md`.
+added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends in
+the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how
+consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles.md`; signing an
+account in from this section is in `docs/product/logging-accounts-in.md`.
 
 ## Added agents
 
@@ -21,11 +21,11 @@ The list decides which agents this section shows, and in what order: the agent s
 picker. Every other place that lists agents follows it too, in its order: the console, project, session and handoff
 dialogs' agent pickers and the console dialog's per-agent sections (see "Which agents the agent pickers list" in
 `docs/product/consoles.md`), the rail's account quota panel (see "What the panel shows" in
-`docs/product/account-quotas.md`) and the menu bar icon's quota submenus (see "The icon's menu" in
+`docs/product/account-quota-panel.md`) and the menu bar icon's quota submenus (see "The icon's menu" in
 `docs/product/menu-bar-icon.md`); so does whether a new session of an agent can be opened, or a session handed off to
-it, at all — from the window or by an agent's tool (see "Opening a session" in `docs/product/sessions.md`). Only this section's Add agent dialog and the welcome screen's supported CLI
-tools list (see "What the welcome screen shows" in `docs/product/welcome-screen.md`) list an agent that was never
-added.
+it, at all — from the window or by an agent's tool (see "When the agent or the account cannot open a session" in
+`docs/product/opening-sessions.md`). Only this section's Add agent dialog and the welcome screen's supported CLI tools
+list (see "What the welcome screen shows" in `docs/product/welcome-screen.md`) list an agent that was never added.
 
 **How the list starts.** The list is decided once, as soon as Octoboard has determined which agents are installed: it
 is filled with every agent that is installed plus every agent the user owns an account of, in the order Claude Code,
@@ -33,11 +33,11 @@ Codex, Grok Build. This holds for a fresh installation, which owns no accounts a
 and for an installation from before the list existed, so no account it had disappears from view. From then on only the
 user changes it; a list the user has emptied stays empty.
 
-**While the list is undecided** — before Octoboard has determined which agents are installed, and for the whole run
-when the user's login shell environment could not be read (until Octoboard next starts) — the section lists every
-agent, in the order Claude Code, Codex, Grok Build. The agents then have no menu and no actions button and cannot be
-dragged, and the Add agent list adds nothing; the Add agent and Add account buttons are still there. Meanwhile every other place that follows the list treats
-every agent as added, in that same order.
+**While the list is undecided** — before Octoboard has determined which agents are installed, and for the whole run when
+the user's login shell environment could not be read (until Octoboard next starts) — the section lists every agent, in
+the order Claude Code, Codex, Grok Build. The agents then have no menu and no actions button and cannot be dragged, and
+the Add agent list adds nothing; the Add agent and Add account buttons are still there. Meanwhile every other place that
+follows the list treats every agent as added, in that same order.
 
 ## The agent strip
 
@@ -85,11 +85,11 @@ turning to Added, so several can be added in turn; it closes on its **Close** bu
 The dialog also opens by itself, in front of Settings, when Settings is opened or navigated from one of the window's
 **Add agent…** buttons (see "Opening and closing Settings" in `docs/product/settings.md`): Settings shows this section
 and the dialog opens over it, holding keyboard focus. It opens once per such request; switching to another section of
-Settings and back does not open it again. When the user closes a dialog opened this way, keyboard focus
-goes to the **Add agent** button at the end of the agent strip, when the strip is there. A later request for Settings to show a section without this dialog
-closes the dialog, however it was opened, and focus goes to that section's tab. A refused addition — the agent is not
-installed, is already added, or which agents are installed is not determined yet — is shown in an error alert (see
-`docs/product/error-alerts.md`).
+Settings and back does not open it again. When the user closes a dialog opened this way, keyboard focus goes to the
+**Add agent** button at the end of the agent strip, when the strip is there. A later request for Settings to show a
+section without this dialog closes the dialog, however it was opened, and focus goes to that section's tab. A refused
+addition — the agent is not installed, is already added, or which agents are installed is not determined yet — is shown
+in an error alert (see `docs/product/error-alerts.md`).
 
 ## Reordering and removing an agent
 
@@ -115,19 +115,20 @@ accounts are kept and come back if it is added again. When the agent is still in
 what is listed still uses the agent and keeps that setting, then a list with one item per kind of user, leaving out a
 kind with none: the consoles whose Default agent fields name it, the projects whose Default agent is it, and the
 sessions of it that are not archived. Each item gives the count of its kind and says how that kind uses the agent: the
-consoles and projects items say that the agent is their default agent ("2 projects have it as their default agent"),
-and the sessions item says that the sessions use it ("3 sessions use it"). While there are at most five, the item is
+consoles and projects items say that the agent is their default agent ("2 projects have it as their default agent"), and
+the sessions item says that the sessions use it ("3 sessions use it"). While there are at most five, the item is
 followed by a colon and their names, each set apart as a chip ("1 console has it as its default agent: Main", "1 session
-uses it: Fix build"), and beyond five only the item without names is given. Its confirm button, **Remove**, is styled as destructive. Once the agent is
-removed its tab goes, keyboard focus goes back to the selected section's tab in Settings' list of sections, and the
-accounts of the agent stay stored untouched. The consoles, projects and sessions that use it keep their setting, and its sessions go on running.
+uses it: Fix build"), and beyond five only the item without names is given. Its confirm button, **Remove**, is styled as
+destructive. Once the agent is removed its tab goes, keyboard focus goes back to the selected section's tab in Settings'
+list of sections, and the accounts of the agent stay stored untouched. The consoles, projects and sessions that use it
+keep their setting, and its sessions go on running.
 
 ## With no agent added
 
 When the user has removed every agent, the strip is replaced by an empty state titled "No agent added", with a line
-saying to add an agent installed on this machine to manage its accounts here, and an **Add agent** button. There is
-no Add account button. The two switches, **Automatically select an account** and **Start usage windows automatically**, stay above
-it.
+saying to add an agent installed on this machine to manage its accounts here, and an **Add agent** button. There is no
+Add account button. The two switches, **Automatically select an account** and **Start usage windows automatically**,
+stay above it.
 
 ## The default account
 
@@ -148,14 +149,14 @@ compared trimmed and ignoring letter case; that is reported under the name field
 not part of a configuration export (see "What is not configuration and never travels" in
 `docs/product/configuration-export-and-import.md`).
 
-The name the user gave is what the default account is called everywhere it is named: in this section, the rail's
-account quota panel, the console, project and session dialogs' account pickers (see "Agent config directories" in
-`docs/product/consoles.md` for how the console dialog names it), a session row's Switch account submenu,
-the agent icon's tooltip and the accessible name of a session in the sidebar, the archive view and confirmations, a
-focus mode card's model line, agent icon tooltip and accessible name, an archive view row's model line, the agent
-icon's tooltip and the accessible name of focus mode's archived rows, the menu bar icon's quota submenus, and what a console session's settings tools answer (see "Application
-settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and
-`docs/product/switching-session-accounts.md`).
+The name the user gave is what the default account is called everywhere it is named: in this section, the rail's account
+quota panel, the console, project and session dialogs' account pickers (see "Agent config directories" in
+`docs/product/consoles.md` for how the console dialog names it), a session row's Switch account submenu, the agent
+icon's tooltip and the accessible name of a session in the sidebar, the archive view and confirmations, a focus mode
+card's model line, agent icon tooltip and accessible name, an archive view row's model line, the agent icon's tooltip
+and the accessible name of focus mode's archived rows, the menu bar icon's quota submenus, and what a console session's
+settings tools answer (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md` and `docs/product/switching-session-accounts.md`).
 
 ## The accounts the user owns
 
@@ -197,13 +198,13 @@ tab in view; the readings already held are shown at once.
 ## The account settings dialog
 
 **Settings**, the first entry of an account's actions menu, with a gear icon, opens a modal dialog of everything about
-that one account.
-It is titled "Account settings", whichever account it is opened on. The first line of its body is the account's name,
-followed by its plan badge, its login state — the badge as in the table, or, while that is not known, "Checking…" while
-the first reading is on its way and "Unknown" otherwise — the "Usage unavailable" mark when its reading failed with
-nothing read before, and the **Log in** icon button for an account known to be signed out. The next line is the
-account's directory; for the default account a "?" help tip follows it (see "The default account" above). For an account the user owns of an agent that is not available, the dialog's body opens with
-a line saying it is not usable until the agent is on `PATH`. Then, one under another:
+that one account. It is titled "Account settings", whichever account it is opened on. The first line of its body is the
+account's name, followed by its plan badge, its login state — the badge as in the table, or, while that is not known,
+"Checking…" while the first reading is on its way and "Unknown" otherwise — the "Usage unavailable" mark when its
+reading failed with nothing read before, and the **Log in** icon button for an account known to be signed out. The next
+line is the account's directory; for the default account a "?" help tip follows it (see "The default account" above).
+For an account the user owns of an agent that is not available, the dialog's body opens with a line saying it is not
+usable until the agent is on `PATH`. Then, one under another:
 
 - **Usage** — the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
   windows as one meter, every other window, model-specific ones included, as a meter of its own, one to a row. How
@@ -234,16 +235,18 @@ after a time or otherwise.
 
 While an account is turned off:
 
-- **No session is opened on it, handed off to it or switched onto it**, by anyone, the user included: the daemon
-  refuses with `account_disabled` (see "Opening a session" in `docs/product/sessions.md`, "What can be handed off" in
-  `docs/product/handing-off-sessions.md` and "When a switch fails" in `docs/product/switching-session-accounts.md`).
-- **Automatic account selection passes over it** (see "Which account a session uses" in `docs/product/sessions.md`),
-  and so does a session started by another session where it would otherwise run on its caller's own account (see "The
-  agent and account of a session a session starts" in `docs/product/hub-orchestration.md`).
+- **No session is opened on it, handed off to it or switched onto it**, by anyone, the user included: the daemon refuses
+  with `account_disabled` (see "When the agent or the account cannot open a session" in
+  `docs/product/opening-sessions.md`, "What can be handed off" in `docs/product/handing-off-sessions.md` and "When a
+  switch fails" in `docs/product/switching-session-accounts.md`).
+- **Automatic account selection passes over it** (see "Which account a session uses" in
+  `docs/product/opening-sessions.md`), and so does a session started by another session where it would otherwise run on
+  its caller's own account (see "The agent and account of a session a session starts" in
+  `docs/product/hub-orchestration.md`).
 - **The window's account choices leave it out**: the session and handoff dialogs' account pickers do not list it and
-  open on another account (see the **Agent** field in "Opening a session" in `docs/product/sessions.md`), a session
-  opened with defaults takes another account, or is unavailable when none is left (see "Opening a session with
-  defaults" in `docs/product/sessions.md`), and a session row's **Switch account** submenu does not list it (see
+  open on another account (see the **Agent** field in "The session dialog" in `docs/product/opening-sessions.md`), a
+  session opened with defaults takes another account, or is unavailable when none is left (see "Opening a session with
+  defaults" in `docs/product/opening-sessions.md`), and a session row's **Switch account** submenu does not list it (see
   "Session rows" in `docs/product/sidebar-session-rows.md`). Where a choice already holds it, it stays listed:
   - in the session and handoff dialogs, when the account the field ends on is turned off, it is listed, marked
     **Disabled**, but cannot be picked, and the dialog cannot be submitted on it;
@@ -254,7 +257,7 @@ While an account is turned off:
     "The project's account, model and reasoning effort" in `docs/product/projects.md`). A console or project whose
     account it is keeps it; only opening a session on it is refused.
 - **No usage window is started on it automatically** (see "When an account is kicked" in
-  `docs/product/account-quotas.md`).
+  `docs/product/starting-usage-windows.md`).
 
 The sessions already running on it are not affected, and resuming, restarting or reopening a session on it is never
 refused for this. Its quota goes on being read, and the rail's account quota panel and the menu bar icon's quota
@@ -287,8 +290,8 @@ it is ignored, and what is shown under the row's line says why.
 A help tip beside the row's name says, one line each, that configuration (skills, plugins, settings and more) and
 conversation history are linked to the default account's directory, what is never shared for the selected agent, and
 what happens to conversations when sharing is turned off; and, while the account has idle sessions, that changing it
-first ends that many idle sessions of the account and resumes them afterwards. The rules are in "What is shared" and "Turning sharing off" in
-`docs/product/sharing-the-default-configuration.md`.
+first ends that many idle sessions of the account and resumes them afterwards. The rules are in "What is shared" and
+"Turning sharing off" in `docs/product/sharing-the-default-configuration.md`.
 
 The switch saves independently of the account's name or directory. It shows the daemon's recorded choice, which changes
 as soon as a change starts, so during a change it shows the change's target. While the last change is incomplete — it
@@ -396,21 +399,19 @@ Claude Code's choices:
 - **Approve everything** launches Claude Code so that every tool runs without asking.
 
 The choice is saved when selected; the choices are unavailable while saving, and a failure is shown in an error alert
-titled "Could not save the permission approval".
-It applies when a session of any account of the agent next starts or resumes, including an account switch, and a
-legacy pinned directory with no account reference included; a running process keeps what it was started with. An
-explicit choice overrides the agent's own setting for that launch without writing its configuration files, and for
-Codex without changing its sandbox or approval policy. Whatever the choice, Follow account configuration included,
-Octoboard's own tools run without asking in both agents, while every other tool stays under the choice (see "Per-agent
-specifics a user will notice" in `docs/product/launching-agents.md`).
+titled "Could not save the permission approval". It applies when a session of any account of the agent next starts or
+resumes, including an account switch, and a legacy pinned directory with no account reference included; a running
+process keeps what it was started with. An explicit choice overrides the agent's own setting for that launch without
+writing its configuration files, and for Codex without changing its sandbox or approval policy. Whatever the choice,
+Follow account configuration included, Octoboard's own tools run without asking in both agents, while every other tool
+stays under the choice (see "Claude Code" and "Codex" in `docs/product/per-agent-launch-specifics.md`).
 
 **Approve everything** is saved only once the user accepts a destructive confirmation that names the agent and warns
-that every tool will run without asking in every account of that agent, commands that change or delete files
-included; its confirm button carries the choice's own name. Cancelling, Escape included, leaves the choice as it was.
-If the save fails, the error alert above is shown over the confirmation, which stays open, and the choice stays
-unchanged. Because the
-user has agreed there, Claude Code's own blocking warning for that mode never appears (see "Per-agent specifics a user
-will notice" in `docs/product/launching-agents.md`).
+that every tool will run without asking in every account of that agent, commands that change or delete files included;
+its confirm button carries the choice's own name. Cancelling, Escape included, leaves the choice as it was. If the save
+fails, the error alert above is shown over the confirmation, which stays open, and the choice stays unchanged. Because
+the user has agreed there, Claude Code's own blocking warning for that mode never appears (see "Claude Code" in
+`docs/product/per-agent-launch-specifics.md`).
 
 The choices are stored by Octoboard and stay on this machine (see "What is not configuration and never travels" in
 `docs/product/configuration-export-and-import.md`). Versions of Octoboard that kept a choice per account are moved over
@@ -419,20 +420,18 @@ once: each agent's setting takes the choice its default account had, and the oth
 ## Adding, editing and removing an account
 
 **Add account**, the icon button at the end of the agent strip, opens a form that asks for the agent, starting on the
-agent of the tab in view —
-every added agent is listed, in the list's order (every agent while the list is undecided), and can be picked, one that
-is not installed included and marked with a Not installed badge after its name, since an account may be set up before its agent is, unlike
-the agent pickers elsewhere (see "Which agents the agent pickers list" in `docs/product/consoles.md`) — then a name and a
-directory, which can be typed or picked with the directory browser (see "Browsing directories" in
-`docs/product/projects.md`). Editing an account offers its name and its directory, never its agent: a directory
-belongs to one agent's layout. The directory is checked for being absolute (or starting with `~/`) and for not being
-already used by another account of the same agent, the default account included (the full rules are in "Agent config
-directories" in `docs/product/consoles.md`); one that does not exist yet is accepted, and the form says that it
-need not exist yet. A directory already in use is refused by the daemon once saving is attempted, and the refusal is
-shown in an error alert naming the account that uses it — the default account by the name it is shown under — with
-the form left open and what was entered kept. For a Grok Build account the form adds
-that the directory has to be a Grok home that Grok has already been run against, which is checked when a session
-launches.
+agent of the tab in view — every added agent is listed, in the list's order (every agent while the list is undecided),
+and can be picked, one that is not installed included and marked with a Not installed badge after its name, since an
+account may be set up before its agent is, unlike the agent pickers elsewhere (see "Which agents the agent pickers list"
+in `docs/product/consoles.md`) — then a name and a directory, which can be typed or picked with the directory browser
+(see "Browsing directories" in `docs/product/projects.md`). Editing an account offers its name and its directory, never
+its agent: a directory belongs to one agent's layout. The directory is checked for being absolute (or starting with
+`~/`) and for not being already used by another account of the same agent, the default account included (the full rules
+are in "Agent config directories" in `docs/product/consoles.md`); one that does not exist yet is accepted, and the form
+says that it need not exist yet. A directory already in use is refused by the daemon once saving is attempted, and the
+refusal is shown in an error alert naming the account that uses it — the default account by the name it is shown under —
+with the form left open and what was entered kept. For a Grok Build account the form adds that the directory has to be a
+Grok home that Grok has already been run against, which is checked when a session launches.
 
 Every account is named by the user, and the name is required: it is stored trimmed, and one left blank is refused. A
 name has to be unique within its agent, compared trimmed and ignoring letter case; accounts of different agents may

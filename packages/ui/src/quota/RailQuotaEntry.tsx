@@ -99,12 +99,12 @@ function QuotaCapsule({ window, height, now }: { window: QuotaWindow; height: nu
   );
 }
 
-/** The rail's quota button and the floating panel it anchors, which lists the accounts of each
- * agent that is added and installed, in the order they were added, with their plan and quota (see "The account quota panel on the rail" in
- * `docs/product/account-quotas.md`). The panel is a `Hint` of kind `popover`, the same behaviour as a status mark's
- * popover: resting the mouse on the button opens it without moving focus; a mouse click opens nothing; a
- * tap, a pen, assistive technology and the keyboard open it with focus in it. Each opening asks the
- * daemon to refresh the quotas that are due. */
+/** The rail's quota button and the floating panel it anchors, which lists the accounts of each agent that is added and
+ * installed, in the order they were added, with their plan and quota (see "Opening the panel" in
+ * `docs/product/account-quota-panel.md`). The panel is a `Hint` of kind `popover`, the same behaviour as a status
+ * mark's popover: resting the mouse on the button opens it without moving focus; a mouse click opens nothing; a tap, a
+ * pen, assistive technology and the keyboard open it with focus in it. Each opening asks the daemon to refresh the
+ * quotas that are due. */
 export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   selectedSessionId?: string;
   onOpenSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;

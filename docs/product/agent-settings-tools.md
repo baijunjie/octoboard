@@ -119,14 +119,14 @@ the user in `ssh://git@example.com/r.git` names the remote and stays. A URL of a
 
 ## Adding a project with its settings
 
-The console session's `add_project` associates projects from the same three sources as the user's form (see
-"Associating a project" in `docs/product/projects.md`), and besides the location takes the settings the
-form does: `name`, `description`, `default_agent`, `tags`, `accounts`, `launch`, `pinned` and `git_workflow` (the
-project's own git workflow settings, as `update_project` takes them, except that an item left out or `null` follows the
-application-wide value; see "A project's own git workflow settings" in `docs/product/git-workflow-settings.md`). Every project
-one call adds takes the same settings, except that `name` and `description` apply only when a single project is
-associated (see "Project names" in `docs/product/projects.md`). A blank `name` or `description` counts as none given,
-and so does a `description` of `null`. The call answers with each added project's settings.
+The console session's `add_project` associates projects from the same three sources as the user's form (see "Associating
+a project" in `docs/product/projects.md`), and besides the location takes the settings the form does: `name`,
+`description`, `default_agent`, `tags`, `accounts`, `launch`, `pinned` and `git_workflow` (the project's own git
+workflow settings, as `update_project` takes them, except that an item left out or `null` follows the application-wide
+value; see "A project's own git workflow settings" in `docs/product/git-workflow-settings.md`). Every project one call
+adds takes the same settings, except that `name` and `description` apply only when a single project is associated (see
+"Project names" in `docs/product/projects.md`). A blank `name` or `description` counts as none given, and so does a
+`description` of `null`. The call answers with each added project's settings.
 
 Explicit text follows "Project names" and "The project's description" in `docs/product/projects.md`. Overlong text is
 refused before anything is cloned or stored; text ignored for several parent-directory projects is not checked.
@@ -182,7 +182,7 @@ working directory. Neither the avatar itself nor the console's console session i
 |---|---|
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
-| `auto_select_account` | Whether a new session whose account was not named uses the account of its agent whose weekly quota resets soonest (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/sessions.md`). |
+| `auto_select_account` | Whether a new session whose account was not named uses the account of its agent whose weekly quota resets soonest (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The four settings" in `docs/product/git-workflow-settings.md`); `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
@@ -194,25 +194,26 @@ working directory. Neither the avatar itself nor the console's console session i
 switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
 built-in default. `git_workflow` is an object of any of the four git workflow settings, with the values
 `update_project`'s takes (`rebase_before_merge` and `delivery` apply only while `development` is not `in_place`, and
-keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others unapplied too.
-An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
-`auto_approve_handoffs`, `auto_start_quota_windows`, `ask_questions_as_choices` or
-`interface_language` argument is ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual. Turning `auto_pull_repositories` on fast-forwards
-the projects already known to be behind at once, as turning the switch on in Settings does, which changes files in the
-user's repositories. Turning `auto_delete_unresumable_archives` on deletes nothing at once, and turning it off stops a
-deletion pass under way, exactly as the switch in Settings does. Turning `auto_select_account` on or off changes no
-session already open; it is read when a later `new_session`, `request_session` or `handoff_session` leaves the account
-out (see "Which account a session uses" in `docs/product/sessions.md`). The call answers as `get_settings` does.
+keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
+unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
+`auto_approve_handoffs`, `auto_start_quota_windows`, `ask_questions_as_choices` or `interface_language` argument is
+ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual.
+Turning `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch
+on in Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on
+deletes nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does.
+Turning `auto_select_account` on or off changes no session already open; it is read when a later `new_session`,
+`request_session` or `handoff_session` leaves the account out (see "Which account a session uses" in
+`docs/product/opening-sessions.md`). The call answers as `get_settings` does.
 
 ## When a change takes effect
 
-As for the same change in the UI: sessions already running keep what they were started with. A changed account
-reaches sessions opened afterwards, and a changed model or effort reaches a session's next launch where the session
-inherits that value (see `docs/product/model-and-reasoning-effort.md`). That holds for the calling console session
-too: its own console's model and effort reach it when it is next launched, and its console's account only console
-sessions opened afterwards. A changed `project_session_launch` reaches a project session at its next launch, unless its
-project or the session sets that value itself. A changed `development`, `rebase_before_merge` or `delivery`,
-application-wide or a project's own, is sure to reach only project sessions begun after it (see "When a change reaches a session" in
+As for the same change in the UI: sessions already running keep what they were started with. A changed account reaches
+sessions opened afterwards, and a changed model or effort reaches a session's next launch where the session inherits
+that value (see `docs/product/model-and-reasoning-effort.md`). That holds for the calling console session too: its own
+console's model and effort reach it when it is next launched, and its console's account only console sessions opened
+afterwards. A changed `project_session_launch` reaches a project session at its next launch, unless its project or the
+session sets that value itself. A changed `development`, `rebase_before_merge` or `delivery`, application-wide or a
+project's own, is sure to reach only project sessions begun after it (see "When a change reaches a session" in
 `docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The switch" in
 `docs/product/revert-gate.md`).
 

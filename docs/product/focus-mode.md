@@ -33,44 +33,42 @@ The session lock button on live cards, a console session's own card included, fo
 **Session cards**, in both: the status glyph with the status in words, the pin button when pinned (see "Pinning" in
 `docs/product/order-of-projects-and-sessions.md`), the session's action menu and, just before it, a Delete or Archive
 button (both always shown when available; see "Session rows" in `docs/product/sidebar-session-rows.md` for when the
-shortcut is there and what it does), its title on one line, its agent's icon
-followed by the **model line**, and how long ago it was created at the trailing end of the agent line. The model line
-reads "<account> · <model> · <effort>". The account is the one the session runs under, named as in a session row's
-agent icon tooltip (see "Session rows" in `docs/product/sidebar-session-rows.md`): the account's name, the default
-account's name, or a removed account's recorded directory; a removed account that recorded no directory leaves the line
-at "<model> · <effort>". "<model> · <effort>" is the model and reasoning effort the session runs with, as "The model and
-effort a session is shown running with" in `docs/product/model-and-reasoning-effort.md` decides them, an unknown one
-reading **Default**, and reads **Default model** when neither is known; the agent's name is not shown on the card. The
-model line is one line that fades where it is cut off, with its full text as its tooltip while cut (see "Names too long
-for their space" in `docs/product/labels-and-tooltips.md`). The card's accessible name ends with "<model> · <effort>"
-alone: the account is already named beside the agent in it, as in a session row's accessible name. Resuming or
-reopening does not reset the creation time. Resting the mouse on the creation time shows a tooltip writing out the
-creation date ("Created …") as an absolute date with year, month, day, hour and minute, formatted in the current
-language and the client's local time zone. The time is not a tab stop, so the tooltip does not open on keyboard
-focus, and a tap on it is the card's press (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`).
-The card's accessible description carries that creation date in place of the relative wording, after the context
-size while the chip is shown. When the context size is known and above zero, its chip appears immediately
-before the creation time on that same agent line and updates while the session runs (see "The context-size chip" in
-`docs/product/session-context.md`), set apart from the creation time by spacing alone; without the chip, the trailing
-block contains creation time alone. The model line has no adjacent separator. The status
-and agent lines share aligned leading icons and text starts. A title with a console-session colour dot shares that
-alignment;
-a title without one starts at the card’s leading content edge, with no empty icon space. Long titles follow "Names too long
-for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has the same tooltip as on a session row, listing the account,
-model and effort under the agent's name (see "Session rows" in `docs/product/sidebar-session-rows.md`). Clicking a card
-selects the session. They are in the order of "Order of projects and sessions" in
-`docs/product/order-of-projects-and-sessions.md`. Cards have an opaque background distinct from the sidebar's, which
-stays opaque while they move, so text from other cards, the console-session summary or the archive does not show through
-them. Cards have no outline: each is set apart by the same soft shadow as the content panel's edges (see "The window
-chrome and the content panel" in `docs/product/window-layout.md`), and the selected card is outlined in the accent
-colour.
+shortcut is there and what it does), its title on one line, its agent's icon followed by the **model line**, and how
+long ago it was created at the trailing end of the agent line. The model line reads "<account> · <model> · <effort>".
+The account is the one the session runs under, named as in a session row's agent icon tooltip (see "Session rows" in
+`docs/product/sidebar-session-rows.md`): the account's name, the default account's name, or a removed account's recorded
+directory; a removed account that recorded no directory leaves the line at "<model> · <effort>". "<model> · <effort>" is
+the model and reasoning effort the session runs with, as "The model and effort a session is shown running with" in
+`docs/product/model-and-reasoning-effort.md` decides them, an unknown one reading **Default**, and reads **Default
+model** when neither is known; the agent's name is not shown on the card. The model line is one line that fades where it
+is cut off, with its full text as its tooltip while cut (see "Names too long for their space" in
+`docs/product/labels-and-tooltips.md`). The card's accessible name ends with "<model> · <effort>" alone: the account is
+already named beside the agent in it, as in a session row's accessible name. Resuming or reopening does not reset the
+creation time. Resting the mouse on the creation time shows a tooltip writing out the creation date ("Created …") as an
+absolute date with year, month, day, hour and minute, formatted in the current language and the client's local time
+zone. The time is not a tab stop, so the tooltip does not open on keyboard focus, and a tap on it is the card's press
+(see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`). The card's accessible description carries that
+creation date in place of the relative wording, after the context size while the chip is shown. When the context size is
+known and above zero, its chip appears immediately before the creation time on that same agent line and updates while
+the session runs (see "The context-size chip" in `docs/product/session-context.md`), set apart from the creation time by
+spacing alone; without the chip, the trailing block contains creation time alone. The model line has no adjacent
+separator. The status and agent lines share aligned leading icons and text starts. A title with a console-session colour
+dot shares that alignment; a title without one starts at the card’s leading content edge, with no empty icon space. Long
+titles follow "Names too long for their space" in `docs/product/labels-and-tooltips.md`. The agent's icon has the same
+tooltip as on a session row, listing the account, model and effort under the agent's name (see "Session rows" in
+`docs/product/sidebar-session-rows.md`). Clicking a card selects the session. They are in the order of "Order of
+projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. Cards have an opaque background distinct
+from the sidebar's, which stays opaque while they move, so text from other cards, the console-session summary or the
+archive does not show through them. Cards have no outline: each is set apart by the same soft shadow as the content
+panel's edges (see "The window chrome and the content panel" in `docs/product/window-layout.md`), and the selected card
+is outlined in the accent colour.
 
 A card for a session **bound to a project session the same view lists** is **inset under that session's card** and
 follows it, as a session row is under its owner's row (see "Project rows" in `docs/product/sidebar-project-rows.md`). A
 connector runs from the owner's card across the gaps between cards, bending smoothly toward the middle of each child
 card and stopping at the last child. It follows the inset side under a right-to-left language. The owner's name in the
-card's accessible name carries the nesting to assistive technology. In a project's combined view, cards also identify the
-console session above them (see "A project's focus mode" below and "The binding badge" in
+card's accessible name carries the nesting to assistive technology. In a project's combined view, cards also identify
+the console session above them (see "A project's focus mode" below and "The binding badge" in
 `docs/product/sidebar-session-rows.md`).
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
@@ -125,24 +123,24 @@ From the top, below the header:
   and a tooltip naming it; its accessible name names that console session as well as its immediate project-session
   owner, where it has one. The count is every card listed, the inset ones included. With
   none, a compact row saying there are no sessions yet takes their place; clicking the row opens a **New session**.
-- **The sessions elsewhere**, between the live cards and the archive, present only with the switch off and while
-  the project has live sessions under a console session that is not archived: one sentence for the whole project
-  saying how many of its sessions are under console sessions, naming none of them, and below it a row of chips,
-  wrapping onto as many lines as it needs — one chip per console session they are under, in the order the console
-  sessions section lists them. A chip shows the console session's colour, its title (faded out when too long, the
-  full title then its tooltip) and an inline count badge in the neutral grey tint the neutral badges and chips share,
-  the same on every chip. Both the total and each chip's count include a lead session **and** the sessions under it,
-  since the lead session's team is listed with it in that console session's focus mode. Pressing a chip enters that console
-  session's focus mode; assistive technology hears it as entering that focus mode, with the count.
+- **The sessions elsewhere**, between the live cards and the archive, present only with the switch off and while the
+  project has live sessions under a console session that is not archived: one sentence for the whole project saying how
+  many of its sessions are under console sessions, naming none of them, and below it a row of chips, wrapping onto as
+  many lines as it needs — one chip per console session they are under, in the order the console sessions section lists
+  them. A chip shows the console session's colour, its title (faded out when too long, the full title then its tooltip)
+  and an inline count badge in the neutral grey tint the neutral badges and chips share, the same on every chip. Both
+  the total and each chip's count include a lead session **and** the sessions under it, since the lead session's team is
+  listed with it in that console session's focus mode. Pressing a chip enters that console session's focus mode;
+  assistive technology hears it as entering that focus mode, with the count.
 - **Archived (n)** counts all of the project's archived sessions, including those under a lead session that is
   still live. The switch changes only the live list; the archive's count, preview and View all
   scope stay the same.
 
-**New session** (the header's **+** and the empty row) opens the new-session dialog with no "Report to"
-choice: the session is always unbound. With the primary modifier held, the header's **+** opens the session at once
-without the dialog, unbound as well (see "Opening a session with defaults" in `docs/product/sessions.md`). With no agent both
-added and installed, the header's **+** is disabled and the empty row is plain text (see "Opening a session" in
-`docs/product/sessions.md`).
+**New session** (the header's **+** and the empty row) opens the new-session dialog with no "Report to" choice: the
+session is always unbound. With the primary modifier held, the header's **+** opens the session at once without the
+dialog, unbound as well (see "Opening a session with defaults" in `docs/product/opening-sessions.md`). With no agent
+both added and installed, the header's **+** is disabled and the empty row is plain text (see "When no agent can open a
+session" in `docs/product/opening-sessions.md`).
 
 ## A console session's focus mode
 
@@ -164,25 +162,25 @@ added and installed, the header's **+** is disabled and the empty row is plain t
   session sees but cannot drive (see "Lead sessions" in `docs/product/hub-orchestration.md`). A session bound to another
   console session, to a project session that is not under this one, or to none, is not shown, and neither is a project
   with nothing under this console session. With none, a compact row saying there are no bound sessions takes their
-  place, carrying no action of its own — the header's **+** below is the way to open one. Each project's name carries its pin
-  button while it is pinned (see "Pinning" in `docs/product/order-of-projects-and-sessions.md`), its own **+**, which
-  opens a new session in that project, and its action menu, which is the project row's without its Focus mode item — a
-  project has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive** covers
-  only the project's share of this console session's archive: the project's archived sessions bound to this console
-  session, or bound to an archived lead session that is bound to it, previewed as any archive preview is (see "The
-  archive view" in `docs/product/archive-view.md`). The project's sessions bound to another console session or to none,
-  and those of a lead session that is still live, are not in it; with none in the share, the submenu shows only the
-  disabled item saying there are none. Its **View all**, offered whenever the share is nonempty, opens this console
+  place, carrying no action of its own — the header's **+** below is the way to open one. Each project's name carries
+  its pin button while it is pinned (see "Pinning" in `docs/product/order-of-projects-and-sessions.md`), its own **+**,
+  which opens a new session in that project, and its action menu, which is the project row's without its Focus mode item
+  — a project has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive**
+  covers only the project's share of this console session's archive: the project's archived sessions bound to this
+  console session, or bound to an archived lead session that is bound to it, previewed as any archive preview is (see
+  "The archive view" in `docs/product/archive-view.md`). The project's sessions bound to another console session or to
+  none, and those of a lead session that is still live, are not in it; with none in the share, the submenu shows only
+  the disabled item saying there are none. Its **View all**, offered whenever the share is nonempty, opens this console
   session's archive view — the one **View all** under **Archived (n)** below opens — not the project's. The project's
   row in the full sidebar keeps the project's whole archive in its menu. The project list's filter is not part of this
   view.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
   can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
   line saying the session reports to this console session, which it will be bound to. With the primary modifier held,
-  this menu and each project's own **+** open the session at once without the dialog, bound to this console session
-  all the same (see "Opening a session with defaults" in `docs/product/sessions.md`). With no agent both added and
-  installed, the header's **+** and each project's own **+** are disabled (see "Opening a session" in
-  `docs/product/sessions.md`).
+  this menu and each project's own **+** open the session at once without the dialog, bound to this console session all
+  the same (see "Opening a session with defaults" in `docs/product/opening-sessions.md`). With no agent both added and
+  installed, the header's **+** and each project's own **+** are disabled (see "When no agent can open a session" in
+  `docs/product/opening-sessions.md`).
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
   in place of the sessions a compact row says the console has no projects yet; clicking it opens **Add project**.
 - **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived lead
@@ -204,9 +202,9 @@ console session's focus mode, and only while the console has at least two consol
 - **A chip** shows the console session's colour (see "The binding badge" in `docs/product/sidebar-session-rows.md`), its
   title, faded out when too long with the full title then its tooltip, and what is going on in that console session and
   the sessions bound to it: a waving hand while any of them is waiting for the user, otherwise the *working* glyph while
-  any of them is working or working in background, otherwise nothing — a session merely running is not given a chip's room, so only those two
-  markers can be seen here. The marker carries a **tooltip** saying which of the two it is, in the same words the
-  chip's own name folds in beside the title (see "Tooltips on indicators" in
+  any of them is working or working in background, otherwise nothing — a session merely running is not given a chip's
+  room, so only those two markers can be seen here. The marker carries a **tooltip** saying which of the two it is, in
+  the same words the chip's own name folds in beside the title (see "Tooltips on indicators" in
   `docs/product/labels-and-tooltips.md`).
 - **The console session in focus** has its chip outlined in the accent colour, and is announced as the current one.
 - The chips are on **one row**. When they do not fit it scrolls sideways, with no scrollbar and its edges fading where
@@ -261,11 +259,11 @@ and selecting it from the console session's focus mode leaves that focus mode.
 
 ## Creating sessions from the keyboard
 
-In either focus mode, **New session** — `Cmd+N` on an Apple keyboard or `Ctrl+N` elsewhere, unless the user has
-changed it — takes the header's **+** action, and **New session with defaults** — `Shift+Cmd+N` or `Ctrl+Shift+N`
-unless changed — takes its quick form, opening a session with defaults (see "Opening a session with defaults" in
-`docs/product/sessions.md`). How either is changed is in `docs/product/keyboard-shortcuts.md`. The header's tooltip
-shows New session's shortcut, or New session with defaults' while the primary modifier is held. These creation
+In either focus mode, **New session** — `Cmd+N` on an Apple keyboard or `Ctrl+N` elsewhere, unless the user has changed
+it — takes the header's **+** action, and **New session with defaults** — `Shift+Cmd+N` or `Ctrl+Shift+N` unless changed
+— takes its quick form, opening a session with defaults (see "Opening a session with defaults" in
+`docs/product/opening-sessions.md`). How either is changed is in `docs/product/keyboard-shortcuts.md`. The header's
+tooltip shows New session's shortcut, or New session with defaults' while the primary modifier is held. These creation
 shortcuts are available only in focus mode.
 
 In a project's focus mode, the normal shortcut opens its new-session dialog and the quick shortcut creates an

@@ -37,9 +37,9 @@ alert (see "When something fails" below).
 - **On request**: **Check for updates** in Settings' About section.
 
 A check does nothing while another check or a download is under way, and nothing once an update is installed and waits
-for its restart: until Octoboard restarts nothing more is looked for or offered. The update state survives the screen for a UI
-that failed and its Try again (see "The window chrome and the content panel" in `docs/product/window-layout.md`): an
-update installed or downloading is still known afterwards.
+for its restart: until Octoboard restarts nothing more is looked for or offered. The update state survives the screen
+for a UI that failed and its Try again (see "The window chrome and the content panel" in
+`docs/product/window-layout.md`): an update installed or downloading is still known afterwards.
 
 A check ends in one of three ways:
 
@@ -138,10 +138,10 @@ behind **Error details**:
 
 None of these asks for a report or offers **Report issue**.
 
-An automatic check that fails, including the one a channel switch starts, opens no alert: Settings' Updates row shows
-a warning mark saying that the last check did not finish (see "The Updates and Update channel rows" below), and the next check
-tries again.
-A check or install refused because the application is already busy with one is not a failure and says nothing.
+An automatic check that fails, including the one a channel switch starts, opens no alert: Settings' Updates row shows a
+warning mark saying that the last check did not finish (see "The Updates and Update channel rows" below), and the next
+check tries again. A check or install refused because the application is already busy with one is not a failure and says
+nothing.
 
 ## The Updates and Update channel rows
 

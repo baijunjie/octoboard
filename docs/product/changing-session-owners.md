@@ -23,10 +23,10 @@ A session that has sessions of its own — archived ones included, since its own
 a console session: bound to a project session it could own none. A call that breaks a rule is refused, with the reason
 in prose, and changes nothing; so is one whose binding changed while it was being made — the session bound elsewhere
 meanwhile, it gained sessions of its own, or the owner can no longer own sessions — which says to look again before
-retrying. `transfer_session` and `bind_to_session` are also refused, changing nothing, while the session being rebound, or an owner involved — the
-owner it is to be bound to, or a handover's earlier or new owner — is being started, resumed, handed off, switched to
-another account, having its branches handed over or having its owner changed; the reason says to look again once that
-is done.
+retrying. `transfer_session` and `bind_to_session` are also refused, changing nothing, while the session being rebound,
+or an owner involved — the owner it is to be bound to, or a handover's earlier or new owner — is being started, resumed,
+handed off, switched to another account, having its branches handed over or having its owner changed; the reason says to
+look again once that is done.
 
 ## Handing a session to another owner
 
@@ -52,11 +52,11 @@ wherever it goes.
 Both sessions concerned are told, by messages written through the delivery every message takes (queued while one cannot
 take a message; see "Messages held until a session can take them" in `docs/product/message-delivery.md`):
 
-- **The session**, when it is running, is told its owner has changed — which session handed it over to which, by kind, id and title — that it
-  takes work only from the new owner, or from the user typing in its terminal, and reports to it with `report`, that
-  this replaces what it was told of its owner when it was started, and that the earlier owner no longer drives it. A
-  session that has lost the tools for owning sessions is also told it can no longer start or drive sessions, with the
-  list of the Octoboard tools it has left.
+- **The session**, when it is running, is told its owner has changed — which session handed it over to which, by kind,
+  id and title — that it takes work only from the new owner, or from the user typing in its terminal, and reports to it
+  with `report`, that this replaces what it was told of its owner when it was started, and that the earlier owner no
+  longer drives it. A session that has lost the tools for owning sessions is also told it can no longer start or drive
+  sessions, with the list of the Octoboard tools it has left.
 - **The new owner** is told which session handed which session over to it, by id, title and project, that the session
   is its own from now on and is driven with `send_message`, `archive_session` and `reopen_session`, and, for a lead
   session, that it keeps its own sessions, which the new owner can read but not drive; then the caller's `note`, every
@@ -186,25 +186,26 @@ only a session with no sessions of its own may — it becomes an ordinary bound 
 it can no longer start or drive sessions.
 
 **The summary reaches the owner as the caller's first report**, through the ordinary reporting path (see
-`docs/product/reporting-to-owners.md`), with the status `needs_decision` and no open items. The report's summary
-opens by saying the project session bound itself to the owner, is the owner's to drive from now on and reports to it
-— and, for a lead session, that it keeps the sessions it started and drives them itself, which the owner can read but not drive — then gives the caller's
-`summary`. It counts as the caller's report for its current turn, so that turn ending without a `report` produces no
-synthesised report (see "When a session does not report" in
+`docs/product/reporting-to-owners.md`), with the status `needs_decision` and no open items. The report's summary opens
+by saying the project session bound itself to the owner, is the owner's to drive from now on and reports to it — and,
+for a lead session, that it keeps the sessions it started and drives them itself, which the owner can read but not drive
+— then gives the caller's `summary`. It counts as the caller's report for its current turn, so that turn ending without
+a `report` produces no synthesised report (see "When a session does not report" in
 `docs/product/reporting-to-owners.md`).
 
 The call returns `owner`, `owner_kind` and a `note` telling the caller that it is now bound to that owner (as its lead
 session, where it is one) and whether its summary was sent as its first report — or was written into the owner's input
-as its first report but not sent to its conversation by the owner's agent, so the owner has not read it, the user has been told, and it is
-not to be sent again (see "A message written but not sent" in `docs/product/message-delivery.md`); that from now on the
-owner is the one it takes work from, or the user typing in its terminal, and it reports to it with `report` once per
-round of work, which replaces what its role description says about being unbound and not calling `report`; that `done`
-with no open items archives it, subject to "Automatic archiving" in `docs/product/reporting-to-owners.md` — refused for
-a lead session while a session it started is not archived and no lock blocks automatic archiving — while
-`needs_decision` or open items leave it running; that a lead session keeps driving its own sessions with `new_session`
-and the tools that go with it, and that any other can no longer start or drive sessions, with the list of the Octoboard
-tools it has left; and not to call `bind_to_session` again. Once the caller is bound, the binding stands: a summary that
-could not be delivered is reported in the note, with the reason, and the caller is told to send it with `report` itself.
+as its first report but not sent to its conversation by the owner's agent, so the owner has not read it, the user has
+been told, and it is not to be sent again (see "A message written but not sent" in `docs/product/message-delivery.md`);
+that from now on the owner is the one it takes work from, or the user typing in its terminal, and it reports to it with
+`report` once per round of work, which replaces what its role description says about being unbound and not calling
+`report`; that `done` with no open items archives it, subject to "Automatic archiving" in
+`docs/product/reporting-to-owners.md` — refused for a lead session while a session it started is not archived and no
+lock blocks automatic archiving — while `needs_decision` or open items leave it running; that a lead session keeps
+driving its own sessions with `new_session` and the tools that go with it, and that any other can no longer start or
+drive sessions, with the list of the Octoboard tools it has left; and not to call `bind_to_session` again. Once the
+caller is bound, the binding stands: a summary that could not be delivered is reported in the note, with the reason, and
+the caller is told to send it with `report` itself.
 
 ## When a binding changes while a session runs
 
@@ -231,10 +232,10 @@ original (see "Who is told" in `docs/product/handing-off-sessions.md`) — while
 message about the change could not be written, is **owed a notice** of it. The notice is kept with the session, across
 a restart of Octoboard, and is not part of the session record clients read.
 
-It is delivered when the session's process is next started — a resume, a reopen, or any other relaunch, such as one
-for a switch of account — ahead of the launch's own instruction, in the same text as that instruction where there is
-one (an owner's `reopen_session` text, say): a Claude Code session resuming a conversation
-has it in its launch prompt, any other session as a message delivered once it can take one (see "Messages held until a session can take them" in
+It is delivered when the session's process is next started — a resume, a reopen, or any other relaunch, such as one for
+a switch of account — ahead of the launch's own instruction, in the same text as that instruction where there is one (an
+owner's `reopen_session` text, say): a Claude Code session resuming a conversation has it in its launch prompt, any
+other session as a message delivered once it can take one (see "Messages held until a session can take them" in
 `docs/product/message-delivery.md`). Where it stands among the information kept for an interrupted session is in
 "Information for an interrupted session" in `docs/product/information-between-sessions.md`.
 

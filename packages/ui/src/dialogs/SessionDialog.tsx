@@ -59,12 +59,12 @@ const NO_OWNER = "none";
 
 /**
  * Opens a console session or a session manually under a project. Joined pickers settle the agent and its account
- * together. They open on the agent per the "Which agent a session uses" section of docs/product/sessions.md (for a
- * project session: the project's default, then the console's project session default, then its `default_agent`; a
- * console session uses only `default_agent`). When automatic account selection is on, the account is the one whose
+ * together. They open on the agent per the "Which agent a session uses" section of docs/product/opening-sessions.md
+ * (for a project session: the project's default, then the console's project session default, then its `default_agent`;
+ * a console session uses only `default_agent`). When automatic account selection is on, the account is the one whose
  * weekly quota resets soonest, unless a resumed record forces a selectable account; otherwise it is the account that
- * agent resolves to when none is chosen (the project's reference, else the console's). The user can pick another
- * agent or one of its accounts for this session; the choice goes out as `open_session`'s `agent` and `account` fields.
+ * agent resolves to when none is chosen (the project's reference, else the console's). The user can pick another agent
+ * or one of its accounts for this session; the choice goes out as `open_session`'s `agent` and `account` fields.
  *
  * `open_session` answers with `session_opened`, which names the session it started — the broadcast
  * that puts it in the tree carries no request id, so this reply is the only way to tell which of

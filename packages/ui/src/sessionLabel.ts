@@ -98,9 +98,9 @@ export function sessionShownStatusKind(session: Pick<Session, "status" | "backgr
   return session.switching_account && session.status !== "archived" ? "switching" : sessionStatusKind(session);
 }
 
-/** The catalog message naming each status, for the "Session statuses" table in
- * docs/product/sessions.md. A row's own `aria-label` wins over one on an element nested inside it,
- * so the wire enum must never be the only place a status is put into words. */
+/** The catalog message naming each status, for the status table in docs/product/session-statuses.md. A row's own
+ * `aria-label` wins over one on an element nested inside it, so the wire enum must never be the only place a status is
+ * put into words. */
 const STATUS_KEY = {
   background: "session.status.background",
   switching: "session.status.switching",

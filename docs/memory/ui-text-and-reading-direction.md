@@ -35,9 +35,9 @@ the language" in `docs/product/language.md`).
 
 ## Lay out by reading direction; keep physical only what never mirrors
 
-Under a right-to-left language the whole window mirrors, except what the "Right-to-left layout" section of
-`docs/product/window-layout.md` lists as not mirrored. Nobody sees a regression here without switching to Arabic, so
-build it in from the start:
+Under a right-to-left language the whole window mirrors, except what the "What is not mirrored" section of
+`docs/product/right-to-left-layout.md` lists. Nobody sees a regression here without switching to Arabic, so build it
+in from the start:
 
 - Position, spacing, borders, corners and alignment use Tailwind's logical utilities (`start-*` / `end-*`, `ms-*` /
   `me-*`, `ps-*` / `pe-*`, `border-s`, `rounded-s-*`, `text-start`), not `left` / `right` / `ml` / `pr` and the like.

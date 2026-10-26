@@ -1,13 +1,12 @@
 # Application lifecycle
 
-Octoboard comes in two forms (see "Two deployment forms" in `docs/architecture.md`). This document describes the
-**desktop form**, the macOS application, in full: the agent processes are owned by a background daemon that starts
-and stops with it; nothing keeps running once the application is gone. Closing the window quits the application
-unless the user has turned on keeping it running in the background, a setting that is off to begin with (see "Closing
-the window" below). What the **server form** — the daemon alone, on a Linux server without a display, reached by its
-owner from a browser on another machine — changes is said where it applies, and in "The daemon on its own" below. That
-form is not built yet, so those passages state what already follows from it and what the daemon does today, not a
-finished behaviour.
+Octoboard comes in two forms. This document describes the **desktop form**, the macOS application, in full: the agent
+processes are owned by a background daemon that starts and stops with it; nothing keeps running once the application is
+gone. Closing the window quits the application unless the user has turned on keeping it running in the background, a
+setting that is off to begin with (see "Closing the window" below). What the **server form** — the daemon alone, on a
+Linux server without a display, reached by its owner from a browser on another machine — changes is said where it
+applies, and in "The daemon on its own" below. That form is not built yet, so those passages state what already follows
+from it and what the daemon does today, not a finished behaviour.
 
 ## System requirements and distribution
 
@@ -15,10 +14,9 @@ finished behaviour.
   architectures, the bundled daemon included.
 - Octoboard is distributed as a `.dmg` disk image. It cannot be distributed through the Mac App Store: its translucent
   window (see "The window chrome and the content panel" in `docs/product/window-layout.md`) relies on a private macOS
-  interface, which the store does not admit. The release build is signed with a Developer ID and notarized, so
-  Gatekeeper admits it as built: `spctl` reports `Notarized Developer ID` for the `.app` and the `.dmg`, including a
-  copy carrying the quarantine attribute, and `codesign --verify --deep --strict` passes on the bundled daemon. That was
-  verified on the machine that built it; installing and running it on a clean machine has not been tried yet.
+  interface, which the store does not admit. The release build, the bundled daemon included, is signed with a Developer
+  ID and notarized, so Gatekeeper admits the `.app` and the `.dmg` as built, a copy carrying the quarantine attribute
+  included; that has been confirmed only on the machine that built it, not yet by installing on a clean one.
 - Once installed, the application updates itself in place from the project's releases, on the user's request (see
   `docs/product/in-app-updates.md`).
 - The server form has no requirements or distribution settled: the daemon is a single binary meant to be put on the
@@ -40,16 +38,17 @@ Two things happen on every daemon start:
 - Per-session scratch space from previous runs is cleared.
 
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
-processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a
-screen that says the daemon failed to start and offers to quit — a failed start never leaves a window with no
-explanation. The daemon's own reason is not on that screen itself but in the popover of the mark after its heading
-(the screen is described in "The window chrome and the content panel" in `docs/product/window-layout.md`); the error
-alert shown over the screen, titled "The daemon failed to start", says that the daemon is the background process that
-runs the user's sessions and terminals, then that Octoboard cannot work without it and that opening Octoboard again
-tries once more, with the same reason in a block under its **Error details**. It is a known failure, not an unexpected one: it asks for no report and has no **Report
-issue** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). With no daemon running there is
-nothing to keep running, so closing the window quits whatever that setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
-Unix user, whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
+processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a screen
+that says the daemon failed to start and offers to quit — a failed start never leaves a window with no explanation. The
+daemon's own reason is not on that screen itself but in the popover of the mark after its heading (the screen is
+described in "The window chrome and the content panel" in `docs/product/window-layout.md`); the error alert shown over
+the screen, titled "The daemon failed to start", says that the daemon is the background process that runs the user's
+sessions and terminals, then that Octoboard cannot work without it and that opening Octoboard again tries once more,
+with the same reason in a block under its **Error details**. It is a known failure, not an unexpected one: it asks for
+no report and has no **Report issue** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). With no
+daemon running there is nothing to keep running, so closing the window quits whatever that setting says (see "Closing
+the window" below). The lock is per data directory, so on a server it is one daemon per Unix user, whose `~/.octoboard`
+is the daemon's (see "The daemon on its own" below).
 
 If the daemon starts but dies later, the application says so in an error alert titled "The daemon exited
 unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
@@ -57,12 +56,12 @@ it, and asks the user to restart Octoboard; it does not silently keep showing a 
 it as an unexpected failure, offering **Report issue**, with the daemon's exit reason behind **Error details** rather
 than in its sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 
-**The window appears already themed.** It is created hidden and shown only once the UI has applied the chosen
-appearance (see "Light, dark and follow the system" in `docs/product/appearance.md`), so a launch never flashes the
-operating system's own appearance first. The window therefore appears a fraction of a second later than it otherwise
-would — measured at 140-220 ms after it is created. Should the UI never get that far at all — its bundle failing to
-load, say — the shell shows the window regardless **4 seconds** after creating it, so a failed start never leaves a
-running application with no window on screen. A window the user has by then closed into the background stays closed.
+**The window appears already themed.** It is created hidden and shown only once the UI has applied the chosen appearance
+(see "Light, dark and follow the system" in `docs/product/appearance.md`), so a launch never flashes the operating
+system's own appearance first. The window therefore appears a fraction of a second later than it otherwise would. Should
+the UI never get that far at all — its bundle failing to load, say — the shell shows the window regardless **4 seconds**
+after creating it, so a failed start never leaves a running application with no window on screen. A window the user has
+by then closed into the background stays closed.
 
 **Closing the window during a launch quits.** The shell starts every launch with keeping the application running in
 the background off, whatever the user last chose: the choice is kept by the window's UI and handed over once it has
@@ -77,24 +76,22 @@ everything the application can**: create consoles and sessions, start agents, ty
 shell terminal and run any command in it (see `docs/product/shell-terminals.md`). It is safe
 there only because the daemon listens on loopback, so whoever can reach it already has the machine.
 
-In the server form the same sentence reads **anyone who can reach the port can do everything** — start agents, type
-into terminals and run any command in a shell terminal on the server, as the Unix user the daemon runs as — which is no
-access model for a machine on a
-network. So the daemon as it is today must not be put beyond loopback, and nothing in it lets it be: it binds to
-loopback and nowhere else, and it refuses any request whose `Host` names it by anything but a loopback address. A
-reverse proxy in front of it does not change that: the daemon also refuses a request whose `Origin` — which a browser
-sends on every WebSocket upgrade — is neither the application's, nor loopback, nor the same as `Host`, so a proxy
-would have to rewrite both headers, and the daemon behind it would be open to whatever the proxy lets through with
-nothing of its own to tell it apart. What the form still lacks is the whole of an access model: a credential checked
-on every route, the UI and the WebSocket upgrades included; one credential per device of the owner's, so that a lost
-or retired device can be revoked without re-issuing the rest; and TLS, which a browser needs before it will show a
-notification or touch the clipboard from a page at a network address at all (see "Two deployment forms" in
-`docs/architecture.md`). None of that exists yet.
+In the server form the same sentence reads **anyone who can reach the port can do everything** — start agents, type into
+terminals and run any command in a shell terminal on the server, as the Unix user the daemon runs as — which is no
+access model for a machine on a network. So the daemon as it is today must not be put beyond loopback, and nothing in it
+lets it be: it binds to loopback and nowhere else, and it refuses any request whose `Host` names it by anything but a
+loopback address. A reverse proxy in front of it does not change that: the daemon also refuses a request whose `Origin`
+— which a browser sends on every WebSocket upgrade — is neither the application's, nor loopback, nor the same as `Host`,
+so a proxy would have to rewrite both headers, and the daemon behind it would be open to whatever the proxy lets through
+with nothing of its own to tell it apart. What the form still lacks is the whole of an access model: a credential
+checked on every route, the UI and the WebSocket upgrades included; one credential per device of the owner's, so that a
+lost or retired device can be revoked without re-issuing the rest; and TLS, which a browser needs before it will show a
+notification or touch the clipboard from a page at a network address at all. None of that exists yet.
 
-The server form is the same user reaching their own daemon from another machine, not a daemon shared by several
-people. The daemon will not tell clients apart even then: whoever holds a credential is taken for the owner and can
-do everything the owner can, so a credential is to be kept like a password. That is this version's design boundary,
-not a gap left open (see "Two deployment forms" in `docs/architecture.md`).
+The server form is the same user reaching their own daemon from another machine, not a daemon shared by several people.
+The daemon will not tell clients apart even then: whoever holds a credential is taken for the owner and can do
+everything the owner can, so a credential is to be kept like a password. That is this version's design boundary, not a
+gap left open.
 
 The one way a browser on another machine reaches today's daemon is a tunnel that ends on the server's loopback — an
 SSH port forward. The page is then at `http://localhost:<port>`, a loopback address, which the check below admits and
@@ -122,8 +119,8 @@ the restriction while a menu is open are in "Moving focus between regions with F
 `docs/product/moving-focus-between-regions.md`.
 
 Failures a user has to know about use the acknowledgement dialog described in "Error alerts" in
-`docs/product/error-alerts.md`, including a daemon process that exits unexpectedly, a failed report-page submission,
-and the failure of a dialog's own action. Session notices that are not failures use toasts; see `docs/product/toasts.md`.
+`docs/product/error-alerts.md`, including a daemon process that exits unexpectedly, a failed report-page submission, and
+the failure of a dialog's own action. Session notices that are not failures use toasts; see `docs/product/toasts.md`.
 What is wrong with one field is said under that field instead (see "Errors under a field" in
 `docs/product/error-alerts.md`).
 
@@ -138,16 +135,16 @@ closed** switch in Settings' General section, which is **off to begin with** (se
 `docs/product/settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
-(see "Quitting" below): with a session starting, working, waiting for the user or working in background, or a busy
-shell terminal, it asks the same confirmation, where Cancel leaves the window open and everything running, and otherwise it quits at once. The
-sessions a confirmed close ends are left *interrupted* and resumable, just as any confirmed quit leaves them (see "Archiving, interruption and
-resuming" in `docs/product/archiving-and-resuming-sessions.md`).
+(see "Quitting" below): with a session starting, working, waiting for the user or working in background, or a busy shell
+terminal, it asks the same confirmation, where Cancel leaves the window open and everything running, and otherwise it
+quits at once. The sessions a confirmed close ends are left *interrupted* and resumable, just as any confirmed quit
+leaves them (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
 
 **With the switch on, closing the window closes it into the background**: the window is hidden, Octoboard leaves the
 Dock, and the focus passes to the application used before it. The daemon, every session and its agent process keep
 running, and so does the UI behind the hidden window: a session that raises its hand still notifies (see "The raised
-hand" in `docs/product/sessions.md`), the Dock badge's count is kept up to date for when Octoboard returns to the
-Dock, and the menu bar icon's menu keeps following the sessions (see `docs/product/menu-bar-icon.md`).
+hand" in `docs/product/session-statuses.md`), the Dock badge's count is kept up to date for when Octoboard returns to
+the Dock, and the menu bar icon's menu keeps following the sessions (see `docs/product/menu-bar-icon.md`).
 
 - **In native fullscreen** the window first leaves fullscreen and is hidden once that is done, about 0.8 seconds later,
   so no empty fullscreen space is left behind. Brought back within that time, it is not hidden.
@@ -180,92 +177,38 @@ and position it had:
 
 Octoboard then returns to the Dock, comes to the front, and its Dock badge shows the current waiting count again.
 
-**Observed** in the packaged application, under Simplified Chinese.
-
-**With the switch off:**
-
-- on a launch with no choice stored yet, Settings' General section showed the row last, below Default clone
-  directory, with its switch off;
-- with a session running, the close button, `Cmd+W` and the Window menu's Close Window item each raised the ordinary
-  quit confirmation, with the application, the daemon and the session's agent process all still alive; Cancel left
-  the window open and all three running as the same processes; confirming ended the application about 0.14 seconds
-  later, the daemon and the agent process following it;
-- with no session running, the close button quit within about 0.15 seconds, asking nothing.
-
-**With the switch on:**
-
-- the close button and `Cmd+W` closing the window into the background: the application left running with the daemon
-  and the agent process alive and no window, Octoboard out of the Dock and inactive, with the application used before
-  it frontmost again; the menu bar icon then bringing the window back at the same size and position (observed when a
-  left click on it still did that), the session still live and Octoboard back in the Dock and frontmost;
-- a close from native fullscreen hiding the window with no empty fullscreen space left behind, and the window
-  staying on screen when brought back during that transition, by the menu bar icon's Open Octoboard or by opening
-  Octoboard again;
-- closing the window again within a second of bringing it back, with the Dock icon ending right and never duplicated;
-- `Cmd+H` working after a close and a return;
-- the window coming back by opening Octoboard again while it ran (for the menu bar icon, see "What has been tried by
-  hand" in `docs/product/menu-bar-icon.md`), at the same size and position, and opening Octoboard again while the
-  window was on screen only bringing it to the front;
-- activating Octoboard while the window was closed bringing back the window, the Dock icon and the badge — tried by
-  activating the application directly — while a notification firing meanwhile did not bring the window back;
-- the page behind the hidden window staying live, and the Dock badge coming back with the right count, including a
-  count that changed while the window was closed;
-- the daemon killed while the window was closed bringing it back with the notice within about 0.2 seconds, and
-  killed while the window was shown and another application frontmost showing the notice only, with the focus left
-  where it was.
-
-**Whatever the switch says:** the close button quit within about 0.2 seconds, asking nothing, with the daemon gone.
-
-**The switch itself.** Turning it on took effect without a relaunch — the next close hid the window — and survived
-one: after a quit and a fresh launch the switch still read on and a close still hid the window. Turning it off in
-that launch made the close quit, and after a further launch the switch read off and the close asked for confirmation
-again; the stored choice followed each change. The row's description differed between the two states and fitted its
-row in Simplified Chinese in the dark theme.
-
-**Not yet tried by hand:** the row's English description and its absence in a browser, neither seen in the
-application itself; a close from native fullscreen with the switch off; and a real click on one of Octoboard's
-notifications bringing the window back.
-
 ## Quitting
 
 Every way of ending the application behaves the same: `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit
 Octoboard (see "Quit Octoboard" in `docs/product/menu-bar-icon.md`), the Dock icon's own Quit, a system-initiated
 termination — logging out, restarting or shutting down the machine — and, while keeping Octoboard running in the
-background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close Window item (see
-"Closing the window" above). The one difference is the escape hatch in "Quitting when the window has stopped
-responding" below, which the close gestures have no part in. `Cmd+Q` and the application menu's Quit were each seen to
-ask, and Cancel left everything running; the menu bar icon's Quit was seen to ask too. The Dock icon's own Quit and a
-system logout were not tried by hand; an AppleEvent quit, which goes through the same `applicationShouldTerminate:`
-path, was, and asked the same way. A quit by closing the window was seen to ask while a session ran, and to end the
-application on confirmation (see "Closing the window" above).
+background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close Window item (see "Closing
+the window" above). The one difference is the escape hatch in "Quitting when the window has stopped responding" below,
+which the close gestures have no part in.
 
 - **While any session is *starting*, *working*, *waiting for the user* or *working in background*, quitting asks for
   confirmation.** One working in background counts because the quit would also end the work it left running (see
-  "Working in background" in `docs/product/sessions.md`). A session *awaiting instructions* does not count: it is in
-  the middle of nothing that is reported, and the quit still leaves it interrupted and resumable like the others. The message says that quitting interrupts those sessions and
-  that each stays resumable next time.
+  "Working in background" in `docs/product/session-statuses.md`). A session *awaiting instructions* does not count: it
+  is in the middle of nothing that is reported, and the quit still leaves it interrupted and resumable like the others.
+  The message says that quitting interrupts those sessions and that each stays resumable next time.
 - **While any shell terminal is busy, quitting asks for confirmation too** (see "Busy shells" in
   `docs/product/shell-terminals.md`); an idle shell terminal, or one whose shell has exited, does not count. With only
   busy shell terminals holding the quit, the message says some terminals are still running something and quitting ends
   what they run; with sessions and busy shell terminals both, it says both are still running, that quitting interrupts
   the sessions, each resumable next time, and ends what the terminals run.
-- Asking brings Octoboard to the front first, restoring its window if it was
-  minimized and bringing it back if it was closed into the background, so a quit from outside the window — the Dock
-  icon's own Quit while another application covers it, the menu bar icon's Quit or a logout while the window is closed —
-  does not leave the question unseen. The menu bar icon's Quit with the window closed was seen to bring it back and ask;
-  the other cases were not yet tried by hand.
+- Asking brings Octoboard to the front first, restoring its window if it was minimized and bringing it back if it was
+  closed into the background, so a quit from outside the window — the Dock icon's own Quit while another application
+  covers it, the menu bar icon's Quit or a logout while the window is closed — does not leave the question unseen.
 - Once confirmed, every session process is ended and every one of those sessions is left **interrupted**, never
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`). Every shell terminal ends too (see "Closing a shell terminal" in
   `docs/product/shell-terminals.md`).
-- With no session *starting*, *working*, *waiting for the user* or *working in background* — none at all, or only
-  ones *awaiting instructions* — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into the background is not brought back
-  for it. Seen with the menu bar icon's Quit and no session at all; with only sessions *awaiting instructions* not yet
-  tried by hand.
+- With no session *starting*, *working*, *waiting for the user* or *working in background* — none at all, or only ones
+  *awaiting instructions* — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into
+  the background is not brought back for it.
 - While the daemon is not running — it failed to start, or has exited — every quit is immediate and asks nothing.
-- The daemon stopping as part of a quit is not reported as the daemon exiting: no notice is shown and a closed window
-  is not brought back for it. Seen with the menu bar icon's Quit while the window was closed and no session was
-  running: the application exited with no window, Dock icon or notice appearing.
+- The daemon stopping as part of a quit is not reported as the daemon exiting: no notice is shown and a closed window is
+  not brought back for it.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.
 - If the application cannot end itself once the quit is under way, an error alert titled "Could not quit" says
   Octoboard kept running instead of ending and asks the user to try quitting it again, and the window stays open.
@@ -305,24 +248,16 @@ otherwise leave no way out short of a force quit. So: **when a quit gesture has 
 dialog and a second quit gesture arrives within 2 seconds, that second gesture quits immediately and asks nothing.**
 The sessions are left exactly as a crash leaves them (see "Crashes and forced termination" below).
 
-A window that is still answering resets that 2-second window every time it handles a quit gesture, so pressing
-`Cmd+Q` twice in quick succession on a working Octoboard does **not** skip the confirmation. The escape hatch opens
-only when nothing answered the first gesture.
+A window that is still answering resets that 2-second window every time it handles a quit gesture, so pressing `Cmd+Q`
+twice in quick succession on a working Octoboard does **not** skip the confirmation. The escape hatch opens only when
+nothing answered the first gesture. It is known to hold for scripted quits; with the page frozen, two `Cmd+Q` key
+presses have been seen not to take it, for a reason not established, so the menu's Quit is the surer way out.
 
 **Closing the window has no part in this, even when it is a quit** (see "Closing the window" above). A double press
 on a close button is an ordinary gesture and must not end a live session unasked, so the close button, `Cmd+W` and
 Close Window never take this escape hatch however often they are repeated, and never open it for the gesture after
 them either. `Cmd+Q`, the application menu's Quit, the menu bar icon's Quit or the Dock icon's Quit — twice — is the
 way out of that state.
-
-**Observed:** with the switch off and a session running, two presses of the close button 0.36 seconds apart, and
-a pointer double-click on it about 80 ms apart, each left the confirmation up with nothing quit.
-
-**Observed, unexplained caveat:** with the page frozen by `SIGSTOP` on the application's WebContent process, two
-scripted quits back to back (AppleEvent, or the menu item through System Events) quit without asking, as described, but
-two `Cmd+Q` key presses did not, even with a second between them. Whether that is WKWebView holding key equivalents
-while its process is frozen, or an artifact of `SIGSTOP`, was not established, and a real page hang was not tried. The
-Dock icon's Quit was not tried in that state.
 
 ## Crashes and forced termination
 

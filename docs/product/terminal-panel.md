@@ -82,11 +82,10 @@ It is for the pointer alone; from the keyboard a terminal is closed through the 
 under the field; the name is saved trimmed, and from then on the shell's own titles no longer change it.
 
 **Closing** a terminal whose shell is busy (see "Busy shells" in `docs/product/shell-terminals.md`) asks first: a
-confirmation titled "Close terminal" names the terminal in its first sentence, its title set apart as a chip, and
-says something is still running in the terminal and closing it ends what runs there, with a destructive Close terminal
-button and Cancel.
-An idle running shell, or one that has exited, closes at once without asking. What closing does to the shell and its jobs is in "Closing a shell terminal" in
-`docs/product/shell-terminals.md`.
+confirmation titled "Close terminal" names the terminal in its first sentence, its title set apart as a chip, and says
+something is still running in the terminal and closing it ends what runs there, with a destructive Close terminal button
+and Cancel. An idle running shell, or one that has exited, closes at once without asking. What closing does to the shell
+and its jobs is in "Closing a shell terminal" in `docs/product/shell-terminals.md`.
 
 - Until the daemon has ended it, the tab stays, dimmed, and stays shown if it was; Close terminal is unavailable for
   it meanwhile.
@@ -120,10 +119,10 @@ then sent away with its Close panel button or by moving the pointer away. In the
   connected, a terminal whose shell has exited included. Selecting under mouse reporting, and text a program copies
   with OSC 52, follow the same section; a program in a tab not shown can copy too, and each tab's menu offers what its
   own program copied. An Option-click moves the shell's cursor as described in "Typing and the mouse" in the same doc.
-- **Links**: web addresses and file paths in the output are links by the rules of "Links in the output" in
-  `docs/product/session-terminal.md`, with the terminal's project in the place of the session's. **A file opened in
-  the file viewer from a shell terminal hands keyboard focus back to that terminal** when the viewer closes, while its
-  tab is still there and shown; otherwise focus goes to the agent terminal.
+- **Links**: web addresses and file paths in the output are links by the rules of `docs/product/terminal-links.md`, with
+  the terminal's project in the place of the session's. **A file opened in the file viewer from a shell terminal hands
+  keyboard focus back to that terminal** when the viewer closes, while its tab is still there and shown; otherwise focus
+  goes to the agent terminal.
 - **Size**: whatever changes the panel's size resizes the shell's terminal, and the shell is told the new size the way
   an agent is (see "Output, scrollback and size" in `docs/product/session-terminal.md`). A terminal whose tab has not
   been shown yet tells the shell no size until it is first shown. While the panel is maximized and the docked
@@ -163,6 +162,6 @@ Keyboard focus and Reconnect:
 ## Keyboard focus
 
 The Terminal panel is a stop of its own in the `F6` cycle (see "Panels and keyboard focus" in
-`docs/product/right-pane-panels.md`), the first among the panels while it is maximized. `F6` lands in the shown tab's terminal, so typing reaches the shell, or on its
-cover's Reconnect while that is offered; with no tab, on New terminal in the header. From there `Tab` goes to the
-shell, so `F6` and `Shift+F6` are the way out of a shell terminal.
+`docs/product/right-pane-panels.md`), the first among the panels while it is maximized. `F6` lands in the shown tab's
+terminal, so typing reaches the shell, or on its cover's Reconnect while that is offered; with no tab, on New terminal
+in the header. From there `Tab` goes to the shell, so `F6` and `Shift+F6` are the way out of a shell terminal.

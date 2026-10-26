@@ -32,12 +32,12 @@ record dated it, the date and time, written for the app's language:
   is rendered as Markdown, its headings ranking below the history's own title; a web address in it opens in the
   user's own browser.
 
-User messages and agent replies share rounded message surfaces with a soft shadow, distinct from the page.
-User messages have a neutral background; agent replies have a soft accent-coloured background that follows the
-app's light or dark appearance. Both use the app's UI font at 14 px with a 24 px line height. Replies keep compact Markdown spacing;
-their headings use the body text's size and line height with semibold weight, and tables keep the body text's size.
-Inline code and fenced code retain a monospace face; fenced code keeps its code theme. The Markdown style preference
-for documents in the file viewer does not change the history's typography (see "Markdown style" in
+User messages and agent replies share rounded message surfaces with a soft shadow, distinct from the page. User messages
+have a neutral background; agent replies have a soft accent-coloured background that follows the app's light or dark
+appearance. Both use the app's UI font at 14 px with a 24 px line height. Replies keep compact Markdown spacing; their
+headings use the body text's size and line height with semibold weight, and tables keep the body text's size. Inline
+code and fenced code retain a monospace face; fenced code keeps its code theme. The Markdown style preference for
+documents in the file viewer does not change the history's typography (see "Markdown style" in
 `docs/product/settings.md`).
 
 **Messages Octoboard wrote into the session are hidden**: the brief a session was started with, a report from a
@@ -102,9 +102,9 @@ in for it. The dates remain visible while messages scroll and in every loading, 
   `docs/product/error-alerts.md`), and **Try again**, which reads it again. A failed history is also read again by
   itself when the connection to the daemon comes back. Reopen remains available on the floating bar.
 
-None of these states opens an error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Assistive
-technology is told the loading, empty and unavailable states as they begin; a failed request is announced by its
-failure when it appears after the history was drawn.
+None of these states opens an error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`).
+Assistive technology is told the loading, empty and unavailable states as they begin; a failed request is announced by
+its failure when it appears after the history was drawn.
 
 ## Keyboard focus
 

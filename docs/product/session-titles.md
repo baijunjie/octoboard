@@ -1,9 +1,9 @@
 # Session titles
 
-A session has a **created name**, chosen when it opens or supplied by its default (see "Opening a session" in
-`docs/product/sessions.md`), and an optional **task title** that says what the agent is working on. Octoboard does not
-generate the task title: it takes it from what the agent itself records or sends to its terminal, and falls back to the
-user's first prompt when neither names the task.
+A session has a **created name**, chosen when it opens or supplied by its default (see "The session dialog" in
+`docs/product/opening-sessions.md`), and an optional **task title** that says what the agent is working on. Octoboard
+does not generate the task title: it takes it from what the agent itself records or sends to its terminal, and falls
+back to the user's first prompt when neither names the task.
 
 ## Displayed names
 

@@ -129,12 +129,13 @@ grant it had watched arrive, and died on the first click to another section.
 
 `shouldForceMount` keeps the unselected panels mounted, but it is not the way to keep a panel's state. Pass it only
 where the hidden panels must go on taking up layout, as the rail's quota panel
-(`packages/ui/src/quota/RailQuotaEntry.tsx`) is the one place that does: it stacks every agent's panel in one grid cell so that, anchored by its bottom edge, it keeps the tallest tab's height
-and its tab strip does not move out from under the pointer. A force-mounted unselected panel is rendered `inert` with
-`data-inert="true"` and without its `role`, `id` or `tabIndex`, but it is still shown, so hide it yourself
-(`data-[inert=true]:invisible`). HeroUI's `.tabs__panel` gives every panel padding and a top margin and takes an
-exiting one out of the flow (`data-[exiting=true]`, `position: absolute`), so where the panels share one box, clear
-those on the panels and put the spacing on the container.
+(`packages/ui/src/quota/RailQuotaEntry.tsx`) is the one place that does: it stacks every agent's panel in one grid cell
+so that, anchored by its bottom edge, it keeps the tallest tab's height and its tab strip does not move out from under
+the pointer. A force-mounted unselected panel is rendered `inert` with `data-inert="true"` and without its `role`, `id`
+or `tabIndex`, but it is still shown, so hide it yourself (`data-[inert=true]:invisible`). HeroUI's `.tabs__panel` gives
+every panel padding and a top margin and takes an exiting one out of the flow (`data-[exiting=true]`,
+`position: absolute`), so where the panels share one box, clear those on the panels and put the spacing on the
+container.
 
 ## A react-aria collection renders its parts from a copy it built, not from your component's render
 
@@ -182,64 +183,32 @@ adds a tab and selects it at once draws the selected tab's fill on the tab itsel
 carrying the indicator's fill and shadow), as the Terminal panel's strip in
 `packages/ui/src/terminal/ShellTerminalPanel.tsx` does.
 
-## An icon-only control also gets a tooltip, through `TitledControl`
+## Wiring a tooltip: what `TitledControl` and the other wrappers silently fail on
 
-Every control in `packages/ui` that shows only an icon — a `CloseButton` or a menu trigger as much as a HeroUI
-`Button` with `isIconOnly` — carries a HeroUI tooltip on top of its `aria-label`, and the two are not always the same
-text (the "An icon-only control: tooltip and `aria-label`" section of `docs/ui-accessibility.md`). Add the tooltip by
-wrapping the control in `TitledControl` from `packages/ui/src/components/TitledControl.tsx`, as the window chrome's
-`ChromeButton` in `packages/ui/src/components/ChromeButton.tsx` does. Passing `title` to the HeroUI control itself
-does nothing: its react-aria base filters `title` out of the DOM props without a warning.
+Which controls carry a tooltip beside their `aria-label`, which wrapper a tooltip takes — `TitledControl` for a
+control, `IndicatorTooltip` for a mark, `AnchoredTooltip` where nothing can be a trigger — and how its text reaches
+assistive technology are set out in the "An icon-only control: tooltip and `aria-label`" and "A tooltip is the
+application's own, never the browser's `title`" sections of `docs/ui-accessibility.md`. Wiring them has traps nothing
+warns about:
 
-Except for the `Switch` case below, a tooltip on a control takes this shape — the control directly inside HeroUI's
-`Tooltip`, as `TitledControl` does — never `Tooltip.Trigger`, which renders a focusable `role="button"` `div` around
-the control: an extra tab stop that
-also takes focus on a mouse press, undoing `preventFocusOnPress`. The shape works only when the child itself consumes
-react-aria's `FocusableContext` (through `useFocusable` or `Focusable`), which is where HeroUI's `Tooltip` leaves the
-trigger props and the trigger ref; every HeroUI button and trigger does. Any other child gets no tooltip at all and
-nothing warns — a plain element or a `span` around the control, and a react-aria collection item as well
-(`ListBox.Item`, built on `useOption` / `useSelectableItem`), which reads as a react-aria-components control and is
-not one for this purpose.
-
-Choose the tooltip shape by what carries it:
-
-- A control: `TitledControl`, as above. It opens on hover and on keyboard focus, or on keyboard focus alone where
-  its `focusOnly` prop is passed, for a control whose hover already does something else. While it is open react-aria
-  links it to the control as its description. `TitledControl` unlinks a plain-string title equal to the control's
-  `aria-label`, so the same words are not announced twice. When a rich title repeats that name, the caller passes
-  `aria-describedby=""` explicitly; a tooltip that says more keeps its description link.
-- A HeroUI `Switch` needing both hover and keyboard-focus tooltips outside a collection row: wrap the whole
-  `Switch` in `Tooltip.Trigger role="presentation" tabIndex={-1}` inside `Tooltip`, and give `Tooltip.Content`
-  `pointer-events-none`, as in `packages/ui/src/sidebar/FocusView.tsx`. Keep the accessible name on `Switch`; when
-  the tooltip repeats that name, pass `aria-describedby=""` on `Switch` to avoid a duplicate announcement. Do not
-  cancel the wrapper's mouse press: the switch must still take focus. `TitledControl` directly around `Switch`
-  sends its hover props to the visually hidden input through `useSwitch` / `useToggle`, so the visible control
-  does not open it on hover; directly around `Switch.Content` reaches neither hover nor focus, since its
-  `SwitchButton` does not consume `FocusableContext`. Verify hover and keyboard focus in the running page when
-  changing this composition.
-- A non-control indicator that can be its own trigger — a badge, a status mark: `IndicatorTooltip` in
-  `packages/ui/src/components/IndicatorTooltip.tsx`. It answers the pointer, and fixes what a bare
-  `Tooltip.Trigger` gets wrong: the trigger hardcodes `role="button"` (so one left without a `role` exposes an
-  unnamed button) and is focusable, so it always sets `tabIndex={-1}`, cancels `mousedown` so a press does not take
-  focus off the terminal, and takes either a `label` (`role="img"` and `aria-label`) or `role="presentation"`
-  (browsers ignore that role on a focusable element, so it only keeps the unnamed button role off). That
-  `tabIndex={-1}` keeps the trigger out of the Tab order, not out of every keyboard route: a row that walks its
-  focusable descendants with the arrow keys — a react-aria `GridList` or `Tree` row — reaches the trigger as a stop
-  of its own and opens the tooltip on focus, which is a stop the row should not have, so a mark inside such a row
-  takes the anchored shape below instead. A mark inside a collection item whose row has no such walk (a
-  `ListBox.Item`) carries this shape as usual. A deliberately focusable indicator would use `Tooltip.Trigger`
-  itself.
-- Text or a mark that cannot be a trigger where it sits — a run of running text, or a mark in a row that walks its
-  focusable descendants as above: `AnchoredTooltip` in `packages/ui/src/components/AnchoredTooltip.tsx`. The caller
-  reports the hover itself and names the element the tooltip is placed against, which may be an ancestor of what the
-  tooltip belongs to. Never name as that anchor an element the UI itself scrolls: react-aria closes a tooltip as soon
-  as anything containing its anchor scrolls, so a label that runs as a marquee and anchors to itself loses its
-  tooltip to its own marquee.
-
-Only a control's tooltip opens on keyboard focus, so neither of the other two shapes may be the only route to what
-it says. An `IndicatorTooltip`'s own `label` is that route where the mark means something on its own. An
-`AnchoredTooltip` adds no element at all and is not linked to what it belongs to for assistive technology either, so
-its text has to reach a screen reader some other way — the text itself, which is in the document whether or not it is
-clipped, or the name of the row it sits in. Do not reach for that shape where no such route exists; the only exception
-is where nothing around the text reaches assistive technology either, kept so far for one case only, in the "A tooltip
-is the application's own, never the browser's `title`" section of `docs/ui-accessibility.md`.
+- Passing `title` to a HeroUI control does nothing: its react-aria base filters `title` out of the DOM props.
+- `TitledControl` puts the control directly inside HeroUI's `Tooltip`, which leaves the trigger props and ref in
+  react-aria's `FocusableContext`, so only a child that consumes it (through `useFocusable` or `Focusable`) gets a
+  tooltip. Every HeroUI button and trigger does; a plain element or a `span` around the control gets none, and neither
+  does a react-aria collection item (`ListBox.Item`, built on `useOption` / `useSelectableItem`), which reads as a
+  react-aria-components control and is not one for this purpose; a mark inside such an item still takes
+  `IndicatorTooltip` as usual. Never wrap a control in a bare `Tooltip.Trigger`: it renders a focusable
+  `role="button"` `div` around the control, an extra tab stop that also takes focus on a mouse press, undoing
+  `preventFocusOnPress`.
+- A control whose hover goes to a hidden input never opens a `TitledControl` on hover: around a HeroUI `Switch` the
+  hover props reach the visually hidden input through `useSwitch` / `useToggle`, and around `Switch.Content` they reach
+  nothing, since its `SwitchButton` does not consume `FocusableContext`. The shape such a control takes is in the
+  second of those sections; check hover and keyboard focus in the running page whenever its composition changes.
+- While a tooltip is open react-aria links it to its trigger as a description, so a tooltip that only repeats the
+  control's name is announced twice. `TitledControl` unlinks it itself only when the title is a plain string equal to
+  the control's `aria-label`; wherever it cannot see the repeat — a rich title whose words are the name, a control
+  wrapped in `IndicatorTooltip` — pass `aria-describedby=""` on the control yourself, as `ArchiveView.tsx`,
+  `TrustedFoldersSection.tsx` and `FocusView.tsx` do. A tooltip that says more than the name keeps the link.
+- Never name as an `AnchoredTooltip`'s anchor an element the UI itself scrolls: react-aria closes a tooltip as soon as
+  anything containing its anchor scrolls, so a label that runs as a marquee and anchors to itself loses its tooltip to
+  its own marquee.

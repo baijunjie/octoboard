@@ -95,17 +95,15 @@ in `docs/product/model-and-reasoning-effort.md`.
 
 ## Session records
 
-`get_session` returns the session's most recent output in `recent_output`, with terminal escape
-sequences and cursor-control bytes stripped and runs of blank lines collapsed, so it is readable
-prose rather than a rendered frame. How much is set by `output_bytes`, a whole number from 1 to 65536 (64 KiB),
-counted in bytes of the raw output before anything is stripped; left out, it is 8192 (8 KiB). A value outside those
-bounds, or one that is not a whole number, is refused rather than clamped, so a caller is never left believing it read
-more than it did. Output shorter than what is asked for is returned whole. For a session whose process has ended, an archived or
-interrupted one, that is the output the daemon kept when the process ended, so the field reads the
-same whether the session is running or not. It is `null` only where the daemon never kept any
-output — no process of the session has printed anything yet, it ended with the daemon killed
-outright before the output was kept, or a new process has since taken the session over and
-discarded it (see "`GET /ws/term/:session` — terminal stream" in `apps/daemon/PROTOCOL.md`). A
+`get_session` returns the session's most recent output in `recent_output`, with terminal escape sequences and
+cursor-control bytes stripped and runs of blank lines collapsed, so it is readable prose rather than a rendered frame.
+How much is set by `output_bytes`, a whole number from 1 to 65536 (64 KiB), counted in bytes of the raw output before
+anything is stripped; left out, it is 8192 (8 KiB). A value outside those bounds, or one that is not a whole number, is
+refused rather than clamped, so a caller is never left believing it read more than it did. Output shorter than what is
+asked for is returned whole. For a session whose process has ended, an archived or interrupted one, that is the output
+the daemon kept when the process ended, so the field reads the same whether the session is running or not. It is `null`
+only where the daemon never kept any output — no process of the session has printed anything yet, it ended with the
+daemon killed outright before the output was kept, or a new process has since taken the session over and discarded it. A
 session that is waiting for the user carries a note saying so.
 
 Every session record the session tools give — `list_projects`' sessions, `get_session`, `list_sessions`,
@@ -114,11 +112,10 @@ session it is bound to, or null when it is unbound — always null for a console
 `owner_kind` (`console` or `project`, the kind of session that owner is; null when it is unbound) and `yours` (whether
 that owner is the caller).
 
-Each record also carries `background_tasks`: for a Claude Code
-session working in background, the work it left running, each entry with `id` and, where Claude Code gives them,
-`type` and `description`; an empty list for every other session. Such a session's `status` is `idle`: it takes a
-message like any session awaiting instructions, but its work is not over (see "Working in background" in
-`docs/product/sessions.md`).
+Each record also carries `background_tasks`: for a Claude Code session working in background, the work it left running,
+each entry with `id` and, where Claude Code gives them, `type` and `description`; an empty list for every other session.
+Such a session's `status` is `idle`: it takes a message like any session awaiting instructions, but its work is not over
+(see "Working in background" in `docs/product/session-statuses.md`).
 
 Each of these records also carries `context`, the session's context size as the window shows it (see "Session context
 size" in `docs/product/session-context.md`): an object with `tokens`, plus `window` and `used_percent` — the share of
@@ -132,11 +129,12 @@ agent's records show one, and for Claude Code after a compaction until the next 
 
 The `status` these records carry is the one the window shows: a running session reads `waiting_user` while a
 folder-trust confirmation that needs the user, a Codex action title or a screen only the user can answer holds it there,
-whatever its agent last reported (see "What the statuses are derived from" in `docs/product/sessions.md`), and one that
-a change of its account's sharing has ended and is about to resume reads `starting` (see "When a change is carried out"
-in `docs/product/sharing-the-default-configuration.md`). Each record also carries `queued_messages` and `writes_held`,
-which say how many messages are waiting to be written into the session — information kept for an interrupted session
-until its resume included — and what keeps them from being written whatever its `status` reads (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
+whatever its agent last reported (see "What the statuses are derived from" in `docs/product/session-statuses.md`), and
+one that a change of its account's sharing has ended and is about to resume reads `starting` (see "When a change is
+carried out" in `docs/product/sharing-the-default-configuration.md`). Each record also carries `queued_messages` and
+`writes_held`, which say how many messages are waiting to be written into the session — information kept for an
+interrupted session until its resume included — and what keeps them from being written whatever its `status` reads (see
+"Messages held until a session can take them" in `docs/product/message-delivery.md`).
 
 Each record also carries the facts the tools that act on a session depend on, so a caller can check them beforehand:
 

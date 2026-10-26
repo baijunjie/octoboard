@@ -65,10 +65,10 @@ still controls whether a `request_session` call starts anything.
 dialog shown: whatever `new_session` would refuse for the same brief and overrides — a missing brief or a blank goal, an
 unknown agent or account, an account of another agent, an agent determined unavailable on this machine (never while that
 determination is still pending), an agent that is not added, an account that is turned off or whose quota is used up
-(see "Opening a session" in `docs/product/sessions.md`), a model or effort the agent does not offer — and a `kind` that
-is neither value, a `project` or `console` given for the other kind, a project or console that does not exist, a name
-that names more than one, a console session asking for a project session without naming the project, and `branches` the
-request cannot hand over (see "Handing branches over" below).
+(see "When the agent or the account cannot open a session" in `docs/product/opening-sessions.md`), a model or effort the
+agent does not offer — and a `kind` that is neither value, a `project` or `console` given for the other kind, a project
+or console that does not exist, a name that names more than one, a console session asking for a project session without
+naming the project, and `branches` the request cannot hand over (see "Handing branches over" below).
 
 ## Approving requests automatically
 
@@ -135,26 +135,26 @@ tool call; where the agent has one, Octoboard sets it above Octoboard's own inst
 **While the call waits, the session reads *waiting for the user*.** The hand goes up as the call starts waiting and
 comes down as the request ends — when the user answers, and equally when the request times out or is withdrawn; a
 request that takes an earlier one's place continues the same wait. It is the ordinary raised hand throughout: shown
-wherever a hand is shown, counted in the rail's waiting count and firing the same system notification as any other
-(see "The raised hand" in `docs/product/sessions.md`). What answers it is the dialog, not the session's terminal, so
-unlike a hand the agent itself raised it holds nothing back: a message addressed to the session is still accepted
-rather than queued (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
+wherever a hand is shown, counted in the rail's waiting count and firing the same system notification as any other (see
+"The raised hand" in `docs/product/session-statuses.md`). What answers it is the dialog, not the session's terminal, so
+unlike a hand the agent itself raised it holds nothing back: a message addressed to the session is still accepted rather
+than queued (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
 
 Once the request has ended, the session's status follows its own agent again, from wherever the agent was last seen to
-be while the hand was up — *working* where it is still in the turn that made the call, *awaiting instructions* where
-it has since reported itself at its prompt, or where a Claude Code prompt declined during the wait left it (see
-"Declining a Claude Code prompt or question" in `docs/product/turns-hooks-do-not-report.md`). That is also where the session is left
-when no further event from the agent arrives at all — as when a request times out after its agent gave up on the call.
+be while the hand was up — *working* where it is still in the turn that made the call, *awaiting instructions* where it
+has since reported itself at its prompt, or where a Claude Code prompt declined during the wait left it (see "Declining
+a Claude Code prompt or question" in `docs/product/turns-hooks-do-not-report.md`). That is also where the session is
+left when no further event from the agent arrives at all — as when a request times out after its agent gave up on the
+call.
 
 Claude Code (observed on 2.1.295) moves an MCP tool call that is still running after 120 seconds to the background:
 its turn ends with the call still waiting, and the call's result reaches it later as the background task's
 notification. None of that moves the session out of *waiting for the user* while the request is waiting.
 
-**Codex and Grok Build each have a time limit of their own on an MCP tool call, and for a session Octoboard starts
-that limit is set above Octoboard's own when the session launches**, so the call is never what gives up first (see
-"Per-agent specifics a user will notice" in `docs/product/launching-agents.md`; for each agent's own default see
-`docs/agent-cli-reference.md`). It is set because the two agents end an abandoned call differently, and only one of
-the two endings leaves the request alive:
+**Codex and Grok Build each have a time limit of their own on an MCP tool call, and for a session Octoboard starts that
+limit is set above Octoboard's own when the session launches**, so the call is never what gives up first (see
+`docs/product/per-agent-launch-specifics.md`). It is set because the two agents end an abandoned call differently, and
+only one of the two endings leaves the request alive:
 
 - **Codex sends nothing at all** when it gives up — no cancellation, no end of the connection, no frame of any kind.
   Octoboard is left unaware, and nothing about the request changes: the dialog stays up, the request goes on waiting,
@@ -165,11 +165,10 @@ the two endings leaves the request alive:
   limit Octoboard sets is what keeps Octoboard's 8 minutes, and not Grok Build's own limit, deciding when the wait
   ends.
 
-**A Codex session is not held silent while its call waits.** For as long as the request is waiting, that session goes
-on taking short turns of its own, one after another at its own interval, each saying only that the tool is still
-running. So a request left on the dialog until the 8 minutes run out costs that session several such turns — tokens on
-its account, and activity in its terminal — and none of them answers the request or shortens the wait (the interval,
-and what was measured, are in "Codex" in `docs/agent-cli-reference.md`).
+**A Codex session is not held silent while its call waits.** For as long as the request is waiting, that session goes on
+taking short turns of its own, one after another at its own interval, each saying only that the tool is still running.
+So a request left on the dialog until the 8 minutes run out costs that session several such turns — tokens on its
+account, and activity in its terminal — and none of them answers the request or shortens the wait.
 
 **A Grok Build session is held silent.** Between the turn that makes the call and the turn that carries its outcome it
 takes no turns of its own and spends no tokens, however long the request waits, so a request left on the dialog until
@@ -218,23 +217,24 @@ waiting.
 Once the user approves, the dialog closes everywhere at once, and then — as for an automatic approval, which has no
 dialog (see "Approving requests automatically" above):
 
-1. **The session is started where the request named, exactly as `new_session` would start it** with the same brief
-   and overrides: named by the request's `title`, else titled from its goal, on the agent and account the call named
-   or defaulted to, the other overrides applied, listed as *starting* until its launch settles, and its folder-trust
+1. **The session is started where the request named, exactly as `new_session` would start it** with the same brief and
+   overrides: named by the request's `title`, else titled from its goal, on the agent and account the call named or
+   defaulted to, the other overrides applied, listed as *starting* until its launch settles, and its folder-trust
    confirmation handled the same way (see "Handing out a task: the brief", "Naming the sessions a session starts" and
    "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). A console session is
-   started in the named console, with that console's badge colour assigned as for any console session. The approval is answered only once the launch has settled, with the
-   launch's own refusal when it fails (see "Opening a session" in `docs/product/sessions.md`).
+   started in the named console, with that console's badge colour assigned as for any console session. The approval is
+   answered only once the launch has settled, with the launch's own refusal when it fails (see "Starting the session" in
+   `docs/product/opening-sessions.md`).
 2. **It has no owner.** A project session is an ordinary unbound project session, which the user owns and which can
    start and drive sessions of its own project (see "The unbound project session's tools" in
    `docs/product/hub-orchestration.md`); a console session is an ordinary console session of its console.
 3. **Its opening prompt says who asked for it.** The brief is preceded by a paragraph naming the requesting session by
    id and title, saying the session was started at that session's request with the user's approval — or, for an
-   automatic approval, automatically under the user's setting to approve session requests without asking — that
-   nobody owns it but the user, and that the requesting session is not its owner and the two can only share information with each
-   other. Where the request named branches, the paragraph also says the requesting session handed it those branches,
-   naming each, with the same approval, that it is now the session responsible for them and is to carry on the work
-   on them. The paragraph is written when the request is made, so it names every branch the request named, whatever
+   automatic approval, automatically under the user's setting to approve session requests without asking — that nobody
+   owns it but the user, and that the requesting session is not its owner and the two can only share information with
+   each other. Where the request named branches, the paragraph also says the requesting session handed it those
+   branches, naming each, with the same approval, that it is now the session responsible for them and is to carry on the
+   work on them. The paragraph is written when the request is made, so it names every branch the request named, whatever
    the move then finds.
 4. **The branches the request named are handed to it** once it has started (see "Handing branches over" below).
 5. **The approval does not archive the caller.** It keeps running, and the approval does not count as a report.
@@ -371,8 +371,8 @@ of an owner's handoff" in `docs/product/handing-off-sessions.md`.
 Every session request's dialog behaves as follows:
 
 - **Keyboard focus starts on the dialog itself** rather than on a button, for each request it shows, so Enter answers
-  nothing until the user moves focus onto a control (see "What an open dialog, menu or popover covers" in
-  `docs/product/window-layout.md`).
+  nothing until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
+  `docs/product/dialogs.md`).
 - **One dialog at a time.** Requests wait in one line, shown oldest first by when they were made, after any waiting
   folder-trust prompts (see "The trust dialog" in `docs/product/folder-trust.md`). A request already on screen stays
   there while it is waiting, whatever arrives — a trust prompt, or a request that sorts before it — and what arrived

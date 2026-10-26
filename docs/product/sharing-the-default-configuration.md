@@ -148,13 +148,13 @@ account, or holding its directory, that are in the middle of a turn, idle with b
 for the user's answer (a permission prompt, a question, a session request, or anything else only the user can answer
 that shows the session as waiting for the user — its folder-trust confirmation, a Codex action title, or a screen of its
 agent's own such as Claude Code's "Resume this conversation?"; see "What the statuses are derived from" in
-`docs/product/sessions.md`), holding a message of Octoboard's that is queued, being written, or was left unsent in its
-input box, or being started, resumed, switched, handed off or having their owner changed — and a sign-in of the account.
-While any of these runs, `set_account_sharing` is refused with `account_in_use`, with nothing stopped or recorded; the
-refusal carries how many working sessions there are (`sessions`) and whether a sign-in runs (`signing_in`). Octoboard's
-short agent CLI reads of the account, of its plan quota and of its models, do not refuse a change: the change waits for
-those running to end, and one that starts meanwhile waits for the change. A sign-in that starts while a change runs
-waits for it too. The request is answered once the whole sequence below has ended.
+`docs/product/session-statuses.md`), holding a message of Octoboard's that is queued, being written, or was left unsent
+in its input box, or being started, resumed, switched, handed off or having their owner changed — and a sign-in of the
+account. While any of these runs, `set_account_sharing` is refused with `account_in_use`, with nothing stopped or
+recorded; the refusal carries how many working sessions there are (`sessions`) and whether a sign-in runs
+(`signing_in`). Octoboard's short agent CLI reads of the account, of its plan quota and of its models, do not refuse a
+change: the change waits for those running to end, and one that starts meanwhile waits for the change. A sign-in that
+starts while a change runs waits for it too. The request is answered once the whole sequence below has ended.
 
 **Idle sessions are ended and resumed around the change.** A session that is idle — at its prompt, waiting for the
 user's next message, with nothing on screen only the user can answer and nothing running in the background — does not
@@ -311,23 +311,24 @@ A failure is not kept across a daemon restart: an account whose last change is i
 
 The daemon starts sessions on an account whose last change is incomplete as on any other, its directory left as it
 stands. The window asks first: when the user starts a session on such an account while no change of it runs (a running
-change refuses the launch, see "When a change is carried out" above), a confirmation, titled to start on this
-account, asks whether to, its body naming the account and saying that the account's last sharing change did not
-finish, so its configuration and conversations may be incomplete. It has no Cancel button: its buttons are **View in Settings** and **Start anyway**, the
-primary one, on which keyboard focus starts. Closing it — with the dialog's close button or Escape — cancels the launch
-and sends nothing; when it stands over another dialog, Escape closes only the question, leaving that dialog open. **View
-in Settings** sends nothing either: it closes the question, and the dialog it was asked from when there is one (the
-session dialog, the handoff dialog, the switch confirmation), and opens Settings on its Agent accounts section, on the
-account's agent's tab, with the account's settings dialog open in front and its sharing switch scrolled into view and
-focused; the warning mark after the switch says what did not finish (see "Sharing the default configuration" in
-`docs/product/agent-accounts.md`). When the account is no longer found there, or its agent is not on the list,
-Settings opens on the section all the same, with no account settings dialog. **Start anyway** closes the question at once and
-sends the request as it would have gone without it; its refusal or failure is shown where it would have been.
+change refuses the launch, see "When a change is carried out" above), a confirmation, titled to start on this account,
+asks whether to, its body naming the account and saying that the account's last sharing change did not finish, so its
+configuration and conversations may be incomplete. It has no Cancel button: its buttons are **View in Settings** and
+**Start anyway**, the primary one, on which keyboard focus starts. Closing it — with the dialog's close button or Escape
+— cancels the launch and sends nothing; when it stands over another dialog, Escape closes only the question, leaving
+that dialog open. **View in Settings** sends nothing either: it closes the question, and the dialog it was asked from
+when there is one (the session dialog, the handoff dialog, the switch confirmation), and opens Settings on its Agent
+accounts section, on the account's agent's tab, with the account's settings dialog open in front and its sharing switch
+scrolled into view and focused; the warning mark after the switch says what did not finish (see "Sharing the default
+configuration" in `docs/product/agent-accounts.md`). When the account is no longer found there, or its agent is not on
+the list, Settings opens on the section all the same, with no account settings dialog. **Start anyway** closes the
+question at once and sends the request as it would have gone without it; its refusal or failure is shown where it would
+have been.
 
 The account asked about is the one the session would run on. The question comes:
 
 - opening a session from the session dialog, on the account chosen, a new session on a found conversation included;
-- opening a session with defaults (see "Opening a session with defaults" in `docs/product/sessions.md`), on the
+- opening a session with defaults (see "Opening a session with defaults" in `docs/product/opening-sessions.md`), on the
   account it would open on;
 - resuming an interrupted session or reopening an archived one — by selecting it, with Resume or Reopen wherever they
   are offered, or from the session dialog's **Resume conversation** tab — on the session's own account; going to a
@@ -404,8 +405,8 @@ without regard to case.
 ## The sessions of a sharing account
 
 - Their conversations are kept in the default directory, reached through the account's links.
-- What a Grok Build session writes back into a shared entry is in the Grok Build paragraph of "Per-agent specifics a
-  user will notice" in `docs/product/launching-agents.md`.
+- What a Grok Build session writes back into a shared entry is in "The per-session Grok home" in
+  `docs/product/per-agent-launch-specifics.md`.
 - A switch between two accounts whose links lead to the same conversation files copies nothing (see "Carrying the
   conversation" in `docs/product/switching-session-accounts.md`).
 - Deleting one moves its agent records to the Trash from the default directory only while the account shares with its

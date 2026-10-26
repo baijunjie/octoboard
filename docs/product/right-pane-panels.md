@@ -23,13 +23,13 @@ and the right pane" in `docs/product/window-layout.md`.
 ## The panel cards
 
 The right pane has **no frame or surface of its own**: it is its cards. Each card looks exactly like the sidebar's
-floating card (see "A hidden pane floats in on hover" in `docs/product/window-layout.md`): rounded corners, the
-hairline edge, the light card shadow and the sidebar's background, docked and floating alike. The cards keep
-**8 px** from the top bar, from the window's end edge and from its bottom (or the connection banner), **8 px** from
-the terminal and **10 px** from each other; the gaps on the terminal's side and between cards hold the resize grips
-(see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md` and "Resizing panels" below). What shows around and between the cards is the
-terminal's area, in the terminal's own background, so the cards read as lying on the content. A single open panel
-takes the stack's full height.
+floating card (see "A hidden pane floats in on hover" in `docs/product/window-layout.md`): rounded corners, the hairline
+edge, the light card shadow and the sidebar's background, docked and floating alike. The cards keep **8 px** from the
+top bar, from the window's end edge and from its bottom (or the connection banner), **8 px** from the terminal and **10
+px** from each other; the gaps on the terminal's side and between cards hold the resize grips (see "Resizing the sidebar
+and the right pane" in `docs/product/window-layout.md` and "Resizing panels" below). What shows around and between the
+cards is the terminal's area, in the terminal's own background, so the cards read as lying on the content. A single open
+panel takes the stack's full height.
 
 A panel is never shorter than **120 px**.
 
@@ -58,11 +58,11 @@ other icon buttons lose room. Those buttons scroll horizontally within their own
 beyond them; Close panel stays outside that area. Scrolling and moving keyboard focus through the buttons reveal
 them, and the area's fades disappear while a button has keyboard focus so its focus ring stays visible.
 
-In the Terminal panel, the header stays on one row. Its visual title appears only when the window is at least
-1168 px wide and the header has at least 352 px of content width, excluding its horizontal padding. Otherwise the
-same title remains available as a level-two heading to assistive technology and gives its space to the tabs. The tabs
-scroll when needed, while the buttons at the end keep their width. In the report panel, the pager gives way while the title
-and trailing buttons keep their width. Pressing a header button with the mouse leaves keyboard focus where it was.
+In the Terminal panel, the header stays on one row. Its visual title appears only when the window is at least 1168 px
+wide and the header has at least 352 px of content width, excluding its horizontal padding. Otherwise the same title
+remains available as a level-two heading to assistive technology and gives its space to the tabs. The tabs scroll when
+needed, while the buttons at the end keep their width. In the report panel, the pager gives way while the title and
+trailing buttons keep their width. Pressing a header button with the mouse leaves keyboard focus where it was.
 
 The pane's 16 px horizontal inset (see "The window chrome and the content panel" in `docs/product/window-layout.md`)
 is measured from the card's edge.
@@ -122,13 +122,13 @@ chrome's controls" in `docs/product/window-layout.md`), except that below 782 px
 ## Floating a panel in
 
 While the right pane has an owner and none of its panels is open, **resting the mouse on a panel toggle floats that
-panel's card in** over the terminal; moving onto another toggle shows that toggle's panel instead. Nothing floats in
-on hover in a window narrower than 782 px, where panels open only when pressed (see "Below 782 px: one panel floats
-over the terminal" below), nor at any width on a device whose primary input cannot hover, such as a phone or a
-tablet's touch screen. The same holds while the only open panel is a maximized Terminal panel, for the toggle of a panel that is not
+panel's card in** over the terminal; moving onto another toggle shows that toggle's panel instead. Nothing floats in on
+hover in a window narrower than 782 px, where panels open only when pressed (see "Below 782 px: one panel floats over
+the terminal" below), nor at any width on a device whose primary input cannot hover, such as a phone or a tablet's touch
+screen. The same holds while the only open panel is a maximized Terminal panel, for the toggle of a panel that is not
 open: the card floats in over the maximized one (see "Maximizing the Terminal panel" below). Resting on a toggle
-otherwise does nothing. How the floating card enters and leaves, what keeps
-it up and how `Escape` sends it away are in "A hidden pane floats in on hover" in `docs/product/window-layout.md`.
+otherwise does nothing. How the floating card enters and leaves, what keeps it up and how `Escape` sends it away are in
+"A hidden pane floats in on hover" in `docs/product/window-layout.md`.
 
 - The card is the panel's own card, at the right pane's chosen width (at most 92% of the window's), with the same
   gaps around it as docked; the terminal shows in those gaps and is not resized.
@@ -174,9 +174,10 @@ terminal taking the content panel's whole width under it. The threshold is the s
   top bar's first enabled control where the terminal takes none: no session selected and no creation action in its
   place, or after a tap.
 - **The sidebar's drawer and a panel floating over the terminal are never on screen together.** Opening the drawer
-  closes the floating panel, for every kind of owner, and no panel floats while the drawer is open. Selecting a
-  session in the drawer closes the drawer, showing the session's terminal with no panel over it. Opening a panel closes the drawer. Opening an archive view closes the
-  floating panel too, so the view it would cover shows (see "The archive view" in `docs/product/archive-view.md`).
+  closes the floating panel, for every kind of owner, and no panel floats while the drawer is open. Selecting a session
+  in the drawer closes the drawer, showing the session's terminal with no panel over it. Opening a panel closes the
+  drawer. Opening an archive view closes the floating panel too, so the view it would cover shows (see "The archive
+  view" in `docs/product/archive-view.md`).
 - **The stacks are left as they are.** Nothing done below 782 px opens, closes, resizes or restores a panel in the
   remembered stacks (see "What is remembered" below). Widening the window to 782 px or more shows the stack exactly
   as it was, a maximized Terminal panel included. Narrowing the window below 782 px, a load included, floats the
@@ -186,11 +187,12 @@ terminal taking the content panel's whole width under it. The threshold is the s
 
 ## Resizing panels
 
-Between two neighbouring panels in the pane's column, in the gap that separates them, is a **resize handle**, drawn
-as a grip like the right pane's width handle (see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md`), with the
-same "Resize" tooltip. It moves only the boundary between that pair: the pair keeps its combined height, neither panel
-goes under 120 px, and the other panels and the stack's own height stay as they are, so **resizing panels never
-resizes the terminal**. Its name says which pair it resizes, naming both panels' kinds, upper one first.
+Between two neighbouring panels in the pane's column, in the gap that separates them, is a **resize handle**, drawn as a
+grip like the right pane's width handle (see "Resizing the sidebar and the right pane" in
+`docs/product/window-layout.md`), with the same "Resize" tooltip. It moves only the boundary between that pair: the pair
+keeps its combined height, neither panel goes under 120 px, and the other panels and the stack's own height stay as they
+are, so **resizing panels never resizes the terminal**. Its name says which pair it resizes, naming both panels' kinds,
+upper one first.
 
 - **Dragging** it moves the boundary.
 - **Double-clicking** it gives the pair an even split of their combined height.
@@ -263,19 +265,19 @@ the page is reloaded.
 
 There are two stacks, one for projects and one for console sessions: every project shares the first and every console
 session the second, so passing the right pane to another project keeps the open panels, their heights and whether the
-Terminal panel is maximized, and passing it to another console session keeps its panels and heights. Until the user changes it, the Files panel is open
-and the Terminal panel closed in the projects' stack, and the report panel is open in the console sessions' stack, so
-the right pane is shown. A stored stack that cannot be read counts as that default. Which panel floats over the
-terminal below 782 px is not part of the stacks and is not remembered. A right pane the user
+Terminal panel is maximized, and passing it to another console session keeps its panels and heights. Until the user
+changes it, the Files panel is open and the Terminal panel closed in the projects' stack, and the report panel is open
+in the console sessions' stack, so the right pane is shown. A stored stack that cannot be read counts as that default.
+Which panel floats over the terminal below 782 px is not part of the stacks and is not remembered. A right pane the user
 had hidden with the earlier pane toggle of Octoboard starts with no panel open in either stack.
 
 ## Panels and keyboard focus
 
-Each panel is a **named region** — the Files panel named for the project's files, the Terminal panel for the project's terminals, the report panel
-"Report" — and each
-is a stop of its own in the `F6` cycle, in stacking order, except that a maximized Terminal panel comes first (see
-"Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). A panel only floating in is
-not a stop; a panel floating over the terminal below 782 px is.
+Each panel is a **named region** — the Files panel named for the project's files, the Terminal panel for the project's
+terminals, the report panel "Report" — and each is a stop of its own in the `F6` cycle, in stacking order, except that a
+maximized Terminal panel comes first (see "Moving focus between regions with F6" in
+`docs/product/moving-focus-between-regions.md`). A panel only floating in is not a stop; a panel floating over the
+terminal below 782 px is.
 
 **Closing a panel that holds keyboard focus hands focus to the terminal** — or, where the terminal cannot take it,
 where it goes instead (see "With no session selected" in `docs/product/session-terminal.md`). So does the right pane

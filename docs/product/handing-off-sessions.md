@@ -16,10 +16,10 @@ hands a session off on its own, not even off an account whose quota is used up.
 
 ## What can be handed off
 
-A project session or a console session, of any role — unbound, lead or bound — can be handed off while it is waiting
-for instructions, waiting for the user or interrupted. One working in background counts as waiting for instructions:
-it can be handed off, and the work it left running in the background ends with its process (see "Working in
-background" in `docs/product/sessions.md`). A handoff is refused, with nothing changed, when:
+A project session or a console session, of any role — unbound, lead or bound — can be handed off while it is waiting for
+instructions, waiting for the user or interrupted. One working in background counts as waiting for instructions: it can
+be handed off, and the work it left running in the background ends with its process (see "Working in background" in
+`docs/product/session-statuses.md`). A handoff is refused, with nothing changed, when:
 
 - the session does not exist (`unknown_session`), is archived (`session_archived`; reopen it first), or is in the middle
   of a turn or still starting (`session_working`: a session still at work goes on writing to its worktree while the
@@ -28,26 +28,27 @@ background" in `docs/product/sessions.md`). A handoff is refused, with nothing c
   (`session_already_starting`);
 - it is locked (`session_locked`; see "Locking a session" in `docs/product/sessions.md`);
 - the receiving agent is the session's own (`handoff_to_same_agent`, which points to switching its account);
-- the receiving agent is not available (`agent_not_available`), is not added (`agent_not_added`; see "Opening a
-  session" in `docs/product/sessions.md` for when that applies), the account named is not one of that agent's
-  (`unknown_account`), the receiving session's account, once resolved, is turned off (`account_disabled`) or used up
-  (`account_quota_exhausted`; see "Opening a session" in `docs/product/sessions.md` for both), or the model or
-  reasoning effort is not one the agent offers (`invalid_launch_setting`);
+- the receiving agent is not available (`agent_not_available`), is not added (`agent_not_added`; see "When the agent or
+  the account cannot open a session" in `docs/product/opening-sessions.md` for when that applies), the account named is
+  not one of that agent's (`unknown_account`), the receiving session's account, once resolved, is turned off
+  (`account_disabled`) or used up (`account_quota_exhausted`; see "When the agent or the account cannot open a session"
+  in `docs/product/opening-sessions.md` for both), or the model or reasoning effort is not one the agent offers
+  (`invalid_launch_setting`);
 - a change of the sharing of the default configuration runs for the session's account or for the receiving session's
   (`account_sharing_in_progress`; see "When a change is carried out" in
   `docs/product/sharing-the-default-configuration.md`);
 - for a session bound to an owner, opening a session bound to that owner would be refused.
 
 The model and reasoning effort follow the rules for opening a session (see "Which model and reasoning effort a session
-uses" in `docs/product/sessions.md`): left out, they come from the project or console as for any new session of that
-agent. The account follows **Automatically select an account** as for any new session (see "Which account a session
-uses" in `docs/product/sessions.md`): while that switch is on, the handoff dialog opens on, and an owner's
+uses" in `docs/product/opening-sessions.md`): left out, they come from the project or console as for any new session of
+that agent. The account follows **Automatically select an account** as for any new session (see "Which account a session
+uses" in `docs/product/opening-sessions.md`): while that switch is on, the handoff dialog opens on, and an owner's
 `handoff_session` that leaves the account out takes, the receiving agent's account whose weekly quota resets soonest.
 When the switch is off, or no account ranks, the handoff dialog opens on the account the project or console resolves,
 and `handoff_session` takes the owner's own account when the receiving agent is the owner's own and that account can
-still open a session, otherwise the project's or console's (see "Handing off from an owner's tool" and "Handing off
-from the window" below). A `hand_off_session` request that leaves the account out does not apply the pick: the account
-comes from the project, else the console.
+still open a session, otherwise the project's or console's (see "Handing off from an owner's tool" and "Handing off from
+the window" below). A `hand_off_session` request that leaves the account out does not apply the pick: the account comes
+from the project, else the console.
 
 From the moment a handoff is accepted until it ends, the original cannot be resumed, switched to another account or
 deleted.
@@ -71,33 +72,34 @@ the conversation does not carry over: the new session starts by reading a record
 - the number of sessions it owns, archived ones included;
 - its place under its owner, named, when it is bound to one.
 
-Only the lines that apply are shown. When none does, the dialog says that nothing moves — the session is responsible
-for no branches, owns no sessions and reports to no session; it never says so when the branch inspection failed.
-**An inspection that fails** leaves the dialog usable, as the handoff does not depend on it: a red error mark right
-after the **Moves to the new session** heading, named that the branches to move are unknown, and the list says nothing of
+Only the lines that apply are shown. When none does, the dialog says that nothing moves — the session is responsible for
+no branches, owns no sessions and reports to no session; it never says so when the branch inspection failed. **An
+inspection that fails** leaves the dialog usable, as the handoff does not depend on it: a red error mark right after the
+**Moves to the new session** heading, named that the branches to move are unknown, and the list says nothing of
 branches. The mark's popover says that the branches the session is responsible for could not be checked, with the
 reason, what to do, any details and, where trying again can help, **Try again**, which closes the popover and inspects
 them again; the mark stays while that runs, and goes once an inspection succeeds, focus then moving to the dialog when
 the mark or its popover held it. The dialog's status region says the failure after the announcement of the dialog's
-opening focus move, and again each time a retry fails again, in the same words or not; it opens no error alert (see "Failures, warnings and notes marked at their point" in
-`docs/product/error-alerts.md`). While the handoff request is under way the list stays as it was when it was sent.
+opening focus move, and again each time a retry fails again, in the same words or not; it opens no error alert (see
+"Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). While the handoff request is
+under way the list stays as it was when it was sent.
 
 Then come the fields:
 
 - **Hand off to** — an agent picker joined to an account picker, as in the session dialog (see the **Agent** field in
-  "Opening a session" in `docs/product/sessions.md`), except that the session's own agent is never offered. It opens on
-  the agent a new session of the project (or, for a console session, of the console) would use by default (see "Which
-  agent a session uses" in `docs/product/sessions.md`) when that is another agent and can be picked (see "Which agents
-  the agent pickers list" in `docs/product/consoles.md`), otherwise on the first other agent that can, in the order of
-  the added agents. The account it opens on for that agent — and for any other agent the user switches to without
-  having picked one of its accounts — is the one the new-session dialog would open on: while **Automatically select an
-  account** is on, the agent's account whose weekly quota resets soonest; otherwise, or when none ranks, the account
-  the project or console resolves (see "Which account a session uses" in `docs/product/sessions.md`). The account the
-  field shows is sent as the receiving session's own account choice. Used-up accounts are treated
-  as in the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and,
-  when the chosen account is used up all the same, the field says why under it, marked invalid, and **Hand off**
-  cannot be pressed. An account whose sharing of the default configuration is being changed is treated the same way
-  while the change runs, and a turned-off account is left out unless the field ends on it, as in the session dialog.
+  "The session dialog" in `docs/product/opening-sessions.md`), except that the session's own agent is never offered. It
+  opens on the agent a new session of the project (or, for a console session, of the console) would use by default (see
+  "Which agent a session uses" in `docs/product/opening-sessions.md`) when that is another agent and can be picked (see
+  "Which agents the agent pickers list" in `docs/product/consoles.md`), otherwise on the first other agent that can, in
+  the order of the added agents. The account it opens on for that agent — and for any other agent the user switches to
+  without having picked one of its accounts — is the one the new-session dialog would open on: while **Automatically
+  select an account** is on, the agent's account whose weekly quota resets soonest; otherwise, or when none ranks, the
+  account the project or console resolves (see "Which account a session uses" in `docs/product/opening-sessions.md`).
+  The account the field shows is sent as the receiving session's own account choice. Used-up accounts are treated as in
+  the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and, when the
+  chosen account is used up all the same, the field says why under it, marked invalid, and **Hand off** cannot be
+  pressed. An account whose sharing of the default configuration is being changed is treated the same way while the
+  change runs, and a turned-off account is left out unless the field ends on it, as in the session dialog.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are
@@ -129,7 +131,7 @@ case the handoff is made at once (see "Approving requests automatically" in
 |---|---|---|
 | `session` | yes | The session to hand off: one of the caller's (`yours: true`). |
 | `agent` | yes | The receiving agent, `claude`, `codex` or `grok`; not the session's own. |
-| `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. `default` chooses that account outright and does not fall through to a project pin. Left out or blank, while **Automatically select an account** is on, it is the account of `agent` whose weekly quota resets soonest, among accounts that can still open a session (see "Which account a session uses" in `docs/product/sessions.md`). When the switch is off, or no account ranks, it is the caller's own account when `agent` is the caller's own agent and that account can still open a session; otherwise the project's account for that agent, else the console's. A left-out account is settled when the call is made; where the user is asked, that is the account their form starts on. |
+| `account` | no | The receiving session's account: an account's id or name, or `default` for the agent's default account. It must belong to `agent`. `default` chooses that account outright and does not fall through to a project pin. Left out or blank, while **Automatically select an account** is on, it is the account of `agent` whose weekly quota resets soonest, among accounts that can still open a session (see "Which account a session uses" in `docs/product/opening-sessions.md`). When the switch is off, or no account ranks, it is the caller's own account when `agent` is the caller's own agent and that account can still open a session; otherwise the project's account for that agent, else the console's. A left-out account is settled when the call is made; where the user is asked, that is the account their form starts on. |
 | `title` | no | The receiving session's created name, stored trimmed. Left out or blank, it takes the original's displayed name (see "What the receiving session takes over" below). It is to be written in the user's language (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
 | `model`, `effort` | no | The receiving session's model and reasoning effort. Left out, each comes from the project or console, as for any handoff; blank, it is the agent's own default; any other must be one the agent offers. |
 | `note` | no | What the caller tells the receiving session beyond the package, such as where the work stands and what to do first. It is added at the end of the receiving session's opening prompt, introduced as a note from the owner that handed the work off, every line quoted. Blank is the same as left out. |
@@ -203,8 +205,8 @@ the title nor the note it passed. A form follows:
 
 **When the agent asked for can no longer be picked, or the account asked for is no longer among its accounts,** both
 pickers show nothing chosen and the field says under them, marked invalid, that the agent or account asked for is no
-longer available and to choose another; **Hand off session** cannot be pressed, and the Advanced section's fields cannot be changed, until the user
-picks.
+longer available and to choose another; **Hand off session** cannot be pressed, and the Advanced section's fields cannot
+be changed, until the user picks.
 
 **Hand off session cannot be pressed either**, and an alert at the top of the dialog says why, while the session cannot
 be handed off from its menu: it is in the middle of a turn or still starting, it is locked, a switch of its account
@@ -243,14 +245,14 @@ receiving session to read. It holds:
 - **the sessions it owns**, archived ones included, each with its title, status and id;
 - **its latest todo list**, as the agent's last update left it;
 - **the files its edits changed**, as its edit and write calls named them;
-- **the conversation**: the original's own conversation — every user message and every reply, in order, each set apart so nothing in it reads as the
-  file's own structure. Tool output, file contents read, command output, the model's reasoning, and what the agent
-  injects into the conversation on its own are left out. Where the agent compacted its history and rewrote its record
-  (Grok Build), the package keeps the summary it wrote and names the files holding the earlier conversation. For a
-  Codex thread that had a turn reverted, the conversation is read as it stands across the thread's rollouts: each
-  earlier file up to the point the next one continues from, then the head, which is also the record the package
-  names (see "Agent session data" in `docs/product/launching-agents.md`). The reverted turns are left out, and so are
-  the todo list updates and file changes made in them.
+- **the conversation**: the original's own conversation — every user message and every reply, in order, each set apart
+  so nothing in it reads as the file's own structure. Tool output, file contents read, command output, the model's
+  reasoning, and what the agent injects into the conversation on its own are left out. Where the agent compacted its
+  history and rewrote its record (Grok Build), the package keeps the summary it wrote and names the files holding the
+  earlier conversation. For a Codex thread that had a turn reverted, the conversation is read as it stands across the
+  thread's rollouts: each earlier file up to the point the next one continues from, then the head, which is also the
+  record the package names (see "Agent session data" in `docs/product/launching-agents.md`). The reverted turns are left
+  out, and so are the todo list updates and file changes made in them.
 
 The original's brief is not kept by Octoboard, so it is not carried separately: where the agent recorded it, it is the
 first user message of the conversation. A conversation record that is missing or cannot be read, or a reverted Codex

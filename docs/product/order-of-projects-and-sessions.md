@@ -43,8 +43,8 @@ Everything walked in this order follows the nesting the same way, so a session b
 its owner wherever both appear.
 
 The order follows status changes as they happen. Row movement follows "Items moving within a collection" in
-`docs/product/collection-motion.md`. The rail's waiting count walks waiting sessions in this same order (see
-"The raised hand" in `docs/product/sessions.md`).
+`docs/product/collection-motion.md`. The rail's waiting count walks waiting sessions in this same order (see "The raised
+hand" in `docs/product/session-statuses.md`).
 
 ## Ordering without status
 
@@ -62,12 +62,12 @@ stands.
 A session's status changing while it stays unarchived then moves no row.
 
 The setting reaches every list that follows this order: both focus modes' lists and project groups, and the chips of a
-project's focus mode for the console sessions above its left-out sessions (see `docs/product/focus-mode.md`); the
-order in which the rail's waiting count walks waiting sessions (see "The raised hand" in `docs/product/sessions.md`);
+project's focus mode for the console sessions above its left-out sessions (see `docs/product/focus-mode.md`); the order
+in which the rail's waiting count walks waiting sessions (see "The raised hand" in `docs/product/session-statuses.md`);
 the menu bar icon's session lists (see "The icon's menu" in `docs/product/menu-bar-icon.md`); and the list of running
-sessions in the confirmation for removing a project (see `docs/product/removing-projects.md`). Other lists of sessions in confirmations, such as the
-archive confirmation's list of the sessions under an owner, stay ranked by status whatever the setting. The switch
-strip never ranks by status (see "The switch strip" in `docs/product/focus-mode.md`).
+sessions in the confirmation for removing a project (see `docs/product/removing-projects.md`). Other lists of sessions
+in confirmations, such as the archive confirmation's list of the sessions under an owner, stay ranked by status whatever
+the setting. The switch strip never ranks by status (see "The switch strip" in `docs/product/focus-mode.md`).
 
 ## Pinning
 

@@ -25,18 +25,18 @@ agent is chosen for that session. The **default agent for project sessions** is 
 the session nor its project names an agent (see "The project's default agent" in `docs/product/projects.md`). It may be
 left unset — "Same as console sessions" — and then it is whatever the default agent for console sessions is at the time,
 following it when it changes. A new console starts unset, and so is a console stored before the setting existed. The
-full order is in "Which agent a session uses" in `docs/product/sessions.md`.
+full order is in "Which agent a session uses" in `docs/product/opening-sessions.md`.
 
 The console dialog, at most 768 px wide, shows both in one **Default agent** group, as two fields, **Console sessions**
 and **Project sessions**, under a note that a project with its own default agent uses that instead. The two fields sit
 side by side in two equal columns, one under the other in a window narrower than 768 px; each field's name sits above
 its picker, which spans the width of its column. Each field takes one of the three supported agents (Claude Code, Codex,
-Grok Build). Console sessions starts on Claude Code in the creation form — or, when Claude Code cannot be picked
-(see "Which agents the agent pickers list" below), on the first added agent that can, so it never starts on an agent
-that cannot be chosen. Project sessions starts on its first entry, **Same as console sessions**, which names the agent
-the Console sessions field currently holds, with that agent's icon dimmed, and follows that field as it changes; the
-agents themselves come after it. Changing one field never moves the other. Which agents the two fields list is in "Which agents the agent pickers
-list" below.
+Grok Build). Console sessions starts on Claude Code in the creation form — or, when Claude Code cannot be picked (see
+"Which agents the agent pickers list" below), on the first added agent that can, so it never starts on an agent that
+cannot be chosen. Project sessions starts on its first entry, **Same as console sessions**, which names the agent the
+Console sessions field currently holds, with that agent's icon dimmed, and follows that field as it changes; the agents
+themselves come after it. Changing one field never moves the other. Which agents the two fields list is in "Which agents
+the agent pickers list" below.
 
 Multiple consoles can exist side by side and are independent of each other.
 
@@ -81,15 +81,15 @@ not change it. Each fill has its own light and dark value (see "What follows the
 
 The console dialog's **Avatar** field is one round control the size of an avatar. It opens the dialog's first row,
 beside the Name field and before it (mirrored under a right-to-left language), centred on the Name field's label and
-input together; it keeps that place when an error appears under the name. It has no visible label: assistive
-technology announces it as a group named "Avatar", and the console's name beside it says whose avatar it is.
-While no image is picked it shows an upload glyph, so an optional field shows nothing that looks already filled in;
-pressing it opens the file picker. Once an image is picked the control shows the image, and a delete button sits over
-its corner: hidden at rest, shown while the mouse pointer is over the control or anything in it has keyboard focus,
-and shown outright on a device whose primary input cannot hover, since a touch has no hover to reveal it with and tapping the image
-opens the file picker instead. Pressing the delete button puts the control back to the upload glyph, from where another
-image can be picked. The field does not show what the default avatar would look like: a console with no image is drawn
-as described above wherever the console appears, and the dialog does not preview it.
+input together; it keeps that place when an error appears under the name. It has no visible label: assistive technology
+announces it as a group named "Avatar", and the console's name beside it says whose avatar it is. While no image is
+picked it shows an upload glyph, so an optional field shows nothing that looks already filled in; pressing it opens the
+file picker. Once an image is picked the control shows the image, and a delete button sits over its corner: hidden at
+rest, shown while the mouse pointer is over the control or anything in it has keyboard focus, and shown outright on a
+device whose primary input cannot hover, since a touch has no hover to reveal it with and tapping the image opens the
+file picker instead. Pressing the delete button puts the control back to the upload glyph, from where another image can
+be picked. The field does not show what the default avatar would look like: a console with no image is drawn as
+described above wherever the console appears, and the dialog does not preview it.
 
 A chosen image is cropped to its centred square and scaled to 128 x 128 pixels in the window before it is saved, so
 any size or shape of picture is accepted; a file that is not a readable image is refused in the dialog. As with the
@@ -133,8 +133,8 @@ Each agent's config directory is where that agent keeps its own configuration, l
 | Codex | what Codex itself takes from `CODEX_HOME` | `~/.codex` |
 | Grok Build | the Grok home, what Grok itself takes from `GROK_HOME` | `~/.grok` |
 
-How each agent is pointed at its directory is in "The launch environment" and "Per-agent specifics a user will notice"
-in `docs/product/launching-agents.md`. An account other than the default one can share the default account's
+How each agent is pointed at its directory is in "The launch environment" in `docs/product/launching-agents.md` and in
+`docs/product/per-agent-launch-specifics.md`. An account other than the default one can share the default account's
 configuration and conversation history through links in its directory, keeping only its login its own (see
 `docs/product/sharing-the-default-configuration.md`).
 
@@ -177,7 +177,7 @@ console that names it keeps it; the sessions that would run on it are refused un
   unaffected. A project can set its own account for an agent — another account, or the agent's default account against a
   console that names one — which its sessions take instead of the console's (see "The project's account, model and
   reasoning effort" in `docs/product/projects.md`), and a session can also be opened under a different account of its
-  agent than either (see "Opening a session" in `docs/product/sessions.md`).
+  agent than either (see "Which account a session uses" in `docs/product/opening-sessions.md`).
 
 For Claude Code, an account pointing at `~/.claude` is not the same as the default account: whenever a directory is
 set, Claude Code reads its global config file from `.claude.json` inside that directory instead of from
@@ -185,8 +185,8 @@ set, Claude Code reads its global config file from `.claude.json` inside that di
 already covers it.
 
 For Grok Build, the directory does not have to already be a Grok home when it is set; whether it is one is checked
-later, at launch, rather than here. What happens then is in "Per-agent specifics a user will notice" in
-`docs/product/launching-agents.md`.
+later, at launch, rather than here. What happens then is in "A Grok Build config directory" in
+`docs/product/per-agent-launch-specifics.md`.
 
 An account's directory is checked when the account is added or edited, in Settings, and a failure is shown in the form
 with nothing saved:
@@ -208,42 +208,42 @@ Claude Code itself, and by Octoboard for Codex, which refuses a missing one (Gro
 stored, and shown for the account, is its expanded absolute path.
 
 **A session keeps the account and the directory it last recorded until it is switched to another account.** A session
-takes its account when it is opened, in the order given in "Which account a session uses" in `docs/product/sessions.md`,
-and nothing but a switch of its account changes it afterwards: not an edit to the project's or the console's reference,
-not an edit to the account's directory. Resuming or reopening it relaunches with that same directory, because the agent
-keeps the conversation inside it. The user can move the session to another account of its agent from its action menu,
-and an owner can move a session of its own with the `switch_session_account` tool; that copies the conversation into the
-target's directory and reads that account's configuration, while keeping explicit model and reasoning effort choices
-(see `docs/product/switching-session-accounts.md`). A session opened on the default account holds no directory and
-resumes under whatever the user's shell exports at that moment. Codex's or Claude Code's permission approval setting
-is looked up again for each launch; keeping a directory does not freeze that choice (see "Approval modes" in
-`docs/product/agent-accounts.md`).
+takes its account when it is opened, in the order given in "Which account a session uses" in
+`docs/product/opening-sessions.md`, and nothing but a switch of its account changes it afterwards: not an edit to the
+project's or the console's reference, not an edit to the account's directory. Resuming or reopening it relaunches with
+that same directory, because the agent keeps the conversation inside it. The user can move the session to another
+account of its agent from its action menu, and an owner can move a session of its own with the `switch_session_account`
+tool; that copies the conversation into the target's directory and reads that account's configuration, while keeping
+explicit model and reasoning effort choices (see `docs/product/switching-session-accounts.md`). A session opened on the
+default account holds no directory and resumes under whatever the user's shell exports at that moment. Codex's or Claude
+Code's permission approval setting is looked up again for each launch; keeping a directory does not freeze that choice
+(see "Approval modes" in `docs/product/agent-accounts.md`).
 
-If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than
-started — but only for a session that has a conversation on the agent's side to resume. A session with none yet — a
-new one, or one opened and never typed into, unless it was opened to resume a conversation (see "Resuming a
-conversation by its session ID" in `docs/product/sessions.md`) — launches into the missing directory instead,
-and the directory is created as above;
-a Codex session whose directory Octoboard cannot create is refused on this same path. This narrower refusal holds for
-all three agents, and the message names the agent and the directory and says to recreate it or to point the account at
-a different one. Grok Build is refused on this same path whenever its pinned directory is not an initialized Grok
-home — one Grok has actually been run against — whether or not there is a conversation to resume, since an empty
-directory would keep neither its login nor its conversation; see "Per-agent specifics a user will notice" in
-`docs/product/launching-agents.md`.
+If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than started —
+but only for a session that has a conversation on the agent's side to resume. A session with none yet — a new one, or
+one opened and never typed into, unless it was opened to resume a conversation (see
+`docs/product/resuming-a-conversation-by-its-session-id.md`) — launches into the missing directory instead, and the
+directory is created as above; a Codex session whose directory Octoboard cannot create is refused on this same path.
+This narrower refusal holds for all three agents, and the message names the agent and the directory and says to recreate
+it or to point the account at a different one. Grok Build is refused on this same path whenever its pinned directory is
+not an initialized Grok home — one Grok has actually been run against — whether or not there is a conversation to
+resume, since an empty directory would keep neither its login nor its conversation; see "A Grok Build config directory"
+in `docs/product/per-agent-launch-specifics.md`.
 
 ## Editing a console
 
-The console's action menu item **Console settings** opens the console dialog under that title (see "The console
-header" in `docs/product/sidebar.md`). The name, both default agents, every agent's account, every agent's console
-session and project session model and reasoning effort, the console session instructions and the avatar can be
-changed. The dialog shows the models and reasoning efforts of one agent at a time (see "The Advanced section" in
-`docs/product/model-and-reasoning-effort.md`); those set for another agent are kept and still saved. The default agent for project sessions can be put back on Same as console sessions, an account back
-on the agent's default account, and the model and the effort back to unset, the agent's own default. Changing a default
-agent or an account affects sessions opened afterwards; a session that already exists keeps the agent and the account
-and directory it was started with. A change to the default agent for console sessions therefore changes the initial choice in the next
-console-session dialog, and a change to the one for project sessions — or to the one for console sessions while
-project sessions follow it — the initial choice in the next session dialog of a project with no default agent of its
-own, while existing sessions keep the agent they were started with (see "Console sessions and project sessions" in
+The console's action menu item **Console settings** opens the console dialog under that title (see "The console header"
+in `docs/product/sidebar.md`). The name, both default agents, every agent's account, every agent's console session and
+project session model and reasoning effort, the console session instructions and the avatar can be changed. The dialog
+shows the models and reasoning efforts of one agent at a time (see "The Advanced section" in
+`docs/product/model-and-reasoning-effort.md`); those set for another agent are kept and still saved. The default agent
+for project sessions can be put back on Same as console sessions, an account back on the agent's default account, and
+the model and the effort back to unset, the agent's own default. Changing a default agent or an account affects sessions
+opened afterwards; a session that already exists keeps the agent and the account and directory it was started with. A
+change to the default agent for console sessions therefore changes the initial choice in the next console-session
+dialog, and a change to the one for project sessions — or to the one for console sessions while project sessions follow
+it — the initial choice in the next session dialog of a project with no default agent of its own, while existing
+sessions keep the agent they were started with (see "Console sessions and project sessions" in
 `docs/product/sessions.md`); a changed model or effort reaches a console session's next launch, or for the project
 session pair a project session's, only when that value is inherited (see `docs/product/model-and-reasoning-effort.md`).
 The name cannot be cleared: saving an empty name is rejected.

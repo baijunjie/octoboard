@@ -7,12 +7,12 @@ user owns alike. The section itself, its accounts table and the account settings
 ## Where Log in appears
 
 **Log in** is always in an account's actions menu, whatever its login state, so an account that is logged in can be
-logged in again; it is unavailable there while a login of the account runs. For an account known to be signed out,
-Log in also appears as an icon button directly after its **Not logged in** badge — in the Status column of the
-accounts table, and in the heading of its account settings dialog (see "The accounts table" and "The account settings dialog" in
+logged in again; it is unavailable there while a login of the account runs. For an account known to be signed out, Log
+in also appears as an icon button directly after its **Not logged in** badge — in the Status column of the accounts
+table, and in the heading of its account settings dialog (see "The accounts table" and "The account settings dialog" in
 `docs/product/agent-accounts.md`). The icon button's tooltip is "Log in" and the name announced for it names the
-account; while a login of the account runs it is unavailable, its tooltip and description saying the account is
-logging in. This applies to the default account and the accounts the user owns alike.
+account; while a login of the account runs it is unavailable, its tooltip and description saying the account is logging
+in. This applies to the default account and the accounts the user owns alike.
 
 ## How each agent signs in
 
@@ -45,13 +45,13 @@ all end it. Only one login can be followed from Settings at a time, since the di
 runs at most one login per account, and one Codex login at a time across all accounts. Log in is unavailable for an
 account whose login is running.
 
-Where keyboard focus goes once the dialog has closed depends on what opened it. When a Log in icon button opened it,
-a login that succeeded puts focus on a control that stays, since the icon button goes away once the account reads as
-logged in: the row's actions menu button for the table's, the first switch of the account settings dialog for the dialog's.
-When the dialog closes any other way — Cancel login, Escape, the close button, Close after a failure — focus goes back
-to the icon button once it is available again, which is after the daemon has answered the cancel, or to that same
-control if the button has gone by then or the login turns out to have succeeded after all. When Log in in the actions
-menu opened it, focus goes back to the row's actions menu button.
+Where keyboard focus goes once the dialog has closed depends on what opened it. When a Log in icon button opened it, a
+login that succeeded puts focus on a control that stays, since the icon button goes away once the account reads as
+logged in: the row's actions menu button for the table's, the first switch of the account settings dialog for the
+dialog's. When the dialog closes any other way — Cancel login, Escape, the close button, Close after a failure — focus
+goes back to the icon button once it is available again, which is after the daemon has answered the cancel, or to that
+same control if the button has gone by then or the login turns out to have succeeded after all. When Log in in the
+actions menu opened it, focus goes back to the row's actions menu button.
 
 When the Agent accounts section opens while a login is already running — after a reload, or started in another window
 — the dialog opens on that login (on one of them, when several are running), without starting another, so it can be

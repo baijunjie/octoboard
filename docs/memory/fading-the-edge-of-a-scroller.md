@@ -46,9 +46,10 @@ Which API a site takes follows from its scroller:
   `packages/ui/src/sidebar/rows.tsx` already does, so a heading built from it needs nothing more. The overlay fades
   default to the side panes' colour; on any other surface, pass `stickySurface` (both APIs take it).
 
-Surfaces with a pinned heading or row use overlay fades (the "What both views show" section of `docs/product/focus-mode.md` and
-the "Folding a section" section of `docs/product/project-pane-git-change-list.md`); other surfaces apply the fade as a
-`mask-image` on the scroller. For a masked scroller, the mask clips by that element's border box, so:
+Surfaces with a pinned heading or row use overlay fades (the "What both views show" section of
+`docs/product/focus-mode.md` and the "Folding a section" section of `docs/product/project-pane-git-change-list.md`);
+other surfaces apply the fade as a `mask-image` on the scroller. For a masked scroller, the mask clips by that element's
+border box, so:
 
 - Padding that gives a control inside the scroller room — the room its focus ring needs — goes on the scroller itself,
   inside the clip, never on an element around it.

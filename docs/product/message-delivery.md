@@ -34,12 +34,13 @@ an interrupt" in `docs/product/interrupting-turns.md`.
 3. A message that would otherwise begin with `/` is written with a single leading space, so it reaches the model as
    text instead of being run as one of the agent's own slash commands. The check is made on the text left after the
    removals, so a removed character in front of a slash command does not keep it from being guarded.
-4. For a Claude Code session only: a line, or a part of one starting at a space right before `/` or a Windows drive path (`X:\`), that ends in an
-   image extension (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) has its last word wrapped in backticks, so ``- /a/b.png``
-   arrives as ``- `/a/b.png` ``. Claude Code reads such a piece as an image to attach and, in doing so, loses the Enter
-   written after the message, which would then sit unsent in its input box, one written mid-turn included (see "A message
-   written but not sent" below). The path stays readable text, unless it contains a space, which the backticks then split; a path line inside a fenced code block is wrapped as well. A path followed by punctuation or already in backticks is
-   not touched. Codex and Grok Build have not been measured for this.
+4. For a Claude Code session only: a line, or a part of one starting at a space right before `/` or a Windows drive path
+   (`X:\`), that ends in an image extension (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`) has its last word wrapped in
+   backticks, so ``- /a/b.png`` arrives as ``- `/a/b.png` ``. Claude Code reads such a piece as an image to attach and,
+   in doing so, loses the Enter written after the message, which would then sit unsent in its input box, one written
+   mid-turn included (see "A message written but not sent" below). The path stays readable text, unless it contains a
+   space, which the backticks then split; a path line inside a fenced code block is wrapped as well. A path followed by
+   punctuation or already in backticks is not touched. Codex and Grok Build have not been measured for this.
 
 This holds for everything Octoboard writes into a running session — an instruction, a report, a report panel form
 submission, information shared by another session, the instruction `reopen_session` hands over, the prompt to continue
@@ -63,9 +64,9 @@ An instruction, a report or information shared by another session, for a session
 is waiting for the user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
 the session can take one, oldest first. A session that sent an instruction or shared information is told it was queued
 and that it must not send it again. The wait can outlast the user's answer: a permission prompt reported through hooks
-keeps the session's hand up until the call it let through has finished. A Codex action title also holds messages;
-when it clears, delivery resumes if the last hook-reported status permits it (see "The raised hand" in
-`docs/product/sessions.md`).
+keeps the session's hand up until the call it let through has finished. A Codex action title also holds messages; when
+it clears, delivery resumes if the last hook-reported status permits it (see "The raised hand" in
+`docs/product/session-statuses.md`).
 
 A message for a session with no process running is refused outright: a resume starts the agent at
 its prompt and replays nothing. The one exception is information shared with an interrupted session, which is kept
@@ -135,18 +136,18 @@ the session is queued as above. Each has a code, which the owners' tools report 
 | Codex | The nudge to switch to another model as a rate limit nears | `codex_rate_limit_nudge` |
 | Grok Build | Its usage-limit screen, offering to upgrade, buy credits or try again | `grok_usage_limit` |
 
-Every Codex launch keeps its last three screens away as far as it can (see "Per-agent specifics a user will notice" in
-`docs/product/launching-agents.md`), so they hold messages only when one comes up all the same. While such a screen is
-up the session reads as *waiting for the user* and raises its hand (see "What the statuses are derived from" in
-`docs/product/sessions.md`); the moment its screen no longer shows one, the queue is written, oldest first, and the
-hand comes down. Octoboard never answers such a screen: the user does, in the session's terminal. A client's
+Every Codex launch keeps its last three screens away as far as it can (see "Codex" in
+`docs/product/per-agent-launch-specifics.md`), so they hold messages only when one comes up all the same. While such a
+screen is up the session reads as *waiting for the user* and raises its hand (see "What the statuses are derived from"
+in `docs/product/session-statuses.md`); the moment its screen no longer shows one, the queue is written, oldest first,
+and the hand comes down. Octoboard never answers such a screen: the user does, in the session's terminal. A client's
 `send_message` meanwhile is queued like any other message, not refused.
 
 **And while an interrupt is typing into the session.** While `interrupt_session` sends its keys into a Claude Code or
-Grok Build session whose input box it finds on the screen, and clears what the agent puts back in its input box, everything Octoboard has to write into the
-session is queued, so that nothing joins the restored prompt, and the queue is written as soon as the interrupt is done
-(see "The input box afterwards" in `docs/product/interrupting-turns.md`). It lasts no longer than the interrupt takes to
-answer, raises no hand, and is not reported in `writes_held`.
+Grok Build session whose input box it finds on the screen, and clears what the agent puts back in its input box,
+everything Octoboard has to write into the session is queued, so that nothing joins the restored prompt, and the queue
+is written as soon as the interrupt is done (see "The input box afterwards" in `docs/product/interrupting-turns.md`). It
+lasts no longer than the interrupt takes to answer, raises no hand, and is not reported in `writes_held`.
 
 **And for a moment after a Grok Build error.** When a Grok Build session's hooks report that its agent stopped on an
 error (`StopFailure`, or a notification of type `agent_error`), what Octoboard writes into it is held for 2 seconds, or
@@ -159,20 +160,11 @@ part way through a write, part of that message is left sitting in the session's 
 Octoboard writes next would be run together with it, so that message and everything queued behind it
 are dropped rather than delivered spoiled.
 
-Octoboard does not try to repair the line. The damage is bounded on its own — the next message written
-into the session closes the leftover fragment and goes in with it — so the cost is one spoiled message
-rather than a session that stays unusable, and that is the better of the two: refusing to write until
-something proved the line was clean would stall a console's whole orchestration on a signal nothing
-can give.
-
-A partial write has **not been observed** in any attempt, so none of this has been seen to happen. The one try, on
-Claude Code only, sent an 8,822-byte `send_message` into a session sitting at its folder-trust dialog — a write the
-hold described above now keeps back: the call answered `delivered`, the dialog stayed untouched and no text appeared
-in the terminal. What became of the text was not
-established, and it is unexplained: it does not match the documented effect of a write at Claude Code's trust dialog,
-where a trailing CR exits the session (see "Writing into a running session" in `docs/agent-cli-reference.md`). The
-assumption above that the next write closes the leftover fragment, bounding the damage to one spoiled message, has
-likewise never been seen to hold.
+Octoboard does not try to repair the line. The damage is expected to be bounded on its own — the next message written
+into the session closes the leftover fragment and goes in with it — so the cost would be one spoiled message rather than
+a session that stays unusable, and that is the better of the two: refusing to write until something proved the line was
+clean would stall a console's whole orchestration on a signal nothing can give. A partial write has never been seen to
+happen, so neither has this bound been seen to hold.
 
 The loss is reported rather than passed off as delivered, but not to everyone: the sender whose own
 call ran into it is told (a report fails, and its session is *not* archived), while a sender whose
@@ -180,12 +172,12 @@ message was already queued behind it is not. What covers those is the message th
 names the session and tells them to look at it before anything else is sent.
 
 **What the owners' tools report.** Every session record the session tools give (see "Session records" in
-`docs/product/what-every-session-reads.md`) carries `queued_messages`, the number of messages queued for the session and not
-yet written — information kept for an interrupted session until its resume included, each piece counted once — and
-`writes_held`: `null`, or, for a running session that holds what is written to it whatever its
-`status` reads, an object with `reason`, an `explanation` in prose, and, for `agent_dialog`, the screen's code in
-`dialog`. A session held only because its agent reported it is waiting for the user — at a permission prompt or a
-question — carries `null`: its `status` says so. When several holds apply, the first of these is reported:
+`docs/product/what-every-session-reads.md`) carries `queued_messages`, the number of messages queued for the session and
+not yet written — information kept for an interrupted session until its resume included, each piece counted once — and
+`writes_held`: `null`, or, for a running session that holds what is written to it whatever its `status` reads, an object
+with `reason`, an `explanation` in prose, and, for `agent_dialog`, the screen's code in `dialog`. A session held only
+because its agent reported it is waiting for the user — at a permission prompt or a question — carries `null`: its
+`status` says so. When several holds apply, the first of these is reported:
 
 | `reason` | The hold |
 |---|---|
@@ -230,9 +222,9 @@ written during the wait nor lifts the hold below. Any other prompt counts, whoev
 - Every client is sent the `message_not_sent` notice about that session, naming its agent, provided the session's
   process that was written to is still running when the check ends. The window shows it as an error alert (see
   `docs/product/error-alerts.md`) titled "Message not sent", naming the session and where it is, and saying the agent
-  did not send a message Octoboard wrote into the session, that the message is waiting in its input box, and that nothing more is written into the
-  session until a prompt is sent; the remedy is to open the session, check the message in its input box and press Enter
-  to send it.
+  did not send a message Octoboard wrote into the session, that the message is waiting in its input box, and that
+  nothing more is written into the session until a prompt is sent; the remedy is to open the session, check the message
+  in its input box and press Enter to send it.
 - Nothing more is written into the session until its agent next reports a prompt sent, whoever sends it: the user
   pressing Enter on the waiting message, or typing and sending something else. Messages arriving meanwhile are queued,
   and are then delivered in order, oldest first.
@@ -240,21 +232,22 @@ written during the wait nor lifts the hold below. Any other prompt counts, whoev
   later starts without one.
 
 **What the sender is told.** A sender whose own message was left unsent is told it was written into the session's input
-but its agent did not send it to the conversation, so the session has not read it; that the user has been told; and
-that it must not send it again. The same is said of a message a view of background agents took (see "A message a
-dialog discarded or a view took" below), and the tools' wording names both: the message is in the input box, or went
-to a view of the agent's background agents. How each tool words this, and what follows from it, is with the tool: the owner's `send_message` in "The
-console session's tools" in `docs/product/hub-orchestration.md`, `report` in `docs/product/reporting-to-owners.md`,
-`share_info` in `docs/product/information-between-sessions.md`, `transfer_session` in "Handing a session to another
-owner", `release_session` in "Releasing a session from its owner" and `bind_to_session` in "Binding an unbound session
-to an owner", all in `docs/product/changing-session-owners.md`. A sender whose message arrives while the session is held behind an unsent
-one is told it was queued, as for a session that cannot take a message. A sender already told its message was queued
-learns nothing more if that message is later left unsent; the notice is what reports it.
+but its agent did not send it to the conversation, so the session has not read it; that the user has been told; and that
+it must not send it again. The same is said of a message a view of background agents took (see "A message a dialog
+discarded or a view took" below), and the tools' wording names both: the message is in the input box, or went to a view
+of the agent's background agents. How each tool words this, and what follows from it, is with the tool: the owner's
+`send_message` in "The console session's tools" in `docs/product/hub-orchestration.md`, `report` in
+`docs/product/reporting-to-owners.md`, `share_info` in `docs/product/information-between-sessions.md`,
+`transfer_session` in "Handing a session to another owner", `release_session` in "Releasing a session from its owner"
+and `bind_to_session` in "Binding an unbound session to an owner", all in `docs/product/changing-session-owners.md`. A
+sender whose message arrives while the session is held behind an unsent one is told it was queued, as for a session that
+cannot take a message. A sender already told its message was queued learns nothing more if that message is later left
+unsent; the notice is what reports it.
 
 **A client's `send_message`** to a Claude Code session at its prompt is answered once the check has ended — the second
 one too, for a message a dialog discarded and that is written again in the same delivery (see "A message a dialog
-discarded or a view took" below) — not as soon as the message is written. A message left unsent is not refused: the client is still answered with success, and, like
-every client, gets the `message_not_sent` notice.
+discarded or a view took" below) — not as soon as the message is written. A message left unsent is not refused: the
+client is still answered with success, and, like every client, gets the `message_not_sent` notice.
 
 **What is not checked:**
 
@@ -285,18 +278,17 @@ screen:
 
 - **A dialog that throws the message away** — "Resume this conversation?" at a launch, "Resume from summary", a notice
   that waits for Enter, "Make auto mode your default permission mode?", or the focused list of background agents.
-  Nothing of the message is in the input box. It goes back to the front of the session's queue and is written again
-  once the dialog is gone, and, being written again, it is checked again. No unsent hold is set. When the message's
-  own Enter has already closed the dialog, it is written again straight away, within the same delivery — at most once
-  per delivery, so a dialog that every write brings back cannot keep the sender waiting; a dialog still up, or one
-  that comes back, leaves the message queued until it is gone. Every client is sent the `message_discarded_by_dialog`
-  notice about the session, naming its agent, provided
-  the process written to is still running; the window shows it as a toast (see `docs/product/toasts.md`), not an error alert,
-  titled with where the session is, saying the agent showed a dialog while Octoboard wrote a message into the session
-  and discarded it, and that the message is written again once the dialog has been answered. A sender is told what
-  its message came to: when it was written again within the same delivery, what that second write came to — delivered,
-  left unsent, or queued again; otherwise that it was queued, as for a session that cannot take one, which is also
-  what the sender of any message waiting behind it is told.
+  Nothing of the message is in the input box. It goes back to the front of the session's queue and is written again once
+  the dialog is gone, and, being written again, it is checked again. No unsent hold is set. When the message's own Enter
+  has already closed the dialog, it is written again straight away, within the same delivery — at most once per
+  delivery, so a dialog that every write brings back cannot keep the sender waiting; a dialog still up, or one that
+  comes back, leaves the message queued until it is gone. Every client is sent the `message_discarded_by_dialog` notice
+  about the session, naming its agent, provided the process written to is still running; the window shows it as a toast
+  (see `docs/product/toasts.md`), not an error alert, titled with where the session is, saying the agent showed a dialog
+  while Octoboard wrote a message into the session and discarded it, and that the message is written again once the
+  dialog has been answered. A sender is told what its message came to: when it was written again within the same
+  delivery, what that second write came to — delivered, left unsent, or queued again; otherwise that it was queued, as
+  for a session that cannot take one, which is also what the sender of any message waiting behind it is told.
 - **A view of background agents** — a subagent's view or the agents view. The message has gone to the subagent, or
   started another background session, so it is not written again: that would deliver it twice. No unsent hold is set;
   the rest of the queue waits until the view is left, as it does behind any screen that holds messages. Every client is

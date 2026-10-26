@@ -14,25 +14,25 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
 
 - With none running, the confirmation offers **Remove**.
 - With some running, the confirmation lists them — each with its status glyph, its agent's icon and its title, in the
-  sidebar's order (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`) — in
-  its consequences, the body text after its options and before its buttons: a line says that that many sessions are
-  still running and will be ended, and the list follows it (see "The confirmation" in
-  `docs/product/branch-and-worktree-cleanup.md` for the lines a ticked option adds).
-  Its button reads **End and remove**. The list follows
-  sessions starting or stopping while the confirmation is open. Confirming ends each running session's process the way
-  archiving does (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), then removes the project
-  with all its sessions and the last output Octoboard kept for each. Sessions bound to another session of the project
-  are ended before the session they are bound to, the deepest level first, so ending that one is never refused over
-  them. A lead session's console session belongs to no project and is left as it is; the lead session's binding to it
-  goes with the lead session's record (see "Lead sessions" in `docs/product/hub-orchestration.md`).
+  sidebar's order (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`) — in its
+  consequences, the body text after its options and before its buttons: a line says that that many sessions are still
+  running and will be ended, and the list follows it (see "The confirmation" in
+  `docs/product/branch-and-worktree-cleanup.md` for the lines a ticked option adds). Its button reads **End and
+  remove**. The list follows sessions starting or stopping while the confirmation is open. Confirming ends each running
+  session's process the way archiving does (see "Archiving, interruption and resuming" in
+  `docs/product/archiving-and-resuming-sessions.md`), then removes the project with all its sessions and the last output
+  Octoboard kept for each. Sessions bound to another session of the project are ended before the session they are bound
+  to, the deepest level first, so ending that one is never refused over them. A lead session's console session belongs
+  to no project and is left as it is; the lead session's binding to it goes with the lead session's record (see "Lead
+  sessions" in `docs/product/hub-orchestration.md`).
 
 The confirmation also carries an option to **also move the project folder to the Trash**, unticked each time the
-confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it can
-be recovered from the Trash. Ticking it makes the message say the folder is moved to the Trash; for the confirm
-button's label, see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`. Ticking it also
-lists the worktrees outside the folder, and the branches, that go with it, and offers locked worktrees under a choice
-of their own (see "With a project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`).
-While a removal runs, the button shows as pending and the option cannot be changed.
+confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it can be
+recovered from the Trash. Ticking it makes the message say the folder is moved to the Trash; for the confirm button's
+label, see "What a confirmation's confirm button names" in `docs/product/dialogs.md`. Ticking it also lists the
+worktrees outside the folder, and the branches, that go with it, and offers locked worktrees under a choice of their own
+(see "With a project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`). While a removal
+runs, the button shows as pending and the option cannot be changed.
 
 **The project's shell terminals end with it** (see "Closing a shell terminal" in `docs/product/shell-terminals.md`),
 whether their shells are busy or not; they never hold a removal up and the confirmation does not list them. They are

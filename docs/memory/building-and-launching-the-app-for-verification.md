@@ -67,17 +67,12 @@ output — so the window comes up blank, or on code that is not the code under t
 indistinguishable from a webview that threw while mounting, so a build mistake reads as a defect in the change and
 gets chased through the frontend instead.
 
-`pnpm build:app` also strips every `APPLE_*` variable from the build's environment and fails if the `.app` comes out
-Developer ID-signed, so there is nothing to remember to unset. The reason it exists: the Tauri CLI reads `APPLE_*`
-straight from the environment and signs and notarizes with whatever it finds there, and while the shell exported
-them, a plain verification build was Developer ID-signed and submitted to Apple's notary service three separate times,
-with nothing in the command or its output to warn of it — unreleased code sent to Apple, minutes added to the build, and
-a signed bundle that the wrapped-sidecar swap above breaks. One of the three came from an agent
-stripping the variables with `UNSET=$(...)` and `env $UNSET ...`, which does nothing in zsh because zsh does not
-word-split an unquoted parameter. Do not run a bare `pnpm tauri build` or `pnpm release` for a verification: the
-first signs with whatever `APPLE_*` the calling shell carries, and the second loads the credentials from the gitignored
-repo-root `.env.secret` itself, so wherever that file is filled in, a shell carrying no `APPLE_*` is not a build that
-cannot sign.
+`pnpm build:app` is also the only build that cannot sign (what it strips and refuses is in the "Release builds"
+section of `apps/desktop/README.md`). Do not run a bare `pnpm tauri build` or `pnpm release` for a verification: the
+Tauri CLI signs and notarizes with whatever `APPLE_*` the calling shell carries, with nothing in its output to say so —
+a plain verification build has been Developer ID-signed and sent to Apple's notary service that way — and
+`pnpm release` loads the credentials from the gitignored repo-root `.env.secret` itself, so wherever that file is
+filled in, a shell carrying no `APPLE_*` is not a build that cannot sign. Nor strip the variables by hand.
 
 Never run a bare `pnpm tauri build` or `pnpm tauri bundle` at all, for any purpose, on macOS: only the scripts
 (`pnpm build:app`, `pnpm install:macos`, `pnpm release`) put the `actool` shim in `apps/desktop/scripts/actool/` on the

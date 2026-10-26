@@ -28,8 +28,8 @@ sessions building and testing in their own worktrees, often short of memory, whi
 
 - Do not run the heavy steps of one verification side by side: under that load it gains almost nothing and adds memory
   pressure.
-- Do not move tests to CI: tests stay local by the user's decision. Merges are local fast-forwards with no PR flow, so CI
-  test runs would need branch pushes and macOS runner minutes.
+- Do not move tests to CI: tests stay local by the user's decision. Merges are local fast-forwards with no PR flow, so
+  CI test runs would need branch pushes and macOS runner minutes.
 - Do not point worktrees at one shared `CARGO_TARGET_DIR`: cargo locks its build directory for a whole build, so
   concurrent agents would queue behind each other.
 

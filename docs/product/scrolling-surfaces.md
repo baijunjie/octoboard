@@ -20,12 +20,12 @@ alone, are in "The surfaces that fade" below.
   cut away or made unreachable. It falls over **the content alone**: a scrollbar the surface draws is left out of the
   fade and reads at full strength, as it would with no fade at all — the one along the bottom of a surface that
   scrolls both ways included, which lies inside the fade's band for its whole length.
-- In focus mode's lists and the Git mode's change lists, the top fade begins below the section heading; see
-  "What both views show" in `docs/product/focus-mode.md` and "Folding a section" in
-  `docs/product/project-pane-git-change-list.md` for the headings' scrolling behavior. In Settings' Agent accounts section it
-  begins below the agent tab strip once the strip is pinned at the top (see "The agent strip" in
-  `docs/product/agent-accounts.md`), and in its Git and Keyboard shortcuts sections below a group's heading once that
-  heading is pinned at the top (see "Group headings" in `docs/product/settings.md`).
+- In focus mode's lists and the Git mode's change lists, the top fade begins below the section heading; see "What both
+  views show" in `docs/product/focus-mode.md` and "Folding a section" in `docs/product/project-pane-git-change-list.md`
+  for the headings' scrolling behavior. In Settings' Agent accounts section it begins below the agent tab strip once the
+  strip is pinned at the top (see "The agent strip" in `docs/product/agent-accounts.md`), and in its Git and Keyboard
+  shortcuts sections below a group's heading once that heading is pinned at the top (see "Group headings" in
+  `docs/product/settings.md`).
 - Only the **top and bottom** edges fade, apart from the strips that scroll sideways and fade at their sideways
   edges: focus mode's strip of console session chips (see "The switch strip" in `docs/product/focus-mode.md`), a
   strip of tabs, and the Files panel's header controls (see "A panel's header" in
@@ -60,12 +60,12 @@ Once it holds more than it can show, each of these fades at its edge:
 - the **Files panel's header controls** other than Close panel (see "A panel's header" in
   `docs/product/right-pane-panels.md`);
 - the **file viewer's** reading surfaces — a file shown as plain text, a highlighted file, a diff and a rendered
-  Markdown document (see "What it shows" and "A Markdown file as a document" in `docs/product/file-viewer.md`);
+  Markdown document (see "What it shows" in `docs/product/file-viewer.md` and `docs/product/markdown-documents.md`);
 - the **lists inside a popover**: the list of branches of the Git mode's branch selector (see "The branch
   selector" in `docs/product/project-pane-git-mode.md`), and the tags offered by the project filter (see "Filtering
   the project list" in `docs/product/sidebar.md`);
 - the list of accounts in the **rail's account quota panel** (see "What the panel shows" in
-  `docs/product/account-quotas.md`);
+  `docs/product/account-quota-panel.md`);
 - the **directory browser's** list of directories (see "Browsing directories" in
   `docs/product/projects.md`);
 - the **update notice's release notes** (see "A newer version is available" in `docs/product/in-app-updates.md`);
@@ -112,21 +112,23 @@ covers. These are:
   of the screen with no daemon address, say — would otherwise leave nothing between those buttons and the top of the
   screen to take focus. In Tab order it comes before the buttons it holds.
 - **the stack trace in the heading mark's popover on the screen for a UI that failed, and the daemon's message in the
-  heading mark's popover on the screen for a daemon that could not start**, each named "Error details". Nothing else in that popover takes
-  focus, so without it the fade at the block's edge would be saying there is more where a keyboard could not go.
-- **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes
-  focus, so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts… (see
-  "What the panel shows" in `docs/product/account-quotas.md`).
+  heading mark's popover on the screen for a daemon that could not start**, each named "Error details". Nothing else in
+  that popover takes focus, so without it the fade at the block's edge would be saying there is more where a keyboard
+  could not go.
+- **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes focus,
+  so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts… (see "What the
+  panel shows" in `docs/product/account-quota-panel.md`).
 - **the update notice's release notes**, named "What is new", as the disclosure that opens them is. Nothing in them
   takes focus. In Tab order they come after the notice's buttons (see "A newer version is available" in
   `docs/product/in-app-updates.md`).
 
-**Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of
-the edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists
-that space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and
-"Folding a section" in `docs/product/project-pane-git-change-list.md`), in Settings' Agent accounts section below the
-agent tab strip, and in its Git and Keyboard shortcuts sections below a group's heading. A strip of tabs instead suppresses its fade while a tab has visible keyboard focus, as above. For
-focus visibility in the Files panel's header controls, see "A panel's header" in `docs/product/right-pane-panels.md`.
+**Keyboard focus does not land under a fade**: a row, a control or a region scrolled into view stops 24 px short of the
+edge, clear of the fade, rather than arriving underneath. In focus mode's lists and the Git mode's change lists that
+space is measured below the section heading (see "What both views show" in `docs/product/focus-mode.md` and "Folding a
+section" in `docs/product/project-pane-git-change-list.md`), in Settings' Agent accounts section below the agent tab
+strip, and in its Git and Keyboard shortcuts sections below a group's heading. A strip of tabs instead suppresses its
+fade while a tab has visible keyboard focus, as above. For focus visibility in the Files panel's header controls, see "A
+panel's header" in `docs/product/right-pane-panels.md`.
 
 **A control in a section heading pinned at the top is not scrolled to**: in the sidebar, in focus mode and in
 Settings' Agent accounts section, a heading that stays at the top of its list is in view already, so moving keyboard

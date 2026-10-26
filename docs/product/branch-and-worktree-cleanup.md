@@ -81,16 +81,15 @@ than the list on its own.
   be recovered. Checked, they are removed past the lock (`git worktree remove` forced twice); the branch one had
   checked out then follows the branch rules above.
 - Neither block is shown while it has nothing to cover.
-- **What a ticked option does is said in the confirmation's consequences**, plain body text below its options and
-  above its buttons, never inside an alert (the confirmation is a warning modal; see "What an open dialog, menu or
-  popover covers" in `docs/product/window-layout.md`). A first line summarizes the sessions archived or deleted along
-  with the session, or how many are deleted along with all the archived sessions, and the list of those sessions, where
-  there is one, follows it. Each option ticked adds a line after the list: that it also permanently deletes that many
-  worktrees and branches Git keeps, or that many locked worktrees, uncommitted changes included. A confirmation with
-  nothing else taken along has no consequences until the first tick, which adds its line; the line goes again when the
-  last option is unticked.
-- **How a ticked option changes the confirm button** — its label, and for archiving its danger colour — is set in
-  "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`.
+- **What a ticked option does is said in the confirmation's consequences**, plain body text below its options and above
+  its buttons, never inside an alert (the confirmation is a warning modal; see "Destructive confirmations" in
+  `docs/product/dialogs.md`). A first line summarizes the sessions archived or deleted along with the session, or how
+  many are deleted along with all the archived sessions, and the list of those sessions, where there is one, follows it.
+  Each option ticked adds a line after the list: that it also permanently deletes that many worktrees and branches Git
+  keeps, or that many locked worktrees, uncommitted changes included. A confirmation with nothing else taken along has
+  no consequences until the first tick, which adds its line; the line goes again when the last option is unticked.
+- **How a ticked option changes the confirm button** — its label, and for archiving its danger colour — is set in "What
+  a confirmation's confirm button names" in `docs/product/dialogs.md`.
 - **A choice holds for the list it was made over.** A list that changes while the confirmation is open — a session
   joining the scope, say — unchecks its checkbox again, so nothing the user has not seen listed is forced.
 - **A force goes only as far as the user was shown.** An item forced is removed only while it still stands as it was
@@ -99,12 +98,12 @@ than the list on its own.
 - Unchecked, the listed items are kept, and are not reported afterwards while they stand as they were listed.
 
 **An archive that asks nothing of the sessions** — a session at its prompt or interrupted, with no unarchived session
-under it (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`) — first asks the daemon what is
-bound to it, from the menu's Archive and from the row's Archive button alike. It opens the archive confirmation only
-when that finds something git refuses or a locked worktree; otherwise the session is archived at once. Pressing
-Archive again while the answer is on its way does nothing. A session archived or gone by the time the answer arrives
-is left as it is, one that has come to need the confirmation for other reasons gets it, and when another dialog has
-opened in the meantime nothing is done.
+under it (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`) — first asks
+the daemon what is bound to it, from the menu's Archive and from the row's Archive button alike. It opens the archive
+confirmation only when that finds something git refuses or a locked worktree; otherwise the session is archived at once.
+Pressing Archive again while the answer is on its way does nothing. A session archived or gone by the time the answer
+arrives is left as it is, one that has come to need the confirmation for other reasons gets it, and when another dialog
+has opened in the meantime nothing is done.
 
 Deleting an unused session asks for no confirmation (see "Deleting an unused session" in
 `docs/product/deleting-sessions.md`), so it forces nothing.
@@ -208,10 +207,10 @@ otherwise be left without its folder:
 **The confirmation** looks up what goes along each time its option to move the folder to the Trash is ticked; its
 Confirm button is pending until the answer arrives. Under the option, a **What goes with it (n)** disclosure, collapsed
 by default, groups the items, named and set out as in "The confirmation" above, as moved to the Trash with the folder
-(the outside worktrees) and deleted permanently (the branches). Locked worktrees come after it as a plain block of their own, as in
-"The confirmation" above: the checkbox **Also move the locked worktrees to the Trash (n)**, its hint, saying they go
-despite their locks and can be recovered from the Trash, and a Details disclosure over them. A branch a locked worktree
-has checked out is counted among what goes only while that box is checked.
+(the outside worktrees) and deleted permanently (the branches). Locked worktrees come after it as a plain block of their
+own, as in "The confirmation" above: the checkbox **Also move the locked worktrees to the Trash (n)**, its hint, saying
+they go despite their locks and can be recovered from the Trash, and a Details disclosure over them. A branch a locked
+worktree has checked out is counted among what goes only while that box is checked.
 
 In the confirmation's consequences, after the options (see `docs/product/removing-projects.md` for the running
 sessions listed there, and "The confirmation" above for how the consequences hold their list and lines), a line appears
@@ -227,11 +226,11 @@ line; confirming it shows the refusal.
 **What goes is worked out again when the removal is made**, while the folder is still there, so what changed after the
 confirmation listed it is taken into account. It runs after the project has been removed and its sessions' processes
 have ended, waiting as in "When the removal runs" above; the project's removal stands whatever happens to it, and what
-is still there is reported as in "What is left is reported" above. When what goes along cannot be worked out at all,
-the folder is still moved and the project removed, but no worktree outside the folder is touched, and where the
-repository outlives the folder no branch either (where the folder held the repository, its branches went with it).
-Every window is then shown an error alert, `project_branches_not_determined`, titled "Branches and worktrees left in
-place", naming the removed project and saying that the worktrees outside its folder, and its branches if the
-repository stays, were left, with the reason under the sentence as a block of code. Its recovery guidance is to open a Terminal in the repository and run `git worktree list`
-and `git branch` to see what was left, then remove what is no longer needed with Git, or leave it in place. When the
-folder's own move fails, the project is not removed and nothing else goes.
+is still there is reported as in "What is left is reported" above. When what goes along cannot be worked out at all, the
+folder is still moved and the project removed, but no worktree outside the folder is touched, and where the repository
+outlives the folder no branch either (where the folder held the repository, its branches went with it). Every window is
+then shown an error alert, `project_branches_not_determined`, titled "Branches and worktrees left in place", naming the
+removed project and saying that the worktrees outside its folder, and its branches if the repository stays, were left,
+with the reason under the sentence as a block of code. Its recovery guidance is to open a Terminal in the repository and
+run `git worktree list` and `git branch` to see what was left, then remove what is no longer needed with Git, or leave
+it in place. When the folder's own move fails, the project is not removed and nothing else goes.

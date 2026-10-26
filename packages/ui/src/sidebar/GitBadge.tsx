@@ -37,7 +37,7 @@ function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React
  * scrolls downward during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
  * The ahead/behind counts are likewise never colour alone.
  *
- * A failed check is a failure mark (`StatusMark`, "A failure that belongs to one row" in
+ * A failed check is a failure mark (`StatusMark`, "How a mark is drawn and opened" in
  * `docs/ui-accessibility.md`) at the badge's start, standing in for the idle glyph: a button named in
  * the application's own words, whose popover holds the reason, the remedy and, last, Git's or the
  * system's own text, which is shown nowhere else. While a check, a pull or a push runs, the refresh

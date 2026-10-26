@@ -17,10 +17,10 @@ the user's own configuration by itself; Octoboard carries the entry Grok wrote o
 | Codex | Only when the working directory is inside a git repository Codex has not been told to trust; outside one it never asks. | "Trust this folder?", with "1. Trust and continue", where the cursor starts, and "2. Quit". | `config.toml` in the Codex home that launch uses, for the **root of the git repository**: from a subfolder it records the repository's root, and from a linked worktree the main repository's root, so the record can cover more than the project asked about. |
 | Grok Build | Only when the folder holds content Grok's trust gates, such as an `AGENTS.md`, git repository or not. | "Do you trust the contents of this directory?", with "Yes, proceed" (`y`) and "No, quit" (`n`), and no cursor. A decline exits Grok. | Its trust store, `trusted_folders.toml`, in the session's own Grok home, from which Octoboard carries it to the user's own. |
 
-Until its confirmation is answered the session does nothing else and reports nothing (see "What the statuses are
-derived from" in `docs/product/sessions.md`). Until the folder is trusted, Claude Code ignores the project's own
-`allow` permission rules (see "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`), and Grok
-Build loads none of the project's instructions, hooks or MCP servers.
+Until its confirmation is answered the session does nothing else and reports nothing (see "What the statuses are derived
+from" in `docs/product/session-statuses.md`). Until the folder is trusted, Claude Code ignores the project's own `allow`
+permission rules (see "Claude Code" in `docs/product/per-agent-launch-specifics.md`), and Grok Build loads none of the
+project's instructions, hooks or MCP servers.
 
 ## What happens when a confirmation comes up
 
@@ -30,15 +30,14 @@ Build loads none of the project's instructions, hooks or MCP servers.
 | Project session whose project has the trust permission, of its own or through a trusted folder | Pressed at once, without a dialog. |
 | Any other project session | The user is asked in a dialog; nothing is sent until they agree. |
 
-Once Octoboard recognises a confirmation that needs the user, the session reads as *waiting for the user* and raises
-its hand everywhere that status is shown or counted (see "The raised hand" in `docs/product/sessions.md`). Closing
-the dialog with **Not now**, moving the terminal's cursor or a failed attempt to press the confirmation leaves the
-hand up. It comes down when Octoboard successfully presses the confirmation, the agent sends its first hook report,
-or, for Codex answered in the terminal, Octoboard sees that the confirmation has been replaced by the next screen —
-or, for Grok Build, which may run no hook at all (see "Messages held until a session can take them" in
+Once Octoboard recognises a confirmation that needs the user, the session reads as *waiting for the user* and raises its
+hand everywhere that status is shown or counted (see "The raised hand" in `docs/product/session-statuses.md`). Closing
+the dialog with **Not now**, moving the terminal's cursor or a failed attempt to press the confirmation leaves the hand
+up. It comes down when Octoboard successfully presses the confirmation, the agent sends its first hook report, or, for
+Codex answered in the terminal, Octoboard sees that the confirmation has been replaced by the next screen — or, for Grok
+Build, which may run no hook at all (see "Messages held until a session can take them" in
 `docs/product/message-delivery.md`), sees that the session's screen no longer shows the confirmation, however it was
-answered.
-The session then shows the agent's last reported status, or its launch status if no report has arrived. An
+answered. The session then shows the agent's last reported status, or its launch status if no report has arrived. An
 interrupted or archived session keeps that status instead of a trust hand.
 
 A confirmation pressed automatically for a console session or under an existing trust permission raises no hand
@@ -107,28 +106,28 @@ Its buttons:
   confirmation is still up, and a later session of the project is asked about again, since the project still has no
   permission.
 
-Keyboard focus starts on the dialog itself rather than on a button, for each prompt it shows, so Enter answers
-nothing until the user moves focus onto a control (see "What an open dialog, menu or popover covers" in
-`docs/product/window-layout.md`).
+Keyboard focus starts on the dialog itself rather than on a button, for each prompt it shows, so Enter answers nothing
+until the user moves focus onto a control (see "Where keyboard focus starts in a confirmation" in
+`docs/product/dialogs.md`).
 
 The box belongs to the one showing of the dialog: it is cleared when the dialog is dismissed with "Not now" and when a
 go-ahead is sent, so the next prompt in the queue starts unticked, and so does the same prompt asked about again after
 the application reloads its state.
 
-Once the go-ahead has been given the dialog closes, whether or not the confirmation could be pressed — a confirmation
-is pressed at most once, so trying again from the dialog could not succeed. A failure is then shown in an error alert about
+Once the go-ahead has been given the dialog closes, whether or not the confirmation could be pressed — a confirmation is
+pressed at most once, so trying again from the dialog could not succeed. A failure is then shown in an error alert about
 the session. Two outcomes differ: the refusal of a folder that can no longer be offered keeps the dialog open, and a
 go-ahead for a confirmation that is no longer waiting — already answered, whether from another client, in the terminal
-or by Octoboard itself — closes the dialog without any message when the box was unticked, since nothing went wrong;
-with the box ticked it shows a message saying the folder was not trusted, because that choice was not carried out.
+or by Octoboard itself — closes the dialog without any message when the box was unticked, since nothing went wrong; with
+the box ticked it shows a message saying the folder was not trusted, because that choice was not carried out.
 
 Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting is dropped,
 without being answered, when its session stops running or is deleted. When a project gains the permission, or a folder
 becomes trusted, the prompts waiting for that project or for projects under that folder are dropped as well, because
-Octoboard presses those confirmations itself; prompts for other projects stay queued. Whenever the application reloads its state
-(a connect, a reconnect, or catching up after falling behind), the daemon asks again about every confirmation still
-waiting, so a prompt the user never saw comes back; with no client connected the confirmation simply waits for the user
-to answer it in the terminal. Once one client has answered, a go-ahead from another changes nothing.
+Octoboard presses those confirmations itself; prompts for other projects stay queued. Whenever the application reloads
+its state (a connect, a reconnect, or catching up after falling behind), the daemon asks again about every confirmation
+still waiting, so a prompt the user never saw comes back; with no client connected the confirmation simply waits for the
+user to answer it in the terminal. Once one client has answered, a go-ahead from another changes nothing.
 
 ## How a confirmation is pressed
 
@@ -170,28 +169,26 @@ for it:
   confirmation. There is no limit on output or time before that, so a confirmation that comes after a long stretch of
   other screens is still recognised — Claude Code's onboarding on an account's first launch, with its sign-in through
   the browser, comes before its confirmation;
-- for Codex, which sends no hook report until its first prompt, until the first terminal title it sets or its first
-  hook report, whichever comes first. Codex sets its terminal title only once its session has started — past the
-  confirmation, and on an account's first launch past its sign-in screen, which comes before the confirmation — so
-  there is no limit on output or time before that either. Every launch sets the items its title shows (see
-  "Per-agent specifics a user will notice" in `docs/product/launching-agents.md`), so no configuration switches the
-  title off.
+- for Codex, which sends no hook report until its first prompt, until the first terminal title it sets or its first hook
+  report, whichever comes first. Codex sets its terminal title only once its session has started — past the
+  confirmation, and on an account's first launch past its sign-in screen, which comes before the confirmation — so there
+  is no limit on output or time before that either. Every launch sets the items its title shows (see "Codex" in
+  `docs/product/per-agent-launch-specifics.md`), so no configuration switches the title off.
 
 What Octoboard writes into a session while its confirmation may be up is held; see "Messages held until a session can
 take them" in `docs/product/message-delivery.md`.
 
 ## Carrying Grok Build's trust record
 
-A Grok Build session runs against a per-session Grok home (see "Per-agent specifics a user will notice" in
-`docs/product/launching-agents.md`), so the entry Grok writes when its confirmation is accepted lands only in that
-session's copy of the trust store and would be lost with the session. Once the confirmation has been accepted —
+A Grok Build session runs against a per-session Grok home (see "The per-session Grok home" in
+`docs/product/per-agent-launch-specifics.md`), so the entry Grok writes when its confirmation is accepted lands only in
+that session's copy of the trust store and would be lost with the session. Once the confirmation has been accepted —
 pressed by Octoboard, or answered by the person in the terminal — Octoboard copies exactly that one entry, as Grok wrote
 it, into `trusted_folders.toml` in the session's source home, adding it or replacing that folder's entry there, and
 leaving every other entry as it is. It holds the store's lock file, `trusted_folders.toml.lock`, while it reads and
 writes. Octoboard writes only an entry Grok itself wrote, never one of its own. An answer that writes no entry — a
-decline — changes nothing and is not reported. A person's answer in the terminal is carried the same way, so Grok
-keeps it as Claude Code and Codex keep an answer given in their own terminal, but it records no permission of
-Octoboard's.
+decline — changes nothing and is not reported. A person's answer in the terminal is carried the same way, so Grok keeps
+it as Claude Code and Codex keep an answer given in their own terminal, but it records no permission of Octoboard's.
 
 When the entry does not reach the user's store, nothing is written there, no permission is recorded, and a notice on
 the session says that Octoboard could not copy Grok's trust for this folder into that file, so Grok will ask again the
@@ -269,14 +266,13 @@ there are none yet (see "The compact row" in `docs/product/empty-states.md`); wh
 paragraph above it, not in that row.
 
 **Removing a folder asks first.** Each folder has a Remove button, whose accessible name gives the folder's full path
-and whose tooltip says that it stops trusting the folder. Pressing it opens a confirmation, titled to remove a trusted folder,
-whose first sentence says that the folder will be removed from the trusted folders, its path written with the daemon
-host's home directory as `~` as in the list. Its message then says that
-later trust confirmations for projects under the folder are asked about again unless the project's own permission or
-another trusted folder covers them, and that projects' own permissions, running sessions and the trust each agent has
-already recorded are kept. Cancelling changes nothing; confirming with **Remove** stops trusting the folder, and the
-confirmation closes once the daemon has done so. A removal that fails is reported in an error alert and the
-confirmation stays open. Removing a folder leaves every project's own permission as it is, leaves running sessions
-alone, a confirmation already pressed included, and does not undo the trust an agent has already recorded; a trust
-confirmation that comes up afterwards in a project under it, without a permission of its own and not under another
-trusted folder, is asked about again.
+and whose tooltip says that it stops trusting the folder. Pressing it opens a confirmation, titled to remove a trusted
+folder, whose first sentence says that the folder will be removed from the trusted folders, its path written with the
+daemon host's home directory as `~` as in the list. Its message then says that later trust confirmations for projects
+under the folder are asked about again unless the project's own permission or another trusted folder covers them, and
+that projects' own permissions, running sessions and the trust each agent has already recorded are kept. Cancelling
+changes nothing; confirming with **Remove** stops trusting the folder, and the confirmation closes once the daemon has
+done so. A removal that fails is reported in an error alert and the confirmation stays open. Removing a folder leaves
+every project's own permission as it is, leaves running sessions alone, a confirmation already pressed included, and
+does not undo the trust an agent has already recorded; a trust confirmation that comes up afterwards in a project under
+it, without a permission of its own and not under another trusted folder, is asked about again.

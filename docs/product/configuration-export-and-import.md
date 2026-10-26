@@ -41,17 +41,18 @@ system itself said is under **Error details**, never in the sentence.
 
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
 there is only everything. Each choice says whether the application settings go with it: everything carries them, this
-device's keyboard shortcuts included, and a single console does not. Under that choice is a checkbox, **Include full project paths**, unchecked by default; its
-note says that without them the file records only each project's directory name, and that an import then places each
-project in the default clone directory or clones it from its remote (see "Project paths" below). Only while it is
-checked, and so before anything is saved, an amber warning mark named that paths are in the file follows the checkbox's
-label, on its line: its popover says that the file contains project paths, each project's full directory path on the
-machine running Octoboard, which may not be the device the user is on, that those paths can reveal details such as
-the user name, and that the file is to be shared only with people the user trusts. The dialog's **Export** button then
-asks the daemon for the document and opens the save dialog. In the desktop app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever
-its settings say, and does not report one that was blocked or cancelled, so there the toast says only that the
-configuration was downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the
-export dialog open; a file that could not be written is told as above.
+device's keyboard shortcuts included, and a single console does not. Under that choice is a checkbox, **Include full
+project paths**, unchecked by default; its note says that without them the file records only each project's directory
+name, and that an import then places each project in the default clone directory or clones it from its remote (see
+"Project paths" below). Only while it is checked, and so before anything is saved, an amber warning mark named that
+paths are in the file follows the checkbox's label, on its line: its popover says that the file contains project paths,
+each project's full directory path on the machine running Octoboard, which may not be the device the user is on, that
+those paths can reveal details such as the user name, and that the file is to be shared only with people the user
+trusts. The dialog's **Export** button then asks the daemon for the document and opens the save dialog. In the desktop
+app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever its
+settings say, and does not report one that was blocked or cancelled, so there the toast says only that the configuration
+was downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the export dialog
+open; a file that could not be written is told as above.
 
 **Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that the file is one
 exported earlier, that its contents can be reviewed and where each project goes on the machine running Octoboard chosen
@@ -76,16 +77,16 @@ created**, in this order:
   cancelled once it has started.
 
 A **project's row** has the project's name and, under it, where the daemon found it: at its exported path, in the
-default clone directory, or not found but able to be cloned from its remote. That line follows what was found,
-whatever choice is then made. A project with nothing offered, and so no default (see "Where an imported project goes"
-below), has no such line: an amber warning mark follows its name instead, named after the project as not found,
-whose popover says that it was not found on the machine running Octoboard and that it is left out unless a directory
-is chosen for it. A project not found that also has account fallbacks still has this one mark, named after the
-project as not found and with accounts not set up, its popover adding the fallbacks' sentences (see the account
-fallbacks below) after its own. The choice of where the
-project goes sits at the end of the name's line, and drops under it where the row is narrow; its accessible name is "Where to place" followed
-by the project's name. A row offers only the choices its state allows, with the daemon's default preselected, and always
-offers **Another directory** and **Leave out**. Labelled lines under them give the paths:
+default clone directory, or not found but able to be cloned from its remote. That line follows what was found, whatever
+choice is then made. A project with nothing offered, and so no default (see "Where an imported project goes" below), has
+no such line: an amber warning mark follows its name instead, named after the project as not found, whose popover says
+that it was not found on the machine running Octoboard and that it is left out unless a directory is chosen for it. A
+project not found that also has account fallbacks still has this one mark, named after the project as not found and with
+accounts not set up, its popover adding the fallbacks' sentences (see the account fallbacks below) after its own. The
+choice of where the project goes sits at the end of the name's line, and drops under it where the row is narrow; its
+accessible name is "Where to place" followed by the project's name. A row offers only the choices its state allows, with
+the daemon's default preselected, and always offers **Another directory** and **Leave out**. Labelled lines under them
+give the paths:
 
 - **Exported path** — the path the project had on the exporting machine. There is none for a project the document
   records by its directory name alone, nor for a project placed at its exported path, whose **Placed in** line already
@@ -131,10 +132,10 @@ The **result** replaces the review, in this order:
   right after its name, on the console's heading line or the project's line (see the account fallbacks below); the
   result has no list of them elsewhere.
 - When the application settings were applied, a card headed **Application settings applied**, with a line for each
-  setting applied, badged **On** or **Off**; one line for the git workflow settings, when the document carried them, badged
-  **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with how
-  many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts could
-  not be used here and were left out said under it, when any were.
+  setting applied, badged **On** or **Off**; one line for the git workflow settings, when the document carried them,
+  badged **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with
+  how many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts
+  could not be used here and were left out said under it, when any were.
 
 The result is the only place the import's failures are shown: no error alert opens for them.
 
@@ -210,9 +211,9 @@ format and version.
   `file://` URL, are the only paths of the exporting machine anywhere in the document, which is the thing to look at
   before handing the file to someone else.
 - **Full paths left out** — each project's path is only the last segment of its directory path, its directory name
-  (empty for a path with none, such as `/`), and its remote URL is kept only when it may be cloned from (see "What may be
-  cloned from" below); any other remote URL, such as a local path or a `file://` URL, is left out. Such a document holds
-  no path of the exporting machine.
+  (empty for a path with none, such as `/`), and its remote URL is kept only when it may be cloned from (see "What may
+  be cloned from" below); any other remote URL, such as a local path or a `file://` URL, is left out. Such a document
+  holds no path of the exporting machine.
 
 ### How an account travels
 
@@ -346,8 +347,8 @@ comes to on the daemon's host, and which of them is the default:
 The **default** is the first of the recorded path, the derived path and the clone that is offered, and there is no
 default when none of them is. A project recorded by its directory name alone (see "Project paths" above) is never
 offered the recorded path, since a name is not an absolute path, so it can be offered only the directory under the
-default clone directory and a fresh clone; an empty name derives no directory, which leaves only the clone. A project with nothing offered is left out of the import unless the user points at a
-directory for it.
+default clone directory and a fresh clone; an empty name derives no directory, which leaves only the clone. A project
+with nothing offered is left out of the import unless the user points at a directory for it.
 
 A directory the user points at has to be absolute, or to start with `~/`, which is expanded to the home directory of
 the host the daemon runs on.
@@ -384,14 +385,13 @@ which references would fall back, the result of an import which ones did.
 is already there — console names are not unique, so two of a name stand side by side.
 
 Each project then goes through **exactly the association a project added by hand goes through** (see "Associating a
-project" in `docs/product/projects.md`): its directory has to exist, its name, tags and launch settings are
-normalized the same way, and a directory already associated with the console being imported into is not associated a
-second time, which is what two projects of one console resolving to the same directory runs into — the second of them is
-reported as failed. What the document says about a project — its pin, its tags, its default agent (none stays none, and
-nothing is detected from the directory), its account references, its models and efforts, its own git workflow settings — is
-applied as it stands. How
-the project was associated on the exporting machine does not carry over: what is recorded is how the daemon's host
-placed it, as a clone or as a local directory.
+project" in `docs/product/projects.md`): its directory has to exist, its name, tags and launch settings are normalized
+the same way, and a directory already associated with the console being imported into is not associated a second time,
+which is what two projects of one console resolving to the same directory runs into — the second of them is reported as
+failed. What the document says about a project — its pin, its tags, its default agent (none stays none, and nothing is
+detected from the directory), its account references, its models and efforts, its own git workflow settings — is applied
+as it stands. How the project was associated on the exporting machine does not carry over: what is recorded is how the
+daemon's host placed it, as a clone or as a local directory.
 
 **An imported project is untrusted like any other.** Folder trust is in no document, so the first session opened under
 an imported project goes through its agent's trust confirmation just as one added by hand would, unless its directory
@@ -405,22 +405,21 @@ fills the window in as it goes.
 
 A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
 applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
-automatically deleting archived sessions makes it delete sessions by itself, automatic account selection makes a
-later new session that names no account take the one whose weekly quota resets soonest, starting usage windows
-automatically spends a little of the accounts' quota by itself, and the four automatic approvals let agents'
-requests, account switches and handoffs through without asking the user, and asking questions as choices changes what
-sessions are told at launch, so applying them changes how the daemon's host
-behaves rather than only adding to what it holds. The inspection says both what the document sets and what is set now,
-so what applying would change can be shown before anything is done. The settings are applied last, through the same path as a change made in Settings — so an
-import that turns automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see
-"Turning the switch on" in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes
-nothing until the next scheduled check, as the switch does, one that turns automatic account selection on or off changes
-no session already open, one that turns the starting of usage windows on looks over the quota readings already held at
-once (see "When an account is kicked" in `docs/product/account-quotas.md`), one that turns an automatic approval on
-or off changes no request already waiting, and one that turns asking questions as choices on or off changes no session
-already running — and the result of the import reports what was applied. Asking to apply the
-settings of a document that carries none is refused rather than quietly ignored, so a request never does less than it
-was told to.
+automatically deleting archived sessions makes it delete sessions by itself, automatic account selection makes a later
+new session that names no account take the one whose weekly quota resets soonest, starting usage windows automatically
+spends a little of the accounts' quota by itself, and the four automatic approvals let agents' requests, account
+switches and handoffs through without asking the user, and asking questions as choices changes what sessions are told at
+launch, so applying them changes how the daemon's host behaves rather than only adding to what it holds. The inspection
+says both what the document sets and what is set now, so what applying would change can be shown before anything is
+done. The settings are applied last, through the same path as a change made in Settings — so an import that turns
+automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on"
+in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes nothing until the next
+scheduled check, as the switch does, one that turns automatic account selection on or off changes no session already
+open, one that turns the starting of usage windows on looks over the quota readings already held at once (see "When an
+account is kicked" in `docs/product/starting-usage-windows.md`), one that turns an automatic approval on or off changes
+no request already waiting, and one that turns asking questions as choices on or off changes no session already running
+— and the result of the import reports what was applied. Asking to apply the settings of a document that carries none is
+refused rather than quietly ignored, so a request never does less than it was told to.
 
 The keyboard shortcuts follow the same choice, and are applied by the client that runs the import, to itself alone,
 once the daemon reports the other settings applied; when those could not be applied, neither are the shortcuts. They

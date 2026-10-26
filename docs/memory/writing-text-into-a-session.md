@@ -29,8 +29,8 @@ interrupt a turn" in `docs/agent-cli-reference.md`). So:
   time the key lands. The bytes are constants; no text from a model or a message reaches such a write.
 - One key per write, never joined to a message or to another key: an Esc written together with a bracketed paste
   breaks the paste in Codex, whose text then lands behind a literal `[200~`.
-- Never repeat a key blind to make sure the first took: read what it did, on the screen or in the daemon's state,
-  before any further press (a run of Ctrl-U presses goes one at a time, each seen on the screen). To learn that a turn ended,
+- Never repeat a key blind to make sure the first took: read what it did, on the screen or in the daemon's state, before
+  any further press (a run of Ctrl-U presses goes one at a time, each seen on the screen). To learn that a turn ended,
   compare `AppState::turn_ends` with a reading taken before the key, not the status: a message the agent had queued
   takes it back to `Working` within milliseconds of a cancel, so polling for `Idle` misses it.
 - Where the step reads or clears the agent's input box, hold `AppState::pause_outbox` for the session from before

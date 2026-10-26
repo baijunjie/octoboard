@@ -45,10 +45,10 @@ window shows until the relaunched process reports its own.
 
 ## The context-size chip
 
-The sidebar's session rows outside focus mode, focus mode's live session cards, the full archive view, and the header of an archived
-session's Session history show the context size as a chip only when it is known and greater than zero; an unknown or
-zero size shows no chip at all. The chip is set apart from neighbouring text by spacing alone, with no separator
-character. It looks the same in every one of these places, for live and archived sessions alike:
+The sidebar's session rows outside focus mode, focus mode's live session cards, the full archive view, and the header of
+an archived session's Session history show the context size as a chip only when it is known and greater than zero; an
+unknown or zero size shows no chip at all. The chip is set apart from neighbouring text by spacing alone, with no
+separator character. It looks the same in every one of these places, for live and archived sessions alike:
 
 - It is a compact, localized number without a unit label (for example "190.1K"), drawn as the same small grey badge an
   agent picker uses to mark an agent as not installed (see "Which agents the agent pickers list" in

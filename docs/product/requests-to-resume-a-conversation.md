@@ -1,11 +1,11 @@
 # Requests to resume a conversation
 
 A session's `request_resume_session` call asks the user to resume a conversation by its id, with exactly what the
-session dialog's **Resume conversation** tab gives the user and the same limits (see "Resuming a conversation by its
-session ID" in `docs/product/sessions.md`): the session of the project that holds the conversation is reopened or
-resumed, or, when no session holds it, a new session is opened on the agent's own record of it. Unlike `reopen_session`,
-which brings back only the caller's own sessions and needs no approval, it can bring back any session of the project,
-whoever owns it.
+session dialog's **Resume conversation** tab gives the user and the same limits (see
+`docs/product/resuming-a-conversation-by-its-session-id.md`): the session of the project that holds the conversation is
+reopened or resumed, or, when no session holds it, a new session is opened on the agent's own record of it. Unlike
+`reopen_session`, which brings back only the caller's own sessions and needs no approval, it can bring back any session
+of the project, whoever owns it.
 
 It is a session request (see `docs/product/session-requests.md`): nothing is resumed on the call alone, and it shares
 with `request_session` the user's approval, automatic approval, the wait and its limit, the raised hand, the ways a
@@ -41,10 +41,10 @@ There is no argument for an agent or an account, which are those that hold the c
 or a message to deliver: a session the call resumes is given no instruction, and the caller tells it what it needs
 afterwards with `share_info` (see `docs/product/information-between-sessions.md`).
 
-The conversation is located exactly as the tab locates it (see "Finding the conversation" in `docs/product/sessions.md`):
-a session that records the id as its agent's conversation decides on its own, whatever its project; only when no session
-records it are the records of every available and added agent searched, in its default account and every stored
-account of it.
+The conversation is located exactly as the tab locates it (see "Finding the conversation" in
+`docs/product/resuming-a-conversation-by-its-session-id.md`): a session that records the id as its agent's conversation
+decides on its own, whatever its project; only when no session records it are the records of every available and added
+agent searched, in its default account and every stored account of it.
 
 ## What is refused before the user is asked
 
@@ -69,9 +69,10 @@ dialog shown and nothing changed:
 - a held conversation its agent no longer has (`conversation_unresumable`), judged as a reopen judges it before
   relaunching anything (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`);
-- for a conversation only an agent's record holds, whatever opening the session would meet in the session dialog:
-  an agent determined unavailable on this machine or not added, an account that is turned off, whose quota is used up
-  or whose sharing is being changed, a model or effort the agent does not offer (see "Opening a session" in `docs/product/sessions.md`).
+- for a conversation only an agent's record holds, whatever opening the session would meet in the session dialog: an
+  agent determined unavailable on this machine or not added, an account that is turned off, whose quota is used up or
+  whose sharing is being changed, a model or effort the agent does not offer (see "When the agent or the account cannot
+  open a session" in `docs/product/opening-sessions.md`).
 
 A `title` that is an archived session's current name asks for no rename.
 
@@ -92,10 +93,11 @@ where the conversation is held, judged again at that moment:
   session the approval reopens from the archive is renamed: a `title` carried for a session that is no longer archived
   by the approval is not given, which the result reports as `renamed: false`.
 - **Only an agent's record holds it: a new session is opened on it** (`opened`), as the tab's **Open** opens one (see
-  "Opening a new session on a found conversation" in `docs/product/sessions.md`): a plain project session in the
-  project, on the agent and account that hold the record, named by `title` or after its project, with the model and
-  reasoning effort asked for. It is bound to nobody and owned by nobody but the user, as a session the user opened
-  from the tab, and it is given no prompt: it comes up at the agent's prompt, continuing the conversation.
+  "Opening a new session on a found conversation" in `docs/product/resuming-a-conversation-by-its-session-id.md`): a
+  plain project session in the project, on the agent and account that hold the record, named by `title` or after its
+  project, with the model and reasoning effort asked for. It is bound to nobody and owned by nobody but the user, as a
+  session the user opened from the tab, and it is given no prompt: it comes up at the agent's prompt, continuing the
+  conversation.
 - **The session that holds it is already running by then** (`already_running`): nothing is done. This holds only where
   the session is no longer dormant, or is being launched or resumed itself; one that is held instead for an account
   switch, a handoff, a handover of branches or a binding change while still dormant fails the approval (see "When an

@@ -90,7 +90,7 @@ turn is shown the same way, though no switch holds it yet; other windows show it
 While a session is shown as switching:
 
 - its sidebar row, focus mode card, breadcrumb and its entry in a confirmation's list of sessions show the *switching
-  account* status in place of its own (see "Session statuses" in `docs/product/sessions.md`);
+  account* status in place of its own (see `docs/product/session-statuses.md`);
 - its terminal is covered by the loading cover with a spinner, saying that the session is switching its account,
   whatever state its connection passes through meanwhile, and takes no input: no key reaches the session's process.
   The terminal offers no Resume. When the session stops being shown as switching, the cover gives way to whatever the
@@ -221,13 +221,13 @@ moment, and is answered as in "When an approval cannot be carried out" in `docs/
 
 ## What a switch does
 
-A switch ends the session's process the way archiving does, copies the session's conversation into the target
-account's config directory, records the new account and directory on the session, and relaunches it as a resume does,
-with everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
+A switch ends the session's process the way archiving does, copies the session's conversation into the target account's
+config directory, records the new account and directory on the session, and relaunches it as a resume does, with
+everything Octoboard injects reassembled. It archives nothing: while the process is down the session reads as
 *interrupted*, and it comes back in *awaiting instructions* like any resumed session, unless it is sent the prompt to
-continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself. Ending an owner's process this
-way does not itself switch or archive the sessions bound to it; a confirmation whose set takes them in switches each of
-them separately.
+continue its turn (see "Continuing after a switch" below). It is sent no message about the switch itself. Ending an
+owner's process this way does not itself switch or archive the sessions bound to it; a confirmation whose set takes them
+in switches each of them separately.
 
 - **The session reads the target account's configuration and keeps its explicit model and reasoning effort choices.**
   An account's directory holds the agent's global configuration as well as its login. Settings kept only in the old
@@ -350,28 +350,28 @@ prompt; a Codex or Grok Build session has it queued and delivered like any messa
 ## When a switch fails
 
 **A switch that cannot be made leaves the session on the account it had, and says why.** It is refused, with nothing
-recorded, when the session is being launched, resumed, handed off, switched already or having its owner changed at
-that moment, when it is archived, when it is on that account already, when the target account is turned off
-(`account_disabled`, carrying what "Opening a session" in `docs/product/sessions.md` describes for it), when the
-target account is used up by the
-reading the daemon holds at that moment (`account_quota_exhausted`, carrying what "Opening a session" in
-`docs/product/sessions.md` describes for it), when the target is a Grok Build directory that is not an initialized Grok home, when the user's
-shell environment could not be captured — which is read whenever either side of the switch is the default account,
-since that is what resolves its directory, and for any Codex switch, since that environment says where the target
-keeps its database (see "The launch environment" in `docs/product/launching-agents.md`) — when the conversation
-record is not where it should be, and while a change of the sharing of the default configuration runs for the
-session's account or for the target (`account_sharing_in_progress`; see "When a change is carried out" in
-`docs/product/sharing-the-default-configuration.md`); the session's process is then left running. The one further
-refusal comes after the process has been asked to end: a process that has not gone within 30 seconds stops the switch,
-with nothing copied and nothing recorded, and that process may still be running. Once the process has been ended, a
-change of the target's sharing that started meanwhile, a copy that
-does not complete (a Codex account's database that cannot be updated included), a relaunch the launch rules refuse
-and a relaunch whose process ends at once are each reported as a failed switch, not as a success: the session is left
-*interrupted* on its old account, resumable as before, and already reads so everywhere by the time the failure is
-shown. Octoboard tells that last case from a success by the process ending within a few seconds of the relaunch,
-never by reading what the agent printed. An account that is not signed in is therefore not a failed switch: every
-agent, Grok Build included, comes up on its own sign-in rather than exiting, so the switch succeeds and the session's
-terminal shows that agent's sign-in, which may start its sign-in flow.
+recorded, when the session is being launched, resumed, handed off, switched already or having its owner changed at that
+moment, when it is archived, when it is on that account already, when the target account is turned off
+(`account_disabled`, carrying what "When the agent or the account cannot open a session" in
+`docs/product/opening-sessions.md` describes for it), when the target account is used up by the reading the daemon holds
+at that moment (`account_quota_exhausted`, carrying what "When the agent or the account cannot open a session" in
+`docs/product/opening-sessions.md` describes for it), when the target is a Grok Build directory that is not an
+initialized Grok home, when the user's shell environment could not be captured — which is read whenever either side of
+the switch is the default account, since that is what resolves its directory, and for any Codex switch, since that
+environment says where the target keeps its database (see "The launch environment" in
+`docs/product/launching-agents.md`) — when the conversation record is not where it should be, and while a change of the
+sharing of the default configuration runs for the session's account or for the target (`account_sharing_in_progress`;
+see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`); the session's process is
+then left running. The one further refusal comes after the process has been asked to end: a process that has not gone
+within 30 seconds stops the switch, with nothing copied and nothing recorded, and that process may still be running.
+Once the process has been ended, a change of the target's sharing that started meanwhile, a copy that does not complete
+(a Codex account's database that cannot be updated included), a relaunch the launch rules refuse and a relaunch whose
+process ends at once are each reported as a failed switch, not as a success: the session is left *interrupted* on its
+old account, resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that
+last case from a success by the process ending within a few seconds of the relaunch, never by reading what the agent
+printed. An account that is not signed in is therefore not a failed switch: every agent, Grok Build included, comes up
+on its own sign-in rather than exiting, so the switch succeeds and the session's terminal shows that agent's sign-in,
+which may start its sign-in flow.
 
 **A conversation that could not be moved says why**, as one of these causes, each of which the window answers with
 a remedy for it (see "The alert for failed switches" above):

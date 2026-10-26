@@ -25,20 +25,19 @@ viewer's background in either appearance. The tags never shrink; the name fades 
 A committed change carries the commits it is read from in the header's **subtitle**, the line directly under the
 title, each commit by its first seven characters:
 
-- **From the Committed section listed together**: the branch, the base branch and the commit the two forked at, then
-  the commit the branch is at — "feature forked from main at 4f2a9c1, now at 9e8d7c6", say, or, with a remote branch as
-  the base, "main forked from origin/main at 4f2a9c1, now at 9e8d7c6", in the same words as the list's own line about
-  the fork. For a branch listed with its whole history (see
-  "Committed changes" in `docs/product/project-pane-git-change-list.md`), the branch and the commit it was at, with all of its
-  history.
+- **From the Committed section listed together**: the branch, the base branch and the commit the two forked at, then the
+  commit the branch is at — "feature forked from main at 4f2a9c1, now at 9e8d7c6", say, or, with a remote branch as the
+  base, "main forked from origin/main at 4f2a9c1, now at 9e8d7c6", in the same words as the list's own line about the
+  fork. For a branch listed with its whole history (see "Committed changes" in
+  `docs/product/project-pane-git-change-list.md`), the branch and the commit it was at, with all of its history.
 - **From under a commit's row**, grouped by commit (see "Grouped by commit" in
   `docs/product/project-pane-git-change-list.md`): the commit and
   the parent it is compared with — "Commit 9e8d7c6, compared with its parent 4f2a9c1" — or, for a commit with no
   parent, that it has none.
 
-The full wording is that line's tooltip where it is cut off (see "The header" in `docs/product/file-viewer.md`),
-and each branch name in it is laid out in the direction of its own text (see "Right-to-left layout" in
-`docs/product/window-layout.md`). An uncommitted change has no such line.
+The full wording is that line's tooltip where it is cut off (see "The header" in `docs/product/file-viewer.md`), and
+each branch name in it is laid out in the direction of its own text (see `docs/product/right-to-left-layout.md`). An
+uncommitted change has no such line.
 
 Under that are the change's details, laid out as the viewer lays out any subject's (see "The header" in
 `docs/product/file-viewer.md`): the path within the project and, for a rename, the path it was renamed from.
@@ -68,11 +67,11 @@ the commit's first parent — the empty tree for a commit with none — and its 
   one, or neither has one — rather than as a line of it. A symbolic link's change never says so, a link's target
   having no newline at its end anyway. A plain patch keeps Git's own marker lines.
 - **An image change** — of a binary image format the file viewer displays (see "What it shows" in
-  `docs/product/file-viewer.md`); an SVG, being text, is a text change — shows the two images, Before and After, side
-  by side where the viewer is wide enough (Before on the left, mirrored under a right-to-left language, see
-  "Right-to-left layout" in `docs/product/window-layout.md`) and one above the other otherwise. A side with no file
-  says so. Each side is headed Before or After, and what is said about one side's own content stands beside its
-  heading rather than in the viewer's header (see "Notices and stand-ins" in `docs/product/file-viewer.md`).
+  `docs/product/file-viewer.md`); an SVG, being text, is a text change — shows the two images, Before and After, side by
+  side where the viewer is wide enough (Before on the left, mirrored under a right-to-left language, see
+  `docs/product/right-to-left-layout.md`) and one above the other otherwise. A side with no file says so. Each side is
+  headed Before or After, and what is said about one side's own content stands beside its heading rather than in the
+  viewer's header (see "Notices and stand-ins" in `docs/product/file-viewer.md`).
 - **Any other binary change**, or an image changed to or from text, says it cannot be shown as a diff, with the size
   before and after.
 - **An untracked file** is shown as new content: the file itself, as the file viewer shows a file; its Untracked tag
@@ -91,16 +90,16 @@ the commit's first parent — the empty tree for a commit with none — and its 
   below itself (`lib` to `lib/index.ts`) is shown this way as well, not as the rename below it is.
 - **A rename into or out of a path below itself** (`lib` to `lib/index.ts`, or back) is compared line by line like any
   other change: its diff is the one between exactly its two versions. Identical content therefore says the change was
-  renamed and nothing more, as the bullet below it says, and edited content gives an ordinary diff — hunks with
-  context, the runs between them collapsed into separators that can be expanded, the layout choice, Show whole file
-  and the run beyond the last hunk, all as above. It shows under Renamed, with the path it came from among the
-  details, and nothing below the outer path is read, named in its diff or counted against the limits the read is held
-  to. This holds in the Staged section and for a committed change, in both directions of the nesting, and it takes both
-  sides being a file or a symbolic link: with a side that is a repository of its own the change is shown instead as
-  the old path's removal followed by the new path's addition in one diff, collapsing nothing and with no separator to
-  expand, as a type change is; each side shows only the commit it records, nothing from inside the nested repository.
-  Two submodules are listed as one renamed change only when both record the same commit (see "What is listed" in `docs/product/project-pane-git-change-list.md`),
-  so that is the only way a nesting pair of them is ever opened.
+  renamed and nothing more, as the bullet below it says, and edited content gives an ordinary diff — hunks with context,
+  the runs between them collapsed into separators that can be expanded, the layout choice, Show whole file and the run
+  beyond the last hunk, all as above. It shows under Renamed, with the path it came from among the details, and nothing
+  below the outer path is read, named in its diff or counted against the limits the read is held to. This holds in the
+  Staged section and for a committed change, in both directions of the nesting, and it takes both sides being a file or
+  a symbolic link: with a side that is a repository of its own the change is shown instead as the old path's removal
+  followed by the new path's addition in one diff, collapsing nothing and with no separator to expand, as a type change
+  is; each side shows only the commit it records, nothing from inside the nested repository. Two submodules are listed
+  as one renamed change only when both record the same commit (see "What is listed" in
+  `docs/product/project-pane-git-change-list.md`), so that is the only way a nesting pair of them is ever opened.
 - **A rename with nothing else changed** says it was renamed and its content is unchanged, and shows that content as
   below. It is the wording of every rename whose patch shows nothing but the path changed — an empty patch, or one
   holding the rename's header alone — wherever it was listed and whether or not its two paths nest. A rename whose
@@ -108,11 +107,11 @@ the commit's first parent — the empty tree for a commit with none — and its 
   way: it says it has no diff to show, as any change with no lines does.
 - **No differences**, when the two sides of a change that is not a rename now hold the same content: the change was
   staged, committed or undone since it was listed. Its content is shown as below as well.
-- **A path in conflict** is not a two-sided change: it shows the file as it is on disk, with its conflict markers
-  where both sides modified or added it, and the kind of conflict — both modified, both added, both deleted, added by
-  us, added by them, deleted by us, deleted by them — is said by the title's Conflicted tag (see "Opening a change"
-  above), with no notice of its own. A file in conflict whose content cannot be read shows the viewer's error alone
-  (see "Notices and stand-ins" in `docs/product/file-viewer.md`). A path both sides deleted has no file to show and says it
+- **A path in conflict** is not a two-sided change: it shows the file as it is on disk, with its conflict markers where
+  both sides modified or added it, and the kind of conflict — both modified, both added, both deleted, added by us,
+  added by them, deleted by us, deleted by them — is said by the title's Conflicted tag (see "Opening a change" above),
+  with no notice of its own. A file in conflict whose content cannot be read shows the viewer's error alone (see
+  "Notices and stand-ins" in `docs/product/file-viewer.md`). A path both sides deleted has no file to show and says it
   does not exist.
 
 **A change with no lines to draw shows the file itself.** For the two cases above — the same content under one name or
@@ -136,9 +135,9 @@ content can be read, a rename between two symbolic links among them. Every one o
 
 A whole file body shown here instead of a diff — an untracked file, one added with no patch, the version inside the
 project of a rename across the boundary, or a change with no lines to draw whose content was read — is a Markdown
-document when the file is Markdown, as it is for a file read for itself (see "A Markdown file as a document" in
-`docs/product/file-viewer.md`). Following a link in that document to another project file leaves Git mode, as that
-section describes. A diff and the file behind a path in conflict are shown as source whatever the file is.
+document when the file is Markdown, as it is for a file read for itself (see `docs/product/markdown-documents.md`).
+Following a link in that document to another project file leaves Git mode, as that section describes. A diff and the
+file behind a path in conflict are shown as source whatever the file is.
 
 How a diff is coloured in each appearance is in "What follows the choice" in `docs/product/appearance.md`. A diff's
 code is focused, selected and copied as a file's is (see "Selecting and copying" in `docs/product/file-viewer.md`).
@@ -228,15 +227,15 @@ did not have focus leaves keyboard focus where it was.
 ## Moving between changes
 
 **Previous file** and **Next file**, and the **Left** and **Right** arrow keys, move through the change list the change
-was opened from as it is on screen — uncommitted and committed changes alike — top to bottom, from one section
-into the next, and stop at either end rather than going round. They follow the rows as shown: a change the filter
-hides is skipped (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), and so are the changes
-in a folded section (see "Folding a section" in `docs/product/project-pane-git-change-list.md`), those under a folded commit
-row (see "Grouped by commit" in the same doc) and, grouped by folder, those under a folded folder. A file in both
-Staged and Unstaged is two stops, as is a file both uncommitted and committed, and, grouped by commit, a file several
-commits changed is a stop under each of their commit rows. A change with no row of its own — one the list no longer has — keeps its place in the order, and the keys move on to the changes that surround it.
-When the keys do nothing, and how they mirror under a right-to-left language, is as in "Moving between files" in
-`docs/product/file-viewer.md`.
+was opened from as it is on screen — uncommitted and committed changes alike — top to bottom, from one section into the
+next, and stop at either end rather than going round. They follow the rows as shown: a change the filter hides is
+skipped (see "Filtering by file name" in `docs/product/project-pane-git-change-list.md`), and so are the changes in a
+folded section (see "Folding a section" in `docs/product/project-pane-git-change-list.md`), those under a folded commit
+row (see "Grouped by commit" in the same doc) and, grouped by folder, those under a folded folder. A file in both Staged
+and Unstaged is two stops, as is a file both uncommitted and committed, and, grouped by commit, a file several commits
+changed is a stop under each of their commit rows. A change with no row of its own — one the list no longer has — keeps
+its place in the order, and the keys move on to the changes that surround it. When the keys do nothing, and how they
+mirror under a right-to-left language, is as in "Moving between files" in `docs/product/file-viewer.md`.
 
 ## Closing it
 
@@ -262,13 +261,13 @@ For an uncommitted change, the listings that keep the change list up to date (se
   worktree's change is never shown in its place.
 
 A committed change, its two commits being fixed, is not read again when the branches are read. When the comparison is
-made again at other commits while a change from the Committed section listed together is open (see "Keeping the list up to date"
-in `docs/product/project-pane-git-change-list.md`), the change is read again from the new commits if the new comparison lists
-it; if it does not, there is no such change between those commits: the viewer closes, no change is selected, and keyboard focus,
-unless it is somewhere outside the list and the viewer, goes to the first row of the list, or to the branch selector
-when the list has no rows. A change from under a commit's row
-stays that commit's whatever the branch does; when the commits are listed again for a new comparison and no longer
-have it, the viewer closes the same way. The viewer never shows a change from other commits than the list's.
+made again at other commits while a change from the Committed section listed together is open (see "Keeping the list up
+to date" in `docs/product/project-pane-git-change-list.md`), the change is read again from the new commits if the new
+comparison lists it; if it does not, there is no such change between those commits: the viewer closes, no change is
+selected, and keyboard focus, unless it is somewhere outside the list and the viewer, goes to the first row of the list,
+or to the branch selector when the list has no rows. A change from under a commit's row stays that commit's whatever the
+branch does; when the commits are listed again for a new comparison and no longer have it, the viewer closes the same
+way. The viewer never shows a change from other commits than the list's.
 
 When the connection to the daemon is lost, what is shown stays until the connection is back, and then the change is
 read again; a change that had nothing on screen yet says, in the neutral stand-in rather than as an error (see

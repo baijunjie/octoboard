@@ -1,16 +1,15 @@
 # Opening a project terminal
 
-**Terminal** under **Open in** in a project's action menu opens the system terminal at that project's directory,
-on the machine the daemon runs on — not on the machine a browser client happens to be open on. It is offered for every project,
-including one that is not a git repository and one whose git status has not arrived yet. That menu is on the
-project's row, on the focused project's header, and on a project's heading in a console session's focus mode; a
-right-click opens it too (see "Project rows" in `docs/product/sidebar-project-rows.md`). Choosing it closes the menu at
-once.
-Nothing is toasted when the terminal has been opened. A failure is an error alert worded from the refusal below.
+**Terminal** under **Open in** in a project's action menu opens the system terminal at that project's directory, on the
+machine the daemon runs on — not on the machine a browser client happens to be open on. It is offered for every project,
+including one that is not a git repository and one whose git status has not arrived yet. That menu is on the project's
+row, on the focused project's header, and on a project's heading in a console session's focus mode; a right-click opens
+it too (see "Project rows" in `docs/product/sidebar-project-rows.md`). Choosing it closes the menu at once. Nothing is
+toasted when the terminal has been opened. A failure is an error alert worded from the refusal below.
 
-The terminal is not part of Octoboard's window. The request finishes once the terminal has been asked to open, not
-when the user closes it, and quitting Octoboard or the daemon does not close it. The shells the daemon itself runs for a project are a different
-thing (see `docs/product/shell-terminals.md`).
+The terminal is not part of Octoboard's window. The request finishes once the terminal has been asked to open, not when
+the user closes it, and quitting Octoboard or the daemon does not close it. The shells the daemon itself runs for a
+project are a different thing (see `docs/product/shell-terminals.md`).
 
 ## Which terminal opens
 

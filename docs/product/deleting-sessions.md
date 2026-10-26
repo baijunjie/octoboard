@@ -87,8 +87,8 @@ Its row and card offer a Delete shortcut under the same conditions (see "Session
 A session is unused, whatever its status, while all of these hold:
 
 - **It has no conversation yet.** The first prompt its agent reports as submitted makes it used for good, whether the
-  user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is
-  opened (see "Resuming a conversation by its session ID" in `docs/product/sessions.md`).
+  user typed it or Octoboard wrote it in; a session opened to resume a conversation is used from the moment it is opened
+  (see `docs/product/resuming-a-conversation-by-its-session-id.md`).
 - **It is bound to no owner, or the user opened it.** A session the user opened bound to an owner — choosing a
   console session under "Report to" in the session dialog, or opening it from a console session's focus mode (see
   "A console session's focus mode" in `docs/product/focus-mode.md`) — can be unused. A session an agent started with
@@ -96,8 +96,8 @@ A session is unused, whatever its status, while all of these hold:
   owner handed it work and expects it to exist.
 - **No session is bound to it.** A live owner with any session under it, in any status, keeps Archive.
 
-A session still *starting* (see "Session statuses" in `docs/product/sessions.md`) is offered **Archive**, not Delete,
-even while all of these hold: deleting it is refused until its launch has settled, while archiving it goes through.
+A session still *starting* (see `docs/product/session-statuses.md`) is offered **Archive**, not Delete, even while all
+of these hold: deleting it is refused until its launch has settled, while archiving it goes through.
 
 **Deleting an unused session needs no confirmation**, including when it is archived. Whether its agent has created
 records does not affect the shortcut or add a confirmation: Claude Code, Codex and Grok Build follow the same rule.
@@ -143,15 +143,14 @@ absent. Otherwise it offers an **unchecked by default** checkbox to also move th
 Trash, including while the check is pending or its result is unknown. It is a plain block, not inside an alert, and its
 hint says that the session, or the sessions, can then no longer be resumed in the agent itself and that the records can
 be recovered from the Trash. While it is ticked, a line in the confirmation's consequences, the body text after its
-options and before its buttons, says that the agent's own records of the session — and of the sessions deleted with
-it, or of all the sessions deleted at once — are also moved to the Trash; it comes after the other consequence lines
-(see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for how the consequences hold their list and
-their lines). Unticked, used
-sessions' agent records are kept; for a bulk deletion, every session's agent records are kept. Either way the
-confirmation's message says that the project's files are kept. How ticking the option changes the confirm button's
-label is set in "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`. While a deletion runs,
-the button shows as pending and the confirmation stays open until it has finished, including moving the records when
-the option is ticked; the option cannot be changed meanwhile.
+options and before its buttons, says that the agent's own records of the session — and of the sessions deleted with it,
+or of all the sessions deleted at once — are also moved to the Trash; it comes after the other consequence lines (see
+"The confirmation" in `docs/product/branch-and-worktree-cleanup.md` for how the consequences hold their list and their
+lines). Unticked, used sessions' agent records are kept; for a bulk deletion, every session's agent records are kept.
+Either way the confirmation's message says that the project's files are kept. How ticking the option changes the confirm
+button's label is set in "What a confirmation's confirm button names" in `docs/product/dialogs.md`. While a deletion
+runs, the button shows as pending and the confirmation stays open until it has finished, including moving the records
+when the option is ticked; the option cannot be changed meanwhile.
 
 - **The records are moved to the system Trash, never deleted outright**, after the sessions themselves are deleted
   (for an archived owner relaunched into a fresh conversation, before it is relaunched).

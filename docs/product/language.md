@@ -76,13 +76,13 @@ What follows the current language:
 
 - every piece of text the UI itself shows: labels, tooltips, accessible names, dialogs, toasts, status labels and
   Settings;
-- the default name when the UI creates a session (see "Opening a session" in `docs/product/sessions.md`);
+- the default name when the UI creates a session (see "The session dialog" in `docs/product/opening-sessions.md`);
 - the text of the system notifications the UI composes, such as the one for a session waiting for the user (see "The
-  raised hand" in `docs/product/sessions.md`);
-- the errors and notices the daemon reports. The daemon reports each as a stable code with its details, and the UI
-  words it in the current language; a console, project, session or shell terminal it mentions is shown by that
-  record's current name, a shell terminal's being its title (by its id when the UI does not know the record). A report the UI has no wording for — one from a daemon newer than
-  the UI — is shown in the daemon's own English;
+  raised hand" in `docs/product/session-statuses.md`);
+- the errors and notices the daemon reports. The daemon reports each as a stable code with its details, and the UI words
+  it in the current language; a console, project, session or shell terminal it mentions is shown by that record's
+  current name, a shell terminal's being its title (by its id when the UI does not know the record). A report the UI has
+  no wording for — one from a daemon newer than the UI — is shown in the daemon's own English;
 - numbers and dates the UI formats, such as a report page's creation time in the report panel;
 - the UI components' own built-in text and formatting;
 - in the macOS application, the application menu: every item Octoboard defines in it — the Octoboard menu's About,
@@ -98,18 +98,19 @@ What follows the current language:
   `docs/product/menu-bar-icon.md`); without a quota it is the product name alone. The product name and the
   agents' names are never translated;
 - the document's language and writing direction. Arabic (`ar`) is the one right-to-left language, and choosing it
-  mirrors the window (see "Right-to-left layout" in `docs/product/window-layout.md`).
+  mirrors the window (see `docs/product/right-to-left-layout.md`).
 
 What does not follow it:
 
-- **Existing session names.** A created name keeps its saved wording when the UI's language changes, including one
-  that used the localized default when it was created (see "Opening a session" in `docs/product/sessions.md`).
-- **A report page.** It is content the console session's model wrote, with its own language and direction, and it is never
-  mirrored under a right-to-left language; only the panel around it follows the UI (see `docs/product/report-panel.md`).
+- **Existing session names.** A created name keeps its saved wording when the UI's language changes, including one that
+  used the localized default when it was created (see "The session dialog" in `docs/product/opening-sessions.md`).
+- **A report page.** It is content the console session's model wrote, with its own language and direction, and it is
+  never mirrored under a right-to-left language; only the panel around it follows the UI (see
+  `docs/product/report-panel.md`).
 - **The terminal.** What the agent draws is laid out left to right whatever the language, and is never mirrored.
-- **Text aimed at the agents** — the console session's instructions, the tool descriptions and the tools' replies, the prompts
-  injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI is
-  localized. What a session is told of the user's language names it, in English, without translating anything else
+- **Text aimed at the agents** — the console session's instructions, the tool descriptions and the tools' replies, the
+  prompts injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI
+  is localized. What a session is told of the user's language names it, in English, without translating anything else
   (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
 - **What a daemon error quotes from elsewhere** is shown as it came: a path or an agent's name inside the localized
   wording, and the operating system's, `git`'s or an agent's own message never inside it but apart, as raw text (see
@@ -126,8 +127,8 @@ until the page is reloaded.
 
 ## The language the daemon holds
 
-The daemon also holds one language, taken as **the user's language**: the language sessions are told to talk to the
-user in (see "The guidance on the user's language" in `docs/product/launching-agents.md`). It is not a client's: there is one
+The daemon also holds one language, taken as **the user's language**: the language sessions are told to talk to the user
+in (see "The guidance on the user's language" in `docs/product/launching-agents.md`). It is not a client's: there is one
 value for every client, the one reported most recently, and none until a client reports one. It is stored as
 `interface_language`, a tag from the 17 offered (see "The offered languages" above); the daemon refuses any other tag.
 
