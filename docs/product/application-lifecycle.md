@@ -376,7 +376,7 @@ server form is the server — with two exceptions, the window's state and the po
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
 
 The macOS application keeps the window's size, position and maximized state in
-`~/Library/Application Support/dev.octoboard.app/window-state.json` (see "The window's size and position across
+`~/Library/Application Support/dev.octoboard.desktop/window-state.json` (see "The window's size and position across
 launches" in `docs/product/window-size-and-position.md`). It belongs to the application's window rather than to the
 daemon, so it is not under `~/.octoboard`. Deleting it makes the next launch open the window as a first launch does.
 

@@ -102,7 +102,7 @@ anything read off an exec'd app about launch timing, first paint, or what is on 
 On macOS, a throwaway `HOME` and `TMPDIR` isolate the daemon, but do not isolate WKWebView. The daemon keeps its
 database and instance lock (`daemon.lock`) under `$HOME/.octoboard` and its port file (`octoboardd.port`) under
 `$TMPDIR`. WKWebView still writes under the real user's `~/Library/WebKit/<bundle identifier>/`, including
-`localStorage` and content rule lists. Every normal build shares the installed app's `dev.octoboard.app` identifier.
+`localStorage` and content rule lists. Every normal build shares the installed app's `dev.octoboard.desktop` identifier.
 An empty daemon project list can prune per-project preferences in that shared profile even when the verification
 never opens their settings, so do not launch a normal build expecting fresh `HOME` alone to protect the user's app.
 
