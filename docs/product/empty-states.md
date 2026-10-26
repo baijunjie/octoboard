@@ -44,8 +44,9 @@ console with nothing in it" in `docs/product/session-terminal.md`).
 
 A list nested inside another — the sidebar's sections in either normal or focus mode, the sessions under an expanded
 project, the trusted folders in Settings — puts a single **empty row** in its rows' place instead: a glyph and the
-message on one line, in the padding of the rows it stands among, with no explaining line under it. A message too long for the row wraps rather than being
-cut. The message is not a heading, so a row adds nothing to the outline of the view it sits in, unlike a full panel.
+message on one line, in the padding of the rows it stands among and as tall as one of the sidebar's rows, with no
+explaining line under it. A message too long for the row wraps rather than being cut. The message is not a heading, so
+a row adds nothing to the outline of the view it sits in, unlike a full panel.
 
 Where there is one thing to do about the list being empty, **the whole row is the button** that does it, and a press
 anywhere in the row does that one thing. Such a row:

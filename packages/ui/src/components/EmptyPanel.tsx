@@ -94,7 +94,9 @@ export function EmptyPanel({
         </span>
       </>
     );
-    if (!action) return <EmptyState aria-hidden={silent} className="flex items-center gap-2 py-1 ps-2 pe-1">{row}</EmptyState>;
+    // `min-h-8` on both forms is the sidebar rows' height (`TreeRow`): a row standing in for them
+    // takes up the line one of them would, so the list does not jump when its first row arrives.
+    if (!action) return <EmptyState aria-hidden={silent} className="flex min-h-8 items-center gap-2 py-1 ps-2 pe-1">{row}</EmptyState>;
     // Named by its visible message and then by what a press does: the message has to be inside the
     // name verbatim (WCAG 2.2 A 2.5.3), and the action says what the row is, which the message
     // alone does not. Two referenced elements rather than one joined string, so neither half is a
@@ -116,7 +118,7 @@ export function EmptyPanel({
             aria-describedby=""
             preventFocusOnPress
             onPress={action.onPress}
-            className="h-auto min-h-0 w-full justify-start gap-2 rounded-lg py-1 ps-2 pe-1 text-start font-normal text-[inherit] whitespace-normal hover:bg-panel-hover [&_svg]:m-0"
+            className="h-auto min-h-8 w-full justify-start gap-2 rounded-lg py-1 ps-2 pe-1 text-start font-normal text-[inherit] whitespace-normal hover:bg-panel-hover [&_svg]:m-0"
           >
             {row}
             <span id={actionId} className="sr-only">
