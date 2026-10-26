@@ -1366,11 +1366,14 @@ to green-cyan, cyan and cyan-blue (teal and cyan collide in light, teal and sky 
 lists them and fails on any other.
 
 A usage bar — the compact one in front of an account option and in the accounts table, and the rail panel's and the
-details' meters — is decorative in the same way: it is hidden from assistive technology, and the option's description,
-the cell's hidden text or the meter's headline carries the remaining usage in words. Its track is HeroUI's
-`--default` (`.quota-bar-track` a step darker than a field's fill, so it can be seen in a select's closed trigger), and
-its fill, the agent's colour or the grey of a used-up account, is settled by how it looks on that track, not by a
-contrast ratio: neither is held to 3:1.
+details' meters — carries its meaning in words, so its colours are decorative in the same way. The compact bar is hidden
+from assistive technology, and the option's description or the cell's hidden text states the remaining usage; a meter
+states it in its own accessible name and value, while its drawn headline is hidden. Its track is `--default`, which
+inside `.control-fills` (Settings, the dialogs, the rail panel) is `--control-fill`; in dark the compact bar's
+`.quota-bar-track` is a step lighter than its `--default`, so it can be seen on a dark popover. The track is not held to
+3:1 against its surface. The fill's agent colour is kept at 3:1 or better against every track it is drawn on at full
+opacity, in both appearances, though nothing requires it: a bar's state never rests on its colour alone. The grey of a
+used-up account is not: it is meant to recede, a step fainter than the agent colours, and its badge says why.
 
 ### Row action menu buttons
 

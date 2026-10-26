@@ -356,13 +356,12 @@ html {
    `edge` prop), since the track there is hardly off its surface. The edge is an inset shadow on both bars alike: inside
    the track, so the bars keep their 4:3 heights and end together, and painted under the fill, so it outlines only the
    empty part (over the fill it would leave a 3px bar a single pixel of its colour). From the tokens, track against the
-   surface and fill (Claude's orange) against the track, light / dark: the table cell 1.27 and 3.55 / 2.18 and 2.97; a
-   popover or menu 1.19 and 3.77 / 1.78 and 3.64; a trigger 1.00 and 3.55 / 1.50 and 2.97. The edge as drawn (25% of the
-   foreground over the track) against the surface outside it and the track inside it, light / dark: a popover or menu
-   2.02 and 1.70 / 3.63 and 2.04; a trigger 1.69 and 1.69 / 2.87 and 1.91. The edge is a hint at a track that is already
-   there, not a control boundary, so it is not held to 3:1; against a dark popover's surface it happens to pass it. In
-   dark a popover's own surface is nearly `--default`, so the dark track is a step lighter. The fill is not held to 3:1
-   against the track either (see docs/ui-accessibility.md, "A colour mark whose meaning is in words"). */
+   surface, light / dark: the table cell 1.27 / 2.18; a popover or menu 1.19 / 1.78; a trigger 1.00 / 1.50 (the fills
+   against it are under `.quota-meter--claude`). The edge as drawn (25% of the foreground over the track) against the
+   surface outside it and the track inside it, light / dark: a popover or menu 2.02 and 1.70 / 3.63 and 2.04; a trigger
+   1.69 and 1.69 / 2.87 and 1.91. The edge is a hint at a track that is already there, not a control boundary, so it is
+   not held to 3:1; against a dark popover's surface it happens to pass it. In dark a popover's own surface is nearly
+   `--default`, so the dark track is a step lighter. */
 .quota-bar-track {
   background-color: var(--default);
 }
@@ -411,10 +410,15 @@ html {
   --meter-fill: var(--danger-soft-foreground);
 }
 
-/* The fill of an account quota bar (`QuotaMeter`): one colour per agent. Claude's is its brand
-   orange darkened to keep 3:1 against the meter's track, lightened on the dark track; Codex's is a
-   blue; Grok's is the foreground, as its mark is. Measured against Settings' track, `--control-fill`
-   (see `.control-fills`): Claude 3.55:1 light, 4.47:1 dark; Codex 3.65:1 light, 4.74:1 dark. */
+/* The fill of an account quota bar (`QuotaMeter` and the compact `AccountUsageBar`): one colour per agent. Claude's is
+   its brand orange darkened to keep 3:1 against every track it is drawn on at full opacity, lightened on the dark
+   tracks, though the bar is decorative and not held to it (see docs/ui-accessibility.md, "A colour mark whose meaning
+   is in words"); Codex's is a blue; Grok's is the foreground, as its mark is. Inside `.control-fills` (Settings, the
+   dialogs, the rail panel) `--default` is `--control-fill`, and the compact bar's dark track lightens that a step (see
+   `.quota-bar-track`): the lightest dark track, and the one that sets Claude's dark value. From the tokens, light then
+   dark: the compact bar on `--control-fill` (a table cell, a select trigger) Claude 3.55 / 3.07, Codex 3.65 / 3.16; the
+   compact bar on HeroUI's own `--default` (a popover, a menu) Claude 3.77 / 3.75, Codex 3.88 / 3.86; the meters, on
+   `--control-fill` itself (the rail panel, the details) Claude 3.55 / 4.60, Codex 3.65 / 4.74. */
 .quota-meter--claude {
   --meter-fill: #c2562f;
 }
@@ -429,7 +433,7 @@ html {
 
 .dark .quota-meter--claude,
 [data-theme="dark"] .quota-meter--claude {
-  --meter-fill: #e8805a;
+  --meter-fill: #ea835d;
 }
 
 .dark .quota-meter--codex,
