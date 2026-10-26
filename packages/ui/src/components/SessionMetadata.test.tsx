@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { sessionOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { SessionContext } from "../protocol";
-import { ArchivedSessionMetadata, ArchivedSessionTime, SessionContextLabel } from "./SessionMetadata";
+import { ArchivedSessionMetadata, SessionContextLabel, SessionRelativeTime } from "./SessionMetadata";
 import { enter, mountForTooltip, openTooltip, trigger, withFakeTimers } from "./tooltipTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -118,15 +118,33 @@ it("shows both absolute timestamps and never invents a missing archive timestamp
   expect(container.textContent).not.toContain("Archived");
 });
 
-it("shows the archive time as relative text, names the full date, and omits an unknown time", () => {
-  const endedAt = 1700000000000;
-  const clock = vi.spyOn(Date, "now").mockReturnValue(endedAt + 5 * 60_000);
-  onTestFinished(() => clock.mockRestore());
-  const { container, render } = mount(<ArchivedSessionTime endedAt={endedAt} />);
+it("shows how long ago an archived session was archived, and writes out its archive and creation dates", () => {
+  const runOut = withFakeTimers();
+  const session = { started_at: 1700000000000, ended_at: 1700000600000 };
+  vi.setSystemTime(session.ended_at + 5 * 60_000);
+  const container = mountForTooltip(<SessionRelativeTime session={session} />);
   const time = container.querySelector("time")!;
   expect(time.textContent).toBe("5 minutes ago");
-  expect(time.dateTime).toBe(new Date(endedAt).toISOString());
-  expect(time.getAttribute("aria-label")).toContain("Archived");
-  render(<ArchivedSessionTime endedAt={null} />);
-  expect(container.innerHTML).toBe("");
+  expect(time.dateTime).toBe(new Date(session.ended_at).toISOString());
+  const label = trigger(container).getAttribute("aria-label")!;
+  expect(label).toMatch(/^Archived .+, Created .+$/);
+  enter(trigger(container));
+  runOut();
+  const lines = Array.from(openTooltip()!.querySelectorAll("span"), (line) => line.textContent);
+  expect(lines).toHaveLength(2);
+  expect(lines[0]).toMatch(/^Archived /);
+  expect(lines[1]).toMatch(/^Created /);
+});
+
+it("shows how long ago a session that is not archived was created, and writes out its creation date alone", () => {
+  const runOut = withFakeTimers();
+  const session = { started_at: 1700000000000, ended_at: null };
+  vi.setSystemTime(session.started_at + 3 * 60 * 60_000);
+  const container = mountForTooltip(<SessionRelativeTime session={session} />);
+  expect(container.querySelector("time")!.textContent).toBe("3 hours ago");
+  expect(trigger(container).getAttribute("aria-label")).toMatch(/^Created /);
+  expect(trigger(container).getAttribute("aria-label")).not.toContain("Archived");
+  enter(trigger(container));
+  runOut();
+  expect(openTooltip()!.textContent).toMatch(/^Created /);
 });

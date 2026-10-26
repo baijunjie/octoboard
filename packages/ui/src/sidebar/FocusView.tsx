@@ -12,7 +12,7 @@ import { IndicatorTooltip } from "../components/IndicatorTooltip";
 import { InlineReference } from "../components/InlineReference";
 import { PaneTitle } from "../components/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/RowControls";
-import { ArchivedSessionTime, hasVisibleContext, SessionContextLabel } from "../components/SessionMetadata";
+import { hasVisibleContext, SessionContextLabel, SessionRelativeTime } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { TitledControl } from "../components/TitledControl";
 import { useListMotion } from "../components/useListMotion";
@@ -23,13 +23,11 @@ import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Console, Project, Session } from "../protocol";
-import { formatRelativeTime } from "../relativeTime";
 import { activityLabelKey, sessionAccountModelLine, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind, statusLabel } from "../sessionLabel";
 import { inheritedLaunch, sessionModelEffort, sessionModelLabel } from "../sessionModel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
 import { useHasBoundSessions, useProjectSessions, useSessionProjectId } from "../sessions/useSessions";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "../store";
-import { useNow } from "../useNow";
 import { BindingBadge } from "./BindingBadge";
 import { GitBadge } from "./GitBadge";
 import { projectMenu } from "./menus";
@@ -583,7 +581,6 @@ const SessionCard = memo(function SessionCard({
   const metadataId = useId();
   const t = useT();
   const language = useCurrentLanguage();
-  const now = useNow();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const hasBound = useHasBoundSessions(session.id);
@@ -602,7 +599,7 @@ const SessionCard = memo(function SessionCard({
   return (
     <TreeRow
       ref={rowRef}
-      describedBy={hasVisibleContext(session.context) ? metadataId : undefined}
+      describedBy={metadataId}
       ariaLabel={joinPhrases(language, [...name, modelLabel])}
       selected={selected}
       locked={session.locked}
@@ -635,9 +632,9 @@ const SessionCard = memo(function SessionCard({
         >
           {agentLine}
         </FadeOverflow>
-        <div className="flex shrink-0 items-center gap-2">
-          {hasVisibleContext(session.context) && <div id={metadataId}><SessionContextLabel context={session.context} touchPopover={false} /></div>}
-          <span>{formatRelativeTime(language, session.started_at, now)}</span>
+        <div id={metadataId} className="flex shrink-0 items-center gap-2">
+          {hasVisibleContext(session.context) && <div><SessionContextLabel context={session.context} touchPopover={false} /></div>}
+          <SessionRelativeTime session={session} touchPopover={false} />
         </div>
       </RowIconLine>
     </TreeRow>
@@ -675,7 +672,7 @@ function ArchivedRow({
       <RowLabel title={sessionDisplayTitle(t, session)} className="min-w-0 flex-1">
         <span className="text-app-muted">{sessionDisplayTitle(t, session)}</span>
       </RowLabel>
-      {session.ended_at != null && <span id={metadataId}><ArchivedSessionTime endedAt={session.ended_at} /></span>}
+      {session.ended_at != null && <div id={metadataId} className="flex shrink-0"><SessionRelativeTime session={session} touchPopover={false} /></div>}
       <RowControls>
         <SessionActions handlers={handlers} session={session} accounts={accounts} hasBoundSessions={false} rowRef={rowRef} />
       </RowControls>

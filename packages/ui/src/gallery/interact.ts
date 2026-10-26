@@ -332,6 +332,13 @@ export interface Ui {
    * a card or row with no size (hidden, or none reported) fails there, naming `row`. The step then
    * fails if the tooltip that opens does not carry the card's "Context window" title. */
   hoverSessionContext: (row: Matcher) => Promise<void>;
+  /** Moves the pointer onto the relative time of the session card or row named `row` and leaves it there,
+   * as `hoverIndicator` does, for the tooltip that writes out the session's dates in full. The time is
+   * the `role="img"` trigger that holds a `time` element, so a card or row with none (an archive row
+   * with no archive time) fails there, naming `row`. The step then fails if the tooltip that opens does
+   * not have the lines the session has: "Archived …" above "Created …" with `archived`, "Created …"
+   * alone without. */
+  hoverSessionDates: (row: Matcher, archived: boolean) => Promise<void>;
   /** Moves the pointer onto the agent's mark of the session row or focus mode card named `row`
    * (`session(title)`) and leaves it there, as `hoverIndicator` does, for the tooltip that names `agent`
    * and lists the account (`details.account`, left out for a session that recorded none), the model and
@@ -873,6 +880,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const shown = doc.querySelector("[role=tooltip]")?.textContent ?? "";
       if (!withoutIsolates(shown).includes(withoutIsolates(title))) {
         throw new Error(`The context size of ${String(row)} did not open its tooltip, which holds ${title}: ${shown === "" ? "no tooltip" : shown} is up`);
+      }
+    },
+    async hoverSessionDates(row, archived) {
+      await hover(
+        () => Array.from(find(row)?.querySelectorAll<HTMLElement>("[role=img]") ?? []).find((element) => element.querySelector("time") !== null),
+        `No session card or row matching ${String(row)} with a relative time to hover`,
+      );
+      const [created, archivedAt] = [t("session.meta.created", { time: "\0" }), t("session.meta.archived", { time: "\0" })].map((phrase) => phrase.split("\0")[0].trim());
+      const lines = Array.from(doc.querySelector("[role=tooltip]")?.querySelectorAll("span") ?? [], (line) => withoutIsolates(line.textContent ?? ""));
+      const expected = archived ? [archivedAt, created] : [created];
+      if (lines.length !== expected.length || !lines.every((line, index) => line.startsWith(expected[index]))) {
+        throw new Error(`The relative time of ${String(row)} did not open a tooltip of lines starting ${expected.map((start) => `"${start}"`).join(", ")}: it has ${lines.length === 0 ? "no lines" : lines.map((line) => `"${line}"`).join(", ")}`);
       }
     },
     async hoverSessionAgent(row, agent, details) {

@@ -137,36 +137,60 @@ function ContextLabel({ context, touchPopover }: { context: SessionContext; touc
   );
 }
 
-export function ArchivedSessionMetadata({ session }: { session: Pick<Session, "started_at" | "ended_at"> }): React.ReactElement {
+/** A session's archive time, while it is archived, and its creation time, each in words with the full local
+ * date and time. */
+function useSessionDates(session: Pick<Session, "started_at" | "ended_at">): { at: number; text: string }[] {
   const t = useT();
   const language = useCurrentLanguage();
   const date = new Intl.DateTimeFormat(language, {
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   });
+  return [
+    ...(session.ended_at != null ? [{ at: session.ended_at, text: t("session.meta.archived", { time: isolate(date.format(session.ended_at)) }) }] : []),
+    { at: session.started_at, text: t("session.meta.created", { time: isolate(date.format(session.started_at)) }) },
+  ];
+}
+
+export function ArchivedSessionMetadata({ session }: { session: Pick<Session, "started_at" | "ended_at"> }): React.ReactElement {
+  const dates = useSessionDates(session);
   return (
     <div className="flex shrink-0 flex-col items-end gap-0.5 text-end text-xs text-app-muted">
-      {session.ended_at != null && <time dateTime={new Date(session.ended_at).toISOString()}>{t("session.meta.archived", { time: isolate(date.format(session.ended_at)) })}</time>}
-      <time dateTime={new Date(session.started_at).toISOString()}>{t("session.meta.created", { time: isolate(date.format(session.started_at)) })}</time>
+      {dates.map(({ at, text }) => <time key={text} dateTime={new Date(at).toISOString()}>{text}</time>)}
     </div>
   );
 }
 
-/** A compact archive time for preview rows and menu items, named by its full local date. */
-export function ArchivedSessionTime({ endedAt }: { endedAt: Session["ended_at"] }): React.ReactElement | null {
-  const t = useT();
+/** How long ago a session was archived, or created while it is not archived, compactly, for rows and menu
+ * items; its tooltip and name write out both dates in full.
+ *
+ * Kept shortfall: it is an `IndicatorTooltip`, so the dates show on pointer hover only and the time is no
+ * tab stop. A screen-reader user has them in the row's description or the menu item's name, but a sighted
+ * keyboard-only user has no route to them in the list. */
+export function SessionRelativeTime({
+  session,
+  touchPopover,
+}: {
+  session: Pick<Session, "started_at" | "ended_at">;
+  /** Whether a tap opens the tooltip's dates in a popover; off inside a pressable row or item, whose tap it is. */
+  touchPopover?: boolean;
+}): React.ReactElement {
   const language = useCurrentLanguage();
   const now = useNow();
-  if (endedAt == null) return null;
-  const date = new Intl.DateTimeFormat(language, {
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
-  });
+  const dates = useSessionDates(session);
+  const at = session.ended_at ?? session.started_at;
   return (
-    <time
-      dateTime={new Date(endedAt).toISOString()}
-      aria-label={t("session.meta.archived", { time: isolate(date.format(endedAt)) })}
-      className="shrink-0 text-xs text-app-muted whitespace-nowrap"
+    <IndicatorTooltip
+      tooltip={<div className="flex flex-col">{dates.map(({ text }) => <span key={text}>{text}</span>)}</div>}
+      label={joinPhrases(language, dates.map(({ text }) => text))}
+      labelRepeatsTooltip
+      className="flex shrink-0"
+      touchPopover={touchPopover}
     >
-      {formatRelativeTime(language, endedAt, now)}
-    </time>
+      <span aria-hidden="true" className="contents">
+        <time dateTime={new Date(at).toISOString()} className="text-xs text-app-muted whitespace-nowrap">
+          {formatRelativeTime(language, at, now)}
+        </time>
+      </span>
+    </IndicatorTooltip>
   );
 }

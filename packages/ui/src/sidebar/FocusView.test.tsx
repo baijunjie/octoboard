@@ -567,7 +567,7 @@ it("shows an archived preview's archive time instead of its context size", () =>
   const { container } = mount((h) => <ProjectFocusView handlers={h} console={main} project={web} sessions={[archived]} owners={owners} />);
   const row = Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((element) => element.getAttribute("aria-label")?.startsWith(isolate(archived.title)))!;
   expect(row.querySelector("time")?.dateTime).toBe(new Date(1000).toISOString());
-  expect(row.querySelector("time")?.getAttribute("aria-label")).toContain("Archived");
+  expect(row.querySelector("time")?.closest('[role="img"]')?.getAttribute("aria-label")).toContain("Archived");
   expect(row.querySelector("[data-variant] > .progress-circle")).toBeNull();
   expect(row.textContent).not.toContain("130K");
 });
@@ -584,12 +584,12 @@ it("updates the context size on active cards and omits an unknown archive time",
   }
   const { container } = mount((handlers) => <View handlers={handlers} />);
   const row = (title: string) => Array.from(container.querySelectorAll<HTMLElement>('div[role="button"]')).find((element) => element.getAttribute("aria-label")?.startsWith(isolate(title)))!;
-  expect(row(active.title).getAttribute("aria-describedby")).toBeNull();
+  const activeDescription = () => document.getElementById(row(active.title).getAttribute("aria-describedby")!);
+  expect(activeDescription()?.querySelector('[role="img"]')?.getAttribute("aria-label")).toMatch(/^Created /);
   expect(row(archived.title).querySelector("time")).toBeNull();
   expect(row(archived.title).getAttribute("aria-describedby")).toBeNull();
   act(update);
-  const description = document.getElementById(row(active.title).getAttribute("aria-describedby")!);
-  expect(description?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`Context ${isolate("1,200")} tokens`);
+  expect(activeDescription()?.querySelector('[role="img"]')?.getAttribute("aria-label")).toContain(`Context ${isolate("1,200")} tokens`);
 });
 
 it("unlocks a locked card without selecting it or changing its position", () => {

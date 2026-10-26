@@ -266,8 +266,9 @@ Session history's heading (see "The context-size chip" in `docs/product/session-
 in the file viewer's title. On a device with a touch screen such a mark answers a press, and a hover, across at least 24 by 24 pixels,
 even where it is drawn smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
 the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
-and an archive view row, the branch badge on a project's sidebar row, the activity marker, and the
-responsible-session badge in the Git mode's branch lists. A touch has no route to what such a mark's tooltip says;
+and an archive view row, the relative time on a focus mode card or archived row and on an item of a View archive
+submenu, the branch badge on a project's sidebar row, the activity marker, and the responsible-session badge in the
+Git mode's branch lists. A touch has no route to what such a mark's tooltip says;
 assistive technology has it in the accessible name of what holds the mark.
 
 These are:
@@ -291,6 +292,11 @@ These are:
   session a confirmation lists among the ones it affects, whose tooltip names the agent and the account the session runs
   under, and everywhere but in a confirmation also the model and effort it runs with, as a labelled list (see
   "Session rows" in `docs/product/sidebar-session-rows.md`);
+- the relative time at the end of a focus mode card, of a focus mode archived row and of an item in a View archive
+  submenu, whose tooltip writes out the session's archive date, while it has one, above its creation date, each as a
+  full local date and time; the time's own name carries the same dates, and the card's or row's description or the
+  item's name takes it in (see "What both views show" in `docs/product/focus-mode.md` and "The archive view" in
+  `docs/product/archive-view.md`);
 - a project's branch badge, on its sidebar row and in focus mode's header, which carries **one tooltip for the whole
   badge** rather than one per mark: resting the mouse on its state glyph, on the branch name or on either upstream
   count shows the same sentence, the one the badge's whole state is said in — the branch and each count while it is

@@ -6,7 +6,7 @@ import { ExternalLinkIcon } from "../components/ExternalLinkIcon";
 import { RepositoryIcon } from "../components/RepositoryIcon";
 import { repositoryLink } from "../repositoryLink";
 import { FadeOverflow } from "../components/FadeOverflow";
-import { ArchivedSessionTime } from "../components/SessionMetadata";
+import { SessionRelativeTime } from "../components/SessionMetadata";
 import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
@@ -31,7 +31,8 @@ export function archiveSubmenu(
     label: sessionChoiceTitle(t, session),
     content: <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</FadeOverflow>,
     icon: <AgentIcon agent={session.agent} />,
-    end: <ArchivedSessionTime endedAt={session.ended_at} />,
+    // A press on the item selects the session, so a tap opens no popover of the dates.
+    end: session.ended_at != null ? <SessionRelativeTime session={session} touchPopover={false} /> : undefined,
     onClick: () => onSelect(session),
   }));
   if (archived.length === 0) {

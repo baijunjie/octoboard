@@ -208,7 +208,7 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive menu, ten newest",
     state: longArchiveState,
-    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a localized relative archive time, including sessions with a recorded context size; its accessible name gives the full archive date and time. The archived child of the active lead is listed on its own, while the two children of the archived lead stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
+    description: "The menu lists the ten newest of thirteen archived rows, with their last active task titles, then View all; the three oldest are left to the full archive. Each item ends in a localized relative archive time, including sessions with a recorded context size; hovering the time writes out both dates (see the archived row's date tooltip in Focus mode). The archived child of the active lead is listed on its own, while the two children of the archived lead stay out. Long archived names fade at the menu edge and run as a marquee when their row is hovered.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: boundProject.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),

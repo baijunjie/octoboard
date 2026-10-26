@@ -18,13 +18,17 @@ as rows of their own, most recently archived first, at most ten. A session inset
 below) is left out of the preview and reached through View all; every other archived session is a preview row,
 including one bound to a project session that is not archived, such as a session of a lead session that is still
 live, and one whose owner is no longer known. A submenu item shows the session's agent's icon, its title and, at the
-item's end edge, how long ago it was archived. The time is plain muted text; these previews show no context-size
-chip or creation time. Relative times are worded in the current language, read as now for anything under a minute,
-and keep up with the clock while shown, never more than 30 seconds behind it. Assistive technology receives the
-archive time as a labeled absolute date with year, month, day, hour and minute, formatted in the current language
-and the client's local time zone; in a submenu this is part of the item's accessible name. An unknown archive time
-is omitted, with no creation-time fallback. Neither the icon nor the time carries a tooltip in a submenu. Focus
-mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`.
+item's end edge, how long ago it was archived, in muted text; these previews show no context-size chip. Relative
+times are worded in the current language, read as now for anything under a minute, and keep up with the clock while
+shown, never more than 30 seconds behind it. Resting the mouse on the time shows a tooltip of two lines: the archive
+date above the creation date, each identified by its meaning ("Archived …", "Created …"). These are absolute dates
+with year, month, day, hour and minute, formatted in the current language and the client's local time zone, as on
+the archive view's rows below. The time is not a tab stop, so the tooltip does not open on keyboard focus, and on a
+touch screen a tap on it selects the session rather than opening the dates in a popover (see "Tooltips on
+indicators" in `docs/product/labels-and-tooltips.md`). Assistive technology receives both dates, the archive date
+first, in place of the relative wording; in a submenu they are part of the item's accessible name. A session with
+no known archive time shows no time, with no creation-time fallback. The agent icon carries no tooltip in a
+submenu. Focus mode's preview rows are described in "What both views show" in `docs/product/focus-mode.md`.
 
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.

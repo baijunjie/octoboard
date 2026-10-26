@@ -14,7 +14,7 @@ import { AgentIcon } from "../components/AgentIcon";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { HelpTip } from "../components/HelpTip";
 import { SessionAgentTooltip } from "../components/SessionAgentIcon";
-import { SessionContextLabel } from "../components/SessionMetadata";
+import { SessionContextLabel, SessionRelativeTime } from "../components/SessionMetadata";
 import { StatusIcon } from "../components/StatusIcon";
 import { StatusMark } from "../components/StatusMark";
 import { TitledControl } from "../components/TitledControl";
@@ -701,6 +701,53 @@ it("hoverSessionContext puts up the tooltip of the card's context size", async (
 it("hoverSessionContext fails for a card whose context size is hidden", async () => {
   mountCard({ tokens: 0 });
   const done = expect(createUi(document, "en").hoverSessionContext((name) => name.startsWith("Add idempotency keys"))).rejects.toThrow(/with a context size to hover/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  runOut();
+});
+
+/** Closes the tooltip. The relative time keeps its own clock ticking until the test unmounts it, so the
+ * timers left are not counted as in `runOut`. */
+function closeTimed(): void {
+  leave(document.querySelector("[role=img]")!);
+  act(() => void vi.runOnlyPendingTimers());
+  expect(openTooltip()).toBeNull();
+}
+
+/** A session card or row as the sidebar draws it, with its relative time among the metadata. */
+function mountTimedRow(session: { started_at: number; ended_at?: number | null }): void {
+  mountForTooltip(
+    <div role="button" aria-label="Add idempotency keys, Claude Code, Working">
+      <SessionRelativeTime session={{ ended_at: null, ...session }} />
+    </div>,
+  );
+}
+
+it("hoverSessionDates puts up the creation date of a session that is not archived", async () => {
+  mountTimedRow({ started_at: Date.now() - 3 * 60 * 60_000 });
+  await settledLive(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), false));
+  expect(Array.from(openTooltip()!.querySelectorAll("span"), (line) => line.textContent)).toEqual([expect.stringMatching(/^Created /)]);
+  closeTimed();
+});
+
+it("hoverSessionDates puts up the archive date above the creation date of an archived session", async () => {
+  mountTimedRow({ started_at: Date.now() - 3 * 60 * 60_000, ended_at: Date.now() - 60_000 });
+  await settledLive(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), true));
+  expect(Array.from(openTooltip()!.querySelectorAll("span"), (line) => line.textContent)).toEqual([expect.stringMatching(/^Archived /), expect.stringMatching(/^Created /)]);
+  closeTimed();
+});
+
+it("hoverSessionDates fails where the tooltip lacks the lines it was told", async () => {
+  mountTimedRow({ started_at: Date.now() - 3 * 60 * 60_000 });
+  const done = expect(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), true)).rejects.toThrow(/lines starting "Archived", "Created"/);
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  closeTimed();
+});
+
+it("hoverSessionDates fails for a row with no relative time", async () => {
+  mountCard({ tokens: 1500 });
+  const done = expect(createUi(document, "en").hoverSessionDates((name) => name.startsWith("Add idempotency keys"), false)).rejects.toThrow(/with a relative time to hover/);
   await vi.advanceTimersByTimeAsync(6000);
   await done;
   runOut();

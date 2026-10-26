@@ -261,7 +261,8 @@ it("names the badge in focus mode's header itself, once, with the sentence its t
   const named = header.named(document.body);
   expect(named).toBe(badge);
   expect(named?.getAttribute("aria-label")).toBe(`Branch ${BRANCH}, 1 commit ahead`);
-  expect(document.body.querySelectorAll("[role=img]")).toHaveLength(1);
+  // A session card's relative time is a named mark of its own.
+  expect(Array.from(document.body.querySelectorAll("[role=img]")).filter((mark) => !mark.querySelector("time"))).toHaveLength(1);
   expect(badge.querySelector("[aria-label]")).toBeNull();
   expect(lineOf(badge).closest("[aria-hidden=true]")).toBeNull();
 });

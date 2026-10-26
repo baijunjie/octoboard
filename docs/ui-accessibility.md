@@ -760,13 +760,13 @@ go placement by placement. The agent and the account are also in the session row
 hidden text where there is no row name, and the accessible name of each of these four ends with its model and effort
 as well, since the row is one button and nothing inside it is announced.
 
-One gap is left open on purpose: no mark on a menu's transient surface carries a tooltip — a clipped path label in a
-menu item does carry its own through the anchored shape, as in the Switch account submenu, but no indicator there
-does — so the agent icon beside each session in the archive submenu says which agent it is to nobody, its `svg`
-being `aria-hidden` as well. The agent is read from the archive view's own rows instead, where that icon carries its
-tooltip and the agent is in the row's accessible name. The context-size mark at the end of those archive items is drawn
-without its tooltip too (`SessionContextLabel`'s `plain`); it keeps its `role="img"` name, which the menu item's own
-name takes in after the title, so the size is still read there.
+One gap is left open on purpose: the agent icon beside each session in the archive submenu carries no tooltip, so it
+says which agent it is to nobody, its `svg` being `aria-hidden` as well. The agent is read from the archive view's own
+rows instead, where that icon carries its tooltip and the agent is in the row's accessible name. The relative time at
+the end of those archive items is the one indicator on a menu's transient surface with a tooltip of its own (the
+session's archive and creation dates, `SessionRelativeTime`); a clipped path label in a menu item carries its own
+through the anchored shape, as in the Switch account submenu. The time keeps its `role="img"` name, which the menu
+item's own name takes in after the title, so the dates are still read there.
 
 **A tooltip is worded from the string that already names the mark**, not from one of its own: the same string where
 it names the mark on its own, so the two cannot drift apart (a session's agent mark shows that string's two parts, the
@@ -797,12 +797,13 @@ On touch, a mark opens its tooltip's content in a popover when tapped (the mark 
 see "A tooltip is the application's own"). It is turned off for every mark that sits inside something answering the
 same tap, since the popover must not open over what the press does: the marks of a session row in the sidebar, in a
 focus mode (card and archive preview) and in the archive view (status glyph, agent icon, context size and binding
-badge), the project row's Git badge, the activity marker (a project row, the console-switch chip), a branch's
-responsible-session badge (an option), and the switch behind focus mode's include-console-sessions tooltip. The same
-mark where it stands alone, such as the title bar's status glyph, the requested-sessions dialog's status and agent
-glyphs, a focus mode's header Git badge and the history header's context badge, opens it. The rest of what a row's
-marks say reaches touch through the row's accessible name alone, a kept shortfall: the row's press is its own, and no
-second route to the marks is built for it yet.
+badge, plus a focus mode's relative time), the archive submenu's relative time (a menu item), the project row's Git
+badge, the activity marker (a project row, the console-switch chip), a branch's responsible-session badge (an option),
+and the switch behind focus mode's include-console-sessions tooltip. The same mark where it stands alone, such as the
+title bar's status glyph, the requested-sessions dialog's status and agent glyphs, a focus mode's header Git badge and
+the history header's context badge, opens it. The rest of what a row's marks say reaches touch through the row's
+accessible name alone, a kept shortfall: the row's press is its own, and no second route to the marks is built for it
+yet.
 
 One exception to the content model is kept on purpose: the trigger is a `div`, so an indicator inside a real
 `<button>` — focus mode's console-switch chip — nests one where no content model allows it. The library offers no

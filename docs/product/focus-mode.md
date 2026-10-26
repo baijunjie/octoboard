@@ -44,7 +44,12 @@ reading **Default**, and reads **Default model** when neither is known; the agen
 model line is one line that fades where it is cut off, with its full text as its tooltip while cut (see "Names too long
 for their space" in `docs/product/labels-and-tooltips.md`). The card's accessible name ends with "<model> · <effort>"
 alone: the account is already named beside the agent in it, as in a session row's accessible name. Resuming or
-reopening does not reset the creation time. When the context size is known and above zero, its chip appears immediately
+reopening does not reset the creation time. Resting the mouse on the creation time shows a tooltip writing out the
+creation date ("Created …") as an absolute date with year, month, day, hour and minute, formatted in the current
+language and the client's local time zone. The time is not a tab stop, so the tooltip does not open on keyboard
+focus, and a tap on it is the card's press (see "Tooltips on indicators" in `docs/product/labels-and-tooltips.md`).
+The card's accessible description carries that creation date in place of the relative wording, after the context
+size while the chip is shown. When the context size is known and above zero, its chip appears immediately
 before the creation time on that same agent line and updates while the session runs (see "The context-size chip" in
 `docs/product/session-context.md`), set apart from the creation time by spacing alone; without the chip, the trailing
 block contains creation time alone. The model line has no adjacent separator. The status
@@ -70,7 +75,8 @@ console session above them (see "A project's focus mode" below and "The binding 
 
 **Archived (n)**, in both, only while the view has archived sessions — with none, the section is not shown at all: the
 archive preview described in "The archive view" in `docs/product/archive-view.md`, each row showing its agent's icon
-and its title on one compact line, with the relative archive time at the trailing end as described there. The heading
+and its title on one compact line, with the relative archive time and its tooltip of the archive and creation dates
+at the trailing end as described there; the row's accessible description carries both dates. The heading
 counts every archived session in the view's scope, including those the preview leaves out. Clicking a row selects
 it while leaving it archived. Its action menu offers **Reopen**, which selects and resumes the session, then **Copy
 session ID** (see "Session rows" in `docs/product/sidebar-session-rows.md`), and after a separator **Delete**, disabled

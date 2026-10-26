@@ -4,7 +4,7 @@ import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/ActionMenu";
-import { ArchivedSessionTime } from "../components/SessionMetadata";
+import { SessionRelativeTime } from "../components/SessionMetadata";
 import { consoleOf, sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
@@ -381,7 +381,7 @@ describe("archive previews in menus", () => {
   it("shows each archived session's archive time at the item's end", () => {
     const sized = { ...roots[0], context: { tokens: 12_345 } };
     const [item] = archiveSubmenu(t, "Archive", [sized], vi.fn(), vi.fn()).items as ActionMenuItem[];
-    expect(item.end).toMatchObject({ type: ArchivedSessionTime, props: { endedAt: sized.ended_at } });
+    expect(item.end).toMatchObject({ type: SessionRelativeTime, props: { session: sized, touchPopover: false } });
   });
 
   it("leaves View archive out of a project's own focus mode, which lists its archive below", () => {
