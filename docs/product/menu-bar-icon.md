@@ -139,8 +139,9 @@ From top to bottom:
      being cut short. A row is read by assistive technology once, as one phrase ("5h 82% remaining · resets in
      1h 57m"), by its menu item alone: neither the name, the detail nor the bar is read on its own;
    - an account with both a five-hour and an account-wide weekly window shows the two as **one meter row**, in
-     the five-hour window's place: its name and detail with its bar, directly beneath that bar a thinner one,
-     about **3 pt** tall, for the weekly window, and beneath it the weekly window's name and detail, both in the
+     the five-hour window's place: its name and detail with its bar, **2.5 pt** beneath that bar a thinner one,
+     **4.5 pt** tall against the five-hour bar's **6 pt** (three quarters, as on every two-layer bar), for the weekly
+     window, and beneath it the weekly window's name and detail, both in the
      secondary text colour. Assistive technology reads the row once, as the two windows' phrases joined ("5h 82%
      remaining · resets in 1h 57m, Weekly 40% remaining · resets in 2d 3h"). Every other window keeps a row of its own, and the
      order of windows is unchanged;
@@ -160,8 +161,9 @@ From top to bottom:
    It uses that agent's account configured for the **current console**, independently of the selected session that
    supplies the menu bar icon's capsule. A missing, deleted or wrong-agent account reference falls back to the
    agent's default account. With no current console there are no opener bars. When the account has both a five-hour
-   and an account-wide weekly window, the five-hour bar has a thinner weekly bar beneath it. Otherwise there is one
-   bar, with window priority five-hour, then account-wide weekly, then the credit pool; model-specific weekly limits
+   and an account-wide weekly window, the five-hour bar has a thinner weekly bar beneath it: **4 pt** over **3 pt**,
+   **2 pt** apart, within a picture **56 × 9 pt**. Otherwise there is one **4 pt** bar, vertically centred in that
+   picture, with window priority five-hour, then account-wide weekly, then the credit pool; model-specific weekly limits
    are excluded.
    An unread account, a reading without an eligible window or a failed latest reading has no opener bars,
    including when the submenu retains stale windows. Switching consoles or editing their account choices updates

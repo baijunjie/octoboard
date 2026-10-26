@@ -8,14 +8,12 @@ import { remainingPercentAt, usageBarWindows } from "./quotaFormat";
  * HeroUI's `Meter` or `ProgressBar`: the bar sits inside a list option, where a `role="meter"` or `progressbar` with a
  * name and a value would be a second, nested control inside the option, whose own description already states the
  * numbers (`usageBarSummary`); this one is purely decorative and carries no role or name. The track is
- * `.quota-bar-track`, the rail's own track; with `edge` it has a hairline edge (see `style.css`), drawn inside the main
- * bar and outside the thin one, which is inset a pixel on each side to end where the main bar does. The thin bar is 3px
- * against the main bar's 4px, the rail button's capsules; the rail panel's and the details' meters are 6px against 8px,
- * the same 4:3. */
+ * `.quota-bar-track`, the rail's own track; with `edge` it has a hairline edge, the same on both bars (see `style.css`).
+ * The thin bar is 3px against the main bar's 4px, the rail button's capsules; the rail panel's and the details' meters
+ * are 6px against 8px, the same 4:3. */
 function Track({ percent, thin, edge }: { percent?: number; thin?: boolean; edge: boolean }): React.ReactElement {
-  const shape = thin ? `h-[3px] ${edge ? "quota-bar-track--outer-edge mx-px" : ""}` : `h-1 ${edge ? "quota-bar-track--edge" : ""}`;
   return (
-    <span className={`block overflow-hidden rounded-full quota-bar-track ${shape}`}>
+    <span className={`block overflow-hidden rounded-full quota-bar-track ${thin ? "h-[3px]" : "h-1"} ${edge ? "quota-bar-track--edge" : ""}`}>
       {percent !== undefined && <span className="block h-full rounded-full bg-(--meter-fill)" style={{ width: `${percent}%` }} />}
     </span>
   );

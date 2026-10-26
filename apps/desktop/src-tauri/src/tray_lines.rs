@@ -48,9 +48,10 @@ const TEXT_TOP: f64 = 4.0;
 const TEXT_TO_BAR: f64 = 5.0;
 const BAR_BOTTOM: f64 = 7.0;
 const BAR_HEIGHT: f64 = 6.0;
-/// A two-layer meter's weekly bar, and the space between it and the 5-hour bar above it.
-const THIN_BAR_HEIGHT: f64 = 3.0;
-const THIN_BAR_GAP: f64 = 2.0;
+/// A two-layer meter's weekly bar, three quarters of the 5-hour bar above it as on every two-layer
+/// bar, and the space between the two, which brings the pair back to a whole point.
+const THIN_BAR_HEIGHT: f64 = 4.5;
+const THIN_BAR_GAP: f64 = 2.5;
 /// The space between a row text's frame and its text, left and right: the inset a text field's
 /// cell has, so the texts sit where they did as fields.
 const TEXT_INSET: f64 = 2.0;
@@ -524,7 +525,12 @@ pub fn dress_submenu(menu: &NSMenu, items: &[SubmenuItem], mtm: MainThreadMarker
 }
 
 const OPENER_BAR_WIDTH: f64 = 56.0;
-const OPENER_BAR_HEIGHT: f64 = 9.0;
+/// The opener's capsules within its picture: the 5-hour one, the weekly one three quarters of it
+/// beneath, and the space between; a lone capsule is the 5-hour one's height, centred.
+const OPENER_MAIN_HEIGHT: f64 = 4.0;
+const OPENER_THIN_HEIGHT: f64 = 3.0;
+const OPENER_GAP: f64 = 2.0;
+const OPENER_BAR_HEIGHT: f64 = OPENER_THIN_HEIGHT + OPENER_GAP + OPENER_MAIN_HEIGHT;
 /// Space reserved for AppKit's submenu arrow and trailing menu inset.
 const OPENER_TRAILING: f64 = 32.0;
 
@@ -623,15 +629,20 @@ fn opener_title(
             draw_opener_capsule(
                 rect(
                     bounds.origin.x,
-                    bounds.origin.y + 4.0,
+                    bounds.origin.y + OPENER_THIN_HEIGHT + OPENER_GAP,
                     bounds.size.width,
-                    5.0,
+                    OPENER_MAIN_HEIGHT,
                 ),
                 remaining,
                 &colour,
             );
             draw_opener_capsule(
-                rect(bounds.origin.x, bounds.origin.y, bounds.size.width, 3.0),
+                rect(
+                    bounds.origin.x,
+                    bounds.origin.y,
+                    bounds.size.width,
+                    OPENER_THIN_HEIGHT,
+                ),
                 weekly,
                 &colour,
             );
@@ -639,9 +650,9 @@ fn opener_title(
             draw_opener_capsule(
                 rect(
                     bounds.origin.x,
-                    bounds.origin.y + 2.0,
+                    bounds.origin.y + (OPENER_BAR_HEIGHT - OPENER_MAIN_HEIGHT) / 2.0,
                     bounds.size.width,
-                    5.0,
+                    OPENER_MAIN_HEIGHT,
                 ),
                 remaining,
                 &colour,
