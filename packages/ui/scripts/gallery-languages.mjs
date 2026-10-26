@@ -4,10 +4,6 @@
 // every language. Kept apart from `gallery-sweep.mjs`, which runs on import, so that the rule has tests of
 // its own.
 
-import { spawnSync } from "node:child_process";
-import { changedFiles, resolveBase } from "../../../scripts/verify/changes.mjs";
-import { workingTree } from "../../../scripts/verify/tree.mjs";
-
 /** The language swept alone when the change cannot reach what differs between languages. */
 const SOURCE_LANGUAGE = "en";
 
@@ -51,8 +47,8 @@ function sensitiveReason(file) {
 }
 
 /** The languages to sweep, and why, from `base` (what `resolveBase` returned) and `files`, the paths changed
- * between the base and the working tree (null when git could not say). `languages` is every language with a
- * catalog. */
+ * between the base and the working tree, the git-ignored extra scenarios included (null when git could not
+ * say), as `branchChanges` in `gallery-impact.mjs` returns them. `languages` is every language with a catalog. */
 export function chooseLanguages(languages, base, files) {
   if (!base.commit) return { languages, reason: `${base.reason}, so there are no changes to judge by` };
   if (files === null) return { languages, reason: "git could not list the changes since the merge base" };
@@ -62,17 +58,4 @@ export function chooseLanguages(languages, base, files) {
     if (what) return { languages, reason: `${file} changed since the merge base, and a change to ${what} can reach what differs between languages` };
   }
   return { languages: [SOURCE_LANGUAGE], reason: "no changed path can make the languages differ; --lang all sweeps every language" };
-}
-
-/** `chooseLanguages` for the working copy at `root` (null when there is none): the changes are those of its
- * branch since its merge base with its recorded target branch, up to the working tree as it is now. */
-export function languagesFromChanges(root, languages) {
-  if (!root) return chooseLanguages(languages, { reason: "not inside a git working copy" }, null);
-  const git = (...args) => {
-    const result = spawnSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-    return result.status === 0 ? result.stdout.trim() : null;
-  };
-  const base = resolveBase(git);
-  const tree = base.commit ? workingTree(root) : null;
-  return chooseLanguages(languages, base, tree ? changedFiles(git, base.commit, tree) : null);
 }

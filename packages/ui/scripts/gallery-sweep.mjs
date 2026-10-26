@@ -13,7 +13,8 @@
 // chromium`, run from this package (the workspace root resolves another `playwright` or none), fetches
 // the one this version expects, and `--chromium` names any other already on the machine.
 //
-// Without `--lang` the languages follow what the branch changed (`gallery-languages.mjs`).
+// Without `--lang` the languages follow what the branch changed (`gallery-languages.mjs`), and a sweep of
+// the whole gallery loads nothing when what the branch changed cannot make a page fail (`gallery-impact.mjs`).
 //
 // Two things keep a sweep from costing more than it must, both shared with `pnpm verify`
 // (`scripts/verify/`). The page loads take a heavy-step slot of the machine-wide lock, so that sweeps
@@ -32,7 +33,8 @@ import { parseArgs } from "node:util";
 import { acquireSlot, describeWait } from "../../../scripts/verify/lock.mjs";
 import { contentKey, readStamp, recordPasses, stampDirectory, stepKey } from "../../../scripts/verify/stamp.mjs";
 import { idsAt, workingTree } from "../../../scripts/verify/tree.mjs";
-import { languagesFromChanges } from "./gallery-languages.mjs";
+import { branchChanges, judgeFromChanges, STAMP_FORCED, STAMP_INPUTS } from "./gallery-impact.mjs";
+import { chooseLanguages } from "./gallery-languages.mjs";
 
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -43,10 +45,16 @@ const LANGUAGES_WITH_CATALOGS = ["en", "zh-Hans"];
 const USAGE = `Usage: pnpm gallery:sweep [options] [scenario ...]
 
 Loads gallery scenarios in a headless browser, runs their steps and fails on any gallery failure banner.
-With no scenario given, every scenario is swept.
+With no scenario given, every scenario is swept, unless nothing the branch changed since its merge base
+with its target branch can make a page fail: only paths the gallery does not load, comments or
+formatting, or in CSS only properties that change how an element looks (colours, backgrounds, shadows,
+radii, font families and weights, and custom properties holding a colour). Then it says so and exits 0
+without loading a page. A change that cannot be judged sweeps, and so do named scenarios, --group, a dark
+theme, --url (another checkout's gallery) and --force; --list lists the scenarios whatever changed.
 
   scenario              An id, or a pattern with * as a wildcard ("git-*"). Repeatable.
   --group <title>       Only the scenarios of the group whose title contains this text (case-insensitive).
+  --force               Sweep even when nothing the branch changed can make a page fail.
   --lang <list>         Comma-separated languages, each one the app offers, or "all" for every language
                         with a catalog (${LANGUAGES_WITH_CATALOGS.join(", ")}). Without it the languages follow what the branch
                         changed since its merge base with its target branch: English alone, unless a
@@ -61,8 +69,9 @@ With no scenario given, every scenario is swept.
   --url <origin>        Use the gallery served at this origin (a running \`pnpm gallery\`) instead of
                         starting a dev server of this checkout.
   --fresh               Load every selected page, even one that already came out clean on this content
-                        (the records are kept in the git directory shared by all worktrees, and are not
-                        read or written with --url, whose gallery is another checkout's).
+                        (it does not override a change judged unable to fail a page; --force does). The
+                        records are kept in the git directory shared by all worktrees, and are not read
+                        or written with --url, whose gallery is another checkout's.
   --list                Print the scenario ids that would be swept and exit.
   --playwright <dir>    A Playwright other than this package's own: a directory holding
                         node_modules/playwright (or playwright-core), or the package itself. Also
@@ -119,6 +128,7 @@ function parse() {
         jobs: { type: "string" },
         url: { type: "string" },
         fresh: { type: "boolean" },
+        force: { type: "boolean" },
         list: { type: "boolean" },
         playwright: { type: "string" },
         chromium: { type: "string" },
@@ -148,6 +158,7 @@ function parse() {
     jobs,
     url: values.url?.replace(/\/+$/, ""),
     fresh: values.fresh ?? false,
+    force: values.force ?? false,
     list: values.list ?? false,
     playwright: values.playwright ?? process.env.OCTOBOARD_PLAYWRIGHT,
     chromium: values.chromium ?? process.env.OCTOBOARD_CHROMIUM,
@@ -304,25 +315,6 @@ async function startServer() {
 }
 
 // ---- records of clean pages ----------------------------------------------------------------------
-
-/** What a page's result depends on, relative to the repository root: this package (the app, the gallery,
- * the fixtures, the configuration of Vite and TypeScript), what it imports from outside it (`config/app.json`,
- * `scripts/env.mjs`), and what decides the dependency versions (the manifests, the lockfile, the patches).
- * The whole package is one key, not one per scenario: which scenarios a source file reaches is not known
- * without tracing imports, and a key that missed an input would pass a page that no longer renders. */
-const STAMP_INPUTS = [
-  "packages/ui",
-  "config",
-  "scripts/env.mjs",
-  "scripts/env.d.mts",
-  "package.json",
-  "pnpm-lock.yaml",
-  "pnpm-workspace.yaml",
-  ".npmrc",
-  "patches",
-];
-/** Git-ignored, yet part of the swept gallery: the checkout's own extra scenarios. */
-const STAMP_FORCED = ["packages/ui/src/gallery/preview"];
 
 /** The env files the dev server reads: `vite.config.ts` loads the root's `.env` and `.env.local`, and Vite its
  * own package's. Not `.env.secret`, which holds credentials nothing here reads. */
@@ -581,6 +573,21 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 
 async function main() {
   const options = parse();
+  const root = git(packageDir, "rev-parse", "--show-toplevel") ?? null;
+  let changes;
+  const branch = () => (changes ??= branchChanges(root));
+  // Before anything starts, so that a sweep with nothing to find costs nothing. Scenarios or a group named, a
+  // dark theme (asked for after a change to colours), a gallery served by another checkout (which this
+  // branch's changes do not describe) and `--list` are not judged.
+  const judging = !options.force && !options.list && !options.url && options.patterns.length === 0 && !options.group && !options.themes.includes("dark");
+  if (judging) {
+    const judged = await judgeFromChanges(branch());
+    if (!judged.sweep) {
+      console.log(`Nothing to load: ${judged.reason} (--force sweeps anyway)`);
+      return 0;
+    }
+    console.error(`Changes: ${judged.reason}`);
+  }
   const { chromium, own } = await loadChromium(options.playwright);
   const started = Date.now();
   const content = options.url ? undefined : snapshotContent();
@@ -607,7 +614,7 @@ async function main() {
     if (!languages) {
       const chosen = options.url
         ? { languages: LANGUAGES_WITH_CATALOGS, reason: "the gallery at --url is another checkout's, so this branch's changes do not describe it" }
-        : languagesFromChanges(git(packageDir, "rev-parse", "--show-toplevel") ?? null, LANGUAGES_WITH_CATALOGS);
+        : chooseLanguages(LANGUAGES_WITH_CATALOGS, branch().base, branch().files);
       languages = chosen.languages;
       checkLanguages(languages, gallery.languages);
       console.error(`Languages: ${languages.join(", ")} (${chosen.reason})`);

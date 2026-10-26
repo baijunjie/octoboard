@@ -169,14 +169,34 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 #### Sweeping the gallery
 
 `pnpm gallery:sweep [ids or patterns]` loads the selected scenarios (all by default) in a headless browser and fails on
-any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--lang`, `--theme`, `--fresh`, `--list`,
-`--url`, ...).
+any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--lang`, `--theme`, `--fresh`, `--force`,
+`--list`, `--url`, ...).
 
 Playwright installs no browser: run `pnpm exec playwright install chromium` from `packages/ui` once, or point
 `--chromium <path>` / `OCTOBOARD_CHROMIUM` (or `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT`) at an existing one.
 
+Before starting anything, the sweep judges what the branch changed since its merge base with its recorded target branch
+(the git-ignored `src/gallery/preview/` included, in which every file counts as added): when none of the changes can make
+a page fail, it prints `Nothing to load: <reason> (--force sweeps anyway)` and exits 0 without loading a page; otherwise
+it prints `Changes: <reason>` and sweeps. The rule lives in `scripts/gallery-impact.mjs`. A change cannot fail the sweep
+when it is outside what the gallery loads (what the records below are keyed on, the tracked root `.env` among it, and
+`scripts/verify/`), is a Markdown or test file inside them, changes a JavaScript or TypeScript file only in comments or
+formatting, or changes a stylesheet only in properties that decide how an element looks and not where it is, whether it
+is shown or what receives the pointer: the same rules and at-rules in the same order and the same other declarations,
+differing only in colours, backgrounds, shadows, border colours, radii, outlines, text decoration, font family, weight and
+style, and custom properties every definition of which in the file is a colour. Opacity, cursor, transitions and
+animations, filters, scrollbar colour, text sizing and border style and width are not among them. A comment- or formatting-only change
+still counts as code when either version of the file holds a comment the React Compiler or the JSX transform reads
+(`eslint-disable` or `eslint-enable`, `$Flow` suppressions, `@jsx` pragmas), since where such a comment sits decides what
+it applies to. The sweep runs whenever the change cannot be judged: no recorded target branch, no merge base, nothing
+differs, git fails, a file does not parse, a file is added or removed (so a checkout holding preview scenarios never
+skips), or the file is of any other type (JSON, HTML, the lockfile, images). A run that names scenarios or patterns, or
+uses `--group`, `--theme dark` or `both`, `--url` or `--force`, is never judged and always sweeps; `--list` lists
+regardless, and `--fresh` does not override a skip.
+
 Without `--lang` the sweep chooses its languages from what the branch changed since its merge base with its recorded target
-branch (the same changes `pnpm verify` judges): English alone, unless a changed path can reach what differs between languages, when every
+branch (the same changes `pnpm verify` judges, with the git-ignored `src/gallery/preview/` counted too, so a checkout with
+preview scenarios sweeps every language): English alone, unless a changed path can reach what differs between languages, when every
 language with a catalog (`en`, `zh-Hans`) is swept. The paths that count are listed in `LANGUAGE_SENSITIVE` in
 `scripts/gallery-languages.mjs`: `src/i18n/` (where `joinPhrases.ts` is the one place that branches on the language
 explicitly), the gallery machinery (`src/gallery/`, `scripts/`, and the repository root's `scripts/verify/`), and the
@@ -192,7 +212,8 @@ sets how many), and say who holds it and who is queued ahead while they wait, so
 rather than overload the machine. The queue is first come, first served: a sweep run again after another run started
 waiting lines up behind it. A page that came out clean (scenario, language and theme) is recorded against a key of
 everything the result depends on: this package including the git-ignored `src/gallery/preview/`, `config/`,
-`scripts/env.mjs` and `scripts/env.d.mts`, the env files the dev server reads (`.env`, `.env.local`), the manifests, the
+`scripts/env.mjs` and `scripts/env.d.mts`, the desktop icon the About section imports
+(`apps/desktop/src-tauri/icons/128x128.png`), the env files the dev server reads (`.env`, `.env.local`), the manifests, the
 lockfile and the dependency patches, the Node version, the browser's version and the `OCTOBOARD_DAEMON_PORT` and
 `VITE_*` environment variables. The key covers the whole package at once, so any edit under `packages/ui` loads
 everything again. A later sweep of the same content skips the recorded pages and reports how many it skipped; `--fresh`
@@ -216,7 +237,8 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `website-preview.html`, `vite.preview.config.ts` | The entry and build config of the fixture-backed React build embedded by the public website |
 | `src/website-preview/` | The preview's bootstrap and fixtures: `main.tsx` mounts the real `App` over `createPreviewDaemon` (`daemon.ts`), with sample repositories (`repositories/`), `createPreviewScenario` (`scenarios.ts`) for its three scenes, sample agent availability and quota readings, and `terminals.ts`, which simulates each session's agent terminal (Claude Code, Codex or Grok Build style) by its status through a `TerminalScript` for `gallery/fakeTerminal.ts`, with the steps it shows in `terminalScripts.ts` (paths, counts and diffs read from the sample repositories; the locales hold only the prose). `scrollBridge.ts` and `interactionBridge.ts` relay scrolling and input modality to the embedding page, sharing report injection and message-source checks in `reportBridge.ts`; the iframe and scene buttons belong to [`apps/web/`](../../apps/web/README.md) |
 | `gallery.html`, `gallery-frame.html`, `src/gallery/` | The dev-only UI state gallery (see "The UI state gallery"): `shell.tsx` and `frame.tsx` (the shell page and the page one scenario renders in), `scenario.ts` (the scenario type), `interact.ts` (step helpers), `fixtureDaemon.ts` with `fixtureGit.ts` and `fixtureConfiguration.ts` (the fixture daemon), `updaterFixture.ts` (the shell's updater as a scenario describes it) and `licensesGallery.tsx` (the page the licenses-dialog scenarios render), `fixtures/` (the scenarios, `builders.ts`, `groups.ts`, sample projects and repositories, change factories), and the untracked, per-checkout `preview/` (extra scenarios appended to `SCENARIOS`) |
-| `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep` (takes a heavy-step slot and skips pages recorded as clean; see "Sweeping the gallery") |
+| `scripts/gallery-sweep.mjs` | `pnpm gallery:sweep` (skips itself when the changes cannot fail it, takes a heavy-step slot and skips pages recorded as clean; see "Sweeping the gallery") |
+| `scripts/gallery-impact.mjs` | The sweep's judgement of whether the branch's changes can make a page fail (with `STAMP_INPUTS`, what the records' key covers), and `branchChanges`, the branch's changes that the language choice shares (see "Sweeping the gallery") |
 | `scripts/gallery-languages.mjs` | The sweep's choice of languages from the branch's changes, and `LANGUAGE_SENSITIVE`, the paths that call for every language (see "Sweeping the gallery") |
 | `scripts/gallery-chip-geometry.mjs` | A standalone Playwright check of chip geometry over gallery scenarios, run by hand against a served gallery |
 | `scripts/generate-licenses.mjs` | `pnpm licenses:generate` (also the first step of `pnpm build`): writes `src/about/licenses.generated.json` from the production dependency closure of this package in `node_modules` (`@types/*` left out) and from `cargo metadata` of the Cargo workspace (normal dependencies of the desktop shell and daemon for the two macOS targets, procedural macros left out; it needs `cargo` and may fetch crate sources); a package that ships no license file is listed without a text; `src/cssDependencies.test.ts` checks that every package a stylesheet names is a production dependency, so it reaches that list |

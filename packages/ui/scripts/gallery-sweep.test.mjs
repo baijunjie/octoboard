@@ -11,14 +11,15 @@ const loader = new URL("./test-fixtures/gallery-sweep-loader.mjs", import.meta.u
 
 // Slots and records of clean pages are kept here, not in the machine-wide places: a sweep started by a
 // test run that holds the heavy-step slot would otherwise wait for it forever. A run is given a state
-// of its own unless it is one of several that share records.
+// of its own unless it is one of several that share records. `--force` is added unless `judged` is set:
+// whether the branch's changes call for a sweep depends on the checkout the test runs in.
 const stateDir = mkdtempSync(path.join(os.tmpdir(), "gallery-sweep-state-"));
 afterAll(() => rmSync(stateDir, { recursive: true, force: true }));
 const newState = () => mkdtempSync(path.join(stateDir, "state-"));
 
-function run(mode, args = ["--list"], state = newState(), onOutput = () => {}) {
+function run(mode, args = ["--list"], state = newState(), onOutput = () => {}, { judged = false } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, ["--no-warnings", "--experimental-loader", loader, script, ...args], {
+    const child = spawn(process.execPath, ["--no-warnings", "--experimental-loader", loader, script, ...(judged ? [] : ["--force"]), ...args], {
       env: { ...process.env, GALLERY_TEST_MODE: mode, OCTOBOARD_SWEEP_STATE_DIR: state, OCTOBOARD_VERIFY_SLOTS: "1" },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -149,3 +150,15 @@ test("a page load waits while every heavy-step slot is held", async () => {
   expect(result).toMatchObject({ code: 0 });
   expect(result.output).toContain("Waiting for a free heavy-step slot; running now: another worktree: ui tests");
 }, 20_000);
+
+test("without --force the branch's changes decide whether pages are loaded, and say why", async () => {
+  const result = await run("normal", ["--lang", "en"], newState(), () => {}, { judged: true });
+  expect(result).toMatchObject({ code: 0 });
+  // Which of the two depends on the state of the checkout the test runs in, so only the line is certain.
+  expect(result.output).toMatch(/^Nothing to load: .+ \(--force sweeps anyway\)$|^Changes: .+\nSweeping 1 scenario/m);
+  const named = await run("normal", ["--lang", "en", "test"], newState(), () => {}, { judged: true });
+  expect(named.output).not.toMatch(/^(Changes|Nothing to load):/m);
+  const dark = await run("normal", ["--lang", "en", "--theme", "dark"], newState(), () => {}, { judged: true });
+  expect(dark.output).not.toMatch(/^(Changes|Nothing to load):/m);
+  expect(dark.output).toContain("1 clean, 0 failed");
+}, 40_000);

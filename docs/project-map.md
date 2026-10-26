@@ -57,7 +57,7 @@ Per-package commands are in that package's doc.
   nothing but test files nothing else imports changed since (`verify/rerun.mjs`, fed by the reporter in
   `packages/ui/src/test/failedFilesReporter.ts`), and caps concurrent heavy steps across worktrees (`verify/lock.mjs`); its tests are
   `verify/*.test.mjs`. The UI package's gallery sweep reuses the lock, the stamps directory, `tree.mjs` and `changes.mjs`
-  (to choose its languages). The scope rule's source is the "Formatting and checks" step of the root
+  (to choose its languages and to judge whether any page can fail). The scope rule's source is the "Formatting and checks" step of the root
   `CLAUDE.md`.
 
 ## Brand artwork
