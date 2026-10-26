@@ -5,6 +5,7 @@ import { useStore } from "zustand/react";
 import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon-client";
 import { daemonMessage } from "./daemonMessage";
 import { errorPresentation, noticeErrorPresentation, noticeKind } from "./errorPresentation";
+import type { ErrorRecovery } from "./errorRecovery";
 import { errorText } from "./errorText";
 import { DEFAULT_GIT_WORKFLOW } from "./gitWorkflow";
 import { currentLanguage } from "./i18n/language";
@@ -55,12 +56,15 @@ export interface ToastRequest {
   session?: string;
   /** The plain name of what failed, for an error alert whose code has no `alertTitle` of its own. */
   title?: string;
+  /** The remedy an error alert gives in place of the one its kind of failure has, where the call site knows a better
+   * one (see `classifyError`). */
+  recovery?: ErrorRecovery;
 }
 
 /** The error toast `toastError` raises for `message`, with the daemon's code and params kept when it is an error that has them. */
-export function errorToast(message: string | Error, session?: string, title?: string): ToastRequest {
+export function errorToast(message: string | Error, session?: string, title?: string, recovery?: ErrorRecovery): ToastRequest {
   const presentation = typeof message === "string" ? message : errorPresentation(message);
-  return { kind: "error", message: errorText(message), session, title, error: message,
+  return { kind: "error", message: errorText(message), session, title, recovery, error: message,
     ...(typeof presentation !== "string" && { daemonError: presentation }) };
 }
 
@@ -691,7 +695,7 @@ export interface Daemon {
   /** `session` is passed by a caller that knows which session the message is about, so the toast
    * can name it; see `ToastRequest.session`. `title` names what failed in plain words, with no name in it; see
    * `ToastRequest.title`. */
-  toastError: (message: string | Error, session?: string, title?: string) => void;
+  toastError: (message: string | Error, session?: string, title?: string, recovery?: ErrorRecovery) => void;
   /** Confirms something the user just did, which has no inline place to say so (a path copied);
    * about no session, so the toast is the message alone. */
   toastNotice: (message: string, content?: ReactNode) => void;
@@ -762,7 +766,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
         const message = daemonMessage(currentLanguage(), err.code, err.params, err.message, store.getState());
         throw new DaemonRequestError(message, err.code, err.params);
       }),
-    toastError: (message, session, title) => emitToast(errorToast(message, session, title)),
+    toastError: (message, session, title, recovery) => emitToast(errorToast(message, session, title, recovery)),
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);

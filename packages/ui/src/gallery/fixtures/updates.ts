@@ -293,4 +293,15 @@ export const updateScenarios: Scenario[] = [
     updater: { check: newer, checked: true, install: { progress: { downloaded: 8_123_456, total: 41_234_567 }, ends: { error: FAILED_INSTALL } } },
     steps: [openSession, downloadAndInstall],
   },
+  {
+    id: "updates-restart-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Alert, the restart did not happen",
+    description: "Restart now, with nothing holding the restart up, goes straight to the shell, which refuses: the error alert dialog is titled \"Could not restart\" and says Octoboard kept running instead of relaunching, and to quit it and open it again; the shell's text is behind Error details, closed, with the Report issue guidance and button of an unexpected failure. The notice that offered the restart stays behind.",
+    state: quiet,
+    updater: { check: newer, checked: true },
+    exitFailure: "the relaunch was refused by the system",
+    steps: [openSession, downloadAndInstall, restartNow],
+  },
 ];

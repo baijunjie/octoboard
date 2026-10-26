@@ -61,6 +61,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
             message: request.message,
             session: request.session,
             error: request.error ?? request.daemonError ?? request.message,
+            recovery: request.recovery,
             title,
             content: (
               <>

@@ -1,4 +1,5 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
+import type { ErrorRecovery } from "../errorRecovery";
 import type { Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
@@ -67,6 +68,9 @@ export interface ToastFixture {
    * the viewing language when a function; a code's own `alertTitle` still wins over it, as it does there. Left out for
    * an error the daemon broadcasts, which no action names. */
   title?: string | ((t: Translate) => string);
+  /** The remedy a call site gives its error alert in place of its failure's own (`ToastRequest.recovery`), as the
+   * action that raises the real error passes it. */
+  recovery?: ErrorRecovery;
   code?: string;
   params?: MessageParams;
   session?: string;
@@ -196,10 +200,17 @@ export interface Scenario {
   /** `"pending"`: `create_shell_terminal` is never answered, so a start stays in flight and the
    * Terminal panel keeps its "Starting terminal…" state. */
   shellTerminalStart?: "pending";
-  /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run, so the confirmation
-   * a busy session or shell terminal holds the quit up with is on screen. The platform has no exit
-   * capability otherwise, and confirming ends nothing. */
+  /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run: with a busy session or shell terminal
+   * the confirmation they hold the quit up with is on screen, and with none the quit goes straight to the shell. The
+   * platform has no exit capability otherwise; what the shell does with the quit is nothing (confirming ends nothing)
+   * unless `exitFailure` fails it. */
   quitRequested?: boolean;
+  /** The text the desktop shell fails the quit or restart with, so a quit (`quitRequested`) or a restart the steps press
+   * ends in the failure alert instead of nothing. The platform has the exit capability, as with `quitRequested`. */
+  exitFailure?: string;
+  /** The daemon exits by itself, as the desktop shell reports with this text, once the steps have run, so the alert
+   * saying so is on screen. The platform has the exit capability, as with `quitRequested`. */
+  daemonExited?: string;
   /** The files and folders that exist for `probe_path_links`, by absolute path: a path the terminal
    * shows, in whatever form, is resolved against the home directory `/Users/dev` or the asking
    * project's folder first. A file in the project or a worktree carries its `view`, where
@@ -292,6 +303,9 @@ export interface Scenario {
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;
+  /** A refusal of `open_project_path` and `reveal_project_path`, which a row of the project pane and the file viewer's
+   * header ask for to open a file or folder in the default application or the file manager; acknowledged otherwise. */
+  projectPathActionError?: FixtureError;
   /** A refusal of `delete_project` that asks for the folder to be moved to the Trash (`trash_directory`),
    * as the daemon refuses a folder shared with another project or one it cannot move. A removal that
    * does not ask for it is not refused. */

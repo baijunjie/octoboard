@@ -4,9 +4,9 @@ import { DaemonRequestError } from "./daemon-client";
 export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
-  | "configuration" | "image" | "avatarSize" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
+  | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
-  | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "hostPathGone" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
@@ -67,8 +67,9 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   ownerGone: ["quick_create_owner_gone"],
   session: ["session_archived", "session_not_running", "session_already_on_account", "unknown_session", "session_request_not_waiting", "session_request_answered", "trust_not_waiting", "session_not_bound"],
   configuration: ["configuration_not_recognised", "configuration_version_unsupported", "configuration_unreadable", "import_choice_unavailable"],
-  image: ["icon_not_an_image"],
-  // The console dialog scales a picked image down to the limit, so only an imported configuration carries one too large.
+  // The console dialog draws a picked image into a data URL scaled down to the limit, so only an imported configuration
+  // carries an avatar that is not an image or is too large.
+  avatarImage: ["icon_not_an_image"],
   avatarSize: ["icon_too_large"],
   remote: ["invalid_remote_url"],
   noCommits: ["no_commits_to_push", "no_commits_to_restore"],

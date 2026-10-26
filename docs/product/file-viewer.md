@@ -61,7 +61,8 @@ the machine running the daemon. They are offered only on a live file — a file 
 and an uncommitted change that is not a deletion, in the worktree it is read from; a committed change and a change
 that deletes the file have neither. Each is an icon button whose tooltip is the short name the row's menu uses while the name announced
 says what pressing does (see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`). Neither says
-anything when it succeeds; a refusal or a failure raises an error alert with the reason, as from a row.
+anything when it succeeds; a refusal or a failure raises the same error alert as from a row, with the same remedy for a
+file that is no longer there.
 
 The details share that row with the controls to use the width beside them, not to hold the header to one row. Each
 detail is an item of its own, and one too long for the space left beside the controls moves down to a row of its own,

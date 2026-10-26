@@ -273,6 +273,7 @@ export function useSessionRequestDialogProps(request: SessionRequest | undefined
     confirmDisabled: form?.unavailable === true,
     confirmLabel: t(ACTION_TEXT[action].confirm),
     cancelLabel: t("dialog.sessionRequest.refuse"),
+    errorTitle: t("dialog.sessionRequest.approveFailedTitle"),
     onCancel: () => void answer(false),
     onConfirm: () => answer(true),
   };

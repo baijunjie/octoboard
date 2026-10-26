@@ -72,7 +72,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The daemon failed to start, the error dialog",
     description:
-      "The error dialog that opens over the page, titled \"The daemon failed to start\": its body is only the application's own sentence (\"The daemon did not start.\") and the line that Octoboard cannot work without it and should be opened again to try once more: a known failure, so there is no report guidance and no Report issue button. The daemon's text is behind Error details, open here, in a wrapping block on its own surface, not as the dialog's body text. The message is taller than the dialog's body, which scrolls with a fade at its bottom edge. The page behind is dimmed and is looked at in the scenarios above.",
+      "The error dialog that opens over the page, titled \"The daemon failed to start\": its body is only the application's own two sentences (the daemon is the background process that runs your sessions and terminals; Octoboard cannot work without it and should be opened again to try once more), a known failure, so there is no report guidance and no Report issue button. The daemon's text is behind Error details, open here, in a wrapping block on its own surface, not as the dialog's body text. The message is taller than the dialog's body, which scrolls with a fade at its bottom edge. The page behind is dimmed and is looked at in the scenarios above.",
     quitRequested: true,
     startup: DAEMON_FAILED,
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],

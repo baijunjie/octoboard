@@ -515,13 +515,13 @@ it("reports a failed dialog action to the acknowledgement queue, with no inline 
   const root = createRoot(container);
   let action!: ReturnType<typeof useDialogAction>;
   function Subject() {
-    action = useDialogAction();
+    action = useDialogAction(undefined, "Could not save");
     return null;
   }
   try {
     act(() => root.render(<Subject />));
     await act(() => action.run(() => Promise.reject(new Error("Something failed"))));
-    expect(errorAlerts.getSnapshot().some((error) => error.message === "Something failed")).toBe(true);
+    expect(errorAlerts.getSnapshot().some((error) => error.message === "Something failed" && error.title === "Could not save")).toBe(true);
     expect(action.busy).toBe(false);
     expect(container.querySelector('[role="alert"]')).toBeNull();
   } finally {

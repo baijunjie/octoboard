@@ -33,7 +33,7 @@ function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; de
   act(() => {
     root.render(
       <DaemonProvider value={fakeDaemon()}>
-        <ConfirmDialog title="Archive" message="Archive it?" confirmLabel="Archive" onConfirm={async () => {}} {...props}
+        <ConfirmDialog title="Archive" message="Archive it?" confirmLabel="Archive" errorTitle="Could not archive" onConfirm={async () => {}} {...props}
           onCancel={() => {}} />
       </DaemonProvider>,
     );

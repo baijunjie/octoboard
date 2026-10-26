@@ -71,6 +71,16 @@ export const connectionScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
   },
   {
+    id: "daemon-exited",
+    group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
+    title: "The daemon exited by itself",
+    description: "The error alert dialog, titled \"The daemon exited unexpectedly\", says the daemon runs your sessions and terminals and Octoboard cannot work without it, and to restart Octoboard to continue, the app name a chip; the shell's own text is behind Error details, closed, and the Report issue guidance and button are offered as for any unexpected failure. The window behind is dimmed, with the connection banner of the lost daemon.",
+    state: connected("closed"),
+    daemonExited: "the daemon process exited with status 101",
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
+  },
+  {
     id: "daemon-lost-behind-dialog",
     group: STARTUP_AND_CONNECTION,
     category: "exceptional",

@@ -53,7 +53,7 @@ function mountApart(error: DaemonRequestError, daemon: Daemon = { store: createS
 it("retains the structured request failure through the dialog action and responds to language changes", async () => {
   let run!: (action: () => Promise<void>) => Promise<void>;
   function Subject() {
-    const action = useDialogAction();
+    const action = useDialogAction(undefined, "Could not save");
     run = action.run;
     return null;
   }

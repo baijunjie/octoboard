@@ -4,7 +4,7 @@
 import type { MessageParams } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, failureTitle, snapshotState } from "./builders";
+import { SAMPLE, snapshotState } from "./builders";
 import { IMAGES } from "./viewerImages";
 
 const GROUP = "Project pane: files";
@@ -147,11 +147,11 @@ const fileTypeFiles: FixtureFiles = {
 export const projectFilesScenarios: Scenario[] = [
   {
     id: "files-viewer-error-toast", group: "File viewer", category: "exceptional",
-    title: "File viewer with an error toast",
-    description: "An unrelated path failure is deliberately raised over the viewer, its path set as code, to confirm that toast placement leaves Previous / Next accessible.",
+    title: "File viewer with an error alert, the file gone",
+    description: "File manager is pressed on a file that has been removed from the disk, so the host refuses it and the error alert opens over the viewer, titled \"Could not open in the file manager\" and saying the file does not exist any more; its remedy says it may have been moved, renamed or deleted and, if moved or renamed, to find it in the project's files and try again from there, not to pick one with Browse.",
     state,
-    toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "", title: failureTitle("common.revealFailedTitle") }],
-    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
+    projectPathActionError: { code: "file_not_found", params: { path: "src/main.ts" }, message: "src/main.ts does not exist" },
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.press(ui.t("viewer.openInFileManager")), (ui) => ui.wait(300)],
   },
   {
     id: "files-tree",

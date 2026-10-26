@@ -1215,6 +1215,8 @@ export function App(): React.ReactElement {
           destructive
           onCancel={closeExitConfirm}
           onConfirm={confirmExit}
+          // A quit or restart that fails is reported by `useAppExit` under its own title; `confirmExit` never rejects.
+          errorTitle={t(exitRestarts ? "exit.restartFailed.title" : "exit.failed.title")}
         />
       )}
     </div>

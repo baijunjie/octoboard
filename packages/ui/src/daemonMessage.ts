@@ -91,7 +91,8 @@ export const RECORD_ID_PARAMS: Record<string, readonly string[]> = {
   session_not_bound_to_owner: ["owner"], session_owner_changing: ["owner"],
 };
 
-/** Names retain the surrounding prose's typeface rather than the monospace used for paths. */
+/** Names retain the surrounding prose's typeface rather than the monospace used for paths. Keyed, as `CODE_PARAMS` is,
+ * by the code a message is worded under (`messageCode`), so a variant's params are listed under `<code>.<variant>`. */
 export const NAME_PARAMS: Record<string, readonly string[]> = {
   unknown_console: ["console"],
   unknown_project: ["project"],
@@ -129,6 +130,8 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   "sharing_resume_failed.running": ["name"],
   account_sharing_repair_failed: ["name"],
   unshared_state_database: ["name"],
+  "icon_not_an_image.import": ["console_name"],
+  "icon_too_large.import": ["console_name"],
 };
 
 /** A structured list never infers boundaries from user-provided names or punctuation. */
@@ -403,12 +406,14 @@ export const UI_PARAMS: Record<string, MessageParams> = {
  * for a variant its params name (`unsupported_file_type` of an `unmerged` file, worded as
  * `daemon.unsupported_file_type.unmerged`, like `daemon.trust_reason.<code>`; `account_quota_exhausted`
  * with a `resets_at` time, worded as `daemon.account_quota_exhausted.resets`; `account_in_use` while the
- * account is being signed in, worded as `daemon.account_in_use.signingIn`, or `.both` with sessions too). */
+ * account is being signed in, worded as `daemon.account_in_use.signingIn`, or `.both` with sessions too; a refused
+ * avatar of an imported console, which names it, worded as `daemon.icon_too_large.import`). */
 export function messageCode(code: string, params: MessageParams): string {
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
   if (code === "sharing_resume_failed" && params.still_running === "true") return "sharing_resume_failed.running";
   if (code === "relocation_failed" && (params.stage === "thread_record" || params.stage === "kept_staging")) return `${code}.${params.stage}`;
+  if ((code === "icon_not_an_image" || code === "icon_too_large") && params.console_name) return `${code}.import`;
   if (code === "account_in_use" && params.signing_in === "true") return /^[1-9]\d*$/.test(params.sessions ?? "") ? "account_in_use.both" : "account_in_use.signingIn";
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;
 }

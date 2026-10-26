@@ -67,7 +67,7 @@ it("stays above an open form until acknowledged and leaves the form available fo
 
 it("reports an identical immediate failure again after acknowledgement and retry", async () => {
   const confirm = vi.fn().mockRejectedValue(new Error("Refused"));
-  mount(<ConfirmDialog title="Save project" message="Save it?" onConfirm={confirm} onCancel={() => {}} />);
+  mount(<ConfirmDialog title="Save project" message="Save it?" errorTitle="Could not save the project" onConfirm={confirm} onCancel={() => {}} />);
   const submit = () => document.querySelector('[role="alertdialog"] form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await act(async () => { submit(); });
   expect(errorAlerts.getSnapshot()).toHaveLength(1);

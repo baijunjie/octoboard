@@ -57,6 +57,11 @@ const quitIdleState = snapshotState({
   sessions: [sessionOf("s-web-2", main.id, website.id, "Update the dependencies", "idle")],
   shellTerminals: quitShells,
 });
+const quitQuietState = snapshotState({
+  consoles: [main],
+  projects: [website],
+  sessions: [sessionOf("s-web-2", main.id, website.id, "Update the dependencies", "idle")],
+});
 const quitBusyState = snapshotState({
   consoles: [main],
   projects: [website],
@@ -258,5 +263,16 @@ export const layoutScenarios: Scenario[] = [
       "Quitting with a working session and a busy shell terminal: one dialog says both are still running, that the sessions are interrupted and can each be resumed next time, and that what the terminals run is ended.",
     state: quitBusyState,
     quitRequested: true,
+  },
+  {
+    id: "layout-quit-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Quit that did not end the app",
+    description:
+      "Nothing holds the quit up, so it goes straight to the shell, which refuses: the error alert dialog is titled \"Could not quit\" and says Octoboard kept running instead of ending and to try quitting again; the shell's text is behind Error details, closed, with the Report issue guidance and button of an unexpected failure.",
+    state: quitQuietState,
+    quitRequested: true,
+    exitFailure: "the application is already shutting down",
   },
 ];

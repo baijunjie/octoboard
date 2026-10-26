@@ -614,6 +614,19 @@ fn index_resolutions(
     Ok(chosen)
 }
 
+/// `err` with the console it refuses named (`console_name`) when it is a refused avatar: a document
+/// may carry several consoles, and the refusal has to say whose avatar it is.
+fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
+    if let Some(coded) = err.downcast_mut::<CodedError>() {
+        if coded.code == error_code::ICON_NOT_AN_IMAGE || coded.code == error_code::ICON_TOO_LARGE {
+            coded
+                .params
+                .insert("console_name".to_string(), name.trim().to_string());
+        }
+    }
+    err
+}
+
 /// Creates a console for each console of the document and associates its projects as `resolutions`
 /// say, through the same association a hand-added project goes through.
 ///
@@ -675,7 +688,8 @@ pub async fn apply(
             icon: document_console.icon,
             console_session_prompt: document_console.console_session_prompt,
         };
-        coordinator::check_new_console(state, &new)?;
+        coordinator::check_new_console(state, &new)
+            .map_err(|err| naming_console(err, &new.name))?;
         prepared.push((new, accounts.fallbacks, document_console.projects));
     }
 
@@ -1606,6 +1620,8 @@ mod tests {
         };
         let mut bad_icon = console("Second", Vec::new());
         bad_icon.icon = Some("not-an-image".to_string());
+        let mut huge_icon = console("Third", Vec::new());
+        huge_icon.icon = Some(format!("data:image/png;base64,{}", "A".repeat(256 * 1024)));
         let mut newer = valid(Vec::new());
         newer["version"] = json!(config_export::VERSION + 1);
         let resolve = || DirectoryChoice::ExportedPath;
@@ -1621,6 +1637,11 @@ mod tests {
                 valid(vec![bad_icon]),
                 Vec::new(),
                 error_code::ICON_NOT_AN_IMAGE,
+            ),
+            (
+                valid(vec![huge_icon]),
+                Vec::new(),
+                error_code::ICON_TOO_LARGE,
             ),
             (
                 valid(Vec::new()),
@@ -1654,6 +1675,13 @@ mod tests {
                 .await
                 .expect_err(code);
             assert_eq!(code_of(&err), code);
+            // A refused avatar names the console it belongs to.
+            let coded = err.downcast_ref::<CodedError>().unwrap();
+            match code {
+                error_code::ICON_NOT_AN_IMAGE => assert_eq!(coded.params["console_name"], "Second"),
+                error_code::ICON_TOO_LARGE => assert_eq!(coded.params["console_name"], "Third"),
+                _ => assert!(!coded.params.contains_key("console_name"), "{code}"),
+            }
             assert!(state.store.list_consoles().unwrap().is_empty(), "{code}");
             assert!(stored_projects(&state).is_empty(), "{code}");
         }

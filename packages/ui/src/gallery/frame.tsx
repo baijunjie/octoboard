@@ -71,6 +71,8 @@ const EMPTY_DOCUMENT = JSON.stringify({ format: "octoboard-configuration", versi
 
 /** The window's quit handler once the app has registered it, for a scenario that asks to quit. */
 let requestQuit: (() => void) | undefined;
+/** The window's handler of the daemon exiting by itself once the app has registered it, for a scenario that says so. */
+let daemonExited: ((detail: string) => void) | undefined;
 
 /** The browser platform, with what the desktop app alone offers added so it can be driven in the
  * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
@@ -82,7 +84,8 @@ let requestQuit: (() => void) | undefined;
  * capability stubbed from the scenario's `configuration` (absent where it says the platform has
  * none) so that no download or file picker is raised from a capture, and the exit capability for a
  * scenario that says `quitRequested`, whose quit request is raised once its steps have run and whose
- * confirmation ends nothing, and the updater for a scenario that has one (`updater`), with that same exit
+ * confirmation ends nothing (or fails with the text of its `exitFailure`), the daemon exiting by itself for a scenario
+ * that says `daemonExited`, and the updater for a scenario that has one (`updater`), with that same exit
  * capability, since a restart goes through it. Nothing else native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
@@ -107,14 +110,17 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       } },
     }),
     ...(scenario?.updater && { updater: fixtureUpdater(scenario.updater) }),
-    ...((scenario?.quitRequested || scenario?.updater) && {
+    ...((scenario?.quitRequested || scenario?.updater || scenario?.daemonExited !== undefined || scenario?.exitFailure !== undefined) && {
       exit: {
-        register: ({ onQuitRequested }) => {
+        register: ({ onQuitRequested, onDaemonExited }) => {
           requestQuit = onQuitRequested;
-          return () => { requestQuit = undefined; };
+          daemonExited = onDaemonExited;
+          return () => { requestQuit = undefined; daemonExited = undefined; };
         },
         heartbeat: async () => {},
-        confirmQuit: async () => {},
+        confirmQuit: async () => {
+          if (scenario?.exitFailure !== undefined) throw new Error(scenario.exitFailure);
+        },
       },
     }),
     ...(scenario?.backgroundRun && { backgroundRun: { set: async () => {} } }),
@@ -271,6 +277,12 @@ try {
       requestQuit();
       await ui.wait(300);
     } else galleryFailure("The scenario asks for a quit request but the app registered no quit handler");
+  }
+  if (scenario?.daemonExited !== undefined) {
+    if (daemonExited) {
+      daemonExited(scenario.daemonExited);
+      await ui.wait(300);
+    } else galleryFailure("The scenario asks for the daemon to exit but the app registered no handler for it");
   }
   // The live changes the URL asks for, as a viewer would have pressed them; the shell's buttons send the rest.
   live.release();

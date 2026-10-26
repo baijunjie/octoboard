@@ -77,8 +77,12 @@ daemon code's own, as "Branches and worktrees not removed" (`session_branches_no
 left in place" (`project_branches_not_determined`) are. A daemon code's own title wins over the action's only for an
 alert a daemon broadcast raises and for some actions' failures outside a dialog; an alert raised by a dialog's submit or
 confirmation always takes that dialog's title for its action, whatever code the failure carries.
-Only a failure nothing titles — an error nothing caught — is titled "Unexpected error" when it is unexpected, and
-"Error" when its cause is a known one. When the failure is
+A failure of the application's own lifecycle has its own title too — "The daemon failed to start", "The daemon exited
+unexpectedly", "Could not quit", "Could not restart" (see "Starting up", "Quitting" and "Restarting" in
+`docs/product/application-lifecycle.md`). Only a failure nothing titles — an error nothing caught — is titled
+"Unexpected error" when it is unexpected, and "Error" when its cause is a known one. A title of its own does not change
+how a failure is classified: the daemon exiting, and a quit or a restart that did not happen, are still unexpected
+failures (see "Recovery and unexpected errors" below). When the failure is
 about a session, the first line of its body, "Session: …", names that session and where it is (its project or
 console), since the daemon's message says only "this session"; a session whose record is already gone, as after a
 failed launch, is named there by the name the failure carried, with no place. The rest of the body is in Octoboard's
@@ -380,7 +384,9 @@ For example:
 
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
-- An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location.
+- An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location. A file or
+  folder that File manager or Default application no longer finds instead says it may have been moved, renamed or
+  deleted (see "A row's actions" in `docs/product/project-pane.md`).
 - An account name already in use asks for an unused name for that agent; an occupied destination asks for a different
   destination while preserving the existing folder.
 - A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.

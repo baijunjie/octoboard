@@ -515,6 +515,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
         case "open_project_path":
         case "reveal_project_path": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          if (scenario.projectPathActionError) return fail(scenario.projectPathActionError);
           return { type: "ack" };
         }
         case "open_path_link":
@@ -1130,7 +1131,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
       }
     },
     // The request the real daemon raises, so the title and the raw text an action gives it reach the alert as they do there.
-    toastError: (message, session, title) => emitToast(errorToast(message, session, title)),
+    toastError: (message, session, title, recovery) => emitToast(errorToast(message, session, title, recovery)),
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);

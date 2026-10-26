@@ -49,8 +49,8 @@ export interface ConfirmDialogProps {
   /** Names what the dialog currently asks about, for one reused across subjects: a change clears
    * the failure shown for the previous one. */
   resetKey?: string;
-  /** What the alert for a failure of `onConfirm` is titled, in place of the generic "Error". */
-  errorTitle?: string;
+  /** What the alert for a failure of `onConfirm` is titled: the plain name of what failed. */
+  errorTitle: string;
   /** A failure that ends the question's purpose: the dialog turns into a failure modal that says it, and its
    * acknowledgement calls `onCancel` (see `Dialog`'s `failure`). */
   failure?: AcknowledgementView;

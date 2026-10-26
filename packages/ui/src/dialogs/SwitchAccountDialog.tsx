@@ -73,6 +73,7 @@ export function SwitchAccountDialog({
       // Nothing left to switch in the chosen scope (its sessions began switching after the dialog opened).
       confirmDisabled={counts[scope] === 0}
       onCancel={onClose}
+      errorTitle={t("dialog.switchAccount.failedTitle")}
       // The set is read once Confirm is pressed, and fixed from then on: sessions opened later never join it.
       onConfirm={() => {
         const refusal = disabled

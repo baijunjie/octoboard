@@ -44,17 +44,18 @@ processes while sharing one database, so it refuses to start. The application th
 screen that says the daemon failed to start and offers to quit — a failed start never leaves a window with no
 explanation. The daemon's own reason is not on that screen itself but in the popover of the mark after its heading
 (the screen is described in "The window chrome and the content panel" in `docs/product/window-layout.md`); the error
-alert shown over the screen, titled "The daemon failed to start", says that the daemon did not start, then that
-Octoboard cannot work without it and that opening Octoboard again tries once more, with the same reason in a block
-under its **Error details**. It is a known failure, not an unexpected one: it asks for no report and has no **Report
+alert shown over the screen, titled "The daemon failed to start", says that the daemon is the background process that
+runs the user's sessions and terminals, then that Octoboard cannot work without it and that opening Octoboard again
+tries once more, with the same reason in a block under its **Error details**. It is a known failure, not an unexpected one: it asks for no report and has no **Report
 issue** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). With no daemon running there is
 nothing to keep running, so closing the window quits whatever that setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
 Unix user, whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
 
-If the daemon starts but dies later, the application says so in an error alert asking the user to restart Octoboard; it
-does not silently keep showing a stale session list. The alert treats it as an unexpected failure, offering **Report
-issue**, with the daemon's exit reason behind **Error details** rather than in its sentence (see "Recovery and
-unexpected errors" in `docs/product/error-alerts.md`).
+If the daemon starts but dies later, the application says so in an error alert titled "The daemon exited
+unexpectedly", which says that the daemon runs the user's sessions and terminals, that Octoboard cannot work without
+it, and asks the user to restart Octoboard; it does not silently keep showing a stale session list. The alert treats
+it as an unexpected failure, offering **Report issue**, with the daemon's exit reason behind **Error details** rather
+than in its sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 
 **The window appears already themed.** It is created hidden and shown only once the UI has applied the chosen
 appearance (see "Light, dark and follow the system" in `docs/product/appearance.md`), so a launch never flashes the
@@ -266,9 +267,9 @@ application on confirmation (see "Closing the window" above).
   is not brought back for it. Seen with the menu bar icon's Quit while the window was closed and no session was
   running: the application exited with no window, Dock icon or notice appearing.
 - Quitting does not depend on the daemon answering: if it does not, the application exits anyway after a short wait.
-- If the application cannot end itself once the quit is under way, an error alert says Octoboard could not be quit,
-  and the window stays open. The alert treats it as an unexpected failure, offering **Report issue**, with the
-  reason behind **Error details**.
+- If the application cannot end itself once the quit is under way, an error alert titled "Could not quit" says
+  Octoboard kept running instead of ending and asks the user to try quitting it again, and the window stays open.
+  The alert treats it as an unexpected failure, offering **Report issue**, with the reason behind **Error details**.
 - Until the window has loaded far enough to be able to ask, a quit is never held back — a window that never gets as
   far as showing the confirmation can still be quit.
 
@@ -293,8 +294,9 @@ rules above:
   (see "Starting up" above): the old daemon is first asked to shut down, as in any quit; one still running **2
   seconds** later is sent a termination signal, which has it end its sessions' processes first, and one still running
   **5 seconds** after that is killed.
-- If the application cannot restart, an error alert says Octoboard could not be restarted, treated as an unexpected
-  failure as a failed quit is.
+- If the application cannot restart, an error alert titled "Could not restart" says Octoboard kept running instead of
+  relaunching and asks the user to quit it and open it again. It is treated as an unexpected failure, as a failed quit
+  is.
 
 ### Quitting when the window has stopped responding
 

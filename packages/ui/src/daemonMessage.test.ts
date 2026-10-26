@@ -67,6 +67,12 @@ it("words a failed launch's reason from the failure's own code and params, keepi
   );
 });
 
+it("names the console whose avatar an import refuses, and words the same refusal of a lone console without a name", () => {
+  expect(daemonMessage("en", "icon_too_large", { limit_kib: "256", console_name: "Hub" }, "x", records)).toBe(`The avatar of the console ${isolate("Hub")} is larger than ${isolate("256")} KiB.`);
+  expect(daemonMessage("en", "icon_not_an_image", { console_name: "Hub" }, "x", records)).toBe(`The avatar of the console ${isolate("Hub")} is not an image.`);
+  expect(daemonMessage("en", "icon_too_large", { limit_kib: "256" }, "x", records)).toBe(`The console avatar is larger than ${isolate("256")} KiB.`);
+});
+
 it("shows the daemon's own text for a code the catalog does not have", () => {
   expect(daemonMessage("en", "a_newer_code", {}, "the English text", records)).toBe("the English text");
 });

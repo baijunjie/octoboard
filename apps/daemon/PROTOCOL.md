@@ -261,8 +261,8 @@ A client also branches on some codes, instead of only showing them:
 | `import_resolution_invalid` | `console`, `project` | A resolution of `import_configuration` names a project the document does not have, resolves one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`; `console` and `project` are the indexes it gave |
 | `import_settings_missing` | — | `import_configuration` asked for the document's application settings and it carries none (a single console's export has none) |
 | `import_choice_unavailable` | `choice` | Reported on a project of `configuration_imported`, not as a reply: the choice made for it cannot be used because the document gives it nothing to use for it (a path that is not absolute, a remote URL that may not be cloned, or none) |
-| `icon_not_an_image` | — | A console's icon is not a `data:image/` URL |
-| `icon_too_large` | `limit_kib` | A console's icon is longer than the limit, 256 KiB |
+| `icon_not_an_image` | `console_name?` | A console's icon is not a `data:image/` URL. `console_name` names the console when the refusal is of an imported configuration (`import_configuration`), which may carry several |
+| `icon_too_large` | `limit_kib`, `console_name?` | A console's icon is longer than the limit, 256 KiB. `console_name` as for `icon_not_an_image` |
 | `session_already_running` | `session` | The session is running already, or is not interrupted or archived |
 | `session_already_starting` | `session` | The session is being started already |
 | `session_already_on_account` | `session` | `switch_session_account` named the account the session is on |
@@ -1250,9 +1250,10 @@ Failure           { code, params, message }             // as an `error` reply c
   in ways this one cannot read), or when it cannot be read (`configuration_unreadable`). Applying also refuses an
   impossible resolution (`import_resolution_invalid`), a request for settings the document does not carry
   (`import_settings_missing`), and whatever `create_console` would refuse of any console of the document
-  (`icon_not_an_image`, `icon_too_large`). Past that point nothing is refused and nothing is undone: what goes wrong is
-  reported in the result (below), because by then earlier consoles and projects exist and have been broadcast, and a
-  rollback would contradict that an import always creates and goes through the ordinary association.
+  (`icon_not_an_image`, `icon_too_large`, with the console's name in `console_name`). Past that point nothing is
+  refused and nothing is undone: what goes wrong is reported in the result (below), because by then earlier consoles and
+  projects exist and have been broadcast, and a rollback would contradict that an import always creates and goes
+  through the ordinary association.
 - **Four directories.** A project is placed in one of: the path the document records (`exported_path`); the last
   segment of that path under this machine's default clone directory (`default_clone_dir`; Settings, `~/Projects`
   unless set), the usual case of the same layout under another root; a fresh clone of the recorded `remote_url` into

@@ -378,6 +378,7 @@ export function ShellTerminalPanel({
             confirmLabel={t("shellTerminal.close")}
             destructive
             onCancel={declineClose}
+            errorTitle={t("shellTerminal.closeFailedTitle")}
             onConfirm={async () => {
               const terminal = terminals.find((candidate) => candidate.id === confirmClose.id);
               setConfirmClose(undefined);

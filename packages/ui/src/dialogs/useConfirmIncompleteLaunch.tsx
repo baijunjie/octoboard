@@ -67,6 +67,8 @@ export function useConfirmIncompleteLaunch(closeOwner?: () => void): {
       message={<p><Message id="dialog.incompleteLaunch.message" params={{ account: <InlineReference dir="auto" wrap>{asked.name}</InlineReference> }} /></p>}
       confirmLabel={t("dialog.incompleteLaunch.confirm")}
       onCancel={cancel}
+      // Confirm only lets the launch run, whose failure its caller reports under its own title.
+      errorTitle={t("dialog.incompleteLaunch.failedTitle")}
       hideCancel
       otherAction={{
         label: t("dialog.incompleteLaunch.viewSettings"),
