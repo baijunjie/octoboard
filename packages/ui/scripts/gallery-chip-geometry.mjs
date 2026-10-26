@@ -107,14 +107,29 @@ try {
         assert.deepEqual(sample.technicalDirections, ["ltr", "ltr"]);
       }
       await open("configuration-import-review", language, 1440);
-      const pairs = await page.locator("li").evaluateAll((rows) => rows.flatMap((row) => {
-        const chips = [...row.children].filter((element) => element.tagName === "P").map((p) => p.querySelector("[data-inline-reference]:has(code)")).filter(Boolean);
-        return chips.length < 2 ? [] : [chips.slice(0, 2).map((chip) => ({ text: chip.textContent, size: parseFloat(getComputedStyle(chip).fontSize), height: chip.getClientRects()[0].height, display: getComputedStyle(chip).display }))];
+      // The review shows a project's path or URL lines (exported path, placed in, clone from and into) as labelled values
+      // on lines of their own: plain monospace text, not chips (docs/ui-accessibility.md's "References in copy use
+      // `InlineReference`" section). The first assertion requires the search-api group of the scenario's fixture, which shows its exported
+      // path together with the directory it is placed in; the checks below it apply to every group.
+      const EXPORTED = "/Users/ana/work/search-api";
+      const groups = await page.locator("li dl").evaluateAll((lists) => lists.flatMap((list) => {
+        const lines = [...list.querySelectorAll(":scope > dd")].map((line) => {
+          const style = getComputedStyle(line);
+          return { text: line.textContent, chips: line.querySelectorAll("[data-inline-reference]").length, size: parseFloat(style.fontSize), lineHeight: parseFloat(style.lineHeight), family: style.fontFamily, dir: line.getAttribute("dir") };
+        });
+        return lines.length === 0 ? [] : [lines];
       }));
-      assert.ok(pairs.length > 0, "Import review must show exported/target paths together");
-      for (const pair of pairs) {
-        for (const path of pair) { near(path.size, 14, `${path.text} font`); assert.equal(path.display, "inline"); }
-        near(pair[0].height, pair[1].height, "Exported/target path background heights");
+      const exported = groups.find((lines) => lines.some((line) => line.text === EXPORTED));
+      assert.ok(exported && exported.length >= 2, `Import review must show the exported path ${EXPORTED} together with the path it is placed in`);
+      for (const lines of groups) {
+        for (const line of lines) {
+          near(line.size, 14, `${line.text} font`);
+          assert.equal(line.chips, 0, `${line.text}: a project path or URL line is plain text, not a chip`);
+          assert.match(line.family, /mono/i, `${line.text}: path or URL font`);
+          assert.equal(line.dir, "ltr", `${line.text}: path or URL direction`);
+          // Only guards against one line getting its own styling: every line is the same component.
+          near(line.lineHeight, lines[0].lineHeight, `${line.text} line height`);
+        }
       }
     }
     for (const width of [1440, 390]) {
@@ -141,6 +156,6 @@ try {
     }
     console.log(trustOnly
       ? `${language}: trust question, session and path share one paragraph at 1440px/390px`
-      : `${language}: 12px/14px/16px prose geometry, padding sizes below their line heights, 390px wrapping/RTL, import source/target equality, trust sentence at 1440px/390px passed`);
+      : `${language}: 12px/14px/16px prose geometry, padding sizes below their line heights, 390px wrapping/RTL, import review path or URL lines, trust sentence at 1440px/390px passed`);
   }
 } finally { await browser.close(); }
