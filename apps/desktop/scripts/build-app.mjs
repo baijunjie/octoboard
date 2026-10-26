@@ -32,13 +32,11 @@ if (relocating) {
   );
 }
 
-// The update signing key goes too, with the update archive that needs it (`withoutUpdaterArtifacts`).
-const env = withoutUpdaterArtifacts(
-  Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_"))),
-);
+const withoutApple = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_")));
 
 const startedAt = Date.now();
-tauriBuild(args, env);
+// The update signing key goes too, with the update archive that needs it (`withoutUpdaterArtifacts`).
+tauriBuild(...withoutUpdaterArtifacts(args, withoutApple));
 
 const app = findBundle(path.join(bundleDir, "macos"), ".app");
 assertProducedSince(app, startedAt);

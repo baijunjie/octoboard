@@ -1,8 +1,8 @@
 // What the desktop build scripts share around `tauri build`: running it (the Tauri CLI binary, its
 // environment and working directory), the universal target and the architectures it is made of, where its
 // output lands, the lookup for the bundle file it produced, the version an `.app` says it is, the check that it
-// carries the layered icon, the removal of the update archives a build leaves behind, and the environment of a
-// build that makes no update archive.
+// carries the layered icon, the removal of the update archives a build leaves behind, and the arguments and
+// environment of a build that makes no update archive.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -32,15 +32,15 @@ export function tauriBuild(args, env) {
 
 // `bundle.createUpdaterArtifacts` in `tauri.conf.json` makes `tauri build` sign an update archive and fail
 // without the update signing key, which only a release has (`release.mjs`). A build for local checks or local
-// installation neither needs the key nor should sign anything with it, so its environment turns the archive off
-// and drops the key variables.
-export function withoutUpdaterArtifacts(env) {
+// installation neither needs the key nor should sign anything with it, so it turns the archive off and drops the
+// key variables. The archive goes off through `--config`: the CLI only writes `TAURI_CONFIG` for the app's own
+// build and never reads it, so setting that variable does nothing. It goes first, ahead of a `--` that hands the
+// rest to cargo. Returns the `[args, env]` pair `tauriBuild` takes.
+export function withoutUpdaterArtifacts(args, env) {
   const kept = Object.fromEntries(
     Object.entries(env).filter(([name]) => !name.startsWith("TAURI_SIGNING_PRIVATE_KEY")),
   );
-  const config = kept.TAURI_CONFIG ? JSON.parse(kept.TAURI_CONFIG) : {};
-  config.bundle = { ...config.bundle, createUpdaterArtifacts: false };
-  return { ...kept, TAURI_CONFIG: JSON.stringify(config) };
+  return [["--config", JSON.stringify({ bundle: { createUpdaterArtifacts: false } }), ...args], kept];
 }
 
 // The version the `.app` says it is (`CFBundleShortVersionString`), which is what the build was made from.

@@ -132,7 +132,7 @@ try {
 removeUpdateArchives(path.join(bundleDir, "macos"));
 
 if (mode === "unsigned") {
-  tauriBuild(TARGET, withoutUpdaterArtifacts(process.env));
+  tauriBuild(...withoutUpdaterArtifacts(TARGET, process.env));
 } else {
   // The CLI prompts for a password when the variable is absent, and a key made with an empty password needs the
   // empty one: set but empty, which the CLI counts as given (unlike the loader, see above).

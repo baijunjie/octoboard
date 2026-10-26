@@ -21,11 +21,12 @@ const identities = execFileSync("security", ["find-identity", "-v", "-p", "codes
 if (!identities.includes(`"${identity}"`)) throw new Error(`No valid signing identity found: ${identity}`);
 
 // Local installation must never inherit notarization credentials, including from the calling shell.
-const env = withoutUpdaterArtifacts(Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_"))));
+const withoutApple = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("APPLE_")));
+const [args, env] = withoutUpdaterArtifacts(["--bundles", "app"], withoutApple);
 env.APPLE_SIGNING_IDENTITY = identity;
 const config = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
 const startedAt = Date.now();
-tauriBuild(["--bundles", "app"], env);
+tauriBuild(args, env);
 const app = findBundle(path.join(bundleDir, "macos"), ".app");
 if (statSync(app).mtimeMs < startedAt) throw new Error(`${app} predates this build.`);
 assertLayeredIcon(app);
