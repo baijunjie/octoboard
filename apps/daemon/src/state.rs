@@ -1996,9 +1996,9 @@ impl AppState {
         };
         // Nor while the agent may be showing its trust screen, which the paste's trailing Enter
         // would accept (Codex, Grok Build) or decline (Claude Code); see `crate::trust`. The press
-        // that answers it, its first hook (for Claude Code, bracketed paste coming on after it), the
-        // end of the watch or, for an agent whose hook may never come, its fallback releases the
-        // queue.
+        // that answers it, its first hook (for Claude Code, with bracketed paste on by then or
+        // coming on after it), the end of the watch or, for an agent whose hook may never come,
+        // its fallback releases the queue.
         if live.trust.holds_writes() || live.needs_user_action() {
             return Drain::Pending;
         }

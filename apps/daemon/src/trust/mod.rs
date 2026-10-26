@@ -55,10 +55,11 @@
 //! - Claude Code's hook is not enough on its own: with the fullscreen renderer `SessionStart`
 //!   runs before it reads its input, and a message written in that gap is taken by its
 //!   early-input capture, which drops the paste markers and turns the Enter into a newline. They
-//!   are held until the session's parsed terminal has also been seen to turn bracketed paste on
+//!   are held until the session's parsed terminal also has bracketed paste on
 //!   (`Screen::waits_for_paste_mode`), whichever of the two comes last releasing them
 //!   ([`on_hook`], [`release_when_paste_mode_comes`]); the inline renderer turns it on first, so
-//!   its first hook releases at once.
+//!   its first hook releases at once. Bracketed paste turned on and off again before the hook, as
+//!   Claude Code's terminal probe does at start, does not count.
 //! - Codex runs none until its first prompt, so its messages are held while the watch is still
 //!   looking (until its first terminal title) and, once its screen is sighted, until Octoboard's
 //!   press of it succeeds, a hook arrives, or the person's own answer in the terminal is seen to
@@ -339,7 +340,9 @@ fn release_when_the_screen_goes(state: &Arc<AppState>, live: &Arc<LiveSession>) 
 /// Releases the messages held for a session whose agent turns bracketed paste on only once it
 /// reads its input ([`Screen::waits_for_paste_mode`]), when that comes after its first hook: the
 /// drain does not retry by itself, and nothing else is left to call for it. When bracketed paste
-/// comes first the first hook releases them ([`on_hook`]).
+/// comes first the first hook releases them ([`on_hook`]), and the release here finds nothing left.
+/// It waits for both, not for bracketed paste alone: bracketed paste seen before the hook can be
+/// undone again ([`TrustState::note_paste_mode`]), and the hook then releases nothing.
 fn release_when_paste_mode_comes(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let state = state.clone();
     let live = Arc::downgrade(live);
@@ -347,12 +350,10 @@ fn release_when_paste_mode_comes(state: &Arc<AppState>, live: &Arc<LiveSession>)
         loop {
             tokio::time::sleep(RELEASE_POLL).await;
             let Some(live) = live.upgrade() else { break };
-            if live.trust.awaits_paste_mode() {
+            if live.trust.follows_paste_mode() {
                 continue;
             }
-            if live.trust.hook_seen.load(Ordering::Acquire) {
-                release_held(&state, &live.id);
-            }
+            release_held(&state, &live.id);
             break;
         }
     });

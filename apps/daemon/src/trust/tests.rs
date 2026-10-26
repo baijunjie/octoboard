@@ -2284,10 +2284,75 @@ async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
 fn claude_messages_are_released_by_the_first_hook_when_bracketed_paste_came_first() {
     let watch = TrustState::new(Agent::Claude, None);
     assert!(watch.holds_writes());
-    watch.note_paste_mode();
+    watch.note_paste_mode(true);
     assert!(watch.holds_writes(), "still before the hook");
     assert!(watch.note_hook().released);
     assert!(!watch.holds_writes());
+}
+
+/// Claude Code turns bracketed paste on and straight off again while it probes the terminal at
+/// start, before it reads its input. When a read ends between the two, the sighting is undone by
+/// the off, so the hook that follows does not release what is held; bracketed paste on again does.
+#[test]
+fn claude_bracketed_paste_turned_off_before_the_hook_does_not_count() {
+    let watch = TrustState::new(Agent::Claude, None);
+    watch.note_paste_mode(true);
+    watch.note_paste_mode(false);
+    assert!(
+        !watch.note_hook().released,
+        "the probe's toggle is not reading input"
+    );
+    assert!(watch.holds_writes());
+    watch.note_paste_mode(true);
+    assert!(!watch.holds_writes());
+    assert!(!watch.follows_paste_mode(), "latched from here on");
+    watch.note_paste_mode(false);
+    assert!(!watch.holds_writes());
+}
+
+/// The same through the session's own output: the probe's toggle split across two reads, then the
+/// hook, then the prompt's bracketed paste.
+#[tokio::test]
+async fn claude_messages_are_not_released_by_the_start_probes_bracketed_paste() {
+    let (state, dir) = state_with_project("paste-probe");
+    let message = crate::term::frame_message(Agent::Claude, "hello");
+    let record = session("claude-1", Agent::Claude, Role::Project, Some("project-1"));
+    let script = format!(
+        "printf 'ready'; {}; sleep 30",
+        take(message.len(), "'%RECEIVED%'")
+    );
+    let (live, received) = start(&state, &dir, record, &script);
+    release_when_paste_mode_comes(&state, &live);
+
+    let delivery = crate::reporting::write_message(
+        &state,
+        "claude-1",
+        "hello",
+        crate::reporting::WhenBlocked::Queue,
+    )
+    .expect("accepted");
+    assert!(matches!(delivery, crate::reporting::Delivery::Queued));
+    // Long enough between the two for the release's poll to see bracketed paste on.
+    live.on_output(b"\x1b[?2004h\x1b[?2031h");
+    tokio::time::sleep(RELEASE_POLL * 3).await;
+    live.on_output(b"\x1b[?2031l\x1b[?2004l");
+    on_hook(&state, &live);
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(
+        live.trust.holds_writes(),
+        "the probe's toggle is not enough"
+    );
+    assert_eq!(state.write_hold("claude-1"), Some(WriteHold::Starting));
+    assert!(sent(&received).is_empty());
+
+    live.on_output(b"\x1b[?2004h");
+    assert!(!live.trust.holds_writes());
+    let delivered =
+        tokio::task::spawn_blocking(move || wait_for(PATIENCE, || sent(&received) == message));
+    assert!(
+        delivered.await.unwrap(),
+        "released when bracketed paste is on"
+    );
 }
 
 /// Codex and Grok Build do not wait for bracketed paste: their first hook releases them, with the
@@ -2295,6 +2360,7 @@ fn claude_messages_are_released_by_the_first_hook_when_bracketed_paste_came_firs
 #[test]
 fn codex_and_grok_are_released_by_the_first_hook_without_bracketed_paste() {
     let codex = TrustState::new(Agent::Codex, None);
+    assert!(!codex.follows_paste_mode());
     assert!(codex.note_hook().released);
     assert!(!codex.holds_writes());
 

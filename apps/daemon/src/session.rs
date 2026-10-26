@@ -253,8 +253,8 @@ impl LiveSession {
             if self.screen_watchers.load(Ordering::Acquire) > 0 {
                 self.look_for_dialog();
             }
-            if self.trust.awaits_paste_mode() && self.pty.bracketed_paste_on() {
-                self.trust.note_paste_mode();
+            if self.trust.follows_paste_mode() {
+                self.trust.note_paste_mode(self.pty.bracketed_paste_on());
             }
         });
         if titled {

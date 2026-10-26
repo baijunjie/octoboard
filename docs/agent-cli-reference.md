@@ -31,7 +31,8 @@ saves of the model and effort and on theme saves with `GROK_THEME` set, were mea
 1.0.62**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude Code
 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about invisible
 characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20; what it says
-about input written before bracketed paste is turned on, and about pasted pieces that end in an image extension, on **Claude Code 2.1.310** on 2026-10-25. All three rewrite
+about input written before bracketed paste is turned on, and about pasted pieces that end in an image extension, on **Claude Code 2.1.310** on 2026-10-25, and what it says
+about the terminal probe's bracketed-paste toggle at start on **Claude Code 2.1.310** on 2026-10-26. All three rewrite
 their hook surface, their payload fields, their configuration layering and their on-disk layout on upgrade, so check a
 detail here against the installed version before relying on it.
 
@@ -2063,10 +2064,17 @@ or destructively if ignored:
   stops the capture and writes `ESC[?2004h` (with `?1004h` and `?2031h`). With the default inline renderer that comes
   before `SessionStart`; with the fullscreen renderer (`"tui": "fullscreen"`) `SessionStart` fires first, 28–325 ms
   ahead of it, and a paste and `CR` written in between is left unsent in the input box, or wiped when a launch prompt
-  is submitted. Its folder-trust confirmation also turns bracketed paste on; a message written right after it is
-  answered and `SessionStart` arrived, before the main screen turned it on again, was still sent (15 of 15, fullscreen).
-  So Octoboard holds a Claude Code session's writes until both its first hook has arrived and bracketed paste has been
-  seen on its terminal since launch.
+  is submitted. Ink's enable is not the first `ESC[?2004h` on the terminal, though: as it starts, before it reads
+  anything, Claude Code probes the terminal with `ESC7 ESC[r ESC8 ESC[?25h ESC[?25l ESC[?2004h ESC[?2031h ESC[?1004h
+  ESC[>0q ESC[?u ESC]7501;? BEL ESC[c ESC[>4m ESC[<u ESC[?1004l ESC[?2031l ESC[?2004l`, turning bracketed paste on
+  and straight off again. A read of its output can end between the two, and a message written after an early
+  `SessionStart` on the strength of that toggle came while the terminal was not yet in raw mode: the tty echoed it,
+  Claude Code later showed it as `[Pasted text #1 +4 lines]` in the input box, and the `CR` was lost (3 of about 45
+  resumes with no launch prompt, inline renderer). Its folder-trust confirmation also turns bracketed paste on; a
+  message written right after it is answered and `SessionStart` arrived, before the main screen turned it on again,
+  was still sent (15 of 15, fullscreen). So Octoboard holds a Claude Code session's writes until its first hook has
+  arrived and its terminal has bracketed paste on at that hook or after it; bracketed paste turned off again before
+  the hook, the probe's toggle and the trust confirmation's alike, does not count.
 - Claude Code does not send a prompt that holds an invisible character. When Enter submits one, it removes those
   characters, leaves the cleaned text in the input box with "Removed N invisible characters · review and press Enter to
   send", and starts no turn (its code returns before the submission that fires `UserPromptSubmit`, read from the

@@ -85,14 +85,17 @@ on screen and, for Claude Code, until the agent is reading its input:
 
 - for Claude Code, until both of two things have happened, whichever comes last releasing the queue: the session's
   first hook report has arrived, which Claude Code sends only once it is past the confirmation — with none to answer,
-  within a couple of seconds of starting, a launch or a resume with no prompt included — and Claude Code has turned
-  bracketed paste on in the session's terminal, which it does once it starts reading its input. Bracketed paste only
-  has to have been on once since the launch; whether Claude Code turns it off again later does not matter. With
-  Claude Code's default renderer bracketed paste comes on before the first hook report, so the report releases the
-  queue; with its fullscreen renderer (`"tui": "fullscreen"`) the report comes first, and a message written before
-  bracketed paste is on would be left unsent in its input box, or wiped when a launch prompt is submitted. A Claude
-  Code session whose hook reports never arrive, or that never turns bracketed paste on, holds its messages for as long
-  as it runs: they are never let through on time alone;
+  within a couple of seconds of starting, a launch or a resume with no prompt included — and the session's terminal
+  has bracketed paste on, which Claude Code turns on, and keeps on, once it starts reading its input. Bracketed paste
+  has to be on when the first hook report arrives, or come on after it: bracketed paste turned on and off again
+  before the report does not count. That covers Claude Code's probe of the terminal as it starts, which turns
+  bracketed paste on and straight off again long before it reads its input, and the paste mode of its trust
+  confirmation. From the first hook report on, whether Claude Code turns bracketed paste off again does not matter.
+  With Claude Code's default renderer bracketed paste comes on before the first hook report, so the report releases
+  the queue; with its fullscreen renderer (`"tui": "fullscreen"`) the report comes first. A message written before
+  Claude Code reads its input would be left unsent in its input box, or wiped when a launch prompt is submitted. A
+  Claude Code session whose hook reports never arrive, or whose terminal never has bracketed paste on at or after the
+  first one, holds its messages for as long as it runs: they are never let through on time alone;
 - for Grok Build, until its first hook report, which it too sends only once it is past the confirmation. The one
   exception: a Grok Build session that has sent none 30 seconds after its launch — a managed policy that allows only
   managed hooks keeps every hook of Octoboard's from running — has its messages let through anyway, provided its
@@ -186,7 +189,7 @@ question — carries `null`: its `status` says so. When several holds apply, the
 
 | `reason` | The hold |
 |---|---|
-| `starting` | The agent has not yet signalled that it is past its startup screens, so its trust confirmation may still come — or, for Claude Code, has sent its first hook report but not yet turned bracketed paste on (see above). |
+| `starting` | The agent has not yet signalled that it is past its startup screens, so its trust confirmation may still come — or, for Claude Code, has sent its first hook report but does not yet have bracketed paste on (see above). |
 | `trust_confirmation` | Its folder-trust confirmation is up and has not been answered. |
 | `agent_dialog` | It is showing a screen only the user can answer (above). |
 | `agent_action` | Codex's terminal title says it is waiting on the user. |

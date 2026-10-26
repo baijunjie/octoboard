@@ -37,10 +37,11 @@ pub(super) struct Screen {
     /// `None` holds them for as long as the session runs.
     pub(super) hook_fallback: Option<Duration>,
     /// Whether the hook alone is not enough to say the agent reads its input: it must also have
-    /// turned bracketed paste on (`ESC [ ? 2004 h`), which it does at the moment its real input
-    /// handling starts. Claude Code's fullscreen renderer runs `SessionStart` before that, while
-    /// an early-input capture still reads the terminal itself, drops the paste markers and turns
-    /// the Enter into a newline, so a message written in between is never sent.
+    /// turned bracketed paste on (`ESC [ ? 2004 h`), which it keeps on from the moment its real
+    /// input handling starts; the brief toggle of its terminal probe at start, on and straight
+    /// off again, does not count. Claude Code's fullscreen renderer runs `SessionStart` before
+    /// that, while an early-input capture still reads the terminal itself, drops the paste markers
+    /// and turns the Enter into a newline, so a message written in between is never sent.
     pub(super) waits_for_paste_mode: bool,
 }
 
@@ -330,9 +331,12 @@ pub struct TrustState {
     pub(super) output_at_sighting: AtomicU64,
     /// A hook callback has arrived, so the screen is past and nothing on the terminal is it.
     pub(super) hook_seen: AtomicBool,
-    /// The session's terminal has had bracketed paste turned on at least once since the launch,
-    /// whatever it has done since; see [`Screen::waits_for_paste_mode`].
+    /// The session's terminal has bracketed paste on as of its last output, or, once the hook has
+    /// come, has had it on since; see [`Screen::waits_for_paste_mode`].
     pub(super) paste_mode_seen: AtomicBool,
+    /// Taken around the hook's arrival and around undoing a sighting of bracketed paste, so that
+    /// none is undone once the hook has come.
+    paste_mode_order: Mutex<()>,
     /// An answer has been started. A session is answered at most once.
     pub(super) answered: AtomicBool,
     /// Octoboard's press of the screen succeeded.
@@ -365,6 +369,7 @@ impl TrustState {
             output_at_sighting: AtomicU64::new(0),
             hook_seen: AtomicBool::new(false),
             paste_mode_seen: AtomicBool::new(false),
+            paste_mode_order: Mutex::new(()),
             answered: AtomicBool::new(false),
             pressed: AtomicBool::new(false),
             dismissed: AtomicBool::new(false),
@@ -426,7 +431,13 @@ impl TrustState {
     /// looked for. Says what the first such hook leaves to do; a later one leaves nothing.
     pub(super) fn note_hook(&self) -> HookNoted {
         let was_holding = self.holds_writes();
-        let first = !self.hook_seen.swap(true, Ordering::AcqRel);
+        let first = {
+            let _order = self
+                .paste_mode_order
+                .lock()
+                .expect("trust paste mutex poisoned");
+            !self.hook_seen.swap(true, Ordering::AcqRel)
+        };
         // Still held when the agent has yet to turn bracketed paste on: that moment releases them.
         let released = was_holding && !self.holds_writes();
         *self.window.lock().expect("trust window mutex poisoned") = Vec::new();
@@ -454,8 +465,8 @@ impl TrustState {
     ///
     /// For an agent that turns bracketed paste on only once it reads its input
     /// ([`Screen::waits_for_paste_mode`], Claude Code) the hook is not the end of the hold: it
-    /// lasts until the terminal has also been seen to turn bracketed paste on, with no time
-    /// limit, like a hook that never comes.
+    /// lasts until the terminal has also been seen with bracketed paste on at the hook or after,
+    /// with no time limit, like a hook that never comes.
     pub fn holds_writes(&self) -> bool {
         if self.hook_seen.load(Ordering::Acquire) {
             return self.awaits_paste_mode();
@@ -484,14 +495,37 @@ impl TrustState {
 
     /// Whether the agent has yet to turn bracketed paste on, and that is still what its messages
     /// wait for ([`Screen::waits_for_paste_mode`]).
-    pub fn awaits_paste_mode(&self) -> bool {
+    fn awaits_paste_mode(&self) -> bool {
         self.screen.waits_for_paste_mode && !self.paste_mode_seen.load(Ordering::Acquire)
     }
 
-    /// The session's parsed terminal has bracketed paste on. Latched: it does not matter whether
-    /// the agent turns it off again.
-    pub fn note_paste_mode(&self) {
-        self.paste_mode_seen.store(true, Ordering::Release);
+    /// Whether the session's bracketed paste is still to be followed ([`Self::note_paste_mode`]):
+    /// for an agent that waits for it, until the hook has come and bracketed paste has been seen
+    /// on.
+    pub fn follows_paste_mode(&self) -> bool {
+        self.screen.waits_for_paste_mode
+            && !(self.hook_seen.load(Ordering::Acquire)
+                && self.paste_mode_seen.load(Ordering::Acquire))
+    }
+
+    /// Records whether the parsed terminal has bracketed paste on after a piece of output.
+    ///
+    /// Claude Code turns it on and straight off again while probing the terminal as it starts,
+    /// long before it reads its input, and a read can end between the two; so until the hook has
+    /// come, bracketed paste turned off again undoes the sighting. From the hook on it is latched:
+    /// it does not matter whether the agent turns it off again.
+    pub fn note_paste_mode(&self, on: bool) {
+        if on {
+            self.paste_mode_seen.store(true, Ordering::Release);
+        } else {
+            let _order = self
+                .paste_mode_order
+                .lock()
+                .expect("trust paste mutex poisoned");
+            if !self.hook_seen.load(Ordering::Acquire) {
+                self.paste_mode_seen.store(false, Ordering::Release);
+            }
+        }
     }
 
     /// Lets through what is held for an agent whose hook has not come ([`Screen::hook_fallback`]),
@@ -510,7 +544,7 @@ impl TrustState {
     /// for a session past its screen.
     #[cfg(test)]
     pub(crate) fn end_watch(&self) {
-        self.note_paste_mode();
+        self.note_paste_mode(true);
         self.note_hook();
     }
 

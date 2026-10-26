@@ -569,7 +569,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   included.
 - [Writing text into a session](memory/writing-text-into-a-session.md) — why any new notice, brief or opening prompt the
   daemon writes into a session's input needs a fixed opening constant listed in `session_history.rs`'s
-  `OCTOBOARD_OPENINGS`, or the archived history shows it as the user's own words.
+  `OCTOBOARD_OPENINGS`, or the archived history shows it as the user's own words; how a key the daemon types on its own
+  is gated, why a gate on a terminal mode the agent sets reads the mode as it stands after its whole start-up output,
+  and how to diagnose a message left unsent from inside the write.
 - [Writing daemon code](memory/writing-daemon-code.md) — conventions for the Rust daemon: live state the daemon derives
   held on `AppState` and published by its own event rather than as a field on a stored record, with the cleanups that
   follow from there being no deletion event for it; why a repeating refresh is timed by the client and has to be bounded

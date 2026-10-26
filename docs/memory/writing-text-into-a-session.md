@@ -37,3 +37,31 @@ interrupt a turn" in `docs/agent-cli-reference.md`). So:
   the first key until it is done, so a queued message does not land in or join text left in the box, and read the box
   from `screen_text_undimmed`: Claude Code draws a fresh session's placeholder (`❯ Try "…"`) faint, and the plain
   screen text reads it as typed text.
+
+## A gate on a terminal mode the agent sets reads the mode as it stands, after reading the agent's whole start-up output
+
+Applies when writes into a session, or the release of held ones, wait on a terminal mode the agent turns on (bracketed
+paste, focus reporting, the alternate screen) as the sign that it reads its input. An agent can switch such a mode on
+and straight off again while it probes the terminal at start, long before it reads anything — Claude Code does so with
+bracketed paste (the bytes are under "Writing into a running session" in `docs/agent-cli-reference.md`) — and whether
+one PTY read ends between the on and the off is a race. A latch on "seen on once since launch" therefore passes every
+unit test and fails live now and then. So:
+
+- Before resting a gate on a mode, read the agent's whole start-up output from a real capture for every place it
+  switches that mode, off as well as on, not only the first time it comes on.
+- Gate on the mode being on as of the latest output at the point that counts (for Claude Code, at its first hook or
+  after it), not on its having been seen once.
+- Test the toggle split across two reads, each state held longer than the poll interval of anything that watches the
+  mode; a test that feeds the start-up output in one read, or flips the mode within one poll, cannot show the race.
+
+## Diagnose a message left unsent from inside the write, in a throwaway build
+
+Applies when a message the daemon writes into a live session is now and then not sent (left in the input box, echoed,
+or missing its Enter) while the unit tests pass. Watching from outside does not find it: the agent's transcript holds no
+trace of a prompt it never submitted, and attaching a terminal client or a recorder to the session can shift the timing
+enough to hide the failure (in one investigation, 0 failures in 22 resumes with a recorder attached against 2 in 10
+without). Instead, in a throwaway worktree that is never committed, make `term::send_message` dump, behind an
+environment variable of its own, the PTY's output since launch from its ring buffer, the parsed screen and every
+terminal mode the gate reads (such as `bracketed_paste_on()`) just before the write, plus screen samples for a few
+seconds after it; run that build against the real agent with no client attached, and read the first failure it
+captures.
