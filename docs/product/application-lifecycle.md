@@ -44,9 +44,11 @@ processes while sharing one database, so it refuses to start. The application th
 screen that says the daemon failed to start and offers to quit — a failed start never leaves a window with no
 explanation. The daemon's own reason is not on that screen itself but in the popover of the mark after its heading
 (the screen is described in "The window chrome and the content panel" in `docs/product/window-layout.md`); the error
-alert shown over the screen says the daemon did not start, with the same reason in a block under its **Error
-details**. With no daemon running there is nothing to keep running, so closing the window quits whatever that
-setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
+alert shown over the screen, titled "The daemon failed to start", says that the daemon did not start, then that
+Octoboard cannot work without it and that opening Octoboard again tries once more, with the same reason in a block
+under its **Error details**. It is a known failure, not an unexpected one: it asks for no report and has no **Report
+issue** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). With no daemon running there is
+nothing to keep running, so closing the window quits whatever that setting says (see "Closing the window" below). The lock is per data directory, so on a server it is one daemon per
 Unix user, whose `~/.octoboard` is the daemon's (see "The daemon on its own" below).
 
 If the daemon starts but dies later, the application says so in an error alert asking the user to restart Octoboard; it

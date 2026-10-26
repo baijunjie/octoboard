@@ -15,7 +15,7 @@ export function AutoApproveAccountSwitchesSetting(): React.ReactElement {
   const description = t(enabled ? "settings.autoApproveAccountSwitches.description.on" : "settings.autoApproveAccountSwitches.description.off");
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", auto_approve_account_switches: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", auto_approve_account_switches: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow label={t("settings.autoApproveAccountSwitches.label")} description={description} isSelected={enabled} onChange={setEnabled} />

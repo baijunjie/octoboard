@@ -20,7 +20,7 @@ type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onCli
 
 /** Native menu and terminal links share the anchor's visible failure and manual destination. */
 export function reportExternalLinkFailure(t: Translate, href: string, cause: unknown): void {
-  reportError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), undefined, undefined, <><p>{t("externalLink.unavailable")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{href}</p></>);
+  reportError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), undefined, undefined, <div className="flex flex-col gap-4"><p>{t("externalLink.unavailable")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{href}</p></div>, t("externalLink.unavailableTitle"));
 }
 
 /** A browser destination stays a real anchor while native shells open it outside the application. */

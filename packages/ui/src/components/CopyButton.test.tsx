@@ -13,7 +13,7 @@ import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "./to
 function mount(props: Partial<React.ComponentProps<typeof CopyButton>> = {}, clipboard?: PlatformAdapter["clipboard"], error = vi.fn()) {
   const container = mountForTooltip(
     <ViewerHost clipboard={clipboard} toasts={{ notice: vi.fn(), error }}>
-      <CopyButton text="the text" {...props} />
+      <CopyButton text="the text" failedText="Could not copy the text" {...props} />
     </ViewerHost>,
   );
   return { button: container.querySelector("button"), container, error };
@@ -51,7 +51,7 @@ it("says so in a toast when there is no clipboard and the selection copy fails",
   const { button, error } = mount();
   press(button!);
   await act(async () => {});
-  expect(error).toHaveBeenCalledWith("Could not copy");
+  expect(error).toHaveBeenCalledWith("Could not copy the text");
   expect(button!.getAttribute("aria-label")).toBe("Copy");
 });
 
@@ -151,7 +151,7 @@ it("puts the hidden text inside the modal dialog the button is in, and restores 
     <ViewerHost clipboard={{ writeText: async () => Promise.reject(new Error("denied")) }}>
       <Dialog title="File" size="viewer" onClose={() => {}} footer={<span />}>
         <p id="page-text">page text</p>
-        <CopyButton text="the text" />
+        <CopyButton text="the text" failedText="Could not copy the text" />
       </Dialog>
     </ViewerHost>,
   );

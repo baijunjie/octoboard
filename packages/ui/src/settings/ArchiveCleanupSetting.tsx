@@ -15,7 +15,7 @@ export function ArchiveCleanupSetting(): React.ReactElement {
   const description = <Message id={enabled ? "settings.archiveCleanup.description.on" : "settings.archiveCleanup.description.off"} />;
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", auto_delete_unresumable_archives: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", auto_delete_unresumable_archives: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow label={t("settings.archiveCleanup.label")} description={description} isSelected={enabled} onChange={setEnabled} />

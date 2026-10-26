@@ -16,7 +16,7 @@ export function SidebarOrderSetting(): React.ReactElement {
   const description = t(enabled ? "settings.sidebarOrder.description.on" : "settings.sidebarOrder.description.off");
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", sidebar_order_by_status: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", sidebar_order_by_status: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow label={t("settings.sidebarOrder.label")} description={description} isSelected={enabled} onChange={setEnabled} />

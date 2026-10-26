@@ -16,7 +16,7 @@ export function StartQuotaWindowsSetting(): React.ReactElement {
   const description = t(enabled ? "settings.startQuotaWindows.description.on" : "settings.startQuotaWindows.description.off");
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", auto_start_quota_windows: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", auto_start_quota_windows: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow

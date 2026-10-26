@@ -4,7 +4,7 @@
 import type { MessageParams } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, snapshotState } from "./builders";
+import { SAMPLE, failureTitle, snapshotState } from "./builders";
 import { IMAGES } from "./viewerImages";
 
 const GROUP = "Project pane: files";
@@ -150,7 +150,7 @@ export const projectFilesScenarios: Scenario[] = [
     title: "File viewer with an error toast",
     description: "An unrelated path failure is deliberately raised over the viewer, its path set as code, to confirm that toast placement leaves Previous / Next accessible.",
     state,
-    toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" }],
+    toasts: [{ kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "", title: failureTitle("common.revealFailedTitle") }],
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600)],
   },
   {

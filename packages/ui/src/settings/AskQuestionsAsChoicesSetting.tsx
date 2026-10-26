@@ -15,7 +15,7 @@ export function AskQuestionsAsChoicesSetting(): React.ReactElement {
   const description = t(enabled ? "settings.askQuestionsAsChoices.description.on" : "settings.askQuestionsAsChoices.description.off");
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", ask_questions_as_choices: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", ask_questions_as_choices: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow label={t("settings.askQuestionsAsChoices.label")} description={description} isSelected={enabled} onChange={setEnabled} />

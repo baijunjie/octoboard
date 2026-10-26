@@ -1,5 +1,6 @@
 import type { Scenario } from "../scenario";
-import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
+import type { PlainMessageKey } from "../../i18n/catalog";
+import { consoleOf, failureTitle, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const console_ = consoleOf("c-errors", "الإصدار Release coordination");
@@ -23,9 +24,27 @@ export const GIT_STDERR = [
   "Aborting",
 ].join("\n");
 
+/** The title the action that fails this way gives its alert in the app; a code with an `alertTitle` of its own (a failed
+ * launch, a message not sent, a trust answer) needs none, as its own wins. */
+const ACTION_TITLE: Record<string, PlainMessageKey> = {
+  unknown_console: "dialog.console.saveFailedTitle",
+  unknown_project: "dialog.project.saveFailedTitle",
+  unknown_session: "dialog.session.failedTitle",
+  unknown_shell_terminal: "shellTerminal.closeFailedTitle",
+  unknown_account: "settings.accounts.dialog.saveFailedTitle",
+  not_a_git_repository: "sidebar.project.pullFailedTitle",
+  git_failed: "sidebar.project.pullFailedTitle",
+  unknown_page: "report.submitFailedTitle",
+  field_too_long: "settings.saveFailedTitle",
+  field_required: "dialog.session.failedTitle",
+  conflicting_fields: "dialog.session.failedTitle",
+  invalid_launch_setting: "dialog.session.failedTitle",
+  shell_environment_timeout: "dialog.session.failedTitle",
+};
+
 const error = (id: string, title: string, code: string, params: Record<string, string>, description: string, message = ""): Scenario => ({
   id, title, description, group: "Trust prompts and toasts", category: "exceptional", state,
-  toasts: [{ kind: "error", code, params, message }],
+  toasts: [{ kind: "error", code, params, message, ...(ACTION_TITLE[code] && { title: failureTitle(ACTION_TITLE[code]) }) }],
 });
 
 /** An acknowledgement whose raw text is the target: the Error details disclosure it sits behind is open. */

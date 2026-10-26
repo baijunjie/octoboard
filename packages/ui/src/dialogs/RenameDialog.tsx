@@ -9,6 +9,7 @@ import { exceedsTextLimit } from "./textLength";
  * called, what a blank value is told, and how the new value is sent. */
 export function RenameDialog({
   title,
+  errorTitle,
   label,
   initialValue,
   placeholder,
@@ -19,6 +20,8 @@ export function RenameDialog({
   tooLongMessage,
 }: {
   title: string;
+  /** What a failed rename is titled: a plain name for what failed, with no name in it. */
+  errorTitle: string;
   label: string;
   initialValue: string;
   placeholder: string;
@@ -31,7 +34,7 @@ export function RenameDialog({
 }): React.ReactElement {
   const t = useT();
   const [value, setValue] = useState(initialValue);
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, errorTitle);
   const { shown, attempt } = useSubmitValidation();
   const valueError = !value.trim() ? requiredMessage
     : characterLimit !== undefined && exceedsTextLimit(value, characterLimit, initialValue) ? tooLongMessage : undefined;

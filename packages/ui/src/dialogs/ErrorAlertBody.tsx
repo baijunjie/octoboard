@@ -26,7 +26,7 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
           {issueGuidance && <p>{issueGuidance}</p>}
           {alert.details === undefined && diagnostics.length > 0 && <DetailsDisclosure><DiagnosticBlock>{[...new Set(diagnostics)].join("\n\n")}</DiagnosticBlock></DetailsDisclosure>}
         </>
-        : !alert.failures?.length && alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} /></p>}
+        : !alert.failures?.length && !alert.remedyInBody && alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} /></p>}
       {alert.details ? <DetailsDisclosure>{alert.details}</DetailsDisclosure> : null}
     </>
   );

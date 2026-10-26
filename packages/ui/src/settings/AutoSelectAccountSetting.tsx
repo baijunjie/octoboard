@@ -15,7 +15,7 @@ export function AutoSelectAccountSetting(): React.ReactElement {
   const description = t(enabled ? "settings.autoSelect.description.on" : "settings.autoSelect.description.off");
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", auto_select_account: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", auto_select_account: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow label={t("settings.autoSelect.label")} description={description} isSelected={enabled} onChange={setEnabled} />

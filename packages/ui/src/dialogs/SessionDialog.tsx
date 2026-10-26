@@ -124,7 +124,7 @@ export function SessionDialog({
   const [resumeId, setResumeId] = useState("");
   // The name typed over an archived session's own, for that session only; unedited, the field shows its title.
   const [heldName, setHeldName] = useState<{ session: string; value: string }>();
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t("dialog.session.failedTitle"));
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
 
   // A resumed conversation is always a plain session, so choosing to resume takes the choice of
@@ -198,7 +198,7 @@ export function SessionDialog({
         // the dialog open.
         if (target.kind !== "running") await onResume(target.session.id);
         const name = foundName.trim();
-        if (target.kind === "archived" && name && name !== target.session.title) await request({ type: "rename_session", session: target.session.id, title: name }).catch((err: unknown) => toastError(errorPresentation(err)));
+        if (target.kind === "archived" && name && name !== target.session.title) await request({ type: "rename_session", session: target.session.id, title: name }).catch((err: unknown) => toastError(errorPresentation(err), undefined, t("dialog.rename.failedTitle")));
         onOpened(target.session.id);
         onClose();
         return;

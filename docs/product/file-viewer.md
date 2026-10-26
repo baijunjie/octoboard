@@ -493,4 +493,6 @@ file and the viewer says why it cannot be shown; and in a document read from a w
 text and a relative image shows its alt text, as an address that is not a project file does.
 
 **The first time a viewer is opened from the terminal** its code is loaded, and nothing is shown until it has loaded.
-A load that fails raises an error alert saying the file viewer could not be shown, and the next click tries again.
+A load that fails raises an error alert, titled that the file viewer could not be shown, saying that it did not load
+and that opening the file again tries once more; it is a known failure and asks for no report. The next click tries
+again.

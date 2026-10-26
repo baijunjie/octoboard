@@ -54,6 +54,12 @@ export function hasErrorRemedy(error: { code: string; params: MessageParams; mes
   return nested !== undefined && hasErrorRemedy(nested);
 }
 
+/** Whether an alert's default body already carries the failure's remedy sentence, so the alert adds no second one:
+ * the body is the default one (the caller gave no `content` of its own) and is a structured failure with a remedy. */
+export function remedyInBody(content: unknown, shown: string | { code: string; params: MessageParams; message: string }): boolean {
+  return content === undefined && typeof shown !== "string" && hasErrorRemedy(shown);
+}
+
 /** The structured cause a `launch_failed` carries under its own code, as a failure of its own. */
 export function nestedFailure(error: { code: string; params: MessageParams }): { code: string; params: MessageParams; message: string } | undefined {
   const { reason_code: reason } = error.params;

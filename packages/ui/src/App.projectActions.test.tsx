@@ -186,7 +186,7 @@ it("sends the project directory request and reports a failure through the shared
   await press("Open in");
   await press("File manager");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
-  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "The system file manager could not be opened." }));
+  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "The system file manager could not be opened." }), undefined, "Could not open in the file manager");
 });
 
 it("copies the project name unchanged and reports success", async () => {
@@ -203,7 +203,7 @@ it("reports a clipboard failure", async () => {
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
   await press("Copy project name");
-  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the project name", recovery: "clipboard" }));
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the project name", recovery: "clipboard" }), undefined, "Could not copy");
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
@@ -224,7 +224,7 @@ it("reports a session ID clipboard failure", async () => {
   const { daemon } = mountApp(false, clipboard, true);
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Copy session ID");
-  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the session ID", recovery: "clipboard" }));
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Could not copy the session ID", recovery: "clipboard" }), undefined, "Could not copy");
   expect(daemon.toastNotice).not.toHaveBeenCalled();
 });
 
@@ -290,7 +290,7 @@ it("keeps a native operation rejection string as the error diagnostic", async ()
   await openProjectMenu("Website");
   await press("Open in");
   await press("File manager");
-  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Native file manager rejected", cause: "Native file manager rejected" }));
+  expect(daemon.toastError).toHaveBeenCalledWith(expect.objectContaining({ message: "Native file manager rejected", cause: "Native file manager rejected" }), undefined, "Could not open in the file manager");
 });
 
 it("keeps the restore confirmation open and displays a refusal", async () => {
@@ -424,6 +424,6 @@ it("opens the project repository through the platform and reports an opening fai
   await openProjectMenu(project.name);
   await press("Open in");
   await press("GitLab");
-  expect(errorAlerts.getSnapshot().some((failure) => failure.message === "Could not open the external link.")).toBe(true);
+  expect(errorAlerts.getSnapshot().some((failure) => failure.message === "The link did not open in a browser. Its address is shown below.")).toBe(true);
   expect(document.querySelector('[role="alertdialog"] p[dir=ltr]')?.textContent).toBe("https://gitlab.com/team/app");
 });

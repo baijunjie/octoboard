@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { gitModeWorktree } from "../browser/browserState";
+import { t } from "../i18n/language";
 import { errorPresentation } from "../errorPresentation";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
@@ -130,7 +131,7 @@ async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "t
     setActiveShellTerminal(project, reply.shell_terminal.id);
     return reply.shell_terminal.id;
   } catch (err) {
-    daemon.toastError(errorPresentation(err));
+    daemon.toastError(errorPresentation(err), undefined, t("shellTerminal.newFailedTitle"));
     return undefined;
   } finally {
     setStarting(project, false);

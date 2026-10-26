@@ -405,7 +405,7 @@ it("reports a native terminal opener failure with the shared actionable destinat
   await act(async () => FakeController.last.openLink("https://example.com/docs"));
   expect(platform.links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
   expect(errorAlerts.getSnapshot()[0]).toMatchObject({
-    message: "Could not open the external link.",
+    message: "The link did not open in a browser. Its address is shown below.",
     classification: { kind: "actionable", recovery: "openExternal" },
     error: { cause },
   });

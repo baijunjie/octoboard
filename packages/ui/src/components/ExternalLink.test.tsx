@@ -66,7 +66,7 @@ it("reports a failed opener with localized copy, the destination as plain text a
   const anchor = mount(<ExternalLink href={URL}>Guide</ExternalLink>, { kind: "tauri", links: { open: vi.fn().mockRejectedValue(cause) } });
   await act(async () => anchor.click());
   const alert = document.querySelector('[role="alertdialog"]')!;
-  expect(alert.textContent).toContain("Could not open the external link.");
+  expect(alert.textContent).toContain("The link did not open in a browser. Its address is shown below.");
   expect(alert.querySelector("p[dir=ltr]")?.textContent).toBe(URL);
   expect(alert.querySelector("[data-inline-reference]")).toBeNull();
   expect(errorAlerts.getSnapshot()[0].error).toMatchObject({ recovery: "openExternal", cause });

@@ -19,7 +19,7 @@ newer than the latest stable release offers nothing until a newer stable release
 older version.
 
 The choice is kept **per client**, in the window's own browser storage, as the choice to keep running in the background
-is (see "Where the choice is stored" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
+is (see "Closing the window" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
 it, and it is not part of a configuration export (see "The application settings a full export carries" in
 `docs/product/configuration-export-and-import.md`). Storage that has been cleared, or holds anything but Stable, reads
 as Beta.
@@ -127,13 +127,16 @@ Only a failure of something the user started opens an error alert (see "The erro
 `docs/product/error-alerts.md`); each says what failed and what to do, with the updater's own text, where there is any,
 behind **Error details**:
 
-- **Check for updates** pressed in Settings that fails: the check could not be done; check the internet connection and
-  try again.
-- **Download and install** that fails: the update could not be downloaded and installed; check the internet connection
-  and the free disk space, then try again. The update stays offered, so it can be tried again.
-- **Download and install** when the application no longer holds the update the window offers: the update is no longer
-  available to install; check for updates to look for it again. The offer and its notice are withdrawn, and the alert
-  has no Error details.
+- **Check for updates** pressed in Settings that fails: titled "Could not check for updates"; Octoboard keeps running
+  the current version and whether a newer one is available is not known; check the internet connection and try again.
+- **Download and install** that fails: titled "Could not install the update"; the update could not be downloaded and
+  installed; check the internet connection and the free disk space, then try again. The update stays offered, so it
+  can be tried again.
+- **Download and install** when the application no longer holds the update the window offers: titled "Could not
+  install the update"; the update is no longer available to install; check for updates to look for it again. The offer
+  and its notice are withdrawn, and the alert has no Error details.
+
+None of these asks for a report or offers **Report issue**.
 
 An automatic check that fails, including the one a channel switch starts, opens no alert: Settings' Updates row shows
 a warning mark saying that the last check did not finish (see "The Updates and Update channel rows" below), and the next check

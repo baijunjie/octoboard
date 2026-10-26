@@ -124,9 +124,9 @@ Deleting an unused session asks for no confirmation (see "Deleting an unused ses
 ## What is left is reported
 
 After a user's archive or deletion, and after a project's removal with its folder moved to the Trash, what was to go
-and is still there is reported to every window as one error alert, `session_branches_not_removed` (see
-`docs/product/error-alerts.md`). It groups the items by why each is still there, in this order, each group led by
-one line saying so over the names:
+and is still there is reported to every window as one error alert, `session_branches_not_removed`, titled "Branches
+and worktrees not removed" (see `docs/product/error-alerts.md`). It groups the items by why each is still there, in
+this order, each group led by one line saying so over the names:
 
 - removing it failed — with git's message, or why the move to the Trash failed, under the item's name as a block of
   code;
@@ -230,8 +230,8 @@ have ended, waiting as in "When the removal runs" above; the project's removal s
 is still there is reported as in "What is left is reported" above. When what goes along cannot be worked out at all,
 the folder is still moved and the project removed, but no worktree outside the folder is touched, and where the
 repository outlives the folder no branch either (where the folder held the repository, its branches went with it).
-Every window is then shown an error alert, `project_branches_not_determined`, naming the removed project and saying
-that the worktrees outside its folder, and its branches if the repository stays, were left, with the reason under the
-sentence as a block of code. Its recovery guidance is to open a Terminal in the repository and run `git worktree list`
+Every window is then shown an error alert, `project_branches_not_determined`, titled "Branches and worktrees left in
+place", naming the removed project and saying that the worktrees outside its folder, and its branches if the
+repository stays, were left, with the reason under the sentence as a block of code. Its recovery guidance is to open a Terminal in the repository and run `git worktree list`
 and `git branch` to see what was left, then remove what is no longer needed with Git, or leave it in place. When the
 folder's own move fails, the project is not removed and nothing else goes.

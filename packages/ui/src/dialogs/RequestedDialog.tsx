@@ -88,6 +88,7 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   return (
     <ConfirmDialog
       title={t("dialog.removeProject.title")}
+      errorTitle={t("dialog.removeProject.failedTitle")}
       subject={<Message id="dialog.removeProject.subject" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
       message={t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}
       consequences={<ConfirmConsequences title={running.length > 0 ? t("dialog.removeProject.running", { count: running.length }) : undefined} sessions={running.length > 0 ? running : undefined} lines={cleanup.consequences} />}
@@ -197,6 +198,7 @@ function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string; onClos
 
 /** The daemon checks the unused state atomically before deleting and cleaning up native records. */
 function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClose: () => void }): null {
+  const t = useT();
   const { request, toastError } = useDaemon();
   const close = useStableHandler(onClose);
   const deletion = useRef<ReturnType<typeof request> | undefined>(undefined);
@@ -208,11 +210,11 @@ function DeleteUnusedSession({ sessionId, onClose }: { sessionId: string; onClos
       if (active) close();
     }, (err: unknown) => {
       if (!active) return;
-      toastError(errorPresentation(err as Error), sessionId);
+      toastError(errorPresentation(err as Error), sessionId, t("dialog.deleteSession.failedTitle"));
       close();
     });
     return () => { active = false; };
-  }, [sessionId, request, toastError, close]);
+  }, [sessionId, request, toastError, close, t]);
   return null;
 }
 
@@ -230,6 +232,7 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
   return (
     <ConfirmDialog
       title={t("dialog.deleteSession.title")}
+      errorTitle={t("dialog.deleteSession.failedTitle")}
       subject={<Message id="dialog.deleteSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
       message={t("dialog.deleteSession.message")}
       consequences={(
@@ -287,6 +290,7 @@ function DeleteArchivedDialog({
   return (
     <ConfirmDialog
       title={t("dialog.deleteArchived.title")}
+      errorTitle={t("dialog.deleteArchived.failedTitle")}
       message={t("dialog.deleteArchived.message", { count: dialog.count })}
       consequences={(
         <ConfirmConsequences
@@ -364,6 +368,7 @@ export function RequestedDialog({
       return (
         <ConfirmDialog
           title={t("dialog.deleteConsole.title")}
+          errorTitle={t("dialog.deleteConsole.failedTitle")}
           subject={<Message id="dialog.deleteConsole.subject" params={{ name: <InlineReference dir="auto" wrap>{dialog.console.name}</InlineReference> }} />}
           message={t("dialog.deleteConsole.message")}
           confirmLabel={t("common.delete")}
@@ -384,6 +389,7 @@ export function RequestedDialog({
       return (
         <ConfirmDialog
           title={t("dialog.restoreProjectChanges.title")}
+          errorTitle={t("dialog.restoreProjectChanges.failedTitle")}
           subject={<Message id="dialog.restoreProjectChanges.subject" params={{ name: <InlineReference dir="auto" wrap>{dialog.project.name}</InlineReference> }} />}
           message={t("dialog.restoreProjectChanges.message")}
           confirmLabel={t("dialog.restoreProjectChanges.confirm")}
@@ -430,6 +436,7 @@ export function RequestedDialog({
       return (
         <RenameDialog
           title={t("dialog.renameProject.title")}
+          errorTitle={t("dialog.renameProject.failedTitle")}
           label={t("common.name")}
           initialValue={dialog.project.name}
           placeholder={t("dialog.project.nameExample")}
@@ -446,6 +453,7 @@ export function RequestedDialog({
       return (
         <RenameDialog
           title={t("dialog.rename.title")}
+          errorTitle={t("dialog.rename.failedTitle")}
           label={t("dialog.rename.field")}
           initialValue={dialog.session.title}
           placeholder={t("dialog.rename.nameExample")}

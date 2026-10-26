@@ -130,7 +130,7 @@ export function ProjectDialog({
     [projects, consoleId],
   );
   const [pickingDirectory, setPickingDirectory] = useState(false);
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t(editing ? "dialog.project.saveFailedTitle" : "dialog.project.addFailedTitle"));
 
   // A single directory's agent is read as its path is entered, a git remote's by probing it, which
   // also checks the remote can be read. A parent directory has no pre-read: each repository found

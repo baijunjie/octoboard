@@ -49,7 +49,7 @@ export function AccountDialog({
   const [name, setName] = useState(editing?.name ?? (renameDefault ? defaultNames?.[initialAgent] ?? "" : ""));
   const [configDir, setConfigDir] = useState(editing?.config_dir ?? "");
   const [pickingDirectory, setPickingDirectory] = useState(false);
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t(editing || renameDefault ? "settings.accounts.dialog.saveFailedTitle" : "settings.accounts.dialog.addFailedTitle"));
   const { shown, attempt } = useSubmitValidation();
 
   const collision = name.trim() === "" && renameDefault

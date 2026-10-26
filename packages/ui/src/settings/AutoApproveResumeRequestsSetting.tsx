@@ -15,7 +15,7 @@ export function AutoApproveResumeRequestsSetting(): React.ReactElement {
   const description = t(enabled ? "settings.autoApproveResume.description.on" : "settings.autoApproveResume.description.off");
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", auto_approve_resume_requests: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", auto_approve_resume_requests: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow label={t("settings.autoApproveResume.label")} description={description} isSelected={enabled} onChange={setEnabled} />

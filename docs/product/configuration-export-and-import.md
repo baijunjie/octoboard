@@ -439,7 +439,9 @@ Refused before anything at all is created:
   directory it points at is neither absolute nor starts with `~/`;
 - a request to apply application settings a document does not carry;
 - anything creating a console by hand would refuse of any console in the document — an avatar that is not an image, or
-  one too large (see "Avatar" in `docs/product/consoles.md`).
+  one larger than 256 KiB (`icon_too_large`; see "Avatar" in `docs/product/consoles.md`). The console dialog scales a
+  picked image down, so only an import meets that limit; its remedy is to give the console a smaller avatar in the
+  Octoboard the configuration came from, export again, then import the new file.
 
 **Past that point nothing is refused and nothing is undone**, because by then earlier consoles and projects exist and
 have already appeared:

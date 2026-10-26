@@ -30,7 +30,7 @@ const COPIED_HOLD_MS = 2000;
  * props are the `Button`'s (`size`, `variant`, `className`, `preventFocusOnPress`) and the caller
  * sets them to fit the place it sits in. An icon-only button's accessible name is the tooltip's
  * text. Where the platform has no clipboard, or it refuses, it copies through a selection (see
- * `copyText`). A copy that fails raises an error toast saying `failedText`.
+ * `copyText`). A copy that fails opens the error alert saying `failedText`.
  */
 export function CopyButton({
   text,
@@ -46,8 +46,8 @@ export function CopyButton({
   beforeCopyText?: string;
   /** The tooltip once copied; "Copied" by default. */
   afterCopyText?: string;
-  /** What the error toast says when the copy fails; "Could not copy" by default. */
-  failedText?: string;
+  /** What the error alert says when the copy fails. */
+  failedText: string;
   /** A label drawn before the icon. */
   children?: React.ReactNode;
 } & Omit<React.ComponentProps<typeof Button>, "children" | "onPress" | "isIconOnly">): React.ReactElement {
@@ -74,7 +74,7 @@ export function CopyButton({
         setEverCopied(true);
         if (!tooltipOpen.current) resetTimer.current = setTimeout(() => setCopied(false), COPIED_HOLD_MS);
       },
-      (cause: unknown) => toastError(new ActionableError(failedText ?? t("common.copyTextFailed"), "clipboard", { cause })),
+      (cause: unknown) => toastError(new ActionableError(failedText, "clipboard", { cause }), undefined, t("common.copyFailedTitle")),
     );
   };
 

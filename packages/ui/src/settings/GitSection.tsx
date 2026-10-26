@@ -28,9 +28,9 @@ export function GitSection(): React.ReactElement {
   const handoff = useFocusHandoff(() => listRef.current?.querySelector("button")?.focus());
 
   const setAutoPull = (value: boolean) =>
-    void request({ type: "update_settings", auto_pull_repositories: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", auto_pull_repositories: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
   const change = (changes: GitWorkflowSettingsChanges) =>
-    void request({ type: "update_settings", git_workflow: changes }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", git_workflow: changes }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <>

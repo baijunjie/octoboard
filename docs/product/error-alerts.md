@@ -69,8 +69,16 @@ and removing an account" in `docs/product/agent-accounts.md`) or a conversation 
 The error alert uses the standard danger icon and a danger acknowledgement button. It appears above any open dialog and
 takes keyboard focus. It identifies the failure and preserves available details. Its title says in plain words what
 failed — "Could not start the session", "Could not export the configuration" — and names no session, account or other
-subject (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`); an alert with no title
-of its own for its failure is titled "Error", or "Unexpected error" when the failure is unexpected. When the failure is
+subject (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`). Every alert raised by a
+user's action, and every one a daemon broadcast raises, has such a title: the action's — "Could not save the
+setting", "Could not hand off the session", "Could not switch branches", "Could not copy", or, for a session's
+**Resume**, "Could not reopen the session" when it is archived and "Could not resume the session" otherwise — or the
+daemon code's own, as "Branches and worktrees not removed" (`session_branches_not_removed`) and "Branches and worktrees
+left in place" (`project_branches_not_determined`) are. A daemon code's own title wins over the action's only for an
+alert a daemon broadcast raises and for some actions' failures outside a dialog; an alert raised by a dialog's submit or
+confirmation always takes that dialog's title for its action, whatever code the failure carries.
+Only a failure nothing titles — an error nothing caught — is titled "Unexpected error" when it is unexpected, and
+"Error" when its cause is a known one. When the failure is
 about a session, the first line of its body, "Session: …", names that session and where it is (its project or
 console), since the daemon's message says only "this session"; a session whose record is already gone, as after a
 failed launch, is named there by the name the failure carried, with no place. The rest of the body is in Octoboard's
@@ -390,6 +398,12 @@ not be read, which keeps its own remedy for reading a file (see "In the window" 
 knows stays unexpected. An unfamiliar failure does not get generic retry advice merely because it occurred during a
 familiar operation.
 
+**An alert whose body is the daemon's message, where that message already says what to do**, adds no remedy line of
+its kind after it: the message's own step is the remedy — "Reopen it first." for an archived session in a handoff, the
+step of a launch failure whose configuration directory cannot be reached, the step of `directory_unreadable`. Its
+classification, and any remedy button it has (see below), stay as they are. An alert whose body Octoboard words for the
+operation keeps its kind's remedy line.
+
 **A remedy that lives in Settings' Agent accounts section has a button** in the footer, a secondary action before the
 acknowledgement button, instead of the step naming where to go:
 
@@ -421,11 +435,14 @@ external-link icon. The guidance names it with a non-interactive inline referenc
 opens the explicit `issueUrl` configured in `config/app.json` when the user activates it. Repeated activation is
 blocked while opening is pending. It does not create an Issue or attach diagnostics or a screenshot automatically.
 The error stays open until acknowledged.
-If opening the page fails, a separate actionable error immediately appears above the original error, with the
+If opening the page fails, a separate actionable error immediately appears above the original error, titled "Could not
+open the Issue page", saying that the browser did not open the Issue page and so its address is shown below, with the
 address as selectable text on a line of its own and instructions to open it manually; the reason the system gave, where
 it gave one, is under that alert's **Error details**. Acknowledging that failure
-returns to the original pending error. Where the desktop platform cannot open external links, the guidance includes
-the address as a selectable chip for manual use.
+returns to the original pending error. Any other link Octoboard has the system open in the browser that does not open
+is reported the same way, in an alert of its own titled "Could not open the link", with its address on a line of its
+own and the remedy to check that the application it needs is installed or to open the address manually. Where the
+desktop platform cannot open external links, the guidance includes the address as a selectable chip for manual use.
 
 **A batch of failures**, such as a set of account switches, uses one acknowledgement dialog listing each failed item.
 It gives each failed item only its short reason, and says each remedy once after the list: a code's own remedy once

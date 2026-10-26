@@ -3,8 +3,8 @@ import { DaemonRequestError } from "./daemon-client";
 
 export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
-  | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session"
-  | "configuration" | "image" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
+  | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
+  | "configuration" | "image" | "avatarSize" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
@@ -64,9 +64,12 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   unresumable: ["conversation_unresumable"],
   unarchive: ["codex_unarchive_failed"],
   conversation: ["conversation_not_found", "conversation_to_resume_not_found", "resume_id_invalid", "conversation_outside_project", "conversation_in_session"],
+  ownerGone: ["quick_create_owner_gone"],
   session: ["session_archived", "session_not_running", "session_already_on_account", "unknown_session", "session_request_not_waiting", "session_request_answered", "trust_not_waiting", "session_not_bound"],
   configuration: ["configuration_not_recognised", "configuration_version_unsupported", "configuration_unreadable", "import_choice_unavailable"],
-  image: ["icon_not_an_image", "icon_too_large"],
+  image: ["icon_not_an_image"],
+  // The console dialog scales a picked image down to the limit, so only an imported configuration carries one too large.
+  avatarSize: ["icon_too_large"],
   remote: ["invalid_remote_url"],
   noCommits: ["no_commits_to_push", "no_commits_to_restore"],
   gitFailure: ["git_failed", "git_clone_failed", "git_push_failed", "git_switch_failed", "git_restore_failed", "git_operation_in_progress", "no_push_remote", "upstream_not_a_remote"],

@@ -2,14 +2,13 @@ import { DaemonRequestError } from "../daemon-client";
 import { consoleAccount, inheritedAccount } from "../accountChoices";
 import { AGENT_LABEL, isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents";
 import { daemonMessage } from "../daemonMessage";
-import { errorPresentation, noticeErrorPresentation, noticeKind } from "../errorPresentation";
-import { errorText } from "../errorText";
+import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import { currentLanguage, t } from "../i18n/language";
 import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow } from "../quota/quotaFormat";
-import { applyDaemonEvent, createStateStore, type Daemon, type ToastRequest } from "../store";
+import { applyDaemonEvent, createStateStore, errorToast, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
 import { createConfigurationReplies } from "./fixtureConfiguration";
@@ -217,13 +216,15 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
   const raiseScenarioToasts = () => {
     if (toastsRaised) return;
     toastsRaised = true;
-    for (const { code, params, message: fixtureMessage, kind, ...toast } of scenario.toasts ?? []) {
+    for (const { code, params, message: fixtureMessage, title: fixtureTitle, kind, ...toast } of scenario.toasts ?? []) {
       const message = typeof fixtureMessage === "function" ? fixtureMessage(t) : fixtureMessage;
+      const title = typeof fixtureTitle === "function" ? fixtureTitle(t) : fixtureTitle;
       const failure = code ? noticeErrorPresentation(code, params ?? {}, message) : undefined;
       if (kind === "session_notice" && !code) throw new Error("A session_notice fixture needs a code to route by");
       emitToast({
         ...toast,
         kind: kind === "session_notice" ? noticeKind(code!, params ?? {}) : kind,
+        title,
         // Mirror the store: keep the full plain message and structured launch title separately.
         ...(code && {
           daemonTitle: failure ? new DaemonRequestError(message, `${code}.title`, params ?? {}) : undefined,
@@ -1115,11 +1116,8 @@ export function createFixtureDaemon(scenario: Scenario): Daemon {
           return { type: "ack" };
       }
     },
-    toastError: (message, session) => {
-      const presentation = typeof message === "string" ? message : errorPresentation(message);
-      emitToast({ kind: "error", message: errorText(message), session,
-        ...(typeof presentation !== "string" && { daemonError: presentation }) });
-    },
+    // The request the real daemon raises, so the title and the raw text an action gives it reach the alert as they do there.
+    toastError: (message, session, title) => emitToast(errorToast(message, session, title)),
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);

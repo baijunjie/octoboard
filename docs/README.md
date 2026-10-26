@@ -569,6 +569,9 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
 - [Adding a daemon error code](memory/adding-a-daemon-error-code.md) — what the UI needs in the same change when the
   daemon starts returning a new error code (message text, params, recovery group, Settings button), so the refusal is
   not shown as an unexpected bug.
+- [Raising an error alert in the UI](memory/raising-an-error-alert-in-the-ui.md) — every route that raises an error
+  alert from `packages/ui` passes a title naming what failed, and a failure the UI detects itself is an
+  `ActionableError` (or carries a `recovery`), or the alert calls it a bug.
 - [Adding a reason an account cannot be used](memory/adding-a-reason-an-account-cannot-be-used.md) — every daemon and
   UI place that must check a new reason an account cannot take new work, the console and project dialog pickers
   included.

@@ -146,7 +146,7 @@ it.each(["Copy", "Paste"])("reports %s failures with localized text", async (act
   expect(toastError).toHaveBeenCalledWith(expect.objectContaining({
     message: action === "Copy" ? "Could not copy the selection" : "Could not paste from the clipboard",
     recovery: "clipboard",
-  }));
+  }), undefined, action === "Copy" ? "Could not copy" : "Could not paste");
 });
 
 it.each([

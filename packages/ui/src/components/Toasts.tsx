@@ -52,7 +52,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
         const session = request.session ? sessions.get(request.session) : undefined;
         const location = session && sessionLocationContent(t, session, consoles, projects);
         if (request.kind === "error") {
-          const { title, body, details } = errorAlertParts(request);
+          const { title, body, details, remedyInBody } = errorAlertParts(request);
           // Which session the alert is about goes in the body, since the daemon words its message as "this session"
           // without naming it: from the session's record, or, when it is gone, from the name the request carries.
           const goneName = request.daemonTitle?.params.title;
@@ -69,6 +69,7 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
               </>
             ),
             details,
+            remedyInBody,
           });
         } else showToast(request, location);
       }),

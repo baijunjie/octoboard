@@ -15,7 +15,7 @@ export function AutoApproveHandoffsSetting(): React.ReactElement {
   const description = t(enabled ? "settings.autoApproveHandoffs.description.on" : "settings.autoApproveHandoffs.description.off");
 
   const setEnabled = (value: boolean) =>
-    void request({ type: "update_settings", auto_approve_handoffs: value }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", auto_approve_handoffs: value }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
 
   return (
     <SwitchSettingRow label={t("settings.autoApproveHandoffs.label")} description={description} isSelected={enabled} onChange={setEnabled} />

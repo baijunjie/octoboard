@@ -53,12 +53,14 @@ export interface ToastRequest {
    * session" without naming it, having no notion of what the client calls it, so the alert's body
    * is the only thing that tells the user which one. */
   session?: string;
+  /** The plain name of what failed, for an error alert whose code has no `alertTitle` of its own. */
+  title?: string;
 }
 
 /** The error toast `toastError` raises for `message`, with the daemon's code and params kept when it is an error that has them. */
-export function errorToast(message: string | Error, session?: string): ToastRequest {
+export function errorToast(message: string | Error, session?: string, title?: string): ToastRequest {
   const presentation = typeof message === "string" ? message : errorPresentation(message);
-  return { kind: "error", message: errorText(message), session, error: message,
+  return { kind: "error", message: errorText(message), session, title, error: message,
     ...(typeof presentation !== "string" && { daemonError: presentation }) };
 }
 
@@ -687,8 +689,9 @@ export interface Daemon {
    * allowing field validation to remain local and execution errors to require acknowledgement. */
   request: (body: RequestBody) => Promise<Event>;
   /** `session` is passed by a caller that knows which session the message is about, so the toast
-   * can name it; see `ToastRequest.session`. */
-  toastError: (message: string | Error, session?: string) => void;
+   * can name it; see `ToastRequest.session`. `title` names what failed in plain words, with no name in it; see
+   * `ToastRequest.title`. */
+  toastError: (message: string | Error, session?: string, title?: string) => void;
   /** Confirms something the user just did, which has no inline place to say so (a path copied);
    * about no session, so the toast is the message alone. */
   toastNotice: (message: string, content?: ReactNode) => void;
@@ -759,7 +762,7 @@ export function createDaemon(origin: DaemonOrigin): Daemon {
         const message = daemonMessage(currentLanguage(), err.code, err.params, err.message, store.getState());
         throw new DaemonRequestError(message, err.code, err.params);
       }),
-    toastError: (message, session) => emitToast(errorToast(message, session)),
+    toastError: (message, session, title) => emitToast(errorToast(message, session, title)),
     toastNotice: (message, content) => emitToast({ kind: "notice", message, content }),
     onToast: (listener) => {
       toastListeners.add(listener);

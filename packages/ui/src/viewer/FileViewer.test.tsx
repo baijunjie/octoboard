@@ -928,7 +928,7 @@ it("reports a user-triggered external Markdown link failure", async () => {
   await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());
   expect(links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
   expect(error).not.toHaveBeenCalled();
-  expect(errorAlerts.getSnapshot()).toEqual(expect.arrayContaining([expect.objectContaining({ message: "Could not open the external link.", error: expect.objectContaining({ cause }), classification: { kind: "actionable", recovery: "openExternal" } })]));
+  expect(errorAlerts.getSnapshot()).toEqual(expect.arrayContaining([expect.objectContaining({ message: "The link did not open in a browser. Its address is shown below.", error: expect.objectContaining({ cause }), classification: { kind: "actionable", recovery: "openExternal" } })]));
 });
 
 it("reads the stored layout, and falls back to unified for anything else", async () => {

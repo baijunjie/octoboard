@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { DaemonErrorMessage } from "./components/DaemonErrorMessage";
+import { remedyInBody } from "./components/errorPartPresence";
 import { rawErrorDetails } from "./components/errorParts";
 import type { ErrorRecovery } from "./errorRecovery";
 import { errorAlerts } from "./errorAlerts";
@@ -19,5 +20,6 @@ export function reportError(error: unknown, session?: string, recovery?: ErrorRe
     title,
     content: content ?? <DaemonErrorMessage error={presentation} />,
     details: rawErrorDetails(presentation),
+    remedyInBody: remedyInBody(content, presentation),
   });
 }

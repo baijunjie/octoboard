@@ -122,7 +122,7 @@ it("immediately shows an actionable manual URL fallback if opening an Issue fail
   const report = [...document.querySelectorAll("a")].find((link) => link.textContent === "Report issue")!;
   await act(async () => report.click());
   const alert = document.querySelector('[role="alertdialog"]')!;
-  expect(alert.textContent).toContain("The Issue page could not be opened.");
+  expect(alert.textContent).toContain("The browser did not open the Issue page, so its address is shown below.");
   expect(alert.textContent).toContain(issueUrl);
   expect(alert.textContent).toContain("open it manually");
   // The system's reason is not part of the alert's words; it is behind Error details, on a surface of its own.
@@ -396,4 +396,16 @@ it("keeps the sentence of a failure the client raises itself, which is already t
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("The request timed out.");
   expect(alert.textContent).not.toContain("Something unexpected went wrong.");
+});
+
+it("adds no remedy line of the failure's kind after a daemon message that says what to do itself", () => {
+  mount();
+  act(() => reportError(new DaemonRequestError("archived", "session_archived", { session: "s1" })));
+  const text = document.querySelector('[role="alertdialog"]')?.textContent;
+  expect(text).toContain("Reopen it first.");
+  expect(text).not.toContain("Select the current session in the sidebar");
+  act(() => errorAlerts.acknowledge());
+  // A body of the caller's own says nothing of the daemon's remedy, so the kind's line stays.
+  act(() => reportError(new DaemonRequestError("archived", "session_archived", { session: "s1" }), undefined, undefined, <p>Archived.</p>));
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Select the current session in the sidebar");
 });

@@ -136,10 +136,10 @@ export function useTrustPromptDialogProps(
       if (err instanceof DaemonRequestError && err.code === TRUST_NOT_WAITING) {
         // Nothing to tell for the plain go-ahead; but a folder the user asked to trust was not.
         if (trustParentDir) {
-          toastError(new ActionableError(t("dialog.trust.alreadyAnswered"), "session"), prompt.session);
+          toastError(new ActionableError(t("dialog.trust.alreadyAnswered"), "session"), prompt.session, t("dialog.trust.failedTitle"));
         }
       } else {
-        toastError(errorPresentation(err as Error), prompt.session);
+        toastError(errorPresentation(err as Error), prompt.session, t("dialog.trust.failedTitle"));
       }
     }
     setTrustDirFor(undefined);
@@ -153,6 +153,7 @@ export function useTrustPromptDialogProps(
     // Wide enough that the paths it sets apart wrap no more than they have to.
     size: "lg",
     title: t("dialog.trust.title"),
+    errorTitle: t("dialog.trust.failedTitle"),
     message: <TrustPromptMessage prompt={prompt} sessionTitle={sessionTitle} />,
     confirmLabel: t("dialog.trust.confirm"),
     cancelLabel: t("dialog.trust.notNow"),

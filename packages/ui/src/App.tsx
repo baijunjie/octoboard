@@ -460,8 +460,8 @@ export function App(): React.ReactElement {
   // same session share one in-flight guard.
   const inFlightRef = useRef<Set<string>>(new Set());
 
-  const runOnce = (key: string, action: () => Promise<void>): Promise<boolean> =>
-    runOnceGuarded(inFlightRef.current, key, action, toastError);
+  const runOnce = (key: string, title: string, action: () => Promise<void>): Promise<boolean> =>
+    runOnceGuarded(inFlightRef.current, key, action, (error) => toastError(error, undefined, title));
 
   /** Resumes a session; resolves to whether the daemon accepted it. A console may now
    * hold any number of live console sessions, so there is nothing to pre-emptively refuse here —
@@ -470,8 +470,11 @@ export function App(): React.ReactElement {
    * false and sends nothing. */
   const resumeSession = async (sessionId: string): Promise<boolean> => {
     let accepted = false;
-    await confirmLaunch(store.getState().sessions.get(sessionId)?.account_id, async () => {
-      accepted = await runOnce(`resume:${sessionId}`, () => startResume(sessionId));
+    const session = store.getState().sessions.get(sessionId);
+    // An archived session is reopened, an interrupted one resumed; the failure is titled for which.
+    const title = t(session?.status === "archived" ? "sidebar.session.reopenFailedTitle" : "sidebar.session.resumeFailedTitle");
+    await confirmLaunch(session?.account_id, async () => {
+      accepted = await runOnce(`resume:${sessionId}`, title, () => startResume(sessionId));
     });
     return accepted;
   };
@@ -613,7 +616,7 @@ export function App(): React.ReactElement {
   };
 
   const pullProjectBranch = (project: Project) => {
-    request({ type: "pull_project_branch", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+    request({ type: "pull_project_branch", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.pullFailedTitle")));
   };
 
   const openRepository = (url: string) => {
@@ -621,31 +624,31 @@ export function App(): React.ReactElement {
   };
 
   const openProjectDirectory = (project: Project) => {
-    request({ type: "open_project_directory", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+    request({ type: "open_project_directory", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("common.revealFailedTitle")));
   };
 
   const copyProjectName = (project: Project) => {
     copyText(project.name, { clipboard }).then(
       () => toastNotice(t("sidebar.project.nameCopied")),
-      (cause: unknown) => toastError(new ActionableError(t("sidebar.project.copyNameFailed"), "clipboard", { cause })),
+      (cause: unknown) => toastError(new ActionableError(t("sidebar.project.copyNameFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle")),
     );
   };
 
   const copySessionId = (session: Session) => {
     copyText(session.id, { clipboard }).then(
       () => toastNotice(t("sidebar.session.idCopied")),
-      (cause: unknown) => toastError(new ActionableError(t("sidebar.session.copyIdFailed"), "clipboard", { cause })),
+      (cause: unknown) => toastError(new ActionableError(t("sidebar.session.copyIdFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle")),
     );
   };
 
   const openProjectTerminal = (project: Project) => {
-    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.openTerminalFailedTitle")));
   };
 
   const pushProjectBranch = (project: Project) => {
     request({ type: "push_project_branch", project: project.id })
       .then(() => toastNotice(t("sidebar.project.pushed")))
-      .catch((err: unknown) => toastError(errorPresentation(err as Error)));
+      .catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.pushFailedTitle")));
   };
 
   const loadProjectBranches = async (project: Project): Promise<ActionMenuEntry[]> => {
@@ -667,7 +670,7 @@ export function App(): React.ReactElement {
         onClick: () => {
           if (current) return;
           request({ type: "switch_project_branch", project: project.id, branch: branch.name })
-            .catch((err: unknown) => toastError(errorPresentation(err as Error)));
+            .catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.switchBranchFailedTitle")));
         },
       };
     });
@@ -805,19 +808,20 @@ export function App(): React.ReactElement {
   };
 
   const setSessionColour = (session: Session, colour: ConsoleSessionColour) => {
-    request({ type: "set_session_colour", session: session.id, colour }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+    request({ type: "set_session_colour", session: session.id, colour }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.session.colourFailedTitle")));
   };
 
   const setLocked = (session: Session, locked: boolean) => {
-    request({ type: "set_session_locked", session: session.id, locked }).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+    request({ type: "set_session_locked", session: session.id, locked }).catch((err: unknown) =>
+      toastError(errorPresentation(err as Error), undefined, t(locked ? "sidebar.session.lockFailedTitle" : "sidebar.session.unlockFailedTitle")));
   };
 
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
-    const body =
+    const [body, failedTitle] =
       "project" in target
-        ? ({ type: "update_project", project: target.project.id, pinned } as const)
-        : ({ type: "set_session_pinned", session: target.session.id, pinned } as const);
-    request(body).catch((err: unknown) => toastError(errorPresentation(err as Error)));
+        ? [{ type: "update_project", project: target.project.id, pinned } as const, pinned ? "sidebar.project.pinFailedTitle" as const : "sidebar.project.unpinFailedTitle" as const]
+        : [{ type: "set_session_pinned", session: target.session.id, pinned } as const, pinned ? "sidebar.session.pinFailedTitle" as const : "sidebar.session.unpinFailedTitle" as const];
+    request(body).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t(failedTitle)));
   };
 
   // Archiving at once takes the row away from under a menu that returns focus to its trigger in
@@ -863,7 +867,7 @@ export function App(): React.ReactElement {
       setArchivingId(now.id);
       request({ type: "archive_session", session: now.id }).catch((err: unknown) => {
         setArchivingId(undefined);
-        toastError(errorPresentation(err as Error));
+        toastError(errorPresentation(err as Error), undefined, t("dialog.archiveSession.failedTitle"));
       });
     });
   };

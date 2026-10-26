@@ -1,4 +1,5 @@
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
+import type { PlainMessageKey, Translate } from "../../i18n/catalog";
 import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
@@ -211,3 +212,8 @@ export const SAMPLE = (() => {
   ];
   return { console: console_, web, api, consoleSession, sessions };
 })();
+
+/** The title the action that raises an error gives its alert (`ToastFixture.title`), for a scenario that raises the
+ * error itself rather than through the action: the message at `key`, worded in the viewing language, so a title the
+ * app renames or drops breaks the scenario at type checking. */
+export const failureTitle = (key: PlainMessageKey) => (t: Translate) => t(key);

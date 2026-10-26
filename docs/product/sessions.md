@@ -333,10 +333,13 @@ The session opened is the one the dialog would open if submitted untouched:
   console session's focus mode, where it is bound to that console session, as the dialog opened there binds it.
 
 It is listed as *starting* and selected, as a session opened from the dialog is, and a launch failure is reported the
-same way (see above). A refusal is shown in an error alert. When the console
-session it would be bound to is no longer available — archived or gone — nothing is sent, and an error alert says so,
-with the same message the dialog shows in that case. Only one session opens with defaults at a time: further presses
-are ignored until the daemon has answered the previous one. If the sidebar has switched to another console by the time
+same way (see above). A refusal is shown in an error alert titled "Could not open a session". When the console
+session it would be bound to is no longer available — archived or gone — nothing is sent, and an error alert titled
+"Cannot open a session" says so, with the same message the dialog shows in that case, then the remedy: if that session
+was archived, choose **View archive**, then **Reopen** on it; otherwise start a session with **New session**. It is a
+known failure (`quick_create_owner_gone`) and asks for no report. The other cases below in which nothing is sent are
+titled "Cannot open a session" too. Only one session opens with defaults at a time: further presses are ignored until
+the daemon has answered the previous one. If the sidebar has switched to another console by the time
 the answer arrives, the session is still opened but not selected.
 
 When no agent is both added and installed, no **+** shows its quick form, and every one of them is disabled (see

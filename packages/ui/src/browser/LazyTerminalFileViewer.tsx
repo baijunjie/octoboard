@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useState } from "react";
 
+import { ActionableError } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import type { TerminalFileViewer as TerminalFileViewerType } from "./TerminalFileViewer";
@@ -26,7 +27,8 @@ export function LazyTerminalFileViewer(props: React.ComponentProps<typeof Termin
       onFailed={() => {
         Viewer = load();
         retried((count) => count + 1);
-        toastError(t("viewer.loadFailed"));
+        // A known failure: the body says to open the file again, and it is not reported as a bug.
+        toastError(new ActionableError(t("viewer.loadFailed"), "none"), undefined, t("viewer.loadFailedTitle"));
         props.onClose();
       }}
     >

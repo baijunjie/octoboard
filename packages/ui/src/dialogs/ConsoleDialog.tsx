@@ -69,7 +69,7 @@ export function ConsoleDialog({
   const [fields, setFields] = useState(initial);
   const [icon, setIcon] = useState<string | null>(editing?.icon ?? null);
   const [sessionPrompt, setSessionPrompt] = useState(editing?.console_session_prompt ?? "");
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t(editing ? "dialog.console.saveFailedTitle" : "dialog.console.createFailedTitle"));
   // Settings, opened over this dialog from the accounts table. It is rendered beside the dialog
   // rather than inside it, as its forms would otherwise submit this one.
   const [managingAccounts, setManagingAccounts] = useState(false);
@@ -96,7 +96,7 @@ export function ConsoleDialog({
       setIcon(await imageToAvatar(file));
     } catch {
       // The avatar's own failure is not a field's: it opens the error alert dialog, as a failed submit does.
-      reportError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"));
+      reportError(new ActionableError(t("dialog.console.avatarUnreadable"), "image"), undefined, undefined, undefined, t("dialog.console.avatarFailedTitle"));
     } finally {
       setDecoding(false);
     }

@@ -26,6 +26,7 @@ import { dialogAround } from "../dialogs/dialogElement";
 import { RenameDialog } from "../dialogs/RenameDialog";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
+import { t } from "../i18n/language";
 import { Message, useT } from "../i18n/react";
 import type { Project, ShellTerminal } from "../protocol";
 import { useDaemon, type Daemon } from "../store";
@@ -388,6 +389,7 @@ export function ShellTerminalPanel({
       {renaming !== undefined && terminals.some((terminal) => terminal.id === renaming) && (
         <RenameDialog
           title={t("shellTerminal.renameDialog.title")}
+          errorTitle={t("shellTerminal.renameDialog.failedTitle")}
           label={t("shellTerminal.renameDialog.field")}
           initialValue={terminals.find((terminal) => terminal.id === renaming)!.title}
           placeholder={t("shellTerminal.renameDialog.nameExample")}
@@ -418,7 +420,7 @@ async function closeShellTerminal(daemon: Pick<Daemon, "request" | "toastError">
   try {
     await daemon.request({ type: "close_shell_terminal", shell_terminal: terminal });
   } catch (err) {
-    daemon.toastError(errorPresentation(err));
+    daemon.toastError(errorPresentation(err), undefined, t("shellTerminal.closeFailedTitle"));
   }
 }
 

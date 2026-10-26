@@ -1,3 +1,4 @@
+import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 
 /** Where a file or folder lives on the daemon's host: in a project's directory, or in one of its
@@ -13,8 +14,9 @@ export interface HostPath {
  * manager, or to open it with its default application, and raises an error alert when the host
  * refuses. A worktree's path is sent with the worktree's id. */
 export function useHostPathActions(): (type: "open_project_path" | "reveal_project_path", host: HostPath) => void {
+  const t = useT();
   const { request, toastError } = useDaemon();
   return (type, { project, worktree, path }) => {
-    void request({ type, project, ...(worktree !== undefined && { worktree }), path }).catch((error: Error) => toastError(error));
+    void request({ type, project, ...(worktree !== undefined && { worktree }), path }).catch((error: Error) => toastError(error, undefined, t(type === "open_project_path" ? "common.openDefaultApplicationFailedTitle" : "common.revealFailedTitle")));
   };
 }

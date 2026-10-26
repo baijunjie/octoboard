@@ -48,7 +48,7 @@ export function CloneDirSetting(): React.ReactElement {
       return;
     }
     void request({ type: "update_settings", default_clone_dir: typed })
-      .catch((err) => toastError(errorPresentation(err as Error)))
+      .catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")))
       .finally(() => setDraft(latest.current));
   };
 

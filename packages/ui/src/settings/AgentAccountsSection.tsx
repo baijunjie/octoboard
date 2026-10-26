@@ -286,6 +286,7 @@ export function AgentAccountsSection(): React.ReactElement {
       {removing && (
         <ConfirmDialog
           title={t("settings.accounts.removeTitle")}
+          errorTitle={t("settings.accounts.removeFailedTitle")}
           subject={<Message id="settings.accounts.removeSubject" params={{ name: <InlineReference dir="auto" wrap>{removing.name}</InlineReference> }} />}
           message={<p><Message id="settings.accounts.removeMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[removing.agent]}</InlineReference> }} /></p>}
           confirmLabel={t("common.remove")}

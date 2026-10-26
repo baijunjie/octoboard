@@ -16,7 +16,7 @@ export function useCopyPath(): (wirePath: string) => void {
   return (wirePath) => {
     copyText(displayWirePath(wirePath), { clipboard }).then(
       () => toastNotice(t("common.pathCopied")),
-      (cause: unknown) => toastError(new ActionableError(t("common.copyFailed"), "clipboard", { cause })),
+      (cause: unknown) => toastError(new ActionableError(t("common.copyFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle")),
     );
   };
 }

@@ -2,6 +2,7 @@
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { t } from "../i18n/language";
 import type { ToastRequest } from "../store";
 
 import type { Agent, RequestBody } from "../protocol";
@@ -867,6 +868,40 @@ describe("the fixture daemon's structured notices", () => {
       expect(toasts[0]?.daemonError).toMatchObject({ code: "config_dir_unreachable", params: expect.objectContaining({ path: params.path }) });
       expect(toasts[0]?.message).toContain(params.title);
       expect(toasts[0]?.message).toContain(params.path);
+      unsubscribe();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("the fixture daemon's error titles", () => {
+  const scenario = { id: "titles", group: "Trust prompts and toasts" as const, category: "normal" as const, title: "" };
+
+  it("passes the title an action names, and the raw error, as the real daemon's toast does", () => {
+    const daemon = createFixtureDaemon(scenario);
+    const toasts: ToastRequest[] = [];
+    const unsubscribe = daemon.onToast((toast) => toasts.push(toast));
+    const error = new Error("disk full");
+    daemon.toastError(error, "s-1", "Could not save the setting");
+    expect(toasts).toEqual([expect.objectContaining({ kind: "error", title: "Could not save the setting", session: "s-1", error })]);
+    unsubscribe();
+  });
+
+  it("gives a scenario's toast the title it names, worded in the viewing language when it is a function", async () => {
+    vi.useFakeTimers();
+    try {
+      const daemon = createFixtureDaemon({
+        ...scenario,
+        toasts: [
+          { kind: "error", message: "one", title: "Could not open the folder" },
+          { kind: "error", message: "two", title: (t) => t("settings.saveFailedTitle") },
+        ],
+      });
+      const toasts: ToastRequest[] = [];
+      const unsubscribe = daemon.onToast((toast) => toasts.push(toast));
+      await vi.runAllTimersAsync();
+      expect(toasts.map((toast) => toast.title)).toEqual(["Could not open the folder", t("settings.saveFailedTitle")]);
       unsubscribe();
     } finally {
       vi.useRealTimers();

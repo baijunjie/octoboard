@@ -1,7 +1,7 @@
 import type { Account, AccountQuota, AccountSharing, Settings } from "../../protocol";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState } from "./builders";
 import { quotaOf, quotaWindow } from "./quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
@@ -499,20 +499,22 @@ export const noticeScenarios: Scenario[] = [
     category: "exceptional",
     title: "Queued error alerts",
     description:
-      "Errors require explicit OK, with no close button or automatic dismissal, and every sentence is the application's own: raw text from the daemon or the system appears only in the Error details disclosure (closed here) of the alerts that carry it. OK advances through: a missing folder named as code, with recovery labels such as Browse, Try again and Settings as chips; the closed connection; an unknown account, whose Manage accounts… button sits in the footer, left of OK; two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one, whose system text is under Error details), each an expected refusal with its own advice rather than the unexpected-failure alert; a session-specific error and a failed trust confirmation, each titled for what failed (\"Request not carried out\", \"Could not answer the trust confirmation\") with a Session line above the message naming the session and where it is, the session and its project each a chip; and, last, an unknown code from a newer daemon: the generic sentence \"Something unexpected went wrong.\", with the daemon's English text under Error details and the Report issue guidance.",
+      "Errors require explicit OK, with no close button or automatic dismissal, and every sentence is the application's own, under a title naming what failed (the first three \"Could not open in the file manager\", \"Could not save the setting\" and \"Could not open a session\", the two refused reopens \"Could not reopen the session\"): raw text from the daemon or the system appears only in the Error details disclosure (closed here) of the alerts that carry it. OK advances through: a missing folder named as code, with recovery labels such as Browse, Try again and Settings as chips; the closed connection; an unknown account, whose Manage accounts… button sits in the footer, left of OK; two refused reopens (the agent no longer has the session's conversation, and Codex could not restore its archived one, whose system text is under Error details), each an expected refusal with its own advice rather than the unexpected-failure alert; a session-specific error and a failed trust confirmation, each titled for what failed (\"Request not carried out\", \"Could not answer the trust confirmation\") with a Session line above the message naming the session and where it is, the session and its project each a chip; and, last, an unknown code from a newer daemon: the generic sentence \"Something unexpected went wrong.\", with the daemon's English text under Error details and the Report issue guidance.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
-      { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "" },
-      { kind: "error", code: "connection_closed", params: {}, message: (t) => t("connection.error.connectionClosed") },
-      { kind: "error", code: "unknown_account", params: { account: "removed-account" }, message: "The configured account no longer exists" },
+      { kind: "error", code: "path_not_found", params: { path: "/Users/dev/code/missing" }, message: "", title: failureTitle("common.revealFailedTitle") },
+      { kind: "error", code: "connection_closed", params: {}, message: (t) => t("connection.error.connectionClosed"), title: failureTitle("settings.saveFailedTitle") },
+      { kind: "error", code: "unknown_account", params: { account: "removed-account" }, message: "The configured account no longer exists", title: failureTitle("dialog.session.failedTitle") },
       {
         kind: "error",
+        title: failureTitle("sidebar.session.reopenFailedTitle"),
         code: "conversation_unresumable",
         params: { agent: "Claude Code", session: "s-web-1" },
         message: "Claude Code no longer has the conversation of this session, so it cannot be resumed",
       },
       {
         kind: "error",
+        title: failureTitle("sidebar.session.reopenFailedTitle"),
         code: "codex_unarchive_failed",
         params: { detail: "no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7" },
         message: "`codex unarchive` failed: no rollout found for thread id 0199c3a2-7e41-7b52-9d0e-4f6a1c85b2d7",
@@ -533,10 +535,11 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Quick create refused, the named owner is no longer available",
-    description: "The quick-create race has no durable form. Its acknowledgement keeps the former owner's full mixed-script task and session title as a wrapping name chip; the plain error sentence remains available to system surfaces.",
+    description: "The quick-create race has no durable form. Its acknowledgement, titled \"Cannot open a session\", keeps the former owner's full mixed-script task and session title as a wrapping name chip; a known refusal, it gives the advice for a session that is gone and offers no report guidance or Report issue button. The plain error sentence remains available to system surfaces.",
     state: snapshotState({ consoles: [console_], projects: [web], sessions: [] }),
     toasts: [{
       kind: "error",
+      title: failureTitle("dialog.session.blockedTitle"),
       code: "quick_create_owner_gone",
       params: { name: "Review release readiness مرحبا 東京 (UnbrokenOwnerNameForProductionDeploymentCompatibilityReview)" },
       message: "The owner is no longer available",
@@ -673,6 +676,7 @@ export const noticeScenarios: Scenario[] = [
     }),
     toasts: [{
       kind: "error",
+      title: failureTitle("dialog.archiveSession.failedTitle"),
       code: "session_has_running_sessions",
       params: {
         count: "2",
@@ -724,7 +728,7 @@ export const noticeScenarios: Scenario[] = [
     title: "Shell environment timeout alert",
     description: "The error alert presents the shell command as selectable code, then the cause, launch consequence and recovery as separate readable parts.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
-    toasts: [{ kind: "error", ...SHELL_TIMEOUT }],
+    toasts: [{ kind: "error", title: failureTitle("dialog.session.failedTitle"), ...SHELL_TIMEOUT }],
   },
   {
     id: "toast-notice",

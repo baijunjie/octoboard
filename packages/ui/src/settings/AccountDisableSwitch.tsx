@@ -30,7 +30,7 @@ export function AccountDisableSwitch({ agent, account, name, label = "settings.a
     if (asking.current) return;
     asking.current = true;
     void request({ type: "set_account_disabled", agent, account, disabled: disable })
-      .catch((err) => toastError(errorPresentation(err as Error)))
+      .catch((err) => toastError(errorPresentation(err as Error), undefined, t(disable ? "settings.accounts.disableFailedTitle" : "settings.accounts.enableFailedTitle")))
       .finally(() => { asking.current = false; });
   };
   return (

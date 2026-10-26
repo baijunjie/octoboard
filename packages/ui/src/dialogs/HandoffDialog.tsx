@@ -52,7 +52,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
   const { request } = useDaemon();
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t("dialog.handOff.failedTitle"));
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
   const { choice, blocked, unavailable, overrides, agentOptions, setPickedAgent, account, launch } = useLaunchChoice(parentConsole, project, session.agent);
 

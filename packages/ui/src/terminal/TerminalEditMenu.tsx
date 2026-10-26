@@ -36,7 +36,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         // A permission prompt may outlive the session that asked for it.
         if (mounted.current && currentSession.current === destination && controllerRef.current === controller) controller.paste(text, destination);
       },
-      (cause: unknown) => toastError(new ActionableError(t("terminal.pasteFailed"), "clipboard", { cause })),
+      (cause: unknown) => toastError(new ActionableError(t("terminal.pasteFailed"), "clipboard", { cause }), undefined, t("terminal.pasteFailedTitle")),
     );
   };
   return (
@@ -55,7 +55,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
       items={[
         {
           label: t("terminal.copy"), icon: Copy, disabled: !selection,
-          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }))); },
+          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle"))); },
         },
         { label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId, onClick: paste },
         { label: t("terminal.selectAll"), icon: TextSelect, onClick: () => controllerRef.current?.selectAll() },

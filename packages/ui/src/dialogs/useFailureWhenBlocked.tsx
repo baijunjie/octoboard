@@ -16,8 +16,8 @@ export function useFailureWhenBlocked(blocked: boolean, message: string | Action
   let current = held?.key === resetKey ? held : undefined;
   if (blocked && !current) {
     const request = errorToast(typeof message === "string" ? new ActionableError(message, "none") : message);
-    const { body, details } = errorAlertParts(request);
-    const view = errorAlerts.view({ message: request.message, error: request.error, title, content: body, details });
+    const { body, details, remedyInBody } = errorAlertParts(request);
+    const view = errorAlerts.view({ message: request.message, error: request.error, title, content: body, details, remedyInBody });
     if (view.classification.kind !== "actionable") throw new Error("An ActionableError classified as unexpected");
     current = { key: resetKey, failure: { ...view, classification: view.classification } };
     setHeld(current);

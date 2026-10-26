@@ -19,7 +19,7 @@ export function LanguageSetting(): React.ReactElement {
   const { request, toastError } = useDaemon();
   const pick = (next: Language) => {
     setLanguage(next);
-    void request({ type: "update_settings", interface_language: next }).catch((err) => toastError(errorPresentation(err as Error)));
+    void request({ type: "update_settings", interface_language: next }).catch((err) => toastError(errorPresentation(err as Error), undefined, t("settings.saveFailedTitle")));
   };
   return (
     <SettingRow label={t("settings.language.label")} description={<Message id="settings.language.description" />}>

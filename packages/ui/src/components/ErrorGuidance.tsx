@@ -22,7 +22,7 @@ export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: 
 export function recoveryParams<V = never>(t: Translate, mark?: (value: string, monospace: boolean) => V): Record<string, string | V> {
   const values: Record<string, string> = {
     appName: globalParam("appName")!, codex: "Codex", git: "Git", pathVar: "PATH", enter: "Enter",
-    terminal: t("common.terminal"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"),
+    terminal: t("common.terminal"), reopen: t("sidebar.session.reopen"), viewArchive: t("sidebar.archive.consoleSessions"), newSession: t("sidebar.focus.newSession"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"),
     worktreeList: "git worktree list", branchList: "git branch",
     configToml: "config.toml", sqliteHome: "sqlite_home", codexSqliteHome: "CODEX_SQLITE_HOME", tilde: "~", home: "HOME",
   };

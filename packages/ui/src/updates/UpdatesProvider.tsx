@@ -16,10 +16,12 @@ function reportUpdateFailure({ action, reason, detail }: UpdateFailure): void {
   const key = reason === "gone" ? "updates.error.install.gone" : action === "check" ? "updates.error.check" : "updates.error.install";
   const message = t(key);
   const remedy = t(`${key}.remedy`);
+  const title = t(action === "check" ? "updates.error.check.title" : "updates.error.install.title");
   errorAlerts.report({
     message,
+    title,
     error: new ActionableError(message, "none"),
-    content: <><p>{message}</p><p>{remedy}</p></>,
+    content: <div className="flex flex-col gap-4"><p>{message}</p><p>{remedy}</p></div>,
     details: detail ? <DiagnosticBlock>{detail}</DiagnosticBlock> : null,
   });
 }

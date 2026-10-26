@@ -33,14 +33,14 @@ export function osc52ClipboardText(payload: string): string | undefined {
  */
 export function programCopyHandler(
   clipboard: ClipboardCapability | undefined,
-  report: () => { t: Translate; toastError: (error: ActionableError) => void },
+  report: () => { t: Translate; toastError: (error: ActionableError, session?: string, title?: string) => void },
 ): ((text: string) => void) | undefined {
   if (!clipboard) return undefined;
   return (text) => {
     clipboard.writeText(text).catch((cause: unknown) => {
       if (cause instanceof DOMException && cause.name === "NotAllowedError") return;
       const { t, toastError } = report();
-      toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }));
+      toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle"));
     });
   };
 }

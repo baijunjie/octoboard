@@ -733,7 +733,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Import, refused before anything is created",
-    description: "The daemon's reason is the error alert dialog's, raised over the review, which stays as it was with nothing written into it.",
+    description: "The daemon's reason is the error alert dialog's, raised over the review, which stays as it was with nothing written into it. The remedy under the reason is about the avatar, not the file: give the console a smaller avatar in the Octoboard the configuration came from, export it again, then import the new file; nothing suggests the file is damaged.",
     state,
     configuration: reviewing({ imported: failure("icon_too_large", { limit_kib: "256" }, "the console avatar is larger than 256 KiB") }),
     steps: [

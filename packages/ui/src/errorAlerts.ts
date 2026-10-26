@@ -12,6 +12,8 @@ export interface ErrorAlertFailure {
 
 export interface ErrorAlertRequest {
   message: string;
+  /** The body in place of `message`. Its box adds no spacing, so a body of several paragraphs lays them out itself
+   * (`flex flex-col gap-4`, the gap the alert leaves before its remedy line). */
   content?: ReactNode;
   title?: string | ReactElement;
   session?: string;
@@ -25,6 +27,10 @@ export interface ErrorAlertRequest {
    * `errorAlertParts`, and the startup screens pass their own block; they word the failure themselves, so the alert does not work
    * out a second copy of its raw text. */
   details?: ReactNode;
+  /** The body already says what to do about the failure (a daemon message with a remedy of its own), so the alert adds
+   * no remedy line of the failure's kind after it: that line is the general advice for the kind, and would repeat or
+   * contradict it. Set where the body is the failure's own message: by `reportError`, and from `errorAlertParts`. */
+  remedyInBody?: boolean;
 }
 
 /** A request with what is worked out from its errors: the classification that sets the alert's guidance, the one

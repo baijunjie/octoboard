@@ -41,9 +41,10 @@ export function useIssueReport(): { guidance: React.ReactElement; link: React.Re
       const reason = cause instanceof Error ? cause.message : diagnosticText(cause);
       errorAlerts.report({
         message: t("error.issue.openFailed"),
+        title: t("error.issue.openFailedTitle"),
         error: cause,
         recovery: "issueLink",
-        content: <><p>{t("error.issue.openFailed")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{issueUrl}</p></>,
+        content: <div className="flex flex-col gap-4"><p>{t("error.issue.openFailed")}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{issueUrl}</p></div>,
         details: reason ? <DiagnosticBlock>{reason}</DiagnosticBlock> : undefined,
       }, { immediate: true });
     } finally {

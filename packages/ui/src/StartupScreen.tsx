@@ -100,11 +100,13 @@ export function DaemonFailedScreen({ error }: { error: string }): React.ReactEle
   const t = useT();
   // Reported once per error: the alert's words are components that follow the language, so a change of language needs no new report.
   useEffect(() => {
-    // The alert says it in the application's words; the raw text is its "Error details", on a surface of its own.
+    // The alert says it in the application's words; the raw text is its "Error details", on a surface of its own. A
+    // daemon that did not start is a known failure with its remedy in the body, not one to report as a bug.
     errorAlerts.report({
       message: error,
+      recovery: "none",
       title: <Message id="startup.daemonFailed.title" />,
-      content: <p><Message id="startup.daemonFailed.description" /></p>,
+      content: <div className="flex flex-col gap-4"><p><Message id="startup.daemonFailed.description" /></p><p><Message id="startup.daemonFailed.remedy" /></p></div>,
       details: <DiagnosticBlock wrap>{error}</DiagnosticBlock>,
     });
   }, [error]);

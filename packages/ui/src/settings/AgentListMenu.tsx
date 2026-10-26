@@ -31,6 +31,7 @@ export function useAgentList(added: Agent[] | null): {
   /** Moves an agent a step earlier (-1) or later (1). */
   move: (agent: Agent, by: -1 | 1) => void;
 } {
+  const t = useT();
   const { request, toastError } = useDaemon();
   // The order asked for, good for as long as the list it was asked against is the one held.
   const [pending, setPending] = useState<{ base: Agent[] | null; order: Agent[] }>();
@@ -59,7 +60,7 @@ export function useAgentList(added: Agent[] | null): {
     void request({ type: "reorder_agents", agents: order }).catch((err) => {
       setPending(undefined);
       setMoved(agent);
-      toastError(errorPresentation(err as Error));
+      toastError(errorPresentation(err as Error), undefined, t("settings.accounts.reorderAgentsFailedTitle"));
     });
   };
   const move = (agent: Agent, by: -1 | 1) => reorder(movedAgent(agents, agent, agents.indexOf(agent) + by), agent);
@@ -141,6 +142,7 @@ export function RemoveAgentDialog({ agent, onRemoved, onCancel }: {
   return (
     <ConfirmDialog
       title={t("settings.accounts.removeAgent")}
+      errorTitle={t("settings.accounts.removeAgentFailedTitle")}
       message={
         <>
           <p><Message id="settings.accounts.removeAgentMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference> }} /></p>

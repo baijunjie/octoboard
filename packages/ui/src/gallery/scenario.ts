@@ -63,6 +63,10 @@ export interface ToastFixture {
    * the real one (`noticeKind`), a failure or a notice carrying raw text to an error alert and any other to a toast. */
   kind: ToastRequest["kind"] | "session_notice";
   message: string | ((t: Translate) => string);
+  /** The plain name of what failed that the action raising the real error gives it (`ToastRequest.title`), worded in
+   * the viewing language when a function; a code's own `alertTitle` still wins over it, as it does there. Left out for
+   * an error the daemon broadcasts, which no action names. */
+  title?: string | ((t: Translate) => string);
   code?: string;
   params?: MessageParams;
   session?: string;

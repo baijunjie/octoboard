@@ -48,23 +48,23 @@ export function useQuickCreateSession(
       // An owner that is no longer live cannot take a session, and there is no dialog to say so.
       const owner = sessions.get(binding.to.id) ?? binding.to;
       if (!liveConsoleSessions([...sessions.values()], target.console.id).some((s) => s.id === owner.id)) {
-        toastError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "session", { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, owner) } }));
+        toastError(new ActionableError(t("dialog.session.ownerGone", { name: isolate(sessionDisplayTitle(t, owner)) }), "ownerGone", { code: "quick_create_owner_gone", params: { name: sessionDisplayTitle(t, owner) } }), undefined, t("dialog.session.blockedTitle"));
         return;
       }
     }
     const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now(), appearance);
     if ("usedUp" in opening) {
-      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action: isolate(action) }), "quotaUsedUpAgent", { code: "quick_create_quota_refused", params: { action } }));
+      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action: isolate(action) }), "quotaUsedUpAgent", { code: "quick_create_quota_refused", params: { action } }), undefined, t("dialog.session.blockedTitle"));
       return;
     }
     if ("disabled" in opening) {
       const { agent, name } = opening.disabled;
-      toastError(new DaemonRequestError(t("daemon.account_disabled", { account: isolate(name), agent: AGENT_LABEL[agent] }), "account_disabled", { agent: AGENT_LABEL[agent], account: name }));
+      toastError(new DaemonRequestError(t("daemon.account_disabled", { account: isolate(name), agent: AGENT_LABEL[agent] }), "account_disabled", { agent: AGENT_LABEL[agent], account: name }), undefined, t("dialog.session.blockedTitle"));
       return;
     }
     if ("changingSharing" in opening) {
       const { account, name } = opening.changingSharing;
-      toastError(new DaemonRequestError(t("daemon.account_sharing_in_progress", { name: isolate(name) }), "account_sharing_in_progress", { account, name }));
+      toastError(new DaemonRequestError(t("daemon.account_sharing_in_progress", { name: isolate(name) }), "account_sharing_in_progress", { account, name }), undefined, t("dialog.session.blockedTitle"));
       return;
     }
     const startedIn = latestConsoleId.current;
@@ -73,7 +73,7 @@ export function useQuickCreateSession(
       .then((reply) => {
         if (reply.type === "session_opened" && latestConsoleId.current === startedIn) onOpened(reply.session.id);
       })
-      .catch((err: unknown) => toastError(errorPresentation(err as Error))))
+      .catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("dialog.session.failedTitle"))))
       .finally(() => {
         pending.current = false;
       });

@@ -143,10 +143,10 @@ export function ReportPanel({
       // "This session is waiting for you."): naming it keeps the user from reading the message as being
       // about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
-        toastError(errorPresentation(err as Error), consoleSessionId);
+        toastError(errorPresentation(err as Error), consoleSessionId, t("report.submitFailedTitle"));
       });
     },
-    [request, toastError, consoleSessionId],
+    [request, toastError, consoleSessionId, t],
   );
 
   // Pages already here stay usable, so the failure to refresh them is a warning at the title, not an

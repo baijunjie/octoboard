@@ -20,7 +20,7 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
   const { request } = useDaemon();
   const added = useDaemonStore((s) => s.settings.added_agents);
   const availability = useDaemonStore((s) => s.agentAvailability);
-  const { busy, run } = useDialogAction();
+  const { busy, run } = useDialogAction(undefined, t("settings.accounts.addAgentFailedTitle"));
   const [pending, setPending] = useState<Agent>();
   const closeRef = useRef<HTMLButtonElement>(null);
   // An agent just added takes its button with it, and focus with that.

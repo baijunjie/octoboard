@@ -74,7 +74,7 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const pendingStart = useRef<Promise<void> | undefined>(undefined);
 
   const cancel = () => actions.cancel(agent, account).catch((err: unknown) => {
-    if ((err as Partial<DaemonRequestError>).code !== "login_not_running") toastError(err as Error);
+    if ((err as Partial<DaemonRequestError>).code !== "login_not_running") toastError(err as Error, undefined, t("settings.accounts.login.cancelFailedTitle"));
   });
   const begin = () => {
     setRefusal(undefined);
