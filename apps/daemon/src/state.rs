@@ -275,6 +275,42 @@ pub struct AppState {
     /// through a cascade or while a project directory is being moved to the Trash.
     session_removals: Mutex<usize>,
     shutdown: tokio::sync::Notify,
+    /// The sessions an `interrupt_session` is sending keys into now (`crate::interrupt`), so two
+    /// at once cannot send a second interrupt key. Held in memory only.
+    interrupts: Mutex<HashSet<String>>,
+}
+
+/// A session's queue paused by [`AppState::pause_outbox`].
+pub struct OutboxPause {
+    state: Arc<AppState>,
+    id: String,
+}
+
+impl Drop for OutboxPause {
+    fn drop(&mut self) {
+        self.state.outbox.resume(&self.id);
+        // Whatever was queued meanwhile waited on this; nothing else is coming to release it.
+        if let Ok(session) = self.state.session_record(&self.id) {
+            let status = self.state.agent_status(&session);
+            self.state.spawn_flush_outbox(&self.id, status);
+        }
+    }
+}
+
+/// A session's claim for one interrupt, taken by [`AppState::claim_interrupt`].
+pub struct InterruptClaim {
+    state: Arc<AppState>,
+    id: String,
+}
+
+impl Drop for InterruptClaim {
+    fn drop(&mut self) {
+        self.state
+            .interrupts
+            .lock()
+            .expect("interrupt lock poisoned")
+            .remove(&self.id);
+    }
 }
 
 /// What a session's claim is held for (see [`AppState::claim_kind`]).
@@ -359,6 +395,16 @@ struct TurnState {
     /// of Octoboard's own that needs no report back: the turn whose prompt opens with that text
     /// (`credit_turn_opened_by`). Each is spent by that turn's start.
     credits: Vec<String>,
+    /// The turn was closed off the terminal title, as cancelled, rather than by a hook
+    /// (`end_turn_off_title`), so a turn end the agent still reports for it is its real end.
+    ended_off_title: bool,
+    /// How many messages Octoboard wrote into the session while this turn ran: for Codex, the ones
+    /// a cancel of the turn leaves unread.
+    written_mid_turn: usize,
+    /// How many times a turn of this session has ended, closed or cancelled, or been seen back at
+    /// its prompt (`note_turn_end`). Only ever moves on, so a reader that compares it with an
+    /// earlier reading sees an end even when the next turn has already started.
+    ends: u64,
 }
 
 /// What closing a turn amounted to.
@@ -506,6 +552,16 @@ impl PromptSignal for HookPrompts<'_> {
     fn trust_holds_writes(&self) -> bool {
         self.live.trust.holds_writes()
     }
+
+    fn mid_turn(&self) -> bool {
+        self.state
+            .session_record(&self.live.id)
+            .is_ok_and(|record| self.state.agent_status(&record) == SessionStatus::Working)
+    }
+
+    fn note_written_mid_turn(&self) {
+        self.state.note_written_mid_turn(&self.live.id);
+    }
 }
 
 impl AppState {
@@ -574,6 +630,7 @@ impl AppState {
             session_publication: Mutex::new(()),
             session_removals: Mutex::new(0),
             shutdown: tokio::sync::Notify::new(),
+            interrupts: Mutex::new(HashSet::new()),
         }
     }
 
@@ -862,6 +919,16 @@ impl AppState {
     pub fn has_process(&self, id: &str) -> bool {
         let live = self.live.read().expect("live sessions lock poisoned");
         live.sessions.contains_key(id) || live.launching.contains(id)
+    }
+
+    /// Claims the session for one interrupt, or `None` while another holds it. The claim ends when
+    /// the guard drops, a panic included.
+    pub fn claim_interrupt(self: &Arc<Self>, id: &str) -> Option<InterruptClaim> {
+        let mut interrupts = self.interrupts.lock().expect("interrupt lock poisoned");
+        interrupts.insert(id.to_string()).then(|| InterruptClaim {
+            state: self.clone(),
+            id: id.to_string(),
+        })
     }
 
     /// Whether the session's claim is held (a launch, resume, switch, handoff, handover of branches or
@@ -1598,7 +1665,13 @@ impl AppState {
     pub fn turn_started(&self, id: &str, prompt: Option<&str>) {
         let mut turns = self.turns.lock().expect("turn lock poisoned");
         let turn = turns.entry(id.to_string()).or_default();
+        // A prompt that arrives while the turn is open joins it, as one steered into a Codex turn
+        // does, carrying the same turn id; only a turn that opens here starts the count afresh.
+        if !turn.open {
+            turn.written_mid_turn = 0;
+        }
         turn.open = true;
+        turn.ended_off_title = false;
         let credit = match prompt {
             Some(prompt) => turn
                 .credits
@@ -1650,10 +1723,65 @@ impl AppState {
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             turn.open = false;
             turn.reported = false;
+            turn.ended_off_title = false;
             turn.last_event_at = now_millis();
+            turn.ends += 1;
             // Grok's backstop fires after a cancelled turn too.
             turn.echo_pending = true;
         }
+    }
+
+    /// The turn ended as cancelled by what the terminal title showed, with no hook to say so
+    /// (`crate::title_interrupt`). Closed as [`Self::abandon_turn`] closes a cancelled one, except
+    /// that what the session reported is kept and a turn end of the agent's own that still comes
+    /// closes it as its real end ([`Self::close_turn`]): the title only infers the cancel.
+    pub fn end_turn_off_title(&self, id: &str) {
+        if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
+            if !turn.open {
+                return;
+            }
+            turn.open = false;
+            turn.ended_off_title = true;
+            turn.last_event_at = now_millis();
+            turn.ends += 1;
+            turn.echo_pending = true;
+        }
+    }
+
+    /// A watch saw the session back at its prompt with no hook, its turn left open
+    /// (`crate::transcript::back_at_prompt`).
+    pub fn note_turn_end(&self, id: &str) {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .entry(id.to_string())
+            .or_default()
+            .ends += 1;
+    }
+
+    /// How many times a turn of this session has ended so far; see [`TurnState::ends`].
+    pub fn turn_ends(&self, id: &str) -> u64 {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .get(id)
+            .map_or(0, |turn| turn.ends)
+    }
+
+    /// Counts a message Octoboard wrote into the session while its turn ran.
+    pub fn note_written_mid_turn(&self, id: &str) {
+        if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
+            turn.written_mid_turn += 1;
+        }
+    }
+
+    /// How many messages Octoboard wrote into the session while its current or last turn ran.
+    pub fn written_mid_turn(&self, id: &str) -> usize {
+        self.turns
+            .lock()
+            .expect("turn lock poisoned")
+            .get(id)
+            .map_or(0, |turn| turn.written_mid_turn)
     }
 
     /// The session reported during its current turn, so its stop needs nothing synthesised.
@@ -1704,6 +1832,21 @@ impl AppState {
         let Some(turn) = turns.get_mut(id) else {
             return TurnClose::NoTurn;
         };
+        if !turn.open && turn.ended_off_title && !clock_attributed {
+            // The title closed the turn as cancelled, and this is the turn's own end after all,
+            // reported late: it is what the turn amounted to. Its echo is the one the title's close
+            // already armed.
+            let reported = turn.reported;
+            turn.ended_off_title = false;
+            turn.reported = false;
+            turn.last_event_at = now_millis();
+            turn.ends += 1;
+            return if reported {
+                TurnClose::Reported
+            } else {
+                TurnClose::OwesReport
+            };
+        }
         if !turn.open {
             // Each ending arms exactly one echo, and this spends it whether or not a turn is open —
             // which is the usual case: the echo arrives about a minute later, and a session that has
@@ -1730,7 +1873,9 @@ impl AppState {
         let reported = turn.reported;
         turn.open = false;
         turn.reported = false;
+        turn.ended_off_title = false;
         turn.last_event_at = now_millis();
+        turn.ends += 1;
         // Only a signal that named its own turn leaves an echo behind; the echo itself does not.
         turn.echo_pending = !clock_attributed;
         if reported {
@@ -1992,6 +2137,18 @@ impl AppState {
     /// whose work is being moved; see [`OutboxHold`].
     pub fn hold_outbox(self: &Arc<Self>, id: &str) -> OutboxHold {
         self.hold_outbox_for(id, false)
+    }
+
+    /// Pauses the session's queue for as long as the guard lives: messages are accepted and queued,
+    /// none is written, and the drain it lets go of is started when the guard drops. Unlike
+    /// [`Self::hold_outbox`] it is no hold a client or a caller is told of: it lasts the few seconds
+    /// an interrupt types into the session (`crate::interrupt`).
+    pub fn pause_outbox(self: &Arc<Self>, id: &str) -> OutboxPause {
+        self.outbox.pause(id);
+        OutboxPause {
+            state: self.clone(),
+            id: id.to_string(),
+        }
     }
 
     /// [`Self::hold_outbox`] for a session a change of its account's sharing restarts; the only
@@ -3599,6 +3756,38 @@ mod tests {
             assert_eq!(state.saved_output("s"), Some(frozen));
             assert!(live.write_input(b"should stay archived").is_err());
         }
+    }
+
+    /// A message written while a turn runs is counted for that turn: a prompt joining the open
+    /// turn, as one steered into a Codex turn does, keeps the count, a message that opens a turn is
+    /// not counted, and the next turn starts again from none.
+    #[tokio::test]
+    async fn messages_written_while_a_turn_runs_are_counted_for_it() {
+        let (state, dir) = app_state("state-written-mid-turn");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = fake_live_session("s", Agent::Codex, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        state.turn_started("s", None);
+
+        state.queue_message("s", "steer this turn");
+        assert_eq!(
+            state.flush_outbox("s", SessionStatus::Working),
+            Drain::Clear
+        );
+        state.turn_started("s", Some("steer this turn"));
+        assert_eq!(state.written_mid_turn("s"), 1);
+
+        assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+        state.apply_hook_status("s", SessionStatus::Idle).unwrap();
+        state.queue_message("s", "open the next turn");
+        assert_eq!(state.flush_outbox("s", SessionStatus::Idle), Drain::Clear);
+        assert_eq!(
+            state.written_mid_turn("s"),
+            1,
+            "a message at the prompt is not counted"
+        );
+        state.turn_started("s", Some("open the next turn"));
+        assert_eq!(state.written_mid_turn("s"), 0);
     }
 
     /// The daemon does not wait for its exit watchers on the way out, so a shutdown keeps the

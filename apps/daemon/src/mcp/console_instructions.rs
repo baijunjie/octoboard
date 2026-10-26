@@ -82,6 +82,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            or account only when the user asked for them. Returns the session's id. The session is \
            yours for its whole life.\n\
          - `send_message` — the next instruction for a session already running.\n\
+         - `interrupt_session` — stop the turn a session of yours is in the middle of, when it \
+           is working on the wrong thing; it keeps its conversation and awaits your next \
+           instruction, which you send with `send_message`.\n\
          - `get_session` — a session's status, account, model, pin and lock, branch names and a \
            tail of its output (8 KiB, or up to 64 KiB if you ask for more); it reads any \
            session, in any console. `get_session_branches` — the branches a session is \

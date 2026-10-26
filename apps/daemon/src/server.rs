@@ -624,9 +624,9 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                 // says nothing about what is in its input box.
                 prompt_sent = !prompt.is_some_and(hooks::is_task_notification);
                 // The previous turn's watch goes before the new turn opens: a watch still current
-                // when it opens could find the previous turn's failure (Codex) or interrupt (Claude
-                // Code) and close this one. Grok has no watch.
-                if matches!(agent, Some(Agent::Codex | Agent::Claude)) {
+                // when it opens could find the previous turn's failure (Codex) or cancel (Claude
+                // Code, Grok) and close this one.
+                if agent.is_some() {
                     state.end_record_watch(session_id);
                 }
                 state.turn_started(session_id, prompt);
@@ -646,9 +646,10 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                     }
                     if let Some(status) = hooks::status_from_event(agent, &event, &payload) {
                         let status = suppress_auto_review_hook(state, session_id, status);
-                        // Read before the status lands: a Claude Code watch is armed on a move
-                        // into a status, not on more of the same.
-                        let previous = (agent == Agent::Claude)
+                        // Read before the status lands: a Claude Code watch, and a Grok one past
+                        // the agent's own hand, is armed on a move into a status, not on more of
+                        // the same.
+                        let previous = matches!(agent, Agent::Claude | Agent::Grok)
                             .then(|| state.session_record(session_id).ok())
                             .flatten()
                             .map(|session| state.agent_status(&session));
@@ -687,11 +688,15 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
 }
 
 /// Starts watching the agent's own session record for what its hooks will not report after this
-/// event, which reported `status` and found the agent at `previous` (read for Claude Code alone).
+/// event, which reported `status` and found the agent at `previous` (read for Claude Code and
+/// Grok Build alone).
 /// Claude Code reports neither a declined prompt nor an interrupted turn, so its transcript is
 /// watched (`crate::transcript` says when); a Codex turn that ends in an error fires nothing after
-/// its `UserPromptSubmit`, so its rollout is. Each watch is spawned, not awaited: it is expected to
-/// far outlive this response, which the adapters' few-second hook timeout would not allow.
+/// its `UserPromptSubmit`, so its rollout is; a Grok turn cancelled before its first token fires
+/// nothing at all, so its terminal title is watched from its `UserPromptSubmit`, and again from
+/// each event that brings it back from waiting on the user (`crate::title_interrupt`). Each watch
+/// is spawned, not awaited: it is expected to far outlive this response, which the adapters'
+/// few-second hook timeout would not allow.
 fn arm_record_watches(
     state: &Arc<AppState>,
     session_id: &str,
@@ -719,6 +724,16 @@ fn arm_record_watches(
             transcript_path,
             payload.get("turn_id").and_then(serde_json::Value::as_str),
         ),
+        // From the prompt, and again each time the hand comes down: whatever the title showed while
+        // a card waited on the user must not end the turn that carries on after it.
+        Agent::Grok
+            if status == SessionStatus::Working
+                && (hooks::starts_conversation(event)
+                    || previous == Some(SessionStatus::WaitingUser)) =>
+        {
+            let generation = state.begin_record_watch(session_id);
+            crate::title_interrupt::watch(state, session_id, generation);
+        }
         _ => {}
     }
 }
@@ -1440,6 +1455,111 @@ mod tests {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
         assert_eq!(state.write_hold("s"), None);
+    }
+
+    /// A Grok Build prompt arms the title watch for its turn, so Ctrl-C before the first token,
+    /// which fires no hook, still puts the session back at its prompt.
+    #[tokio::test]
+    async fn a_grok_prompt_watches_the_title_for_a_cancel_no_hook_reports() {
+        let (state, dir) = app_state("server-grok-title-watch");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session("s", Agent::Grok, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+
+        apply_hook(
+            &state,
+            "s",
+            br#"{"hook_event_name": "UserPromptSubmit", "hookEventName": "user_prompt_submit"}"#,
+        );
+        assert_eq!(
+            state.store.get_session("s").unwrap().unwrap().status,
+            SessionStatus::Working
+        );
+        for byte in include_bytes!("../testdata/grok_title_cancel_before_output.bin") {
+            live.on_output(std::slice::from_ref(byte));
+        }
+        let idle = {
+            let state = state.clone();
+            crate::test_support::within(std::time::Duration::from_secs(5), move || {
+                state.store.get_session("s").unwrap().unwrap().status == SessionStatus::Idle
+            })
+            .await
+        };
+        assert!(
+            idle,
+            "the cancel the title showed puts the session at its prompt"
+        );
+    }
+
+    /// What the title shows while a Grok Build card waits on the user is not counted against the
+    /// turn that carries on once the hand comes down: the watch is armed again from there.
+    #[tokio::test]
+    async fn a_grok_card_s_title_does_not_end_the_turn_that_carries_on_after_it() {
+        let (state, dir) = app_state("server-grok-title-card");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::console_session(
+                "s",
+                SessionStatus::Idle,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session("s", Agent::Grok, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        let status = |state: &Arc<AppState>| state.store.get_session("s").unwrap().unwrap().status;
+        let running = "\x1b]0;\u{280B} - Working\u{2026} - grok\x07".as_bytes();
+        let at_prompt = b"\x1b]0;grok\x07";
+
+        apply_hook(&state, "s", br#"{"hook_event_name": "UserPromptSubmit"}"#);
+        live.on_output(running);
+        apply_hook(
+            &state,
+            "s",
+            br#"{"hook_event_name": "PreToolUse", "toolName": "ask_user_question"}"#,
+        );
+        assert_eq!(status(&state), SessionStatus::WaitingUser);
+        live.on_output(at_prompt);
+        tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        apply_hook(
+            &state,
+            "s",
+            br#"{"hook_event_name": "PostToolUse", "toolName": "ask_user_question"}"#,
+        );
+        assert_eq!(status(&state), SessionStatus::Working);
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+        assert_eq!(
+            status(&state),
+            SessionStatus::Working,
+            "the card's title ended the turn"
+        );
+
+        // The watch armed when the hand came down still sees a cancel.
+        live.on_output(running);
+        live.on_output(at_prompt);
+        let idle = {
+            let state = state.clone();
+            crate::test_support::within(std::time::Duration::from_secs(5), move || {
+                status(&state) == SessionStatus::Idle
+            })
+            .await
+        };
+        assert!(
+            idle,
+            "a cancel after the card still puts the session at its prompt"
+        );
     }
 
     /// A Claude Code session at `status` with a live stand-in, and the path its transcript is at,

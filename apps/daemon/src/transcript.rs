@@ -368,6 +368,7 @@ pub(crate) fn back_at_prompt(
                 session = %session_id,
                 "a {found} was found; the agent is back at its prompt"
             );
+            state.note_turn_end(session_id);
             // Mirrors the release the hook path pairs with every status change: a message queued
             // while the session could not take one is still queued, and nothing else is coming to
             // release it. `flush_outbox`'s gate asks for a hook-reported state, which this `Idle`

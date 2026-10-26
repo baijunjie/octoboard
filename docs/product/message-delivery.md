@@ -7,7 +7,10 @@ information shared by another session, a report panel form submission — and wh
 
 A session that is working, awaiting instructions or working in background takes a message straight away, unless one
 of the holds below applies to it, or it is a Claude Code session held behind a message its agent did not send (see "A
-message written but not sent" below); every agent queues one written mid-turn and consumes it when the turn ends.
+message written but not sent" below). A message written mid-turn is taken by the agent: Claude Code and Grok Build
+queue it and run it once the turn ends, though Claude Code can also take it into the turn still running, and Codex
+steers it into the running turn. What becomes of such messages when an owner interrupts the turn is in "Messages during
+an interrupt" in `docs/product/interrupting-turns.md`.
 
 **A message is not written verbatim.** Its text is reshaped in the steps below, in this order:
 
@@ -135,6 +138,12 @@ up the session reads as *waiting for the user* and raises its hand (see "What th
 `docs/product/sessions.md`); the moment its screen no longer shows one, the queue is written, oldest first, and the
 hand comes down. Octoboard never answers such a screen: the user does, in the session's terminal. A client's
 `send_message` meanwhile is queued like any other message, not refused.
+
+**And while an interrupt is typing into the session.** While `interrupt_session` sends its keys into a Claude Code or
+Grok Build session whose input box it finds on the screen, and clears what the agent puts back in its input box, everything Octoboard has to write into the
+session is queued, so that nothing joins the restored prompt, and the queue is written as soon as the interrupt is done
+(see "The input box afterwards" in `docs/product/interrupting-turns.md`). It lasts no longer than the interrupt takes to
+answer, raises no hand, and is not reported in `writes_held`.
 
 **And for a moment after a Grok Build error.** When a Grok Build session's hooks report that its agent stopped on an
 error (`StopFailure`, or a notification of type `agent_error`), what Octoboard writes into it is held for 2 seconds, or

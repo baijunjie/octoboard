@@ -155,6 +155,18 @@ impl TerminalSnapshot {
     /// places words with cursor moves and Codex redraws only the cells that changed, so the bytes
     /// hold no whole phrase.
     pub fn visible_text(&self) -> String {
+        self.visible_text_where(|_| true)
+    }
+
+    /// [`Self::visible_text`] with every faint (SGR 2) cell shown as a space: what an agent
+    /// writes as a hint rather than as text, such as Claude Code's placeholder in an empty input
+    /// box.
+    pub fn visible_text_undimmed(&self) -> String {
+        self.visible_text_where(|cell| !cell.flags.contains(Flags::DIM))
+    }
+
+    /// The visible rows, a cell `shown` rejects written as a space.
+    fn visible_text_where(&self, shown: impl Fn(&Cell) -> bool) -> String {
         let grid = self.terminal.grid();
         let mut text = String::new();
         for row in 0..grid.screen_lines() as i32 {
@@ -165,6 +177,10 @@ impl TerminalSnapshot {
                     .flags
                     .intersects(Flags::WIDE_CHAR_SPACER | Flags::LEADING_WIDE_CHAR_SPACER)
                 {
+                    continue;
+                }
+                if !shown(cell) {
+                    text.push(' ');
                     continue;
                 }
                 text.push(cell.c);

@@ -914,6 +914,21 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::InterruptSession { session } => {
+            let crate::interrupt::Interrupted {
+                interrupted,
+                status,
+                note,
+            } = crate::interrupt::interrupt_session(state, &session).await?;
+            Ok(Some(Event::SessionInterrupted {
+                id: request_id,
+                session,
+                interrupted,
+                status,
+                note,
+            }))
+        }
+
         RequestBody::RenameSession { session: id, title } => {
             rename_session(state, &id, &title)?;
             Ok(None)

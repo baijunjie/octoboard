@@ -127,8 +127,8 @@ mod tests;
 pub(crate) use carry::write_replacing;
 pub use carry::CarriedTrust;
 use carry::*;
-pub(crate) use press::wait_for;
 use press::*;
+pub(crate) use press::{wait_for, wait_quiet};
 pub use screen::TrustState;
 use screen::*;
 

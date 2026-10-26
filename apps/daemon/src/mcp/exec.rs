@@ -86,6 +86,7 @@ pub async fn call(
         "update_settings" => settings::update_settings(state, arguments),
         "new_session" => new_session(state, &session, arguments, crate::term::launch).await,
         "send_message" => send_message(state, &session, arguments).await,
+        "interrupt_session" => interrupt_session(state, &session, arguments).await,
         "get_session" => reads::get_session(state, &session, arguments).await,
         "rename_session" => rename_session(state, &session, arguments).await,
         "set_session_pinned" => set_session_pinned(state, &session, arguments).await,
@@ -451,6 +452,22 @@ async fn send_message(
         "delivered": delivery == Delivery::Written,
         "note": delivery_note(delivery),
     }))
+}
+
+/// Stops the turn a session of the caller's is running, through the same function the control
+/// request runs.
+async fn interrupt_session(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
+    let crate::interrupt::Interrupted {
+        interrupted,
+        status,
+        note,
+    } = crate::interrupt::interrupt_session(state, &target.id).await?;
+    Ok(json!({ "interrupted": interrupted, "status": status, "note": note }))
 }
 
 /// What the caller is told of a message for a session. A queued one is reported rather than
@@ -2694,6 +2711,13 @@ pub(super) mod tests {
             ("send_message", "b", "is a console session;"),
             ("send_message", "foreign", "not bound to any session"),
             (
+                "interrupt_session",
+                "of-b",
+                "bound to another console session, `b`",
+            ),
+            ("interrupt_session", "loose", "not bound to any session"),
+            ("interrupt_session", "b", "is a console session;"),
+            (
                 "archive_session",
                 "of-b",
                 "bound to another console session, `b`",
@@ -2724,7 +2748,21 @@ pub(super) mod tests {
             }
         }
 
-        // The caller's own is not refused by the ownership check.
+        // The caller's own is not refused by the ownership check: `interrupt_session` gets as
+        // far as the session's own state, here no process to send a key to.
+        let err = call(
+            &state,
+            "a",
+            "interrupt_session",
+            &arguments(json!({ "session": "of-a" })),
+        )
+        .await
+        .expect_err("refused");
+        assert_eq!(
+            err.downcast_ref::<CodedError>().map(|err| err.code),
+            Some(error_code::SESSION_NOT_RUNNING),
+            "{err}"
+        );
         call(
             &state,
             "a",
@@ -2735,6 +2773,33 @@ pub(super) mod tests {
         .unwrap();
         let archived = state.store.get_session("of-a").unwrap().unwrap();
         assert_eq!(archived.status, SessionStatus::Archived);
+    }
+
+    /// `interrupt_session` on a running session of the caller's answers with the function's
+    /// result: here one at its prompt, with nothing to interrupt.
+    #[tokio::test]
+    async fn interrupt_session_answers_for_a_running_session_of_the_caller_s() {
+        let (state, _dir) = shared_console_state("tool-interrupt-idle");
+        with_status(&state, "of-a", SessionStatus::Idle);
+        let _live = running(&state, "of-a");
+
+        let answer = call(
+            &state,
+            "a",
+            "interrupt_session",
+            &arguments(json!({ "session": "of-a" })),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(answer["interrupted"], false);
+        assert_eq!(answer["status"], "idle");
+        assert!(
+            answer["note"]
+                .as_str()
+                .is_some_and(|note| note.starts_with("Nothing to interrupt")),
+            "{answer}"
+        );
     }
 
     /// `shared_console_state` plus an unbound project session, `starter`, in `project-1` with one
@@ -3125,6 +3190,12 @@ pub(super) mod tests {
             ("send_message", "starter", "your own session"),
             ("send_message", "other-project", "not bound to any session"),
             ("send_message", "a", "is a console session"),
+            (
+                "interrupt_session",
+                "of-a",
+                "bound to a console session, `a`",
+            ),
+            ("interrupt_session", "starter", "your own session"),
             ("archive_session", "of-b", "bound to a console session, `b`"),
             ("archive_session", "loose", "not bound to any session"),
             (

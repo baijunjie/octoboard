@@ -39,6 +39,7 @@ mod host_tools;
 mod hostfs;
 mod instance_lock;
 mod interface_language;
+mod interrupt;
 mod launch_settings;
 mod line_file;
 mod loopback;
@@ -83,6 +84,7 @@ mod terminal_snapshot;
 mod terminal_title;
 #[cfg(test)]
 mod test_support;
+mod title_activity;
 mod title_interrupt;
 mod transcript;
 mod trust;

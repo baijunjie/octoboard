@@ -1,0 +1,39 @@
+  main /p/t/c/-/4/s/r/gs6_ctrlu/cwd                                                          1.4K / 128K │ [Dashboard]
+
+
+     ❯ SLOWLIST go                                                                                           2:51 AM
+
+
+     one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen        2:51 AM
+     seventeen eighteen
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    ⠦ Responding… 5.3s                                                                              5.5s ⇣1.36k [stop]
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ ❯                                                                                                                │
+  ╰──────────────────────────────────────────────────────────────────────────────────── stub-model · always-approve ─╯
+
+  Shift+Tab:mode  │  Ctrl+c:cancel  │  Ctrl+x:shortcuts
+

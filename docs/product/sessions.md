@@ -699,17 +699,20 @@ Transitions:
 
 Status comes from hook events Octoboard injects into each agent per launch, with the exceptions below. Only the
 session's own events count: those of a subagent it runs never change its status, on any agent, and on Claude Code
-neither do those of its internal helper agents. Six things besides those events bear on a running session's status,
-and only these six.
+neither do those of its internal helper agents. Seven things besides those events bear on a running session's status,
+and only these seven.
 
 - While a **Claude Code** session is *working* or *waiting for the user*, Octoboard also reads that session's own
   transcript file — the machine-readable record the agent keeps of the conversation, still not its rendered output —
   and, while it is *working*, the activity glyph its terminal title starts with, because neither a turn the user
   cancels nor a declined prompt is reported by any hook event; see "Cancelling a Claude Code turn" and "Declining a
-  Claude Code prompt or question" below.
+  Claude Code prompt or question" in `docs/product/turns-hooks-do-not-report.md`.
+- While a **Grok Build** session is *working*, Octoboard also reads the spinner its terminal title starts with, because
+  a turn cancelled before its first token is reported by no hook event; see "Cancelling a Grok Build turn before its
+  first token" in `docs/product/turns-hooks-do-not-report.md`.
 - While a **Codex** session has a turn open, Octoboard also reads that session's own rollout file — the record Codex
   keeps of the session, again not its rendered output — because a turn that ends in an error is reported by no hook
-  event at all; see "A Codex turn that ends in an error" below.
+  event at all; see "A Codex turn that ends in an error" in `docs/product/turns-hooks-do-not-report.md`.
 - A **Codex** terminal title showing `Action Required` holds the session at *waiting for the user*, including
   a prompt for one of Codex's subagents. Both phases of its blinking indicator keep the hand up; other hook reports
   cannot lower it while that title remains. See "The raised hand" below for its limits.
@@ -840,10 +843,12 @@ own row:
 the user* on the agent's next event, when its Codex action title clears or when the screen that held it is no longer
 shown — or, where the answer was a decline and no
 event follows, on the decline showing up in the agent's own record of the conversation, which only Claude Code
-sessions are read for (see "Declining a Claude Code prompt or question" below). Nobody can answer for them: a session
-driving others — a console session, or a
-project session that started sessions — is told to leave such a session alone, and a message addressed to it is held
-until the user is done — see "Messages held until a session can take them" in `docs/product/message-delivery.md`.
+sessions are read for (see "Declining a Claude Code prompt or question" in
+`docs/product/turns-hooks-do-not-report.md`). Nobody can answer for them: a session driving others — a console
+session, or a project session that started sessions — is told to leave such a session alone, a message addressed to it
+is held until the user is done — see "Messages held until a session can take them" in
+`docs/product/message-delivery.md` — and an interrupt of its turn is refused (see "When a key is sent" in
+`docs/product/interrupting-turns.md`).
 
 **A granted tool permission prompt reported through hooks lowers the hand only once the call it let through has
 finished.** The user answering *yes* is itself reported by no event, so the next event the session produces is normally
@@ -875,158 +880,6 @@ Codex's activity title, which every launch keeps on: each launch sets the items 
 launch, overriding the user's and the project's own `tui.terminal_title` inside Octoboard's terminal, so the signal
 does not depend on how the user has configured their titles (see "Per-agent specifics a user will notice" in
 `docs/product/launching-agents.md`). The user's Codex configuration files are not changed.
-
-### Declining a Claude Code prompt or question
-
-A Claude Code session with its hand up that is then **declined** — the permission prompt answered No
-or dismissed with Esc, or the agent's own ask-the-user question cancelled — reports nothing at all:
-no hook event of any kind follows, while the agent is already back at an empty prompt. So for this
-one case Octoboard reads the session's own transcript file, the record Claude Code keeps of the
-conversation, and moves the session to *awaiting instructions* once the decline appears there,
-normally within about a second of the user answering. Both ways a Claude Code session raises its hand
-are covered: a permission prompt and its own ask-the-user question.
-
-What follows from that move is nothing special to this path: the raised hand comes down wherever the
-sidebar showed it, the Dock badge count drops, and a message queued
-for the session while its hand was up is released (see "Messages held until a session can take them"
-in `docs/product/message-delivery.md`). A later prompt or question in the same session raises the
-hand and notifies afresh, as any other does.
-
-- The agent prints that the turn was interrupted, but its process is still running, so the session is
-  *awaiting instructions* and not *interrupted*.
-- No turn end was reported, so no report is synthesised for the session's owner for that turn either (see "When a
-  session does not report" in `docs/product/reporting-to-owners.md`).
-- **Claude Code sessions only.** Codex and Grok Build report a decline through their own hook events,
-  and the transcript read here is Claude Code's own format; neither is watched this way.
-- Only a hand that is currently up is recovered this way. A turn cancelled while the session reads
-  as *working* is recovered by its own watch — see "Cancelling a Claude Code turn" below.
-- Only the decline Claude Code records as the user's own entry counts. The transcript also logs
-  each request sent to the model, replaying the conversation so far — earlier declines included;
-  a decline replayed inside one does not lower the hand.
-- Where an ask-the-user question is left not by declining it but by asking to chat about it instead,
-  the turn in fact carries on; Octoboard reads that as a decline too, so the session reads as
-  *awaiting instructions* for a moment until the agent's next event puts it back to *working*.
-- If the record cannot be read — the pending-decision event named no transcript file, or the file is
-  unreadable — nothing lowers the hand, and the session keeps it up until something else moves its
-  status.
-- A decline is noticed the same way while a session request holds that session's hand up (see
-  "Waiting for the answer" in `docs/product/session-requests.md`). The hand stays up until the
-  request ends, since it is the request's own; the session is then *awaiting instructions*, where the
-  decline left its agent.
-
-**What this costs to keep working.** The transcript is a file format Claude Code owns and rewrites on
-upgrade, and a decline is recognised by two fixed marker strings inside it; the behaviour was
-measured against Claude Code 2.1.274 and 2.1.286, and the hand was seen coming down in the running
-application against 2.1.289. A release that renames those markers breaks this
-silently and completely — there is no error, nothing is reported as having failed, and the only
-symptom is a declined prompt leaving the raised hand up with nothing to lower it. Nothing Octoboard
-can observe by itself tells that apart from a user who simply has not answered yet.
-
-### Cancelling a Claude Code turn
-
-A Claude Code session reading *working* whose turn the user **cancels** — Esc pressed while the
-request waits for the model, or while the model is thinking, writing or running a tool — reports
-nothing: the cancelled turn fires no hook event, while the agent is already back at its prompt. So
-while the session works Octoboard watches two things, and moves the session to *awaiting
-instructions* as soon as either shows the cancel, normally within about a second of it:
-
-- **The transcript.** Once the model has shown output, Claude Code records the cancel in the
-  session's own transcript file, as a user entry reading `[Request interrupted by user]` (cancelled
-  while the model writes) or `[Request interrupted by user for tool use]` (cancelled while a tool
-  runs). The session moves once that entry appears.
-- **The terminal title.** Claude Code starts its terminal title with a turning half-filled circle
-  (`◐`, `◑`) while a turn runs, and with `✳` when it is back at its prompt. A cancel before the
-  model has shown anything — the request still waiting for its response, or the model still
-  thinking — writes nothing to the transcript, and the title is its only trace. The session moves
-  once three things hold: the title has shown the prompt for about a second after showing the turn
-  running, Octoboard has applied every hook event it has received for the session, and the session
-  still reads *working*. The same `✳` comes up when a turn ends normally and when a permission prompt or question
-  waits on the user, but the hook events that come with those have moved the session by then, and
-  a session they moved stays where they put it.
-
-After a cancel before any output, Claude Code puts the prompt's text back in its input box. A
-message Octoboard writes into the session from then on goes in after that text and is sent
-together with it, whether the session reads *working* or *awaiting instructions* at the time.
-
-- **When the watches run.** Both start each time a hook event moves the session into *working* — a
-  submitted prompt, or any other event that finds it not already working, such as the hand coming
-  down on an answered prompt — and stop once the session leaves *working* some other way, raises its
-  hand, or its process ends. While a session request holds the session's hand up (see "Waiting for
-  the answer" in `docs/product/session-requests.md`), the title watch waits: a cancel the title
-  showed meanwhile moves the session once the request ends, if it is then back at *working*.
-- **Only this turn's cancel counts.** Only transcript entries written after the watch started are
-  read, and an interrupt counts only if it is timestamped no earlier than a few seconds before the
-  watch started, so an earlier turn's interrupt, and one in the history of a resumed or copied
-  conversation, does not. An interrupt replayed inside a logged request does not count either, for
-  the reason given in "Declining a Claude Code prompt or question" above. A `✳` counts only after a
-  running glyph the title showed when the watch started or later, so the `✳` the previous turn left
-  on the title does not end this one. Each submitted prompt retires the previous turn's watches
-  before its own turn opens, so a cancel found late never ends the turn after it.
-- **Not while a screen of the agent's own is up.** While one of the Claude Code screens that hold
-  messages is on the session's screen (see "Messages held until a session can take them" in
-  `docs/product/message-delivery.md`), a `✳` is the turn waiting on the user and is not counted.
-- The agent's process is still running, so the session is *awaiting instructions* and not
-  *interrupted*.
-- No turn end was reported, so no report is synthesised for the session's owner for that turn (see
-  "When a session does not report" in `docs/product/reporting-to-owners.md`).
-- **Claude Code sessions only.** Codex and Grok Build report a cancelled turn through their own hook
-  events, and the transcript and title glyphs read here are Claude Code's own; neither agent is
-  watched this way.
-- A cancel while the session's hand is up is a decline, covered by "Declining a Claude Code prompt
-  or question" above.
-
-Where it is not recovered, the session keeps reading *working* until its next prompt is submitted:
-
-- the hook event that moved the session into *working* named no transcript file, or the file could
-  not be read when the watch started — the title is then not watched either;
-- the cancel came before Octoboard applied the hook event that moved the session into *working* —
-  hook events are delivered asynchronously — as can happen with a cancel very soon after the prompt
-  was submitted; its interrupt entry and its `✳` can then both be missed;
-- an event from the cancelled turn reaches Octoboard after the move, reporting the session as
-  *working* again;
-- for a cancel before any output, which only the title shows: Claude Code has been told not to set
-  its terminal title, or the title showing the turn running and the `✳` after it reached Octoboard
-  in one piece of output, of which only the last title is seen (rare);
-- for a cancel after output: the interrupt entry carries no timestamp Octoboard can read, and the
-  title misses it too.
-
-**What this costs to keep working.** As with a decline, the transcript is a file format Claude Code
-owns and rewrites on upgrade, and a cancel is recognised there by the two fixed interrupt strings
-above; they were seen in real transcripts of Claude Code 2.1.296, 2.1.302 and 2.1.303, where a
-cancel while the model thinks wrote `[Request interrupted by user]` too, and of 2.1.310 for cancels
-after output. The title is read by its fixed glyphs, `◐`/`◑` and `✳`, measured on Claude Code
-2.1.310. A release that renames the strings or changes the glyphs breaks this silently — there is
-no error and nothing is reported as having failed — and the only symptom is a cancelled turn
-reading *working* until the next prompt.
-
-### A Codex turn that ends in an error
-
-A Codex turn that **ends in an error** — the account's usage limit reached, for one — is reported by
-no hook event at all: Codex has no failure event and no notification event, so nothing follows the
-turn's prompt submission, while the agent is already back at its prompt. So for this one case
-Octoboard reads the session's own rollout file, the record Codex keeps of the session, and moves the
-session to *awaiting instructions* once the turn appears there as ended with an error — normally
-within about a second of the prompt, and so up to about half a second behind Codex's own return to
-its prompt. Every turn of a session is covered, its first included.
-
-- The agent's process is still running, so the session is *awaiting instructions* and not
-  *interrupted*.
-- The turn is reported on: a session bound to an owner has a report synthesised for it with status
-  *failed*, carrying Codex's own error text and the usual line saying the session stopped without
-  reporting (see "When a session does not report" in `docs/product/reporting-to-owners.md`).
-- **Codex sessions only.** Claude Code and Grok Build report a failed turn through their own hook
-  events, and the file read here is Codex's own format; neither is watched this way.
-- A turn Codex ends normally, and one the user cancels, are reported by Codex's own hook events, and
-  nothing is read from the rollout for them.
-- If the record cannot be read — the prompt submission named no rollout file or no turn, or the
-  turn's end never appears there — nothing moves the session, and it keeps reading *working* until
-  something else does.
-
-**What this costs to keep working.** The rollout is a file format Codex owns and rewrites on upgrade,
-and a failed turn is recognised by the shape of the record Codex writes for the turn's end; the
-behaviour was measured against Codex 0.160.0. A release that changes that shape breaks this silently
-— there is no error and nothing is reported as having failed — and the only symptom is a session
-reading *working* while Codex sits at its prompt.
 
 ## Locking a session
 

@@ -1,5 +1,6 @@
 //! Pressing a session's trust screen: the keys each agent's screen takes, and the checks made on
-//! the terminal before and after each of them. The only code that types into a session on its own.
+//! the terminal before and after each of them. One of the two places that type keys of their own
+//! into a session, with `crate::interrupt`.
 
 use super::*;
 
@@ -27,8 +28,9 @@ pub(super) const YES: &[u8] = b"y";
 /// Sends the keys that accept the session's trust confirmation, checking before each one that the
 /// screen is as it must be. Blocks, for the settle time and while it watches the screen respond.
 ///
-/// This is the only place that writes keystrokes of its own into a session, and it takes no text:
-/// the bytes are the constants above, so nothing a model or a message wrote can reach it.
+/// Like `crate::interrupt`, the other place that writes keystrokes of its own into a session, it
+/// takes no text: the bytes are the constants above, so nothing a model or a message wrote can
+/// reach it.
 pub(super) fn answer(live: &LiveSession) -> Result<()> {
     if !live.trust.claim_answer() || !still_waiting_after_claim(live) {
         return Err(not_waiting());
@@ -251,7 +253,7 @@ pub(super) fn not_dismissed(agent: Agent) -> anyhow::Error {
 }
 
 /// Waits until the session has printed nothing for [`QUIET`], or `timeout` passes.
-pub(super) fn wait_quiet(live: &LiveSession, timeout: Duration) -> bool {
+pub(crate) fn wait_quiet(live: &LiveSession, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     loop {
         let before = live.output_total();

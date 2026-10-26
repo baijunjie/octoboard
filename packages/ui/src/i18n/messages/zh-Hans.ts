@@ -352,6 +352,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.session_already_on_account": "此会话已在该账户上。",
   "daemon.session_archived": "无法将已归档的会话切换到另一个账户或移交。请先重新打开它。",
   "daemon.session_working": "此会话正在进行一个回合，暂时无法移交。",
+  "daemon.session_busy": "此会话正在切换账户、移交、移交分支、更换所有者或重启，暂时无法中断它的回合。",
   "daemon.handoff_to_same_agent": "移交会把会话交给另一个智能体，而此会话已在使用 {agent}。",
   "daemon.conversation_not_found": "在 {path} 中找不到此会话的 {agent} 对话，因此无法在另一个账户上继续。",
   "daemon.conversation_unresumable": "{agent} 已不再保留此会话的对话，因此无法接续。",

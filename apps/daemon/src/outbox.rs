@@ -131,6 +131,13 @@ pub trait PromptSignal {
     /// Whether the agent's folder-trust screen has been sighted and not answered, which a message
     /// written into it would answer.
     fn trust_holds_writes(&self) -> bool;
+    /// Whether the agent is in the middle of a turn, read before a message is written so the
+    /// message that opens a turn is not taken for one written into it.
+    fn mid_turn(&self) -> bool {
+        false
+    }
+    /// Records that a message went into the agent in the middle of a turn.
+    fn note_written_mid_turn(&self) {}
 }
 
 /// A screen watch that ends when it is dropped, so no return from a drain leaves it on.
@@ -160,6 +167,10 @@ pub struct Outbox {
     /// the session is being handed off and what is queued for it goes to its successor, or
     /// restarted for a change of its account's sharing (the value is `true`).
     held: Mutex<HashMap<String, bool>>,
+    /// The sessions whose queue is paused for a moment (`AppState::pause_outbox`), each with how
+    /// many pauses are held on it: like a hold, nothing is written, but it is no handoff and has no
+    /// successor.
+    paused: Mutex<HashMap<String, usize>>,
     /// The messages that are also kept in the store (`Store::add_pending_info`), by ticket, and
     /// the row each is kept in. A row is deleted only once its message has been written into the
     /// session ([`Self::take_written`]), so a daemon that exits before the queue drains, or a
@@ -277,7 +288,7 @@ impl Outbox {
         // The claim is released before the queue is re-read, so there is no ordering in which the
         // producer both fails to claim and lets this loop exit.
         loop {
-            if self.is_held(id) {
+            if self.is_held(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
             if !self.claim(id) {
@@ -301,7 +312,7 @@ impl Outbox {
     ) -> Drain {
         loop {
             // Re-read for every message: a hold taken while this pass runs stops it at the next one.
-            if self.is_held(id) {
+            if self.is_held(id) || self.is_paused(id) {
                 return Drain::Pending;
             }
             if prompts.unsent_waiting() || prompts.trust_holds_writes() {
@@ -322,7 +333,12 @@ impl Outbox {
                 return Drain::Clear;
             };
             let before = prompts.sent();
-            match write(&text) {
+            let mid_turn = prompts.mid_turn();
+            let written = write(&text);
+            if mid_turn && written.is_ok() {
+                prompts.note_written_mid_turn();
+            }
+            match written {
                 Ok(()) if !checked || prompts.wait_past(before) => self.mark_written(ticket),
                 Ok(()) => {
                     let now = prompts.sighting();
@@ -428,6 +444,35 @@ impl Outbox {
             .lock()
             .expect("outbox hold lock poisoned")
             .insert(id.to_string(), for_sharing);
+    }
+
+    /// Stops writing this session's queue until every pause taken has been ended with
+    /// [`Self::resume`]. Pushing still works.
+    pub fn pause(&self, id: &str) {
+        *self
+            .paused
+            .lock()
+            .expect("outbox pause lock poisoned")
+            .entry(id.to_string())
+            .or_default() += 1;
+    }
+
+    /// Ends one pause; the queue is written again once none is left.
+    pub fn resume(&self, id: &str) {
+        let mut paused = self.paused.lock().expect("outbox pause lock poisoned");
+        if let Some(count) = paused.get_mut(id) {
+            *count -= 1;
+            if *count == 0 {
+                paused.remove(id);
+            }
+        }
+    }
+
+    pub fn is_paused(&self, id: &str) -> bool {
+        self.paused
+            .lock()
+            .expect("outbox pause lock poisoned")
+            .contains_key(id)
     }
 
     pub fn release_hold(&self, id: &str) {
@@ -672,6 +717,33 @@ mod tests {
         );
         assert_eq!(written, vec!["first", "second"]);
         assert_eq!(outbox.len("s"), 0);
+    }
+
+    /// A paused queue is written only once every pause on it has ended, so two that overlap do not
+    /// let it go early.
+    #[test]
+    fn a_paused_queue_waits_for_the_last_pause_to_end() {
+        let outbox = Outbox::default();
+        outbox.push("s", "held");
+        outbox.pause("s");
+        outbox.pause("s");
+        let mut written = Vec::new();
+        let mut drain = |outbox: &Outbox| {
+            outbox.drain_with(
+                "s",
+                &mut |text| {
+                    written.push(text.to_string());
+                    Ok(())
+                },
+                &MidTurn,
+            )
+        };
+        assert_eq!(drain(&outbox), Drain::Pending);
+        outbox.resume("s");
+        assert_eq!(drain(&outbox), Drain::Pending);
+        outbox.resume("s");
+        assert_eq!(drain(&outbox), Drain::Clear);
+        assert_eq!(written, vec!["held"]);
     }
 
     /// A message queued while a drain is already under way is written by that drain rather than left

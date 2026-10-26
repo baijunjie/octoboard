@@ -428,6 +428,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         schema: || new_session_schema(true),
     },
     SEND_MESSAGE,
+    INTERRUPT_SESSION,
     GET_SESSION,
     RENAME_SESSION,
     SET_SESSION_PINNED,
@@ -520,6 +521,28 @@ const SEND_MESSAGE: ToolDef = ToolDef {
                 },
             }),
             &["session", "text"],
+        )
+    },
+};
+
+const INTERRUPT_SESSION: ToolDef = ToolDef {
+    name: "interrupt_session",
+    description: "Stop the turn a running session of yours is in the middle of, as the user \
+                  pressing its interrupt key would. The session keeps its conversation and \
+                  goes back to awaiting instructions; redirect it with `send_message`. Use it \
+                  when the session is working on the wrong thing or should stop now, not to \
+                  hurry it along. The answer says whether a turn was stopped (`interrupted`), \
+                  the session's `status` afterwards, and in `note` what became of the messages \
+                  you sent it during that turn. A session not in a turn is left alone. Refused \
+                  for a session that is waiting for the user, not running or still starting, or \
+                  being switched, handed off or restarted, and for a session that is not yours \
+                  (`yours: false`): it is somebody else's, to be left alone.",
+    schema: || {
+        object_schema(
+            json!({
+                "session": { "type": "string", "description": "The session's id." },
+            }),
+            &["session"],
         )
     },
 };
@@ -1427,6 +1450,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
         schema: || new_session_schema(false),
     },
     SEND_MESSAGE,
+    INTERRUPT_SESSION,
     GET_SESSION,
     ARCHIVE_SESSION,
     ARCHIVE_SELF,
@@ -1867,6 +1891,7 @@ mod tests {
             [
                 "new_session",
                 "send_message",
+                "interrupt_session",
                 "get_session",
                 "archive_session",
                 "archive_self",
@@ -1906,6 +1931,7 @@ mod tests {
                 "update_settings",
                 "new_session",
                 "send_message",
+                "interrupt_session",
                 "get_session",
                 "rename_session",
                 "set_session_pinned",

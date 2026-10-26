@@ -34,7 +34,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   connection: ["git_remote_unreachable", "connection_closed", "request_timed_out"],
   unlock: ["session_locked"],
   stopSessions: ["session_has_running_sessions", "console_has_running_sessions", "project_has_running_sessions", "session_not_deletable"],
-  wait: ["session_lock_busy", "session_already_running", "session_already_starting", "session_working"],
+  wait: ["session_lock_busy", "session_already_running", "session_already_starting", "session_working", "session_busy"],
   lostMessages: ["handoff_messages_dropped"],
   sharingLostMessages: ["sharing_messages_dropped"],
   unsentMessage: ["message_not_sent"],

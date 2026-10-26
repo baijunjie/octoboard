@@ -348,6 +348,18 @@ under a new session id, starts a transient `claude daemon`, and shows "New sessi
 `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` (setting `disableAgentView`) removes the agents view and its hint and leaves the
 subagent view. Octoboard holds its writes while either view, or the focused task list, is on screen.
 
+**Keys that interrupt a turn** (2.1.310, in a PTY with a real account). One Esc stops a turn, about 160 ms after it
+while the model writes; what that leaves in the transcript and the title is under "A user interrupt emits no hook
+event" above, and an Esc before the model has shown anything puts the prompt back in the input box. Esc during a tool,
+with a message typed into the queue meanwhile, interrupts the turn and then takes the queued message as a new turn,
+whose `UserPromptSubmit` had fired when it was queued; a message queued while the model was still writing was also
+seen taken into the running turn before the Esc. Text typed into the input box mid-turn stays there after the Esc. An
+Esc written in the same write as a bracketed paste still worked. Ctrl-C mid-turn interrupts as Esc does, but a single
+Ctrl-C at the prompt arms "Press Ctrl-C again to exit". Ctrl-U deletes one line of the input box a press, and at the
+start of a line the line break before it, so a three-line prompt took six presses to empty; the box then shows
+"Ctrl+Y to paste deleted text". A fresh session's empty box shows a placeholder such as `❯ Try "refactor <filepath>"`,
+which reads like text.
+
 ## Codex
 
 12 hook events, payload as JSON on stdin. The binary embeds the **full JSON Schema of every hook payload**, with
@@ -535,6 +547,17 @@ measured with `codex doctor --json`, whose `config.load` check names the effecti
 ignored before that, and a top-level `profile` key in `config.toml` makes the configuration fail to load (`invalid
 data`) — `--profile <name>` on this version layers `$CODEX_HOME/<name>.config.toml` instead.
 
+**Keys that interrupt a turn** (0.163.0, in a PTY with a real account). One Esc stops a turn: the `Interrupt` hook
+fires 20–130 ms later, the screen shows "■ Conversation interrupted", the composer is left empty (the prompt is not put
+back) and the rollout records `turn_aborted`. A message submitted mid-turn is steered into the running turn: it fires a
+`UserPromptSubmit` with the turn's own `turn_id`, and an Esc after it ends the turn with that message unanswered. Ctrl-C
+mid-turn interrupts the same way, but Ctrl-C at the prompt exits Codex ("To continue this session, run: codex resume
+…"). At the prompt one Esc shows "esc again to edit previous message" and a second opens the transcript rewind
+("Browsing transcript … ↵ rewind · esc back"). An Esc written in the same write as a bracketed paste breaks the paste:
+its text lands in the composer behind a literal `[200~`. With Octoboard's title items (`activity`, `thread-name`,
+`project-name`) the activity item is a braille spinner while a turn runs, and the title is back to the project or thread
+name once the Esc has landed.
+
 ## Grok Build
 
 16 hook events, payload as JSON on stdin, with **every field present in both camelCase and snake_case**. The hook
@@ -690,6 +713,17 @@ failed" line, no modal, and submits a queued prompt by itself. An HTTP 400 fires
 Octoboard lets a Grok session's writes through 30 s after its launch when no hook has come and no trust screen has been
 sighted (one that has is held until the rendered screen no longer shows it), holds them for two seconds after a
 `StopFailure` or an `agent_error`, and holds them while the usage-limit modal is on screen.
+
+**Keys that interrupt a turn** (1.0.70, in a PTY against a local stand-in for its inference API). Esc does not stop a
+turn; Ctrl-C does. While the model streams, Ctrl-C fires `StopCancelled` (`reason` `user_interrupt`) 50–190 ms later
+and the screen shows "Turn cancelled by user". Before the first token arrives it fires no hook at all — no
+`StopCancelled` and no `Stop`; the `idle_prompt` notification came about a minute later — and puts the prompt back in
+the composer, and the title drops its braille spinner 16 ms after the key; the spinner stays through tool calls. With
+text in the composer, Ctrl-C clears the text and the turn runs on; a second Ctrl-C then cancels it. Ctrl-C at the
+prompt asks to be pressed again to quit. During a blocking shell command with a message queued, Ctrl-C fired
+`StopCancelled` and the queued message was submitted 4 ms later. Ctrl-U deletes one line of the composer a press, at the
+start of a line the line break before it, and a line wrapped over two rows in one press; the composer then shows "Input
+cleared · ctrl+z to undo". Not measured: Ctrl-C with the subagents' cancel-turn panel up, and at a permission card.
 
 ## Across the three agents
 

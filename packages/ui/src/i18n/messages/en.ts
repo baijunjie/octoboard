@@ -385,6 +385,7 @@ export const en = {
   "daemon.session_already_on_account": "This session is on that account already.",
   "daemon.session_archived": "An archived session cannot be switched to another account or handed off. Reopen it first.",
   "daemon.session_working": "This session is in the middle of a turn, so it cannot be handed off yet.",
+  "daemon.session_busy": "This session is being switched to another account, handed off, having its branches handed over, given another owner or restarted, so its turn cannot be interrupted now.",
   "daemon.handoff_to_same_agent": "A handoff moves a session to another agent, and this session already runs on {agent}.",
   "daemon.conversation_not_found":
     "No {agent} conversation of this session was found in {path}, so it cannot continue under another account.",

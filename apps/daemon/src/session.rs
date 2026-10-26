@@ -10,7 +10,7 @@ use crate::agent_dialogs::{self, Dialog, Sighting};
 use crate::protocol::Agent;
 use crate::pty::{NewPty, PtyCore, PtyOwner, Spawned};
 use crate::ptyio;
-use crate::title_interrupt::TitleActivity;
+use crate::title_activity::TitleActivity;
 use crate::trust::{CarriedTrust, TrustState};
 
 pub use crate::pty::spawn_reader_thread;
@@ -31,7 +31,7 @@ pub const AGENT_ERROR_SETTLE: Duration = Duration::from_secs(2);
 struct TitleObserver {
     parser: crate::terminal_title::Parser,
     latest: Option<Option<String>>,
-    /// What Claude Code's titles have said about its turns; see `crate::title_interrupt`.
+    /// What the agent's titles have said about its turns; see `crate::title_activity`.
     activity: TitleActivity,
     state: Weak<crate::state::AppState>,
     runtime: Option<tokio::runtime::Handle>,
@@ -226,9 +226,12 @@ impl LiveSession {
         let titled = {
             let mut observer = self.title.lock().expect("title observer lock poisoned");
             let completed = observer.parser.feed(data);
-            if completed.is_some() && self.agent == Agent::Claude {
+            if let Some(title) = &completed {
                 let glyph = observer.parser.leading_glyph();
-                observer.activity.note(glyph, Instant::now());
+                // A title of nothing but a spinner reaches here empty, and still shows a turn.
+                let empty = title.is_none() && glyph.is_none();
+                let shown = crate::title_activity::shown(self.agent, glyph, empty);
+                observer.activity.note(shown, Instant::now());
             }
             if let Some(title) = &completed {
                 // A title that only spun since the last one changes nothing, so it does not reach
@@ -262,8 +265,9 @@ impl LiveSession {
     /// Writes raw input. The error says how many bytes went in, because a caller deciding whether
     /// to retry has to know: whatever was accepted is already in the child's input buffer.
     ///
-    /// Counted: every writer but the trust path comes through here, which is how the trust path
-    /// learns that someone else has typed into the session since it last looked. A write made up
+    /// Counted: every writer but the trust path comes through here or through
+    /// [`Self::write_keys_if`], which counts its keys too, and that is how the trust path learns
+    /// that someone else has typed into the session since it last looked. A write made up
     /// only of what an attached terminal sends by itself — focus reports, replies to the agent's
     /// terminal queries, mouse movement, wheel turns and button releases — is not counted: Claude
     /// Code turns focus reporting on as it draws its trust screen, and Grok Build turns on
@@ -300,6 +304,34 @@ impl LiveSession {
             return Ok(false);
         }
         self.pty.write_locked(&input, data).map(|()| true)
+    }
+
+    /// Writes `keys` only if nobody else has written into the input since the count read as
+    /// `expected` and `gate` still holds, and says whether it did; `gate` runs under the lock every
+    /// other writer takes, so nothing written in between can make it stale. Unlike the trust
+    /// path's keys these are counted, so a later step of the same caller is told apart from
+    /// someone else's write only by expecting the count past its own.
+    pub(crate) fn write_keys_if(
+        &self,
+        expected: u64,
+        gate: impl FnOnce() -> bool,
+        keys: &[u8],
+    ) -> Result<bool, ptyio::PartialWrite> {
+        let input = self.pty.lock_input();
+        if self.pty.is_frozen() {
+            return Err(ptyio::PartialWrite {
+                written: 0,
+                error: io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "the session output has been archived",
+                ),
+            });
+        }
+        if self.input_writes.load(Ordering::Acquire) != expected || !gate() {
+            return Ok(false);
+        }
+        self.input_writes.fetch_add(1, Ordering::AcqRel);
+        self.pty.write_locked(&input, keys).map(|()| true)
     }
 
     /// How many writes anyone else has made into this session's input so far.

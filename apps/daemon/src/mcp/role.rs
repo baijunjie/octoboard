@@ -496,6 +496,9 @@ fn unbound_project_session_description(agent: Agent) -> String {
            the sessions you own (`yours: true`). `{get_session}` also reads any other session, \
            but one with `yours: false` is somebody else's — the user's own, or another session's, \
            named in `owner` — and is to be left alone.\n\
+         - `{interrupt_session}` stops the turn a session you own is in the middle of, when it \
+           is working on the wrong thing; it keeps its conversation and awaits your next \
+           instruction, which you send with `{send_message}`.\n\
          - `{rename_session}` and `{set_session_pinned}` retitle or pin a session you own.\n\
          - `{archive_self}` ends and archives you once your sessions are all archived.\n\
          - A session you start cannot start sessions of its own.\n\
@@ -515,6 +518,7 @@ fn unbound_project_session_description(agent: Agent) -> String {
         report = tool("report"),
         new_session = tool("new_session"),
         send_message = tool("send_message"),
+        interrupt_session = tool("interrupt_session"),
         get_session = tool("get_session"),
         archive_session = tool("archive_session"),
         archive_self = tool("archive_self"),

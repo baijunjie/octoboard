@@ -432,6 +432,16 @@ impl PtyCore {
             .visible_text()
     }
 
+    /// [`Self::screen_text`] with faint cells blanked; see
+    /// [`TerminalSnapshot::visible_text_undimmed`].
+    pub fn screen_text_undimmed(&self) -> String {
+        self.fan
+            .lock()
+            .expect("fan mutex poisoned")
+            .terminal
+            .visible_text_undimmed()
+    }
+
     /// What this process printed after `mark`, as taken from [`Self::output_total`] — less of it if
     /// the ring buffer has already let some go.
     pub fn output_since(&self, mark: u64) -> Vec<u8> {

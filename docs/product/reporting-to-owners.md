@@ -50,6 +50,10 @@ too ends with work still running.
 launched or resumed: it has stopped to wait for its sessions, not stopped working. With none of them running, its turn
 is reported on as any bound session's is.
 
+**No report is synthesised for a turn that was cancelled** — by the user in the terminal, or by its owner's
+`interrupt_session` (see `docs/product/interrupting-turns.md`): the session is back at its prompt, awaiting
+instructions. How a cancel that fires no hook event is recognised is in `docs/product/turns-hooks-do-not-report.md`.
+
 Grok Build reports no turn end at all for some turns, and the backstop Octoboard falls back on
 there fires about a minute after the turn ends, so a synthesised report for one of those turns
 arrives that much later. Sessions outside the orchestration are never reported on.

@@ -1966,6 +1966,11 @@ pub enum RequestBody {
         session: String,
         text: String,
     },
+    /// Stops the turn the session's agent is running, keeping its process and conversation; see
+    /// `crate::interrupt`.
+    InterruptSession {
+        session: String,
+    },
     RenameSession {
         session: String,
         title: String,
@@ -2409,6 +2414,15 @@ pub struct PathLinkView {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
+    /// The answer to `interrupt_session`: whether a running turn was stopped, the session's status
+    /// once the interrupt had settled, and what the caller is to know, in prose.
+    SessionInterrupted {
+        id: Option<String>,
+        session: String,
+        interrupted: bool,
+        status: SessionStatus,
+        note: String,
+    },
     SessionHistory {
         id: Option<String>,
         session: String,
@@ -3503,6 +3517,10 @@ pub mod error_code {
     /// those sessions and their `sessions`, by title, comma separated.
     pub const SESSION_HAS_RUNNING_SESSIONS: &str = "session_has_running_sessions";
     pub const SESSION_WAITING_FOR_USER: &str = "session_waiting_for_user";
+    /// An `interrupt_session` for a session that is being switched to another account, handed
+    /// off, having its branches handed over, given another owner, or restarted for a change of its
+    /// account's sharing. Nothing was sent. `params` names the `session`.
+    pub const SESSION_BUSY: &str = "session_busy";
     /// A message the user sent is refused because the session's agent is showing, or may still be
     /// about to show, its folder-trust confirmation, which the message's trailing Enter would
     /// answer. `params` names the `session`.
@@ -3850,6 +3868,7 @@ pub fn now_millis() -> i64 {
 mod tests {
     use super::{
         Event, HistoryMessage, HistorySpeaker, ProjectAccount, ProjectSource, Request, RequestBody,
+        SessionStatus,
     };
 
     #[test]
@@ -3927,6 +3946,28 @@ mod tests {
         assert_eq!(
             serde_json::to_value(ProjectSource::Git).unwrap(),
             serde_json::json!("git")
+        );
+    }
+
+    #[test]
+    fn a_session_interrupted_reply_serializes_with_its_type_and_fields() {
+        assert_eq!(
+            serde_json::to_value(Event::SessionInterrupted {
+                id: Some("request-1".to_owned()),
+                session: "s-1".to_owned(),
+                interrupted: true,
+                status: SessionStatus::Idle,
+                note: "Interrupted.".to_owned(),
+            })
+            .unwrap(),
+            serde_json::json!({
+                "type": "session_interrupted",
+                "id": "request-1",
+                "session": "s-1",
+                "interrupted": true,
+                "status": "idle",
+                "note": "Interrupted.",
+            })
         );
     }
 
@@ -4025,6 +4066,13 @@ mod tests {
                 r#"{"type":"hand_off_session","id":"request-1","session":"session-7","agent":"codex"}"#,
                 |body| match body {
                     RequestBody::HandOffSession { session, .. } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"interrupt_session","id":"request-1","session":"session-7"}"#,
+                |body| match body {
+                    RequestBody::InterruptSession { session } => Some(session),
                     _ => None,
                 },
             ),

@@ -143,7 +143,7 @@ rather than queued (see "Messages held until a session can take them" in `docs/p
 Once the request has ended, the session's status follows its own agent again, from wherever the agent was last seen to
 be while the hand was up — *working* where it is still in the turn that made the call, *awaiting instructions* where
 it has since reported itself at its prompt, or where a Claude Code prompt declined during the wait left it (see
-"Declining a Claude Code prompt or question" in `docs/product/sessions.md`). That is also where the session is left
+"Declining a Claude Code prompt or question" in `docs/product/turns-hooks-do-not-report.md`). That is also where the session is left
 when no further event from the agent arrives at all — as when a request times out after its agent gave up on the call.
 
 Claude Code (observed on 2.1.295) moves an MCP tool call that is still running after 120 seconds to the background:
