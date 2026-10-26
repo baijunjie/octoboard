@@ -140,6 +140,7 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E7 | Local main `2d8e1a705888dbe319da3fc2c0e0951d6f9766d5` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo6-20261025-fyq175xi`; WARN-1 and WARN-2, real daemon and Git data with fixture Codex CLI/records, no Safari or gallery. |
 | E8 | Local main `9d199cb42573568a07d618034494a95c75a0a2c7` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo8-20261025-2j89ms59`; FOCUS-4, bare Error and Note viewer-header marks with real daemon/throwaway files; no agent, browser or gallery. |
 | E9 | Branch `fix/startup-error-details` at `f37fc3d925f35eb78f1048ea4767df369a1f6b1d` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo9-ddnbws96`; WARN-3, WARN-4 and WARN-5, real daemon with isolated HOME/TMPDIR/agent directories, fixture Codex CLI and dated records, throwaway real Git repositories and worktrees; no Safari or gallery. |
+| E10 | Local main `287dec4a61d1cc57f4ad1b3c09c8211210320a11`, source of `docs/voiceover-relisten` | Packaged `Octoboard Verification`, build-time identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo10-20261027-relisten`; SA-D, SA-E and FOCUS-1 on the current accounts table and account details dialog; real daemon with a credential-free Grok CLI fixture. |
 
 E4's tree equals main `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they
 are not durable references and are not cited by hash. E5's three commits are the fixes as they landed on main; the build
@@ -195,8 +196,29 @@ up during setup was excluded, and every quoted phrase was correlated with a deli
 application. Sessions, binding, hooks, branch-reference validation, inspections and archiving went through the real
 daemon; Codex records were synthetic dated rollouts, with no login or model use.
 
+E10 used macOS 26.2 (25C56), arm64, English application text, Simplified Chinese system/VoiceOver interface and
+light application appearance following System (confirmed from the isolated window's screenshot). Native speech was read
+through AppleScript's `content of last phrase`, requested every 25 ms, with native focus sampled every fourth poll;
+IPC adds latency. The caption panel was already enabled and was left unchanged; it was not the reader. No synthetic
+VoiceOver `output` command was used. Accessibility presses and focus actions targeted the isolated PID; window attention
+was set explicitly for attended runs. Command-F5 was the only global key used, with a frontmost-PID check before the
+listening toggles. The final off toggle followed a frontmost check of the user's application after the verification app
+had exited. The reader was stopped before that final toggle, and VoiceOver's enabled flag was verified off. Volume,
+input source and other system preferences were left unchanged. No screen lock was observed during the pass.
+
+The E10 build used `pnpm build:app --bundles app` with only native product-name and identifier overrides, then an
+ad-hoc-signed scratch copy on the internal disk. The running daemon's executable path, scratch database/lock/port and
+identifier-specific WebKit storage were checked; its executable text section matched the fresh daemon build (whole-file
+hashes differ after packaging/signing). A clean launch environment, independent HOME/TMPDIR/ZDOTDIR/XDG and agent
+configuration directories, and a shell rc with only the fixture and system executable paths kept real accounts out.
+The fixture used the same 10 s / 10 s / 10 s login progression described above, wrote an empty auth marker and answered
+quota probes locally; it opened no browser and made no authorization or model request. The table first held the renamed
+default account, `VoiceOver fixture`; later runs added `VoiceOver cancel`, `VoiceOver details` and `VoiceOver away`.
+The default's table had two rows including the header, and the later table had five. All temporary accounts, processes,
+app/data directories and identifier-specific storage were removed after recording; the documentation worktree remains.
+
 Every `StatusAnnouncer` in the SA cases renders an unnamed `sr-only` `role="status"` with no explicit `aria-live`,
-`aria-atomic` or `aria-relevant` props. For E1 to E5, the captured effective native mapping is a group with the
+`aria-atomic` or `aria-relevant` props. For E1 to E5 and E10, the captured effective native mapping is a group with the
 application-status subrole (empty-group subrole while empty), role description "application status", empty own name,
 title, description and value (the own value was not sampled for short-lived statuses by the compact native observer),
 the phrase in a descendant static text, live polite, atomic true, relevant additions and text. This is the native
@@ -218,8 +240,8 @@ mapping.
 | [SA-A Later change, no focus move](#sa-a-later-change-no-focus-move) | `StatusAnnouncer`, exposed beside a modal | Pass |
 | [SA-B Outage with a per-appearance gate](#sa-b-outage-with-a-per-appearance-gate) | `StatusAnnouncer` with a caller gate | Pass |
 | [SA-C Delayed first write after a dialog opens](#sa-c-delayed-first-write-after-a-dialog-opens) | `StatusAnnouncer` with `firstWriteDelayMs` | Pass |
-| [SA-D Written after a dialog closes](#sa-d-written-after-a-dialog-closes) | `StatusAnnouncer` written by a caller timer, gated on window attention | Pass: menu, direct button, return to the window; possibly stale, row layout changed |
-| [SA-E Success already present at mount](#sa-e-success-already-present-at-mount) | suppression at remount | Pass; possibly stale, row layout changed |
+| [SA-D Written after a dialog closes](#sa-d-written-after-a-dialog-closes) | `StatusAnnouncer` written by a caller timer, gated on window attention | Pass: current table menu, direct button, return to the window and account details (E10) |
+| [SA-E Success already present at mount](#sa-e-success-already-present-at-mount) | suppression at remount | Pass: current table remount (E10) |
 | [SA-F Hidden status text stays navigable](#sa-f-hidden-status-text-stays-navigable) | plain text in the status after its announcement | Pass |
 | [SA-G Confirmation that clears with its tooltip, focus retained](#sa-g-confirmation-that-clears-with-its-tooltip-focus-retained) | `StatusAnnouncer` span, default delay elapsed | Pass, attribution shared with the button's renamed name |
 | [SA-H First mount at the default delay, no focus move](#sa-h-first-mount-at-the-default-delay-no-focus-move) | `StatusAnnouncer` whose text is present from the first render, empty until its first write, focus kept | Pass |
@@ -229,7 +251,7 @@ mapping.
 | [SA-L Section status written after an attended wait, tab focus retained](#sa-l-section-status-written-after-an-attended-wait-tab-focus-retained) | section `StatusAnnouncer` fed by a caller wait | Pass; direct opening untested |
 | [SA-M Region mounted with each opening of a disclosure](#sa-m-region-mounted-with-each-opening-of-a-disclosure) | `StatusAnnouncer` mounted per opening | Pass |
 | [SA-N Viewer notice after paint, then an empty status](#sa-n-viewer-notice-after-paint-then-an-empty-status) | `FileNotice` through `StatusAnnouncer`, then clear; first-paint large-file notice without an announcement region | Pass for the recorded branches and focus hand-off; native live attributes not sampled |
-| [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus hand-off | Pass; one transient phrase observed and accepted; possibly stale, button and row changed |
+| [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus hand-off | Pass: current table and account details; transient web-area phrase still observed (E10) |
 | [FOCUS-2 Focus after an expansion takes the pressed control away](#focus-2-focus-after-an-expansion-takes-the-pressed-control-away) | caller-told focus restore and code-frame hand-off | Pass |
 | [FOCUS-3 Status mark and quota popover focus and reading paths](#focus-3-status-mark-and-quota-popover-focus-and-reading-paths) | shared hover/press popover, focus and item chooser | Pass for quota Enter/Escape focus paths, the mark's focus return on Escape and item-chooser reachability; the bare-mark Enter naming failed, see KNW-9 and FOCUS-4 |
 | [FOCUS-4 Bare mark dialog named by its tone](#focus-4-bare-mark-dialog-named-by-its-tone) | tone-named bare mark dialog; sentence remains the trigger name | Pass for Enter speech without the repeated sentence and Escape focus return, Error and Note |
@@ -434,7 +456,8 @@ mapping.
 
 - **Location and state change.** The fixture login succeeds; the dialog closes; the account row's hidden status says the
   account is logged in. Three paths: Log in from the account's Actions menu, Log in from the row's own direct button,
-  and success while the window is minimized followed by return.
+  and success while the window is minimized followed by return. E10 also exercises the Log in button in the account
+  details dialog, which remains open under the login dialog.
 - **Mechanism.** A row-lifetime `StatusAnnouncer` written by a caller timer. `packages/ui/src/settings/AccountLogin.tsx`
   (`AccountLoginAnnouncer`: on a success that was not already there at mount it waits `AFTER_FOCUS_MOVE_DELAY_MS` and
   only while the window is attended, restarting the wait on each return, then gives the announcer the account-named
@@ -445,46 +468,67 @@ mapping.
   The dialog closes on success, hiding its own progress status.
 - **ARIA wiring as rendered.** The common mapping; empty before success, populated with the account text in descendants
   after. The text is `⁨VoiceOver fixture⁩: logged in.` with isolation marks around the account name.
-- **Result.** Spoken automatically, once, in all three paths. After the Settings and Actions-button focus phrase
-  (`Settings web dialog 包含3个项目 Actions for ⁨VoiceOver fixture⁩ (Grok Build) More actions 菜单弹出 按钮 Grok Build tab panel`),
-  `⁨VoiceOver fixture⁩: logged in.` followed about 1.5 s later. Direct button path: the same two phrases; a transient
-  `Octoboard 网页内容` and a no-action button phrase may precede the final Actions phrase and are not a failure of the
-  announcement. Away path: success while the window was minimized produced no speech while away; on the first return the
-  announcement came about 1.5 s after the Actions focus phrase; a second minimize and return produced no second
+- **Earlier result (E4).** Spoken automatically, once, in all three paths. After the Settings and Actions-button focus
+  phrase (`Settings web dialog 包含3个项目 Actions for ⁨VoiceOver fixture⁩ (Grok Build) More actions 菜单弹出 按钮 Grok Build tab
+  panel`), `⁨VoiceOver fixture⁩: logged in.` followed about 1.5 s later. Direct button path: the same two phrases; a
+  transient `Octoboard 网页内容` and a no-action button phrase may precede the final Actions phrase and are not a failure of
+  the announcement. Away path: success while the window was minimized produced no speech while away; on the first return
+  the announcement came about 1.5 s after the Actions focus phrase; a second minimize and return produced no second
   announcement, and the success cleared 6.0 s of attended time after the second return.
 - **Capture.** Last phrase through AppleScript, 25 ms polling, with native focus and window state (screen unlocked,
   application frontmost, window minimized) sampled alongside; the daemon's success event timestamped independently.
-- **Environment.** E4. The direct-button and menu paths were also heard in E3 and the menu path in E2.
-- **Date.** 2026-10-20.
+- **Environment.** E10 for the current table and details dialog; E4 for the earlier row. The direct-button and menu
+  paths were also heard in E3 and the menu path in E2.
+- **Date.** 2026-10-20; rechecked 2026-10-27.
 - **Reuse scope.** Covers a durable `StatusAnnouncer` in a row that is hidden by a modal while it is open, written by a
   caller timer that starts at the success (once the window is attended) and runs 1500 ms, the modal closing and focus
   returning about two frames after the success, so both come before the write, in WKWebView on macOS. Window states
   tested: attended, and minimized with the application otherwise frontmost. Not tested: a window visible but not
   frontmost, a different attention predicate, another agent, real login, other languages or appearances. A caller
   without the attention gate, or with a write at the close, is a known-not-to-work pattern below.
-- **Possibly stale.** The three paths were heard on an account row that has since changed: the accounts are now a table
-  (`AccountTableRow`) whose Status cell holds the Log in button (`packages/ui/src/settings/AccountLoginButton.tsx`),
-  which stays focusable but `aria-disabled` while a login runs, and the account details dialog
-  (`packages/ui/src/settings/AccountDetailsDialog.tsx`) mounts a second `AccountLoginAnnouncer`. The announcer's wait
-  and attention gate read the same in source, but the row layout, the opener and the focus phrase before the write were
-  not heard again, so the recorded paths may no longer describe the product.
+- **Current result (E10).** Spoken automatically through the current table's direct button and Actions menu: `⁨VoiceOver
+  fixture⁩: logged in.` The direct path first said `Octoboard 网页内容`, then `Settings web dialog 包含3个项目 Actions for
+  ⁨VoiceOver fixture⁩ (Grok Build) More actions 菜单弹出 按钮 Grok Build accounts table 5列，2行`. The success phrase followed
+  about 1.5 s later; in the menu run it followed about 0.9 s after the final focus phrase (about 1.5 s after the
+  daemon's success). Minimized with the application still frontmost: no success phrase while away; after restoring, the
+  Actions phrase named the five-row table and `⁨VoiceOver away⁩: logged in.` followed about 1.3 s later. A second
+  minimize/restore gave no second success phrase, and the native region was empty after seven seconds back. In account
+  details, after returning to the sharing switch (FOCUS-1), `⁨VoiceOver details⁩: logged in.` followed about 1.5 s
+  later, once; the underlying table row was absent from the exposed native tree, and only the details region held the
+  sentence. This does not establish counts of identical consecutive native speech replays beyond the last-phrase polling
+  limit.
+- **Current wiring and reuse scope.** The table announcer is inside the Account row-header cell; the Log in control is
+  in the Status cell. The details announcer is inside the still-open Account settings modal. Both native status
+  regions had the common mapping, including polite, atomic true and additions/text relevance, with empty own
+  title/description/value and the sentence in a static-text child. Source wiring is `role="status"`, `sr-only`, with
+  no explicit live/atomic/relevant props; generated HTML ID references were not extracted. The table's region was
+  mounted empty before login, hidden under the login modal and written after its close; the details region was exposed
+  after the nested login modal closed. This confirms the timer/attention mechanism on the current layout and covers
+  the distinct row-Actions and details-sharing-switch focus destinations. The earlier scope's exclusions still apply;
+  the visible-but-background window and a minimized application that is also not frontmost were not tested.
 
 ### SA-E Success already present at mount
 
-- **Location and state change.** After a success, Settings General then Agent accounts then the Claude Code tab then the
-  Grok Build tab are shown within six seconds, remounting the account row.
+- **Earlier location and state change (E4).** After a success, Settings General then Agent accounts then the Claude Code
+  tab then the Grok Build tab are shown within six seconds, remounting the account row.
 - **Mechanism.** `AccountLoginAnnouncer` in `packages/ui/src/settings/AccountLogin.tsx` initializes from the success
   present when the row mounts and does not write it; it clears that hold when the state next leaves success.
 - **ARIA wiring as rendered.** The common mapping, empty after the remount.
-- **Result.** Not spoken, as intended: only the tab-selection phrases were captured; no second logged-in phrase through
-  10 s or more after the success. The original announcement count stayed one.
+- **Earlier result (E4).** Not spoken, as intended: only the tab-selection phrases were captured; no second logged-in
+  phrase through 10 s or more after the success. The original announcement count stayed one.
 - **Capture.** Last phrase through AppleScript, with native samples of the empty region.
-- **Environment.** E4 (and E2, E3 with an earlier form of the same suppression).
-- **Date.** 2026-10-20.
+- **Environment.** E10 for the current table; E4 (and E2, E3 with an earlier form of the same suppression) for the
+  earlier row.
+- **Date.** 2026-10-20; rechecked 2026-10-27.
 - **Reuse scope.** Covers suppressing a state that is already present when the announcer's row mounts. It is evidence
   for silence on remount only alongside SA-D's positive result.
-- **Possibly stale.** Heard on the earlier account row layout (see SA-D); the suppression in
-  `packages/ui/src/settings/AccountLogin.tsx` is unchanged in source but was not heard on the table row.
+- **Current location and result (E10).** About 2.5 s after the menu-path success, while the row still held its success
+  text, General then Agent accounts were pressed, remounting the table. The native status region was empty on return
+  and after another 11 s. Only the selection phrases, `General 已选择 tab，第1项（共10项） Settings sections tab group` and
+  `Agent accounts 已选择 tab，第3项（共10项）`, followed by VoiceOver's tab hint, were heard; no second logged-in sentence
+  occurred. SA-D supplies the positive announcement immediately before this suppression check. The current pass did
+  not switch agent tabs or reopen account details during success; it confirms row-remount suppression through the
+  Settings section switch, with the same empty-region source wiring and native mapping recorded by SA-D.
 
 ### SA-F Hidden status text stays navigable
 
@@ -723,34 +767,52 @@ mapping.
 ### FOCUS-1 Focus after the login dialog closes
 
 - **Location and state change.** A dialog opened from the row's own Log in button closes, by success or by cancelling.
-  The button is shown only while the account reads as signed out and is disabled while a login runs; the menu path
-  opens from a menu item instead.
+  The current table's Status-cell button is shown only while the account reads as signed out, stays focusable and is
+  `aria-disabled` while a login runs; the menu path opens from a menu item instead. Account details offers a second
+  direct button, with the details modal remaining open beneath the login dialog.
 - **Mechanism.** `useLoginFocusReturn` in `packages/ui/src/settings/AccountLoginButton.tsx` (`AccountLoginButton`),
-  driven by the button's `onPress`; `AccountTableRow` passes the row's actions button as the fallback. After success
-  focus goes to the row's actions button. After a cancel it goes to the Log in button once the daemon has answered and
-  the button is available again, otherwise to the actions button. The move waits one animation frame past React Aria's
-  restore (two after the unmount), acts only when focus is on `<body>` or the original button, sets the keyboard
-  modality, and leaves a restore that landed correctly alone. The menu path supplies no hand-off, and React Aria returns
-  focus to the menu's trigger.
-- **ARIA wiring as rendered.** The row's Actions control is a pop-up button named `Actions for ⁨VoiceOver fixture⁩ (Grok
-  Build)` with has-popup set; the direct button is a button named "Log in". Final screenshots show the keyboard focus
-  ring on the correct control.
-- **Result.** Success, direct button: focus on the Actions button, then the SA-D announcement. Cancel after the login
-  had started: focus on the Log in button (`Settings web dialog 包含3个项目 Log in button Grok Build tab panel`), enabled and
-  focused for 9 s or more. Cancel before the daemon had registered the login (the start request delayed 3.5 s by a
-  temporary proxy): focus on the Log in button at once, and it stayed there after the late start and cancel. Observed
-  and accepted: in the cancel-after-start run a generic `Octoboard 网页内容` phrase was spoken about 99 ms before the
-  correct button phrase, so a transient web-area utterance is not excluded; the correct target is spoken immediately
+  driven by the button's `onPress`; `AccountTableRow` passes the row's actions button as the fallback, and
+  `AccountDetailsDialog` passes its first `input[role="switch"]`. After success focus goes to the row's actions button
+  or the details dialog's first switch, as applicable. After a cancel it goes to the Log in button once the daemon has
+  answered and the button is available again, otherwise to the configured fallback. The move waits one animation frame
+  past React Aria's restore (two after the unmount), acts only when focus is on `<body>` or inside the original button,
+  sets the keyboard modality, and leaves a restore that landed correctly alone. The current menu path supplies an
+  explicit two-frame hand-off to the row's Actions button (`AgentAccountsSection.tsx`, `returnToRowActions`).
+- **Earlier ARIA wiring as rendered (E4).** The row's Actions control is a pop-up button named `Actions for ⁨VoiceOver
+  fixture⁩ (Grok Build)` with has-popup set; the direct button is a button named "Log in". Final screenshots show the
+  keyboard focus ring on the correct control.
+- **Earlier result (E4).** Success, direct button: focus on the Actions button, then the SA-D announcement. Cancel after
+  the login had started: focus on the Log in button (`Settings web dialog 包含3个项目 Log in button Grok Build tab panel`),
+  enabled and focused for 9 s or more. Cancel before the daemon had registered the login (the start request delayed 3.5
+  s by a temporary proxy): focus on the Log in button at once, and it stayed there after the late start and cancel.
+  Observed and accepted: in the cancel-after-start run a generic `Octoboard 网页内容` phrase was spoken about 99 ms before
+  the correct button phrase, so a transient web-area utterance is not excluded; the correct target is spoken immediately
   after. Intermediate disabled states shorter than the sample resolution were not observed.
-- **Capture.** Last phrase through AppleScript and native focus samples at 40 ms.
-- **Environment.** E4. E3 recorded the earlier cancel failure (KNW-5) and E2 the lost focus after a success (KNW-3).
-- **Date.** 2026-10-20.
+- **Capture.** Last phrase through AppleScript; native focus sampled at 40 ms in E4, every fourth requested 25 ms
+  phrase poll in E10 (about 100 ms plus IPC latency).
+- **Environment.** E10 for the current table and account details; E4 for the earlier row. E3 recorded the earlier
+  cancel failure (KNW-5) and E2 the lost focus after a success (KNW-3).
+- **Date.** 2026-10-20; rechecked 2026-10-27.
 - **Reuse scope.** Covers the focus destination for a dialog whose opener may be disabled or gone when it closes, as
   `useLoginFocusReturn` does it. Not tested: a window visible but not frontmost, a different opener.
-- **Possibly stale.** Heard on the earlier account row, where the Log in button was natively disabled while a login ran.
-  The button now stays focusable and is `aria-disabled` in that state, sits in the table's Status cell and is also
-  offered on the account details dialog, and the hand-off acts when focus is on `<body>` or on a button that is going.
-  The recorded phrases and the disabled-opener relation were not heard again on this layout.
+- **Current result and wiring (E10).** The table's success path focused the row's named Actions pop-up button and
+  spoke its table context before SA-D's success sentence. Cancelling after the login started returned focus to the
+  enabled direct button for at least 9 s: `Octoboard 网页内容` was followed about 63 ms later by
+  `Settings web dialog 包含3个项目 Log in to ⁨VoiceOver cancel⁩ Log in button Grok Build accounts table 5列，5行`.
+  The button's source accessible name is now `Log in to ⁨VoiceOver cancel⁩`, with a decorative `aria-hidden` icon;
+  while active it has `aria-disabled`, with `aria-describedby` pointing to its hidden `Logging in…` span. The native
+  start phrase `Log in to ⁨VoiceOver cancel⁩ Logging in… 变暗 button Grok Build accounts table` captured that state.
+  In account details, cancel returned to the enabled Log in button:
+  `Account settings web dialog 包含19个项目 Log in to ⁨VoiceOver details⁩ Log in button`, again after a transient web-area
+  phrase. Success focused the first switch instead:
+  `Account settings web dialog 包含19个项目 Share default configuration for ⁨VoiceOver details⁩ 关 开关`.
+  Native focus identified that switch as `AXCheckBox` / `AXSwitch`, value 0 and enabled; no switch was toggled. The
+  table opener's name and Actions pop-up name were captured natively; exact generated description IDs were not.
+- **Current reuse scope.** Confirms the current focusable, aria-disabled opener for a normal started login and its
+  cancel, the row fallback after success, and the details modal's first-switch fallback after success. The transient
+  web-area phrase remains observed. The E4 artificially delayed start/cancel race was not rerun on this table and
+  remains historical evidence only; the current pass does not cover that race, another opener, an unattended window
+  or the default account's details fallback (its first switch is Disable account rather than Share configuration).
 
 ### FOCUS-2 Focus after an expansion takes the pressed control away
 
@@ -1413,7 +1475,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `sidebar/Sidebar.tsx` | filter no-match | SA-A for a change while the section is mounted; no match for the rest | Heard | The section is kept per console, so it can mount with the no-match text already present (switching back to a console, leaving a focus view). SA-H does not cover that: SA-H was heard for a panel toggle with focus left on the toggle, while these mounts come with a console or view switch whose focus relation was not recorded. |
 | `components/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
 | `settings/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
-| `settings/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the earlier row layout (possibly stale, see SA-D); the second mount in `settings/AccountDetailsDialog.tsx` is not covered | Heard | The wait and attention gate match SA-D in source; the table row and the details dialog were not heard. |
+| `settings/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the current table and the second mount in `settings/AccountDetailsDialog.tsx` (E10) | Heard | Current table direct/menu/return paths and the owned-account details path were heard in E10; SA-E heard the table remount. |
 | `settings/PermissionsSection.tsx`, through `AttendedStatusAnnouncer` | permission states | SA-L for the section opening and a return with the states unchanged; no match for a change while Settings is open | Heard | A grant made in System Settings was not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
 | `configuration/ImportReview.tsx` | "apply to all" applied | SA-A | Candidate | Mounted empty in the review step, text written after a press while focus rests, inside the modal's own subtree, default delay. Writing the identical sentence again does not rewrite it. |
 | `browser/ChangeList.tsx` | filter no-match | SA-A for typing; no match for a first render holding the text | Candidate | Typing in the filter writes in place at rest. The text can also be present at the first render (a persisted filter, a branch change that closes a popover and returns focus), a mount SA-H does not clearly cover. |
@@ -1448,11 +1510,10 @@ Totals: of 32 callers, 13 were heard for the writes named (`Sidebar`, `Connectio
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`), 5 are candidates (`ImportReview`, `ChangeList`,
 `ProjectBrowser`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`,
 `SpotNotice`, `BlockFallback`, the account switch outcome in `App`, and the ten callers listed after it). Of the heard
-callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` did on the row layout it was
-heard on; the other eleven match for some writes only, with SA-N's native-capture limits stated in that case. Of the
-candidates, `ImportReview` matches for every write it makes; `ChangeList`, `ProjectBrowser`, `TerminalPane` and
-`ShellTerminalView` for some.
-
+callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` matches the E10 table and
+owned-account details paths recorded in SA-D; the other eleven match for some writes only, with SA-N's native-capture
+limits stated in that case. Of the candidates, `ImportReview` matches for every write it makes; `ChangeList`,
+`ProjectBrowser`, `TerminalPane` and `ShellTerminalView` for some.
 
 Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
@@ -1510,8 +1571,9 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   (KNW-2); no passing case.
 - A window visible but not frontmost, and a minimized window with the application also not frontmost (KNW-4's condition,
   not rerun on E4): not tested for SA-D or FOCUS-1.
-- A transient web-area utterance before the correct button phrase after a later cancel (FOCUS-1): accepted, not
-  explained.
+- A transient web-area utterance before the correct button phrase after a cancel (FOCUS-1): still observed on the
+  current table and in account details in E10, accepted, not explained. The artificially delayed start/cancel race was
+  heard only on the E4 row, not rerun on the current table; the default account's details fallback was not heard.
 - Last-phrase polling cannot show how much of a status was spoken before a focus move replaced it (SA-K, FOCUS-2).
 - Not covered by any case: real login, other agents' login dialogs, languages and appearances other than those recorded,
   other macOS versions.
