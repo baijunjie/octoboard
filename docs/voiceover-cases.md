@@ -37,8 +37,8 @@ application, not as written in source:
   focus stays put or moves while it is written. A write within about 300 ms of a focus move is a different relation from
   one made while focus has rested.
 - **Write delay.** None, once per mount (`StatusAnnouncer`'s first write delay), per appearance (the banner's own gate),
-  or a caller wait before each text (a timer started at a state change, or `PermissionsAnnouncer`'s attended wait), and
-  whether `firstWriteDelayMs` overrides it.
+  or a caller wait before each text (a timer started at a state change, or the attended wait of `PermissionsAnnouncer`
+  and `AttendedStatusAnnouncer`), and whether `firstWriteDelayMs` overrides it.
 - **Exposure beside a modal.** Whether the region is exposed at the moment it writes: in the main window while no modal
   is open, inside the modal's own subtree, or kept exposed beside a modal through a `data-live-announcer` or top-layer
   marker. These three count as the same; a region under an open modal without a marker is hidden, and a write into it is
@@ -70,9 +70,8 @@ result and they are not a listening result themselves; report them as checks.
 - Automated tests of the caller's wiring: the region's lifetime and text changes, duplicate suppression, and focus
   behavior around the write.
 - Browser inspection of the rendered DOM: the effective role, accessible name and description, the live attributes, and
-  that neither the region nor an ancestor is hidden by `aria-hidden` or `inert` while the real overlay is open (React
-  Aria's modal hiding leaves exposed any element, with its ancestors, marked `data-live-announcer="true"` or
-  `data-react-aria-top-layer`; a region outside such a marker is hidden by an open modal).
+  that neither the region nor an ancestor is hidden by `aria-hidden` or `inert` while the real overlay is open (a marked
+  element is left exposed with its ancestors; the rule is in `docs/ui-accessibility.md`, "Announcing a change").
 - A statement of which case is matched and, item by item, why each point under "What \"matches a case\" means" holds.
 
 ### When a new listening pass is needed
@@ -142,11 +141,10 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E8 | Local main `9d199cb42573568a07d618034494a95c75a0a2c7` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo8-20261025-2j89ms59`; FOCUS-4, bare Error and Note viewer-header marks with real daemon/throwaway files; no agent, browser or gallery. |
 | E9 | Branch `fix/startup-error-details` at `f37fc3d925f35eb78f1048ea4767df369a1f6b1d` | Packaged `Octoboard Verification`, identifier and scratch ad-hoc signing identifier `dev.octoboard.verify.vo9-ddnbws96`; WARN-3, WARN-4 and WARN-5, real daemon with isolated HOME/TMPDIR/agent directories, fixture Codex CLI and dated records, throwaway real Git repositories and worktrees; no Safari or gallery. |
 
-E4's tree equals main `429be4556`, which carries the Settings opener fix `39c1ec3f3` and the login success announcement
-fix `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they are not durable
-references and are not cited by hash. E5's three commits are the fixes as they landed on main; the build was made from
-the same changes on the branch before it was rebased onto main. E6, E7 and E8 were built directly from the committed
-local main revisions listed in the table.
+E4's tree equals main `429be4556`. E1 to E3 and the build commits behind them were unmerged local-only builds, so they
+are not durable references and are not cited by hash. E5's three commits are the fixes as they landed on main; the build
+was made from the same changes on the branch before it was rebased onto main. E6, E7 and E8 were built directly from the
+committed local main revisions listed in the table.
 
 The login cases used a credential-free fixture standing in for the Grok Build CLI, run through the real daemon's login
 coordinator and the real UI. It validates rendering, announcement and recovery; it does not validate real CLI output
@@ -159,60 +157,43 @@ E6 differs from the common recording procedure above. Application text was Engli
 roles with Simplified Chinese. The operating-system version and caption-panel state were not independently recorded in
 that pass; the application appearance is not recorded (E7 states its appearance). Whether a frontmost-process check
 preceded each global input is not recorded. AppleScript last-phrase changes were polled at a requested 25 ms interval,
-with additional deliberate reads and sparse native trees. The machine locked partway through setup; input stopped, the
-user unlocked it, and locked-screen empty phrases were excluded. VoiceOver was restarted to resume tracking, and left
-off as originally found. Global System Events keystrokes, `cliclick` and real pointer movement were used, as well as
-process-targeted accessibility actions and VoiceOver cursor commands. Command-F5 was sent to toggle VoiceOver without
-separately obtaining the explicit system-wide-shortcut authorization required by the project procedure; this was a
-procedural deviation, not evidence of process-confined input. No other VoiceOver preference or system setting was
-changed; the AppleScript permission was already available. Temporary builds, data, native captures and raw logs were
-removed after verification; the cases preserve the observations transcribed from the tool output, not retained raw
-artifacts.
+with additional deliberate reads and sparse native trees. The machine locked partway through setup; locked-screen empty
+phrases were excluded, and VoiceOver was restarted to resume tracking and left off as originally found. Global System
+Events keystrokes (Command-F5 among them), `cliclick` and real pointer movement were used, as well as process-targeted
+accessibility actions and VoiceOver cursor commands, so input was not confined to the application's process. The cases
+preserve the observations transcribed from the tool output, not retained raw artifacts.
 
-E7 differs from the common recording procedure in its global input (Tab/Enter and pointer hover), which the user
-explicitly authorized, with a frontmost-process check before each. It used macOS 26.2 (25C56), English application text,
-mixed English/Simplified Chinese VoiceOver output and the light application appearance. The caption panel was visible
-but was not the reader; it was not toggled. Last-phrase polling, deliberate cursor reads and native trees supplied the
-evidence. Before any system-wide shortcut or global input, the user explicitly authorized Command-F5 plus System Events,
-`cliclick` and real pointer input for this round. The successful global Tab/Enter operations and pointer hover were
+E7 differs from the common recording procedure in its global input (Tab/Enter, pointer hover and Command-F5), each
 preceded by a frontmost-process check for the isolated application; accessibility actions and VoiceOver cursor commands
-were preferred. VoiceOver started off and was restored off with the authorized shortcut. Its AppleScript permission was
-already available; no other VoiceOver preference, system permission or notification setting was changed. The fixture CLI
-used no credentials or model service. Three ordinary fixture sessions were created and bound through the real daemon,
-marked used through its hook route, and archived together; synthetic records used Codex's dated rollout layout so
-inspection could report `present`. Real branch creation, daemon branch-reference validation and inspection established
-ownership of the uncommitted and locked worktrees. A separate fixture session emitted the trust question through its PTY
-for the real recognizer. Throwaway HOME, agent directories and identifier-specific WebKit storage isolated the run. Its
-build, processes, data, captures and logs were cleaned up after transcription.
+were preferred. It used macOS 26.2 (25C56), English application text, mixed English/Simplified Chinese VoiceOver output
+and the light application appearance. The caption panel was visible but was not the reader. Last-phrase polling,
+deliberate cursor reads and native trees supplied the evidence. The fixture CLI used no credentials or model service.
+Three ordinary fixture sessions were created and bound through the real daemon, marked used through its hook route, and
+archived together; synthetic records used Codex's dated rollout layout so inspection could report `present`. Real branch
+creation, daemon branch-reference validation and inspection established ownership of the uncommitted and locked
+worktrees. A separate fixture session emitted the trust question through its PTY for the real recognizer. Throwaway
+HOME, agent directories and identifier-specific WebKit storage isolated the run.
 
 E8 used macOS 26.2 (25C56) and English application text, with mixed English/Simplified Chinese VoiceOver output.
-Appearance and caption-panel visibility were not independently recorded in this pass. Before any shortcut or global
-input, the user explicitly authorized Command-F5 and the global input needed for this round. AX actions targeted only
-the isolated application; the global input actually used was System Events Enter/Escape and Command-F5, each preceded by
-a frontmost-PID check for that app. No global pointer input was used. VoiceOver started off; the last-phrase recorder
-was stopped before the final authorized toggle, and the disabled state was checked again after stopping the app. Its
-AppleScript permission was already available; no other VoiceOver preference or system setting was changed. The
-build-time identifier, scratch signing identifier, isolated daemon database/lock/port and identifier-specific WebKit
-storage were checked before driving the window. Temporary processes, bundle, data, captures and logs were cleaned up
-after transcription.
+Appearance and caption-panel visibility were not independently recorded in this pass. Accessibility actions targeted
+only the isolated application; the global input actually used was System Events Enter/Escape and Command-F5, each
+preceded by a frontmost-PID check for that app. No global pointer input was used. The build-time identifier, scratch
+signing identifier, isolated daemon database/lock/port and identifier-specific WebKit storage were checked before
+driving the window. The user explicitly authorized Command-F5 and the global input used.
 
 E9 was built from a commit of an unmerged branch, `git archive`d into a scratch copy (not a worktree); only packaging
 metadata was changed in the copy (identifier and native product name), and the UI was built with its original product
 name. The bundle was ad-hoc signed with its unique identifier; no Developer ID, notarization or update signing. It used
 macOS 26.2 (25C56) on arm64, English application text, mixed English/Simplified Chinese VoiceOver output and the light
 application appearance, confirmed from a screenshot of its own window. The caption panel was enabled but was not the
-reader and was not toggled. Before any shortcut or global input, the user explicitly authorized Command-F5 (on and off)
-through System Events, other System Events keys, `cliclick` and real pointer input for this round; each global input
-and each VoiceOver cursor move was preceded by a frontmost-PID check for the isolated application. Accessibility
-actions were preferred; the archive row's inner buttons were not exposed as separate accessibility children, so two
-guarded Tabs, one guarded hover and a guarded Enter opened its Delete confirmation, which is setup, not evidence about
-the dialog. The first background recorder expired after its 10-minute bound and a second was started; speech from other
-applications picked up during setup was excluded, and every quoted phrase was correlated with a deliberate action in the
-isolated application. VoiceOver started off and was restored off with the authorized shortcut; its AppleScript
-permission was already available, and no other VoiceOver preference, permission or volume setting was changed. Sessions,
-binding, hooks, branch-reference validation, inspections and archiving went through the real daemon; Codex records were
-synthetic dated rollouts, with no login or model use. Temporary processes, bundle, scratch copy, data, captures, logs,
-identifier-specific WebKit and cache storage and the LaunchServices registration were removed after transcription.
+reader. Global input (System Events keys including Command-F5, `cliclick` and real pointer input) and each VoiceOver
+cursor move were preceded by a frontmost-PID check for the isolated application. Accessibility actions were preferred;
+the archive row's inner buttons were not exposed as separate accessibility children, so two guarded Tabs, one guarded
+hover and a guarded Enter opened its Delete confirmation, which is setup, not evidence about the dialog. The first
+background recorder expired after its 10-minute bound and a second was started; speech from other applications picked
+up during setup was excluded, and every quoted phrase was correlated with a deliberate action in the isolated
+application. Sessions, binding, hooks, branch-reference validation, inspections and archiving went through the real
+daemon; Codex records were synthetic dated rollouts, with no login or model use.
 
 Every `StatusAnnouncer` in the SA cases renders an unnamed `sr-only` `role="status"` with no explicit `aria-live`,
 `aria-atomic` or `aria-relevant` props. For E1 to E5, the captured effective native mapping is a group with the
@@ -237,8 +218,8 @@ mapping.
 | [SA-A Later change, no focus move](#sa-a-later-change-no-focus-move) | `StatusAnnouncer`, exposed beside a modal | Pass |
 | [SA-B Outage with a per-appearance gate](#sa-b-outage-with-a-per-appearance-gate) | `StatusAnnouncer` with a caller gate | Pass |
 | [SA-C Delayed first write after a dialog opens](#sa-c-delayed-first-write-after-a-dialog-opens) | `StatusAnnouncer` with `firstWriteDelayMs` | Pass |
-| [SA-D Written after a dialog closes](#sa-d-written-after-a-dialog-closes) | `StatusAnnouncer` written by a caller timer, gated on window attention | Pass: menu, direct button, return to the window |
-| [SA-E Success already present at mount](#sa-e-success-already-present-at-mount) | suppression at remount | Pass |
+| [SA-D Written after a dialog closes](#sa-d-written-after-a-dialog-closes) | `StatusAnnouncer` written by a caller timer, gated on window attention | Pass: menu, direct button, return to the window; possibly stale, row layout changed |
+| [SA-E Success already present at mount](#sa-e-success-already-present-at-mount) | suppression at remount | Pass; possibly stale, row layout changed |
 | [SA-F Hidden status text stays navigable](#sa-f-hidden-status-text-stays-navigable) | plain text in the status after its announcement | Pass |
 | [SA-G Confirmation that clears with its tooltip, focus retained](#sa-g-confirmation-that-clears-with-its-tooltip-focus-retained) | `StatusAnnouncer` span, default delay elapsed | Pass, attribution shared with the button's renamed name |
 | [SA-H First mount at the default delay, no focus move](#sa-h-first-mount-at-the-default-delay-no-focus-move) | `StatusAnnouncer` whose text is present from the first render, empty until its first write, focus kept | Pass |
@@ -248,7 +229,7 @@ mapping.
 | [SA-L Section status written after an attended wait, tab focus retained](#sa-l-section-status-written-after-an-attended-wait-tab-focus-retained) | section `StatusAnnouncer` fed by a caller wait | Pass; direct opening untested |
 | [SA-M Region mounted with each opening of a disclosure](#sa-m-region-mounted-with-each-opening-of-a-disclosure) | `StatusAnnouncer` mounted per opening | Pass |
 | [SA-N Viewer notice after paint, then an empty status](#sa-n-viewer-notice-after-paint-then-an-empty-status) | `FileNotice` through `StatusAnnouncer`, then clear; first-paint large-file notice without an announcement region | Pass for the recorded branches and focus hand-off; native live attributes not sampled |
-| [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus hand-off | Pass; one transient phrase observed and accepted |
+| [FOCUS-1 Focus after the login dialog closes](#focus-1-focus-after-the-login-dialog-closes) | explicit focus hand-off | Pass; one transient phrase observed and accepted; possibly stale, button and row changed |
 | [FOCUS-2 Focus after an expansion takes the pressed control away](#focus-2-focus-after-an-expansion-takes-the-pressed-control-away) | caller-told focus restore and code-frame hand-off | Pass |
 | [FOCUS-3 Status mark and quota popover focus and reading paths](#focus-3-status-mark-and-quota-popover-focus-and-reading-paths) | shared hover/press popover, focus and item chooser | Pass for quota Enter/Escape focus paths, the mark's focus return on Escape and item-chooser reachability; the bare-mark Enter naming failed, see KNW-9 and FOCUS-4 |
 | [FOCUS-4 Bare mark dialog named by its tone](#focus-4-bare-mark-dialog-named-by-its-tone) | tone-named bare mark dialog; sentence remains the trigger name | Pass for Enter speech without the repeated sentence and Escape focus return, Error and Note |
@@ -459,7 +440,7 @@ mapping.
   only while the window is attended, restarting the wait on each return, then gives the announcer the account-named
   text; `useClearSucceededLogin` dismisses the success after `SUCCESS_SHOWN_MS`, 6000 ms of attended time without a
   break), `packages/ui/src/components/useWindowAttended.ts` (`useWindowAttended`: document visible and window focused),
-  `packages/ui/src/settings/AgentAccountsSection.tsx` (`AccountRow` mounts the announcer and `useClearSucceededLogin`),
+  `packages/ui/src/settings/AccountsTable.tsx` (`AccountTableRow` mounts the announcer and `useClearSucceededLogin`),
   and `StatusAnnouncer` with its default 100 ms already elapsed (the timer is the caller's, not `firstWriteDelayMs`).
   The dialog closes on success, hiding its own progress status.
 - **ARIA wiring as rendered.** The common mapping; empty before success, populated with the account text in descendants
@@ -481,6 +462,12 @@ mapping.
   tested: attended, and minimized with the application otherwise frontmost. Not tested: a window visible but not
   frontmost, a different attention predicate, another agent, real login, other languages or appearances. A caller
   without the attention gate, or with a write at the close, is a known-not-to-work pattern below.
+- **Possibly stale.** The three paths were heard on an account row that has since changed: the accounts are now a table
+  (`AccountTableRow`) whose Status cell holds the Log in button (`packages/ui/src/settings/AccountLoginButton.tsx`),
+  which stays focusable but `aria-disabled` while a login runs, and the account details dialog
+  (`packages/ui/src/settings/AccountDetailsDialog.tsx`) mounts a second `AccountLoginAnnouncer`. The announcer's wait
+  and attention gate read the same in source, but the row layout, the opener and the focus phrase before the write were
+  not heard again, so the recorded paths may no longer describe the product.
 
 ### SA-E Success already present at mount
 
@@ -496,6 +483,8 @@ mapping.
 - **Date.** 2026-10-20.
 - **Reuse scope.** Covers suppressing a state that is already present when the announcer's row mounts. It is evidence
   for silence on remount only alongside SA-D's positive result.
+- **Possibly stale.** Heard on the earlier account row layout (see SA-D); the suppression in
+  `packages/ui/src/settings/AccountLogin.tsx` is unchanged in source but was not heard on the table row.
 
 ### SA-F Hidden status text stays navigable
 
@@ -654,7 +643,10 @@ mapping.
   readable. Not heard: a change of the states while Settings is open (a grant made in System Settings), a first reading
   that arrives while the section is already showing, not at the tab focus move, and Settings opened directly onto
   Permissions, which no production control does today, so it is untested rather than failing. The rows' own copy was not
-  tested as a reading path.
+  tested as a reading path. `AttendedStatusAnnouncer` (`packages/ui/src/components/AttendedStatusAnnouncer.tsx`) carries
+  the same attended wait in a component of its own (`PermissionsAnnouncer` is a separate copy); that is not a listening
+  result of its own.
+
 
 ### SA-M Region mounted with each opening of a disclosure
 
@@ -732,14 +724,15 @@ mapping.
 ### FOCUS-1 Focus after the login dialog closes
 
 - **Location and state change.** A dialog opened from the row's own Log in button closes, by success or by cancelling.
-  The button is shown only while the account reads as signed out and is disabled while a login runs; the menu path opens
-  from a menu item instead.
-- **Mechanism.** `useLoginFocusReturn` in `packages/ui/src/settings/AgentAccountsSection.tsx`, driven by `AccountRow`
-  and the button's `onPress`. After success focus goes to the row's actions button. After a cancel it goes to the Log in
-  button once the daemon has answered and the button is enabled again, otherwise to the actions button. The move waits
-  one animation frame past React Aria's restore (two after the unmount), acts only when focus is on `<body>` or the
-  original button, sets the keyboard modality, and leaves a restore that landed correctly alone. The menu path supplies
-  no hand-off, and React Aria returns focus to the menu's trigger.
+  The button is shown only while the account reads as signed out and is disabled while a login runs; the menu path
+  opens from a menu item instead.
+- **Mechanism.** `useLoginFocusReturn` in `packages/ui/src/settings/AccountLoginButton.tsx` (`AccountLoginButton`),
+  driven by the button's `onPress`; `AccountTableRow` passes the row's actions button as the fallback. After success
+  focus goes to the row's actions button. After a cancel it goes to the Log in button once the daemon has answered and
+  the button is available again, otherwise to the actions button. The move waits one animation frame past React Aria's
+  restore (two after the unmount), acts only when focus is on `<body>` or the original button, sets the keyboard
+  modality, and leaves a restore that landed correctly alone. The menu path supplies no hand-off, and React Aria returns
+  focus to the menu's trigger.
 - **ARIA wiring as rendered.** The row's Actions control is a pop-up button named `Actions for ⁨VoiceOver fixture⁩ (Grok
   Build)` with has-popup set; the direct button is a button named "Log in". Final screenshots show the keyboard focus
   ring on the correct control.
@@ -755,6 +748,10 @@ mapping.
 - **Date.** 2026-10-20.
 - **Reuse scope.** Covers the focus destination for a dialog whose opener may be disabled or gone when it closes, as
   `useLoginFocusReturn` does it. Not tested: a window visible but not frontmost, a different opener.
+- **Possibly stale.** Heard on the earlier account row, where the Log in button was natively disabled while a login ran.
+  The button now stays focusable and is `aria-disabled` in that state, sits in the table's Status cell and is also
+  offered on the account details dialog, and the hand-off acts when focus is on `<body>` or on a button that is going.
+  The recorded phrases and the disabled-opener relation were not heard again on this layout.
 
 ### FOCUS-2 Focus after an expansion takes the pressed control away
 
@@ -812,21 +809,15 @@ mapping.
   dialog`; within it the text read `Shown without syntax highlighting because the file is large.`. Quota's selected
   heading read `标题级别2 No agent available`, then `An agent's quota is shown once its command is found on your PATH .`.
   Thus content was reachable through the item chooser; this record does not call sequential navigation a pass or explain
-  why it did not reach the panels. Since `9d199cb42` a bare mark's hover panel is also named by its tone, so the mark
-  listing above is not current wiring, and the chooser route for tone-named panels was not heard.
-  `docs/ui-accessibility.md` (section "A floating panel that does not take the window") states that the hover form is
-  the mouse's and that the keyboard and assistive technology open the press form, so sequential navigation not reaching
-  a hover-opened panel is the designed behaviour, not an open defect.
-- **Result, Enter.** **Fail for the E6 bare mark's naming (recorded as KNW-9):** the SVG mark focused its inner dialog
-  and repeated its sentence. The following is one recorded phrase containing the sentence twice, once as the dialog's
-  name and once as its body, not two sampled automatic status writes. Naming the dialog by its own text caused the
-  double read; `9d199cb42` replaces that name with the tone word. This E6 failure is kept as KNW-9; FOCUS-4 records the
-  check of the changed naming:
-
-  ```text
-  This image cannot be displayed, so its text is shown instead. This image cannot be displayed, so its text is shown instead. web dialog
-  ```
-
+  why it did not reach the panels. A bare mark's hover panel is now also named by its tone, so the mark listing above
+  is not the current wiring, and the chooser route for tone-named panels was not heard. The hover form is the mouse's
+  and the keyboard and assistive technology open the press form (`docs/ui-accessibility.md`, "A floating panel that
+  does not take the window"), so sequential navigation not reaching a hover-opened panel is the designed behaviour, not
+  an open defect.
+- **Result, Enter.** **Fail for the E6 bare mark's naming (recorded as KNW-9, which holds the exact phrase):** the SVG
+  mark focused its inner dialog and repeated its sentence, once as the dialog's name and once as its body, in one
+  recorded phrase rather than two sampled automatic status writes. Naming the dialog by its own text caused the double
+  read; the current wiring names the dialog with the tone word instead, and FOCUS-4 records the check of that naming.
   Quota focused its first control and spoke `Manage accounts… button Account quota web dialog`. Deliberate reading
   inside spoke `An agent's quota is shown once its command is found on your PATH .`, `标题级别2 No agent available`, then
   `Account quota web dialog` when moving back out.
@@ -846,8 +837,8 @@ mapping.
 - **Date.** 2026-10-25.
 - **Reuse scope.** Records the E6 focus and reading paths of these two `PopoverHint` callers, including a nested viewer
   mark, with an existing trigger to return to. Passing evidence: quota's Enter and Escape focus paths, the mark's focus
-  return on Escape, and the item-chooser reachability of the hover content as wired in E6 (not as wired since
-  `9d199cb42`). The bare mark's Enter speech is a failure (KNW-9), not a passing naming pattern; FOCUS-4 records its
+  return on Escape, and the item-chooser reachability of the hover content as wired in E6 (not as currently
+  wired). The bare mark's Enter speech is a failure (KNW-9), not a passing naming pattern; FOCUS-4 records its
   replacement. Hover reachability establishes the item-chooser route only. It does not cover a populated quota panel, a
   Files-tree failure mark, a removed trigger, touch, mouse clicks, hybrid devices or Escape delivery to an agent or
   shell terminal.
@@ -858,8 +849,8 @@ mapping.
   and press Enter on its bare Note mark. Close with Escape. Navigate to a malformed `broken.svg` that falls back to its
   text, let the temporary fallback announcement end, then press Enter on its bare Error mark and close with Escape.
   These are the two representative tones heard; no warning or touch interaction was exercised.
-- **Mechanism.** After `9d199cb42`, `packages/ui/src/components/StatusMark.tsx` (`PopoverMark`) gives a bare mark's
-  `Hint` the localized tone label, while `MarkButton` retains the notice sentence as its `aria-label`.
+- **Mechanism.** `packages/ui/src/components/StatusMark.tsx` (`PopoverMark`) gives a bare mark's `Hint` the
+  localized tone label, while `MarkButton` retains the notice sentence as its `aria-label`.
   `packages/ui/src/components/hintPopover.tsx` (`PopoverHint`) names its pressed react-aria `Dialog` with `aria-label`,
   independently of the body text, and moves focus inside. Escape restores the existing trigger.
   `packages/ui/src/viewer/notices.tsx` (`FileNotice`) supplies the whole-file mark after the path.
@@ -892,7 +883,7 @@ mapping.
 
 - **Capture.** AppleScript `content of last phrase` after each action, a background poll requested at 25 ms, and native
   trees after Enter and Escape. Setup and focus used process-targeted AX actions; Enter/Escape used System Events only
-  after checking the isolated app's frontmost PID. The authorization for the shortcut and global input is recorded
+  after checking the isolated app's frontmost PID. The authorization for the shortcut and global input is stated
   under E8. No synthetic VoiceOver `output` was used.
 - **Environment.** E8, real daemon and throwaway files in the isolated packaged app; no agent CLI, Safari or gallery.
 - **Date.** 2026-10-25.
@@ -976,8 +967,8 @@ mapping.
   opening its Delete confirmation, the real daemon's branch inspection reported one uncommitted worktree and one locked
   worktree, and its agent-record inspection reported `present`. Tick the force-remove, locked-worktree and agent-record
   options, let the warning update settle, read each checkbox, then read through the warning.
-- **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`, `ConfirmWarning`) puts the
-  warning title, the bound-session list and then the consequence lines inside
+- **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteSessionDialog`; `ConfirmWarning` no longer
+  exists) put the warning title, the bound-session list and then the consequence lines inside
   `packages/ui/src/components/TintedAlert.tsx` (`TintedAlert`), under `Alert.Content`. The indicator is `aria-hidden`.
   `packages/ui/src/dialogs/ConfirmDialog.tsx` (`ConfirmDialog`) keeps the options before that warning.
   `packages/ui/src/dialogs/ConfirmOption.tsx` (`ConfirmOption`) uses HeroUI `Label` and `Description` for the name and
@@ -1148,12 +1139,12 @@ mapping.
   as checkbox reads. This is manual reading, not a claim that the whole dialog was spoken automatically in this order.
 - **Result, opening announcement.** Unconfirmed: the automatic speech on opening was not reliably captured. Not a
   failure.
-- **Two joins in the heard text, changed after this pass.** "permanently.The project's" (the subject and the message,
-  which were separated by a text node that was only a space) and "Codex (Default)Fixture turn" (a session row's hidden
-  agent name directly before its title; E7 heard the same join). The same branch, before it merged, put the space into
-  the message's own text node and ended the hidden agent name with a comma ("Codex (Default), "), since a hidden
-  element's trailing space is dropped in rendering. That changes the text only, not any item under "What \"matches a
-  case\" means"; the new phrases were not heard.
+- **Two joins in the heard text.** "permanently.The project's" (the subject and the message, which were separated by a
+  text node that was only a space) and "Codex (Default)Fixture turn" (a session row's hidden agent name directly before
+  its title; E7 heard the same join). The current source puts the space into the message's own text node and ends the
+  hidden agent name with a comma ("Codex (Default), "), since a hidden element's trailing space is dropped in
+  rendering. That changes the text only, not any item under "What \"matches a case\" means"; the new phrases were not
+  heard.
 - **Capture.** AppleScript last phrase, by background polling at a requested 25 ms and by direct reads after guarded
   cursor commands; the native tree with all three options checked.
 - **Environment.** E9. Real daemon and UI, fixture Codex processes, synthetic dated Codex records, real bound session
@@ -1173,10 +1164,12 @@ mapping.
   repository making the real worktree inspection fail (an earlier attempt with a renamed directory gave an empty
   successful lookup and is not evidence of the failure), read the settled ticked checkbox and the separate mark, and
   press the mark. Cancel the removal; the configuration and path were restored before cleanup.
-- **Mechanism.** `RequestedDialog.tsx` (`DeleteProjectDialog`, `ConfirmConsequences`), `ConfirmDialog.tsx`,
-  `Dialog.tsx`, `ConfirmOption.tsx`, `BranchCleanupOptions.tsx` (`useProjectRemovalCleanup`) and
-  `packages/ui/src/components/StatusMark.tsx` (`StatusMark`): the warning mark is a 24 px button after the checkbox,
-  outside its label; the failure adds no description to the checkbox. The note is linked as in WARN-3.
+- **Mechanism.** `packages/ui/src/dialogs/RequestedDialog.tsx` (`DeleteProjectDialog`, `ConfirmConsequences`),
+  `packages/ui/src/dialogs/ConfirmDialog.tsx`, `packages/ui/src/dialogs/Dialog.tsx`,
+  `packages/ui/src/dialogs/ConfirmOption.tsx`, `packages/ui/src/dialogs/BranchCleanupOptions.tsx`
+  (`useProjectRemovalCleanup`) and `packages/ui/src/components/StatusMark.tsx` (`StatusMark`): the warning mark is a 24
+  px button after the checkbox, outside its label; the failure adds no description to the checkbox. The note is linked
+  as in WARN-3.
 - **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Remove project`, live
   assertive, atomic 0, relevant additions text; a plain level-2 heading, the subject and body as static text, the
   sessions as an `AXList` with each working status a named image and each agent name static text. The checkbox's title
@@ -1234,8 +1227,8 @@ mapping.
   ```
 
   The join "Trash.2 sessions" is between two separate blocks of the body in the dialog's own description.
-- **Joins changed after this pass.** "removed.Its" and "Codex (Default)Fixture turn", changed as WARN-3 says; not
-  heard again.
+- **Joins in the heard text.** "removed.Its" and "Codex (Default)Fixture turn" have the same cause and the same
+  source change as in WARN-3; the new phrases were not heard.
 - **Capture.** As WARN-3. The ticked checkbox and the mark were focused again from Cancel first, so an unchanged focus
   could not leave a stale last phrase.
 - **Environment.** E9.
@@ -1251,8 +1244,9 @@ mapping.
   real daemon emitted `trust_prompt` for that session and project and offered the parent folder. Read from Close through
   the body, the caution and the folder-wide checkbox; finish with Not now, never Trust and continue.
 - **Mechanism.** `packages/ui/src/dialogs/TrustPromptDialog.tsx` (`useTrustPromptDialogProps`, `TrustPromptMessage`,
-  `Caution`), `ConfirmDialog.tsx`, `Dialog.tsx`: the caution is the agent-specific sentence in one plain `p` after the
-  prompt's other paragraphs, with no hidden prefix, no title of its own, no `TintedAlert` and no `StatusAnnouncer`.
+  `Caution`), `packages/ui/src/dialogs/ConfirmDialog.tsx` and `packages/ui/src/dialogs/Dialog.tsx`: the caution is the
+  agent-specific sentence in one plain `p` after the prompt's other paragraphs, with no hidden prefix, no title of its
+  own, no `TintedAlert` and no `StatusAnnouncer`.
 - **ARIA wiring as rendered.** Native `AXApplicationAlertDialog`, title and description `Trust this folder?`, live
   assertive, atomic 0, relevant additions text; a plain level-2 heading. The caution paragraph's static-text children
   run from `Trusting lets ` through the two inline `Codex` references to its end. Neither `Caution:` nor `The project's
@@ -1310,8 +1304,8 @@ the bare-mark Enter naming of the recording behind FOCUS-3, whose other results 
 
 - **What and where.** E1: the account row's `sr-only` wrapper with an inner `role="status"`, empty until success, was
   filled at the moment the state became succeeded, while the login dialog was closing and focus was being returned.
-  `AccountLoginAnnouncement` in `packages/ui/src/settings/AccountLogin.tsx` in that build, and `AccountRow` in
-  `packages/ui/src/settings/AgentAccountsSection.tsx`.
+  `AccountLoginAnnouncement` in `packages/ui/src/settings/AccountLogin.tsx` in that build, mounted by the account row
+  (`AccountRow` in `packages/ui/src/settings/AgentAccountsSection.tsx` then; `AccountTableRow` now).
 - **Result.** Not spoken, in two completed runs, with capture running at least 12 s past the success (longer than the
   6000 ms the text was held). The expected phrase `VoiceOver fixture: logged in.` was never captured; what was spoken
   after success was the Settings dialog and the focused control. The native tree did contain the text, which is
@@ -1420,14 +1414,14 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `sidebar/Sidebar.tsx` | filter no-match | SA-A for a change while the section is mounted; no match for the rest | Heard | The section is kept per console, so it can mount with the no-match text already present (switching back to a console, leaving a focus view). SA-H does not cover that: SA-H was heard for a panel toggle with focus left on the toggle, while these mounts come with a console or view switch whose focus relation was not recorded. |
 | `components/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
 | `settings/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
-| `settings/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D | Heard | Matches in full. |
+| `settings/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the earlier row layout (possibly stale, see SA-D); the second mount in `settings/AccountDetailsDialog.tsx` is not covered | Heard | The wait and attention gate match SA-D in source; the table row and the details dialog were not heard. |
 | `settings/PermissionsSection.tsx`, `PermissionsAnnouncer` | permission states | SA-L for the section opening and a return with the states unchanged; no match for a change while Settings is open | Heard | A grant made in System Settings was not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
 | `configuration/ImportReview.tsx` | "apply to all" applied | SA-A | Candidate | Mounted empty in the review step, text written after a press while focus rests, inside the modal's own subtree, default delay. Writing the identical sentence again does not rewrite it. |
 | `browser/ChangeList.tsx` | filter no-match | SA-A for typing; no match for a first render holding the text | Candidate | Typing in the filter writes in place at rest. The text can also be present at the first render (a persisted filter, a branch change that closes a popover and returns focus), a mount SA-H does not clearly cover. |
 | `viewer/FileViewer.tsx`, `ViewerContentView` | loading, disconnected | SA-J for navigation loading; SA-C for the dialog opening as a candidate; no match for disconnected | Heard for SA-J, candidate for SA-C | The navigation text is written at once with focus on Next file (SA-J). The region is mounted with the dialog with a 1500 ms first delay as focus moves, the shape of SA-C, but the opening was heard on the login dialog only. The disconnected text was not exercised. |
 | `viewer/FileViewer.tsx`, `UnchangedView` | loading, read outcome | SA-J for the outcome after navigating; no match for its own loading text or other outcomes | Heard | 1500 ms first delay on a new child inside the open dialog with focus kept, heard for the unchanged outcome only. Its own "Loading…" (written when the read takes longer than the first delay), the failure and other outcomes, and a dialog that opens straight onto the view, were not heard; the `Loading…` heard came from the parent. Each text is emptied `READ_TIME_MS` after it was written (`clearAfterRead`), which was not heard either. |
 | `components/CopyButton.tsx` | "Copied" | SA-G for the confirmation and the tooltip-driven clear, for a press made while the button has focus; no match for the 2 s automatic clear | Heard | Heard in the main window with focus kept. The 2000 ms branch without a tooltip, a repeat press and a failure were not heard. The copy button in the viewer dialog sets `preventFocusOnPress` (a pointer press does not move focus to it), carries its own "Path copied" text and sits in a dialog, so it is a candidate only for a keyboard press made while it has focus. |
-| `browser/GitView.tsx` | git loading, comparing, listing | SA-H for the first mount with focus kept; no match for the Changes-tab mount or replacement sequences | Heard | Heard for the Changes loading at mount with focus on the panel toggle. The tab variant, which moves focus into the pane, captured no sentence, and the comparing and listing texts replacing one another in place were not heard. |
+| `browser/GitView.tsx` | git loading, comparing, listing, spoken failures | SA-H for the first mount with focus kept; no match for the Changes-tab mount, replacement sequences or the failure sentences | Heard | Heard for the Changes loading at mount with focus on the panel toggle. The tab variant, which moves focus into the pane, captured no sentence, and the comparing and listing texts replacing one another in place were not heard. The failure sentences (`useSpokenFailures`) were not exercised. |
 | `browser/ProjectBrowser.tsx` | files loading | SA-H for the load when the Files panel is shown with focus kept; no match for the Files-tab mount or search loading | Candidate | Same hidden `div`, default delay and main window as the representative, but its own Files load finished too fast to sample, switching to the Files tab is the untested focus-move variant, and search-triggered loading was not recorded. |
 | `components/ActionMenu.tsx`, `LoadedMenuItems` | menu loading, load failed | SA-I for the loading text; no match for load failed | Heard | Heard with the submenu focused and the git list stretched to 2 s; a visible "Loading…" item says the same word, so attribution is shared. The failure update was masked by an error alert. |
 | `viewer/CodeSurface.tsx` | expansion loading and note | SA-K and FOCUS-2 for the loading text and the focus after an expansion; no match for the outcome notes | Heard | Loading heard while the pressed button had focus, and focus restored to the surviving control or the code frame on E5. Notes, failure and capped outcomes were not exercised, nor the emptying of each text `READ_TIME_MS` after it was written (`clearAfterRead`). |
@@ -1436,24 +1430,36 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `terminal/TerminalPane.tsx`, cover and dormant status | loading, starting, resuming, reconnecting, disconnected and switching covers; the dormant bar's "Not running" or "This session is archived" | SA-A for the writes into the mounted regions (the pane always mounts with no session, so SA-H applies only to test and gallery mounts); no match for a write made as selecting a session moves focus into the terminal, and none for the dormant bar's button | Candidate | Two `StatusAnnouncer` regions mounted with the pane, default delay (browser-observed: regions inserted empty, text written 100 to 250 ms later). The bar's sentence is `aria-hidden` and its button stays reachable, so only the sentence is spoken, not sentence and button as PLAIN-2 heard. The bar's sentence is held while a modal is open (selecting an interrupted session on an incomplete account asks first) and written `AFTER_FOCUS_MOVE_DELAY_MS` after the close, so it is not written under the modal (KNW-2). A sentence already spoken stays in the region unchanged through a modal, so closing it says nothing. Nothing was heard on the pane itself. An archived bar and `SessionHistoryView`'s own region can both hold text while the history loads (different sentences, no duplicate). |
 | `terminal/ShellTerminalView.tsx`, trouble and exited status | disconnected, reconnecting and exited, for the shown tab only | close to SA-H for the first write after a keyboard tab switch (focus stays on the tab; the regions are mounted with each showing, but with the longer `AFTER_FOCUS_MOVE_DELAY_MS`), a candidate only; no case matches a pointer switch or a new terminal, where focus moves into the view (open item); SA-A for trouble changes; PLAIN-2 for the exit filling in place while the terminal input keeps focus, with the sentence only | Candidate | Two `StatusAnnouncer` regions per shown tab, empty when mounted (browser-observed); a hidden tab has none, so switching to an exited or troubled tab writes its text after the delay rather than with the region. PLAIN-2 heard the earlier hand-built region holding the sentence and the Close terminal button, spoken as `The shell has exited Close terminal`; the button is now outside the region, so the match is for the sentence only, by decision, and it has to be listened to again before it is claimed. The write after a tab switch made with the pointer comes with a focus move into the view, which no case covers. |
 | `viewer/notices.tsx`, `FileNotice` | the notice's sentence, for a notice that arrives after the viewer has painted | SA-N for SVG fallback, clear and later reading; the first-paint large-file notice has no announcement region (no `speak`) and stayed silent, as context | Heard for these branches | 1500 ms first delay and `clearAfterRead`; SVG sentence present at about 2 s and empty by about 7 s, with focus handed from the now-unavailable Previous file to Next file. E6 did not sample native live attributes. Other image failures, patch fallbacks and replacement sequences remain unheard; SA-J is still the retained-focus representative. |
+| `viewer/notices.tsx`, `BlockFallback` | the fallback sentence, for a block (a Mermaid diagram or a formula) that fails after paint, when `speak` is set | none | none | Uses `SpokenSentence` as `FileNotice`; `MermaidBlock` and `FormulaView` pass `speak`. Not heard; focus relation, exposure and native live attributes are unmatched. |
 | `viewer/notices.tsx`, `SpotNotice` | the notice's sentence, for a spot in a document that fails or falls back after paint | SA-N is the nearest recorded mechanism; no complete match established | none | Uses `SpokenSentence` as `FileNotice`, rendered as a `span` inside a paragraph, but this caller was not heard. Focus relation, exposure and native live attributes still need matching evidence; SA-N does not establish them for a document spot. |
 | `App.tsx`, account switch outcome | a batch of account switches finished | none | none | Written seconds after the switch dialog has closed, once the batch finishes without failures, and cleared after 10 s. The credential-free fixture does not produce conversation records to switch, so it was not recorded. |
+| `settings/UpdatesSetting.tsx` | update check outcome and failure, once the user has engaged the row | none | none | Region mounted with the Updates row in Settings; the buttons go pending rather than disabled so they keep focus. Not heard, and no case records a write after a press in Settings. |
+| `settings/ShortcutsSection.tsx` | shortcut rebind, conflict and reset sentences | none | none | Region mounted with the section; an identical consecutive sentence is made distinct by alternating a trailing no-break space so it is written again. Not heard. |
+| `settings/AccountSharingSwitch.tsx` | sharing change failure (`clearAfterRead`); direction and phase of a running change | none | none | Two regions, one beside the switch and one in `SharingProgress`. Not heard. |
+| `updates/UpdateNotice.tsx`, through `AttendedStatusAnnouncer` | update available, installed and similar notice | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | The wait is the one `PermissionsAnnouncer` has, but the region sits beside a bottom strip in the main window, not in a section shown by a tab focus move, and the strip can arrive while the user is elsewhere. Not heard. |
+| `terminal/SessionHistoryView.tsx` | history loading, unavailable, empty | none | none | Region mounted with the view, which comes with a focus move into the history region. Not heard. |
+| `about/ThirdPartyLicensesDialog.tsx` | search result count or none, typed in the search field; loading line at the dialog opening | none | none | Two regions in an open dialog: the count region writes in place while focus rests in the field (the shape of SA-A, inside a dialog), the loading region has `firstWriteDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS` as the dialog opens (the shape of SA-C). Neither was heard. |
+| `dialogs/ResumeConversationFields.tsx` | resume lookup outcome | none | none | Always-mounted region in the new-session dialog's Resume tab; text arrives after typing in the Session ID field while focus stays there. Not heard. |
+| `dialogs/SessionRequestForms.tsx`, `IncompleteSharingAnnouncer` | an account's unfinished sharing change marked after the dialog opened | none | none | Mounted with the request dialog; text appears after the opening. Not heard. |
+| `dialogs/HandoffDialog.tsx` | branch check failed (`firstWriteDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`) | none | none | Region mounted with the dialog; a failure arrives after it opened and again on each failed retry. Not heard. |
+| `report/ReportPanel.tsx` | list failure mark's words | none | none | Region mounted through every state of the panel. Not heard. |
 
-Totals: of 21 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
+Totals: of 32 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
 `AccountLoginAnnouncer`, `PermissionsAnnouncer`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`), 5 are candidates (`ImportReview`, `ChangeList`,
-`ProjectBrowser`, `TerminalPane`, `ShellTerminalView`) and 3 have no complete match (`ShellTerminalPanel`, `SpotNotice`,
-the account switch outcome in `App`). Of the heard callers, `ConnectionBanner` and `AccountLoginAnnouncer` match for
-every write they make; the other eleven match for some writes only, with SA-N's native-capture limits stated in that
-case. Of the candidates, `ImportReview` matches for every write it makes; `ChangeList`, `ProjectBrowser`, `TerminalPane`
-and `ShellTerminalView` for some.
+`ProjectBrowser`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`,
+`SpotNotice`, `BlockFallback`, the account switch outcome in `App`, and the ten callers listed after it). Of the heard
+callers, `ConnectionBanner` matches for every write it makes, and `AccountLoginAnnouncer` did on the row layout it was
+heard on; the other eleven match for some writes only, with SA-N's native-capture limits stated in that case. Of the
+candidates, `ImportReview` matches for every write it makes; `ChangeList`, `ProjectBrowser`, `TerminalPane` and
+`ShellTerminalView` for some.
+
 
 Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
 | Element (file, symbol) | Case | Why |
 |---|---|---|
 | `WelcomeScreen.tsx` | none | A plain status populated on mount, then replaced in place from "Checking…" to Installed or Not detected when availability arrives. The populated-on-mount shape is the one not spoken for the earlier Permissions rows (KNW-7); not mounted or tested separately. |
-| `browser/GitView.tsx`, notices region | none | The "branch deleted" notice was not reached: the review drops a gone selected branch and returns to its own branch. |
 
 ## Open items
 
@@ -1470,11 +1476,10 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   focus without the space before the reference ("committed toGit"), although the DOM keeps it.
 - Hover-opened status-mark and quota content was reached through the VoiceOver item chooser in FOCUS-3. Sequential
   navigation did not reach that content in the attempted walks; it is not certified by the successful chooser route.
-  Since `9d199cb42` a bare mark's hover panel is named by its tone, so the chooser listing by sentence ("Shown without
-  syntax highlighting ... web dialog") is not current wiring, and the chooser route for tone-named panels was not heard.
-  `docs/ui-accessibility.md` (section "A floating panel that does not take the window") makes the hover form the mouse's
-  and has the keyboard and assistive technology open the press form, so this is the designed behaviour, not an open
-  defect. A populated quota panel, Files-tree failure marks and terminal Escape delivery were not heard in E6.
+  A bare mark's hover panel is now named by its tone, so the chooser listing by sentence ("Shown without syntax
+  highlighting ... web dialog") is not the current wiring, and the chooser route for tone-named panels was not heard.
+  Sequential navigation not reaching a hover-opened panel is the designed behaviour, not an open defect (see
+  FOCUS-3). A populated quota panel, Files-tree failure marks and terminal Escape delivery were not heard in E6.
 - File notices: SA-N heard the later SVG fallback and sampled its clear, and noted that the first-paint large-file
   notice, which has no announcement region (no `speak`), stayed silent. It did not hear a later patch fallback, other
   image failure or replacement sequence, nor `SpotNotice`. Its native live politeness, atomicity and relevance were not
@@ -1489,7 +1494,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   `ViewerContentView`'s disconnected text (not exercised); `AdvancedSection`'s unavailable text (not separately
   recorded); `PermissionsAnnouncer`'s change while Settings is open (no permission was granted or revoked) and Settings
   opened directly onto Permissions (no production control opens it there, so it is untested); `GitView`'s replacement
-  sequences and notices region (no fixture reached them); `ProjectBrowser`'s search loading (not recorded);
+  sequences and failure sentences (not exercised); `ProjectBrowser`'s search loading (not recorded);
   the account switch outcome in `App` (the credential-free fixture does not produce conversation records to
   switch); `ShellTerminalPanel`'s starting status (not observed populated); the terminal statuses of
   `TerminalPane` and `ShellTerminalView` (see the open items below).

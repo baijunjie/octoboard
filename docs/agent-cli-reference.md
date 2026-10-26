@@ -20,21 +20,20 @@ the timeout paragraph's `tool_timeout_sec = 660`; "The id a turn records is not 
 first measured on that build. What "Plan quota" says was measured on **Claude Code 2.1.302**, **Codex 0.162.1** and
 **Grok Build 1.0.60**. What the Claude Code section's "Permission mode" says was measured on **Claude Code 2.1.303**.
 What "Starting a quota window" says was checked on 2026-10-22 against **Claude Code 2.1.308**, **Codex 0.162.1** and
-**Grok Build 1.0.67**.
-What "Sharing a session directory between accounts" says, and the "Codex, history segments" and "Under a different
-account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19 on **Claude Code
-2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was measured on
-**Codex 0.162.1**. What "Sharing a configuration directory between accounts" says was measured on 2026-10-20 on **Claude
-Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**. The Grok Build chain-following note and the per-session
-`config.toml` copy note in that section, including plugin switches, and the Grok Build section's notes on what startup
-saves of the model and effort and on theme saves with `GROK_THEME` set, were measured on 2026-10-21 on **Grok Build
-1.0.62**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on **Claude Code
-2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about invisible
-characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20; what it says
-about input written before bracketed paste is turned on, and about pasted pieces that end in an image extension, on **Claude Code 2.1.310** on 2026-10-25, and what it says
-about the terminal probe's bracketed-paste toggle at start on **Claude Code 2.1.310** on 2026-10-26. All three rewrite
-their hook surface, their payload fields, their configuration layering and their on-disk layout on upgrade, so check a
-detail here against the installed version before relying on it.
+**Grok Build 1.0.67**. What "Sharing a session directory between accounts" says, and the "Codex, history segments" and
+"Under a different account" notes under "Moving a conversation to another config directory", were measured on 2026-10-19
+on **Claude Code 2.1.302**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Codex resume from aged rollouts" says was
+measured on **Codex 0.162.1**. What "Sharing a configuration directory between accounts" says was measured on 2026-10-20
+on **Claude Code 2.1.304**, **Codex 0.162.1** and **Grok Build 1.0.62**. The Grok Build chain-following note and the
+per-session `config.toml` copy note in that section, including plugin switches, and the Grok Build section's notes on
+what startup saves of the model and effort and on theme saves with `GROK_THEME` set, were measured on 2026-10-21 on
+**Grok Build 1.0.62**. What "Signing in a config directory without a terminal" says was measured on 2026-10-19 on
+**Claude Code 2.1.303**, **Codex 0.162.1** and **Grok Build 1.0.62**. What "Writing into a running session" says about
+invisible characters was read from the executable of, and measured on, **Claude Code 2.1.304** on 2026-10-20; what it
+says about input written before bracketed paste is turned on, and about pasted pieces that end in an image extension, on
+**Claude Code 2.1.310** on 2026-10-25; and what it says about the terminal probe's bracketed-paste toggle at start on
+**Claude Code 2.1.310** on 2026-10-26. All three rewrite their hook surface, their payload fields, their configuration
+layering and their on-disk layout on upgrade, so check a detail here against the installed version before relying on it.
 
 How Octoboard's status mapping handles these traps is encoded in `apps/daemon/src/hooks.rs`; the product behavior
 built on them is in the product docs.
@@ -115,8 +114,8 @@ option and no feedback field, and the highlighted default is `1. Yes`, so Enter 
 the turn's own summary line (`✻ Brewed for 2s · done <time>`), then sits at an empty prompt. Only `Esc` was pressed on
 2.1.296; `3. No` was not tried there, so the two being indistinguishable stands for 2.1.274 / 2.1.286 alone.
 
-A decline is recorded as a **user interrupt** rather than as its own kind of event, so its only machine-readable trace is
-the pair of transcript records described under "A user interrupt emits no hook event" below — which is what makes the
+A decline is recorded as a **user interrupt** rather than as its own kind of event, so its only machine-readable trace
+is the pair of transcript records described under "A user interrupt emits no hook event" below — which is what makes the
 transcript the only way to observe one.
 
 Two traps around this, both measured:
@@ -128,12 +127,12 @@ Two traps around this, both measured:
   starts without a word of complaint, while the same file's *permission rules* are checked loudly. So a hook name being
   accepted is no evidence the event exists, let alone that it fires.
 
-**`AskUserQuestion` has no plain decline option.** Its list offers the answers, then `Type something.` and
-`Chat about this`; Esc cancels. Esc writes the same two records as a declined permission prompt, field for field.
-`Chat about this` does not: its `tool_result` opens with the same "The user doesn't want to proceed with this tool use"
-sentence but continues into the user's feedback, there is **no** `[Request interrupted by user for tool use]` record, and
-the turn carries on — `PostToolBatch` and `Stop` both fire. So the two exits are told apart by the second record, not by
-the first.
+**`AskUserQuestion` has no plain decline option.** Its list offers the answers, then `Type something.` and `Chat about
+this`; Esc cancels. Esc writes the same two records as a declined permission prompt, field for field. `Chat about this`
+does not: its `tool_result` opens with the same "The user doesn't want to proceed with this tool use" sentence but
+continues into the user's feedback, there is **no** `[Request interrupted by user for tool use]` record, and the turn
+carries on — `PostToolBatch` and `Stop` both fire. So the two exits are told apart by the second record, not by the
+first.
 
 **A user interrupt emits no hook event**, in the thinking phase or mid-tool. Only the interrupted turn is silent; the
 next turn reports normally. The session's next `UserPromptSubmit` is the reliable sign that the previous turn is over
@@ -151,15 +150,16 @@ at entry level rather than inside the block; the `[Request interrupted by user f
 **An interrupt before the model has shown anything writes nothing** on 2.1.310 (measured in a PTY against a local stub
 API, with the request held unanswered and with only `message_start` sent, and once against the real API with Opus still
 in its thinking phase): no interrupt entry, no hook, and the prompt entry written at submit stays the last user entry.
-Claude Code puts the prompt's text back in the input box, and submitting it again writes the prompt a second time, as
-a sibling of the first (the same `parentUuid`); a bracketed paste and Enter written then submit the restored text with
-the pasted text joined straight onto it, no separator between them. On 2.1.296–2.1.303 an interrupt in the thinking phase still wrote
-`[Request interrupted by user]`. The one trace left is the terminal title's status glyph (see "Terminal titles and the
-titles in an agent's own records" under "## Across the three agents"): `◐`/`◑` alternate about once a second while the
-turn runs, through tool calls and while the request waits, and the glyph turns to `✳` 70 ms after the Esc. The same
-`✳` follows every `Stop` (14 ms after the hook was posted) and every `PermissionRequest` whose dialog is shown (20–45
-ms after), and stays through the dialog; after the dialog is answered the glyph turns again with no hook until the
-tool's `PostToolUse`. The `◐` of a new turn came 6 ms *before* its `UserPromptSubmit` was posted. All on 2.1.310.
+Claude Code puts the prompt's text back in the input box, and submitting it again writes the prompt a second time, as a
+sibling of the first (the same `parentUuid`); a bracketed paste and Enter written then submit the restored text with the
+pasted text joined straight onto it, no separator between them. On 2.1.296–2.1.303 an interrupt in the thinking phase
+still wrote `[Request interrupted by user]`. The one trace left is the terminal title's status glyph (see "Terminal
+titles and the titles in an agent's own records" under "## Across the three agents"): `◐`/`◑` alternate about once a
+second while the turn runs, through tool calls and while the request waits, and the glyph turns to `✳` 70 ms after the
+Esc. The same `✳` follows every `Stop` (14 ms after the hook was posted) and every `PermissionRequest` whose dialog is
+shown (20–45 ms after), and stays through the dialog; after the dialog is answered the glyph turns again with no hook
+until the tool's `PostToolUse`. The `◐` of a new turn came 6 ms *before* its `UserPromptSubmit` was posted. All on
+2.1.310.
 
 **The markers are also replayed.** `api-request-blob` entries written into the main transcript while a session works
 carry the conversation so far in their `message.content`, earlier interrupt markers included (once with a trailing
@@ -323,14 +323,14 @@ subscription credentials against a local stub). None runs a hook, and `idle_prom
   "Enter to confirm · Esc to cancel" (from 70 minutes and 100k tokens, adjustable with
   `CLAUDE_CODE_RESUME_THRESHOLD_MINUTES` and `CLAUDE_CODE_RESUME_TOKEN_THRESHOLD`). A blind Enter runs `/compact`.
 
-Octoboard passes an instruction for a relaunched conversation as the launch prompt, which keeps both launch dialogs
-away, and holds its writes into any session whose screen shows one of them (`docs/product/message-delivery.md`).
+What Octoboard does about the dialogs above and the screens below, the notice that waits for Enter, the auto-mode nudge
+and the views of background agents, is in "Messages held until a session can take them" in
+`docs/product/message-delivery.md`.
 
 **A notice that waits for Enter** (2.1.308): in `auto` mode with `ANTHROPIC_BASE_URL` pointing elsewhere, the first
 classifier call of a session raised "We're changing auto mode to no longer charge for classifier requests …" mid-turn,
 ending "Enter to continue · Esc to cancel" (the rewind dialog's footer too), with no hook. A message written then was
-lost: its Enter dismissed the notice and the text went nowhere. Octoboard holds its writes while that footer is on
-screen.
+lost: its Enter dismissed the notice and the text went nowhere.
 
 **"Make auto mode your default permission mode?"** (2.1.310, read from the executable and reproduced with a fake key
 against a local stub). Offered once per launch while the config directory's `.claude.json` has no
@@ -344,7 +344,7 @@ Body text, then unnumbered rows "Yes, set auto mode as my default permission mod
 ("manual mode", "accept edits"), and **no footer**. No hook fires before, during or after it. A bracketed paste is
 dropped and a CR picks the focused row; an Enter within 150 ms of it mounting is ignored. Yes switches the session to
 auto, writes `permissions.defaultMode: "auto"` into the user settings and sets `hasSeenAutoDefaultNudge`; No and Esc
-only set `hasSeenAutoDefaultNudge`. Octoboard holds its writes while its title and Yes row are on screen.
+only set `hasSeenAutoDefaultNudge`.
 
 **Views of background agents** (2.1.307, reproduced against a local stub). A turn that starts an `Agent` with
 `run_in_background` adds a task list under the prompt box — a filled `⏺ main` row and a row per agent — and the hint
@@ -360,7 +360,7 @@ prompt, hinted as "← for agents" for the first ten seconds) moves the conversa
 under a new session id, starts a transient `claude daemon`, and shows "New sessions: …", "0 awaiting input · 1 working ·
 0 completed" and "describe a task for a new session": a paste and CR there start another session with that text.
 `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` (setting `disableAgentView`) removes the agents view and its hint and leaves the
-subagent view. Octoboard holds its writes while either view, or the focused task list, is on screen.
+subagent view.
 
 **Keys that interrupt a turn** (2.1.310, in a PTY with a real account). One Esc stops a turn, about 160 ms after it
 while the model writes; what that leaves in the transcript and the title is under "A user interrupt emits no hook
@@ -490,12 +490,12 @@ the hook's own stderr text is not shown — and a *synchronous* hook that hangs 
 `async = true` a hook that exits non-zero and writes stderr produces no cell and no warning whatsoever.
 
 **Project configuration layering**: project hooks in `<cwd>/.codex/hooks.json` merge with injected ones;
-`<cwd>/AGENTS.md` is concatenated *after* `~/.codex/AGENTS.md` inside a single instructions block, separated by a
-`--- project-doc ---` line, so the user's global file survives; skills are discovered in both `<cwd>/.agents/skills/`
-and `<cwd>/.codex/skills/`. `<cwd>/.codex/config.toml` is layered over `CODEX_HOME/config.toml` once the project is
-trusted and ignored before that (see "The effort a turn runs at when nothing sets one" below), and a `-c` override
-outranks both: on 0.162.1 a trusted project's `[tui] terminal_title = []` stopped every terminal title, and
-`-c tui.terminal_title=[…]` brought them back.
+`<cwd>/AGENTS.md` is concatenated *after* `~/.codex/AGENTS.md` inside a single instructions block, separated by a `---
+project-doc ---` line, so the user's global file survives; skills are discovered in both `<cwd>/.agents/skills/` and
+`<cwd>/.codex/skills/`. `<cwd>/.codex/config.toml` is layered over `CODEX_HOME/config.toml` once the project is trusted
+and ignored before that (measured with `codex doctor --json`, 0.162.1), and a `-c` override outranks both: on 0.162.1 a
+trusted project's `[tui] terminal_title = []` stopped every terminal title, and `-c tui.terminal_title=[…]` brought them
+back.
 
 **An update prompt can come first**: when a newer version is out, Codex can open with an "Update now / Skip / Skip
 until next version" prompt (seen as an "Update available!" banner in the probe on 0.161.0). Octoboard passes
@@ -520,11 +520,12 @@ paste and CR answer it:
 - With no login, the sign-in screen ("Welcome to Codex", "1. Sign in with ChatGPT", "2. Sign in with Device Code",
   "3. Provide your own API key", "Press enter to continue"); a CR starts the ChatGPT sign-in. Nothing skips it.
 
-Mid-session, close to a rate limit, Codex draws "Approaching rate limits" / "Switch to <model> for lower credit
-usage?" with "1. Switch to …", "2. Keep current model" and "3. Keep current model (never show again)" after a turn, with
-no title change and no hook; a paste and CR switched the model and the message was never sent.
-`-c notice.hide_rate_limit_model_nudge=true` keeps it away. Octoboard passes these three overrides, the migration table
-built from the session's catalogue cache, and holds its writes while the sign-in screen or any of these is on screen.
+Mid-session, close to a rate limit, Codex draws "Approaching rate limits" / "Switch to <model> for lower credit usage?"
+with "1. Switch to …", "2. Keep current model" and "3. Keep current model (never show again)" after a turn, with no
+title change and no hook; a paste and CR switched the model and the message was never sent. `-c
+notice.hide_rate_limit_model_nudge=true` keeps it away. What Octoboard passes against these screens is in "Codex" in
+`docs/product/per-agent-launch-specifics.md`, and how it holds its writes while one is up in "Messages held until a
+session can take them" in `docs/product/message-delivery.md`.
 
 **Two visible side effects of passing any `-c` override**: it forces embedded mode, so the TUI carries a permanent
 `⚠ 1 warning` badge explaining that command-line overrides require it, and the session is invisible to `codex agents`.
@@ -550,16 +551,15 @@ is why a list that is wrong cannot be left to the launch to catch.
 spent): a rollout's `turn_context` payload carries the effort the configuration resolved to, and **leaves the `effort`
 key out** when no layer sets `model_reasoning_effort` — 335 such records on the account measured, none carrying `null`.
 Codex then runs the model at its catalogue entry's `default_reasoning_level`. The catalogue is cached per account as
-`models_cache.json` in `CODEX_HOME`, in the `{"models": [...]}` shape `codex debug models` prints, next to
-`fetched_at`, `client_version`, `etag` and `identity`. The default is the account's, not the model's alone: the same
-day, `gpt-6.1-sol` defaulted to `medium` on one account and to `low` on another. That this is the level actually run is
+`models_cache.json` in `CODEX_HOME`, in the `{"models": [...]}` shape `codex debug models` prints, next to `fetched_at`,
+`client_version`, `etag` and `identity`. The default is the account's, not the model's alone: the same day,
+`gpt-6.1-sol` defaulted to `medium` on one account and to `low` on another. That this is the level actually run is
 corroborated rather than read off a request: in 35 sessions whose turn contexts left the effort out, each subagent Codex
-spawned was recorded in a `SubAgentActivity` item with `reasoning_effort` `medium`, that account's default, and not
-with the entry's `multi_agent_reasoning_effort` (`xhigh`). Which configuration layers a turn context reflects was
-measured with `codex doctor --json`, whose `config.load` check names the effective `model` but not the effort: a
-`.codex/config.toml` in the working directory is layered over `CODEX_HOME/config.toml` once the project is trusted and
-ignored before that, and a top-level `profile` key in `config.toml` makes the configuration fail to load (`invalid
-data`) — `--profile <name>` on this version layers `$CODEX_HOME/<name>.config.toml` instead.
+spawned was recorded in a `SubAgentActivity` item with `reasoning_effort` `medium`, that account's default, and not with
+the entry's `multi_agent_reasoning_effort` (`xhigh`). Which configuration layers a turn context reflects was measured
+with `codex doctor --json`, whose `config.load` check names the effective `model` but not the effort (the project layer
+is under "Project configuration layering" above): a top-level `profile` key in `config.toml` makes the configuration
+fail to load (`invalid data`) — `--profile <name>` on this version layers `$CODEX_HOME/<name>.config.toml` instead.
 
 **Keys that interrupt a turn** (0.163.0, in a PTY with a real account). One Esc stops a turn: the `Interrupt` hook
 fires 20–130 ms later, the screen shows "■ Conversation interrupted", the composer is left empty (the prompt is not put
@@ -639,13 +639,13 @@ Measured on 1.0.50 against a recording stdio server that never answered `tools/c
 cancellation arrived at 20.65 s) and a tool that did answer in the same run as the control; the key is honoured in the
 block Octoboard appends to the `config.toml` copy, which is where the 20 s came from. Octoboard sets it to 660 there,
 its own 600 s forwarding limit plus a minute, so that its limit is the one that ends a call: a cancellation withdraws a
-waiting session request (`request_session`), which would end the user's 8 minutes to answer early (see "How a request ends" in `docs/product/session-requests.md`). On 1.0.52 with a
-real account, the appended `[mcp_servers.octoboard]` block was read off a live farm carrying
-`tool_timeout_sec = 660`.
+waiting session request (`request_session`), which would end the user's 8 minutes to answer early (see "How a request
+ends" in `docs/product/session-requests.md`). On 1.0.52 with a real account, the appended `[mcp_servers.octoboard]`
+block was read off a live farm carrying `tool_timeout_sec = 660`.
 
 **The model is held silent while an MCP call is outstanding**, the opposite of Codex. Through a
-`request_console_session` call (the tool is now `request_session`, which waits the same way) that Octoboard kept
-waiting the full 8 minutes, Grok sent its endpoint nothing between the turn's own request and the one carrying the
+`request_session` call (measured under its earlier name `request_console_session`) that Octoboard kept waiting the
+full 8 minutes, Grok sent its endpoint nothing between the turn's own request and the one carrying the
 tool's error: no turn of its own, no token spent (measured on 1.0.50 against a stub inference endpoint).
 
 **What the model itself is handed, and what it calls** (1.0.50 against a stand-in endpoint, re-confirmed on 1.0.52
@@ -653,13 +653,13 @@ against a real account): an MCP tool is **not** among the tools offered to the m
 own `use_tool`, whose `tool_name` is the qualified `<server key>__<tool>` and whose `tool_input` holds the arguments —
 the wrapper the `PreToolUse` payload shows — and a `search_tool` call first is not required, though 1.0.52 injects a
 system reminder of its own telling the model to call `search_tool` for a tool's input schema before `use_tool`. In four
-real Grok Build 1.0.52 sessions driven through `request_console_session` (now `request_session`) end to end, every one
-called `search_tool` at least once, and what a real model called was the `use_tool` wrapper with the qualified
-`octoboard__<tool>` name. Every chat request sets `stream: true`, so anything standing in for the endpoint has to answer as a stream. A turn is also
-followed by requests that offer no tools at all and belong to the TUI rather than the agent: the dashboard summary line,
-the session title, and a prediction of the user's next line. Inference for one model can be routed on its own through a
-`[model.<name>]` entry carrying its own `base_url` (and `api_key`), without the `endpoints.models_base_url` that moves
-every model's.
+real Grok Build 1.0.52 sessions driven end to end through `request_session` (then named `request_console_session`),
+every one called `search_tool` at least once, and what a real model called was the `use_tool` wrapper with the qualified
+`octoboard__<tool>` name. Every chat request sets `stream: true`, so anything standing in for the endpoint has to answer
+as a stream. A turn is also followed by requests that offer no tools at all and belong to the TUI rather than the agent:
+the dashboard summary line, the session title, and a prediction of the user's next line. Inference for one model can be
+routed on its own through a `[model.<name>]` entry carrying its own `base_url` (and `api_key`), without the
+`endpoints.models_base_url` that moves every model's.
 
 **Model and reasoning effort**: `--model <id>` and `--reasoning-effort <level>`, placed after the `--rules` pair and
 before the positional task. In a fullscreen TUI (1.0.62), startup alone persists these as `[models] default` and
@@ -688,15 +688,15 @@ the per-session `config.toml` copy").
 **Discovering models** (Grok Build 1.0.50): Grok has **no alias or "latest" indirection** either. `grok models` prints
 to stdout the login line, a blank line, `Default model: <id>`, a blank line, `Available models:` and then one bullet
 line per model, `  * <id> (default)` for the default and `  - <id>` for the others, in the order Grok shows them. It
-carries no display name and no effort levels. It also refreshes `models_cache.json` in the config directory (`GROK_HOME`),
-a JSON object with `fetched_at`, `grok_version`, `etag` and `models`, a map **keyed by model id**; each value's `info`
-carries `name` (the display name), `hidden`, `supports_reasoning_effort`, `reasoning_effort` (the default) and
-`reasoning_efforts`, a list of `{id, value, label, description, default}` whose `value` is what `--reasoning-effort`
-takes (the level set differs per model: the oldest of the four measured lacked `xhigh`). Octoboard takes the id list
-from the text, which is the one Grok itself shows, and the names, efforts and `hidden` flag from the file; the file
-alone would do for the data but only exists after Grok has run in that home, and the text is what refreshes it. The
-cache is per account (its `identity` differs). **An unknown id is refused loudly at launch** with `Couldn't set model
-'<id>'.`, the opposite of Codex's silent deferred failure.
+carries no display name and no effort levels. It also refreshes `models_cache.json` in the config directory
+(`GROK_HOME`), a JSON object with `fetched_at`, `grok_version`, `etag` and `models`, a map **keyed by model id**; each
+value's `info` carries `name` (the display name), `hidden`, `supports_reasoning_effort`, `reasoning_effort` (the
+default) and `reasoning_efforts`, a list of `{id, value, label, description, default}` whose `value` is what
+`--reasoning-effort` takes (the level set differs per model: the oldest of the four measured lacked `xhigh`). Octoboard
+takes the id list from the text, which is the one Grok itself shows, and the names, efforts and `hidden` flag from the
+file; the file alone would do for the data but only exists after Grok has run in that home, and the text is what
+refreshes it. The cache is per account (its `identity` differs). **An unknown id is refused loudly at launch** with
+`Couldn't set model '<id>'.`, the opposite of Codex's silent deferred failure.
 
 **The id a turn records is not one of the ids `grok models` prints** (1.0.52). With nothing set, a session runs the
 `config.toml` default — `grok-4.7` on the account measured — while its own session record and usage file name the
@@ -724,9 +724,8 @@ dismisses it with no hook and leaves the input free. An HTTP 429 shows "Rate lim
 when that retry is refused too it fires `agent_error` and `StopFailure` (`error` `rate_limit`) with an inline "Retry
 failed" line, no modal, and submits a queued prompt by itself. An HTTP 400 fires the same two hooks (`error`
 `invalid_request`, as for the 402) with an inline line and no modal; a single HTTP 500 is retried with no hook.
-Octoboard lets a Grok session's writes through 30 s after its launch when no hook has come and no trust screen has been
-sighted (one that has is held until the rendered screen no longer shows it), holds them for two seconds after a
-`StopFailure` or an `agent_error`, and holds them while the usage-limit modal is on screen.
+How Octoboard holds its writes around these hooks and screens is in "Messages held until a session can take them" in
+`docs/product/message-delivery.md`.
 
 **Keys that interrupt a turn** (1.0.70, in a PTY against a local stand-in for its inference API). Esc does not stop a
 turn; Ctrl-C does. While the model streams, Ctrl-C fires `StopCancelled` (`reason` `user_interrupt`) 50–190 ms later
@@ -864,17 +863,17 @@ built from, never the per-session home itself, which is discarded with the proce
   place, the `.zst` was gone, and the new database's `rollout_path` named that `.jsonl` inside the target home. So the
   database path is no obstacle to a copy, and the target's rollout is a plain file again until it ages out once more.
 - **Codex, history segments** (0.162.1) — `rollout-<start>-<thread id>_<segment id>.jsonl` (or `.zst`) is **not a
-  subagent's rollout but a later segment of the same thread**. An earlier reading of this section took it for a
-  subagent's; every such file on the measured machine (26, written by 0.159.2–0.162.1) has a `session_meta` carrying the
-  thread's own id, and its lines carry only that thread id. The `session_meta` has `history_mode: "paginated"` and
-  `history_base: {thread_id, end_ordinal_exclusive, end_byte_offset}`, where `thread_id` names the file the segment
-  continues from — the thread's first rollout by the thread id, a later segment by its segment id — and the segment's
-  ordinals pick up at that cut. So the files form a chain, its last segment (the chain's leaf) is the conversation's
-  head, and the database's `rollout_path` names the head (read from a copy of the real database). Reverting a turn
-  starts a segment: through `codex app-server`, a thread with two turns, `thread/revert` before the second, then a third
-  turn, left the first rollout (ordinals 0–25) plus a segment (ordinals 15–28, based on the first at ordinal 15). A
-  segment can also start a fresh history instead (`history_base` null, ordinals from 0; seen on disk, trigger not
-  measured). Resumed with `codex exec resume <thread id>` in fresh homes, asking for the codewords given so far:
+  subagent's rollout but a later segment of the same thread**: every such file on the measured machine (26, written by
+  0.159.2–0.162.1) has a `session_meta` carrying the thread's own id, and its lines carry only that thread id. The
+  `session_meta` has `history_mode: "paginated"` and `history_base: {thread_id, end_ordinal_exclusive,
+  end_byte_offset}`, where `thread_id` names the file the segment continues from — the thread's first rollout by the
+  thread id, a later segment by its segment id — and the segment's ordinals pick up at that cut. So the files form a
+  chain, its last segment (the chain's leaf) is the conversation's head, and the database's `rollout_path` names the
+  head (read from a copy of the real database). Reverting a turn starts a segment: through `codex app-server`, a thread
+  with two turns, `thread/revert` before the second, then a third turn, left the first rollout (ordinals 0–25) plus a
+  segment (ordinals 15–28, based on the first at ordinal 15). A segment can also start a fresh history instead
+  (`history_base` null, ordinals from 0; seen on disk, trigger not measured). Resumed with `codex exec resume <thread
+  id>` in fresh homes, asking for the codewords given so far:
   - every file of the chain present, no database row → the head, and the right conversation (first and third turns);
     the same with the chain compressed, where only the head was decompressed and the first rollout read in place;
   - the first rollout alone → that file, **the reverted turn back and the third turn gone, with no error or warning**;
@@ -882,109 +881,111 @@ built from, never the per-session home itself, which is discarded with the proce
     rollout`.
 
   So a resume that matches the newest file containing the id picks the head, which is correct. What makes a file the
-  newest was not settled. In the fork described under "Which rollout a home resumes, over a shared directory" below,
-  a home with no row picked the segment with the later timestamp in its name. That segment was also the chain's leaf,
+  newest was not settled. In the fork described under "Which rollout a home resumes, over a shared directory" below, a
+  home with no row picked the segment with the later timestamp in its name. That segment was also the chain's leaf,
   while the other segment had the later mtime. So mtime does not decide it; name order or lineage might.
   **Octoboard's switch carries the whole chain**: the head as the record and every other file of the thread as a
-  companion, through the same staged copy. Measured with 0.162.1 on a thread made through `codex app-server` (two
-  turns, `thread/revert` of the second, a third turn, `thread/revert` of the third, a fourth: a first rollout and two
-  segments), the chain copied by that code into a fresh home, plain and compressed, resumed with the surviving first
-  and fourth turns and neither reverted one; the new database row named the head (a compressed head came back as a
-  plain `.jsonl`, the other two files stayed compressed). Octoboard reads the head for a thread's context size: the
-  last `token_count` record with a non-null `info` gives `last_token_usage.total_tokens` and `model_context_window`.
-  The cumulative total in a segment continues from the segment before it (in a real thread the first rollout ended on
-  964,390 and its segment began at 1,036,910), which is why the last request's figure is read and not the total. A
-  head segment has no `token_count` until its next turn after a revert, so until then the last one in the file it
-  continues, before that segment's `history_base.end_byte_offset`, stands in, or failing that the nearest earlier file's. A segment holds only the lines after the
-  last cut, so the opening prompt comes from the first rollout, and the conversation as it stands is the head preceded
-  by each file it continues up to its `history_base.end_byte_offset` (decompressed bytes; in a real thread the offset
-  fell on the line boundary before the next segment's first line). Subagents are separate
+  companion, through the same staged copy. Measured with 0.162.1 on a thread made through `codex app-server` (two turns,
+  `thread/revert` of the second, a third turn, `thread/revert` of the third, a fourth: a first rollout and two
+  segments), the chain copied by that code into a fresh home, plain and compressed, resumed with the surviving first and
+  fourth turns and neither reverted one; the new database row named the head (a compressed head came back as a plain
+  `.jsonl`, the other two files stayed compressed). Octoboard reads the head for a thread's context size: the last
+  `token_count` record with a non-null `info` gives `last_token_usage.total_tokens` and `model_context_window`. The
+  cumulative total in a segment continues from the segment before it (in a real thread the first rollout ended on
+  964,390 and its segment began at 1,036,910), which is why the last request's figure is read and not the total. A head
+  segment has no `token_count` until its next turn after a revert, so until then the last one in the file it continues,
+  before that segment's `history_base.end_byte_offset`, stands in, or failing that the nearest earlier file's. A segment
+  holds only the lines after the last cut, so the opening prompt comes from the first rollout, and the conversation as
+  it stands is the head preceded by each file it continues up to its `history_base.end_byte_offset` (decompressed bytes;
+  in a real thread the offset fell on the line boundary before the next segment's first line). Subagents are separate
   threads: a spawned agent's rollout is `rollout-<child start>-<child thread id>.jsonl`, with
   `source.subagent.thread_spawn.parent_thread_id` in its `session_meta`, so its name never contains the parent's id. A
   home with no row resuming the parent with two such rollouts beside it opened the parent with the conversation intact
-  (and took rows for both children). An earlier reading of this section took the `_<segment id>` files for subagents'
-  and had the switch leave them behind, which resumed a reverted thread at a stale branch.
+  (and took rows for both children).
   **A target whose own row names an older head resumes that head, with the whole chain copied.** Measured with 0.162.1:
   a home holding the first rollout and the first segment was resumed once, so its row named that segment; the whole
-  chain was then copied in over it (the third file added, the other two replaced) and the thread resumed again. It
-  came up on the older branch (the first and third turns; the third had been reverted since, and the fourth was
-  absent), with no error, and the row still named the older segment. So a target that held the thread before it was
-  reverted elsewhere has to have that row dealt with, not only the files.
+  chain was then copied in over it (the third file added, the other two replaced) and the thread resumed again. It came
+  up on the older branch (the first and third turns; the third had been reverted since, and the fourth was absent), with
+  no error, and the row still named the older segment. So a target that held the thread before it was reverted elsewhere
+  has to have that row dealt with, not only the files.
   **The row decides, and either removing it or repointing it fixes the resume** (0.162.1, same setup, with a
   `thread_attachments` row and a `thread_dynamic_tools` row seeded for the thread, the database edited with `sqlite3`
   while Codex was not running):
-  - Deleting the thread's `threads` row cascades into those two tables when foreign keys are on (both are declared
-    `ON DELETE CASCADE`; the `sqlite3` shell has them off by default, and Codex's own connections turn them on). With foreign keys off the children stayed, Codex's own insert of the fresh row succeeded with no foreign-key
-    complaint, and the children were attached to it again. The resume answered "ALPHA, DELTA". The fresh row is built
-    from the rollouts, so the old row's title, pin, section and project were gone; its title and preview now came
-    from the head.
-  - Updating only `rollout_path` to the head's path (the whole chain in place) also answered "ALPHA, DELTA", and
-    kept the row's other columns and its children untouched. The row's `title`, `preview` and `first_user_message`
-    stayed those of the older branch and were not refreshed by the resume's turn. With the chain compressed, a path
-    naming the `.jsonl` that no longer exists and one naming the `.jsonl.zst` both resumed the head.
+  - Deleting the thread's `threads` row cascades into those two tables when foreign keys are on (both are declared `ON
+    DELETE CASCADE`; the `sqlite3` shell has them off by default, and Codex's own connections turn them on). With
+    foreign keys off the children stayed, Codex's own insert of the fresh row succeeded with no foreign-key complaint,
+    and the children were attached to it again. The resume answered "ALPHA, DELTA". The fresh row is built from the
+    rollouts, so the old row's title, pin, section and project were gone; its title and preview now came from the head.
+  - Updating only `rollout_path` to the head's path (the whole chain in place) also answered "ALPHA, DELTA", and kept
+    the row's other columns and its children untouched. The row's `title`, `preview` and `first_user_message` stayed
+    those of the older branch and were not refreshed by the resume's turn. With the chain compressed, a path naming the
+    `.jsonl` that no longer exists and one naming the `.jsonl.zst` both resumed the head.
   - Clearing only the home's `thread_history_1.sqlite` rows (the `threads` row left standing) still resumed the older
     branch, and deleting them along with the `threads` row changed nothing: its tables (`thread_turns`, `thread_items`,
     `thread_history_projection_state`) are keyed by the id of a rollout *file*, one set for the first segment and one
     for the head here, not by the thread's, and Codex rebuilt them.
   - Other tables keyed by thread id: `thread_spawn_edges`, `thread_goals` (in `goals_1.sqlite`) and the queue tables
     were empty in the measured home and were not exercised; `thread_sections` is not per thread.
-  - **Octoboard's switch updates `rollout_path` only**, in every `state_<n>.sqlite` of the target's database
-    directory that has a `threads` table, to the head's path in the target without `.zst`, the form Codex keeps for a
-    compressed rollout (no row of 1,212 in a real database ended in `.zst`). It changes nothing else, so nothing
-    cascades and the user's title, pin and links stay. The cost is that the older branch's title and preview stay on
-    the row. A home with no row is left alone, since it resumes the head by name.
+  - **Octoboard's switch updates `rollout_path` only**, in every `state_<n>.sqlite` of the target's database directory
+    that has a `threads` table, to the head's path in the target without `.zst`, the form Codex keeps for a compressed
+    rollout (no row of 1,212 in a real database ended in `.zst`). It changes nothing else, so nothing cascades and the
+    user's title, pin and links stay. The cost is that the older branch's title and preview stay on the row. A home with
+    no row is left alone, since it resumes the head by name.
   - **Codex can keep its databases outside the home** (0.162.1): `sqlite_home` in `config.toml` and the
     `CODEX_SQLITE_HOME` environment variable both moved the whole set of `*.sqlite` files, and with both set the
-    configuration won. A relative `sqlite_home` (`"db"`, `"../up"`) was taken against the home, and a leading `~/`
-    was expanded with the process's `HOME`. A relative `CODEX_SQLITE_HOME` was taken against the directory Codex
-    was started in, not the home. The binary also names an enterprise requirement for
-    `sqlite_home` that overrides the environment variable; that was not looked for. The switch reads the target's
-    `config.toml` and the environment the relaunch will see (the home's `~` is that environment's `HOME`), and fails
-    with `relocation_failed`, rather than update a database it has guessed, when the configuration cannot be read or
-    parsed, `CODEX_SQLITE_HOME` is relative (the starting directory is not known there), or the directory cannot be
-    listed; a directory that does not exist means no database.
+    configuration won. A relative `sqlite_home` (`"db"`, `"../up"`) was taken against the home, and a leading `~/` was
+    expanded with the process's `HOME`. A relative `CODEX_SQLITE_HOME` was taken against the directory Codex was started
+    in, not the home. The binary also names an enterprise requirement for `sqlite_home` that overrides the environment
+    variable; that was not looked for. The switch reads the target's `config.toml` and the environment the relaunch will
+    see (the home's `~` is that environment's `HOME`), and fails with `relocation_failed`, rather than update a database
+    it has guessed, when the configuration cannot be read or parsed, `CODEX_SQLITE_HOME` is relative (the starting
+    directory is not known there), or the directory cannot be listed; a directory that does not exist means no database.
   - **A managed daemon holding the thread was not measured.** In a scratch home every 0.162.1 TUI start launched
     `<home>/packages/app-server-daemon/…/codex app-server --managed-daemon` (parent pid 1), which outlived the TUI and
     copied about 323 MB into the home's `packages/` (measured 2026-10-20). Whether a daemon in the target holding the
     thread loaded would ignore a changed row is unverified.
-- **Claude Code, beside the transcript** — `projects/<slug>/<session id>/` holds `subagents/`, `tool-results/` and
-  `custom-title.json`, and `file-history/<session id>/` holds the rewind checkpoints (`<hash>@v<n>`). Both are layout
-  as found on disk; a resume with the transcript alone was measured above, and what a resume without these loses
-  (rewind, subagent transcripts) was not.
-- **Grok Build** — the session directory copied under a different working directory's encoded name resumed with the
-  conversation intact; `sessions/session_search.sqlite` is not consulted. **An unauthenticated home does not refuse**:
-  measured with Grok Build 1.0.46, `grok --resume <id>` against a home with no login stays up on a browser device-code
-  sign-in (`Approve in your browser to finish signing in`, then `Waiting for approval`) instead of exiting. So, as with
-  Claude Code and Codex, a switch to an account that is not signed in comes up and counts as a success, and the
-  relaunched session can start the agent's own sign-in flow. Whether the session is looked up before or after that
-  sign-in was not measured, so a relocation cannot be verified without a login. For a session it does not hold
-  locally, Grok prints `Session "<id>" not found locally, restoring conversation from remote...`. Its remote registry
-  has never been seen to restore one: every attempt so far answered 404 (see "Grok Build over a linked `sessions/`"
-  below). Whether the registry would serve a session to a different account is unmeasured.
-- **Under a different account** — a conversation copied into a config directory signed in to another account:
-  - **Codex resumes it, encrypted reasoning included** (0.162.1). The two homes were signed in by copies of the
-    `auth.json` of two genuinely different ChatGPT accounts: a personal Plus account and a Business workspace, with
-    different account and organisation ids. The thread was made under A on `gpt-6.1-sol` at medium effort, with a turn
-    whose rollout holds a `reasoning` item carrying `encrypted_content`. Copied into B's home and resumed on the same
-    model, it ran a turn and recalled the earlier conversation. The response's per-input-item usage in the trace log
-    (`RUST_LOG=trace`) listed that reasoning item's id, so it was sent and accepted. Control in the same run: the same
-    rollout with eight characters of the `encrypted_content` changed was refused with `invalid_encrypted_content`
-    ("The encrypted content for item rs_… could not be verified. Reason: Encrypted content could not be decrypted or
-    parsed."). So the server verifies an earlier turn's reasoning, and it accepted the other account's. The reverse
-    direction (made under B, resumed under A) was the same. A resume on a smaller model (`gpt-6-luna`) worked too, with
-    a warning that the session was recorded with another model.
+- **Claude Code, beside the transcript** —
+  `projects/<slug>/<session id>/` holds `subagents/`, `tool-results/` and `custom-title.json`, and
+  `file-history/<session id>/` holds the rewind checkpoints (`<hash>@v<n>`). Both are layout as found on disk; a resume
+  with the transcript alone was measured above, and what a resume without these loses (rewind, subagent transcripts) was
+  not.
+- **Grok Build** — the session directory copied under a different working directory's encoded name resumed with
+  the conversation intact; `sessions/session_search.sqlite` is not consulted. **An unauthenticated home does not
+  refuse**: measured with Grok Build 1.0.46, `grok --resume <id>` against a home with no login stays up on a browser
+  device-code sign-in (`Approve in your browser to finish signing in`, then `Waiting for approval`) instead of exiting.
+  So, as with Claude Code and Codex, a switch to an account that is not signed in comes up and counts as a success, and
+  the relaunched session can start the agent's own sign-in flow. Whether the session is looked up before or after that
+  sign-in was not measured, so a relocation cannot be verified without a login. For a session it does not hold locally,
+  Grok prints `Session "<id>" not found locally, restoring conversation from remote...`. Its remote registry has never
+  been seen to restore one: every attempt so far answered 404 (see "Grok Build over a linked `sessions/`" below).
+  Whether the registry would serve a session to a different account is unmeasured.
+- **Under a different account** — a
+  conversation copied into a config directory signed in to another account:
+  - **Codex resumes it, encrypted reasoning
+  included** (0.162.1). The two homes were signed in by copies of the `auth.json` of two genuinely different ChatGPT
+  accounts: a personal Plus account and a Business workspace, with different account and organisation ids. The thread
+  was made under A on `gpt-6.1-sol` at medium effort, with a turn whose rollout holds a `reasoning` item carrying
+  `encrypted_content`. Copied into B's home and resumed on the same model, it ran a turn and recalled the earlier
+  conversation. The response's per-input-item usage in the trace log (`RUST_LOG=trace`) listed that reasoning item's id,
+  so it was sent and accepted. Control in the same run: the same rollout with eight characters of the
+  `encrypted_content` changed was refused with `invalid_encrypted_content` ("The encrypted content for item rs_… could
+  not be verified. Reason: Encrypted content could not be decrypted or parsed."). So the server verifies an earlier
+  turn's reasoning, and it accepted the other account's. The reverse direction (made under B, resumed under A) was the
+  same. A resume on a smaller model (`gpt-6-luna`) worked too, with a warning that the session was recorded with another
+  model.
   - **Claude Code does not resend an earlier turn's thinking, so its signature is no obstacle; the resume under a
-    second account itself was not measured** (2.1.302). Two scratch config directories were each signed in by the
-    user, to a personal Max account (A) and to a Team account (B). Under A, `claude -p --model haiku`
-    (`claude-haiku-5-5`) wrote a transcript whose assistant turn holds a `thinking` block with a 1,580-character
-    `signature`. Two copies were resumed under A with `--resume`, one as written and one with eight characters of the
-    signature changed. Both resumed and recalled the conversation; the tampered signature was not refused. The
-    transcript's own request log explains why: Claude Code 2.1.302 writes `api-request-blob` and `api-request` lines
-    into the transcript, and in the resumed request the earlier assistant turn was sent as its text alone, without the
-    thinking block. The request asked for `thinking: {type: "adaptive", display: "omitted"}`, with context management
-    `clear_thinking_20251015`, `keep: "all"`. The resume under B could not be run because every request B made was
-    answered "You've hit your weekly limit"; the signature finding makes a refusal on signatures unlikely.
-  - **Grok Build:** not measured; the machine has one Grok Build account.
+  second account itself was not measured** (2.1.302). Two scratch config directories were each signed in by the user, to
+  a personal Max account (A) and to a Team account (B). Under A, `claude -p --model haiku` (`claude-haiku-5-5`) wrote a
+  transcript whose assistant turn holds a `thinking` block with a 1,580-character `signature`. Two copies were resumed
+  under A with `--resume`, one as written and one with eight characters of the signature changed. Both resumed and
+  recalled the conversation; the tampered signature was not refused. The transcript's own request log explains why:
+  Claude Code 2.1.302 writes `api-request-blob` and `api-request` lines into the transcript, and in the resumed request
+  the earlier assistant turn was sent as its text alone, without the thinking block. The request asked for `thinking:
+  {type: "adaptive", display: "omitted"}`, with context management `clear_thinking_20251015`, `keep: "all"`. The resume
+  under B could not be run because every request B made was answered "You've hit your weekly limit"; the signature
+  finding makes a refusal on signatures unlikely.
+  - **Grok Build:** not measured; the machine has one Grok Build
+  account.
 
 **The session comes up under the target directory's whole setup.** A config directory holds the agent's global
 configuration, not only its login: the same Codex thread resumed in a fresh home came up with that home's own defaults
@@ -1041,31 +1042,33 @@ and the process killed; one Grok Build login completed on its own (see below).
 | A directory that does not exist | created | refused, exit 1 | created |
 | Done | exit 0, `Login successful.` (from the executable) | `account/login/completed` with `success: true` (from the schema) | exit 0, `✓ Signed in as <email>` on stderr |
 
-- **Claude Code** (`claude auth login`; `--console` and `--sso` were not tried) prints on stdout `Opening browser to sign
-  in…`, then `If the browser didn't open, visit: <url>`, then `Paste code here if prompted > ` with no newline. It
-  listens on `127.0.0.1` at an ephemeral port (53228 in one run) and hands the browser a URL of its own, `https://claude.com/cai/oauth/authorize?code=true&client_id=…&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A<port>%2Fcallback&scope=…&code_challenge=…&code_challenge_method=S256&state=…`.
+- **Claude Code** (`claude auth login`; `--console` and `--sso` were not tried) prints on stdout `Opening browser to
+  sign in…`, then `If the browser didn't open, visit: <url>`, then `Paste code here if prompted > ` with no newline. It
+  listens on `127.0.0.1` at an ephemeral port (53228 in one run) and hands the browser a URL of its own,
+  `https://claude.com/cai/oauth/authorize?code=true&client_id=…&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A<port>%2Fcallback&scope=…&code_challenge=…&code_challenge_method=S256&state=…`.
   The browser is run as `$BROWSER <url>` when `BROWSER` is set, and otherwise as `open <url>` looked up on `PATH`. Both
-  were replaced by scripts that only recorded their argument, and no LaunchServices launch came from the process. So
-  the URL Octoboard should open is the one handed to `BROWSER`, captured by a `BROWSER` that reports it back, and the
+  were replaced by scripts that only recorded their argument, and no LaunchServices launch came from the process. So the
+  URL Octoboard should open is the one handed to `BROWSER`, captured by a `BROWSER` that reports it back, and the
   loopback callback then finishes the login with nothing pasted. The URL on stdout is a different one: its
-  `redirect_uri` is `https://platform.claude.com/oauth/code/callback`, the page that shows the user a code to paste.
-  The paste does work without a terminal: `notarealcode#notarealstate` written to a piped stdin was taken and sent,
-  and the command answered `Login failed: Request failed with status code 400` on stderr and exited 1 within a second.
-  An empty stdin (`/dev/null`, or a pipe held open) does not end the wait. SIGTERM ends it with exit 143. It created a
-  config directory that did not exist (`.claude.json` and `backups/`) before any sign-in. On success the credential
-  goes to the Keychain item named under "A second config directory is a second login" above, and the account record
-  to `.claude.json`. Both, and the `Login successful.` line, come from the executable and the earlier
-  measurements, not from a completed login here. `claude auth status` reporting `loggedIn: true` afterwards is the
-  check to make.
+  `redirect_uri` is `https://platform.claude.com/oauth/code/callback`, the page that shows the user a code to paste. The
+  paste does work without a terminal: `notarealcode#notarealstate` written to a piped stdin was taken and sent, and the
+  command answered `Login failed: Request failed with status code 400` on stderr and exited 1 within a second. An empty
+  stdin (`/dev/null`, or a pipe held open) does not end the wait. SIGTERM ends it with exit 143. It created a config
+  directory that did not exist (`.claude.json` and `backups/`) before any sign-in. On success the credential goes to the
+  Keychain item named under "A second config directory is a second login" above, and the account record to
+  `.claude.json`. Both, and the `Login successful.` line, come from the executable and the earlier measurements, not
+  from a completed login here. `claude auth status` reporting `loggedIn: true` afterwards is the check to make.
 - **Codex** has three ways in, and the app server is the one made for a front end. `codex app-server` (the same command
   and flags as the quota probe) takes `account/login/start` after `initialize`:
-  - `{"type":"chatgpt"}` replies at once with `{"type":"chatgpt","loginId":"<uuid>","authUrl":"https://auth.openai.com/oauth/authorize?…&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback&…"}`
+  - `{"type":"chatgpt"}` replies at once with
+    `{"type":"chatgpt","loginId":"<uuid>","authUrl":"https://auth.openai.com/oauth/authorize?…&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fauth%2Fcallback&…"}`
     and listens on `127.0.0.1:1455`. It opens no browser: no LaunchServices launch came from the process, and nothing
     was run through `BROWSER` or `open`. With 1455 already held by another process, the reply took about four seconds
-    and named port 1457, where it listened instead. Whether the authorization server accepts that port was not
-    tried, so two logins at once are a risk.
-  - `{"type":"chatgptDeviceCode"}` replies with `{"type":"chatgptDeviceCode","loginId":…,"verificationUrl":"https://auth.openai.com/codex/device","userCode":"<4 characters>-<5 characters>"}`,
-    with no listener and no browser.
+    and named port 1457, where it listened instead. Whether the authorization server accepts that port was not tried, so
+    two logins at once are a risk.
+  - `{"type":"chatgptDeviceCode"}` replies with
+    `{"type":"chatgptDeviceCode","loginId":…,"verificationUrl":"https://auth.openai.com/codex/device","userCode":"<4
+    characters>-<5 characters>"}`, with no listener and no browser.
   - `account/login/cancel` with the `loginId` answers `{"status":"canceled"}`, followed by the notification
     `account/login/completed` with `{"loginId":…,"success":false,"error":"Login was not completed"}` (`"Login server
     error: Login was not completed"` for the browser flow). The schema
@@ -1077,26 +1080,27 @@ and the process killed; one Grok Build login completed on its own (see below).
   http://localhost:1455.`, `If your browser did not open, navigate to this URL to authenticate:`, the URL (redirect
   `http://127.0.0.1:1455/auth/callback`) and ``On a remote or headless machine? Use `codex login --device-auth`
   instead.`` It opened the browser itself through LaunchServices, with `BROWSER` set and a recording `open` first on
-  `PATH`, so it would put up a page Octoboard did not ask for. `codex login --device-auth` prints on **stdout** the
-  link `https://auth.openai.com/codex/device`, `Enter this one-time code (expires in 15 minutes)` and the code, with ANSI
+  `PATH`, so it would put up a page Octoboard did not ask for. `codex login --device-auth` prints on **stdout** the link
+  `https://auth.openai.com/codex/device`, `Enter this one-time code (expires in 15 minutes)` and the code, with ANSI
   colour escapes even into a pipe, and opens nothing and listens on nothing. Both died on SIGTERM. Neither creates a
   missing `CODEX_HOME`: both exit 1 with `Error loading configuration: CODEX_HOME points to "<dir>", but that path does
   not exist`. On success Codex writes `auth.json` into the home. That rests on the earlier measurement of a copied
   `auth.json` under "A second config directory is a second login" above. Whether the `cli_auth_credentials_store`
   setting could send it elsewhere was not examined.
-- **Grok Build** (`grok login`, with no flag) printed on **stderr** `To sign in, open this URL in your browser:`,
-  `https://accounts.x.ai/oauth2/device?user_code=<4 characters>-<4 characters>`, `Confirm this code in your browser:`,
-  the code, and `Waiting for authorization...`, about a second after it started. Its debug log says the device flow was
-  chosen by a login configuration fetched from the server (`resolved interactive transport transport="device"
-  source=remote`), so the default could change without an upgrade; `--device-auth` asks for it explicitly, and
-  `--oauth` was not tried. It listens on nothing. **It opens the browser itself through LaunchServices** (the system
-  log showed `LAUNCH: Asking CSUI to launch 1 items` from the process in both runs it was watched in), with `BROWSER`
-  set and a recording `open` first on `PATH`; `GROK_TEST_OPEN_URL_FILE`, a name in the executable, did not stop it either. So Octoboard
-  cannot be the only one to open the page. It created a `GROK_HOME` that did not exist (`agent_id`, `docs/`, `logs/`).
-  In the first run, nothing on the machine knowingly approved the code. The login still completed 5.4 seconds after the
-  URL appeared: the browser it opened was already signed in to x.ai, and whether a person clicked through is not
-  known. It wrote `auth.json` into the scratch home, printed `✓ Signed in as <email>` on stderr and exited 0. So
-  completion is exit 0, with `auth.json` present in `GROK_HOME`. Killed while waiting, it died on SIGTERM.
+- **Grok Build** (`grok login`, with no flag) printed on **stderr**
+  `To sign in, open this URL in your browser:`, `https://accounts.x.ai/oauth2/device?user_code=<4 characters>-<4
+  characters>`, `Confirm this code in your browser:`, the code, and `Waiting for authorization...`, about a second after
+  it started. Its debug log says the device flow was chosen by a login configuration fetched from the server (`resolved
+  interactive transport transport="device" source=remote`), so the default could change without an upgrade;
+  `--device-auth` asks for it explicitly, and `--oauth` was not tried. It listens on nothing. **It opens the browser
+  itself through LaunchServices** (the system log showed `LAUNCH: Asking CSUI to launch 1 items` from the process in
+  both runs it was watched in), with `BROWSER` set and a recording `open` first on `PATH`; `GROK_TEST_OPEN_URL_FILE`, a
+  name in the executable, did not stop it either. So Octoboard cannot be the only one to open the page. It created a
+  `GROK_HOME` that did not exist (`agent_id`, `docs/`, `logs/`). In the first run, nothing on the machine knowingly
+  approved the code. The login still completed 5.4 seconds after the URL appeared: the browser it opened was already
+  signed in to x.ai, and whether a person clicked through is not known. It wrote `auth.json` into the scratch home,
+  printed `✓ Signed in as <email>` on stderr and exited 0. So completion is exit 0, with `auth.json` present in
+  `GROK_HOME`. Killed while waiting, it died on SIGTERM.
 
   A plain `grok` run (no `login` subcommand) against a home with no login does the same: it starts the grok.com
   sign-in inline (`auth: inline auth flow` in `$GROK_HOME/logs/unified.jsonl`), and on a machine whose browser was
@@ -1119,31 +1123,32 @@ and the process killed; one Grok Build login completed on its own (see below).
 **Before a login, on the quota path.** The same probes as in "Plan quota" below, against a directory that does not
 exist and one created empty:
 
-- **Claude Code does not tell the two apart, and recreates a missing directory.** Both the probe and `claude auth status`
-  create the directory (`.claude.json`, `backups/`, and for the probe `plugins/` and `sessions/`) and then answer as
-  for an empty one. The probe's `get_usage` succeeds, with
-  `{"subscription_type":null,"rate_limits_available":false,"rate_limits":null,"behaviors":null,"session":{…}}`. That
-  is presumably what an account without a subscription answers as well (not measured), so it does not say "not signed
-  in" alone. The `initialize` reply in the same exchange does: its `account` is `{"tokenSource":"none","apiProvider":"firstParty"}`.
-  Read from the executable, not measured against a signed-in directory: a subscription login replaces `tokenSource`
-  with `subscriptionType` (with `email` and `organization`), and an API key adds `apiKeySource`. `claude auth status` (JSON by
-  default) prints on stdout `{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty",…,"configDirectory":"<dir>"}`
-  and exits **1**; `--text` prints `Not logged in. Run claude auth login to authenticate.`, exit 1. The probe and
-  `claude auth status` each answered in under half a second. The probe also writes `Ignoring <n> permissions.allow entries from
+- **Claude Code does not tell the two apart, and recreates a missing directory.** Both the probe and `claude auth
+  status` create the directory (`.claude.json`, `backups/`, and for the probe `plugins/` and `sessions/`) and then
+  answer as for an empty one. The probe's `get_usage` succeeds, with
+  `{"subscription_type":null,"rate_limits_available":false,"rate_limits":null,"behaviors":null,"session":{…}}`. That is
+  presumably what an account without a subscription answers as well (not measured), so it does not say "not signed in"
+  alone. The `initialize` reply in the same exchange does: its `account` is
+  `{"tokenSource":"none","apiProvider":"firstParty"}`. Read from the executable, not measured against a signed-in
+  directory: a subscription login replaces `tokenSource` with `subscriptionType` (with `email` and `organization`), and
+  an API key adds `apiKeySource`. `claude auth status` (JSON by default) prints on stdout
+  `{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty",…,"configDirectory":"<dir>"}` and exits **1**;
+  `--text` prints `Not logged in. Run claude auth login to authenticate.`, exit 1. The probe and `claude auth status`
+  each answered in under half a second. The probe also writes `Ignoring <n> permissions.allow entries from
   .claude/settings.json: this workspace has not been trusted…` to stderr, because the home directory it runs in holds
-  `~/.claude/settings.json` as a project file and the fresh directory has no trust record for it. That is noise, not
-  an error.
-- **Codex** keeps the two distinct. With the directory missing, `codex app-server` writes nothing on stdout and exits
-  1 within a tenth of a second, its stderr ending in `Error:` and `CODEX_HOME points to "<dir>", but that path does
-  not exist`, after a `WARNING: proceeding, even though we could not create PATH aliases: …` line naming the same
-  path. It does not create the directory. Empty, it starts, and `account/rateLimits/read` answers `{"error":{"code":-32600,"message":"codex account authentication required to read
-  rate limits"},"id":2}`. The code alone is JSON-RPC's generic invalid request, so it is the message that marks the
-  case. `account/read` (params `{}`) is the structured answer:
-  `{"result":{"account":null,"requiresOpenaiAuth":true,"workspaceRouting":null}}`, where a signed-in home has
-  `account` set to `{"type":"chatgpt","email","planType"}` or `{"type":"apiKey"}` (per the schema). `codex login status` prints
-  `Not logged in` on stderr and exits 1 for the empty home, and `Error loading configuration: CODEX_HOME points to …`
-  with exit 1 for the missing one. The empty home is not left empty: the app server writes its databases, `skills/`
-  and `installation_id` into it.
+  `~/.claude/settings.json` as a project file and the fresh directory has no trust record for it. That is noise, not an
+  error.
+- **Codex** keeps the two distinct. With the directory missing, `codex app-server` writes nothing on stdout and exits 1
+  within a tenth of a second, its stderr ending in `Error:` and `CODEX_HOME points to "<dir>", but that path does not
+  exist`, after a `WARNING: proceeding, even though we could not create PATH aliases: …` line naming the same path. It
+  does not create the directory. Empty, it starts, and `account/rateLimits/read` answers
+  `{"error":{"code":-32600,"message":"codex account authentication required to read rate limits"},"id":2}`. The code
+  alone is JSON-RPC's generic invalid request, so it is the message that marks the case. `account/read` (params `{}`) is
+  the structured answer: `{"result":{"account":null,"requiresOpenaiAuth":true,"workspaceRouting":null}}`, where a
+  signed-in home has `account` set to `{"type":"chatgpt","email","planType"}` or `{"type":"apiKey"}` (per the schema).
+  `codex login status` prints `Not logged in` on stderr and exits 1 for the empty home, and `Error loading
+  configuration: CODEX_HOME points to …` with exit 1 for the missing one. The empty home is not left empty: the app
+  server writes its databases, `skills/` and `installation_id` into it.
 - **Grok Build does not tell the two apart, and creates a missing directory.** `grok agent --no-leader stdio` creates it
   (`config.toml`, `README.md`, `docs/`, `logs/`, `sessions/` and lock files; on 1.0.62 also `installed-plugins/`, and on
   a home that already has a `config.toml` it appends `[marketplace] default_skills_installs_purged = true`, writing
@@ -1167,12 +1172,12 @@ build, so a reply that matches none of them should still be shown as a plain fai
 
 ## Sharing a session directory between accounts
 
-Octoboard does not link an account's session directory into another account's on its own: it does so only as part of
-an account sharing the whole of the default account's configuration, conversation databases included (see
-`docs/product/sharing-the-default-configuration.md`). This section records the measurements of a session directory
-shared without the rest; linking the rest of a configuration directory, and what changes once the databases are linked
-too, is under "Sharing a configuration directory between accounts" below. Codex and Claude Code lose or split conversations in a shared directory, in ways they give no
-warning of, and Grok Build has no guard against two writers:
+Octoboard links an account's session directory into another account's only as part of an account sharing the whole of
+the default account's configuration (see "What is shared" in `docs/product/sharing-the-default-configuration.md`). This
+section records the measurements of a session directory shared without the rest; linking the rest of a configuration
+directory, and what changes once the databases are linked too, is under "Sharing a configuration directory between
+accounts" below. Codex and Claude Code lose or split conversations in a shared directory, in ways they give no warning
+of, and Grok Build has no guard against two writers:
 
 - **Codex.** One home's rollout compression unlinks a rollout that another home holds open, and the turns that home
   writes afterwards are lost. A home whose database row names an older history segment resumes a stale branch and
@@ -1404,16 +1409,16 @@ target).
   `default/settings.json`, itself a link to `dotfiles/settings.json`, a save from the account replaced
   `default/settings.json`'s link with a plain file, and the dotfiles copy stopped updating. A save from the default
   account (one level) wrote through correctly. Not measured for Codex.
-- **Grok Build follows the whole chain** (1.0.62, measured 2026-10-21, scratch homes, a fake API key, the model
-  endpoint on `127.0.0.1`). Default directory D held the files; account A linked `AGENTS.md`, `pager.toml` and
-  `disabled-hooks` at D's resolved paths; a per-session farm linked those names either at D's files (one link) or at
-  A's entries (two links). In both layouts the model's `write` of `AGENTS.md` and of `pager.toml`, and its `search_replace`
-  of `AGENTS.md`, replaced D's file (new inode) and left A's link and the farm's link in place — the farm's still
-  pointing at A when the layout was two links. `/hooks` disable wrote D's `disabled-hooks` in place (same inode);
-  `/hooks` enable replaced D's file (new inode, emptied). A's link and the farm's link stayed, including when the
-  farm pointed at A. The one-link results in the table above still hold. A two-link chain was not measured for
-  `config.toml`, `trusted_folders.toml` or `/settings` as a `pager.toml` writer. `/theme` writes `[ui] theme` into
-  `config.toml`, not into `pager.toml`.
+- **Grok Build follows the whole chain** (1.0.62, measured 2026-10-21, scratch homes, a fake API key, the model endpoint
+  on `127.0.0.1`). Default directory D held the files; account A linked `AGENTS.md`, `pager.toml` and `disabled-hooks`
+  at D's resolved paths; a per-session farm linked those names either at D's files (one link) or at A's entries (two
+  links). In both layouts the model's `write` of `AGENTS.md` and of `pager.toml`, and its `search_replace` of
+  `AGENTS.md`, replaced D's file (new inode) and left A's link and the farm's link in place — the farm's still pointing
+  at A when the layout was two links. `/hooks` disable wrote D's `disabled-hooks` in place (same inode); `/hooks` enable
+  replaced D's file (new inode, emptied). A's link and the farm's link stayed, including when the farm pointed at A. The
+  one-link results in the table above still hold. A two-link chain was not measured for `config.toml`,
+  `trusted_folders.toml` or `/settings` as a `pager.toml` writer. `/theme` writes `[ui] theme` into `config.toml`, not
+  into `pager.toml`.
 - **Grok itself rewrites the per-session `config.toml` copy** (1.0.62). `grok mcp add --scope user` and the TUI command
   `/theme` replaced that copy (new inode: the server block, or `[ui] theme`, added). Grok's write alone left D's file
   and A's link unchanged. Octoboard keeps the copy to contain its injected MCP block, then, after the process exits and
@@ -1434,9 +1439,8 @@ target).
   from that home; with the file linked, that is every sharing account.
 - **Grok's sandbox mode refuses a linked tree** (1.0.62, measured in a per-session home built over a home with
   `bundled/`). `grok --sandbox workspace` refuses to start when `hooks/`, `hooks-paths` or `bundled/` is a symlink (the
-  guide adds `bundles/` and a symlinked `GROK_HOME`). Octoboard's per-session homes copy `bundled/`, `bundles/`,
-  `hooks-paths` and `sandbox.toml`, and a launch whose profile Octoboard can read as not `off` is refused before
-  the home is built. Sandbox mode is off by default.
+  guide adds `bundles/` and a symlinked `GROK_HOME`). Sandbox mode is off by default. The rest is under "Injecting
+  Octoboard into each agent" below.
 
 **Items load through links** (measured with a control for each).
 
@@ -1603,8 +1607,9 @@ first turn set a secret word; success means the model recalled it. Compression w
 | `archived_sessions/…jsonl` | no — ``session <id> is archived. Run `codex unarchive <id>` to unarchive it first.`` |
 | `archived_sessions/…jsonl.zst` | no — the same refusal |
 
-- **A compressed rollout resumes in place, and Codex decompresses it**: after the resume the `.zst` was gone and a plain
-  `.jsonl` stood at the same path. So a `.zst` under `sessions/` counts as a present record.
+- **A compressed rollout resumes in place, and Codex decompresses it** (see "Codex, a rollout it has compressed" under
+  "Moving a conversation to another config directory" above). So a `.zst` under `sessions/` counts as a present
+  record.
 - **An archived thread is refused by where it sits, plain or compressed**, with the text above (`code -32600`). It is
   not a missing record: `codex unarchive <id>` moves the file to `sessions/YYYY/MM/DD/` keeping its extension (a `.zst`
   stays `.zst`), and the resume that follows works from it. So a rollout in `archived_sessions/` is present but needs
@@ -1728,12 +1733,12 @@ process group when the reply arrived.
 - **Claude Code** syncs plugins on start (it rewrites `plugins/synced/…` and a `.in_use` marker per installed plugin
   version) and registers the process in `sessions/<pid>.json` with a `.key` file. `--setting-sources local` stopped the
   plugin writes, but it also drops the user's `settings.json`, which can carry `apiKeyHelper`, `env` (API key or auth
-  token, base URL, Bedrock or Vertex, proxy, extra CA certificates) and `forceLoginMethod`, so a probe could fail or read
-  a different identity than the account's sessions use; the probe therefore leaves settings loading as it is. An
+  token, base URL, Bedrock or Vertex, proxy, extra CA certificates) and `forceLoginMethod`, so a probe could fail or
+  read a different identity than the account's sessions use; the probe therefore leaves settings loading as it is. An
   `enabledPlugins` override through `--settings` did not stop the sync. `--strict-mcp-config` with an empty
   `--mcp-config` does keep the user's MCP servers from starting. So the plugin sync and the `sessions/` registration
-  stay; a later Claude Code start clears a registration whose process is gone (the probe is killed, so it leaves its
-  own until then). No session record is written, with `--no-session-persistence`.
+  stay; a later Claude Code start clears a registration whose process is gone (the probe is killed, so it leaves its own
+  until then). No session record is written, with `--no-session-persistence`.
 - **Codex**, bare: the app server starts a plugin catalogue sync that runs `git ls-remote` over SSH against a plugin
   marketplace and writes `plugins/cache/…` and `.tmp/git-…`. With `features.plugins`, `features.remote_plugin`,
   `features.apps` and `features.hooks` set to false neither happens and the reply is unchanged. Still written:
@@ -1866,7 +1871,8 @@ Codex or Grok Build window reports no reset time were not measured.
 How each agent is given Octoboard's status hooks, its MCP server and a role description, with the condition each one
 brings. Everything is per launch (arguments, an environment variable, or files Octoboard writes itself) and never an
 edit of the project's or the user's files, and was exercised against the versions above. What a user sees of it is in
-`docs/product/launching-agents.md`.
+"What is injected on every launch" in `docs/product/launching-agents.md` and in
+`docs/product/per-agent-launch-specifics.md`.
 
 | Capability | Claude Code | Codex | Grok Build |
 |---|---|---|---|
@@ -2042,22 +2048,23 @@ or destructively if ignored:
 - A macOS PTY master accepts only about 1022 bytes before `EAGAIN` when the child is not draining, so the write is a
   non-blocking partial-write-and-retry loop in slices, never a blocking `write_all` on the daemon's event loop.
 - Nothing may be written while a modal dialog is up. The paste is discarded but the trailing `CR` confirms whatever is
-  highlighted: at Claude Code's trust dialog that was seen to exit the session for a short message (an 8.8 KB paste
-  left it untouched, unexplained), at Grok's approval modal it would select "always-approve", and at Codex's or Grok's
-  folder-trust confirmation it accepts, trusting the folder. Only Codex's approval modal was seen to take a paste
-  without effect. Never send bare keys either, since Grok and Codex treat digits as confirm hotkeys. The one
-  deliberate exception is the daemon's press of an agent's own folder-trust confirmation: Down and Enter for Claude
-  Code, Enter for Codex, `y` for Grok, and nothing else.
+  highlighted: at Claude Code's trust dialog that was seen to exit the session for a short message (an 8.8 KB paste left
+  it untouched, unexplained: the write was answered `delivered` while no text appeared), at Grok's approval modal it
+  would select "always-approve", and at Codex's or Grok's folder-trust confirmation it accepts, trusting the folder.
+  Only Codex's approval modal was seen to take a paste without effect. Never send bare keys either, since Grok and Codex
+  treat digits as confirm hotkeys. The one deliberate exception is the daemon's press of an agent's own folder-trust
+  confirmation: Down and Enter for Claude Code, Enter for Codex, `y` for Grok, and nothing else.
 - The gate comes from hook-reported state, never from the terminal, because none of the agents signal modal state
   through terminal modes. If the hook state is missing or stale, do not write. Two kinds of screen are the exception,
   since no hook announces them, and are read off the terminal instead. The folder-trust confirmations are read from the
   output: no hook runs before one is answered, and nothing is written into a session from its launch until its first
-  hook has arrived (for Claude Code, also until bracketed paste is on, below); for Codex, which runs none until its first prompt, also until the confirmation has been pressed, the
-  person's answer in the terminal is seen to replace it, or the watch for it has ended with none sighted; for Grok
-  Build, which may run no hook at all, at most until 30 s have passed with no confirmation sighted, or, for one sighted,
-  until the rendered screen no longer shows it. The dialogs an agent raises that only a person can answer (Claude Code's
-  launch and resume dialogs and its views of background agents, Codex's and Grok Build's own screens) are read from the
-  rendered screen, which is looked at before each write: nothing is written while one is up.
+  hook has arrived (for Claude Code, also until bracketed paste is on, below); for Codex, which runs none until its
+  first prompt, also until the confirmation has been pressed, the person's answer in the terminal is seen to replace it,
+  or the watch for it has ended with none sighted; for Grok Build, which may run no hook at all, at most until 30 s have
+  passed with no confirmation sighted, or, for one sighted, until the rendered screen no longer shows it. The dialogs an
+  agent raises that only a person can answer (Claude Code's launch and resume dialogs and its views of background
+  agents, Codex's and Grok Build's own screens) are read from the rendered screen, which is looked at before each write:
+  nothing is written while one is up.
 - Claude Code reads nothing written before it turns bracketed paste on. From its start until Ink first puts the
   terminal in raw mode, it reads stdin through an early-input capture that drops every `ESC[` sequence (so the paste
   markers vanish) and turns `CR` into a newline, then seeds the prompt with what it caught; Ink's first raw-mode enable
@@ -2091,29 +2098,24 @@ or destructively if ignored:
   among letters of Arabic, Indic and some other scripts, a zero-width space in Thai, Khmer, Lao or Myanmar text, a
   direction mark in a line holding right-to-left letters, U+034F after a combining mark, and a few more. Private-use and
   unassigned code points, and format characters outside the list such as U+0600, pass untouched. The UI's bidirectional
-  isolates (U+2068, U+2069), which an agent copies into what it writes, are the usual trigger. So Octoboard removes the
-  same characters from every message before writing it and keeps only the joiner and presentation-selector cases above:
-  the script-dependent ones need Unicode script data to judge, and the tag flags are too rare to be worth a rule, so
-  those characters are removed too (a tag flag arrives as a plain black flag). Removing one too many costs a letterform,
-  a direction mark or a flag; keeping one too many costs the message. It is encoded in
-  `apps/daemon/src/term/invisible.rs`. Because a held prompt fires no `UserPromptSubmit`, that hook is also how
-  Octoboard notices a write to an idle Claude Code session that was not sent, whatever held it; a write mid-turn cannot
-  be checked that way, since the agent sends nothing until its turn ends (the behaviour is in "A message written but not
-  sent" in `docs/product/message-delivery.md`). Codex and Grok Build were not measured: neither executable carries any
-  wording about such a hold, but neither was run against one.
-- Claude Code reads a pasted piece that ends in an image extension as an image and loses the `CR` that follows
-  (measured on 2.1.310, 2026-10-25, a real `claude` in a PTY against a stub endpoint). Its paste handler splits the text
-  on newlines and on a space right before `/` or a Windows drive path; a piece whose trimmed, quote-stripped and
+  isolates (U+2068, U+2069), which an agent copies into what it writes, are the usual trigger. Octoboard's own handling
+  of these characters is in `apps/daemon/src/term/invisible.rs` and in "Messages held until a session can take them" in
+  `docs/product/message-delivery.md`. Because a held prompt fires no `UserPromptSubmit`, that hook is also how Octoboard
+  notices a write to an idle Claude Code session that was not sent, whatever held it; a write mid-turn cannot be checked
+  that way, since the agent sends nothing until its turn ends (the behaviour is in "A message written but not sent" in
+  `docs/product/message-delivery.md`). Codex and Grok Build were not measured: neither executable carries any wording
+  about such a hold, but neither was run against one.
+- Claude Code reads a pasted piece that ends in an image extension as an image and loses the `CR` that follows (measured
+  on 2.1.310, 2026-10-25, a real `claude` in a PTY against a stub endpoint). Its paste handler splits the text on
+  newlines and on a space right before `/` or a Windows drive path; a piece whose trimmed, quote-stripped and
   backslash-unescaped text ends in `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp` (any case) takes an asynchronous
   image-read path, whether or not the file exists and whether it is absolute or relative. An `Enter` that arrives while
   the paste is processed is held and replayed on the text path, but the image path clears it when it completes: the
-  message sits in the input box as `[Image #1]` plus `[Pasted text #N +M lines]`, the path text is gone and an image
-  the receiver never asked for is inlined. Idle, no `UserPromptSubmit` fires; mid-turn, the message is not queued but
-  left in the input box. A plain multi-line paste was sent in about 0.4 s, any paste with such a piece was not, and a
-  `CR` written separately 0.3 s or more later sent it. A report listing produced screenshots one per line is the usual
+  message sits in the input box as `[Image #1]` plus `[Pasted text #N +M lines]`, the path text is gone and an image the
+  receiver never asked for is inlined. Idle, no `UserPromptSubmit` fires; mid-turn, the message is not queued but left
+  in the input box. A plain multi-line paste was sent in about 0.4 s, any paste with such a piece was not, and a `CR`
+  written separately 0.3 s or more later sent it. A report listing produced screenshots one per line is the usual
   trigger. A trailing space or invisible character does not avoid it (the piece is trimmed first; invisible characters
-  hold the prompt anyway). So Octoboard wraps the trailing path token of every such piece in backticks (``- `/a/b.png` ``,
-  a quoted path whole), which ends the piece in something else and keeps the path readable as text (a path containing a space is split by the backticks, and a path line inside a fenced code block is wrapped like any other); a piece that does not end
-  in the extension, such as a path followed by punctuation or one already in backticks, is left alone. The shaping
-  is for Claude Code only (Codex and Grok Build were not measured) and is in `apps/daemon/src/term/image_path.rs`.
+  hold the prompt anyway). Octoboard's shaping against it is in `apps/daemon/src/term/image_path.rs` and in "Messages
+  held until a session can take them" in `docs/product/message-delivery.md`; Codex and Grok Build were not measured.
   Measured with the shaped message: sent both idle and mid-turn.

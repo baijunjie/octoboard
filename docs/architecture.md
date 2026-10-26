@@ -150,7 +150,7 @@ confirmations, settings and sessions would each need an owner and an authorizati
 | Terminal | `xterm.js` | macOS cannot embed a Terminal.app or iTerm window in another application; PTY + `xterm.js` is the standard approach and terminal compatibility is its job. |
 | Report panel | sandboxed iframe (`srcdoc`) + `postMessage` | Independent of the desktop framework. |
 | File viewer | `@pierre/diffs` (Shiki on its JavaScript regex engine) | One library for files and diffs; loads offline in the packaged WebView under the app's CSP, no WebAssembly. Behind an application-owned interface. |
-| Storage | SQLite (`rusqlite`, coordinator side) | |
+| Storage | SQLite (`rusqlite`, coordinator side) | — |
 
 ## Orchestration design decisions
 
@@ -180,10 +180,11 @@ confirmations, settings and sessions would each need an owner and an authorizati
   is text written into the receiving terminal, so any session that can write to another could steer it. Commanding is
   therefore the only hard-enforced boundary (`send_message`, `archive_session` and `reopen_session` act on the caller's
   own sessions). Sharing information is a separate tool, offered to every session and reaching any running session in
-  any console or project, and keeping what it is given for an interrupted session until that session is resumed (see `docs/product/information-between-sessions.md`); it is delivered under a header naming
-  the sender and saying the text is information to weigh, role descriptions tell each session whose work it takes, and
-  the receiver's owner is copied so it is never blind to what reaches its sessions. Octoboard makes the distinction
-  plain; whether a model keeps to it is the model's call.
+  any console or project, and keeping what it is given for an interrupted session until that session is resumed (see
+  "Information for an interrupted session" in `docs/product/information-between-sessions.md`); it is delivered under a
+  header naming the sender and saying the text is information to weigh, role descriptions tell each session whose work
+  it takes, and the receiver's owner is copied so it is never blind to what reaches its sessions. Octoboard makes the
+  distinction plain; whether a model keeps to it is the model's call.
 - **A session whose work needs somewhere it does not reach asks the user for a session rather than being given more
   reach.** Two alternatives were set aside. Letting a project session drive sessions in other projects directly breaks
   the assumption that an owner and its bound sessions share a project — removing a project would leave dangling
@@ -246,13 +247,13 @@ Each has an established solution unless noted; any outstanding manual verificati
   `@tauri-apps/*` packages in the UI must move together, since the Tauri CLI refuses to build when the two differ in
   major or minor version.
 - **Full-width punctuation from a CJK input method needs a workaround.** A mark such as `？`, which an input method
-  emits without a candidate window, is swallowed on the first press by unmodified `xterm.js` 6.0.0 in WKWebView. The library arms
-  a "key down seen" flag on every keydown, a bare `Shift` included, and drops the commit while it is set, but WebKit
-  delivers the commit before the mark's own keydown. With the pinned version, the terminal's key handler
+  emits without a candidate window, is swallowed on the first press by unmodified `xterm.js` 6.0.0 in WKWebView. The
+  library arms a "key down seen" flag on every keydown, a bare `Shift` included, and drops the commit while it is set,
+  but WebKit delivers the commit before the mark's own keydown. With the pinned version, the terminal's key handler
   restores the flag after a modifier-only keydown (`TerminalController`), reaching into a private field that must be
-  rechecked on every `xterm.js` upgrade. Composed CJK text is unaffected.
-  The user confirmed the workaround with a real input method on 5.5.0; its private-field contract was rechecked
-  against 6.0.0, but that upgrade has not had a separate manual input-method check.
+  rechecked on every `xterm.js` upgrade. Composed CJK text is unaffected. The workaround was confirmed by hand with a
+  real input method on `xterm.js` 5.5.0; on 6.0.0 only the private-field contract has been checked, not the input
+  method.
 - **Mouse reports past column 95.** The encoded byte exceeds 127, so `onData` never sees it; only `onBinary` does, as a
   string of raw code units, hence a mask back to bytes rather than a UTF-8 encode. Not yet confirmed by hand: the
   forwarding was read line by line but never exercised with a mouse-aware TUI, and none is reachable from Grok's bash
@@ -280,21 +281,22 @@ Each has an established solution unless noted; any outstanding manual verificati
 
 ## Data model
 
-Entities: console, host, project, session, account, report, report-panel page, and the trusted folders. The shapes are in
-`apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind a few fields.
+Stored entities: console, host, project, session, account, report-panel page, trusted folders, information held for an
+interrupted session, branch origin (the session responsible for a branch) and application-wide settings. The shapes
+are in `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind a few fields.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
 - `Session.bound_to` is the id of the session a session reports to — a console session, or an unbound project session
   or lead session of the same project — or unset. It is always set to the starting session for a session started
   through `new_session`. It can change: `transfer_session` hands a session to another owner, `bind_to_session` binds
-  an unbound project session to an owner, and `release_session` clears it (and `lead`), leaving the session unbound. An unbound project session bound
-  to a console session becomes a lead session: it keeps the sessions bound to it, so orchestration is at most two
-  levels deep. `Session.lead` (stored, never sent to clients) marks such a session, because nothing else in the record
-  tells a session bound later from one opened bound, and only the former keeps the unbound project session's role
-  description and tools on every launch. A console session itself is never bound, and a session bound to a lead session
-  owns no other. Reports are routed by this field rather than by a lookup for "the" console session of a console,
-  because a console may hold several at once.
+  an unbound project session to an owner, and `release_session` clears it (and `lead`), leaving the session unbound.
+  An unbound project session bound to a console session becomes a lead session: it keeps the sessions bound to it, so
+  orchestration is at most two levels deep. `Session.lead` (stored, never sent to clients) marks such a session,
+  because nothing else in the record tells a session bound later from one opened bound, and only the former keeps the
+  unbound project session's role description and tools on every launch. A console session itself is never bound, and a
+  session bound to a lead session owns no other. Reports are routed by this field rather than by a lookup for "the"
+  console session of a console, because a console may hold several at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself
@@ -317,9 +319,9 @@ Entities: console, host, project, session, account, report, report-panel page, a
   resume. Nothing but the agent interprets them, which is why they are stored as free text per agent rather than as an
   enumeration, and why the models a dialog offers are asked of the agent itself for the account in question, kept only
   as a short-lived cache in the daemon: a list maintained in Octoboard would be a second source of truth that goes
-  stale with every agent release. A console's `console_session_agent` is no longer a setting of its own: it is kept
-  equal to `default_agent`, is not sent to clients, and survives only so that no existing database has to be
-  rewritten.
+  stale with every agent release. A console's `console_session_agent` is not a setting of its own: it is kept
+  equal to `default_agent`, is not sent to clients and nothing reads it; the column is kept so that existing databases
+  need no rewrite.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
 - `Page.console_session_id` is the console session that pushed the page, not its console: a console may hold several
