@@ -804,7 +804,7 @@ pub(crate) fn console_with_project_and_accounts(prefix: &str) -> (Arc<AppState>,
             pinned: false,
             tags: Vec::new(),
             description: None,
-            worktrees: Default::default(),
+            git_workflow: Default::default(),
         })
         .unwrap();
     for (id, agent) in [

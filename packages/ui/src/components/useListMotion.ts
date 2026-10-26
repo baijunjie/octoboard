@@ -22,6 +22,17 @@ interface ListMotionOptions {
    * one of its items growing or shrinking on its own (not all at once), is that change, not a resize, and positions
    * are taken from its reading-start edge, which stays put as it does (its right edge under RTL). */
   contentWidth?: boolean;
+  /** The collection's block size follows its rows over the same time as their movement, whenever a change that is
+   * animated alters it (rows coming and going, or a row growing or shrinking on its own), from the size shown, with
+   * what it holds clipped at the block edges meanwhile: what follows the collection glides with it the whole way, the
+   * exit copies never draw over that, and a row's new part shows as the clip reaches it, as an entering row's does.
+   * The sizes are `offsetHeight`s set as its `height`, so the list needs `box-sizing: border-box`. Its rows are
+   * measured on every render of its owner as well (a layout read each time), so that a row the owner renders larger
+   * starts its change before it is drawn: it suits a collection whose owner renders rarely. Rows that come or go wholly
+   * above the visible part of a scrolled ancestor not at its end move that ancestor by the browser's scroll anchoring,
+   * which the fit does not undo, so what is in view can shift as the change starts. For a collection that sits above
+   * other content; ignored for a virtualized one and for a `contentWidth` one, which hold their own overflow. */
+  fitHeight?: boolean;
 }
 
 /** A tree's rows by their parent row, and the parents whose rows are shown. A row added or removed
@@ -94,7 +105,7 @@ export function releaseListMotion(row: Element): void {
   }
 }
 
-function watchList(list: HTMLElement, { descendants = false, virtualized = false, keys, folds, contentWidth = false }: ListMotionOptions): ListWatch {
+function watchList(list: HTMLElement, { descendants = false, virtualized = false, keys, folds, contentWidth = false, fitHeight = false }: ListMotionOptions): ListWatch {
   let logical = keys;
   let logicalFolds = folds;
   const added = new Set<string>();
@@ -115,6 +126,23 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
   // A content-width list's own inline styles while its items' motion is held inside it (`hold`).
   let held: { minWidth: string; overflow: string } | undefined;
   let holdTimer: ReturnType<typeof setTimeout> | undefined;
+  // A `fitHeight` list's laid-out block size, and its running change of that size with the list's own `overflow-y`.
+  const fits = fitHeight && !virtualized && !contentWidth;
+  let fitted = list.offsetHeight;
+  let fitting: { animation: Animation; overflowY: string } | undefined;
+  // Shrinking the list would clamp the position of whatever scrolls it at once, before the size has played out, so
+  // where each scrolled ancestor stands is followed, to put back as a shrinking change starts. Any ancestor can be the
+  // one that scrolls (the nearest one whose overflow allows it may not overflow at all), so all of them are followed.
+  const ancestorTops = new Map<Element, number>();
+  const recordScrolls = () => {
+    ancestorTops.clear();
+    for (let at = list.parentElement; at; at = at.parentElement) if (at.scrollTop > 0) ancestorTops.set(at, at.scrollTop);
+  };
+  const onAncestorScroll = (event: Event) => {
+    const target = event.target === document ? document.scrollingElement : event.target;
+    if (target instanceof Element && target !== list && target.contains(list)) ancestorTops.set(target, target.scrollTop);
+  };
+  if (fits) document.addEventListener("scroll", onAncestorScroll, { passive: true, capture: true });
   const observed = new Set<HTMLElement>();
   const slides = new Map<HTMLElement, Slide>();
   const entrances = new Map<HTMLElement, Animation>();
@@ -207,6 +235,20 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       visual.remove();
     };
   };
+  const endFit = () => {
+    if (!fitting) return;
+    const { animation, overflowY } = fitting;
+    fitting = undefined;
+    animation.cancel();
+    list.style.overflowY = overflowY;
+  };
+  const fit = (from: number, to: number) => {
+    const animation = list.animate?.([{ height: `${from}px` }, { height: `${to}px` }], { duration: DURATION, easing: EASING });
+    if (!animation) return;
+    fitting = { animation, overflowY: list.style.overflowY };
+    list.style.overflowY = "clip";
+    animation.onfinish = () => { if (fitting?.animation === animation) endFit(); };
+  };
   const settle = () => {
     clearTimeout(holdTimer);
     if (!held) return;
@@ -232,9 +274,14 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const newWidth = list.clientWidth;
     const newOuterWidth = contentWidth ? list.offsetWidth : outerWidth;
     const newHeight = list.clientHeight;
+    // The size shown now, read before any animation is created or cancelled: where a change is still playing, it is
+    // that change's, which the new layout is measured from.
+    const shown = fits ? (fitting ? list.offsetHeight : fitted) : 0;
     const scrolled = scrollTop !== list.scrollTop || scrollLeft !== list.scrollLeft;
     const newOrder = JSON.stringify(rows.map((element) => element.dataset.listMotion ?? element.dataset.flip));
     const base = virtualized ? list.getBoundingClientRect() : anchor();
+    // For a fitted list, whether every row is where and as large as it was measured last, the same rows.
+    let same = fits && rows.length === positions.size;
     // Read all geometry before creating or cancelling animations, keeping layout reads in one pass.
     const moves = rows.map((element) => {
       const residual = offset(element);
@@ -256,6 +303,7 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       const key = element.dataset.listMotion ?? element.dataset.flip!;
       const before = positions.get(key);
       next.set(key, position);
+      if (same && (before?.element !== element || before.x !== position.x || before.y !== position.y || before.width !== position.width || before.height !== position.height)) same = false;
       return { element, position, before, residual, transform: style?.transform ?? "none" };
     });
     // In a content-width row, an item that has grown or shrunk on its own (a tab gaining a mark, renamed) is a
@@ -267,6 +315,19 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     const moving = initialized && animate && !prefersReducedMotion() && !resized && (!virtualized || (height === newHeight && !scrolled));
     // A pure reorder at the same width (a drag let go) brings nothing in or out, so it has no travel to hold in.
     const reordered = next.size === positions.size && newOuterWidth === outerWidth && [...next.keys()].every((key) => positions.has(key));
+    // Measuring again with nothing changed (the owner rendering anew) leaves a running change alone: laying the list out
+    // at its new size to measure it would clamp what scrolls it at once.
+    const refit = fits && !(moving && same && fitting);
+    let clamped: [Element, number][] = [];
+    if (refit) {
+      endFit();
+      fitted = list.offsetHeight;
+      // Laid out at its new size, a shrinking list has clamped the ancestors scrolled to its end. Only an ancestor that
+      // stands below where it was and at its maximum is put back: anything else moved it (a script, scroll anchoring),
+      // and that stays. Read before this change's exit copies are placed, which can reach past the list's new end, in
+      // the same layout as the clamp.
+      if (shown > fitted) clamped = [...ancestorTops].filter(([at, top]) => at.contains(list) && at.scrollTop < top && at.scrollTop >= at.scrollHeight - at.clientHeight - 1);
+    }
     // Before any exit is placed, as holding the list's width can move its box.
     if (!moving) settle();
     else if (contentWidth && ((newOrder !== order && !reordered) || itemResized)) hold(newOuterWidth);
@@ -311,6 +372,13 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
         animation.onfinish = () => { if (slides.get(element)?.animation === animation) slides.delete(element); };
       }
     }
+    if (refit) {
+      if (moving && shown !== fitted) {
+        fit(shown, fitted);
+        for (const [at, top] of clamped) at.scrollTop = top;
+      }
+      recordScrolls();
+    }
     initialized = initialized || rows.length > 0;
     positions = next;
     // A content-width list's own width may have just been held or let go.
@@ -322,9 +390,23 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     for (const element of observed) if (!rows.includes(element)) { resize?.unobserve(element); observed.delete(element); }
     for (const element of rows) if (!observed.has(element)) { resize?.observe(element); observed.add(element); }
     order = newOrder;
-    released = undefined;
+    // An unchanged measure (the owner rendering anew between a release and the change it announces) leaves a release
+    // for that change.
+    if (!same) released = undefined;
   };
-  const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => measure(true));
+  // During a fit, measuring again restarts it from the size shown: only a real change may do that. The list's own size
+  // animating is none, nor is a row at the size it was measured at, which is what the observer first reports of each
+  // row it starts observing, the rows the change brought in among them.
+  const unchanged = ({ target }: ResizeObserverEntry) => {
+    if (target === list) return list.clientWidth === width;
+    if (!(target instanceof HTMLElement)) return false;
+    const known = positions.get(target.dataset.listMotion ?? target.dataset.flip ?? "");
+    return known?.element === target && known.width === target.offsetWidth && known.height === target.offsetHeight;
+  };
+  const resize = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver((entries) => {
+    if (fitting && entries.every(unchanged)) return;
+    measure(true);
+  });
   resize?.observe(list);
   // Cached collections can populate in a second commit during the same mount. Once that
   // commit settles, a first addition to a genuinely empty collection is a live update. Rows that
@@ -391,7 +473,10 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
     },
     rendered() {
       const keys = JSON.stringify(children().map((element) => element.dataset.listMotion ?? element.dataset.flip));
-      if (keys !== order || departing.size > 0) measure(true);
+      // A fitted list's rows can resize with what its owner renders (a description changing). Measured here, that
+      // change starts before it is drawn; from the observer's report it would start inside the observer, where setting
+      // the list's size back is a further change the observer cannot deliver in that frame.
+      if (keys !== order || departing.size > 0 || fits) measure(true);
     },
     stop() {
       stopped = true;
@@ -399,6 +484,8 @@ function watchList(list: HTMLElement, { descendants = false, virtualized = false
       clearTimeout(additionTimer);
       clearTimeout(releaseTimer);
       settle();
+      endFit();
+      document.removeEventListener("scroll", onAncestorScroll, true);
       departing.clear();
       resize?.disconnect();
       mutations?.disconnect();
@@ -462,8 +549,8 @@ function followList<T extends HTMLElement>(initial: ListMotionOptions): ListFoll
 /** Keyed rows enter, leave and slide to their new positions in either axis. Removed controls
  * leave only inert visual copies; actions and focus handoffs take effect immediately. Virtual
  * collections distinguish logical changes from newly rendered or recycled identities when supplied keys. */
-export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys, folds, contentWidth = false }: ListMotionOptions = {}): ListMotionRef<T> {
-  const [motion] = useState(() => followList<T>({ descendants, virtualized, keys, folds, contentWidth }));
+export function useListMotion<T extends HTMLElement>({ descendants = false, virtualized = false, keys, folds, contentWidth = false, fitHeight = false }: ListMotionOptions = {}): ListMotionRef<T> {
+  const [motion] = useState(() => followList<T>({ descendants, virtualized, keys, folds, contentWidth, fitHeight }));
   const focused = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const onFocus = (event: FocusEvent) => {
@@ -491,7 +578,7 @@ export function useListMotion<T extends HTMLElement>({ descendants = false, virt
     };
   }, [motion, virtualized]);
   useLayoutEffect(() => {
-    motion.rendered({ descendants, virtualized, keys, folds, contentWidth });
+    motion.rendered({ descendants, virtualized, keys, folds, contentWidth, fitHeight });
     const list = motion.ref.current;
     const lost = focused.current;
     if (!virtualized && lost?.isConnected && list?.contains(lost) && document.activeElement === document.body) lost.focus({ preventScroll: true });

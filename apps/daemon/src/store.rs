@@ -20,13 +20,13 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings, GitWorkflowSettingsChanges};
 use crate::protocol::{
     error_code, now_millis, Account, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError,
     Console, ConsoleSessionColour, Host, HostKind, Origin, Page, Project, ProjectAccount,
     ProjectSource, Role, Session, SessionStatus, Settings,
 };
 use crate::session_title::RecordTitles;
-use crate::worktree_settings::{WorktreeOverride, WorktreeSettings, WorktreeSettingsChanges};
 
 /// The single local host record every project and session points at. There is no other host yet,
 /// but the column exists so that adding remote hosts needs no data migration ("Data model" in
@@ -170,8 +170,8 @@ impl Store {
                 pinned        INTEGER NOT NULL DEFAULT 0,
                 tags          TEXT NOT NULL DEFAULT '[]',
                 description   TEXT,
-                -- NULL follows the application-wide value; see `Store::worktree_settings`.
-                use_worktrees       INTEGER,
+                -- NULL follows the application-wide value; see `Store::git_workflow_settings`.
+                development         TEXT,
                 rebase_before_merge INTEGER,
                 delivery            TEXT,
                 revert_gate         INTEGER
@@ -306,7 +306,7 @@ impl Store {
                 added_agents           TEXT,
                 -- NULL until the user names a default account; see `Store::default_account_names`.
                 default_account_names  TEXT,
-                use_worktrees       INTEGER NOT NULL DEFAULT 1,
+                development         TEXT NOT NULL DEFAULT 'worktree',
                 rebase_before_merge INTEGER NOT NULL DEFAULT 1,
                 delivery            TEXT NOT NULL DEFAULT 'ask',
                 revert_gate         INTEGER NOT NULL DEFAULT 0
@@ -465,14 +465,31 @@ impl Store {
                 [],
             )?;
         }
-        for (column, definition) in WORKTREE_SETTING_COLUMNS {
-            if !column_exists(&conn, "settings", column)? {
-                conn.execute(
+        // `development` replaced the boolean `use_worktrees`: on is `worktree`, off `in_place`.
+        // The old column is read only for the migration that adds the new one, so a value the user
+        // has set since is not overwritten when an older build leaves the old column behind again.
+        // One transaction, so that an interruption between the copy and the drop cannot lose it.
+        let tx = conn.unchecked_transaction()?;
+        let settings_had_development = column_exists(&tx, "settings", "development")?;
+        for (column, definition) in GIT_WORKFLOW_SETTING_COLUMNS {
+            if !column_exists(&tx, "settings", column)? {
+                tx.execute(
                     &format!("ALTER TABLE settings ADD COLUMN {column} {definition}"),
                     [],
                 )?;
             }
         }
+        if column_exists(&tx, "settings", "use_worktrees")? {
+            if !settings_had_development {
+                tx.execute(
+                    "UPDATE settings SET development =
+                         CASE WHEN use_worktrees THEN 'worktree' ELSE 'in_place' END",
+                    [],
+                )?;
+            }
+            tx.execute("ALTER TABLE settings DROP COLUMN use_worktrees", [])?;
+        }
+        tx.commit()?;
         // The approval choice was once kept per account, the default account's in `settings`
         // under a name that said so. It is one choice per agent now, and the default account's
         // is the one that stays; the other accounts' are dropped.
@@ -667,14 +684,29 @@ impl Store {
                 )?;
             }
         }
-        for (column, definition) in WORKTREE_OVERRIDE_COLUMNS {
-            if !column_exists(&conn, "projects", column)? {
-                conn.execute(
+        // As for `settings`; a project that followed the application-wide value (NULL) still does.
+        let tx = conn.unchecked_transaction()?;
+        let projects_had_development = column_exists(&tx, "projects", "development")?;
+        for (column, definition) in GIT_WORKFLOW_OVERRIDE_COLUMNS {
+            if !column_exists(&tx, "projects", column)? {
+                tx.execute(
                     &format!("ALTER TABLE projects ADD COLUMN {column} {definition}"),
                     [],
                 )?;
             }
         }
+        if column_exists(&tx, "projects", "use_worktrees")? {
+            if !projects_had_development {
+                tx.execute(
+                    "UPDATE projects SET development =
+                         CASE WHEN use_worktrees IS NULL THEN NULL
+                              WHEN use_worktrees THEN 'worktree' ELSE 'in_place' END",
+                    [],
+                )?;
+            }
+            tx.execute("ALTER TABLE projects DROP COLUMN use_worktrees", [])?;
+        }
+        tx.commit()?;
         for column in PROJECT_ACCOUNT_DEFAULT_COLUMNS {
             if !column_exists(&conn, "projects", column)? {
                 conn.execute(
@@ -1089,7 +1121,7 @@ impl Store {
                                    claude_session_model, claude_session_effort,
                                    codex_session_model, codex_session_effort, grok_session_model,
                                    grok_session_effort, trust_consent, pinned, tags,
-                                   description, use_worktrees, rebase_before_merge, delivery,
+                                   description, development, rebase_before_merge, delivery,
                                    revert_gate)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
                      ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
@@ -1118,10 +1150,10 @@ impl Store {
                 project.pinned,
                 tags_to_text(&project.tags),
                 project.description,
-                project.worktrees.use_worktrees,
-                project.worktrees.rebase_before_merge,
-                project.worktrees.delivery.as_ref().map(enum_to_text),
-                project.worktrees.revert_gate,
+                project.git_workflow.development.as_ref().map(enum_to_text),
+                project.git_workflow.rebase_before_merge,
+                project.git_workflow.delivery.as_ref().map(enum_to_text),
+                project.git_workflow.revert_gate,
             ],
         )?;
         Ok(())
@@ -1160,7 +1192,7 @@ impl Store {
                                  codex_session_model = ?12, codex_session_effort = ?13,
                                  grok_session_model = ?14, grok_session_effort = ?15,
                                  pinned = ?16, tags = ?17, description = ?18,
-                                 use_worktrees = ?19, rebase_before_merge = ?20, delivery = ?21,
+                                 development = ?19, rebase_before_merge = ?20, delivery = ?21,
                                  revert_gate = ?22
              WHERE id = ?1",
             params![
@@ -1182,10 +1214,10 @@ impl Store {
                 project.pinned,
                 tags_to_text(&project.tags),
                 project.description,
-                project.worktrees.use_worktrees,
-                project.worktrees.rebase_before_merge,
-                project.worktrees.delivery.as_ref().map(enum_to_text),
-                project.worktrees.revert_gate,
+                project.git_workflow.development.as_ref().map(enum_to_text),
+                project.git_workflow.rebase_before_merge,
+                project.git_workflow.delivery.as_ref().map(enum_to_text),
+                project.git_workflow.revert_gate,
             ],
         )?;
         Ok(())
@@ -1290,7 +1322,7 @@ impl Store {
             claude_approval_mode: self.claude_approval_mode()?,
             default_account_names: self.default_account_names()?,
             disabled_default_accounts: self.disabled_default_accounts()?,
-            worktrees: self.worktree_settings()?,
+            git_workflow: self.git_workflow_settings()?,
         })
     }
 
@@ -1414,29 +1446,32 @@ impl Store {
         Ok(())
     }
 
-    /// The application-wide worktree settings. A project's override is resolved against them by
-    /// `worktree_settings::effective`, never by reading this directly.
-    pub fn worktree_settings(&self) -> Result<WorktreeSettings> {
+    /// The application-wide git workflow settings. A project's override is resolved against them by
+    /// `git_workflow::effective`, never by reading this directly.
+    pub fn git_workflow_settings(&self) -> Result<GitWorkflowSettings> {
         let conn = self.lock();
-        read_worktree_settings(&conn)
+        read_git_workflow_settings(&conn)
     }
 
-    /// Applies `changes` to the application-wide worktree settings in one read-modify-write.
+    /// Applies `changes` to the application-wide git workflow settings in one read-modify-write.
     /// Whether anything actually changed.
-    pub fn change_worktree_settings(&self, changes: &WorktreeSettingsChanges) -> Result<bool> {
+    pub fn change_git_workflow_settings(
+        &self,
+        changes: &GitWorkflowSettingsChanges,
+    ) -> Result<bool> {
         let conn = self.lock();
-        let current = read_worktree_settings(&conn)?;
+        let current = read_git_workflow_settings(&conn)?;
         let next = changes.applied_to(current);
         if next == current {
             return Ok(false);
         }
         conn.execute(
-            "UPDATE settings SET use_worktrees = ?2, rebase_before_merge = ?3, delivery = ?4,
+            "UPDATE settings SET development = ?2, rebase_before_merge = ?3, delivery = ?4,
                                  revert_gate = ?5
              WHERE id = ?1",
             params![
                 SETTINGS_ID,
-                next.use_worktrees,
+                enum_to_text(&next.development),
                 next.rebase_before_merge,
                 enum_to_text(&next.delivery),
                 next.revert_gate,
@@ -2775,7 +2810,7 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                claude_account_default, codex_account_default, grok_account_default,
                                claude_session_model, claude_session_effort, codex_session_model,
                                codex_session_effort, grok_session_model, grok_session_effort,
-                               trust_consent, pinned, tags, description, use_worktrees,
+                               trust_consent, pinned, tags, description, development,
                                rebase_before_merge, delivery, revert_gate";
 
 /// The projects columns flagging that a project pins an agent's default account. Added in place
@@ -2802,20 +2837,20 @@ const PROJECT_SETTING_COLUMNS: [&str; 9] = [
     "grok_session_effort",
 ];
 
-/// The `settings` columns of the worktree settings, with their definitions. Added in place to a
+/// The `settings` columns of the git workflow settings, with their definitions. Added in place to a
 /// database that predates them, at the application-wide defaults.
-const WORKTREE_SETTING_COLUMNS: [(&str, &str); 4] = [
-    ("use_worktrees", "INTEGER NOT NULL DEFAULT 1"),
+const GIT_WORKFLOW_SETTING_COLUMNS: [(&str, &str); 4] = [
+    ("development", "TEXT NOT NULL DEFAULT 'worktree'"),
     ("rebase_before_merge", "INTEGER NOT NULL DEFAULT 1"),
     ("delivery", "TEXT NOT NULL DEFAULT 'ask'"),
     ("revert_gate", "INTEGER NOT NULL DEFAULT 0"),
 ];
 
-/// The `projects` columns of a project's worktree override. Added in place like
+/// The `projects` columns of a project's git workflow override. Added in place like
 /// [`PROJECT_SETTING_COLUMNS`]; NULL, which a row from before them reads as, follows the
 /// application-wide value.
-const WORKTREE_OVERRIDE_COLUMNS: [(&str, &str); 4] = [
-    ("use_worktrees", "INTEGER"),
+const GIT_WORKFLOW_OVERRIDE_COLUMNS: [(&str, &str); 4] = [
+    ("development", "TEXT"),
     ("rebase_before_merge", "INTEGER"),
     ("delivery", "TEXT"),
     ("revert_gate", "INTEGER"),
@@ -3029,14 +3064,14 @@ fn read_account(row: &Row<'_>) -> rusqlite::Result<Account> {
     })
 }
 
-fn read_worktree_settings(conn: &Connection) -> Result<WorktreeSettings> {
+fn read_git_workflow_settings(conn: &Connection) -> Result<GitWorkflowSettings> {
     Ok(conn.query_row(
-        "SELECT use_worktrees, rebase_before_merge, delivery, revert_gate
+        "SELECT development, rebase_before_merge, delivery, revert_gate
          FROM settings WHERE id = ?1",
         params![SETTINGS_ID],
         |row| {
-            Ok(WorktreeSettings {
-                use_worktrees: row.get(0)?,
+            Ok(GitWorkflowSettings {
+                development: enum_from_row(row, 0)?,
                 rebase_before_merge: row.get(1)?,
                 delivery: enum_from_row(row, 2)?,
                 revert_gate: row.get(3)?,
@@ -3070,8 +3105,8 @@ fn read_project(row: &Row<'_>) -> rusqlite::Result<Project> {
         pinned: row.get(21)?,
         tags,
         description: row.get(23)?,
-        worktrees: WorktreeOverride {
-            use_worktrees: row.get(24)?,
+        git_workflow: GitWorkflowOverride {
+            development: enum_from_row_opt(row, 24)?,
             rebase_before_merge: row.get(25)?,
             delivery: enum_from_row_opt(row, 26)?,
             revert_gate: row.get(27)?,
@@ -3249,8 +3284,8 @@ fn enum_from_text<T: DeserializeOwned>(text: &str) -> Result<T, serde_json::Erro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::git_workflow::{self, Delivery, Development};
     use crate::test_support::ScratchFile;
-    use crate::worktree_settings::{self, Delivery};
 
     fn temp_db(name: &str) -> ScratchFile {
         ScratchFile::new(&format!("store-{name}"), "octoboard.db")
@@ -3954,7 +3989,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
-            worktrees: Default::default(),
+            git_workflow: Default::default(),
         }
     }
 
@@ -5089,36 +5124,36 @@ mod tests {
         }
     }
 
-    /// The application-wide worktree settings start at on, on, ask, off, change item by item with a
-    /// repeat write reporting no change, and a database from before the columns existed gains them
-    /// at those defaults.
+    /// The application-wide git workflow settings start at worktree, on, ask, off, change item by
+    /// item with a repeat write reporting no change, and a database from before the columns existed
+    /// gains them at those defaults.
     #[test]
-    fn the_worktree_settings_default_change_per_item_and_migrate() {
-        let path = temp_db("worktree-settings");
+    fn the_git_workflow_settings_default_change_per_item_and_migrate() {
+        let path = temp_db("git-workflow-settings");
         let store = Store::open(&path).expect("store");
         assert_eq!(
-            store.worktree_settings().unwrap(),
-            WorktreeSettings::default()
+            store.git_workflow_settings().unwrap(),
+            GitWorkflowSettings::default()
         );
         assert_eq!(
-            store.get_settings().unwrap().worktrees,
-            WorktreeSettings::default()
+            store.get_settings().unwrap().git_workflow,
+            GitWorkflowSettings::default()
         );
 
-        let changes = WorktreeSettingsChanges {
+        let changes = GitWorkflowSettingsChanges {
             delivery: Some(Delivery::PullRequest),
             revert_gate: Some(true),
-            ..WorktreeSettingsChanges::default()
+            ..GitWorkflowSettingsChanges::default()
         };
-        assert!(store.change_worktree_settings(&changes).unwrap());
-        assert!(!store.change_worktree_settings(&changes).unwrap());
+        assert!(store.change_git_workflow_settings(&changes).unwrap());
+        assert!(!store.change_git_workflow_settings(&changes).unwrap());
         assert!(!store
-            .change_worktree_settings(&WorktreeSettingsChanges::default())
+            .change_git_workflow_settings(&GitWorkflowSettingsChanges::default())
             .unwrap());
         assert_eq!(
-            store.worktree_settings().unwrap(),
-            WorktreeSettings {
-                use_worktrees: true,
+            store.git_workflow_settings().unwrap(),
+            GitWorkflowSettings {
+                development: Development::Worktree,
                 rebase_before_merge: true,
                 delivery: Delivery::PullRequest,
                 revert_gate: true,
@@ -5128,19 +5163,19 @@ mod tests {
 
         {
             let conn = Connection::open(&path).expect("database");
-            for (column, _) in WORKTREE_SETTING_COLUMNS {
+            for (column, _) in GIT_WORKFLOW_SETTING_COLUMNS {
                 conn.execute(&format!("ALTER TABLE settings DROP COLUMN {column}"), [])
                     .expect("drop column");
             }
-            for (column, _) in WORKTREE_OVERRIDE_COLUMNS {
+            for (column, _) in GIT_WORKFLOW_OVERRIDE_COLUMNS {
                 conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
                     .expect("drop column");
             }
         }
         let store = Store::open(&path).expect("reopened in place");
         assert_eq!(
-            store.worktree_settings().unwrap(),
-            WorktreeSettings::default()
+            store.git_workflow_settings().unwrap(),
+            GitWorkflowSettings::default()
         );
     }
 
@@ -5149,44 +5184,44 @@ mod tests {
     /// change of the application-wide value for the items the project does not hold.
     #[test]
     fn a_project_override_falls_back_to_the_global_value_and_follows_its_changes() {
-        let path = temp_db("worktree-override");
+        let path = temp_db("git-workflow-override");
         let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
         store.insert_project(&project(false)).expect("project");
         let stored = || store.get_project("project-1").unwrap().unwrap();
-        assert_eq!(stored().worktrees, WorktreeOverride::default());
+        assert_eq!(stored().git_workflow, GitWorkflowOverride::default());
         assert_eq!(
-            worktree_settings::effective(&store, &stored()).unwrap(),
-            WorktreeSettings::default()
+            git_workflow::effective(&store, &stored()).unwrap(),
+            GitWorkflowSettings::default()
         );
 
         let mut edited = stored();
-        edited.worktrees = WorktreeOverride {
-            use_worktrees: Some(false),
+        edited.git_workflow = GitWorkflowOverride {
+            development: Some(Development::InPlace),
             delivery: Some(Delivery::Merge),
-            ..WorktreeOverride::default()
+            ..GitWorkflowOverride::default()
         };
         store.update_project(&edited).expect("update");
-        assert_eq!(stored().worktrees, edited.worktrees);
+        assert_eq!(stored().git_workflow, edited.git_workflow);
         assert_eq!(
-            store.list_projects().unwrap()[0].worktrees,
-            edited.worktrees
+            store.list_projects().unwrap()[0].git_workflow,
+            edited.git_workflow
         );
 
         store
-            .change_worktree_settings(&WorktreeSettingsChanges {
-                use_worktrees: Some(true),
+            .change_git_workflow_settings(&GitWorkflowSettingsChanges {
+                development: Some(Development::Branch),
                 rebase_before_merge: Some(false),
                 delivery: Some(Delivery::PullRequest),
                 revert_gate: Some(true),
             })
             .unwrap();
         assert_eq!(
-            worktree_settings::effective(&store, &stored()).unwrap(),
-            WorktreeSettings {
-                use_worktrees: false,
+            git_workflow::effective(&store, &stored()).unwrap(),
+            GitWorkflowSettings {
+                development: Development::InPlace,
                 rebase_before_merge: false,
                 delivery: Delivery::Merge,
                 revert_gate: true,
@@ -5194,23 +5229,94 @@ mod tests {
         );
 
         let mut cleared = stored();
-        cleared.worktrees = WorktreeOverride::default();
+        cleared.git_workflow = GitWorkflowOverride::default();
         store.update_project(&cleared).expect("update");
-        assert_eq!(stored().worktrees, WorktreeOverride::default());
+        assert_eq!(stored().git_workflow, GitWorkflowOverride::default());
         drop(store);
 
         {
             let conn = Connection::open(&path).expect("database");
-            for (column, _) in WORKTREE_OVERRIDE_COLUMNS {
+            for (column, _) in GIT_WORKFLOW_OVERRIDE_COLUMNS {
                 conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
                     .expect("drop column");
             }
         }
         let store = Store::open(&path).expect("reopened in place");
         assert_eq!(
-            store.get_project("project-1").unwrap().unwrap().worktrees,
-            WorktreeOverride::default()
+            store
+                .get_project("project-1")
+                .unwrap()
+                .unwrap()
+                .git_workflow,
+            GitWorkflowOverride::default()
         );
+    }
+
+    /// A database that still holds the boolean `use_worktrees` gets `development` from it: on is
+    /// `worktree`, off `in_place`, and a project that followed the application-wide value still
+    /// does. The old columns go, and a second open reads what was migrated.
+    #[test]
+    fn use_worktrees_migrates_to_development_and_the_old_columns_go() {
+        let path = temp_db("use-worktrees-migration");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let mut off = project(false);
+        off.git_workflow.delivery = Some(Delivery::Merge);
+        store.insert_project(&off).expect("project");
+        let mut on = project(false);
+        on.id = "project-2".to_string();
+        store.insert_project(&on).expect("project");
+        let mut follows = project(false);
+        follows.id = "project-3".to_string();
+        store.insert_project(&follows).expect("project");
+        drop(store);
+
+        {
+            let conn = Connection::open(&path).expect("database");
+            conn.execute_batch(
+                "ALTER TABLE settings DROP COLUMN development;
+                 ALTER TABLE projects DROP COLUMN development;
+                 ALTER TABLE settings ADD COLUMN use_worktrees INTEGER NOT NULL DEFAULT 1;
+                 ALTER TABLE projects ADD COLUMN use_worktrees INTEGER;
+                 UPDATE settings SET use_worktrees = 0;
+                 UPDATE projects SET use_worktrees = 0 WHERE id = 'project-1';
+                 UPDATE projects SET use_worktrees = 1 WHERE id = 'project-2';",
+            )
+            .expect("old shape");
+        }
+        let check = |path: &std::path::Path| {
+            let store = Store::open(path).expect("reopened in place");
+            assert_eq!(
+                store.git_workflow_settings().unwrap().development,
+                Development::InPlace
+            );
+            let development = |id: &str| {
+                store
+                    .get_project(id)
+                    .unwrap()
+                    .unwrap()
+                    .git_workflow
+                    .development
+            };
+            assert_eq!(development("project-1"), Some(Development::InPlace));
+            assert_eq!(development("project-2"), Some(Development::Worktree));
+            assert_eq!(development("project-3"), None);
+            assert_eq!(
+                store
+                    .get_project("project-1")
+                    .unwrap()
+                    .unwrap()
+                    .git_workflow
+                    .delivery,
+                Some(Delivery::Merge)
+            );
+            assert!(!column_exists(&store.lock(), "settings", "use_worktrees").unwrap());
+            assert!(!column_exists(&store.lock(), "projects", "use_worktrees").unwrap());
+        };
+        check(&path);
+        check(&path);
     }
 
     /// Turning a default account off and on records it per agent, a repeat write reports no change,

@@ -1,6 +1,6 @@
 import type { Scenario } from "../scenario";
 import { consoleOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
-import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const console_ = consoleOf("c-errors", "الإصدار Release coordination");
 const project = projectOf("p-errors", console_.id, "البحث Search API");
@@ -11,7 +11,7 @@ const account = { id: "account-errors", agent: "claude" as const, name: "الع�
 const state = snapshotState({
   consoles: [console_], projects: [project], sessions: [session, hub], shellTerminals: [shell],
   pages: { [hub.id]: [pageOf("page-errors", hub.id, "<p>Report</p>", 1)] },
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [account] },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [account] },
 });
 
 /** The browser producer forwards Git stderr verbatim, including its leading spaces and newlines. */

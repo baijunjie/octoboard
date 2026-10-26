@@ -65,7 +65,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
     codex_session_effort: project.codex_session_effort,
     grok_session_model: project.grok_session_model,
     grok_session_effort: project.grok_session_effort,
-    worktrees: project.worktrees,
+    git_workflow: project.git_workflow,
   });
   const consoles = Array.from(state.consoles.values())
     .filter((console) => consoleId === undefined || console.id === consoleId)
@@ -100,7 +100,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
     );
   return {
     format: "octoboard-configuration",
-    version: 1,
+    version: 2,
     ...(consoleId === undefined && {
       settings: {
         auto_pull_repositories: state.settings.auto_pull_repositories,
@@ -113,7 +113,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
         ...(typeof state.settings.auto_approve_account_switches === "boolean" && { auto_approve_account_switches: state.settings.auto_approve_account_switches }),
         ...(typeof state.settings.auto_approve_handoffs === "boolean" && { auto_approve_handoffs: state.settings.auto_approve_handoffs }),
         ...(typeof state.settings.ask_questions_as_choices === "boolean" && { ask_questions_as_choices: state.settings.ask_questions_as_choices }),
-        worktrees: state.settings.worktrees,
+        git_workflow: state.settings.git_workflow,
       },
     }),
     consoles,

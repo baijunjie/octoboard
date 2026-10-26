@@ -57,8 +57,8 @@ use super::quotas;
 use super::reads;
 use super::session_branches as session_branches_tool;
 use super::settings::{
-    self, describe_project, launch_argument, project_accounts_argument, resolve_account,
-    worktrees_argument,
+    self, describe_project, git_workflow_argument, launch_argument, project_accounts_argument,
+    resolve_account,
 };
 
 /// Runs one tool call. The `Err` case is what the model is shown as the reason the call failed, so
@@ -164,7 +164,7 @@ async fn add_project(
     }
     let mut settings = coordinator::NewProjectSettings {
         pinned: optional_bool(arguments, "pinned")?.unwrap_or(false),
-        worktrees: worktrees_argument(arguments)?,
+        git_workflow: git_workflow_argument(arguments)?,
         ..Default::default()
     };
     for (agent, account) in project_accounts_argument(state, arguments)? {
@@ -1196,7 +1196,7 @@ pub(super) mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
-                worktrees: Default::default(),
+                git_workflow: Default::default(),
             })
             .unwrap();
         let owner = console_session("owner");
@@ -1780,7 +1780,7 @@ pub(super) mod tests {
                     pinned: false,
                     tags: Vec::new(),
                     description: None,
-                    worktrees: Default::default(),
+                    git_workflow: Default::default(),
                 })
                 .unwrap();
         }
@@ -2831,7 +2831,7 @@ pub(super) mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
-                worktrees: Default::default(),
+                git_workflow: Default::default(),
             })
             .unwrap();
         for session in [
@@ -3645,19 +3645,20 @@ pub(super) mod tests {
             .contains("not a tool"));
     }
 
-    /// The worktree settings are read and changed through the settings tools: the application-wide
-    /// ones by `get_settings` / `update_settings`, a project's own by `update_project`, and
-    /// `get_project` and `list_projects` report the override beside the values in force.
+    /// The git workflow settings are read and changed through the settings tools: the
+    /// application-wide ones by `get_settings` / `update_settings`, a project's own by
+    /// `update_project`, and `get_project` and `list_projects` report the override beside the
+    /// values in force.
     #[tokio::test]
-    async fn the_worktree_settings_are_read_and_changed_through_the_tools() {
-        let (state, _dir) = settings_state("worktree-settings-tools");
+    async fn the_git_workflow_settings_are_read_and_changed_through_the_tools() {
+        let (state, _dir) = settings_state("git-workflow-settings-tools");
         let read = call(&state, "a", "get_settings", &Map::new())
             .await
             .unwrap();
         assert_eq!(
-            read["worktrees"],
+            read["git_workflow"],
             json!({
-                "use_worktrees": true,
+                "development": "worktree",
                 "rebase_before_merge": true,
                 "delivery": "ask",
                 "revert_gate": false,
@@ -3668,24 +3669,24 @@ pub(super) mod tests {
             &state,
             "a",
             "update_settings",
-            &arguments(json!({ "worktrees": { "delivery": "merge", "revert_gate": true } })),
+            &arguments(json!({ "git_workflow": { "delivery": "merge", "revert_gate": true } })),
         )
         .await
         .unwrap();
-        assert_eq!(updated["worktrees"]["delivery"], "merge");
-        assert_eq!(updated["worktrees"]["revert_gate"], true);
-        assert_eq!(updated["worktrees"]["use_worktrees"], true);
+        assert_eq!(updated["git_workflow"]["delivery"], "merge");
+        assert_eq!(updated["git_workflow"]["revert_gate"], true);
+        assert_eq!(updated["git_workflow"]["development"], "worktree");
         for bad in [
-            json!({ "worktrees": { "delivery": "rebase" } }),
-            json!({ "worktrees": { "use_worktrees": "yes" } }),
-            json!({ "worktrees": { "typo": true } }),
+            json!({ "git_workflow": { "delivery": "rebase" } }),
+            json!({ "git_workflow": { "development": "yes" } }),
+            json!({ "git_workflow": { "typo": true } }),
         ] {
             let message = refused(&state, "a", "update_settings", bad).await;
-            assert!(message.contains("worktrees"), "{message}");
+            assert!(message.contains("git_workflow"), "{message}");
         }
         assert_eq!(
-            state.store.worktree_settings().unwrap().delivery,
-            crate::worktree_settings::Delivery::Merge
+            state.store.git_workflow_settings().unwrap().delivery,
+            crate::git_workflow::Delivery::Merge
         );
 
         let project = call(
@@ -3694,24 +3695,24 @@ pub(super) mod tests {
             "update_project",
             &arguments(json!({
                 "project": "project-1",
-                "worktrees": { "use_worktrees": false, "delivery": "pull_request" },
+                "git_workflow": { "development": "in_place", "delivery": "pull_request" },
             })),
         )
         .await
         .unwrap();
         assert_eq!(
-            project["worktrees"]["override"],
+            project["git_workflow"]["override"],
             json!({
-                "use_worktrees": false,
+                "development": "in_place",
                 "rebase_before_merge": null,
                 "delivery": "pull_request",
                 "revert_gate": null,
             })
         );
         assert_eq!(
-            project["worktrees"]["effective"],
+            project["git_workflow"]["effective"],
             json!({
-                "use_worktrees": false,
+                "development": "in_place",
                 "rebase_before_merge": true,
                 "delivery": "pull_request",
                 "revert_gate": true,
@@ -3725,37 +3726,40 @@ pub(super) mod tests {
             "update_project",
             &arguments(json!({
                 "project": "project-1",
-                "worktrees": { "delivery": null, "revert_gate": false },
+                "git_workflow": { "delivery": null, "revert_gate": false },
             })),
         )
         .await
         .unwrap();
-        assert_eq!(project["worktrees"]["override"]["use_worktrees"], false);
-        assert!(project["worktrees"]["override"]["delivery"].is_null());
-        assert_eq!(project["worktrees"]["effective"]["delivery"], "merge");
-        assert_eq!(project["worktrees"]["effective"]["revert_gate"], false);
+        assert_eq!(
+            project["git_workflow"]["override"]["development"],
+            "in_place"
+        );
+        assert!(project["git_workflow"]["override"]["delivery"].is_null());
+        assert_eq!(project["git_workflow"]["effective"]["delivery"], "merge");
+        assert_eq!(project["git_workflow"]["effective"]["revert_gate"], false);
 
         let message = refused(
             &state,
             "a",
             "update_project",
-            json!({ "project": "project-1", "worktrees": { "delivery": "rebase" } }),
+            json!({ "project": "project-1", "git_workflow": { "delivery": "rebase" } }),
         )
         .await;
-        assert!(message.contains("worktrees"), "{message}");
+        assert!(message.contains("git_workflow"), "{message}");
 
         let listed = call(&state, "a", "list_projects", &Map::new())
             .await
             .unwrap();
         assert_eq!(
-            listed["projects"][0]["worktrees"]["effective"]["use_worktrees"],
-            false
+            listed["projects"][0]["git_workflow"]["effective"]["development"],
+            "in_place"
         );
         let own = call(&state, "of-a", "get_project", &Map::new())
             .await
             .unwrap();
-        assert_eq!(own["worktrees"]["override"]["revert_gate"], false);
-        assert_eq!(own["worktrees"]["effective"]["delivery"], "merge");
+        assert_eq!(own["git_workflow"]["override"]["revert_gate"], false);
+        assert_eq!(own["git_workflow"]["effective"]["delivery"], "merge");
         // A project session cannot change them.
         assert!(refused(&state, "of-a", "update_settings", json!({}))
             .await
@@ -4235,21 +4239,21 @@ pub(super) mod tests {
         assert!(added["projects"][0]["description"].is_null());
     }
 
-    /// `add_project` takes the project's own worktree values as `update_project` does, except that
-    /// an item left out or `null` follows the application-wide value; a parent source gives them to
-    /// every project it adds, and a bad value is refused before anything is stored.
+    /// `add_project` takes the project's own git workflow values as `update_project` does, except
+    /// that an item left out or `null` follows the application-wide value; a parent source gives
+    /// them to every project it adds, and a bad value is refused before anything is stored.
     #[tokio::test]
-    async fn add_project_takes_the_projects_own_worktree_values() {
-        let (state, dir) = settings_state("add-project-worktrees");
+    async fn add_project_takes_the_projects_own_git_workflow_values() {
+        let (state, dir) = settings_state("add-project-git-workflow");
         let before = state.store.list_projects().unwrap().len();
         for bad in [
             json!({ "delivery": "rebase" }),
-            json!({ "use_worktrees": "yes" }),
+            json!({ "development": "yes" }),
             json!({ "typo": true }),
         ] {
-            let args = json!({ "source": "local", "path": "/tmp", "worktrees": bad });
+            let args = json!({ "source": "local", "path": "/tmp", "git_workflow": bad });
             let message = refused(&state, "a", "add_project", args).await;
-            assert!(message.contains("worktrees"), "{message}");
+            assert!(message.contains("git_workflow"), "{message}");
         }
         assert_eq!(state.store.list_projects().unwrap().len(), before);
 
@@ -4257,7 +4261,7 @@ pub(super) mod tests {
             &state,
             "a",
             "update_settings",
-            &arguments(json!({ "worktrees": { "revert_gate": true } })),
+            &arguments(json!({ "git_workflow": { "revert_gate": true } })),
         )
         .await
         .unwrap();
@@ -4270,22 +4274,22 @@ pub(super) mod tests {
             &arguments(json!({
                 "source": "local",
                 "path": repo.to_string_lossy(),
-                "worktrees": { "use_worktrees": false, "delivery": "merge", "revert_gate": null },
+                "git_workflow": { "development": "in_place", "delivery": "merge", "revert_gate": null },
             })),
         )
         .await
         .unwrap();
         assert_eq!(
-            added["projects"][0]["worktrees"]["override"],
+            added["projects"][0]["git_workflow"]["override"],
             json!({
-                "use_worktrees": false,
+                "development": "in_place",
                 "rebase_before_merge": null,
                 "delivery": "merge",
                 "revert_gate": null,
             })
         );
         assert_eq!(
-            added["projects"][0]["worktrees"]["effective"]["revert_gate"],
+            added["projects"][0]["git_workflow"]["effective"]["revert_gate"],
             true
         );
 
@@ -4300,7 +4304,7 @@ pub(super) mod tests {
             &arguments(json!({
                 "source": "parent",
                 "path": parent.to_string_lossy(),
-                "worktrees": { "rebase_before_merge": false },
+                "git_workflow": { "rebase_before_merge": false },
             })),
         )
         .await
@@ -4309,7 +4313,7 @@ pub(super) mod tests {
         assert_eq!(projects.len(), 2);
         assert!(projects
             .iter()
-            .all(|project| project["worktrees"]["override"]["rebase_before_merge"] == false));
+            .all(|project| project["git_workflow"]["override"]["rebase_before_merge"] == false));
 
         let bare = dir.join("bare");
         std::fs::create_dir(&bare).unwrap();
@@ -4321,7 +4325,7 @@ pub(super) mod tests {
         )
         .await
         .unwrap();
-        assert!(added["projects"][0]["worktrees"]["override"]["delivery"].is_null());
+        assert!(added["projects"][0]["git_workflow"]["override"]["delivery"].is_null());
     }
 
     /// `new_session`'s account must belong to the session's agent, and its model must be one the

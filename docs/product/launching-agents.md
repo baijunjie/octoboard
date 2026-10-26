@@ -108,9 +108,9 @@ besides the variables a project session's agent is given for its git (see "The l
   `list_consoles`, `list_projects` and `list_archived` — with the rule that a session not its own is to be left alone
   whatever it can read of it, `list_agent_models` to check before naming a model or effort, `list_sessions` and
   `share_info` for information, and `get_session_branches` for where the branches a session is responsible for are
-  checked out. Where its project's effective worktree settings
-  have use worktrees for development on at the launch, it also carries the worktree rule (see "The worktree rule" in
-  `docs/product/worktree-settings.md`), where **Ask questions as choices** is on at the launch, the guidance on
+  checked out. Where its project's effective git workflow settings
+  have sessions develop on a branch or in a worktree of their own at the launch, it also carries the development rule
+  (see "The development rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as choices** is on at the launch, the guidance on
   asking the user after it (see "The guidance on asking the user" below), and where the language the daemon
   holds is not English, the guidance on the user's language after that (see "The guidance on the user's language" below). Every project session's text ends by saying that everything else is the
   ordinary work of the project, under its own instructions, conventions and configuration. The text is written from who the session
@@ -215,7 +215,7 @@ file while **Ask questions as choices** is on (see that section in `docs/product
 - that a question that only lacks information and has no options to offer is not forced into the tool with invented
   options, but goes into the numbered list at the end of its reply, for the user to answer directly.
 
-A project session is given the section only when the switch is on at that launch. As with the worktree rule, a change
+A project session is given the section only when the switch is on at that launch. As with the development rule, a change
 to the switch is sure to reach only project sessions begun after it: Claude Code and Grok Build keep the role text a
 conversation was first given, so a session begun earlier may keep the section, or its absence, even when resumed. When
 a change reaches a console session is in "The console session's instruction file" above.

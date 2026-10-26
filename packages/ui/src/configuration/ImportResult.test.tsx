@@ -262,7 +262,7 @@ it("tells of each application setting that was applied, and of none the file did
   expect(settingLines(container)).toEqual({ "Automatically pull repositories": { badge: "On" } });
 });
 
-it("tells of the worktree settings when they were applied, and not otherwise", () => {
+it("tells of the git workflow settings when they were applied, and not otherwise", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -272,10 +272,10 @@ it("tells of the worktree settings when they were applied, and not otherwise", (
   });
   const render = (settings_applied: ImportedSettings) =>
     act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], settings_applied }} /></DaemonProvider>));
-  render({ auto_pull_repositories: true, worktrees: { use_worktrees: true, rebase_before_merge: true, delivery: "ask", revert_gate: true } });
-  expect(settingLines(container)["Worktrees"]).toEqual({ badge: "Matches the file" });
+  render({ auto_pull_repositories: true, git_workflow: { development: "worktree", rebase_before_merge: true, delivery: "ask", revert_gate: true } });
+  expect(settingLines(container)["Git workflow"]).toEqual({ badge: "Matches the file" });
   render({ auto_pull_repositories: true });
-  expect(container.textContent).not.toContain("Worktrees");
+  expect(container.textContent).not.toContain("Git workflow");
 });
 
 it("tells what came of the keyboard shortcuts in the settings card, and the ones left out under them", () => {

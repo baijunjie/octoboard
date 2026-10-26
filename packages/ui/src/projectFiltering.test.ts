@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Project } from "./protocol";
 import { effectiveTags, matchesFilter, tagVocabulary, withoutTags, withTag } from "./projectFiltering";
-import { FOLLOWING_WORKTREE_SETTINGS } from "./worktreeSettings";
+import { FOLLOWING_GIT_WORKFLOW } from "./gitWorkflow";
 
 const project = (name: string, tags: string[]): Project => ({
   id: name,
@@ -17,7 +17,7 @@ const project = (name: string, tags: string[]): Project => ({
   claude_account_id: { kind: "inherit" },
   codex_account_id: { kind: "inherit" },
   grok_account_id: { kind: "inherit" },
-  worktrees: FOLLOWING_WORKTREE_SETTINGS,
+  git_workflow: FOLLOWING_GIT_WORKFLOW,
 });
 
 describe("tagVocabulary", () => {

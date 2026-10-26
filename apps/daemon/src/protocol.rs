@@ -559,10 +559,10 @@ pub struct Project {
     /// The user's own summary of what the project is for, read by agent sessions. Stored trimmed;
     /// `None` when blank.
     pub description: Option<String>,
-    /// The project's own worktree settings; an item left `null` follows the application-wide
-    /// value in `Settings::worktrees`.
+    /// The project's own git workflow settings; an item left `null` follows the application-wide
+    /// value in `Settings::git_workflow`.
     #[serde(default)]
-    pub worktrees: crate::worktree_settings::WorktreeOverride,
+    pub git_workflow: crate::git_workflow::GitWorkflowOverride,
 }
 
 impl Project {
@@ -932,9 +932,9 @@ pub struct Settings {
     /// The agents, by wire name, whose default account the user turned off for new work, as
     /// `Account::disabled` does for an account row. Not carried by an export.
     pub disabled_default_accounts: std::collections::BTreeSet<String>,
-    /// The application-wide worktree settings; a project may override each item (see
-    /// `Project::worktrees`).
-    pub worktrees: crate::worktree_settings::WorktreeSettings,
+    /// The application-wide git workflow settings; a project may override each item (see
+    /// `Project::git_workflow`).
+    pub git_workflow: crate::git_workflow::GitWorkflowSettings,
 }
 
 impl Default for Settings {
@@ -959,7 +959,7 @@ impl Default for Settings {
             claude_approval_mode: None,
             default_account_names: Default::default(),
             disabled_default_accounts: Default::default(),
-            worktrees: Default::default(),
+            git_workflow: Default::default(),
         }
     }
 }
@@ -1643,12 +1643,12 @@ pub enum RequestBody {
         /// one project, as `name` is.
         #[serde(default)]
         description: Option<String>,
-        /// The project's own worktree settings; the object, or an item in it, absent or `null`
+        /// The project's own git workflow settings; the object, or an item in it, absent or `null`
         /// follows the application-wide value. A parent directory gives the same values to every
-        /// project it adds. A `delivery` that is none of `ask`, `merge` or `pull_request` is
-        /// refused.
+        /// project it adds. A `development` that is none of `in_place`, `branch` or `worktree`, or
+        /// a `delivery` that is none of `ask`, `merge` or `pull_request`, is refused.
         #[serde(default)]
-        worktrees: Option<crate::worktree_settings::WorktreeOverride>,
+        git_workflow: Option<crate::git_workflow::GitWorkflowOverride>,
     },
     UpdateProject {
         project: String,
@@ -1690,11 +1690,11 @@ pub enum RequestBody {
         /// Absent leaves the description alone; an explicit `null` (or a blank string) clears it.
         #[serde(default, deserialize_with = "present_option")]
         description: Option<Option<String>>,
-        /// Absent leaves the project's worktree settings alone. Within it, per item: absent leaves
-        /// it alone, an explicit `null` goes back to following the application-wide value, and a
-        /// value sets the project's own. An unknown `delivery` is refused.
+        /// Absent leaves the project's git workflow settings alone. Within it, per item: absent
+        /// leaves it alone, an explicit `null` goes back to following the application-wide value,
+        /// and a value sets the project's own. An unknown `development` or `delivery` is refused.
         #[serde(default)]
-        worktrees: Option<crate::worktree_settings::WorktreeOverrideChanges>,
+        git_workflow: Option<crate::git_workflow::GitWorkflowOverrideChanges>,
     },
     DeleteProject {
         project: String,
@@ -2048,9 +2048,10 @@ pub enum RequestBody {
         auto_start_quota_windows: Option<bool>,
         /// A blank value goes back to the built-in default.
         default_clone_dir: Option<String>,
-        /// Absent leaves the worktree settings alone; within it, each item absent is left alone.
+        /// Absent leaves the git workflow settings alone; within it, each item absent is left
+        /// alone.
         #[serde(default)]
-        worktrees: Option<crate::worktree_settings::WorktreeSettingsChanges>,
+        git_workflow: Option<crate::git_workflow::GitWorkflowSettingsChanges>,
     },
     /// Both fields are required: an account always has a name and a directory. Broadcasts
     /// `settings_updated`.
@@ -4705,36 +4706,37 @@ mod tests {
         assert_eq!(claude_session_effort, None);
     }
 
-    /// `add_project` takes a project's own worktree values: an item absent or `null` follows the
-    /// application-wide value, and a `delivery` outside the three is refused.
+    /// `add_project` takes a project's own git workflow values: an item absent or `null` follows
+    /// the application-wide value, and a `development` or `delivery` outside the three is refused.
     #[test]
-    fn add_project_parses_its_own_worktree_values() {
-        use crate::worktree_settings::{Delivery, WorktreeOverride};
+    fn add_project_parses_its_own_git_workflow_values() {
+        use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
         let parse = |tail: &str| {
             serde_json::from_str::<Request>(&format!(
                 r#"{{"type":"add_project","console_id":"c","source":"local","path":"/p"{tail}}}"#
             ))
         };
-        let worktrees = |tail: &str| match parse(tail).unwrap().body {
-            RequestBody::AddProject { worktrees, .. } => worktrees.unwrap_or_default(),
+        let git_workflow = |tail: &str| match parse(tail).unwrap().body {
+            RequestBody::AddProject { git_workflow, .. } => git_workflow.unwrap_or_default(),
             _ => panic!("not add_project"),
         };
-        assert_eq!(worktrees(""), WorktreeOverride::default());
+        assert_eq!(git_workflow(""), GitWorkflowOverride::default());
         assert_eq!(
-            worktrees(r#","worktrees":null"#),
-            WorktreeOverride::default()
+            git_workflow(r#","git_workflow":null"#),
+            GitWorkflowOverride::default()
         );
         assert_eq!(
-            worktrees(
-                r#","worktrees":{"use_worktrees":false,"delivery":"merge","revert_gate":null}"#
+            git_workflow(
+                r#","git_workflow":{"development":"in_place","delivery":"merge","revert_gate":null}"#
             ),
-            WorktreeOverride {
-                use_worktrees: Some(false),
+            GitWorkflowOverride {
+                development: Some(Development::InPlace),
                 delivery: Some(Delivery::Merge),
-                ..WorktreeOverride::default()
+                ..GitWorkflowOverride::default()
             }
         );
-        assert!(parse(r#","worktrees":{"delivery":"rebase"}"#).is_err());
+        assert!(parse(r#","git_workflow":{"delivery":"rebase"}"#).is_err());
+        assert!(parse(r#","git_workflow":{"development":true}"#).is_err());
     }
 
     /// A project's account takes all three states on an update: `null` is inheriting, and an

@@ -13,8 +13,8 @@ use std::os::unix::ffi::OsStrExt;
 
 use super::*;
 use crate::branch_origin::revert_gate_inputs::{inputs, GateRequest};
+use crate::git_workflow::{Development, GitWorkflowSettingsChanges};
 use crate::test_support::fixture_git;
-use crate::worktree_settings::WorktreeSettingsChanges;
 
 // -- the daemon the gate-hook asks ----------------------------------------------
 
@@ -159,7 +159,7 @@ fn set_revert_gate(fixture: &Fixture, on: bool) {
     fixture
         .state
         .store
-        .change_worktree_settings(&WorktreeSettingsChanges {
+        .change_git_workflow_settings(&GitWorkflowSettingsChanges {
             revert_gate: Some(on),
             ..Default::default()
         })
@@ -425,66 +425,60 @@ fn the_switch_is_read_at_every_request_and_a_projects_own_value_wins() {
     assert_eq!(ask(), None, "the application-wide switch is off");
 
     let mut project = fixture.state.store.get_project("project").unwrap().unwrap();
-    project.worktrees.revert_gate = Some(true);
+    project.git_workflow.revert_gate = Some(true);
     fixture.state.store.update_project(&project).unwrap();
     assert!(ask().is_some(), "the project holds its own value");
 
-    project.worktrees.revert_gate = Some(false);
+    project.git_workflow.revert_gate = Some(false);
     fixture.state.store.update_project(&project).unwrap();
     set_revert_gate(&fixture, true);
     assert_eq!(ask(), None, "and so does it when it is off");
 }
 
-fn set_use_worktrees(fixture: &Fixture, on: bool) {
+fn set_development(fixture: &Fixture, development: Development) {
     fixture
         .state
         .store
-        .change_worktree_settings(&WorktreeSettingsChanges {
-            use_worktrees: Some(on),
+        .change_git_workflow_settings(&GitWorkflowSettingsChanges {
+            development: Some(development),
             ..Default::default()
         })
         .unwrap();
 }
 
 #[test]
-fn the_gate_runs_only_while_worktrees_are_used_and_the_stored_switch_is_kept() {
+fn the_gate_runs_whatever_the_development_setting_is() {
     let (fixture, _) = project_with_remote();
     let ask = || inputs(&fixture.state, "a", &request(&fixture.repo));
-    assert!(ask().is_some(), "both on");
+    for development in [
+        Development::InPlace,
+        Development::Branch,
+        Development::Worktree,
+    ] {
+        set_development(&fixture, development);
+        assert!(ask().is_some(), "{development:?}");
+    }
 
-    set_use_worktrees(&fixture, false);
-    assert_eq!(ask(), None, "use worktrees is off, the gate switch on");
-    let stored = fixture.state.store.worktree_settings().unwrap();
-    assert!(stored.revert_gate, "the gate switch is left as it was set");
-
-    set_use_worktrees(&fixture, true);
-    assert!(ask().is_some(), "turning use worktrees back on restores it");
+    set_development(&fixture, Development::InPlace);
+    set_revert_gate(&fixture, false);
+    assert_eq!(ask(), None, "the gate switch alone decides");
 }
 
 #[test]
-fn a_projects_own_use_worktrees_decides_whether_the_gate_runs() {
+fn a_projects_own_development_does_not_decide_whether_the_gate_runs() {
     let (fixture, _) = project_with_remote();
     let ask = || inputs(&fixture.state, "a", &request(&fixture.repo));
     let mut project = fixture.state.store.get_project("project").unwrap().unwrap();
 
-    project.worktrees.use_worktrees = Some(false);
+    project.git_workflow.development = Some(Development::InPlace);
     fixture.state.store.update_project(&project).unwrap();
-    assert_eq!(ask(), None, "the project opts out of worktrees");
-
-    set_use_worktrees(&fixture, false);
-    project.worktrees.use_worktrees = Some(true);
-    fixture.state.store.update_project(&project).unwrap();
-    assert!(ask().is_some(), "the project opts in over an off default");
+    assert!(ask().is_some(), "the project works on the current branch");
 
     set_revert_gate(&fixture, false);
-    project.worktrees.use_worktrees = None;
-    project.worktrees.revert_gate = Some(true);
+    assert_eq!(ask(), None, "its own development does not turn the gate on");
+    project.git_workflow.revert_gate = Some(true);
     fixture.state.store.update_project(&project).unwrap();
-    assert_eq!(
-        ask(),
-        None,
-        "its own gate switch does not outrank the main one"
-    );
+    assert!(ask().is_some(), "its own gate switch does");
 }
 
 #[test]

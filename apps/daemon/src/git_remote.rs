@@ -966,7 +966,7 @@ mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
-                worktrees: Default::default(),
+                git_workflow: Default::default(),
             })
             .expect("project");
         (state, dir)

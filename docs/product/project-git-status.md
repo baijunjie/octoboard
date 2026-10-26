@@ -215,7 +215,7 @@ branch" in `docs/product/project-git-actions.md`.
 
 ## Automatically pulling repositories
 
-Settings' **Git** section (see "Git" in `docs/product/settings.md`) holds one switch, **Automatically pull
+Settings' **Git** section (see "Git" in `docs/product/settings.md`) holds the switch **Automatically pull
 repositories**, **off** to begin with. It is stored by the daemon, so every window and every client sees the same
 value and it survives a restart.
 

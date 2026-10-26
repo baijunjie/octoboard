@@ -21,9 +21,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::browse::{compare, wire_path};
+use crate::git_workflow;
 use crate::revert_gate::GateInputs;
 use crate::state::AppState;
-use crate::worktree_settings;
 
 use super::{git_files, is_same_branch, repo_key, reported_repository, repository_of};
 
@@ -62,7 +62,7 @@ fn inputs_of(
     let Some(project) = state.store.get_project(&project_id)? else {
         return Ok(None);
     };
-    if !worktree_settings::effective(&state.store, &project)?.revert_gate_active() {
+    if !git_workflow::effective(&state.store, &project)?.revert_gate {
         return Ok(None);
     }
     let Some(repo) = repository_of(Path::new(&project.path)) else {

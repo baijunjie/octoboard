@@ -47,8 +47,8 @@ pub struct LaunchRequest {
     pub role: Role,
     /// Who the session reports to, if anyone; see `LaunchSpec::owner`.
     pub owner: Option<crate::mcp::Owner>,
-    /// The project's effective worktree settings; see `LaunchSpec::worktrees`.
-    pub worktrees: Option<crate::worktree_settings::WorktreeSettings>,
+    /// The project's effective git workflow settings; see `LaunchSpec::git_workflow`.
+    pub git_workflow: Option<crate::git_workflow::GitWorkflowSettings>,
     /// See `LaunchSpec::ask_questions_as_choices`.
     pub ask_questions_as_choices: bool,
     /// See `LaunchSpec::user_language`.
@@ -93,7 +93,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         agent,
         role,
         owner,
-        worktrees,
+        git_workflow,
         ask_questions_as_choices,
         user_language,
         cwd,
@@ -157,7 +157,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         session_id,
         role,
         owner,
-        worktrees,
+        git_workflow,
         ask_questions_as_choices,
         user_language: user_language.as_deref(),
         new_agent_session_id: &new_agent_session_id,

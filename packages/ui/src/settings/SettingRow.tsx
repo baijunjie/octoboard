@@ -2,7 +2,8 @@ import { Switch } from "@heroui/react";
 import React, { useEffect, useRef } from "react";
 
 /** One setting: its name and, when it has one, a line saying what it does at the start, its control
- * at the end, with a thin divider under every row but the last. At phone widths the control moves
+ * at the end, with a thin divider under every row but the last (the copy of a row a list motion is
+ * still removing does not count, so the divider goes as the row leaves). At phone widths the control moves
  * under the text instead, since beside it a wide control (a select) squeezes the description to a
  * few words per line. `help` is a help tip that ends the name's line (see "Explanations in help
  * tips" in `docs/product/labels-and-tooltips.md`). `below` is what the row has to say under itself across its whole
@@ -23,7 +24,7 @@ export function SettingRow({
   motionKey?: string;
 }): React.ReactElement {
   return (
-    <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 last:border-b-0">
+    <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit])))]:border-b-0">
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">

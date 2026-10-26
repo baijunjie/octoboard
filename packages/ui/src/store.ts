@@ -6,6 +6,7 @@ import { DaemonClient, DaemonRequestError, type ConnectionState } from "./daemon
 import { daemonMessage } from "./daemonMessage";
 import { errorPresentation, noticeErrorPresentation, noticeKind } from "./errorPresentation";
 import { errorText } from "./errorText";
+import { DEFAULT_GIT_WORKFLOW } from "./gitWorkflow";
 import { currentLanguage } from "./i18n/language";
 import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
@@ -30,7 +31,6 @@ import {
   type Settings,
   type ShellTerminal,
 } from "./protocol";
-import { DEFAULT_WORKTREE_SETTINGS } from "./worktreeSettings";
 
 /**
  * A window notification. Errors require acknowledgement in the shared error dialog; notices
@@ -292,7 +292,7 @@ const initialState: State = {
   trustedDirectories: [],
   sessionRequests: [],
   gitStatuses: new Map(),
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
   agentAvailability: new Map(INITIAL_AGENT_AVAILABILITY.map((a) => [a.agent, a])),
   accountQuotas: [],
   accountLogins: [],

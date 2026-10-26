@@ -11,9 +11,9 @@ an optional default agent, how it was associated, the remote URL of the reposito
 remote URL" below), whether the user has pinned it (see "Order of projects and sessions" in
 `docs/product/order-of-projects-and-sessions.md`), any number of tags (see `docs/product/project-tags.md`), and — one
 set per agent — what it says about the account its sessions run under and an optional model and reasoning effort for
-them (see "The project's account, model and reasoning effort" below), and its own worktree settings, each following
-the application-wide value until the project holds one of its own (see "A project's own worktree settings" in
-`docs/product/worktree-settings.md`). Every project is bound to a host (see "Hosts" below).
+them (see "The project's account, model and reasoning effort" below), and its own git workflow settings, each
+following the application-wide value until the project holds one of its own (see "A project's own git workflow
+settings" in `docs/product/git-workflow-settings.md`). Every project is bound to a host (see "Hosts" below).
 
 A project also carries whether the user has given Octoboard permission to press any agent's trust confirmation for
 its directory without asking. A project starts without that permission, including one the console session associates;
@@ -80,8 +80,8 @@ For a git association:
 - A clone can take minutes; other state updates keep flowing while it runs.
 
 The form's collapsed **Advanced** section (see "The project's account, model and reasoning effort" below) also holds the
-new project's own worktree settings, each following the application-wide value unless a value is picked for it (see
-"Reading and changing them" in `docs/product/worktree-settings.md`).
+new project's own git workflow settings, each following the application-wide value unless a value is picked for it
+(see "Reading and changing them" in `docs/product/git-workflow-settings.md`).
 
 A directory that is already associated with the same console is skipped rather than associated twice. Associating a
 parent directory again after new repositories have appeared beneath it therefore adds only the new ones. If every
@@ -182,8 +182,8 @@ names and effort levels are each agent's own, and a session reads only the set o
 
 The project dialog, both when associating and when editing a project, joins the account picker to the **Default agent**
 field as a single field, the way the session dialog joins its Agent field to one, and holds the same collapsed
-**Advanced** section, with the project's Worktrees group below the model and effort (see "Reading and changing them" in
-`docs/product/worktree-settings.md`). All of it but the Worktrees group belongs to the agent the Default agent field
+**Advanced** section, with the project's Git workflow group below the model and effort (see "Reading and changing
+them" in `docs/product/git-workflow-settings.md`). All of it but the Git workflow group belongs to the agent the Default agent field
 currently settles on — the agent picked, or the agent "Same as console" names while the field is on it — so switching
 that field shows another agent's set, and what was set for an agent no longer shown is kept and still saved. The account
 picker lists, in this order, the inherited entry, "Same as console", with a badge naming the account the console
@@ -199,7 +199,7 @@ badge naming the console's account as usual. A project that names a turned-off a
 run on it are refused until then.
 
 While a new project on a **parent directory** is set to "Detect from files" the account picker is not shown and the
-Advanced section holds the Worktrees group alone, since no agent is settled — each repository found is detected on its
+Advanced section holds the Git workflow group alone, since no agent is settled — each repository found is detected on its
 own — and any account, model or effort set before the source changed is not stored. The Advanced section stays open or
 closed as it was when the Default agent field or the source changes.
 
@@ -250,7 +250,7 @@ a repository with no remote left.
 ## Editing a project
 
 Only the name, the description, the default agent, the account, the model and the reasoning effort, the tags and the
-project's own worktree settings can be changed, besides pinning and unpinning the project. The name is changed from the
+project's own git workflow settings can be changed, besides pinning and unpinning the project. The name is changed from the
 project's Rename or Project settings, everything else from Project settings, which opens the project dialog under that
 title (see "Project rows" in `docs/product/sidebar-project-rows.md`). The description field follows the name, and the
 tags field sits between the description and the default agent: typing in it offers the tags already in use that the
@@ -283,8 +283,8 @@ back to following the console's default for project sessions; the account can be
 inheriting the console's reference among them, and the model and the effort back to unset.
 
 The console session can make the same changes to its console's projects (see "Changing a project: `update_project`" in
-`docs/product/agent-settings-tools.md`), its own worktree settings included. How the project dialog offers those is in
-"Reading and changing them" in `docs/product/worktree-settings.md`.
+`docs/product/agent-settings-tools.md`), its own git workflow settings included. How the project dialog offers those
+is in "Reading and changing them" in `docs/product/git-workflow-settings.md`.
 
 ## Browsing directories
 

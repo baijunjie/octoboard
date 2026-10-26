@@ -10,7 +10,7 @@ import type { Session } from "../protocol";
 import { projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { Daemon, State } from "../store";
 import { parentConsole, project, renderDialog, hub1, buttons, optionElements, choose } from "./sessionDialogTestSupport";
-import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -70,7 +70,7 @@ const requestsOf = (daemon: Daemon, type: string) => vi.mocked(daemon.request).m
 const openButton = () => buttons().find((button) => button.textContent === "Open")!;
 const openDisabled = () => openButton().hasAttribute("disabled") || openButton().getAttribute("aria-disabled") === "true";
 const claudeAccounts: Partial<State> = {
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
     { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
   ] },
 };

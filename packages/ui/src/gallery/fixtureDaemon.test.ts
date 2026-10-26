@@ -11,7 +11,7 @@ import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import { quotaOf, quotaWindow } from "./fixtures/quotas";
 import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
-import { DEFAULT_WORKTREE_SETTINGS, FOLLOWING_WORKTREE_SETTINGS } from "../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
 describe("the fixture daemon's session archiving", () => {
   it("archives running and interrupted descendants and supports reopening", async () => {
@@ -333,7 +333,7 @@ describe("the fixture daemon's session creation", () => {
     const project = projectOf("p", owner.id, "Website");
     const existing = sessionOf("hub", owner.id, undefined, "Renamed release coordinator", "archived", { ordinal: 6 });
     const accounts = [{ id: "work", agent: "codex" as const, name: "Work", config_dir: "/Users/dev/.codex-work" }];
-    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts } }) });
+    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts } }) });
     const preview = { type: "preview_console_session_title" as const, console: owner.id };
     for (let read = 0; read < 2; read++) {
       await expect(daemon.request(preview)).resolves.toEqual({ type: "console_session_title", console: owner.id, title: owner.name });
@@ -484,13 +484,13 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 describe("the fixture daemon's settings and trusted folders", () => {
   it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
     const accounts = [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }];
-    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts }, trustedDirectories: ["/Users/dev/code"] }) });
+    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts }, trustedDirectories: ["/Users/dev/code"] }) });
     await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
     expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "~/work/../repos" });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/repos", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/repos", git_workflow: DEFAULT_GIT_WORKFLOW, accounts });
     await daemon.request({ type: "update_settings", auto_pull_repositories: false, default_clone_dir: " " });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts });
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBeUndefined();
@@ -552,7 +552,7 @@ describe("the fixture daemon's settings and trusted folders", () => {
 describe("the fixture daemon's account directories", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const state = {
-    ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [work, { ...work, id: "codex-work", agent: "codex" as const }] } }),
+    ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [work, { ...work, id: "codex-work", agent: "codex" as const }] } }),
     agentAvailability: new Map([["claude" as const, { agent: "claude" as const, availability: "available" as const, default_account_dir: "/Users/dev/.claude" }]]),
   };
   const daemon = () => createFixtureDaemon({ id: "dirs", title: "", group: "Settings", category: "normal", state });
@@ -616,7 +616,7 @@ describe("the fixture daemon's session release", () => {
 describe("the fixture daemon's account switches", () => {
   const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });
-  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
+  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
   const scenario = { id: "switch", title: "", group: "Sidebar sessions" as const, category: "normal" as const, state };
 
   it("records the new account while keeping session launch settings, and clears it for the default account", async () => {
@@ -868,7 +868,7 @@ describe("the fixture daemon's settings and rail removals", () => {
     const console_ = consoleOf("c", "Main", { claude_account_id: account.id });
     const project = projectOf("p", console_.id, "Website", { claude_account_id: { kind: "account", id: account.id }, codex_account_id: { kind: "default" } });
     const session = sessionOf("s", console_.id, project.id, "Work", "idle", { account_id: account.id, config_dir: account.config_dir });
-    const daemon = createFixtureDaemon({ id: "account-removal", group: "Settings", category: "normal", title: "", state: { ...snapshotState({ consoles: [console_], projects: [project], sessions: [session] }), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [account] } } });
+    const daemon = createFixtureDaemon({ id: "account-removal", group: "Settings", category: "normal", title: "", state: { ...snapshotState({ consoles: [console_], projects: [project], sessions: [session] }), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [account] } } });
     await daemon.request({ type: "delete_account", account: account.id });
     const current = daemon.store.getState();
     expect(current.settings.accounts).toEqual([]);
@@ -899,7 +899,7 @@ describe("the fixture daemon's settings and rail removals", () => {
 });
 
 describe("the fixture daemon's permission approval", () => {
-  const scenario = { id: "agent-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] } }) };
+  const scenario = { id: "agent-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] } }) };
 
   it("saves and clears Codex's reviewer and Claude Code's mode, one for the agent, without changing other settings", async () => {
     const daemon = createFixtureDaemon(scenario);
@@ -933,7 +933,7 @@ describe("the fixture daemon's account sharing", () => {
     category: "normal" as const,
     title: "",
     state: {
-      ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts } }),
+      ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts } }),
       agentAvailability: new Map([
         ["claude" as const, { agent: "claude" as const, availability: "available" as const, default_account_dir: "/Users/dev/.claude" }],
         ["codex" as const, { agent: "codex" as const, availability: "available" as const, default_account_dir: "/Users/dev/.codex" }],
@@ -1157,7 +1157,7 @@ describe("the fixture daemon's path link probe", () => {
 });
 
 describe("the fixture daemon's added agents", () => {
-  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] };
+  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] };
   const daemonWith = (added: ("claude" | "codex" | "grok")[] | null, availability: [("claude" | "codex" | "grok"), "available" | "unavailable" | "not_determined"][]) => {
     const daemon = createFixtureDaemon({ id: "added-agents", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { ...settings, added_agents: added } }) });
     daemon.store.setState({ agentAvailability: new Map(availability.map(([agent, state]) => [agent, { agent, availability: state }])) });
@@ -1213,7 +1213,7 @@ describe("the fixture daemon's added agents", () => {
 });
 
 describe("the fixture daemon's account login and default account name", () => {
-  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, added_agents: ["claude", "grok"] as ("claude" | "grok")[], accounts: [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }] };
+  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, added_agents: ["claude", "grok"] as ("claude" | "grok")[], accounts: [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }] };
   const daemonWith = (outcome?: "succeeded" | "failed" | "timed_out") => createFixtureDaemon({ id: "login", group: "Settings", category: "normal", title: "", state: snapshotState({ settings }), loginOutcome: outcome });
   const login = (daemon: ReturnType<typeof daemonWith>, agent: string, account: string | null) =>
     daemon.store.getState().accountLogins.find((held) => held.agent === agent && held.account === account);
@@ -1347,7 +1347,7 @@ describe("the fixture daemon's quota gate", () => {
       consoles: [consoleOf("c", "Main")],
       projects: [projectOf("p", "c", "Website")],
       sessions: [sessionOf("s", "c", "p", "Work", "idle")],
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: withAccounts },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: withAccounts },
       accountQuotas: withReadings,
     }),
   });
@@ -1420,7 +1420,7 @@ describe("the fixture daemon's disabled accounts", () => {
       consoles: [consoleOf("c", "Main")],
       projects: [projectOf("p", "c", "Website")],
       sessions: [sessionOf("s", "c", "p", "Work", "idle", { account_id: "a-off", config_dir: "/Users/dev/.claude-work" })],
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts, ...(disabledDefaults && { disabled_default_accounts: disabledDefaults }) },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, ...(disabledDefaults && { disabled_default_accounts: disabledDefaults }) },
     }),
   });
 
@@ -1536,39 +1536,39 @@ describe("the fixture daemon's configuration export", () => {
   });
 });
 
-describe("the fixture daemon's worktree settings", () => {
+describe("the fixture daemon's git workflow settings", () => {
   const console_ = consoleOf("c", "Main");
-  const daemonWith = (own = FOLLOWING_WORKTREE_SETTINGS) =>
+  const daemonWith = (own = FOLLOWING_GIT_WORKFLOW) =>
     createFixtureDaemon({
-      id: "worktrees",
+      id: "git-workflow",
       group: "Settings",
       category: "normal",
       title: "",
-      state: snapshotState({ consoles: [console_], projects: [projectOf("p", console_.id, "Website", { worktrees: own })] }),
+      state: snapshotState({ consoles: [console_], projects: [projectOf("p", console_.id, "Website", { git_workflow: own })] }),
     });
 
   it("changes only the application-wide items a settings request names", async () => {
     const daemon = daemonWith();
-    await daemon.request({ type: "update_settings", worktrees: { delivery: "pull_request", revert_gate: false } });
-    expect(daemon.store.getState().settings.worktrees).toEqual({ ...DEFAULT_WORKTREE_SETTINGS, delivery: "pull_request", revert_gate: false });
+    await daemon.request({ type: "update_settings", git_workflow: { delivery: "pull_request", revert_gate: false } });
+    expect(daemon.store.getState().settings.git_workflow).toEqual({ ...DEFAULT_GIT_WORKFLOW, delivery: "pull_request", revert_gate: false });
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
-    expect(daemon.store.getState().settings.worktrees).toEqual({ ...DEFAULT_WORKTREE_SETTINGS, delivery: "pull_request", revert_gate: false });
+    expect(daemon.store.getState().settings.git_workflow).toEqual({ ...DEFAULT_GIT_WORKFLOW, delivery: "pull_request", revert_gate: false });
   });
 
   it("sets, keeps and clears a project's own items as update_project says", async () => {
-    const daemon = daemonWith({ ...FOLLOWING_WORKTREE_SETTINGS, delivery: "merge" });
-    await daemon.request({ type: "update_project", project: "p", worktrees: { revert_gate: false } });
-    expect(daemon.store.getState().projects.get("p")?.worktrees).toEqual({ ...FOLLOWING_WORKTREE_SETTINGS, delivery: "merge", revert_gate: false });
-    await daemon.request({ type: "update_project", project: "p", worktrees: { delivery: null } });
-    expect(daemon.store.getState().projects.get("p")?.worktrees).toEqual({ ...FOLLOWING_WORKTREE_SETTINGS, revert_gate: false });
+    const daemon = daemonWith({ ...FOLLOWING_GIT_WORKFLOW, delivery: "merge" });
+    await daemon.request({ type: "update_project", project: "p", git_workflow: { revert_gate: false } });
+    expect(daemon.store.getState().projects.get("p")?.git_workflow).toEqual({ ...FOLLOWING_GIT_WORKFLOW, delivery: "merge", revert_gate: false });
+    await daemon.request({ type: "update_project", project: "p", git_workflow: { delivery: null } });
+    expect(daemon.store.getState().projects.get("p")?.git_workflow).toEqual({ ...FOLLOWING_GIT_WORKFLOW, revert_gate: false });
     await daemon.request({ type: "update_project", project: "p", name: "Site" });
-    expect(daemon.store.getState().projects.get("p")?.worktrees).toEqual({ ...FOLLOWING_WORKTREE_SETTINGS, revert_gate: false });
+    expect(daemon.store.getState().projects.get("p")?.git_workflow).toEqual({ ...FOLLOWING_GIT_WORKFLOW, revert_gate: false });
   });
 
   it("gives an added project the items the request carries and lets the rest follow", async () => {
     const daemon = daemonWith();
-    await daemon.request({ type: "add_project", console_id: console_.id, source: "local", path: "/Users/dev/code/new", worktrees: { use_worktrees: false, delivery: null } });
+    await daemon.request({ type: "add_project", console_id: console_.id, source: "local", path: "/Users/dev/code/new", git_workflow: { development: "in_place", delivery: null } });
     const added = [...daemon.store.getState().projects.values()].find((project) => project.path === "/Users/dev/code/new");
-    expect(added?.worktrees).toEqual({ ...FOLLOWING_WORKTREE_SETTINGS, use_worktrees: false });
+    expect(added?.git_workflow).toEqual({ ...FOLLOWING_GIT_WORKFLOW, development: "in_place" });
   });
 });

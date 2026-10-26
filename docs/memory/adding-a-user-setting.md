@@ -34,6 +34,6 @@ added, in the same change, to:
   `configuration.import.settings.consequence.<name>` message saying what turning it on then does, added to
   `packages/ui/src/i18n/messages/en.ts` and `zh-Hans.ts`), which both the review and the result render from; the field
   and its `current_` counterpart must exist in `DocumentSettings` and `InspectedSettings` in
-  `packages/ui/src/protocol.ts`. A setting that is not a switch (like the worktree settings or keyboard shortcuts)
-  instead gets its own line in both `packages/ui/src/configuration/ImportReview.tsx` and `ImportResult.tsx`, shown only
-  when the document carries the setting.
+  `packages/ui/src/protocol.ts`. A setting that is not a switch (like the git workflow settings or keyboard
+  shortcuts) instead gets its own line in both `packages/ui/src/configuration/ImportReview.tsx` and `ImportResult.tsx`,
+  shown only when the document carries the setting.

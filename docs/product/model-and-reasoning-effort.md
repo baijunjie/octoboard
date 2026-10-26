@@ -41,7 +41,7 @@ collapsed when the dialog opens. The handoff dialog holds one too, which works a
 session that takes over (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the
-agent the dialog's agent field currently settles on; the project dialog's also holds the project's Worktrees group
+agent the dialog's agent field currently settles on; the project dialog's also holds the project's Git workflow group
 below them, alone while no agent is settled (see "The project's account, model and reasoning effort" in
 `docs/product/projects.md`). In the session dialog, a note explains that unchanged values follow
 the project settings, or the console settings for a console session; the handoff dialog carries the same inheritance

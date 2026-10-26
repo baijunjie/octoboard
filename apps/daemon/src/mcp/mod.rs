@@ -180,7 +180,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       every git repository directly beneath `path`, or `git` to clone \
                       `remote_url` into `path`, which defaults to the user's default clone \
                       directory. Returns the settings of each project added, as `list_projects` \
-                      gives them; a `parent` source gives the same settings, `worktrees` \
+                      gives them; a `parent` source gives the same settings, `git_workflow` \
                       included, to every project it adds. A `git` URL must be an http(s), \
                       ssh or git URL without credentials in it: the user's own git \
                       credentials are used.",
@@ -234,7 +234,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                         "type": "boolean",
                         "description": "Pin the project to the top of the console's project list.",
                     },
-                    "worktrees": worktrees_schema(WorktreesFor::NewProject),
+                    "git_workflow": git_workflow_schema(GitWorkflowFor::NewProject),
                 }),
                 &["source"],
             )
@@ -286,7 +286,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                     },
                     "accounts": accounts_schema(true),
                     "launch": launch_schema("the project's sessions"),
-                    "worktrees": worktrees_schema(WorktreesFor::Project),
+                    "git_workflow": git_workflow_schema(GitWorkflowFor::Project),
                 }),
                 &["project"],
             )
@@ -352,7 +352,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "get_settings",
         description: "The application-wide settings: `auto_pull_repositories`, \
                       `auto_delete_unresumable_archives`, `auto_select_account`, \
-                      `sidebar_order_by_status`, `default_clone_dir`, the `worktrees` settings, \
+                      `sidebar_order_by_status`, `default_clone_dir`, the `git_workflow` settings, \
                       the `accounts` (each agent also has a default account, listed with the id \
                       `default`; `disabled` marks one the user turned off for new sessions), and \
                       the `trusted_directories`. Accounts and trusted directories are read-only here.",
@@ -401,7 +401,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                                         given. An absolute path or one starting with `~/`; blank \
                                         goes back to the built-in default.",
                     },
-                    "worktrees": worktrees_schema(WorktreesFor::Application),
+                    "git_workflow": git_workflow_schema(GitWorkflowFor::Application),
                 }),
                 &[],
             )
@@ -1176,11 +1176,10 @@ const GET_PROJECT: ToolDef = ToolDef {
         "This project's settings in Octoboard, read-only: name, directory, source, remote URL \
          (credentials removed), pin, tags, description, `default_agent`, `accounts` and `launch` \
          (the model and effort sessions of each agent start with; a value left unset falls back \
-         to the console's `project_session_launch`), and `worktrees` (the project's own \
-         `override` of the worktree settings, `null` following the application-wide value, and \
-         the `effective` resolved values; `rebase_before_merge`, `delivery` and `revert_gate` \
-         apply only while `use_worktrees` is on). Only this session's own project can be \
-         read. ",
+         to the console's `project_session_launch`), and `git_workflow` (the project's own \
+         `override` of the git workflow settings, `null` following the application-wide value, \
+         and the `effective` resolved values; `rebase_before_merge` and `delivery` apply only \
+         while `development` is not `in_place`). Only this session's own project can be read. ",
         started_by_a_session!()
     ),
     schema: || object_schema(json!({}), &[]),
@@ -1734,15 +1733,15 @@ fn launch_schema(whose: &str) -> Value {
     })
 }
 
-/// When a change to an item of the worktree rule takes effect. The rule is part of the role text,
-/// which Claude Code and Grok record on a session's first turn and replay on every resume.
+/// When a change to an item of the development rule takes effect. The rule is part of the role
+/// text, which Claude Code and Grok record on a session's first turn and replay on every resume.
 const RULE_REACHES: &str = "Unlike other settings, a change is sure to reach only project \
-                            sessions begun after it: one begun earlier may keep the worktree rule \
-                            it started with, even when resumed.";
+                            sessions begun after it: one begun earlier may keep the rule it \
+                            started with, even when resumed.";
 
-/// Whose worktree settings a tool's `worktrees` argument holds.
+/// Whose git workflow settings a tool's `git_workflow` argument holds.
 #[derive(Clone, Copy, PartialEq)]
-enum WorktreesFor {
+enum GitWorkflowFor {
     Application,
     /// An existing project's own choices: an item left out is left as it is.
     Project,
@@ -1750,16 +1749,17 @@ enum WorktreesFor {
     NewProject,
 }
 
-/// The `worktrees` argument: the four worktree settings, application-wide or as a project's own.
-fn worktrees_schema(whose: WorktreesFor) -> Value {
-    let project = whose != WorktreesFor::Application;
+/// The `git_workflow` argument: the four git workflow settings, application-wide or as a project's
+/// own.
+fn git_workflow_schema(whose: GitWorkflowFor) -> Value {
+    let project = whose != GitWorkflowFor::Application;
     let (owner, left_out) = match whose {
-        WorktreesFor::Application => ("the application-wide values", "is left as it is"),
-        WorktreesFor::Project => (
+        GitWorkflowFor::Application => ("the application-wide values", "is left as it is"),
+        GitWorkflowFor::Project => (
             "this project's own choices",
             "is left as it is; `null` goes back to following the application-wide value",
         ),
-        WorktreesFor::NewProject => (
+        GitWorkflowFor::NewProject => (
             "this project's own choices",
             "or `null` follows the application-wide value",
         ),
@@ -1771,12 +1771,26 @@ fn worktrees_schema(whose: WorktreesFor) -> Value {
             kind
         }
     };
+    let mut development = json!({
+        "type": nullable(json!("string")),
+        "description": format!(
+            "Where project sessions develop: `in_place` (directly on the current branch; they are \
+             given no rule), `branch` (on a branch of their own in the project directory, which \
+             they share, so it suits one session at a time) or `worktree` (on a branch of their \
+             own in a worktree of their own). {RULE_REACHES}"
+        ),
+    });
+    development["enum"] = if project {
+        json!(["in_place", "branch", "worktree", null])
+    } else {
+        json!(["in_place", "branch", "worktree"])
+    };
     let mut delivery = json!({
         "type": nullable(json!("string")),
         "description": format!(
             "How finished work is delivered: `ask` (ask the user each time), `merge` (merge into \
              the target branch locally) or `pull_request` (push and open a pull request). \
-             Applies only while `use_worktrees` is on. {RULE_REACHES}"
+             Applies only while `development` is not `in_place`. {RULE_REACHES}"
         ),
     });
     delivery["enum"] = if project {
@@ -1787,29 +1801,24 @@ fn worktrees_schema(whose: WorktreesFor) -> Value {
     json!({
         "type": "object",
         "description": format!(
-            "The worktree settings for project sessions, {owner}; an item left out {left_out}."
+            "The git workflow settings for project sessions, {owner}; an item left out \
+             {left_out}."
         ),
         "properties": {
-            "use_worktrees": {
-                "type": nullable(json!("boolean")),
-                "description": format!(
-                    "Whether project sessions are asked to develop in a worktree of their own. \
-                     {RULE_REACHES}"
-                ),
-            },
+            "development": development,
             "rebase_before_merge": {
                 "type": nullable(json!("boolean")),
                 "description": format!(
                     "Whether a branch is rebased onto its target branch before it is merged. \
-                     Applies only while `use_worktrees` is on. {RULE_REACHES}"
+                     Applies only while `development` is not `in_place`. {RULE_REACHES}"
                 ),
             },
             "delivery": delivery,
             "revert_gate": {
                 "type": nullable(json!("boolean")),
                 "description": "Whether a branch update that quietly undoes changes already on \
-                                the target branch is blocked. Applies only while `use_worktrees` \
-                                is on. A change takes effect at once, in running sessions too.",
+                                the target branch is blocked, whatever `development` is. A \
+                                change takes effect at once, in running sessions too.",
             },
         },
         "additionalProperties": false,

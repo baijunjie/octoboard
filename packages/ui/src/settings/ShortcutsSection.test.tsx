@@ -49,7 +49,9 @@ it("lists only the commands this client has, and says the fixed ones cannot be c
   expect(text(browser)).not.toContain("Undo");
   expect(button(browser, "Change the shortcut for Toggle focus mode")).not.toBeNull();
   expect(button(browser, "Change the shortcut for Next region of the window")).toBeNull();
-  expect(browser.querySelectorAll("h3").length).toBeGreaterThan(0);
+  const headings = Array.from(browser.querySelectorAll("h3"));
+  expect(headings.length).toBeGreaterThan(0);
+  expect(headings.every((heading) => heading.hasAttribute("data-sticky-heading") && heading.closest("section")?.getAttribute("aria-labelledby") === heading.id)).toBe(true);
 });
 
 it("lists the desktop app's own commands and the native menu's fixed keys there", () => {

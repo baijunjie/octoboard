@@ -1262,9 +1262,10 @@ export const en = {
   "dialog.project.detectFailedTitle": "Could not check the location",
   "dialog.project.detectFailed": "The daemon answered with something unexpected.",
   "dialog.project.urlChecking": "Checking the repository…",
-  "dialog.project.worktrees.description":
-    "Each item follows the app setting unless you choose a value for this project. A change to a rule reaches only sessions begun after it, and a change to the revert gate takes effect at once.",
-  "dialog.project.worktrees.sameAsGlobal": "Same as app setting",
+  "dialog.project.gitWorkflow.title": "Git workflow",
+  "dialog.project.gitWorkflow.description":
+    "Each item follows the app setting unless you choose a value for this project. A change to the revert gate takes effect at once; any other change reaches only sessions begun after it.",
+  "dialog.project.gitWorkflow.sameAsGlobal": "Same as app setting",
   "dialog.consoleSession.title": "Open console session in {console}",
   "dialog.consoleSession.launchInheritanceNote": "Unchanged values follow the console settings.",
   "dialog.session.title": "Open session in {project}",
@@ -1642,6 +1643,7 @@ export const en = {
   "configuration.import.settings.badge.same": "No change",
   "configuration.import.settings.badge.changes": "Set to the file's",
   "configuration.import.settings.badge.reset": "Back to defaults",
+  "configuration.import.gitWorkflow": "Git workflow",
   "configuration.import.settings.consequence.autoPull": "{appName} then pulls your repositories by itself.",
   "configuration.import.settings.consequence.archiveCleanup": "{appName} then deletes such archived sessions by itself.",
   "configuration.import.settings.consequence.autoSelectAccount": "A new session then uses the account whose weekly limit resets soonest.",
@@ -1745,7 +1747,6 @@ export const en = {
   "settings.sections": "Settings sections",
   "settings.section.general": "General",
   "settings.section.git": "Git",
-  "settings.section.worktrees": "Worktrees",
   "settings.section.accounts": "Agent accounts",
   "settings.section.trustedFolders": "Trusted folders",
   "settings.section.permissions": "Permissions",
@@ -1963,38 +1964,46 @@ export const en = {
   "settings.updates.channel.description": "Beta gets every release, stable ones included. Stable gets only stable releases.",
   "settings.updates.channel.beta": "Beta",
   "settings.updates.channel.stable": "Stable",
+  "settings.git.group.repository": "Repository",
+  "settings.git.group.development": "Development",
+  "settings.git.group.protection": "Protection",
   "settings.git.autoPull.label": "Automatically pull repositories",
   "settings.git.autoPull.description":
     "Pulls a project's branch when it is behind its upstream and can be fast-forwarded. It never pushes, and it leaves a branch that has commits of its own alone.",
   "settings.git.autoPull.help": "About automatic pulling",
   "settings.git.autoPull.remoteCheck":
     "The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",
-  "settings.worktrees.useWorktrees.label": "Use worktrees for development",
-  "settings.worktrees.useWorktrees.description.off":
-    "Once this is on, a project session is asked to create a branch and a worktree of its own before it changes files. A change reaches only sessions begun after it, and a project's own rules for worktrees and branches come first. Rebase, delivery and the revert gate are shown while this is on.",
-  "settings.worktrees.useWorktrees.description.on":
-    "A project session is asked to create a branch and a worktree of its own before it changes files. A change reaches only sessions begun after it, and a project's own rules for worktrees and branches come first. Rebase, delivery and the revert gate are shown while this is on.",
-  "settings.worktrees.rebase.label": "Rebase before merging",
-  "settings.worktrees.rebase.description.off":
+  "settings.gitWorkflow.development.label": "Where sessions develop",
+  "settings.gitWorkflow.development.inPlace": "On the current branch",
+  "settings.gitWorkflow.development.branch": "On a branch of its own",
+  "settings.gitWorkflow.development.worktree": "In a worktree of its own",
+  "settings.gitWorkflow.development.description.inPlace":
+    "A project session works directly on the current branch and is given no rule for branches or worktrees. A change reaches only sessions begun after it. Rebase and delivery are shown once sessions work on a branch of their own.",
+  "settings.gitWorkflow.development.description.branch":
+    "A project session is asked to create a branch of its own in the project directory before it changes files. The branch shares that directory, so this suits one session at a time. A change reaches only sessions begun after it, and a project's own rules for worktrees and branches come first.",
+  "settings.gitWorkflow.development.description.worktree":
+    "A project session is asked to create a branch and a worktree of its own before it changes files. A change reaches only sessions begun after it, and a project's own rules for worktrees and branches come first.",
+  "settings.gitWorkflow.rebase.label": "Rebase before merging",
+  "settings.gitWorkflow.rebase.description.off":
     "Once this is on, a branch is rebased onto its target branch before it is merged. A change reaches only sessions begun after it, and a project's own rules come first.",
-  "settings.worktrees.rebase.description.on":
+  "settings.gitWorkflow.rebase.description.on":
     "A branch is rebased onto its target branch before it is merged. A change reaches only sessions begun after it, and a project's own rules come first.",
-  "settings.worktrees.delivery.label": "Delivery",
-  "settings.worktrees.delivery.description":
+  "settings.gitWorkflow.delivery.label": "Delivery",
+  "settings.gitWorkflow.delivery.description":
     "How a session delivers finished work when nobody has said how. A change reaches only sessions begun after it, and a project's own rules come first.",
-  "settings.worktrees.delivery.ask": "Ask each time",
-  "settings.worktrees.delivery.merge": "Merge locally",
-  "settings.worktrees.delivery.pullRequest": "Open a pull request",
-  "settings.worktrees.revertGate.label": "Revert gate",
-  "settings.worktrees.revertGate.description.off":
+  "settings.gitWorkflow.delivery.ask": "Ask each time",
+  "settings.gitWorkflow.delivery.merge": "Merge locally",
+  "settings.gitWorkflow.delivery.pullRequest": "Open a pull request",
+  "settings.gitWorkflow.revertGate.label": "Revert gate",
+  "settings.gitWorkflow.revertGate.description.off":
     "Once this is on, in a project session a branch update that quietly undoes changes already on its target branch is blocked. A change takes effect at once, running sessions included.",
-  "settings.worktrees.revertGate.description.on":
+  "settings.gitWorkflow.revertGate.description.on":
     "In a project session, a branch update that quietly undoes changes already on its target branch is blocked. A change takes effect at once, running sessions included.",
-  "settings.worktrees.revertGate.help": "About passing the revert gate",
-  "settings.worktrees.revertGate.deliberate":
+  "settings.gitWorkflow.revertGate.help": "About passing the revert gate",
+  "settings.gitWorkflow.revertGate.deliberate":
     "It blocks an update that quietly drops changes already on the target branch, usually after a merge or rebase whose conflicts were resolved wrongly. To undo a commit on purpose, undo it with {gitRevert}, or add a {reverts} line to the message of the commit that undoes it, and the update passes.",
-  "settings.worktrees.on": "On",
-  "settings.worktrees.off": "Off",
+  "settings.gitWorkflow.on": "On",
+  "settings.gitWorkflow.off": "Off",
   "settings.trusted.description":
     "Under these folders, every agent's trust confirmation is accepted for you without asking, for every project, including projects added later. Each agent then records the trust in its own configuration and applies the project's own permission rules and hooks. A folder is trusted from a session's trust dialog. Trust a folder only if you trust everything that ends up inside it.",
   "settings.trusted.empty": "No trusted folders yet",

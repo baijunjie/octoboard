@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { consoleOf } from "../gallery/fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
 import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
-import { FOLLOWING_WORKTREE_SETTINGS } from "../worktreeSettings";
+import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
   id,
@@ -35,7 +35,7 @@ const project = (id: string, name: string, pinned = false): Project => ({
   claude_account_id: { kind: "inherit" },
   codex_account_id: { kind: "inherit" },
   grok_account_id: { kind: "inherit" },
-  worktrees: FOLLOWING_WORKTREE_SETTINGS,
+  git_workflow: FOLLOWING_GIT_WORKFLOW,
 });
 
 describe("ordersByStatus", () => {

@@ -6,7 +6,7 @@ import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, snapshotState } from 
 import { noneAddedState } from "./empty";
 import { agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
-import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Settings";
 
@@ -28,7 +28,7 @@ const browserState: Scenario["state"] = {
     ask_questions_as_choices: true,
     added_agents: ["claude", "codex"],
     default_clone_dir: "/Users/dev/Projects",
-    worktrees: DEFAULT_WORKTREE_SETTINGS,
+    git_workflow: DEFAULT_GIT_WORKFLOW,
     accounts: [
       { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
       {
@@ -550,7 +550,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: git",
-    description: "Default clone directory is the first row, before Automatically pull repositories; its explanation describes when the chosen directory is used, and the path appears in the input. Automatically pull repositories shows its first two sentences under the label, and a small muted \"?\" at the end of the label holds the sentence about the remote being checked. It is the only row on this page with a help tip.",
+    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Permissions, Notifications, Keyboard shortcuts, Configuration, About. Git has three headed groups holding six rows. Repository: Default clone directory (its explanation describes when the chosen directory is used, and the path appears in the input), then Automatically pull repositories, which shows its first two sentences under the label and a small muted \"?\" holding the sentence about the remote being checked. Development: Where sessions develop reads In a worktree of its own, with the explanation for that choice; Rebase before merging is on, with the explanation that says what being on does; Delivery, last, reads Ask each time in a select at the end of its row. Protection: Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\".",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -558,52 +558,40 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
-    id: "settings-worktrees",
+    id: "settings-git-changed",
     group: GROUP,
     category: "normal",
-    title: "Settings: worktrees",
-    description: "Worktrees follows Git in the section list. Four rows in this order: Use worktrees for development and Rebase before merging are on, each with the explanation that says what being on does; Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\"; Delivery, last, reads Ask each time in a select at the end of its row. Use worktrees for development ends its explanation with \"Rebase, delivery and the revert gate are shown while this is on.\"",
-    state: browserState,
+    title: "Settings: git, development on a branch and the other items changed from the defaults",
+    description: "Where sessions develop reads On a branch of its own, with the explanation that the branch shares the project directory, so it suits one session at a time. Rebase before merging is off, its explanation saying what turning it on would do; Delivery reads Open a pull request, the longest of its three labels, which fits the select without being cut. Revert gate, in its own group, is on, its explanation starting \"In a project session\" and saying a change takes effect at once, running sessions included.",
+    state: { ...browserState, settings: { ...browserState.settings!, git_workflow: { development: "branch", rebase_before_merge: false, delivery: "pull_request", revert_gate: true } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.worktrees")),
+      (ui) => ui.press(ui.t("settings.section.git")),
     ],
   },
   {
-    id: "settings-worktrees-changed",
+    id: "settings-git-in-place",
     group: GROUP,
     category: "normal",
-    title: "Settings: worktrees changed from the defaults",
-    description: "Use worktrees for development stays on and the other rows differ from the defaults: Rebase before merging is off, its explanation saying what turning it on would do; Revert gate is on, its explanation starting \"In a project session\" and saying a change takes effect at once, running sessions included. Delivery reads Open a pull request, the longest of its three labels, which fits the select without being cut.",
-    state: { ...browserState, settings: { ...browserState.settings!, worktrees: { use_worktrees: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: true } } },
+    title: "Settings: git, development on the current branch",
+    description: "Where sessions develop reads On the current branch, its explanation saying a session is given no rule for branches or worktrees and that rebase and delivery are shown once sessions work on a branch of their own. Rebase before merging and Delivery are not shown, though the stored values (rebase on, delivery Open a pull request) are kept and come back with another choice. Revert gate is still shown, on, in the Protection group.",
+    state: { ...browserState, settings: { ...browserState.settings!, git_workflow: { development: "in_place", rebase_before_merge: true, delivery: "pull_request", revert_gate: true } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.worktrees")),
+      (ui) => ui.press(ui.t("settings.section.git")),
     ],
   },
   {
-    id: "settings-worktrees-off",
+    id: "settings-git-revert-gate-help",
     group: GROUP,
     category: "normal",
-    title: "Settings: worktrees, worktrees off",
-    description: "Use worktrees for development is off and is the only row on the page, its explanation starting \"Once this is on\" and still ending with the line that rebase, delivery and the revert gate are shown while it is on. Rebase before merging, Revert gate and Delivery are not shown, though the stored values (rebase on, revert gate on, delivery Open a pull request) are kept and come back when the switch is turned on.",
-    state: { ...browserState, settings: { ...browserState.settings!, worktrees: { use_worktrees: false, rebase_before_merge: true, delivery: "pull_request", revert_gate: true } } },
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.worktrees")),
-    ],
-  },
-  {
-    id: "settings-worktrees-revert-gate-help",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: worktrees, revert gate help tip open",
+    title: "Settings: git, revert gate help tip open",
     description: "The mouse rests on the \"?\" after the Revert gate label, so its popover is open: it says what the gate blocks and how to undo a commit on purpose, with git revert or a \"Reverts: <sha>\" line in the undoing commit's message, both as monospace chips. No focus has moved; the text can be selected.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.worktrees")),
-      (ui) => ui.hoverStatusMark(ui.t("settings.worktrees.revertGate.help")),
+      (ui) => ui.press(ui.t("settings.section.git")),
+      (ui) => ui.hoverStatusMark(ui.t("settings.gitWorkflow.revertGate.help")),
     ],
   },
   {

@@ -1,7 +1,7 @@
 import type { Agent } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { branchItemOf, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
-import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Archive view";
 
@@ -110,7 +110,7 @@ const preservedTaskTitles: Record<string, string> = {
 };
 const archiveState = {
   ...state,
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude" as const, "codex" as const], default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude" as const, "codex" as const], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
     { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment, regional deployment pipeline and supported customer account for the next scheduled release", config_dir: "/Users/dev/.claude-release" },
     { id: "a-release", agent: "claude" as const, name: "Production release coordination and regression review account for regional deployment pipelines and customer support, for the next scheduled regional release", config_dir: "/Users/dev/.claude-regression" },
   ] },

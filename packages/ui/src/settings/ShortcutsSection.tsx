@@ -12,9 +12,7 @@ import { restoreAllBindings, restoreBinding, setBinding, shortcutOverrides, useB
 import type { ShortcutProblem } from "../shortcuts/validate";
 import { IS_MAC } from "../useWindowShortcut";
 import { SettingRow } from "./SettingRow";
-
-/** The height of a group's heading, which pins to the top of the section's scroller while its rows scroll under it. */
-export const SHORTCUT_GROUP_HEADING_HEIGHT = 40;
+import { SettingsGroup } from "./SettingsGroup";
 
 /**
  * The keyboard shortcuts: every key the app has, grouped, with the app's own commands rebindable. A
@@ -151,14 +149,7 @@ export function ShortcutsSection(): React.ReactElement {
         )}
       </div>
       {groups.map(({ group, commands }) => (
-        <section key={group} aria-labelledby={`shortcuts-${group}`}>
-          <h3
-            id={`shortcuts-${group}`}
-            data-sticky-heading=""
-            className="sticky top-[calc(-1*var(--section-padding))] z-3 mt-4 flex h-[40px] items-center groove-b bg-overlay text-base font-semibold"
-          >
-            {t(`settings.shortcuts.group.${group}`)}
-          </h3>
+        <SettingsGroup key={group} title={t(`settings.shortcuts.group.${group}`)}>
           {commands.map((command) => (
             <ShortcutRow
               key={command.id}
@@ -175,7 +166,7 @@ export function ShortcutsSection(): React.ReactElement {
               onReset={reset}
             />
           ))}
-        </section>
+        </SettingsGroup>
       ))}
     </div>
   );

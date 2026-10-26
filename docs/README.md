@@ -10,7 +10,8 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   picker's usage bar, what a reading leaves in the account's directory, the rail's quota panel, and when an account
   counts as used up and what that refuses, and the `get_account_quotas` tool that gives a session the readings and refreshes them on request.
 - [Collection motion](product/collection-motion.md) — entry, exit and position transitions for dynamic collections, including
-  horizontal and wrapping items, virtualized rows, keyboard focus and reduced motion.
+  horizontal and wrapping items, virtualized rows, dividers, a collection's height following its rows, keyboard focus
+  and reduced motion.
 - [Consoles](product/consoles.md) — consoles: their fields and working directory, the two default agents, agents
   that are not installed, the avatar, console session instructions, per-agent config directories (accounts and how
   sessions hold their directory), and editing and deleting a console.
@@ -273,11 +274,13 @@ Long-lived documentation under `docs/`. Development plan docs and bug tickets ar
   requests, each its own switch, and asking questions as choices), Notifications, Keyboard shortcuts and
   Configuration (exporting and importing the configuration document, where the window can save and open files)
   sections.
-- [Worktree settings](product/worktree-settings.md) — the four worktree settings (use worktrees, rebase before merging,
-  delivery, revert gate), their values and defaults, the other three applying only while use worktrees is on, a project
-  following each application-wide value or holding its own and how the effective values are worked out, and how they
-  are read and changed in Settings, in the project dialog, through the daemon's requests, the agents' settings tools
-  and the configuration export and import.
+- [Git workflow settings](product/git-workflow-settings.md) — the four git workflow settings (where sessions develop: on
+  the current branch, on a branch of its own or in a worktree of its own; rebase before merging; delivery; revert gate),
+  their values and defaults, rebase and delivery having no effect while sessions develop on the current branch, the
+  revert gate being independent of that, a project following each application-wide value or holding its own, the
+  development rule a project session is given ("Developing on a branch" or "Developing in a worktree") and when a change
+  reaches a session, and how they are read and changed in Settings, in the project dialog, through the daemon's
+  requests, the agents' settings tools and the configuration export and import.
 - [The revert gate](product/revert-gate.md) — the built-in gate on a project session's git: which branches are guarded
   and how a session's new branch gets its target branch and fork point, what local updates and pushes it refuses and
   how a deliberate revert passes, what the agent sees, the switch read every time it runs, where it runs and where

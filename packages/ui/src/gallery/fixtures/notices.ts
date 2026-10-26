@@ -4,7 +4,7 @@ import type { Scenario } from "../scenario";
 import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, sessionOf, snapshotState } from "./builders";
 import { quotaOf, quotaWindow } from "./quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
-import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const TRUST = "Trust prompts and toasts";
 
@@ -59,7 +59,7 @@ const resumeSettings: Settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
   added_agents: ALL_AGENTS,
-  default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS,
+  default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
   accounts,
 };
 const onAccount = (account: Account) => ({ account_id: account.id, config_dir: account.config_dir });

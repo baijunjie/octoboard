@@ -88,8 +88,8 @@ it("reports the setting this machine has now as the scenario's own state has it"
     if (typeof inspection.settings!.auto_approve_handoffs === "boolean") {
       expect(inspection.settings!.current_auto_approve_handoffs, id).toBe(machine!.auto_approve_handoffs ?? false);
     }
-    if (inspection.settings!.worktrees) {
-      expect(inspection.settings!.current_worktrees, id).toEqual(machine!.worktrees);
+    if (inspection.settings!.git_workflow) {
+      expect(inspection.settings!.current_git_workflow, id).toEqual(machine!.git_workflow);
     }
   }
 });
@@ -187,8 +187,8 @@ it("reports application settings only for a document that carries them", () => {
       if (typeof inspection.settings.auto_approve_handoffs === "boolean") {
         expect(result.settings_applied.auto_approve_handoffs, id).toBe(inspection.settings.auto_approve_handoffs);
       }
-      if (inspection.settings.worktrees) {
-        expect(result.settings_applied.worktrees, id).toEqual(inspection.settings.worktrees);
+      if (inspection.settings.git_workflow) {
+        expect(result.settings_applied.git_workflow, id).toEqual(inspection.settings.git_workflow);
       }
     }
   }

@@ -179,6 +179,8 @@ Help tips are used in these places:
 
 - Settings' **Automatically pull repositories** row, at the end of the row's name: that the remote is checked every few
   minutes whichever way the switch is set (see "Git" in `docs/product/settings.md`);
+- Settings' **Revert gate** row in the Git section, at the end of the row's name: what the gate blocks and how a
+  deliberate undo passes it (see "Protection" in `docs/product/settings.md`);
 - Settings' **Start usage windows automatically** row in the Agent accounts section, at the end of the row's name: why a
   usage window that has reset waits for the account's next request before it starts counting, and how the switch starts
   it (see "Start usage windows automatically" in `docs/product/settings.md`);

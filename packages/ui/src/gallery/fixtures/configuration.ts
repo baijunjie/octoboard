@@ -4,8 +4,8 @@
 // here by hand, and the test beside this file holds those answers to the rules the daemon follows.
 import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/ImportReview";
-import type { InspectedProject, WorktreeSettings } from "../../protocol";
-import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
+import type { GitWorkflowSettings, InspectedProject } from "../../protocol";
 import type { Ui } from "../interact";
 import type { ConfigurationFixture, Scenario, Step } from "../scenario";
 import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, snapshotState } from "./builders";
@@ -41,17 +41,17 @@ const layout = {
 };
 const state = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
 });
 const autoPulling = snapshotState({
   ...layout,
-  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
+  settings: { auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
 });
 const noConsoleState = snapshotState({
   consoles: [],
   projects: [],
   sessions: [],
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
+  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ALL_AGENTS, default_clone_dir: DEFAULT_CLONE_DIR, git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
 });
 
 const openSettings = (ui: Ui) => ui.press(ui.t("rail.settings"));
@@ -82,8 +82,8 @@ const project = (extra: Partial<InspectedProject> & Pick<InspectedProject, "name
   ...extra,
 });
 
-/** The worktree settings the full export carries: not the ones this machine starts with. */
-const FILE_WORKTREES: WorktreeSettings = { use_worktrees: true, rebase_before_merge: false, delivery: "merge", revert_gate: true };
+/** The git workflow settings the full export carries: not the ones this machine starts with. */
+const FILE_GIT_WORKFLOW: GitWorkflowSettings = { development: "branch", rebase_before_merge: false, delivery: "merge", revert_gate: true };
 
 /** A document of a laptop's layout set up on a machine where it sits elsewhere: one project at its
  * recorded path, one found under the default clone directory, one to be cloned and one that nothing
@@ -111,8 +111,8 @@ export const REVIEW: Omit<Inspection, "type"> = {
     current_auto_approve_handoffs: false,
     ask_questions_as_choices: false,
     current_ask_questions_as_choices: true,
-    worktrees: FILE_WORKTREES,
-    current_worktrees: DEFAULT_WORKTREE_SETTINGS,
+    git_workflow: FILE_GIT_WORKFLOW,
+    current_git_workflow: DEFAULT_GIT_WORKFLOW,
   },
   consoles: [
     {
@@ -236,7 +236,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, worktrees: FILE_WORKTREES },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW },
   consoles: [
     {
       name: "Work laptop",
@@ -327,7 +327,7 @@ const SETTINGS_FAILED_RESULT: Omit<Imported, "type"> = {
   ],
 };
 
-const FILE = { name: "octoboard-configuration.json", text: JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: [] }, null, 2) };
+const FILE = { name: "octoboard-configuration.json", text: JSON.stringify({ format: "octoboard-configuration", version: 2, consoles: [] }, null, 2) };
 
 const refusal = (name: string, text: string, inspection: FixtureError): ConfigurationFixture => ({ file: { name, text }, inspection });
 
@@ -339,7 +339,7 @@ const DIRECTORY_REVIEW = { ...REVIEW, consoles: REVIEW.consoles.map((console) =>
 const documentWith = (shortcuts: Record<string, unknown>) => ({
   name: FILE.name,
   text: JSON.stringify(
-    { format: "octoboard-configuration", version: 1, settings: { auto_pull_repositories: true, keyboard_shortcuts: shortcuts }, consoles: [] },
+    { format: "octoboard-configuration", version: 2, settings: { auto_pull_repositories: true, keyboard_shortcuts: shortcuts }, consoles: [] },
     null,
     2,
   ),
@@ -371,10 +371,10 @@ const SETTINGS_APPLIED_RESULT: Omit<Imported, "type"> = {
   consoles: SETTINGS_FAILED_RESULT.consoles,
 };
 
-/** `WITH_SETTING_OFF`, its document carrying the worktree settings this machine already has. */
-const WITH_WORKTREES_HERE: Omit<Inspection, "type"> = {
+/** `WITH_SETTING_OFF`, its document carrying the git workflow settings this machine already has. */
+const WITH_GIT_WORKFLOW_HERE: Omit<Inspection, "type"> = {
   ...WITH_SETTING_OFF,
-  settings: { ...WITH_SETTING_OFF.settings!, worktrees: DEFAULT_WORKTREE_SETTINGS, current_worktrees: DEFAULT_WORKTREE_SETTINGS },
+  settings: { ...WITH_SETTING_OFF.settings!, git_workflow: DEFAULT_GIT_WORKFLOW, current_git_workflow: DEFAULT_GIT_WORKFLOW },
 };
 
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
@@ -553,7 +553,7 @@ export const configurationScenarios: Scenario[] = [
     configuration: refusal(
       "octoboard-configuration.json",
       JSON.stringify({ format: "octoboard-configuration", version: 3, consoles: [] }),
-      failure("configuration_version_unsupported", { version: "3", supported: "1" }, "version 3 is not supported"),
+      failure("configuration_version_unsupported", { version: "3", supported: "2" }, "version 3 is not supported"),
     ),
     steps: [
       ...importFromSettings,
@@ -569,7 +569,7 @@ export const configurationScenarios: Scenario[] = [
     state,
     configuration: refusal(
       "octoboard-configuration.json",
-      JSON.stringify({ format: "octoboard-configuration", version: 1, consoles: "none" }),
+      JSON.stringify({ format: "octoboard-configuration", version: 2, consoles: "none" }),
       failure("configuration_unreadable", { detail: "invalid type: string \"none\", expected a sequence" }, "unreadable"),
     ),
     steps: [
@@ -582,7 +582,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review",
-    description: "Cards for two consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps. Account fallbacks sit under a console's name and at the end of a project's row; the last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line, lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), worktrees reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
+    description: "Cards for two consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps. Account fallbacks sit under a console's name and at the end of a project's row; the last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line, lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -620,11 +620,11 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-review-shortcuts-same",
     group: GROUP,
     category: "normal",
-    title: "Import, keyboard shortcuts and worktree settings the device already has",
-    description: "Worktrees and keyboard shortcuts both read \"No change\" because the file's are the ones this device already has, below automatic pull, which turns off.",
+    title: "Import, keyboard shortcuts and git workflow settings the device already has",
+    description: "Git workflow and keyboard shortcuts both read \"No change\" because the file's are the ones this device already has, below automatic pull, which turns off.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
-    configuration: { file: SHORTCUTS_FILE, inspection: WITH_WORKTREES_HERE },
+    configuration: { file: SHORTCUTS_FILE, inspection: WITH_GIT_WORKFLOW_HERE },
     steps: [
       ...importFromSettings,
       chooseFile,

@@ -78,10 +78,8 @@ Each group has a heading, and each command a row: its name, then its current key
 button — with a **Reset** button after it while the command's shortcut differs from its default — or, for a key that
 cannot be changed, the word **Fixed**.
 
-Once the section is scrolled far enough for a group's heading to reach the top of the section's area, the heading stays
-pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading arrives and pushes it out;
-the top fade then begins below the pinned heading (see "The edge that hides content fades" in
-`docs/product/scrolling-surfaces.md`).
+A group's heading stays pinned at the top of the section's area while the group's rows scroll beneath it, as in
+"Group headings" in `docs/product/settings.md`.
 
 ### Changing a shortcut
 

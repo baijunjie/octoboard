@@ -13,7 +13,10 @@ import { MotionListBox } from "./MotionListBox";
 let points: Record<string, [number, number]>;
 let width: number;
 let reduced: boolean;
-let resize: () => void;
+/** The latest observer's report of `targets`, every element it observes unless given. */
+let resize: (targets?: Element[]) => void;
+/** Like a real observer, the latest one first reports each element it starts observing, at that element's size. */
+let firstReports: () => void;
 let preferenceChanged: () => void;
 let progress: number;
 const disconnectResize = vi.fn();
@@ -28,10 +31,19 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("matchMedia", () => ({ get matches() { return reduced; }, addEventListener: (_: string, fn: () => void) => { preferenceChanged = fn; }, removeEventListener: vi.fn() }));
   vi.stubGlobal("ResizeObserver", class {
-    constructor(fn: () => void) { resize = fn; }
-    observe() {}
-    unobserve() {}
-    disconnect = disconnectResize;
+    observed = new Set<Element>();
+    pending: Element[] = [];
+    constructor(report: (entries: ResizeObserverEntry[]) => void) {
+      const entries = (targets: Element[]) => targets.map((target) => ({ target })) as unknown as ResizeObserverEntry[];
+      resize = (targets) => report(entries(targets ?? [...this.observed]));
+      firstReports = () => {
+        const targets = this.pending.splice(0);
+        if (targets.length > 0) report(entries(targets));
+      };
+    }
+    observe(element: Element) { this.observed.add(element); this.pending.push(element); }
+    unobserve(element: Element) { this.observed.delete(element); this.pending = this.pending.filter((target) => target !== element); }
+    disconnect() { disconnectResize(); this.observed.clear(); this.pending = []; }
   });
   Object.defineProperties(HTMLElement.prototype, {
     offsetLeft: { configurable: true, get(this: HTMLElement) { return points[this.dataset.listMotion ?? ""]?.[0] ?? 0; } },
@@ -590,4 +602,412 @@ it("keeps a strip that loses a tab at its width, clipping, until the motion has 
   width = 80;
   strip.render(["b"]);
   expect([strip.strip.style.minWidth, strip.strip.style.overflow]).toEqual(["", ""]);
+});
+
+function FitList({ keys, options, style }: { keys: string[]; options: Parameters<typeof useListMotion>[0]; style?: React.CSSProperties }) {
+  const ref = useListMotion<HTMLDivElement>(options);
+  return <div ref={ref} data-root="" style={style}>{keys.map((key) => <button key={key} data-list-motion={key}>{key}</button>)}</div>;
+}
+
+function mountFit(initial: string[], options: Parameters<typeof useListMotion>[0] = { fitHeight: true }, style?: React.CSSProperties) {
+  const host = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  const render = (keys: string[]) => act(() => root.render(<FitList keys={keys} options={options} style={style} />));
+  const unmount = () => { act(() => root.unmount()); host.remove(); };
+  onTestFinished(unmount);
+  render(initial);
+  return { render, unmount, list: host.firstElementChild as HTMLElement };
+}
+
+/** The list's laid-out block size, and its rows' by key, which jsdom would otherwise leave at nothing. */
+function stubListHeight(initial: number) {
+  const state = { height: initial, rows: {} as Record<string, number> };
+  const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+  Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+    configurable: true,
+    get(this: HTMLElement) { return this.hasAttribute("data-root") ? state.height : state.rows[this.dataset.listMotion ?? ""] ?? 0; },
+  });
+  onTestFinished(() => {
+    if (original) Object.defineProperty(HTMLElement.prototype, "offsetHeight", original);
+    else Reflect.deleteProperty(HTMLElement.prototype, "offsetHeight");
+  });
+  return state;
+}
+
+const heightFrames = () => animate.mock.calls.map(([frames]) => frames).filter((frames) => frames[0]?.height !== undefined);
+const heightRuns = () => animate.mock.results.filter((_, index) => animate.mock.calls[index]![0][0]?.height !== undefined).map((result) => result.value as { onfinish: () => void });
+
+it("animates a fitHeight collection's block size over the change of its rows, clipped meanwhile, and lets go of it after", () => {
+  const list = stubListHeight(100);
+  points = { a: [0, 0], b: [0, 50] };
+  const strip = mountFit(["a", "b"]);
+  list.height = 50;
+  points = { a: [0, 0] };
+  strip.render(["a"]);
+  expect(heightFrames()).toEqual([[{ height: "100px" }, { height: "50px" }]]);
+  expect(animate.mock.calls.find(([frames]) => frames[0]?.height !== undefined)![1]).toMatchObject({ duration: 300, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+  expect(strip.list.style.overflowY).toBe("clip");
+  act(() => heightRuns()[0]!.onfinish());
+  expect(strip.list.style.overflowY).toBe("");
+});
+
+it("starts an interrupted fitHeight change from the size shown, and leaves nothing behind once the last has played", () => {
+  const list = stubListHeight(100);
+  points = { a: [0, 0], b: [0, 50] };
+  const strip = mountFit(["a", "b"]);
+  // Mid-way the list shows 75px; the rows come back, so once the running change is cancelled it lays out at 100px.
+  const plain = animate.getMockImplementation()!;
+  onTestFinished(() => { animate.mockImplementation(plain); });
+  animate.mockImplementation((frames) => ({ cancel: (frames[0]?.height === undefined ? cancel : () => { list.height = 100; }) as typeof cancel, effect: { getComputedTiming: () => ({ progress }) }, onfinish: null }));
+  list.height = 50;
+  points = { a: [0, 0] };
+  strip.render(["a"]);
+  list.height = 75;
+  points = { a: [0, 0], b: [0, 50] };
+  strip.render(["a", "b"]);
+  expect(heightFrames().at(-1)).toEqual([{ height: "75px" }, { height: "100px" }]);
+  expect(strip.list.style.overflowY).toBe("clip");
+  const run = animate.mock.results.at(-1)!.value as { onfinish: () => void };
+  act(() => run.onfinish());
+  expect(strip.list.style.overflowY).toBe("");
+});
+
+it("leaves a fitHeight collection's block size alone under reduced motion", () => {
+  const list = stubListHeight(100);
+  points = { a: [0, 0], b: [0, 50] };
+  const strip = mountFit(["a", "b"]);
+  reduced = true;
+  list.height = 50;
+  points = { a: [0, 0] };
+  strip.render(["a"]);
+  expect(heightFrames()).toEqual([]);
+  expect(strip.list.style.overflowY).toBe("");
+});
+
+it("does not fit the block size of a collection that did not ask for it", () => {
+  const list = stubListHeight(100);
+  points = { a: [0, 0], b: [0, 50] };
+  const plain = mount(["a", "b"]);
+  list.height = 50;
+  points = { a: [0, 0] };
+  plain.render(["a"]);
+  expect(heightFrames()).toEqual([]);
+});
+
+it("sets an inline overflow-y back as it was, and does so when the collection unmounts mid-change", () => {
+  const list = stubListHeight(100);
+  points = { a: [0, 0], b: [0, 50] };
+  const strip = mountFit(["a", "b"], { fitHeight: true }, { overflowY: "auto" });
+  list.height = 50;
+  points = { a: [0, 0] };
+  strip.render(["a"]);
+  expect(strip.list.style.overflowY).toBe("clip");
+  act(() => heightRuns()[0]!.onfinish());
+  expect(strip.list.style.overflowY).toBe("auto");
+  // The change of size gets a cancel of its own, apart from the one the rows' movement shares.
+  const plain = animate.getMockImplementation()!;
+  onTestFinished(() => { animate.mockImplementation(plain); });
+  const fitCancel = vi.fn();
+  animate.mockImplementation((frames) => ({ cancel: frames[0]?.height === undefined ? cancel : fitCancel, effect: { getComputedTiming: () => ({ progress }) }, onfinish: null }));
+  list.height = 100;
+  points = { a: [0, 0], b: [0, 50] };
+  strip.render(["a", "b"]);
+  expect(strip.list.style.overflowY).toBe("clip");
+  expect(fitCancel).not.toHaveBeenCalled();
+  strip.unmount();
+  expect(fitCancel).toHaveBeenCalledOnce();
+  expect(strip.list.style.overflowY).toBe("auto");
+});
+
+it("takes what the observer reports beyond the list's own animated size during a change, and not that", () => {
+  const list = stubListHeight(150);
+  list.rows = { a: 50, b: 50, c: 50 };
+  points = { a: [0, 0], b: [0, 50], c: [0, 100] };
+  const strip = mountFit(["a", "b", "c"]);
+  act(() => firstReports());
+  // While a change of size runs, the list shows its animated size; cancelled, it lays out at `laid`.
+  let laid = 50;
+  const plain = animate.getMockImplementation()!;
+  onTestFinished(() => { animate.mockImplementation(plain); });
+  animate.mockImplementation((frames) => ({ cancel: (frames[0]?.height === undefined ? cancel : () => { list.height = laid; }) as typeof cancel, effect: { getComputedTiming: () => ({ progress }) }, onfinish: null }));
+  list.height = 50;
+  points = { a: [0, 0] };
+  strip.render(["a"]);
+  expect(heightFrames()).toEqual([[{ height: "150px" }, { height: "50px" }]]);
+  animate.mockClear();
+  // Mid-way it shows 100px. The list's own size, and a row at the size it was measured at, are no change.
+  list.height = 100;
+  const row = strip.list.querySelector("[data-list-motion=a]")!;
+  act(() => resize([strip.list, row]));
+  expect(animate).not.toHaveBeenCalled();
+  expect(strip.list.style.overflowY).toBe("clip");
+  // A row that grows during the change is one: the change goes on from the size shown to the new one.
+  laid = 70;
+  list.rows.a = 70;
+  act(() => resize([row]));
+  expect(heightFrames()).toEqual([[{ height: "100px" }, { height: "70px" }]]);
+  expect(strip.list.style.overflowY).toBe("clip");
+  // A width change comes with the report: that is a resize, which ends the change and plays none.
+  animate.mockClear();
+  width = 120;
+  act(() => resize([strip.list]));
+  expect(animate).not.toHaveBeenCalled();
+  expect(strip.list.style.overflowY).toBe("");
+});
+
+it("leaves a running change alone when the observer first reports the rows that change brought in", () => {
+  const list = stubListHeight(50);
+  list.rows = { a: 50 };
+  points = { a: [0, 0] };
+  const strip = mountFit(["a"]);
+  act(() => firstReports());
+  list.height = 150;
+  list.rows = { a: 50, b: 50, c: 50 };
+  points = { a: [0, 0], b: [0, 50], c: [0, 100] };
+  strip.render(["a", "b", "c"]);
+  expect(heightFrames()).toEqual([[{ height: "50px" }, { height: "150px" }]]);
+  const calls = animate.mock.calls.length;
+  const cancels = cancel.mock.calls.length;
+  act(() => firstReports());
+  expect(animate).toHaveBeenCalledTimes(calls);
+  expect(cancel).toHaveBeenCalledTimes(cancels);
+  expect(strip.list.style.overflowY).toBe("clip");
+});
+
+it("leaves the block size of a virtualized or content-width collection alone, and of a width resize", () => {
+  const list = stubListHeight(100);
+  points = { a: [0, 0], b: [0, 50] };
+  const virtual = mountFit(["a", "b"], { fitHeight: true, virtualized: true });
+  const strip = mountFit(["a", "b"], { fitHeight: true, contentWidth: true });
+  list.height = 50;
+  points = { a: [0, 0] };
+  virtual.render(["a"]);
+  strip.render(["a"]);
+  expect(heightFrames()).toEqual([]);
+  const plain = mountFit(["a", "b"]);
+  width = 300;
+  list.height = 30;
+  plain.render(["a"]);
+  expect(heightFrames()).toEqual([]);
+});
+
+it("starts a growing collection from the size shown, one of its rows having grown, so what follows glides the whole way", () => {
+  const list = stubListHeight(100);
+  list.rows = { a: 100 };
+  points = { a: [0, 0], b: [0, 100] };
+  const strip = mountFit(["a", "b"]);
+  strip.render(["a"]);
+  animate.mockClear();
+  // `a` gains a line and `c` comes in: the grown part of `a` shows as the clip reaches it.
+  list.height = 220;
+  list.rows = { a: 120, c: 100 };
+  points = { a: [0, 0], c: [0, 120] };
+  strip.render(["a", "c"]);
+  expect(heightFrames().at(-1)).toEqual([{ height: "100px" }, { height: "220px" }]);
+});
+
+it("grows from the size shown as rows come in above the rows that stay", () => {
+  const list = stubListHeight(50);
+  list.rows = { b: 50 };
+  points = { b: [0, 0] };
+  const strip = mountFit(["b"]);
+  list.height = 100;
+  list.rows = { a: 50, b: 50 };
+  points = { a: [0, 0], b: [0, 50] };
+  strip.render(["a", "b"]);
+  expect(heightFrames()).toEqual([[{ height: "50px" }, { height: "100px" }]]);
+});
+
+it("follows a row that grows or shrinks on its own, wherever it stands", () => {
+  const list = stubListHeight(133);
+  list.rows = { a: 93, b: 40 };
+  points = { a: [0, 0], b: [0, 93] };
+  mountFit(["a", "b"]);
+  act(() => firstReports());
+  // `a` gains a line: `b` slides down from where it stood and the list grows with it.
+  list.height = 153;
+  list.rows = { a: 113, b: 40 };
+  points = { a: [0, 0], b: [0, 113] };
+  act(() => resize());
+  expect(heightFrames()).toEqual([[{ height: "133px" }, { height: "153px" }]]);
+  act(() => heightRuns()[0]!.onfinish());
+  // The last row growing and shrinking again: the list follows it both ways.
+  list.height = 173;
+  list.rows = { a: 113, b: 60 };
+  act(() => resize());
+  act(() => heightRuns()[1]!.onfinish());
+  list.height = 153;
+  list.rows = { a: 113, b: 40 };
+  act(() => resize());
+  expect(heightFrames().slice(1)).toEqual([[{ height: "153px" }, { height: "173px" }], [{ height: "173px" }, { height: "153px" }]]);
+});
+
+it("starts the change of a row its owner renders larger as the owner renders, not from the observer's report", () => {
+  const list = stubListHeight(133);
+  list.rows = { a: 93, b: 40 };
+  points = { a: [0, 0], b: [0, 93] };
+  const strip = mountFit(["a", "b"]);
+  list.height = 153;
+  list.rows = { a: 113, b: 40 };
+  points = { a: [0, 0], b: [0, 113] };
+  strip.render(["a", "b"]);
+  expect(heightFrames()).toEqual([[{ height: "133px" }, { height: "153px" }]]);
+  // The observer then reports the row at the size it was measured at: the change goes on.
+  const calls = animate.mock.calls.length;
+  act(() => resize([strip.list.querySelector("[data-list-motion=a]")!]));
+  expect(animate).toHaveBeenCalledTimes(calls);
+});
+
+/** A fitHeight list rendered into `parent`, which the test owns. */
+function mountFitInto(parent: HTMLElement, outer: HTMLElement) {
+  const root = createRoot(parent);
+  onTestFinished(() => { act(() => root.unmount()); outer.remove(); });
+  return (keys: string[]) => act(() => root.render(<FitList keys={keys} options={{ fitHeight: true }} />));
+}
+
+/** A scroller whose position the test sets, as a browser clamps it when what it holds gets shorter. */
+function stubScrollTop(element: HTMLElement, initial: number) {
+  const state = { top: initial };
+  Object.defineProperty(element, "scrollTop", { configurable: true, get: () => state.top, set: (value: number) => { state.top = value; } });
+  return state;
+}
+
+it("puts a scroller back where it stood as the list's shrinking starts, so it clamps as the size plays out", () => {
+  const list = stubListHeight(300);
+  const host = document.body.appendChild(document.createElement("div"));
+  host.style.overflowY = "auto";
+  points = { a: [0, 0], b: [0, 150] };
+  const render = mountFitInto(host, host);
+  render(["a", "b"]);
+  const scroll = stubScrollTop(host, 0);
+  scroll.top = 200;
+  act(() => host.dispatchEvent(new Event("scroll")));
+  list.height = 150;
+  // The browser clamps the position as it lays out the smaller list.
+  scroll.top = 100;
+  points = { a: [0, 0] };
+  render(["a"]);
+  expect(scroll.top).toBe(200);
+});
+
+it("leaves a running shrinking change and its scroller alone when its owner renders again with nothing changed", () => {
+  const list = stubListHeight(300);
+  const host = document.body.appendChild(document.createElement("div"));
+  host.style.overflowY = "auto";
+  points = { a: [0, 0], b: [0, 150] };
+  const render = mountFitInto(host, host);
+  render(["a", "b"]);
+  const scroll = stubScrollTop(host, 0);
+  scroll.top = 200;
+  act(() => host.dispatchEvent(new Event("scroll")));
+  // Cancelled, the change would lay the list out at its new size, which clamps the scroller.
+  const plain = animate.getMockImplementation()!;
+  onTestFinished(() => { animate.mockImplementation(plain); });
+  const fitCancel = vi.fn(() => { scroll.top = 100; });
+  animate.mockImplementation((frames) => ({ cancel: frames[0]?.height === undefined ? cancel : fitCancel, effect: { getComputedTiming: () => ({ progress }) }, onfinish: null }));
+  list.height = 150;
+  scroll.top = 100;
+  points = { a: [0, 0] };
+  render(["a"]);
+  expect(scroll.top).toBe(200);
+  render(["a"]);
+  expect(fitCancel).not.toHaveBeenCalled();
+  expect(heightFrames()).toEqual([[{ height: "300px" }, { height: "150px" }]]);
+  expect(scroll.top).toBe(200);
+  expect(host.querySelector("[data-root]")!.getAttribute("style")).toBe("overflow-y: clip;");
+});
+
+/** A fitHeight list 300px tall in a 50px scroller scrolled to 200, which shrinks to 150px: the scroller's end
+ * moves from 250 to 100. `top` is where the scroller stands once the smaller list is laid out. */
+function shrinkInScroller(top: number) {
+  const list = stubListHeight(300);
+  const host = document.body.appendChild(document.createElement("div"));
+  host.style.overflowY = "auto";
+  points = { a: [0, 0], b: [0, 150] };
+  const render = mountFitInto(host, host);
+  Object.defineProperties(host, { scrollHeight: { configurable: true, value: 300 }, clientHeight: { configurable: true, value: 50 } });
+  render(["a", "b"]);
+  const scroll = stubScrollTop(host, 0);
+  scroll.top = 200;
+  act(() => host.dispatchEvent(new Event("scroll")));
+  Object.defineProperty(host, "scrollHeight", { configurable: true, value: 150 });
+  scroll.top = top;
+  list.height = 150;
+  points = { a: [0, 0] };
+  render(["a"]);
+  expect(heightFrames()).toEqual([[{ height: "300px" }, { height: "150px" }]]);
+  return scroll.top;
+}
+
+it("puts back a scroller the shrinking list clamped at its new end", () => {
+  expect(shrinkInScroller(100)).toBe(200);
+});
+
+it("does not put back a scroller that was scrolled up short of its new end, rather than clamped, as the list shrinks", () => {
+  // Scrolled up to 50 in the same task as the change, before any scroll event.
+  expect(shrinkInScroller(50)).toBe(50);
+});
+
+it("keeps a released drag for the change it announces across a render of a fitted list's owner that changes nothing", () => {
+  vi.stubGlobal("DOMMatrixReadOnly", class {
+    m41 = 0;
+    m42: number;
+    constructor(transform: string) { this.m42 = Number(/translateY\((-?\d+)px\)/.exec(transform)?.[1] ?? 0); }
+  });
+  points = { a: [0, 0], b: [0, 50] };
+  const strip = mountFit(["a", "b"]);
+  const a = strip.list.querySelector<HTMLElement>("[data-list-motion=a]")!;
+  // `a` was dragged 60px down, past `b`.
+  a.style.transform = "translateY(60px)";
+  releaseListMotion(a);
+  a.style.transform = "";
+  strip.render(["a", "b"]);
+  points = { b: [0, 0], a: [0, 50] };
+  strip.render(["b", "a"]);
+  expect(animate.mock.calls.map(([frames]) => frames)).toEqual([
+    [{ translate: "0px 50px" }, { translate: "0px 0px" }],
+    [{ translate: "0px 10px" }, { translate: "0px 0px" }],
+  ]);
+});
+
+it("puts back the ancestor that scrolls, not the nearest one that may, and only as the list shrinks", () => {
+  const list = stubListHeight(150);
+  const outer = document.body.appendChild(document.createElement("div"));
+  outer.style.overflowY = "auto";
+  const inner = outer.appendChild(document.createElement("div"));
+  // The nearest ancestor whose overflow lets it scroll, though nothing overflows it vertically.
+  inner.style.overflowY = "auto";
+  const render = mountFitInto(inner, outer);
+  points = { a: [0, 0], b: [0, 150] };
+  render(["a"]);
+  const scroll = stubScrollTop(outer, 0);
+  scroll.top = 120;
+  act(() => outer.dispatchEvent(new Event("scroll")));
+  // Growing: something else scrolled the page up meanwhile, which stays.
+  list.height = 300;
+  scroll.top = 40;
+  render(["a", "b"]);
+  expect(heightFrames().at(-1)).toEqual([{ height: "150px" }, { height: "300px" }]);
+  expect(scroll.top).toBe(40);
+  act(() => heightRuns().at(-1)!.onfinish());
+  scroll.top = 200;
+  act(() => outer.dispatchEvent(new Event("scroll")));
+  // Shrinking: the clamp is undone, on the ancestor that scrolls.
+  list.height = 150;
+  scroll.top = 50;
+  points = { a: [0, 0] };
+  render(["a"]);
+  expect(scroll.top).toBe(200);
+});
+
+it("stops following its ancestors' scrolling once it is gone", () => {
+  stubListHeight(100);
+  const add = vi.spyOn(document, "addEventListener");
+  const remove = vi.spyOn(document, "removeEventListener");
+  onTestFinished(() => { add.mockRestore(); remove.mockRestore(); });
+  points = { a: [0, 0] };
+  const strip = mountFit(["a"]);
+  const follow = add.mock.calls.find(([type, , options]) => type === "scroll" && typeof options === "object" && options.capture)![1];
+  strip.unmount();
+  expect(remove).toHaveBeenCalledWith("scroll", follow, true);
 });

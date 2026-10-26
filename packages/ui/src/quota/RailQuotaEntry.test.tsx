@@ -10,7 +10,7 @@ import type { Account, AccountQuota, Agent, Availability, Session } from "../pro
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { RailQuotaEntry } from "./RailQuotaEntry";
-import { DEFAULT_WORKTREE_SETTINGS } from "../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
 
 // jsdom has no layout, so a scroller never reports overflow. This one reports the way the library's
 // does, once when it mounts: overflowing when its list holds the marked account. Each scroller's report
@@ -84,7 +84,7 @@ function mount(
   vi.setSystemTime(NOW);
   const store = createStateStore({
     agentAvailability: new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }])),
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts },
+    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     accountQuotas: [quota("claude", null, "max"), quota("claude", "claude-work", "pro"), quota("codex", null, "plus")],
   });
   const daemon = { store, request } as unknown as Daemon;

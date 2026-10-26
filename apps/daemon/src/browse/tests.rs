@@ -131,7 +131,7 @@ impl Fixture {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
-                worktrees: Default::default(),
+                git_workflow: Default::default(),
             })
             .unwrap();
         id.to_string()

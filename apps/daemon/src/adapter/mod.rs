@@ -42,12 +42,12 @@ use std::time::Duration;
 
 use anyhow::Result;
 
+use crate::git_workflow::GitWorkflowSettings;
 use crate::mcp::Owner;
 use crate::protocol::{
     error_code, Agent, ApprovalReviewer, ClaudeApprovalMode, CodedError, Notice, Role,
     TerminalAppearance,
 };
-use crate::worktree_settings::WorktreeSettings;
 
 /// Everything an adapter needs to assemble one launch.
 pub struct LaunchSpec<'a> {
@@ -60,9 +60,9 @@ pub struct LaunchSpec<'a> {
     /// Who this session reports to, if anyone, which decides what its role text tells it is
     /// waiting on it and which tools its MCP server announces. Never set for a console session.
     pub owner: Option<Owner>,
-    /// The project's effective worktree settings, read when the launch was assembled, which shape
-    /// the worktree rule in the role text. Never set for a console session.
-    pub worktrees: Option<WorktreeSettings>,
+    /// The project's effective git workflow settings, read when the launch was assembled, which
+    /// shape the development rule in the role text. Never set for a console session.
+    pub git_workflow: Option<GitWorkflowSettings>,
     /// The application setting `ask_questions_as_choices` as it stood when the launch was
     /// assembled, which decides whether a project session's role text asks it to put questions
     /// to the user as options to pick from.
@@ -133,7 +133,7 @@ impl LaunchSpec<'_> {
     /// What the launch adds to the role description beyond the role and owner.
     pub fn role_options(&self) -> crate::mcp::role::RoleOptions<'_> {
         crate::mcp::role::RoleOptions {
-            worktrees: self.worktrees.as_ref(),
+            git_workflow: self.git_workflow.as_ref(),
             ask_as_choices: self.ask_questions_as_choices,
             user_language: self.user_language,
         }
@@ -507,7 +507,7 @@ pub mod tests {
         pub session_id: String,
         pub role: crate::protocol::Role,
         pub owner: Option<Owner>,
-        pub worktrees: Option<crate::worktree_settings::WorktreeSettings>,
+        pub git_workflow: Option<crate::git_workflow::GitWorkflowSettings>,
         pub ask_questions_as_choices: bool,
         pub user_language: Option<String>,
         pub new_agent_session_id: String,
@@ -531,7 +531,7 @@ pub mod tests {
                 session_id: &self.session_id,
                 role: self.role,
                 owner: self.owner.clone(),
-                worktrees: self.worktrees,
+                git_workflow: self.git_workflow,
                 ask_questions_as_choices: self.ask_questions_as_choices,
                 user_language: self.user_language.as_deref(),
                 new_agent_session_id: &self.new_agent_session_id,
@@ -569,7 +569,7 @@ pub mod tests {
             session_id: "session-1".to_string(),
             role: crate::protocol::Role::Project,
             owner: Some(Owner::Console),
-            worktrees: Some(crate::worktree_settings::WorktreeSettings::default()),
+            git_workflow: Some(crate::git_workflow::GitWorkflowSettings::default()),
             ask_questions_as_choices: true,
             user_language: None,
             new_agent_session_id: format!("agent-{}", std::process::id()),

@@ -15,9 +15,11 @@
 //!
 //! Every console session's role description is only a short pointer to its instruction file.
 //!
-//! A project session launched with worktrees on is also told the default worktree rule, shaped by
-//! the project's effective worktree settings at that launch. It holds for the session's life like
-//! the rest, so a settings change is sure to reach only sessions begun after it.
+//! A project session launched with `development` on a branch of its own, with or without a
+//! worktree, is also told the matching default rule, shaped by the project's effective git
+//! workflow settings at that launch; on the current branch it is told none. It holds for the
+//! session's life like the rest, so a settings change is sure to reach only sessions begun after
+//! it.
 //!
 //! The same holds for the section asking a session to put its questions as options to pick from,
 //! which a project session is given only while the application setting `ask_questions_as_choices`
@@ -26,8 +28,8 @@
 //! And for the section naming the language the user set the interface to, which a project session
 //! is given only when a language is stored and it is not English (see [`user_language_guidance`]).
 
+use crate::git_workflow::{Delivery, Development, GitWorkflowSettings};
 use crate::protocol::{Agent, Role};
-use crate::worktree_settings::{Delivery, WorktreeSettings};
 
 use super::console_instructions::console_session_instruction_filename;
 use super::{qualified_tool_name, Owner};
@@ -37,9 +39,9 @@ use super::{qualified_tool_name, Owner};
 /// description, fixed for its life: a change reaches only sessions begun afterwards.
 #[derive(Clone, Copy, Default)]
 pub struct RoleOptions<'a> {
-    /// The project's effective worktree settings; a console session never changes a project and is
-    /// given no rule whatever they hold.
-    pub worktrees: Option<&'a WorktreeSettings>,
+    /// The project's effective git workflow settings; a console session never changes a project
+    /// and is given no rule whatever they hold.
+    pub git_workflow: Option<&'a GitWorkflowSettings>,
     /// The application setting `ask_questions_as_choices`: the section on asking the user.
     pub ask_as_choices: bool,
     /// The tag of the language to tell the session the user's interface is set to: the stored one.
@@ -70,9 +72,12 @@ pub fn role_description(
         (Role::Project, Some(owner)) => project_session_description(agent, owner),
         (Role::Project, None) => unbound_project_session_description(agent),
     };
-    if let Some(settings) = options.worktrees.filter(|settings| settings.use_worktrees) {
+    if let Some(rule) = options
+        .git_workflow
+        .and_then(|settings| development_rule(settings, owner.is_some()))
+    {
         text.push_str("\n\n");
-        text.push_str(&worktree_rule(settings, owner.is_some()));
+        text.push_str(&rule);
     }
     if options.ask_as_choices {
         text.push_str("\n\n");
@@ -91,12 +96,54 @@ pub fn role_description(
 const ORDINARY_WORK: &str = "Everything else is the ordinary work of this project: its own \
                              instructions, conventions and configuration apply unchanged.";
 
-/// The default worktree rule. It yields to the project's own rules, which the agent reads anyway
-/// and judges better than any keyword match could. Only the sentences that name rebasing and
-/// delivery depend on the settings; `bound` adds the owner to who may say how work is delivered.
-/// Git in a worktree is run with `-C` because Claude Code asks for approval of every command that
-/// changes directory before running git, an allowed git command included.
-fn worktree_rule(settings: &WorktreeSettings, bound: bool) -> String {
+/// The default rule for where a project session develops, or `None` for `InPlace`, which gives it
+/// none. It yields to the project's own rules, which the agent reads anyway and judges better than
+/// any keyword match could. Only the sentences that name rebasing and delivery depend on the
+/// settings, and they are the same for both variants; `bound` adds the owner to who may say how
+/// work is delivered. Git in a worktree is run with `-C` because Claude Code asks for approval of
+/// every command that changes directory before running git, an allowed git command included.
+fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<String> {
+    let (heading, own_branch, handed_over, cleanup) = match settings.development {
+        Development::InPlace => return None,
+        Development::Branch => (
+            "Developing on a branch",
+            "create a new branch from the current branch, which becomes its target branch, with \
+             `git switch -c <name>` in the project directory you were started in; work and \
+             commit there. Read-only work, such as investigating or answering questions, needs \
+             none.",
+            "A branch handed to you is worked on by switching to it in the project directory, or, \
+             if it is already checked out in a worktree, there, running git in that worktree as \
+             `git -C <worktree>` rather than after a `cd`.",
+            "Clean up yourself as soon as a branch is no longer needed:\n   \
+             - After a local merge, or after opening a pull request, switch back to the target \
+               branch and delete the local branch; after a pull request, leave the remote \
+               branch. To change the pull request later, switch to the remote branch again, push \
+               to the same branch, and clean up again.\n   \
+             - Ask before switching away from a branch with uncommitted changes; never discard \
+               anything on the user's behalf.",
+        ),
+        Development::Worktree => (
+            "Developing in a worktree",
+            "create a new branch from the current branch, which becomes its target branch, with \
+             its own worktree at `.worktrees/<short-name>` in the project directory you were \
+             started in, adding `.worktrees/` to `.git/info/exclude` so no tracked file changes; \
+             work and commit there, running git in it as `git -C <worktree>` rather than after a \
+             `cd`. Read-only work, such as investigating or answering questions, needs none.",
+            "A branch handed to you that already has a worktree is worked on there.",
+            "Clean up yourself as soon as a worktree is no longer needed, rather than leaving it \
+             to the cleanup archiving runs:\n   \
+             - After a local merge, remove the worktree and the local branch from the main \
+               working copy at once; this is part of the merge and is not asked again.\n   \
+             - After opening a pull request, remove the worktree and the local branch at once, \
+               leaving the remote branch. To change the pull request later, recreate the \
+               worktree from the remote branch, push to the same branch, and clean up again.\n   \
+             - A worktree opened only to verify something, never committed, is opened detached \
+               and removed as soon as the verification is done.\n   \
+             - Ask before removing a worktree with uncommitted changes, or with ignored files \
+               beyond regenerable dependencies and build output (`.env`, local configuration, \
+               say); never discard or force-remove anything on the user's behalf.",
+        ),
+    };
     let who = if bound {
         "the user or your owner says"
     } else {
@@ -115,34 +162,18 @@ fn worktree_rule(settings: &WorktreeSettings, bound: bool) -> String {
     };
     // The sub-items' indentation sits before each line break, since a continued line loses its
     // leading whitespace.
-    format!(
-        "## Developing in a worktree\n\n\
+    Some(format!(
+        "## {heading}\n\n\
          Where this project's own instructions set out how to use worktrees or branches, follow \
          them instead of this section. Otherwise:\n\
          \n\
-         1. Before changing files in a git repository, create a new branch from the current \
-            branch, which becomes its target branch, with its own worktree at \
-            `.worktrees/<short-name>` in the project directory you were started in, adding \
-            `.worktrees/` to `.git/info/exclude` so no tracked file changes; work and commit \
-            there, running git in it as `git -C <worktree>` rather than after a `cd`. Read-only \
-            work, such as investigating or answering questions, needs none.\n\
-         2. A branch handed to you that already has a worktree is worked on there.\n\
+         1. Before changing files in a git repository, {own_branch}\n\
+         2. {handed_over}\n\
          3. When done, report the branch and its changes. Merge, push or open a pull request as \
             {who}; where nobody has said, {otherwise}.\n\
          4. {merging}\n\
-         5. Clean up yourself as soon as a worktree is no longer needed, rather than leaving it to \
-            the cleanup archiving runs:\n   \
-            - After a local merge, remove the worktree and the local branch from the main working \
-              copy at once; this is part of the merge and is not asked again.\n   \
-            - After opening a pull request, remove the worktree and the local branch at once, \
-              leaving the remote branch. To change the pull request later, recreate the worktree \
-              from the remote branch, push to the same branch, and clean up again.\n   \
-            - A worktree opened only to verify something, never committed, is opened detached and \
-              removed as soon as the verification is done.\n   \
-            - Ask before removing a worktree with uncommitted changes, or with ignored files \
-              beyond regenerable dependencies and build output (`.env`, local configuration, \
-              say); never discard or force-remove anything on the user's behalf."
-    )
+         5. {cleanup}"
+    ))
 }
 
 /// What a console session is told in its system prompt: which side of the orchestration it is on,
@@ -676,9 +707,9 @@ mod tests {
         }
     }
 
-    fn settings(rebase_before_merge: bool, delivery: Delivery) -> WorktreeSettings {
-        WorktreeSettings {
-            use_worktrees: true,
+    fn settings(rebase_before_merge: bool, delivery: Delivery) -> GitWorkflowSettings {
+        GitWorkflowSettings {
+            development: Development::Worktree,
             rebase_before_merge,
             delivery,
             revert_gate: true,
@@ -697,13 +728,14 @@ mod tests {
         [Some(Owner::Console), Some(project_owner()), None]
     }
 
-    /// Every kind of project session is told the rule with worktrees on, and none is with them
-    /// off; the rest of its text is the same either way, and the project's own rules come first.
+    /// Every kind of project session is told the worktree rule with `development` on `worktree`,
+    /// and none is told any with `in_place`; the rest of its text is the same either way, and the
+    /// project's own rules come first.
     #[test]
-    fn a_project_session_is_told_the_worktree_rule_only_with_worktrees_on() {
-        let on = WorktreeSettings::default();
-        let off = WorktreeSettings {
-            use_worktrees: false,
+    fn a_project_session_is_told_the_worktree_rule_only_with_a_worktree() {
+        let on = GitWorkflowSettings::default();
+        let off = GitWorkflowSettings {
+            development: Development::InPlace,
             ..on
         };
         for agent in Agent::ALL {
@@ -719,7 +751,7 @@ mod tests {
                     owner.as_ref(),
                     agent,
                     &RoleOptions {
-                        worktrees: Some(&on),
+                        git_workflow: Some(&on),
                         ..Default::default()
                     },
                 );
@@ -728,7 +760,7 @@ mod tests {
                     owner.as_ref(),
                     agent,
                     &RoleOptions {
-                        worktrees: Some(&off),
+                        git_workflow: Some(&off),
                         ..Default::default()
                     },
                 );
@@ -754,9 +786,74 @@ mod tests {
         }
     }
 
+    /// With `development` on `branch` the rule names a branch made with `git switch -c` in the
+    /// project directory and cleans up by switching back, and says nothing of worktrees to make
+    /// or remove; delivery and merging read as they do for a worktree.
+    #[test]
+    fn a_project_session_is_told_the_branch_rule_with_a_branch_of_its_own() {
+        let branch = GitWorkflowSettings {
+            development: Development::Branch,
+            ..GitWorkflowSettings::default()
+        };
+        let worktree = GitWorkflowSettings::default();
+        let rule_of = |agent, owner: Option<&Owner>, settings: &GitWorkflowSettings| {
+            let plain = role_description(Role::Project, owner, agent, &RoleOptions::default());
+            let with = role_description(
+                Role::Project,
+                owner,
+                agent,
+                &RoleOptions {
+                    git_workflow: Some(settings),
+                    ..Default::default()
+                },
+            );
+            let before = plain.strip_suffix(ORDINARY_WORK).expect("closing sentence");
+            with.strip_prefix(before)
+                .and_then(|rest| rest.strip_suffix(ORDINARY_WORK))
+                .expect("the rest is unchanged")
+                .to_string()
+        };
+        for agent in Agent::ALL {
+            for owner in every_owner() {
+                let rule = rule_of(agent, owner.as_ref(), &branch);
+                assert!(rule.starts_with(
+                    "## Developing on a branch\n\nWhere this project's own instructions set out \
+                     how to use worktrees or branches, follow them instead of this section."
+                ));
+                assert!(rule.contains("`git switch -c <name>` in the project directory"));
+                assert!(rule.contains(
+                    "A branch handed to you is worked on by switching to it in the project \
+                     directory, or, if it is already checked out in a worktree, there, running \
+                     git in that worktree as `git -C <worktree>` rather than after a `cd`."
+                ));
+                assert!(
+                    rule.contains("switch back to the target branch and delete the local branch")
+                );
+                assert!(rule.contains("leave the remote branch"));
+                assert!(rule.contains("Ask before switching away from a branch with uncommitted"));
+                assert!(!rule.contains(".worktrees"));
+                // Its own first step asks for no worktree to run git in.
+                assert!(!rule.contains("`git -C <worktree>` rather than after a `cd`. Read-only"));
+                assert!(rule.ends_with("on the user's behalf.\n\n"));
+                // Items 3 and 4 are the same in the worktree variant.
+                let shared = |rule: &str| {
+                    rule.lines()
+                        .filter(|line| line.starts_with("3. ") || line.starts_with("4. "))
+                        .map(str::to_string)
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(
+                    shared(&rule),
+                    shared(&rule_of(agent, owner.as_ref(), &worktree))
+                );
+                assert_eq!(shared(&rule).len(), 2);
+            }
+        }
+    }
+
     /// A console session never changes a project, so its text is the same whatever the settings.
     #[test]
-    fn a_console_session_is_told_no_worktree_rule() {
+    fn a_console_session_is_told_no_development_rule() {
         for agent in Agent::ALL {
             let plain = role_description(Role::Console, None, agent, &RoleOptions::default());
             for delivery in [Delivery::Ask, Delivery::Merge, Delivery::PullRequest] {
@@ -768,7 +865,7 @@ mod tests {
                             None,
                             agent,
                             &RoleOptions {
-                                worktrees: Some(&with),
+                                git_workflow: Some(&with),
                                 ..Default::default()
                             }
                         ),
@@ -801,7 +898,7 @@ mod tests {
                         owner.as_ref(),
                         agent,
                         &RoleOptions {
-                            worktrees: Some(&settings(true, delivery)),
+                            git_workflow: Some(&settings(true, delivery)),
                             ..Default::default()
                         },
                     );
@@ -834,7 +931,7 @@ mod tests {
                         owner.as_ref(),
                         agent,
                         &RoleOptions {
-                            worktrees: Some(&settings(rebase, Delivery::Merge)),
+                            git_workflow: Some(&settings(rebase, Delivery::Merge)),
                             ..Default::default()
                         },
                     )
@@ -869,7 +966,7 @@ mod tests {
             None,
             Agent::Claude,
             &RoleOptions {
-                worktrees: Some(&WorktreeSettings::default()),
+                git_workflow: Some(&GitWorkflowSettings::default()),
                 ..Default::default()
             },
         );
@@ -882,11 +979,11 @@ mod tests {
     }
 
     /// A project session is told to ask the user with options only while the setting is on, in a
-    /// section after the worktree rule and before the closing sentence; Claude Code's and Grok
+    /// section after the development rule and before the closing sentence; Claude Code's and Grok
     /// Build's tools are named, and a console session is told through its file rather than here.
     #[test]
     fn a_project_session_is_told_to_ask_with_options_only_with_the_setting_on() {
-        let worktrees = WorktreeSettings::default();
+        let worktrees = GitWorkflowSettings::default();
         for agent in Agent::ALL {
             for owner in every_owner() {
                 let off = role_description(
@@ -894,7 +991,7 @@ mod tests {
                     owner.as_ref(),
                     agent,
                     &RoleOptions {
-                        worktrees: Some(&worktrees),
+                        git_workflow: Some(&worktrees),
                         ..Default::default()
                     },
                 );
@@ -903,7 +1000,7 @@ mod tests {
                     owner.as_ref(),
                     agent,
                     &RoleOptions {
-                        worktrees: Some(&worktrees),
+                        git_workflow: Some(&worktrees),
                         ask_as_choices: true,
                         ..Default::default()
                     },
@@ -950,14 +1047,14 @@ mod tests {
     /// session's role description never carries it.
     #[test]
     fn a_project_session_is_told_the_users_language_only_for_a_non_english_one() {
-        let worktrees = WorktreeSettings::default();
+        let worktrees = GitWorkflowSettings::default();
         let with = |tag: Option<&str>, agent, owner: Option<&Owner>| {
             role_description(
                 Role::Project,
                 owner,
                 agent,
                 &RoleOptions {
-                    worktrees: Some(&worktrees),
+                    git_workflow: Some(&worktrees),
                     ask_as_choices: true,
                     user_language: tag,
                 },

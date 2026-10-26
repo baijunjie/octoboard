@@ -4,19 +4,19 @@ Settings is a large dialog over the whole window. A list of sections runs down i
 settings fill the right under the section's heading, one row per setting: on the left its name and a line of text under
 it saying what it does — a trusted folder's row has its path alone — and on the right its control. Under a right-to-left
 language the sides swap (see "Right-to-left layout" in `docs/product/window-layout.md`). A section that explains itself
-as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on one
-row in "Git", on the **Revert gate** row in Worktrees (see "Worktrees" below), and in Agent accounts on the **Start
+as a whole does so in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on the
+**Automatically pull repositories** and **Revert gate** rows in Git (see "Git" below), and in Agent accounts on the **Start
 usage windows automatically** row (see "Start usage windows automatically" below), on each agent's Permission approval
 row, on the accounts table's Disable heading and, in an account's settings dialog, after the default account's
 directory and on the sharing row (see "Approval modes", "The accounts table", "The account settings dialog" and
 "Sharing the default configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
-`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Worktrees**, **Agent
-accounts**, **Trusted folders**, **Permissions**, **Agent behavior**, **Notifications**, **Keyboard shortcuts**,
-**Configuration** and **About**; the dialog opens on General unless it was asked to open on another section.
+`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Agent accounts**,
+**Agent behavior**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration**
+and **About**; the dialog opens on General unless it was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
 archived sessions whose conversation is gone, automatic account selection, the ordering of the sidebar by status, the
-application-wide worktree settings, the agent accounts (without their directories) and the trusted folders, and change
+application-wide git workflow settings, the agent accounts (without their directories) and the trusted folders, and change
 all but the last two (see "Application settings: `get_settings` and `update_settings`" in
 `docs/product/agent-settings-tools.md`).
 
@@ -85,6 +85,14 @@ dialog, on the control that opened Settings — the console dialog's Manage acco
 itself when that control is gone.
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
+
+## Group headings
+
+A section whose rows fall into groups — Git and Keyboard shortcuts — heads each group with a heading of its own. Once
+the section is scrolled far enough for a group's heading to reach the top of the section's area, the heading stays
+pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading arrives and pushes it out;
+the top fade then begins below the pinned heading (see "The edge that hides content fades" in
+`docs/product/scrolling-surfaces.md`).
 
 ## How paths are shown
 
@@ -169,7 +177,10 @@ in `docs/product/application-lifecycle.md`.
 
 ## Git
 
-Two rows: **Default clone directory** first, then **Automatically pull repositories**.
+Three groups, each under a heading (see "Group headings" above): **Repository**, holding **Default clone directory**
+and then **Automatically pull repositories**; **Development**, holding **Where sessions develop**, **Rebase before
+merging** and **Delivery** (see "Development" below); and **Protection**, holding **Revert gate** (see "Protection"
+below).
 
 ### Default clone directory
 
@@ -198,39 +209,46 @@ whichever way the switch is set, so the branch always shows how far ahead or beh
 never does and where the value is kept are in "Automatically pulling repositories" in
 `docs/product/project-git-status.md`.
 
-## Worktrees
+### Development
 
-The application-wide worktree settings: how a project session is asked to use git worktrees and deliver finished work,
-and the revert gate. What each one does, its values and its default are in `docs/product/worktree-settings.md`, and a
-project can hold its own value for any of them (see "A project's own worktree settings" there). The rows, in order, are
-**Use worktrees for development**, **Rebase before merging**, **Revert gate** and **Delivery**. A change applies that
-one item alone. The daemon keeps the values, so every window shows the same.
+The Development and Protection rows are the application-wide git workflow settings. What each one does, its values and
+its default are in `docs/product/git-workflow-settings.md`, and a project can hold its own value for any of them (see
+"A project's own git workflow settings" there). A change applies that one item alone. The daemon keeps the values, so
+every window shows the same. As with the other switches here, while a switch is off its row's description says what
+turning it on will do, and while it is on it says what is happening now.
 
-As with the other switches here, while a switch is off its row's description says what turning it on will do, and while
-it is on it says what is happening now.
-
-- **Use worktrees for development**, a switch, on to begin with. Its description says that a project session is asked
-  to create a branch and a worktree of its own before it changes files, that a change reaches only sessions begun after
-  it, that a project's own rules for worktrees and branches come first, and that the other three rows are shown while
-  it is on. While it is off the other three rows are not shown: their values are kept, and the rows come back with them
-  when it is turned on again. When a row that goes had keyboard focus — another window or a console session can turn
-  the switch off — focus moves to this switch.
+- **Where sessions develop**, a choice of **On the current branch**, **On a branch of its own** and **In a worktree of
+  its own**, In a worktree of its own to begin with. Its description follows the choice. On the current branch, it
+  says that a project session works directly on the current branch and is given no rule for branches or worktrees,
+  that a change reaches only sessions begun after it, and that Rebase and Delivery are shown once sessions work on a
+  branch of their own. On a branch of its own, it says that a project session is asked to create a branch of its own
+  in the project directory before it changes files, that the branch shares that directory so this suits one session at
+  a time, that a change reaches only sessions begun after it, and that a project's own rules for worktrees and branches
+  come first. In a worktree of its own, it says that a project session is asked to create a branch and a worktree of
+  its own before it changes files, that a change reaches only sessions begun after it, and that a project's own rules
+  for worktrees and branches come first. While it is on the current branch the other two rows of the group are not
+  shown: their values are kept, and the rows come back with them when a branch or a worktree of its own is chosen
+  again. When a row that goes had keyboard focus — another window or a console session can change the choice — focus
+  moves to this row's picker.
 - **Rebase before merging**, a switch, on to begin with. Its description says that a branch is rebased onto its target
   branch before it is merged, that a change reaches only sessions begun after it, and that a project's own rules come
   first.
-- **Revert gate**, a switch, off to begin with. Its description says that in a project session a branch update that
-  quietly undoes changes already on its target branch is blocked, and that a change takes effect at once, running
-  sessions included. A "?" help tip at the end of its name ("About passing the revert gate") says what it blocks —
-  usually what a merge or rebase whose conflicts were resolved wrongly leaves — and how a deliberate undo passes: made
-  with `git revert`, or with a `Reverts: <sha>` line in the message of the commit that undoes it (see "A deliberate
-  revert" in `docs/product/revert-gate.md`).
 - **Delivery**, a choice of **Ask each time**, **Merge locally** and **Open a pull request**, Ask each time to begin
   with. Its description says that it is how a session delivers finished work when nobody has said how, that a change
   reaches only sessions begun after it, and that a project's own rules come first.
 
-A console session may read and change all four, and a full configuration export carries them (see "Application
-settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings
-a full export carries" in `docs/product/configuration-export-and-import.md`).
+### Protection
+
+- **Revert gate**, a switch, off to begin with, always shown whatever Where sessions develop holds. Its description
+  says that in a project session a branch update that quietly undoes changes already on its target branch is blocked,
+  and that a change takes effect at once, running sessions included. A "?" help tip at the end of its name ("About
+  passing the revert gate") says what it blocks — usually what a merge or rebase whose conflicts were resolved wrongly
+  leaves — and how a deliberate undo passes: made with `git revert`, or with a `Reverts: <sha>` line in the message of
+  the commit that undoes it (see "A deliberate revert" in `docs/product/revert-gate.md`).
+
+A console session may read and change all four git workflow settings, and a full configuration export carries them
+(see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
+application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Agent accounts
 
@@ -267,6 +285,68 @@ it, since it spends the user's quota (see "Who reads and changes what" in `docs/
 full configuration export carries it (see "The application settings a full export carries" in
 `docs/product/configuration-export-and-import.md`). When a request is sent, what it is and what it leaves behind are in
 "Starting a window that has not begun counting" in `docs/product/account-quotas.md`.
+
+## Agent behavior
+
+What a session may do without asking the user first, and how it asks the user. A paragraph under the heading says as
+much, above five rows: **Automatically approve session requests**, **Automatically approve resume requests**,
+**Automatically approve account switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The
+section is the same in every client. Each switch is kept by the daemon, so every window shows the same, and besides its
+row only an import asked to apply a full configuration document's application settings changes it (see "The
+application settings a full export carries" in `docs/product/configuration-export-and-import.md`); turning one on or
+off leaves the others as they are. What an automatic approval does, what turning one of the four approval switches on
+changes, and why agents cannot change any of them are in "Approving requests automatically" in
+`docs/product/session-requests.md`.
+
+### Automatically approve session requests
+
+A switch, **off to begin with** — installations from before the switch existed included: whether a session's
+`request_session` call, its request for a session that is nobody's, is approved without asking the user. While the
+switch is off the row's description says what turning it on will do, and while it is on it says what is happening now:
+a session can start a session that reports to the user without asking first, and nobody but the user owns the new
+session.
+
+### Automatically approve resume requests
+
+A switch, **off to begin with** — installations from before the switch existed included: whether a session's
+`request_resume_session` call, its request to resume a conversation, is approved without asking the user (see
+`docs/product/requests-to-resume-a-conversation.md`). While the switch is off the row's description says what turning
+it on will do, and while it is on it says what is happening now: a session can reopen or resume a session, or resume a
+conversation in a new session, without asking first; a reopened or resumed session keeps its owner and has its
+archived owners reopened with it; and a new session started this way is owned by nobody but the user.
+
+### Automatically approve account switches
+
+A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
+`switch_session_account` call, which switches the account of one of its own sessions, is made without asking the user
+(see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md`). While the switch is
+off the row's description says that, once it is on, a session can do so without asking first, and that until then the
+user is asked and can change the account, model and reasoning effort before confirming; while it is on, it says that a
+session does so without asking, and that turning it off has the user asked again, with those choices. The Switch
+account the user makes from the window is not affected.
+
+### Automatically approve handoffs
+
+A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
+`handoff_session` call, which hands one of its own sessions off to a session of another agent, is made without asking
+the user (see "The user's approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). While the switch
+is off the row's description says that, once it is on, a session can do so without asking first, and that until then
+the user is asked and can change the agent, account, model and reasoning effort before confirming; while it is on, it
+says that a session does so without asking, and that turning it off has the user asked again, with those choices. The
+Hand off the user makes from the window is not affected.
+
+### Ask questions as choices
+
+A switch, **on to begin with** — installations from before the switch existed included: whether the instructions
+Octoboard gives a session ask it to put a question that needs the user's decision as options the user picks from,
+through the agent's own tool for asking, rather than listing the options in its reply (what a session is told is in
+"The guidance on asking the user" in `docs/product/launching-agents.md`). While the switch is on the row's description
+says so, that turning it off lets sessions ask in their own way, and that a change reaches sessions started afterwards;
+while it is off, it says that once it is on sessions are asked to do so, and that until then they ask in their own way.
+The daemon stores it as `ask_questions_as_choices`. A session already running keeps what it was told when it launched;
+when a change reaches a console session is in "The console session's instruction file" in
+`docs/product/launching-agents.md`. An agent can neither read nor change the switch through the settings tools (see
+"Who reads and changes what" in `docs/product/agent-settings-tools.md`).
 
 ## Trusted folders
 
@@ -338,68 +418,6 @@ of the grants fails, the section is instead a red alert titled that the permissi
 report which have been granted, which
 opens no error alert (see "Failures shown on the screen" in `docs/product/error-alerts.md`). Until the first read comes
 back the section shows neither line and nothing else either.
-
-## Agent behavior
-
-What a session may do without asking the user first, and how it asks the user. A paragraph under the heading says as
-much, above five rows: **Automatically approve session requests**, **Automatically approve resume requests**,
-**Automatically approve account switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The
-section is the same in every client. Each switch is kept by the daemon, so every window shows the same, and besides its
-row only an import asked to apply a full configuration document's application settings changes it (see "The
-application settings a full export carries" in `docs/product/configuration-export-and-import.md`); turning one on or
-off leaves the others as they are. What an automatic approval does, what turning one of the four approval switches on
-changes, and why agents cannot change any of them are in "Approving requests automatically" in
-`docs/product/session-requests.md`.
-
-### Automatically approve session requests
-
-A switch, **off to begin with** — installations from before the switch existed included: whether a session's
-`request_session` call, its request for a session that is nobody's, is approved without asking the user. While the
-switch is off the row's description says what turning it on will do, and while it is on it says what is happening now:
-a session can start a session that reports to the user without asking first, and nobody but the user owns the new
-session.
-
-### Automatically approve resume requests
-
-A switch, **off to begin with** — installations from before the switch existed included: whether a session's
-`request_resume_session` call, its request to resume a conversation, is approved without asking the user (see
-`docs/product/requests-to-resume-a-conversation.md`). While the switch is off the row's description says what turning
-it on will do, and while it is on it says what is happening now: a session can reopen or resume a session, or resume a
-conversation in a new session, without asking first; a reopened or resumed session keeps its owner and has its
-archived owners reopened with it; and a new session started this way is owned by nobody but the user.
-
-### Automatically approve account switches
-
-A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
-`switch_session_account` call, which switches the account of one of its own sessions, is made without asking the user
-(see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md`). While the switch is
-off the row's description says that, once it is on, a session can do so without asking first, and that until then the
-user is asked and can change the account, model and reasoning effort before confirming; while it is on, it says that a
-session does so without asking, and that turning it off has the user asked again, with those choices. The Switch
-account the user makes from the window is not affected.
-
-### Automatically approve handoffs
-
-A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
-`handoff_session` call, which hands one of its own sessions off to a session of another agent, is made without asking
-the user (see "The user's approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). While the switch
-is off the row's description says that, once it is on, a session can do so without asking first, and that until then
-the user is asked and can change the agent, account, model and reasoning effort before confirming; while it is on, it
-says that a session does so without asking, and that turning it off has the user asked again, with those choices. The
-Hand off the user makes from the window is not affected.
-
-### Ask questions as choices
-
-A switch, **on to begin with** — installations from before the switch existed included: whether the instructions
-Octoboard gives a session ask it to put a question that needs the user's decision as options the user picks from,
-through the agent's own tool for asking, rather than listing the options in its reply (what a session is told is in
-"The guidance on asking the user" in `docs/product/launching-agents.md`). While the switch is on the row's description
-says so, that turning it off lets sessions ask in their own way, and that a change reaches sessions started afterwards;
-while it is off, it says that once it is on sessions are asked to do so, and that until then they ask in their own way.
-The daemon stores it as `ask_questions_as_choices`. A session already running keeps what it was told when it launched;
-when a change reaches a console session is in "The console session's instruction file" in
-`docs/product/launching-agents.md`. An agent can neither read nor change the switch through the settings tools (see
-"Who reads and changes what" in `docs/product/agent-settings-tools.md`).
 
 ## Notifications
 

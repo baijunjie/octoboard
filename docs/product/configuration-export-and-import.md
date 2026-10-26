@@ -91,8 +91,8 @@ The **application settings card** is headed by the checkbox **Also apply the app
 it is a line for each setting the document carries — one an older document leaves out has no line — naming the setting
 with a badge for what applying would change from what is set now: **Turns on**, with what then follows in that
 setting's own words (see "The application settings a full export carries" below); **Turns off**; or **No change**. A
-document that carries the application-wide worktree settings adds one line for all four, named after Settings'
-Worktrees section, badged **Set to the file's** when they differ from the current ones and **No change** when they do
+document that carries the application-wide git workflow settings adds one line for all four, named **Git workflow**,
+badged **Set to the file's** when they differ from the current ones and **No change** when they do
 not. A document that carries keyboard shortcuts adds a line for them, badged **Set to the file's**, with how many of the
 file's shortcuts differ from the defaults — counting only those that can be used here — and that they apply to this
 device or browser only; **Back to defaults**, with that it applies to this device or browser only; or **No change**,
@@ -117,7 +117,7 @@ The **result** replaces the review, in this order:
   to open. In a narrow dialog each line becomes a block that names every value, under its console's name.
 - Each account that fell back to a default account, listed under a heading of its own.
 - When the application settings were applied, a card headed **Application settings applied**, with a line for each
-  setting applied, badged **On** or **Off**; one line for the worktree settings, when the document carried them, badged
+  setting applied, badged **On** or **Off**; one line for the git workflow settings, when the document carried them, badged
   **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with how
   many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts could
   not be used here and were left out said under it, when any were.
@@ -165,10 +165,11 @@ import creates the console, and with it a working directory of its own.
 Its name, its description if it has one, the directory it points at, how it was associated, the remote URL recorded for
 it, its own default agent if it has one, whether it is pinned, its tags (see `docs/product/project-tags.md`), and — one
 set per agent — the account its sessions run under and the model and reasoning effort they launch with (see
-`docs/product/projects.md`), and its own worktree settings under `worktrees`, `null` for each item it leaves to the
-application-wide value (see "A project's own worktree settings" in `docs/product/worktree-settings.md`). Every export
+`docs/product/projects.md`), and its own git workflow settings under `git_workflow`, `null` for each item it leaves
+to the application-wide value (see "A project's own git workflow settings" in
+`docs/product/git-workflow-settings.md`). Every export
 carries them, full or of one console. An import stores the description trimmed, and a project of a document that
-carries no description is imported with none; one whose document carries no worktree settings follows every
+carries no description is imported with none; one whose document carries no git workflow settings follows every
 application-wide value. Export and import preserve the full length of project names and descriptions,
 including values beyond the editing limits in "Project names" and "The project's description" in
 `docs/product/projects.md`; an import neither rejects nor truncates them for their length.
@@ -264,8 +265,9 @@ settings leaves it as the importing daemon holds it.
 - **Ask questions as choices** (see that section in `docs/product/settings.md`), under `ask_questions_as_choices`. The
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
-- **The application-wide worktree settings** (see "The four settings" in `docs/product/worktree-settings.md`), under
-  `worktrees`, an object holding all four of `use_worktrees`, `rebase_before_merge`, `delivery` and `revert_gate`.
+- **The application-wide git workflow settings** (see "The four settings" in `docs/product/git-workflow-settings.md`),
+  under `git_workflow`, an object holding all four of `development`, `rebase_before_merge`, `delivery` and
+  `revert_gate`.
   Applying the document's settings sets all four to the document's values, and a document without it, or with `null`
   there, leaves them as they are. The import review and its result each have one line for all four (see "In the window"
   above).
@@ -283,7 +285,7 @@ accounts stay out of every document (see "What is not configuration and never tr
 
 ### Versions
 
-The format marker tells a configuration document from any other JSON. The version is a whole number, 1 today, and is
+The format marker tells a configuration document from any other JSON. The version is a whole number, 2 today, and is
 raised only when a change would make a reader written for an older version misread a document — a field dropped, or
 given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know; neither is
 renaming one whose old name an import still reads, as with `auto_sync_repositories` above. An import refuses a document
@@ -291,7 +293,10 @@ whose format it does not recognize, and one whose version is 0 or newer than it 
 
 A document of an older version is not refused: before reading it, an import upgrades it to the current version one
 version at a time, so a file exported before the version was raised stays importable. The upgrade is part of the import
-and the file itself is left as it is. Only version 1 exists today, so no document needs upgrading yet.
+and the file itself is left as it is. Upgrading a version 1 document to version 2 renames the application-wide
+`worktrees` under `settings`, and each project's `worktrees`, to `git_workflow`, and turns the boolean `use_worktrees`
+in them into `development`: `true` becomes `worktree`, `false` becomes `in_place`, and a project's `null`, following the
+application-wide value, stays `null`.
 
 A document also carries, under `exported_by`, the version of Octoboard (its daemon) that exported it. It is there only
 for diagnosing a document that misbehaves: an import never reads it, it has no bearing on the version number, and a
@@ -361,7 +366,7 @@ project" in `docs/product/projects.md`): its directory has to exist, its name, t
 normalized the same way, and a directory already associated with the console being imported into is not associated a
 second time, which is what two projects of one console resolving to the same directory runs into — the second of them is
 reported as failed. What the document says about a project — its pin, its tags, its default agent (none stays none, and
-nothing is detected from the directory), its account references, its models and efforts, its own worktree settings — is
+nothing is detected from the directory), its account references, its models and efforts, its own git workflow settings — is
 applied as it stands. How
 the project was associated on the exporting machine does not carry over: what is recorded is how the daemon's host
 placed it, as a clone or as a local directory.

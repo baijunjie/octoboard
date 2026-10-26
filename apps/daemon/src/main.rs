@@ -31,6 +31,7 @@ mod git_restore;
 mod git_status;
 mod git_switch;
 mod git_watch;
+mod git_workflow;
 mod handoff;
 mod hook_mode;
 mod hook_queue;
@@ -88,7 +89,6 @@ mod title_activity;
 mod title_interrupt;
 mod transcript;
 mod trust;
-mod worktree_settings;
 
 use std::sync::Arc;
 

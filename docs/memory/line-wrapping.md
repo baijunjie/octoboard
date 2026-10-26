@@ -18,8 +18,10 @@ So such a line is not a review finding to answer with formatting; shorten it onl
 binding part of it to a local, or leave it.
 
 An edit made in place is what produces them — a sentence added to a doc comment, a clause changed mid-paragraph
-in Markdown — because the line grows while the rest of the paragraph keeps the old wrapping. So after editing a
-comment or any prose, re-wrap that whole paragraph rather than only the line you touched.
+in Markdown, a rename that lengthens an identifier or term that comments and prose mention — because the line grows
+while the rest of the paragraph keeps the old wrapping. So after editing a comment or any prose, re-wrap that whole
+paragraph rather than only the line you touched; after a rename, that means every paragraph it changed, not only the
+code.
 
 ## Count a line's width in characters, not bytes
 

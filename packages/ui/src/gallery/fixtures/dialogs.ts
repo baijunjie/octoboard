@@ -1,3 +1,4 @@
+import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
 import type { Agent, AgentAvailability, Settings } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
@@ -5,7 +6,6 @@ import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, ses
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
-import { DEFAULT_WORKTREE_SETTINGS, FOLLOWING_WORKTREE_SETTINGS } from "../../worktreeSettings";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 
@@ -57,7 +57,7 @@ const accountsState = snapshotState({
     auto_delete_unresumable_archives: true,
     added_agents: ALL_AGENTS,
     default_clone_dir: "/Users/dev/Projects",
-    worktrees: DEFAULT_WORKTREE_SETTINGS,
+    git_workflow: DEFAULT_GIT_WORKFLOW,
     accounts: [
       { id: "a-work", agent: "claude", name: "Work account for release coordination across all production services مرحبا 发布", config_dir: "/Users/dev/.claude-work" },
       { id: "a-personal", agent: "claude", name: "Personal account for documentation and experimental development مرحبا 发布", config_dir: "/Users/dev/.claude-personal" },
@@ -151,26 +151,26 @@ const inheritingState = snapshotState({
   settings: accountsState.settings,
 });
 
-// A project that holds its own delivery and revert gate and follows the application-wide value for the other two,
-// which are set apart from the defaults so that each badge names a value that is not the one the project holds.
-const worktreeProject = projectOf("p-worktrees", console_.id, "Worktree Site", {
-  worktrees: { ...FOLLOWING_WORKTREE_SETTINGS, delivery: "merge", revert_gate: false },
+// A project that holds its own delivery and revert gate and follows the application-wide value for development and
+// rebase, which are set apart from the defaults so that each badge names a value that is not the one the project holds.
+const gitWorkflowProject = projectOf("p-git-workflow", console_.id, "Workflow Site", {
+  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, delivery: "merge", revert_gate: false },
 });
-const worktreeState = snapshotState({
+const gitWorkflowState = snapshotState({
   consoles: [console_],
-  projects: [worktreeProject],
+  projects: [gitWorkflowProject],
   sessions: [],
-  settings: { ...accountsState.settings!, worktrees: { use_worktrees: true, rebase_before_merge: false, delivery: "pull_request", revert_gate: true } },
+  settings: { ...accountsState.settings!, git_workflow: { development: "branch", rebase_before_merge: false, delivery: "pull_request", revert_gate: true } },
 });
 
-// A project that turns worktrees off for itself while the application-wide setting has them on, and holds a value of
-// its own for rebase and delivery: those two stay as stored, out of sight.
-const noWorktreesProject = projectOf("p-no-worktrees", console_.id, "Scratch Site", {
-  worktrees: { ...FOLLOWING_WORKTREE_SETTINGS, use_worktrees: false, rebase_before_merge: true, delivery: "merge" },
+// A project that develops on the current branch for itself while the application-wide setting has worktrees, and holds a
+// value of its own for rebase and delivery: those two stay as stored, out of sight.
+const inPlaceProject = projectOf("p-in-place", console_.id, "Scratch Site", {
+  git_workflow: { ...FOLLOWING_GIT_WORKFLOW, development: "in_place", rebase_before_merge: true, delivery: "merge" },
 });
-const noWorktreesState = snapshotState({
+const inPlaceState = snapshotState({
   consoles: [console_],
-  projects: [noWorktreesProject],
+  projects: [inPlaceProject],
   sessions: [],
   settings: accountsState.settings,
 });
@@ -835,7 +835,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project",
-    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open and the Worktrees group ends it, below Model and Reasoning effort: its four pickers, in the order Use worktrees for development, Rebase before merging, Revert gate and Delivery, all read Same as app setting, each followed by a grey badge with the current application-wide value (On, On, Off, Ask each time). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open and the Git workflow group ends it, below Model and Reasoning effort: its four pickers, in the order Where sessions develop, Rebase before merging, Delivery and Revert gate, all read Same as app setting, each followed by a grey badge with the current application-wide value (In a worktree of its own, On, Ask each time, Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1400,
     steps: [
       consoleActions,
@@ -1349,30 +1349,30 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
-    state: worktreeState,
-    id: "dialog-edit-project-worktrees",
+    state: gitWorkflowState,
+    id: "dialog-edit-project-git-workflow",
     group: "Projects",
     category: "normal",
-    title: "Project worktree settings, some its own",
-    description: "Advanced is open and ends in the Worktrees group, which holds a picker for each setting in the order Use worktrees for development, Rebase before merging, Revert gate, Delivery (last). Revert gate reads Off and Delivery reads Merge locally, the project's own values with no badge; Use worktrees for development and Rebase before merging read Same as app setting, followed by a grey badge with the application-wide value (On and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    title: "Project git workflow, some its own",
+    description: "Advanced is open and ends in the Git workflow group, which holds a picker for each setting in the order Where sessions develop, Rebase before merging, Delivery, Revert gate (last). Delivery reads Merge locally and Revert gate reads Off, the project's own values with no badge; Where sessions develop and Rebase before merging read Same as app setting, followed by a grey badge with the application-wide value (On a branch of its own and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1200,
     steps: [
-      (ui) => projectActions(ui, worktreeProject.name),
+      (ui) => projectActions(ui, gitWorkflowProject.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
   },
   {
     ...dialogFixture,
-    state: noWorktreesState,
-    id: "dialog-edit-project-worktrees-off",
+    state: inPlaceState,
+    id: "dialog-edit-project-git-workflow-in-place",
     group: "Projects",
     category: "normal",
-    title: "Project worktree settings, worktrees off for the project",
-    description: "In the Worktrees group, Use worktrees for development reads Off, the project's own value, while the application-wide value is On, and is the only picker there: Rebase before merging, Revert gate and Delivery are not shown, though the project's own values for rebase and delivery are kept and come back when worktrees are turned on. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    title: "Project git workflow, developing on the current branch for the project",
+    description: "In the Git workflow group, Where sessions develop reads On the current branch, the project's own value, while the application-wide value is In a worktree of its own. Rebase before merging and Delivery are not shown, though the project's own values for them are kept and come back with another choice; Revert gate is still shown, reading Same as app setting with its grey badge. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1200,
     steps: [
-      (ui) => projectActions(ui, noWorktreesProject.name),
+      (ui) => projectActions(ui, inPlaceProject.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
     ],
@@ -1679,7 +1679,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source",
-    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open and, with Detect from files offering no model or effort, holds the Worktrees group alone, its four pickers reading Same as app setting, Delivery last.",
+    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open and, with Detect from files offering no model or effort, holds the Git workflow group alone, its four pickers reading Same as app setting, Revert gate last.",
     height: 1000,
     steps: [
       consoleActions,

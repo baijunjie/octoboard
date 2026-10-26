@@ -287,10 +287,10 @@ export function ImportReview({
         const now = settings[`current_${field}` as const];
         return typeof wanted === "boolean" && typeof now === "boolean" && <BooleanSettingLine key={field} label={t(label)} wanted={wanted} current={now} consequence={consequence} />;
       })}
-      {settings.worktrees && settings.current_worktrees && (
-        sameValue(settings.worktrees, settings.current_worktrees)
-          ? <SettingLine label={t("settings.section.worktrees")} badge={t("configuration.import.settings.badge.same")} />
-          : <SettingLine label={t("settings.section.worktrees")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
+      {settings.git_workflow && settings.current_git_workflow && (
+        sameValue(settings.git_workflow, settings.current_git_workflow)
+          ? <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.same")} />
+          : <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
       )}
       {shortcuts && (
         !shortcuts.changes

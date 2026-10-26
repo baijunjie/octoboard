@@ -3,7 +3,7 @@ import type { Scenario } from "../scenario";
 import type { Ui } from "../interact";
 import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 import { quotaOf, quotaWindow } from "./quotas";
-import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Sidebar sessions";
 const FOCUS_GROUP = "Focus mode";
@@ -23,7 +23,7 @@ const settings: Settings = {
   auto_pull_repositories: false,
   auto_delete_unresumable_archives: true,
   added_agents: ALL_AGENTS,
-  default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS,
+  default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
   accounts,
 };
 

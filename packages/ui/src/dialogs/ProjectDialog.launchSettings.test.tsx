@@ -284,10 +284,10 @@ it("offers no account and no launch settings while the source is a parent direct
   await choose("Personal");
   await chooseSource("A parent directory");
   expect(accountPicker()).toBeUndefined();
-  // Advanced holds the worktree settings alone.
+  // Advanced holds the git workflow settings alone.
   await click(buttonText("Advanced"));
   expect(pickerNamed("Model")).toBeUndefined();
-  expect(pickerNamed("Use worktrees for development")).toBeDefined();
+  expect(pickerNamed("Where sessions develop")).toBeDefined();
   await click(buttonText("Add"));
   // What was set before is out of sight and not sent.
   expect(sentOf(pending, "add_project")).not.toHaveProperty("claude_account_id");

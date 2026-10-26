@@ -155,7 +155,7 @@ fn project(id: &str, path: &Path) -> Project {
         pinned: false,
         tags: Vec::new(),
         description: None,
-        worktrees: Default::default(),
+        git_workflow: Default::default(),
     }
 }
 

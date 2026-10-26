@@ -21,11 +21,11 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::git_remote;
+use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
 use crate::protocol::{
     Account, Agent, CodedError, Console, Project, ProjectAccount, ProjectSource,
 };
 use crate::store::Store;
-use crate::worktree_settings::{WorktreeOverride, WorktreeSettings};
 
 /// Names the kind of file, so one that is not a configuration document is told apart from one
 /// whose version is unsupported.
@@ -36,7 +36,7 @@ pub const FORMAT: &str = "octoboard-configuration";
 ///
 /// Raising it needs a step in `config_upgrade` that upgrades a document of the previous version,
 /// so an export made before stays importable.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConfigurationDocument {
@@ -92,10 +92,11 @@ pub struct DocumentSettings {
     /// setting as it is.
     #[serde(default)]
     pub ask_questions_as_choices: Option<bool>,
-    /// The application-wide worktree settings. Absent in a document exported before they existed:
-    /// importing it leaves them as they are.
+    /// The application-wide git workflow settings. Absent in a document exported before they
+    /// existed: importing it leaves them as they are. A version 1 document carries them as
+    /// `worktrees`, which `config_upgrade` converts.
     #[serde(default)]
-    pub worktrees: Option<WorktreeSettings>,
+    pub git_workflow: Option<GitWorkflowSettings>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
     /// reads and writes: the client adds them to a full export it saves (an empty object when it has
     /// none changed, which on import means every shortcut at its default) and applies them from an
@@ -186,10 +187,10 @@ pub struct DocumentProject {
     pub codex_session_effort: Option<String>,
     pub grok_session_model: Option<String>,
     pub grok_session_effort: Option<String>,
-    /// The project's own worktree settings, each item `null` when it follows the application-wide
-    /// value. Absent in an older document: every item follows.
+    /// The project's own git workflow settings, each item `null` when it follows the
+    /// application-wide value. Absent in an older document: every item follows.
     #[serde(default)]
-    pub worktrees: WorktreeOverride,
+    pub git_workflow: GitWorkflowOverride,
 }
 
 /// The document for the console `console`, or for every console and the application settings when
@@ -232,7 +233,7 @@ pub fn build(
             auto_approve_account_switches: Some(store.auto_approve_account_switches()?),
             auto_approve_handoffs: Some(store.auto_approve_handoffs()?),
             ask_questions_as_choices: Some(store.ask_questions_as_choices()?),
-            worktrees: Some(store.worktree_settings()?),
+            git_workflow: Some(store.git_workflow_settings()?),
             keyboard_shortcuts: None,
         }),
     };
@@ -329,7 +330,7 @@ fn document_project(
         codex_session_effort: project.codex_session_effort,
         grok_session_model: project.grok_session_model,
         grok_session_effort: project.grok_session_effort,
-        worktrees: project.worktrees,
+        git_workflow: project.git_workflow,
     }
 }
 
@@ -413,7 +414,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
-            worktrees: Default::default(),
+            git_workflow: Default::default(),
         }
     }
 
@@ -559,7 +560,7 @@ mod tests {
                 auto_approve_account_switches: Some(false),
                 auto_approve_handoffs: Some(false),
                 ask_questions_as_choices: Some(true),
-                worktrees: Some(WorktreeSettings::default()),
+                git_workflow: Some(GitWorkflowSettings::default()),
                 keyboard_shortcuts: None,
             })
         );

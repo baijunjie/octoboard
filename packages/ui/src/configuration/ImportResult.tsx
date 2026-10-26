@@ -290,7 +290,7 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
               const on = applied[field];
               return typeof on === "boolean" && <SettingLine key={field} label={t(label)} badge={t(on ? "configuration.import.result.badge.on" : "configuration.import.result.badge.off")} />;
             })}
-            {applied.worktrees && <SettingLine label={t("settings.section.worktrees")} badge={t("configuration.import.result.badge.matches")} />}
+            {applied.git_workflow && <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.result.badge.matches")} />}
             {shortcuts && (
               <SettingLine
                 label={t("settings.section.shortcuts")}

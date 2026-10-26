@@ -1719,7 +1719,14 @@ otherwise read as a resize and animate nothing, and positions are measured from 
 moves items with inline transforms during a drag calls `releaseListMotion(item)` as it lets go, before clearing the
 transforms, so the dropped item slides on from where it is drawn instead of moving twice. A divider that is hidden
 after the last item uses `[&:not(:has(~[data-list-motion]))]:border-b-0`, not `last:`, because exit copies are
-appended after the last real item.
+appended after the last real item; a row whose following siblings may carry no motion key (such as a shared row
+component used both with and without one) uses `[&:not(:has(~:not([data-list-motion-exit])))]:border-b-0` instead,
+which skips only the exit copies.
+Where the content below a collection would visibly jump, or be drawn over by departing copies, as items come and go,
+the collection passes `fitHeight` to `useListMotion` (a virtualized or content-width collection cannot): its height
+then follows the change with the position-change easing, clipped at its top and bottom edges, so the content below
+glides with it. Such a collection is a positioned (`relative`) container, so that its clip reaches the absolutely
+placed exit copies, and sizes by its border box (`box-sizing: border-box`, as Tailwind's base styles give).
 For a lazily mounted choice popup, use `MotionListBox` inside the popup so the observer mounts with the list and
 captures its initial positions before the first live choice update. Apply the same motion rule to choices that
 refresh while the popup remains open; a static choice list simply has no movement to animate.

@@ -6,8 +6,8 @@ after `git reset --soft <target branch>`, say — so old code goes back in as if
 fast-forwards it all the same because it checks only ancestry. The gate checks by content instead, and refuses the
 update or the push before it happens. Ordinary commits, rebases, merges and pushes go through.
 
-It is off by default (opt in per project or application-wide) and runs only while the project's effective
-`use_worktrees` and `revert_gate` worktree settings are both on (see "The switch" below). It needs nothing installed,
+It is off by default (opt in per project or application-wide) and runs whenever the project's effective `revert_gate`
+git workflow setting is on (see "The switch" below). It needs nothing installed,
 in the project or on the machine: it runs from the hook dispatchers every project session's git is already pointed at
 (see "The session's git hooks" in `docs/product/branch-responsible-session.md`), as part of Octoboard itself, and
 depends on no interpreter such as Python — on a fresh macOS, `/usr/bin/python3` is only a stub that prompts to install
@@ -99,14 +99,13 @@ that brings the changes back, never to force-push or reset.
 
 ## The switch
 
-The gate runs only while the project's effective `use_worktrees` and `revert_gate` settings are both on (see "The
-four settings" in `docs/product/worktree-settings.md`), each application-wide with a per-project override.
-`revert_gate` is off by default: Octoboard does not assume a project wants it, so a project, or the whole installation,
-opts in.
-Both settings are read every time the gate runs, so turning either off or on reaches running sessions at once, without
-relaunching them. The gate is part of working in worktrees: while `use_worktrees` is off it does not run whatever
-`revert_gate` holds, and the stored `revert_gate` value is kept and takes effect again when `use_worktrees` is turned
-back on. Where the user turns it on and off is in "Reading and changing them" in `docs/product/worktree-settings.md`.
+The gate runs whenever the project's effective `revert_gate` setting is on (see "The four settings" in
+`docs/product/git-workflow-settings.md`), application-wide with a per-project override. `revert_gate` is off by
+default: Octoboard does not assume a project wants it, so a project, or the whole installation, opts in.
+The setting is read every time the gate runs, so turning it off or on reaches running sessions at once, without
+relaunching them. Where project sessions develop plays no part: the gate runs alike whether they work on the current
+branch, on a branch of their own or in a worktree of their own. Where the user turns it on and off is in "Reading and
+changing them" in `docs/product/git-workflow-settings.md`.
 
 ## Where it runs
 

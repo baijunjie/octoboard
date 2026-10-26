@@ -30,6 +30,10 @@ use crate::git_remote;
 use crate::git_restore;
 use crate::git_status;
 use crate::git_switch;
+use crate::git_workflow::{
+    GitWorkflowOverride, GitWorkflowOverrideChanges, GitWorkflowSettings,
+    GitWorkflowSettingsChanges,
+};
 use crate::hostfs;
 use crate::launch_settings::{
     self, normalize_launch_setting, normalize_session_launch_setting, trimmed_or_none,
@@ -54,9 +58,6 @@ use crate::store::{ReorderOutcome, Store, LOCAL_HOST_ID};
 use crate::switch_continue;
 use crate::term;
 use crate::trust;
-use crate::worktree_settings::{
-    WorktreeOverride, WorktreeOverrideChanges, WorktreeSettings, WorktreeSettingsChanges,
-};
 
 /// Handles one request. The returned event, when there is one, is the answer to that request and
 /// goes to the asking socket only; everything that changed state has already been broadcast. For
@@ -302,7 +303,7 @@ async fn handle_inner(
             detect_default_agent,
             tags,
             description,
-            worktrees,
+            git_workflow,
         } => {
             add_project(
                 state,
@@ -324,7 +325,7 @@ async fn handle_inner(
                         codex_session_effort,
                         grok_session_model,
                         grok_session_effort,
-                        worktrees: worktrees.unwrap_or_default(),
+                        git_workflow: git_workflow.unwrap_or_default(),
                     },
                     detect_default_agent,
                     tags,
@@ -353,7 +354,7 @@ async fn handle_inner(
             pinned,
             tags,
             description,
-            worktrees,
+            git_workflow,
         } => {
             let launch = launch_settings::changes_of([
                 (Agent::Claude, claude_session_model, claude_session_effort),
@@ -378,7 +379,7 @@ async fn handle_inner(
                     pinned,
                     tags,
                     description,
-                    worktrees: worktrees.unwrap_or_default(),
+                    git_workflow: git_workflow.unwrap_or_default(),
                     ..ProjectChanges::default()
                 },
             )
@@ -1027,7 +1028,7 @@ async fn handle_inner(
             sidebar_order_by_status,
             auto_start_quota_windows,
             default_clone_dir,
-            worktrees,
+            git_workflow,
         } => {
             update_settings(
                 state,
@@ -1044,7 +1045,7 @@ async fn handle_inner(
                     sidebar_order_by_status,
                     auto_start_quota_windows,
                     default_clone_dir,
-                    worktrees: worktrees.unwrap_or_default(),
+                    git_workflow: git_workflow.unwrap_or_default(),
                 },
             )?;
             Ok(None)
@@ -1683,7 +1684,7 @@ pub struct NewProjectSettings {
     pub codex_session_effort: Option<String>,
     pub grok_session_model: Option<String>,
     pub grok_session_effort: Option<String>,
-    pub worktrees: WorktreeOverride,
+    pub git_workflow: GitWorkflowOverride,
 }
 
 impl NewProjectSettings {
@@ -1912,7 +1913,7 @@ pub async fn add_project(
             pinned: settings.pinned,
             tags: tags.clone(),
             description: description.clone(),
-            worktrees: settings.worktrees,
+            git_workflow: settings.git_workflow,
         };
         state.store.insert_project(&project)?;
         crate::git_watch::add(state, &project);
@@ -1948,7 +1949,7 @@ pub struct ProjectChanges {
     pub remove_tags: Vec<String>,
     /// `Some(None)` clears it; blank text clears it too.
     pub description: Present<String>,
-    pub worktrees: WorktreeOverrideChanges,
+    pub git_workflow: GitWorkflowOverrideChanges,
 }
 
 /// Applies `changes` to the project `id`, broadcasts it and returns it as stored. Every reference
@@ -2059,7 +2060,7 @@ pub async fn update_project(
             tags.extend(changes.add_tags.iter().cloned());
             project.tags = normalise_tags(tags);
         }
-        project.worktrees = changes.worktrees.applied_to(project.worktrees);
+        project.git_workflow = changes.git_workflow.applied_to(project.git_workflow);
         state.store.update_project(&project)?;
         // Read back rather than sent as `project`: the stored record carries what this write
         // does not touch (the remote URL, the trust consent), which another path may have just
@@ -3928,12 +3929,12 @@ fn launch_settings(
     ))
 }
 
-/// The worktree settings in force for a project session's project as this launch is assembled,
+/// The git workflow settings in force for a project session's project as this launch is assembled,
 /// which shape the rule its role text carries; none for a console session, which is given no rule.
-fn launch_worktree_settings(
+fn launch_git_workflow_settings(
     state: &Arc<AppState>,
     session: &Session,
-) -> Result<Option<WorktreeSettings>> {
+) -> Result<Option<GitWorkflowSettings>> {
     let Some(project_id) = session
         .project_id
         .as_ref()
@@ -3945,7 +3946,7 @@ fn launch_worktree_settings(
         .store
         .get_project(project_id)?
         .ok_or_else(|| CodedError::unknown_project(project_id))?;
-    Ok(Some(crate::worktree_settings::effective(
+    Ok(Some(crate::git_workflow::effective(
         &state.store,
         &project,
     )?))
@@ -3984,7 +3985,7 @@ async fn start_process(
         agent: session.agent,
         role: session.role,
         owner: owner_of(state, session)?,
-        worktrees: launch_worktree_settings(state, session)?,
+        git_workflow: launch_git_workflow_settings(state, session)?,
         ask_questions_as_choices: state.store.ask_questions_as_choices()?,
         user_language: state.store.interface_language()?,
         cwd: cwd.to_path_buf(),
@@ -5951,7 +5952,7 @@ pub struct SettingsChanges {
     pub auto_start_quota_windows: Option<bool>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
-    pub worktrees: WorktreeSettingsChanges,
+    pub git_workflow: GitWorkflowSettingsChanges,
 }
 
 /// Applies `changes`: absent means "leave it alone", as in `update_project`. Broadcasts
@@ -5970,7 +5971,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         sidebar_order_by_status,
         auto_start_quota_windows,
         default_clone_dir,
-        worktrees,
+        git_workflow,
     } = changes;
     if let Some(tag) = &interface_language {
         if !crate::interface_language::is_offered(tag) {
@@ -6027,7 +6028,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;
     }
-    changed |= state.store.change_worktree_settings(&worktrees)?;
+    changed |= state.store.change_git_workflow_settings(&git_workflow)?;
     if !changed {
         return Ok(());
     }
@@ -6408,7 +6409,7 @@ mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
-                worktrees: Default::default(),
+                git_workflow: Default::default(),
             })
             .unwrap();
         let add = |id: &str, console: &str, role: Role, project: Option<&str>, status| {
@@ -6539,7 +6540,7 @@ mod tests {
                 pinned: false,
                 tags: Vec::new(),
                 description: None,
-                worktrees: Default::default(),
+                git_workflow: Default::default(),
             })
             .unwrap();
         state
@@ -6649,7 +6650,7 @@ mod tests {
                     pinned: false,
                     tags: Vec::new(),
                     description: None,
-                    worktrees: Default::default(),
+                    git_workflow: Default::default(),
                 })
                 .unwrap();
             state
@@ -7714,7 +7715,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
-            worktrees: Default::default(),
+            git_workflow: Default::default(),
         }
     }
 
@@ -7878,7 +7879,7 @@ mod tests {
                     pinned: false,
                     tags: Vec::new(),
                     description: None,
-                    worktrees: Default::default(),
+                    git_workflow: Default::default(),
                 })
                 .unwrap();
         }
@@ -9465,7 +9466,7 @@ mod tests {
             pinned: false,
             tags: Vec::new(),
             description: None,
-            worktrees: Default::default(),
+            git_workflow: Default::default(),
         };
         state.store.insert_project(&project).unwrap();
         let refused = |err: anyhow::Error| {
@@ -9680,11 +9681,12 @@ mod tests {
         assert_eq!(normalize_session_launch_setting(None), None);
     }
 
-    /// A project session launches with its project's worktree settings as they are at that launch,
-    /// the project's own value winning; a console session, which is given no rule, with none.
+    /// A project session launches with its project's git workflow settings as they are at that
+    /// launch, the project's own value winning; a console session, which is given no rule, with
+    /// none.
     #[test]
-    fn a_project_session_launches_with_its_projects_worktree_settings() {
-        let (state, _dir) = crate::test_support::app_state("coordinator-worktree-settings");
+    fn a_project_session_launches_with_its_projects_git_workflow_settings() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-git-workflow-settings");
         state
             .store
             .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
@@ -9694,30 +9696,30 @@ mod tests {
         let mut session = bare_session("s", Role::Project);
         session.project_id = Some("project-1".to_string());
         assert_eq!(
-            launch_worktree_settings(&state, &session).unwrap(),
-            Some(WorktreeSettings::default())
+            launch_git_workflow_settings(&state, &session).unwrap(),
+            Some(GitWorkflowSettings::default())
         );
         state
             .store
-            .change_worktree_settings(&WorktreeSettingsChanges {
-                delivery: Some(crate::worktree_settings::Delivery::Merge),
-                ..WorktreeSettingsChanges::default()
+            .change_git_workflow_settings(&GitWorkflowSettingsChanges {
+                delivery: Some(crate::git_workflow::Delivery::Merge),
+                ..GitWorkflowSettingsChanges::default()
             })
             .unwrap();
-        project.worktrees.use_worktrees = Some(false);
+        project.git_workflow.development = Some(crate::git_workflow::Development::InPlace);
         state.store.update_project(&project).unwrap();
         assert_eq!(
-            launch_worktree_settings(&state, &session).unwrap(),
-            Some(WorktreeSettings {
-                use_worktrees: false,
-                delivery: crate::worktree_settings::Delivery::Merge,
-                ..WorktreeSettings::default()
+            launch_git_workflow_settings(&state, &session).unwrap(),
+            Some(GitWorkflowSettings {
+                development: crate::git_workflow::Development::InPlace,
+                delivery: crate::git_workflow::Delivery::Merge,
+                ..GitWorkflowSettings::default()
             })
         );
         let mut console_session = bare_session("c", Role::Console);
         console_session.project_id = Some("project-1".to_string());
         assert_eq!(
-            launch_worktree_settings(&state, &console_session).unwrap(),
+            launch_git_workflow_settings(&state, &console_session).unwrap(),
             None
         );
     }
@@ -9939,12 +9941,13 @@ mod tests {
         assert_eq!(refused(err), error_code::INVALID_LAUNCH_SETTING);
     }
 
-    /// `update_settings` changes the worktree settings item by item, broadcasts `settings_updated`
-    /// with them only when one actually changed, and refuses an unknown delivery at parsing.
+    /// `update_settings` changes the git workflow settings item by item, broadcasts
+    /// `settings_updated` with them only when one actually changed, and refuses an unknown
+    /// delivery at parsing.
     #[tokio::test]
-    async fn update_settings_changes_the_worktree_settings_and_broadcasts_only_a_change() {
-        use crate::worktree_settings::{Delivery, WorktreeSettings};
-        let (state, _dir) = crate::test_support::app_state("coordinator-worktree-settings");
+    async fn update_settings_changes_the_git_workflow_settings_and_broadcasts_only_a_change() {
+        use crate::git_workflow::{Delivery, GitWorkflowSettings};
+        let (state, _dir) = crate::test_support::app_state("coordinator-git-workflow-settings");
         let request = |json: &str| {
             serde_json::from_str::<crate::protocol::Request>(json)
                 .unwrap()
@@ -9956,28 +9959,28 @@ mod tests {
             &state,
             None,
             request(
-                r#"{"type":"update_settings","worktrees":{"delivery":"merge","revert_gate":true}}"#,
+                r#"{"type":"update_settings","git_workflow":{"delivery":"merge","revert_gate":true}}"#,
             ),
         )
         .await
         .unwrap();
         assert_eq!(
-            state.store.worktree_settings().unwrap(),
-            WorktreeSettings {
+            state.store.git_workflow_settings().unwrap(),
+            GitWorkflowSettings {
                 delivery: Delivery::Merge,
                 revert_gate: true,
-                ..WorktreeSettings::default()
+                ..GitWorkflowSettings::default()
             }
         );
         assert!(matches!(
             events.try_recv(),
             Ok(Event::SettingsUpdated { settings })
-                if settings.worktrees.delivery == Delivery::Merge && settings.worktrees.revert_gate
+                if settings.git_workflow.delivery == Delivery::Merge && settings.git_workflow.revert_gate
         ));
 
         for unchanged in [
-            r#"{"type":"update_settings","worktrees":{"delivery":"merge"}}"#,
-            r#"{"type":"update_settings","worktrees":{}}"#,
+            r#"{"type":"update_settings","git_workflow":{"delivery":"merge"}}"#,
+            r#"{"type":"update_settings","git_workflow":{}}"#,
             r#"{"type":"update_settings"}"#,
         ] {
             handle(&state, None, request(unchanged)).await.unwrap();
@@ -9985,33 +9988,33 @@ mod tests {
         }
 
         assert!(serde_json::from_str::<crate::protocol::Request>(
-            r#"{"type":"update_settings","worktrees":{"delivery":"squash"}}"#
+            r#"{"type":"update_settings","git_workflow":{"delivery":"squash"}}"#
         )
         .is_err());
     }
 
-    /// A project added with its own worktree values stores them, the items it leaves out following
-    /// the application-wide value, and a parent directory gives the same values to every project it
-    /// adds.
+    /// A project added with its own git workflow values stores them, the items it leaves out
+    /// following the application-wide value, and a parent directory gives the same values to
+    /// every project it adds.
     #[tokio::test]
-    async fn add_project_stores_its_own_worktree_values_for_every_project_added() {
-        use crate::worktree_settings::{Delivery, WorktreeOverride};
-        let (state, dir) = crate::test_support::app_state("coordinator-add-project-worktrees");
+    async fn add_project_stores_its_own_git_workflow_values_for_every_project_added() {
+        use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
+        let (state, dir) = crate::test_support::app_state("coordinator-add-project-git-workflow");
         let workdir = console_workdir(&dir);
         state
             .store
             .insert_console(&console(Agent::Claude, &workdir))
             .unwrap();
-        let own = WorktreeOverride {
-            use_worktrees: Some(false),
+        let own = GitWorkflowOverride {
+            development: Some(Development::InPlace),
             delivery: Some(Delivery::PullRequest),
-            ..WorktreeOverride::default()
+            ..GitWorkflowOverride::default()
         };
         let add = |source: &str, path: &Path| {
             let path = serde_json::to_string(&path.to_string_lossy()).unwrap();
             let request = serde_json::from_str::<crate::protocol::Request>(&format!(
                 r#"{{"type":"add_project","console_id":"console-1","source":"{source}","path":{path},
-                    "worktrees":{{"use_worktrees":false,"delivery":"pull_request"}}}}"#
+                    "git_workflow":{{"development":"in_place","delivery":"pull_request"}}}}"#
             ))
             .unwrap();
             handle(&state, None, request.body)
@@ -10022,7 +10025,7 @@ mod tests {
         add("local", &single).await.unwrap();
         let added = state.store.list_projects().unwrap();
         assert_eq!(added.len(), 1);
-        assert_eq!(added[0].worktrees, own);
+        assert_eq!(added[0].git_workflow, own);
 
         let parent = dir.join("parent");
         for name in ["one", "two"] {
@@ -10031,16 +10034,18 @@ mod tests {
         add("parent", &parent).await.unwrap();
         let added = state.store.list_projects().unwrap();
         assert_eq!(added.len(), 3);
-        assert!(added.iter().all(|project| project.worktrees == own));
+        assert!(added.iter().all(|project| project.git_workflow == own));
     }
 
-    /// `update_project` sets a project's own worktree items on a value, leaves the override alone
-    /// when `worktrees` is absent or empty (an unrelated change included), and goes back to following
-    /// the application-wide value on `null` for an item; the first change broadcasts the project.
+    /// `update_project` sets a project's own git workflow items on a value, leaves the override
+    /// alone when `git_workflow` is absent or empty (an unrelated change included), and goes back
+    /// to following the application-wide value on `null` for an item; the first change broadcasts
+    /// the project.
     #[tokio::test]
-    async fn a_project_worktree_override_is_left_set_or_cleared_by_an_update() {
-        use crate::worktree_settings::{Delivery, WorktreeOverride};
-        let (state, dir) = crate::test_support::app_state("coordinator-update-project-worktrees");
+    async fn a_project_git_workflow_override_is_left_set_or_cleared_by_an_update() {
+        use crate::git_workflow::{Delivery, Development, GitWorkflowOverride};
+        let (state, dir) =
+            crate::test_support::app_state("coordinator-update-project-git-workflow");
         let workdir = console_workdir(&dir);
         state
             .store
@@ -10056,7 +10061,7 @@ mod tests {
                 .get_project("project-1")
                 .unwrap()
                 .unwrap()
-                .worktrees
+                .git_workflow
         };
         let update = |json: &str| {
             serde_json::from_str::<crate::protocol::Request>(&format!(
@@ -10070,12 +10075,12 @@ mod tests {
         handle(
             &state,
             None,
-            update(r#""worktrees":{"use_worktrees":false,"delivery":"pull_request"}"#),
+            update(r#""git_workflow":{"development":"in_place","delivery":"pull_request"}"#),
         )
         .await
         .unwrap();
-        let expected = WorktreeOverride {
-            use_worktrees: Some(false),
+        let expected = GitWorkflowOverride {
+            development: Some(Development::InPlace),
             rebase_before_merge: None,
             delivery: Some(Delivery::PullRequest),
             revert_gate: None,
@@ -10083,7 +10088,7 @@ mod tests {
         assert_eq!(stored(), expected);
         assert!(matches!(
             events.try_recv(),
-            Ok(Event::ProjectUpserted { project }) if project.worktrees == expected
+            Ok(Event::ProjectUpserted { project }) if project.git_workflow == expected
         ));
 
         handle(&state, None, update(r#""pinned":true"#))
@@ -10102,7 +10107,7 @@ mod tests {
             expected,
             "an unrelated change leaves the override"
         );
-        handle(&state, None, update(r#""worktrees":{}"#))
+        handle(&state, None, update(r#""git_workflow":{}"#))
             .await
             .unwrap();
         assert_eq!(stored(), expected);
@@ -10110,21 +10115,21 @@ mod tests {
         handle(
             &state,
             None,
-            update(r#""worktrees":{"delivery":null,"revert_gate":true}"#),
+            update(r#""git_workflow":{"delivery":null,"revert_gate":true}"#),
         )
         .await
         .unwrap();
         assert_eq!(
             stored(),
-            WorktreeOverride {
-                use_worktrees: Some(false),
+            GitWorkflowOverride {
+                development: Some(Development::InPlace),
                 revert_gate: Some(true),
-                ..WorktreeOverride::default()
+                ..GitWorkflowOverride::default()
             }
         );
 
         assert!(serde_json::from_str::<crate::protocol::Request>(
-            r#"{"type":"update_project","project":"p","worktrees":{"delivery":"squash"}}"#
+            r#"{"type":"update_project","project":"p","git_workflow":{"delivery":"squash"}}"#
         )
         .is_err());
     }
@@ -10201,7 +10206,7 @@ mod tests {
             pinned: None,
             tags: None,
             description: None,
-            worktrees: None,
+            git_workflow: None,
         };
         edit(&mut request);
         request

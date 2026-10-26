@@ -1,5 +1,5 @@
 import { Modal, Tabs } from "@heroui/react";
-import { Bell, FileCog, FolderCheck, GitBranch, GitFork, Info, Keyboard, KeyRound, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
+import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
@@ -19,10 +19,10 @@ import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { PermissionsSection } from "./PermissionsSection";
-import { SHORTCUT_GROUP_HEADING_HEIGHT, ShortcutsSection } from "./ShortcutsSection";
+import { SETTINGS_GROUP_HEADING_HEIGHT } from "./SettingsGroup";
+import { ShortcutsSection } from "./ShortcutsSection";
 import { SettingsFocusContext } from "./useSectionRefocus";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
-import { WorktreesSection } from "./WorktreesSection";
 
 interface Section {
   id: string;
@@ -35,14 +35,13 @@ interface Section {
 
 const SECTIONS = [
   { id: "general", label: "settings.section.general", Icon: Settings2, Content: GeneralSection },
-  { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection },
-  { id: "worktrees", label: "settings.section.worktrees", Icon: GitFork, Content: WorktreesSection },
+  { id: "git", label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
   { id: "accounts", label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
+  { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
   { id: "trusted-folders", label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   { id: "permissions", label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
-  { id: "agent-permissions", label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
   { id: "notifications", label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
-  { id: "shortcuts", label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SHORTCUT_GROUP_HEADING_HEIGHT },
+  { id: "shortcuts", label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: SETTINGS_GROUP_HEADING_HEIGHT },
   { id: "configuration", label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
   { id: "about", label: "settings.section.about", Icon: Info, Content: AboutSection },
 ] as const satisfies readonly Section[];

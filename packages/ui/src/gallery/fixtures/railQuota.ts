@@ -4,7 +4,7 @@ import type { Scenario } from "../scenario";
 import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
-import { DEFAULT_WORKTREE_SETTINGS } from "../../worktreeSettings";
+import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Window layout";
 
@@ -26,7 +26,7 @@ function railQuotaState(
       consoles: [console_],
       projects: [web, api],
       sessions,
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts, default_account_names: defaultNames },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, default_account_names: defaultNames },
       accountQuotas,
     }),
     agentAvailability: new Map<Agent, AgentAvailability>(

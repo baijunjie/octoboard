@@ -1,6 +1,6 @@
+import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
 import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
-import { DEFAULT_WORKTREE_SETTINGS, FOLLOWING_WORKTREE_SETTINGS } from "../../worktreeSettings";
 
 /** Every agent, as the list of added agents of a user who has added them all (in the default order). */
 export const ALL_AGENTS: Agent[] = ["claude", "codex", "grok"];
@@ -47,7 +47,7 @@ export function projectOf(id: string, consoleId: string, name: string, extra: Pa
     claude_account_id: { kind: "inherit" },
     codex_account_id: { kind: "inherit" },
     grok_account_id: { kind: "inherit" },
-    worktrees: FOLLOWING_WORKTREE_SETTINGS,
+    git_workflow: FOLLOWING_GIT_WORKFLOW,
     ...extra,
   };
 }
@@ -177,7 +177,7 @@ export function snapshotState(parts: {
     trustedDirectories: parts.trustedDirectories ?? [],
     sessionRequests: parts.sessionRequests ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
-    settings: parts.settings ?? { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", worktrees: DEFAULT_WORKTREE_SETTINGS, accounts: [] },
+    settings: parts.settings ?? { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
     accountQuotas: parts.accountQuotas ?? [],
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
     homeDir: "/Users/dev",

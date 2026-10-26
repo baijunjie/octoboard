@@ -21,12 +21,12 @@ use super::args::{
 };
 use crate::coordinator::{self, ConsoleChanges, ProjectChanges, SettingsChanges};
 use crate::git_remote;
+use crate::git_workflow;
 use crate::launch_settings::LaunchChange;
 use crate::protocol::{
     default_account_name_in, Agent, CodedError, Console, Project, ProjectAccount, Session,
 };
 use crate::state::AppState;
-use crate::worktree_settings;
 
 pub(super) async fn update_project(
     state: &Arc<AppState>,
@@ -49,7 +49,7 @@ pub(super) async fn update_project(
         add_tags: optional_string_list(arguments, "add_tags")?.unwrap_or_default(),
         remove_tags: optional_string_list(arguments, "remove_tags")?.unwrap_or_default(),
         description: present_text(arguments, "description")?,
-        worktrees: worktrees_argument(arguments)?,
+        git_workflow: git_workflow_argument(arguments)?,
     };
     let updated = coordinator::update_project(state, &project.id, changes).await?;
     describe_project(state, &updated)
@@ -115,7 +115,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "auto_select_account": state.store.auto_select_account()?,
         "sidebar_order_by_status": state.store.sidebar_order_by_status()?,
         "default_clone_dir": state.store.default_clone_dir()?,
-        "worktrees": state.store.worktree_settings()?,
+        "git_workflow": state.store.git_workflow_settings()?,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
     }))
@@ -149,7 +149,7 @@ pub(super) fn update_settings(
             // Not settable by an agent: it spends the user's quota.
             auto_start_quota_windows: None,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
-            worktrees: worktrees_argument(arguments)?,
+            git_workflow: git_workflow_argument(arguments)?,
         },
     )?;
     get_settings(state)
@@ -161,13 +161,13 @@ pub(super) fn get_project(state: &Arc<AppState>, caller: &Session) -> Result<Val
     describe_project(state, &own_project(state, caller, None)?)
 }
 
-/// The optional `worktrees` argument, read as the control requests read theirs: an item left out
+/// The optional `git_workflow` argument, read as the control requests read theirs: an item left out
 /// is left alone, and for a project `null` goes back to following the application-wide value. For
 /// a new project, where there is nothing to leave alone, both follow it.
-pub(super) fn worktrees_argument<T: serde::de::DeserializeOwned + Default>(
+pub(super) fn git_workflow_argument<T: serde::de::DeserializeOwned + Default>(
     arguments: &Map<String, Value>,
 ) -> Result<T> {
-    match arguments.get("worktrees") {
+    match arguments.get("git_workflow") {
         None | Some(Value::Null) => Ok(T::default()),
         Some(value) => {
             // The control protocol ignores keys it does not know; a tool call that misspells an
@@ -175,12 +175,12 @@ pub(super) fn worktrees_argument<T: serde::de::DeserializeOwned + Default>(
             if let Some(unknown) = value.as_object().and_then(|items| {
                 items
                     .keys()
-                    .find(|key| !crate::worktree_settings::ITEMS.contains(&key.as_str()))
+                    .find(|key| !crate::git_workflow::ITEMS.contains(&key.as_str()))
             }) {
-                bail!("`worktrees.{unknown}` is not a worktree setting");
+                bail!("`git_workflow.{unknown}` is not a git workflow setting");
             }
             serde_json::from_value(value.clone())
-                .map_err(|err| anyhow!("`worktrees` is not valid: {err}"))
+                .map_err(|err| anyhow!("`git_workflow` is not valid: {err}"))
         }
     }
 }
@@ -293,7 +293,7 @@ fn per_agent_object(entry: impl Fn(Agent) -> Value) -> Value {
 
 /// A project's settings as every tool that reports one gives them: the account setting of each
 /// agent as `inherit`, `default` or an account id, and the remote without any credential it
-/// carries, and its worktree settings as the project's own choices (`null` follows the
+/// carries, and its git workflow settings as the project's own choices (`null` follows the
 /// application-wide value) beside the values in force.
 pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Result<Value> {
     Ok(json!({
@@ -317,9 +317,9 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
             let (model, effort) = project.launch(agent);
             json!({ "model": model, "effort": effort })
         }),
-        "worktrees": {
-            "override": project.worktrees,
-            "effective": worktree_settings::effective(&state.store, project)?,
+        "git_workflow": {
+            "override": project.git_workflow,
+            "effective": git_workflow::effective(&state.store, project)?,
         },
     }))
 }
