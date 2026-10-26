@@ -34,20 +34,20 @@ checked with `cargo`. `src-tauri/` is a member of the root Cargo workspace along
 - `pnpm tauri dev` — starts the `packages/ui` dev server (port 5174) and opens the window on it.
 - `pnpm build:tauri` — builds the daemon sidecar, then `packages/ui`, whose `dist/` the application bundles.
 - `pnpm build:app` — builds the app without signing, to check a change (below).
-- `pnpm build:install` — builds, signs and installs the app locally (below).
+- `pnpm install:macos` — builds, signs and installs the app locally (below).
 - `pnpm release` — builds the distributable `.app`, `.dmg` and signed update archive (below).
 - `pnpm publish-release` — publishes what `pnpm release` built for the in-app updates to find (below).
 - `pnpm test` — the Node tests of the release scripts (`scripts/*.test.mjs`).
 
 ### Local installation
 
-`pnpm build:install` (`scripts/install-app.mjs`, also available from the repository root) builds, signs and installs
+`pnpm install:macos` (`scripts/install-app.mjs`, also available from the repository root) builds, signs and installs
 the `.app`:
 
 1. Put `APPLE_SIGNING_IDENTITY` (a valid signing certificate in the keychain) in the gitignored repo-root `.env.secret`.
 2. Copy [`.env.install.example`](../../.env.install.example) to `.env.install.local` and set `OCTOBOARD_INSTALL_DIR`
    to an absolute installation directory. Environment variables take precedence over file values.
-3. Quit any running Octoboard, then run `pnpm build:install` (it takes no arguments).
+3. Quit any running Octoboard, then run `pnpm install:macos` (it takes no arguments).
 
 It builds only the `.app`, never notarizes, and replaces the installed application only after verifying the built
 signature, keeping the previous bundle for rollback if replacement fails.
@@ -84,15 +84,15 @@ A universal build needs both Rust targets, which `pnpm release` adds with `rustu
 nothing when they are there). For it `scripts/build-daemon.mjs`, which Tauri runs as `beforeBuildCommand`, sees
 `TAURI_ENV_TARGET_TRIPLE` and builds the daemon for both architectures into `src-tauri/binaries/` (`octoboardd-<triple>`
 for each, which each per-architecture build resolves, and their `lipo` join `octoboardd-universal-apple-darwin`, which
-the bundler wants). `pnpm build:app` and `pnpm build:install` stay on the host's architecture.
+the bundler wants). `pnpm build:app` and `pnpm install:macos` stay on the host's architecture.
 
-Like `pnpm build:install`, it needs Xcode 26's `actool` as the selected developer directory and fails when the `.app` lacks
+Like `pnpm install:macos`, it needs Xcode 26's `actool` as the selected developer directory and fails when the `.app` lacks
 the layered app icon.
 
 `pnpm build:app` (`scripts/build-app.mjs`) runs the same `tauri build` with every `APPLE_*` variable removed from the
 child's environment, so it can neither sign nor notarize, and fails if the `.app` carries a Developer ID authority.
 Extra arguments go to `tauri build` (for example `pnpm build:app --bundles app` to skip the `.dmg`).
-A missing layered app icon only produces a warning there. `pnpm build:app` and `pnpm build:install` also drop the
+A missing layered app icon only produces a warning there. `pnpm build:app` and `pnpm install:macos` also drop the
 update key variables and turn the update archive off (`createUpdaterArtifacts` in `tauri.conf.json`), so neither needs
 the key nor signs anything with it.
 

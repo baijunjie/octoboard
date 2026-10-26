@@ -9,7 +9,7 @@
     "build:daemon": "node scripts/build-daemon.mjs",
     "build:tauri": "pnpm build:daemon && pnpm --filter @octoboard/ui build",
     "build:app": "node scripts/build-app.mjs",
-    "build:install": "node scripts/install-app.mjs",
+    "install:macos": "node scripts/install-app.mjs",
     "release": "node scripts/release.mjs",
     "publish-release": "node scripts/publish-release.mjs",
     "test": "node --test scripts/*.test.mjs"

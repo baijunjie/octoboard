@@ -47,7 +47,7 @@ Per-package commands are in that package's doc.
   the release credentials (Apple's, and the update signing key), read by `apps/desktop/scripts/release.mjs` and by
   `apps/desktop/scripts/install-app.mjs` for its signing identity.
   [`.env.install.example`](../.env.install.example) is the template for the gitignored `.env.install.local`, read
-  only by the desktop's `build:install` command for its installation directory.
+  only by the desktop's `install:macos` command for its installation directory.
 - [`scripts/`](../scripts/) — the repository-level scripts behind root `package.json` commands: `env.mjs` (the env
   reader above), `test-rust.mjs` (`pnpm test:rust`) and `verify.mjs` with `verify/` (`pnpm verify`, the pre-delivery
   checks). `pnpm verify` picks the checks a branch's changes call for (`verify/scope.mjs` implements the scope rule,

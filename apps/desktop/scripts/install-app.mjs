@@ -5,8 +5,8 @@ import path from "node:path";
 import { loadEnv } from "../../../scripts/env.mjs";
 import { appDir, assertLayeredIcon, bundleDir, findBundle, tauriBuild, withoutUpdaterArtifacts } from "./bundle.mjs";
 
-if (process.platform !== "darwin") throw new Error("build:install requires macOS.");
-if (process.argv.length > 2) throw new Error("build:install takes no arguments; configure .env.install.local.");
+if (process.platform !== "darwin") throw new Error("install:macos requires macOS.");
+if (process.argv.length > 2) throw new Error("install:macos takes no arguments; configure .env.install.local.");
 loadEnv(".env.secret", ".env.install.local");
 
 const installDir = process.env.OCTOBOARD_INSTALL_DIR;
@@ -34,7 +34,7 @@ verify(app);
 
 // Replacing a running shell also replaces its sidecar; leave quitting and ending sessions to the user.
 const running = execFileSync("lsappinfo", ["find", `bundleid=${config.identifier}`], { encoding: "utf8" }).trim();
-if (running) throw new Error("Build complete. Quit Octoboard before running build:install again; active sessions will end when you quit.");
+if (running) throw new Error("Build complete. Quit Octoboard before running install:macos again; active sessions will end when you quit.");
 
 mkdirSync(installDir, { recursive: true });
 const destination = path.join(realpathSync(installDir), path.basename(app));

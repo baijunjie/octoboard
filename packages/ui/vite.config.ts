@@ -11,7 +11,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 import appConfig from "../../config/app.json" with { type: "json" };
 import { loadEnv } from "../../scripts/env.mjs";
 
-import { REPORT_ENV } from "./src/test/failedFilesReporter";
+import { REPORT_ENV } from "./src/test/failedFilesReporter.ts";
 
 // Fills `%APP_NAME%` in `index.html` (the page title) from `config/app.json`, the source the app's
 // name comes from.

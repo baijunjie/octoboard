@@ -24,7 +24,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
-use uuid::Uuid;
 
 use crate::branch_origin::cleanup;
 use crate::branch_origin::handover::{
@@ -34,8 +33,8 @@ use crate::branch_origin::session_branches;
 use crate::coordinator::{self, OpenRequest};
 use crate::git_remote;
 use crate::protocol::{
-    error_code, now_millis, Agent, CodedError, Console, Event, Origin, Project, ProjectSource,
-    Role, Session, SessionStatus,
+    error_code, Agent, CodedError, Console, Origin, Project, ProjectSource, Role, Session,
+    SessionStatus,
 };
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
 use crate::session_request;
@@ -1092,11 +1091,12 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
 pub(super) mod tests {
     use super::*;
     use crate::protocol::{
-        Account, AccountQuota, Agent, AgentAvailability, Availability, Console, Project,
-        ProjectAccount, ProjectSource, QuotaWindow, QuotaWindowKind,
+        now_millis, Account, AccountQuota, Agent, AgentAvailability, Availability, Console, Event,
+        Project, ProjectAccount, ProjectSource, QuotaWindow, QuotaWindowKind,
     };
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{output_containing, running, ScratchDir};
+    use uuid::Uuid;
 
     fn console() -> Console {
         Console {

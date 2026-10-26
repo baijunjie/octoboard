@@ -80,7 +80,7 @@ repo-root `.env.secret` itself, so wherever that file is filled in, a shell carr
 cannot sign.
 
 Never run a bare `pnpm tauri build` or `pnpm tauri bundle` at all, for any purpose, on macOS: only the scripts
-(`pnpm build:app`, `pnpm build:install`, `pnpm release`) put the `actool` shim in `apps/desktop/scripts/actool/` on the
+(`pnpm build:app`, `pnpm install:macos`, `pnpm release`) put the `actool` shim in `apps/desktop/scripts/actool/` on the
 CLI's `PATH`. Without it, compiling the layered icon crashes `actool`'s `ibtoold` helper ("attempt to insert nil
 object"), and the helper left running keeps failing every later `actool` call on the machine — the scripts' builds in
 every worktree included — until `killall ibtoold`. So when a build reports that error, or a script reports the layered

@@ -2203,6 +2203,7 @@ impl AppState {
     }
 
     /// Removes and returns what is queued for a session, oldest first.
+    #[cfg(test)]
     pub fn take_queued(&self, id: &str) -> Vec<String> {
         self.take_queued_with_rows(id)
             .into_iter()
@@ -2210,8 +2211,8 @@ impl AppState {
             .collect()
     }
 
-    /// [`Self::take_queued`], each message with the row of the store it is kept in, if it is (see
-    /// [`Self::queue_kept_message`]).
+    /// Removes and returns what is queued for a session, oldest first, each message with the row of
+    /// the store it is kept in, if it is (see [`Self::queue_kept_message`]).
     pub fn take_queued_with_rows(&self, id: &str) -> Vec<(String, Option<i64>)> {
         self.outbox.take(id)
     }
