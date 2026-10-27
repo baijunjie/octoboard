@@ -60,6 +60,7 @@ mod record_observed;
 mod record_titles;
 mod record_watch;
 mod relocate;
+mod reply_route;
 mod reporting;
 mod revert_gate;
 mod rfc3339;

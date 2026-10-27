@@ -119,6 +119,9 @@ then sent away with its Close panel button or by moving the pointer away. In the
   connected, a terminal whose shell has exited included. Selecting under mouse reporting, and text a program copies
   with OSC 52, follow the same section; a program in a tab not shown can copy too, and each tab's menu offers what its
   own program copied. An Option-click moves the shell's cursor as described in "Typing and the mouse" in the same doc.
+- **Answers to a program's queries**: a program in the shell gets one answer to each query it puts to its terminal,
+  however many clients show the terminal, and none to old queries in the output replayed on attaching, by the rules of
+  "Answers to a program's queries" in `docs/product/session-terminal.md`.
 - **Links**: web addresses and file paths in the output are links by the rules of `docs/product/terminal-links.md`, with
   the terminal's project in the place of the session's. **A file opened in the file viewer from a shell terminal hands
   keyboard focus back to that terminal** when the viewer closes, while its tab is still there and shown; otherwise focus

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useImperativeHandle } from "react";
+import { act, useEffect, useImperativeHandle } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
@@ -17,11 +17,14 @@ import { startShellTerminal } from "./shellTerminals";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const focused = vi.hoisted(() => [] as string[]);
+const mountedViews = vi.hoisted(() => [] as string[]);
 
 // The view stands in for the terminal itself, which needs a real browser: it says which terminal
-// it is and whether its tab is the one shown, and records the focus it is given.
+// it is and whether its tab is the one shown, and records the focus it is given and each mount, where
+// the real view attaches to its terminal.
 vi.mock("./ShellTerminalView", () => ({
   ShellTerminalView: ({ terminal, shown, ref }: { terminal: ShellTerminal; shown: boolean; ref?: React.Ref<{ focus: () => void }> }) => {
+    useEffect(() => void mountedViews.push(terminal.id), []);
     useImperativeHandle(ref, () => ({ focus: () => focused.push(terminal.id) }), [terminal.id]);
     return <div id={`shell-terminal-${terminal.id}`} tabIndex={-1} data-view={terminal.id} data-shown={String(shown)} />;
   },
@@ -37,6 +40,7 @@ afterEach(() => {
   cleanup?.();
   cleanup = undefined;
   focused.length = 0;
+  mountedViews.length = 0;
   localStorage.clear();
   setGitModeWorktree("p", undefined);
 });
@@ -101,6 +105,11 @@ it("lists the project's terminals oldest first, shows the newest, and names the 
   const selected = panel.tabs().find((tab) => tab.getAttribute("aria-selected") === "true")!;
   expect(tabpanel.getAttribute("aria-labelledby")).toBe(selected.id);
   expect(tabpanel.id).toBe(selected.getAttribute("aria-controls"));
+});
+
+it("mounts one view per terminal, so each terminal has one emulator and one connection", () => {
+  mount([shell("a", 1), shell("b", 2)]);
+  expect([...mountedViews].sort()).toEqual(["a", "b"]);
 });
 
 it("starts a terminal in the worktree the Git mode shows, and shows it once the daemon has it", async () => {

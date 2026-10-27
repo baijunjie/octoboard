@@ -269,7 +269,7 @@ export function ShellTerminalPanel({
         <Tabs
           selectedKey={activeId ?? ""}
           onSelectionChange={(key) => select(String(key))}
-          className="flex min-h-0 flex-1 flex-col gap-0"
+          className="flex flex-none flex-col gap-0"
         >
           <PanelHeader
             title={t("panel.terminal.name")}
@@ -322,42 +322,45 @@ export function ShellTerminalPanel({
               </Tabs.ListContainer>
             )}
           </PanelHeader>
-          {/* A column, so the starting and empty states centre in it; the views are absolute. */}
-          <div ref={bodyRef} role={activeTerminal ? "tabpanel" : undefined} className="relative flex min-h-0 flex-1 flex-col">
-            {terminals.map((terminal) => (
-              <React.Fragment key={terminal.id}>
-                {/* First among what goes away with the view, so focus inside it is still found. */}
-                <HandOffOnUnmount from={`#shell-terminal-${terminal.id}`} to={focusShown} />
-                <ShellTerminalView
-                  ref={(handle: ShellTerminalViewHandle | null) => {
-                    if (handle) views.current.set(terminal.id, handle);
-                    else views.current.delete(terminal.id);
-                  }}
-                  terminal={terminal}
-                  shown={terminal.id === activeId}
-                  resizing={resizing}
-                  onViewFile={onViewFile}
-                  onClose={() => requestClose(terminal, "terminal")}
-                />
-              </React.Fragment>
-            ))}
-            <StatusAnnouncer text={terminals.length === 0 && starting ? t("shellTerminal.starting") : undefined} />
-            {terminals.length === 0 && starting && (
-              <div aria-hidden="true" className="flex min-h-0 flex-1 flex-col items-center justify-center-safe gap-3 text-sm text-app-muted">
-                <Spinner size="md" color="current" aria-hidden="true" />
-                {t("shellTerminal.starting")}
-              </div>
-            )}
-            {terminals.length === 0 && !starting && (
-              <CenteredEmptyPanel
-                icon={SquareTerminal}
-                message={t("shellTerminal.none")}
-                description={t("shellTerminal.none.description")}
-                action={{ label: t("shellTerminal.new"), icon: Plus, onPress: () => void start() }}
-              />
-            )}
-          </div>
         </Tabs>
+        {/* Outside `Tabs`, which renders a hidden copy of all it holds to build its collection: a
+            terminal view in that copy would be a second emulator with a connection of its own to
+            the same terminal.
+            A column, so the starting and empty states centre in it; the views are absolute. */}
+        <div ref={bodyRef} role={activeTerminal ? "tabpanel" : undefined} className="relative flex min-h-0 flex-1 flex-col">
+          {terminals.map((terminal) => (
+            <React.Fragment key={terminal.id}>
+              {/* First among what goes away with the view, so focus inside it is still found. */}
+              <HandOffOnUnmount from={`#shell-terminal-${terminal.id}`} to={focusShown} />
+              <ShellTerminalView
+                ref={(handle: ShellTerminalViewHandle | null) => {
+                  if (handle) views.current.set(terminal.id, handle);
+                  else views.current.delete(terminal.id);
+                }}
+                terminal={terminal}
+                shown={terminal.id === activeId}
+                resizing={resizing}
+                onViewFile={onViewFile}
+                onClose={() => requestClose(terminal, "terminal")}
+              />
+            </React.Fragment>
+          ))}
+          <StatusAnnouncer text={terminals.length === 0 && starting ? t("shellTerminal.starting") : undefined} />
+          {terminals.length === 0 && starting && (
+            <div aria-hidden="true" className="flex min-h-0 flex-1 flex-col items-center justify-center-safe gap-3 text-sm text-app-muted">
+              <Spinner size="md" color="current" aria-hidden="true" />
+              {t("shellTerminal.starting")}
+            </div>
+          )}
+          {terminals.length === 0 && !starting && (
+            <CenteredEmptyPanel
+              icon={SquareTerminal}
+              message={t("shellTerminal.none")}
+              description={t("shellTerminal.none.description")}
+              action={{ label: t("shellTerminal.new"), icon: Plus, onPress: () => void start() }}
+            />
+          )}
+        </div>
       </div>
       {terminals.map((terminal) => {
         const tab = tabNodes.get(terminal.id);
