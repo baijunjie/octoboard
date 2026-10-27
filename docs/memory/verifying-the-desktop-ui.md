@@ -111,57 +111,18 @@ project's Git mode) answers every scenario from what that scenario's fixture hap
 cannot supply goes out as the real daemon's "not known" value and the UI draws the fallback for it. A complete fix can
 therefore leave every scenario showing what it showed before, with nothing in the type checker or the unit tests to say
 which side is wrong: the viewer's bar for the lines past a diff's last hunk went on claiming more might follow because
-no fixture change carried both sides' whole text for the new line count to be taken from.
-
-So a reply that gains such a field is taught to the fixture together with the condition the real daemon fills it under,
-and every scenario's fixture is given what that condition needs — the scenarios whose fixture answers with an error
-included, since they answer the reply as well, and an unfilled field there is a state the real daemon never sends. Take
-that condition from the daemon's own code and tests — never from an enumeration of cases in a doc or a plan, and never
-by importing a helper out of the UI's own source that happens to compute the same thing: the fixture stands on the
-daemon's side of the protocol, so it repeats the rule inside `packages/ui/src/gallery/` rather than depending on UI code
-that is free to change for the UI's reasons. An enumeration can lag the rule it enumerates, and the first implementation
-of the refusal below, built on one, was wrong for the case the rule covers and the list did not (a binary change, whose
-patch has no hunk and whose two sides are nonetheless both counted, from the bodies the reply carries).
-
-Hold that condition in a signature before holding it at run time. A repository's change fixtures are written through a
-factory per kind of change rather than as literals (`packages/ui/README.md`, section "The UI state gallery"), so a field
-the reply gains goes first into the parameters of the factories whose kind the real daemon fills it for: an unfilled
-field is a legal value of the reply, so nothing but a parameter that has to be passed stops a fixture being written that
-cannot be answered faithfully. Leave to the run-time refusal below only what no signature can settle — a field whose
-condition is a property of the data rather than of the kind of thing the fixture is.
-
-Do not hold that condition by remembering it. Where the real daemon would fill the field and the fixture carries nothing
-to fill it from, the fixture daemon refuses the request rather than answering with the field unfilled, and the refusal
-is painted over the page as well as rejected to the caller, because the window swallows a failed read into its own
-error line and the scenario would otherwise read as merely broken. Such a refusal is deliberately not a daemon error:
-scenarios answer requests with a daemon error on purpose and those are legitimate UI states under test, so a gap in the
-gallery's own data must never be dressed as one. Extend that refusal to each new field of this kind, and have the guard
-test over the fixture daemon's replies read every scenario's reply — including the ones that carry no such field — so a
-refusal fails the test run too and not only the scenario someone opens by hand. And before reading a scenario as a fix
-that did not work, check that its fixture can produce the input the fix reads at all. A handler for a request no
-scenario ever sends falls outside all of this — no scenario renders it and no guard test reads it — so write one only
-once a scenario makes that request, and delete one left unused rather than keeping it for completeness; until then it
-is an unfaithful reply nothing can catch, waiting for whoever adds that scenario first.
-
-A fixture field says what a reply costs, never whether it is given. Whether the daemon answers a request at all follows
-from the change's own data — its group, its sides, whether making its patch already failed — so the fixture daemon reads
-it from there, and the daemon error it refuses with is one the real daemon sends for that data. An optional field saying
-how a reply is answered (the delay before it, the error in place of it) is carried by exactly the scenarios that need
-something special, which makes its presence look like the condition for answering at all: gating on `expand` refused a
-deletion, a binary change and a change past the patch budget with an `invalid_change` the real daemon never sends there.
-A factory parameter likewise carries the content a reply needs, not the right to ask for it.
+no fixture change carried both sides' whole text for the new line count to be taken from. So before reading a scenario
+as a fix that did not work, check that its fixture can produce the input the fix reads at all. Where a reply gains such
+a field, the fixture has to be taught it as `packages/ui/README.md`, section "The UI state gallery", under
+"Conventions for writing scenarios", sets out.
 
 The public website's product preview is one more scenario over the same fixture daemon (`createPreviewScenario` in
 `packages/ui/src/website-preview/scenarios.ts`), but it is not among the gallery's scenarios, so neither
-`pnpm gallery:sweep` nor the guard test reads it, and the `agent-gallery` skill does not keep it in step. When a
-change makes something the preview shows draw on daemon state it did not before, give that scenario the state
-too and look at the preview itself (`pnpm --filter @octoboard/web dev`): left out, the feature renders empty
+`pnpm gallery:sweep` nor the guard test over the fixture daemon's replies
+(`packages/ui/src/gallery/fixtures/projectGit.test.ts`) reads it, and the `agent-gallery` skill does not keep it in
+step. When a change makes something the preview shows draw on daemon state it did not before, give that scenario the
+state too and look at the preview itself (`pnpm --filter @octoboard/web dev`): left out, the feature renders empty
 there and nothing fails.
-
-A scenario that answers a request with a daemon error on purpose uses the code the real daemon sends for that request
-in that situation, taken from its handler and `apps/daemon/PROTOCOL.md`, never one that merely sounds right: the UI
-words each code its own way, so a `list_dir` refused with `permission_denied` rather than the `directory_unreadable`
-the daemon sends for an unreadable directory shows copy the app never shows.
 
 ## A final capture does not verify earlier transient states
 

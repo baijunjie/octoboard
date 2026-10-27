@@ -20,11 +20,22 @@ directory, after which it is read afresh from the new one; renaming it keeps the
 
 ## How a quota is read
 
-Octoboard asks the agent's own CLI, run the way a session of that account would be run: in the login shell's
+Octoboard asks the agent's own CLI, given the environment a session of that account would get: the login shell's
 environment, with the agent's configuration directory set to the account's directory (left as the shell has it for
-the default account). The CLI looks after its own sign-in, Keychain access and token refresh; Octoboard never reads a
-credential and never contacts a service of its own. The agents mark this way of asking as experimental, so a reading
-that fails or cannot be understood only makes that account's quota unavailable and affects nothing else.
+the default account). It runs from the home directory, with no terminal. The CLI looks after its own sign-in, Keychain
+access and token refresh; Octoboard never reads a credential and never contacts a service of its own. Each agent is
+asked over the channel it offers its own front ends:
+
+| Agent | What is run | What it is asked |
+|---|---|---|
+| Claude Code | `claude -p` in stream-JSON input and output mode, keeping no session, with no MCP servers (`--strict-mcp-config` and an empty `--mcp-config`) | Its `get_usage` control request, after `initialize` |
+| Codex | `codex app-server`, with its plugins, remote plugins, apps and hooks turned off by `-c features.…=false` overrides | `account/rateLimits/read`, after `initialize` |
+| Grok Build | `grok agent --no-leader stdio`, in a process of its own rather than through a Grok already running | `_x.ai/billing`, after `initialize` |
+
+The agents mark these requests as experimental, so a reading that fails or cannot be understood only makes that
+account's quota unavailable and affects nothing else. A reading is given 60 seconds and at most 8 MiB on its standard
+output, beyond which it fails; its error output fails nothing, and only its first 4 KiB are kept for the reason a
+failure gives.
 
 An account whose directory does not exist is not run at all: it is reported as not logged in (see "Quota states"
 below), and reading its quota never creates the directory, so one the user deleted stays deleted. The default account
@@ -201,8 +212,10 @@ The reason is one of these, in the UI's language:
 - the agent's binary was not found on the shell's `PATH`;
 - the shell environment the CLI runs in could not be read;
 - the CLI gave no reply within 60 seconds;
-- the CLI could not be run, stopped without replying, wrote too much output, or refused the request — with its exit
-  status and the last line it wrote to its error output, or the error it gave;
+- the CLI could not be run, stopped without replying, wrote too much output, or refused the request — for one that
+  stopped without replying, with its exit status and the last line of the part of its error output that is kept (its
+  first 4 KiB, so for a longer error output a line from that part, possibly cut short), and for a refusal, the error
+  it gave;
 - the CLI replied, but not with a quota that could be read;
 - the CLI replied that the account has no quota to report, as for an account without a subscription. This one is not
   tried less often the way a failed reading is (see "When quotas are read" above), but windows read before stay, out
@@ -275,12 +288,13 @@ seconds of its reset time passing, without waiting for a newer reading.
 
 ## What reading a quota leaves behind
 
-Each reading starts one process of the agent, which is ended once it has replied, timed out or the daemon shut down;
-none is started once shutdown has begun, and no conversation is started (a kick does make a request; see "What a kick
-leaves behind" in `docs/product/starting-usage-windows.md`). Where the CLI allows it without changing which sign-in is
-used, the reading leaves out the user's MCP servers, plugins and hooks: Claude Code's MCP servers are not started, and
-Codex's plugins, apps and hooks are turned off for the reading. Claude Code still loads the user's settings, since they
-can decide which credentials are used, and Grok Build offers no way to leave anything out.
+Each reading starts one process of the agent, which is ended, together with the helper processes it started, once it has
+replied, timed out or the daemon shut down; none is started once shutdown has begun, and no conversation is started (a
+kick does make a request; see "What a kick leaves behind" in `docs/product/starting-usage-windows.md`). Where the CLI
+allows it without changing which sign-in is used, the reading leaves out the user's MCP servers, plugins and hooks:
+Claude Code's MCP servers are not started, and Codex's plugins, apps and hooks are turned off for the reading. Claude
+Code still loads the user's settings, since they can decide which credentials are used, and Grok Build offers no way to
+leave anything out.
 
 Some writes into the account's directory cannot be avoided:
 

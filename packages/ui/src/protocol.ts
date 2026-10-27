@@ -1296,9 +1296,6 @@ export type RequestBody =
    * with no resolution is left out. Refused before anything is created with the codes of
    * `inspect_configuration`, `import_resolution_invalid` and `import_settings_missing`. */
   | { type: "import_configuration"; document: unknown; resolutions?: ProjectResolution[]; apply_settings?: boolean }
-  /** Reads the next automatic title without reserving it; answered with `console_session_title`.
-   * Refused with `unknown_console` when the console does not exist. */
-  | { type: "preview_console_session_title"; console: string }
   | {
     type: "open_session";
     console_id: string;
@@ -1689,7 +1686,6 @@ export type Event =
    * once, when the session starts; nothing stores it, so a client that connects later never sees
    * it. */
   | { type: "session_notice"; session: string; code: string; params: MessageParams; message: string }
-  | { type: "console_session_title"; id?: string; console: string; title: string }
   /** The reply to `open_session`, to `hand_off_session` and to an approving `answer_session_request`: the session that
    * was started. The same record is also broadcast as `session_upserted`, but that broadcast
    * carries no request id, so this is the only way the caller can tell which session in the tree

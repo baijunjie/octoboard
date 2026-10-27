@@ -167,6 +167,38 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `fixtures/changeFixtures.ts` (`textChange`, `deletion`, `untracked`, ...), never as literals. A rule over a whole
   repository that no single change shows is held by a test over the sample repository (`objectIdCheck` in
   `fixtures/invariants.ts`); add such a rule there.
+- A reply that gains a field the UI draws from is taught to the fixture daemon together with the condition the real
+  daemon fills the field under, and every scenario's fixture is given what that condition needs, those that answer
+  with an error included (they answer the reply too, and an unfilled field there is a state the real daemon never
+  sends). Take the condition from the daemon's own code and tests, never from a list of cases in a doc or a plan,
+  which can lag the rule; and never import a UI helper that happens to compute the same thing: the fixture stands on
+  the daemon's side of the protocol, so repeat the rule inside `src/gallery/` (as `lineCount` in `fixtureGit.ts`
+  repeats the daemon's count), since UI code is free to change for the UI's reasons.
+- Hold the condition in a signature before holding it at run time: a field the reply gains goes first into the
+  parameters of the `changeFixtures.ts` factories whose kind of change the real daemon fills it for, because an
+  unfilled field is a legal value of the reply and only a parameter that has to be passed stops a fixture that cannot
+  be answered faithfully being written. Leave to the run-time refusal only a condition that depends on the data rather
+  than on the kind of change. Extend `refuseUnfillable` (`banner.ts`) to each new field of this kind, and have the
+  guard test over the fixture daemon's replies read every scenario's reply, those carrying no such field included, so
+  a refusal fails the test run and not only the scenario someone opens. That test (`fixtures/projectGit.test.ts`,
+  "answer every read a scenario's repository offers without a refusal") takes the repositories from `SCENARIOS` (the
+  sample one every scenario without a `git` is answered from included), so a new fixture is read without being named.
+  It lets a daemon error through only where the fixture stages that very error for the change, and checks that each
+  read reached its target, so a mis-addressed one cannot pass as an error. A `FixtureUnfillableError` is deliberately
+  not a `DaemonRequestError`: a scenario's daemon error is a legitimate UI state to show, so a gap in the gallery's
+  own data must not be dressed as one that a test, or someone looking at the page, would let pass.
+- Write a fixture daemon handler only for a request some scenario sends, and delete one left unused: no scenario
+  renders its reply and no guard test reads it, so it is an unfaithful reply nothing can catch, waiting for whoever
+  adds the first scenario that asks.
+- A fixture field says what a reply costs (`expand.delay`, `expand.error`), never whether it is given. Whether the
+  daemon answers at all follows from the change's own data (its group, its sides, whether making its patch already
+  failed), and the fixture daemon reads it from there; gating on `expand`, which only some scenarios carry, refused a
+  deletion, a binary change and a change past the patch budget with an `invalid_change` the real daemon never sends
+  there. Likewise a factory parameter carries the content a reply needs, not the right to ask for it.
+- A scenario that answers a request with a daemon error on purpose uses the code the real daemon sends for that
+  request in that situation, taken from its handler and `apps/daemon/PROTOCOL.md`, not one that merely sounds right:
+  the UI words each code its own way, so `list_dir` refused with `permission_denied` instead of the
+  `directory_unreadable` the daemon sends for an unreadable directory shows copy the app never shows.
 
 #### Sweeping the gallery
 
@@ -239,7 +271,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 
 | Path | Role |
 |---|---|
-| `src/components/` | Shared building blocks: window chrome (`TitleBar`, `Rail`, `ContentPanel`, `Toasts`), panel headers and resize handles, menus (`ActionMenu`) and `Hint`, the one component behind every tooltip and floating popover, status and error presentations (`StatusMark`, `ErrorAlert`, `FailureAlert`, `PaneFailure`, `DaemonErrorMessage`, `DiagnosticBlock`), scroll-fade and list-motion helpers, focus-handoff hooks, the bottom-strip helpers (`useBottomStrip`, `AttendedStatusAnnouncer`) and `ExternalLink`. Alerts go through `TintedAlert` and `AlertFrame`, the only importers of HeroUI's `Alert` parts (enforced by `eslint.config.mjs`) |
+| `src/components/` | Shared building blocks: window chrome (`TitleBar`, `Rail`, `ContentPanel`, `Toasts`), panel headers and resize handles, menus (`ActionMenu`) and `Hint`, the one component behind every tooltip and floating popover, status and error presentations (`StatusMark`, `ErrorAlert`, `FailureAlert`, `PaneFailure`, `DaemonErrorMessage`, `DiagnosticBlock`), scroll-fade and list-motion helpers, focus-handoff hooks, `useBottomStrip` (the bottom strips' shared behavior), `AttendedStatusAnnouncer` (announcing a status that can arrive while the user is out of the window) and `ExternalLink`. Alerts go through `TintedAlert` and `AlertFrame`, the only importers of HeroUI's `Alert` parts (enforced by `eslint.config.mjs`) |
 | `src/layout/` | Pane layout: the `docked` breakpoint, pane widths, the sidebar drawer and the aside's frame (`AsidePane`), whose content the aside shows (`asideOwner.ts`), pane toggles and F6 region cycling |
 | `src/shortcuts/` | The central registry of keyboard shortcuts: command definitions, the portable `Binding`, validation, the persisted per-client overrides and the key recorder `recordKeys`; the Settings section is `src/settings/ShortcutsSection.tsx` |
 | `src/navigation/` | Back and Forward through the locations the content area has shown |

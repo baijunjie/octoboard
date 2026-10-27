@@ -565,11 +565,6 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
           return { type: "ack" };
         }
-        case "preview_console_session_title": {
-          const owner = store.getState().consoles.get(body.console);
-          if (!owner) return fail({ code: "unknown_console", params: { console: body.console }, message: `unknown console ${body.console}` });
-          return { type: "console_session_title", console: body.console, title: owner.name };
-        }
         case "locate_conversation_to_resume": {
           const located = scenario.conversationLocation ?? { kind: "not_found" as const };
           if (located === "pending") return new Promise<Event>(() => {});

@@ -184,7 +184,6 @@ it("uses the localized default name as its placeholder and submitted title", asy
   const name = document.body.querySelector<HTMLInputElement>('[role="dialog"] input')!;
   expect(name.placeholder).toBe(`${parentConsole.name} session`);
   expect(name.value).toBe("");
-  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "preview_console_session_title" }));
   await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
   expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", title: "Main session" }));
 });

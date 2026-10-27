@@ -37,8 +37,8 @@ application, not as written in source:
   focus stays put or moves while it is written. A write within about 300 ms of a focus move is a different relation from
   one made while focus has rested.
 - **Write delay.** None, once per mount (`StatusAnnouncer`'s first write delay), per appearance (the banner's own gate),
-  or a caller wait before each text (a timer started at a state change, or the attended wait of `PermissionsAnnouncer`
-  and `AttendedStatusAnnouncer`), and whether `firstWriteDelayMs` overrides it.
+  or a caller wait before each text (a timer started at a state change, or the attended wait of
+  `AttendedStatusAnnouncer`), and whether `firstWriteDelayMs` overrides it.
 - **Exposure beside a modal.** Whether the region is exposed at the moment it writes: in the main window while no modal
   is open, inside the modal's own subtree, or kept exposed beside a modal through a `data-live-announcer` or top-layer
   marker. These three count as the same; a region under an open modal without a marker is hidden, and a write into it is
@@ -622,9 +622,10 @@ mapping.
   clone's own permission state, left unchanged).
 - **Mechanism.** A section-level `StatusAnnouncer`, mounted with the section and writing every text, the first included,
   after a caller wait. `packages/ui/src/settings/PermissionsSection.tsx` (`PermissionsSection`: the rows show each state
-  as ordinary visible copy, not `aria-hidden` and with no `role="status"`; `PermissionsAnnouncer`: gives the announcer
-  the permission names with their states, one sentence, after `AFTER_FOCUS_MOVE_DELAY_MS` of attended time, restarting
-  the wait on each return to the window, and writes nothing again while the text has not changed),
+  as ordinary visible copy, not `aria-hidden` and with no `role="status"`, and the permission names with their states go
+  to the announcer as one sentence), `packages/ui/src/components/AttendedStatusAnnouncer.tsx` (writes each text after
+  `AFTER_FOCUS_MOVE_DELAY_MS` of attended time, restarting the wait on each return to the window, and writes nothing
+  again while the text has not changed; heard as a local `PermissionsAnnouncer` holding the same code),
   `packages/ui/src/components/useWindowAttended.ts` and `StatusAnnouncer` with its default 100 ms long elapsed (the wait
   is the caller's, not `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus.
 - **ARIA wiring as rendered.** The common mapping; empty when the tab was focused, populated 1.5 s later with the
@@ -643,9 +644,7 @@ mapping.
   readable. Not heard: a change of the states while Settings is open (a grant made in System Settings), a first reading
   that arrives while the section is already showing, not at the tab focus move, and Settings opened directly onto
   Permissions, which no production control does today, so it is untested rather than failing. The rows' own copy was not
-  tested as a reading path. `AttendedStatusAnnouncer` (`packages/ui/src/components/AttendedStatusAnnouncer.tsx`) carries
-  the same attended wait in a component of its own (`PermissionsAnnouncer` is a separate copy); that is not a listening
-  result of its own.
+  tested as a reading path.
 
 
 ### SA-M Region mounted with each opening of a disclosure
@@ -1415,7 +1414,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `components/ConnectionBanner.tsx` | outage | SA-B | Heard | Matches in full. |
 | `settings/AccountLoginDialog.tsx` | login progress | SA-C for the dialog opening; no match for the rest | Heard | After Log in again the announcer remounts with a footer focus move, not a dialog opening, which was not heard. |
 | `settings/AccountLogin.tsx`, `AccountLoginAnnouncer` | login success | SA-D on the earlier row layout (possibly stale, see SA-D); the second mount in `settings/AccountDetailsDialog.tsx` is not covered | Heard | The wait and attention gate match SA-D in source; the table row and the details dialog were not heard. |
-| `settings/PermissionsSection.tsx`, `PermissionsAnnouncer` | permission states | SA-L for the section opening and a return with the states unchanged; no match for a change while Settings is open | Heard | A grant made in System Settings was not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
+| `settings/PermissionsSection.tsx`, through `AttendedStatusAnnouncer` | permission states | SA-L for the section opening and a return with the states unchanged; no match for a change while Settings is open | Heard | A grant made in System Settings was not heard, and Settings opened directly onto Permissions is unreachable from production controls and untested. |
 | `configuration/ImportReview.tsx` | "apply to all" applied | SA-A | Candidate | Mounted empty in the review step, text written after a press while focus rests, inside the modal's own subtree, default delay. Writing the identical sentence again does not rewrite it. |
 | `browser/ChangeList.tsx` | filter no-match | SA-A for typing; no match for a first render holding the text | Candidate | Typing in the filter writes in place at rest. The text can also be present at the first render (a persisted filter, a branch change that closes a popover and returns focus), a mount SA-H does not clearly cover. |
 | `viewer/FileViewer.tsx`, `ViewerContentView` | loading, disconnected | SA-J for navigation loading; SA-C for the dialog opening as a candidate; no match for disconnected | Heard for SA-J, candidate for SA-C | The navigation text is written at once with focus on Next file (SA-J). The region is mounted with the dialog with a 1500 ms first delay as focus moves, the shape of SA-C, but the opening was heard on the login dialog only. The disconnected text was not exercised. |
@@ -1436,7 +1435,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `settings/UpdatesSetting.tsx` | update check outcome and failure, once the user has engaged the row | none | none | Region mounted with the Updates row in Settings; the buttons go pending rather than disabled so they keep focus. Not heard, and no case records a write after a press in Settings. |
 | `settings/ShortcutsSection.tsx` | shortcut rebind, conflict and reset sentences | none | none | Region mounted with the section; an identical consecutive sentence is made distinct by alternating a trailing no-break space so it is written again. Not heard. |
 | `settings/AccountSharingSwitch.tsx` | sharing change failure (`clearAfterRead`); direction and phase of a running change | none | none | Two regions, one beside the switch and one in `SharingProgress`. Not heard. |
-| `updates/UpdateNotice.tsx`, through `AttendedStatusAnnouncer` | update available, installed and similar notice | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | The wait is the one `PermissionsAnnouncer` has, but the region sits beside a bottom strip in the main window, not in a section shown by a tab focus move, and the strip can arrive while the user is elsewhere. Not heard. |
+| `updates/UpdateNotice.tsx`, through `AttendedStatusAnnouncer` | update available, installed and similar notice | SA-L is the nearest recorded mechanism (the same attended wait); no complete match established | none | The wait is the one `PermissionsSection` uses, but the region sits beside a bottom strip in the main window, not in a section shown by a tab focus move, and the strip can arrive while the user is elsewhere. Not heard. |
 | `terminal/SessionHistoryView.tsx` | history loading, unavailable, empty | none | none | Region mounted with the view, which comes with a focus move into the history region. Not heard. |
 | `about/ThirdPartyLicensesDialog.tsx` | search result count or none, typed in the search field; loading line at the dialog opening | none | none | Two regions in an open dialog: the count region writes in place while focus rests in the field (the shape of SA-A, inside a dialog), the loading region has `firstWriteDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS` as the dialog opens (the shape of SA-C). Neither was heard. |
 | `dialogs/ResumeConversationFields.tsx` | resume lookup outcome | none | none | Always-mounted region in the new-session dialog's Resume tab; text arrives after typing in the Session ID field while focus stays there. Not heard. |
@@ -1445,7 +1444,7 @@ items, and was not itself heard. A candidate still has to pass the checks under 
 | `report/ReportPanel.tsx` | list failure mark's words | none | none | Region mounted through every state of the panel. Not heard. |
 
 Totals: of 32 callers, 13 were heard for the writes named (`Sidebar`, `ConnectionBanner`, `AccountLoginDialog`,
-`AccountLoginAnnouncer`, `PermissionsAnnouncer`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
+`AccountLoginAnnouncer`, `PermissionsSection`, `ViewerContentView`, `UnchangedView`, `CopyButton`, `GitView`,
 `ActionMenu`, `CodeSurface`, `AdvancedSection`, `FileNotice`), 5 are candidates (`ImportReview`, `ChangeList`,
 `ProjectBrowser`, `TerminalPane`, `ShellTerminalView`) and 14 have no complete match (`ShellTerminalPanel`,
 `SpotNotice`, `BlockFallback`, the account switch outcome in `App`, and the ten callers listed after it). Of the heard
@@ -1492,7 +1491,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   `CopyButton`'s 2000 ms automatic clear (the presses used kept the tooltip open); `ActionMenu`'s load-failed update (an
   error alert masked it); `CodeSurface`'s outcome notes and failure, `UnchangedView`'s other outcomes and
   `ViewerContentView`'s disconnected text (not exercised); `AdvancedSection`'s unavailable text (not separately
-  recorded); `PermissionsAnnouncer`'s change while Settings is open (no permission was granted or revoked) and Settings
+  recorded); `PermissionsSection`'s change while Settings is open (no permission was granted or revoked) and Settings
   opened directly onto Permissions (no production control opens it there, so it is untested); `GitView`'s replacement
   sequences and failure sentences (not exercised); `ProjectBrowser`'s search loading (not recorded);
   the account switch outcome in `App` (the credential-free fixture does not produce conversation records to

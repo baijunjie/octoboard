@@ -694,15 +694,6 @@ async fn handle_inner(
             }))
         }
 
-        RequestBody::PreviewConsoleSessionTitle { console } => {
-            let title = state.store.preview_console_session_title(&console)?;
-            Ok(Some(Event::ConsoleSessionTitle {
-                id: request_id,
-                console,
-                title,
-            }))
-        }
-
         RequestBody::OpenSession {
             console_id,
             project_id,
@@ -6264,41 +6255,6 @@ mod tests {
         // its first wait, which is where a kick of the reading would already be claimed.
         tokio::task::yield_now().await;
         assert!(!state.account_quotas.is_kicked_for_test(Agent::Grok, None));
-    }
-
-    #[tokio::test]
-    async fn a_title_preview_echoes_the_request_and_refuses_unknown_consoles() {
-        let (state, _dir) = crate::test_support::app_state("console-title-preview");
-        state
-            .store
-            .insert_console(&console(Agent::Claude, Path::new("/tmp/unused")))
-            .unwrap();
-        let request = || RequestBody::PreviewConsoleSessionTitle {
-            console: "console-1".to_string(),
-        };
-        for _ in 0..2 {
-            let reply = handle(&state, Some("req-1".to_string()), request())
-                .await
-                .unwrap();
-            assert!(
-                matches!(reply, Some(Event::ConsoleSessionTitle { id: Some(id), console, title })
-                if id == "req-1" && console == "console-1" && title == "Console")
-            );
-        }
-        let error = handle(
-            &state,
-            None,
-            RequestBody::PreviewConsoleSessionTitle {
-                console: "missing".to_string(),
-            },
-        )
-        .await
-        .unwrap_err();
-        assert_eq!(
-            error.downcast_ref::<CodedError>().unwrap().code,
-            error_code::UNKNOWN_CONSOLE
-        );
-        assert!(state.store.list_sessions().unwrap().is_empty());
     }
 
     fn console(console_session_agent: Agent, workdir: &Path) -> Console {

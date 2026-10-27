@@ -1792,10 +1792,6 @@ pub enum RequestBody {
         #[serde(default)]
         apply_settings: bool,
     },
-    /// Previews the current console name without allocating a session ordinal.
-    PreviewConsoleSessionTitle {
-        console: String,
-    },
     OpenSession {
         console_id: String,
         project_id: Option<String>,
@@ -2621,11 +2617,6 @@ pub enum Event {
     SessionRequestClosed {
         request_id: String,
         reason: SessionRequestEnding,
-    },
-    ConsoleSessionTitle {
-        id: Option<String>,
-        console: String,
-        title: String,
     },
     /// The reply to `open_session`, and to an approving `answer_session_request`: the session that
     /// was opened. For `open_session` it is `starting`, the launch still going on; for an approving

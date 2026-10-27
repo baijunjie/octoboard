@@ -124,6 +124,9 @@ besides the variables a project session's agent is given for its git (see "The l
   (see `docs/product/reporting-to-owners.md` and "The unbound project session's tools" in
   `docs/product/hub-orchestration.md`).
 
+The arguments and files through which each agent is given these are in "How each agent is given the injection" in
+`docs/product/per-agent-launch-specifics.md`.
+
 The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception below),
 never fail the turn, and carry a short timeout (3 seconds) so a daemon that is unreachable costs a turn a fraction of a
 second rather than stalling it. A Claude Code that can post hooks itself (2.1.63 or later) is given the daemon's address

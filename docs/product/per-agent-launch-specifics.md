@@ -3,13 +3,45 @@
 What each agent's launch does differently, and what a user will notice of it. What every launch injects, the launch
 environment and what Octoboard never modifies are in `docs/product/launching-agents.md`.
 
+## How each agent is given the injection
+
+What "What is injected on every launch" in `docs/product/launching-agents.md` lists, and the user's choices carried with
+it, reaches each agent through that agent's own launch arguments, the environment, or, for Grok Build, files in the
+per-session Grok home; never through the project's or the user's own files. All of it is passed again on every launch,
+a resume and an account switch included. Octoboard's MCP server is registered under the name `octoboard` with every
+agent.
+
+| What | Claude Code | Codex | Grok Build |
+|---|---|---|---|
+| The session's id | `--session-id <id>` on a new session; `--resume <id>` on a resume | None on a new session (see "Codex" below); `codex resume <id>` on a resume | `--session-id <id>` on a new session; `--resume <id>` on a resume |
+| Status hooks | In the JSON passed with `--settings`, which Claude Code merges with the settings files rather than replacing them, so the project's own hooks still run | One `-c hooks.<event>=…` override per event, each run asynchronously, together with `--dangerously-bypass-hook-trust` | A `hooks/` directory of Octoboard's own in the per-session Grok home (see "The per-session Grok home" below) |
+| Octoboard's MCP server | `--mcp-config` | `-c mcp_servers.octoboard.command=…` and `-c mcp_servers.octoboard.args=[…]` | An `[mcp_servers.octoboard]` table in the per-session copy of `config.toml` |
+| Running Octoboard's tools without asking | An `allow` rule, `mcp__octoboard`, in the `--settings` JSON | `-c mcp_servers.octoboard.default_tools_approval_mode="approve"` | Nothing is passed |
+| The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
+| The role description | `--append-system-prompt`, added to Claude Code's own system prompt | `-c developer_instructions=…`, a developer message added beside Codex's own prompt, which stays as it is | `--rules`, appended to Grok's system prompt |
+| The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
+| An explicit approval choice (see "Approval modes" in `docs/product/agent-accounts.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me** | Not applicable |
+| Anything else | The status line, and under **Approve everything** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | Nothing else |
+
+The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
+Octoboard's tools" below and the Codex list below for why). A value the session leaves to the agent's default — no
+model, no effort, **Follow account configuration** — passes nothing for it. The variables a launch sets for each agent,
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME` and `GROK_THEME` among them, are in "The launch environment" in
+`docs/product/launching-agents.md`.
+
+A new session's initial task is passed as the agent's prompt argument. On a resume only Claude Code is given a prompt
+argument, and only when Octoboard has an instruction or a prompt to continue for it; Codex and Grok Build are given none
+on a resume, and what Octoboard has for them is written into the session instead (see "Messages held until a session
+can take them" in `docs/product/message-delivery.md`).
+
 ## Claude Code
 
 Octoboard assigns the session's id up front, so a session has an agent-side id from the moment it starts; a session
 opened to resume a conversation has that conversation's id. The flags that would drop the project's own permission
-rules, hooks or MCP servers are never passed. Its status line is Octoboard's, which runs the user's own in its place;
-the footer differences that brings for a user without one are in "Claude Code's status line" in
-`docs/product/launching-agents.md`.
+rules, hooks or MCP servers are never passed. Octoboard's server takes the name `octoboard` among the session's MCP
+servers, so a project's own MCP server of that name is not started in a Claude Code session Octoboard runs. Its status
+line is Octoboard's, which runs the user's own in its place; the footer differences that brings for a user without one
+are in "Claude Code's status line" in `docs/product/launching-agents.md`.
 
 When Claude Code has **not been trusted with the project's directory**, it ignores that project's own `allow` permission
 rules for the session while still applying its `deny` rules — so the session is only ever more restrictive, never less.
@@ -75,10 +107,10 @@ conversation, whose id it has from the start. The launch conditions that are vis
   script, so no pre-captured hash could ever match it.
 - Octoboard's own tools are pre-approved for the session, so a console session's orchestration calls raise no approval
   dialog. This covers Octoboard's tools alone; every other tool, the sandbox and the approval policy are untouched.
-- Codex's own time limit on a call to Octoboard's tools (300 s by default) is raised above Octoboard's own limit on a
-  forwarded call (the 10 minutes in "Waiting for the answer" of `docs/product/session-requests.md`), so that a call that
-  waits for the user, such as a session request, can return its result. This is the limit on Octoboard's tools alone; no
-  other tool's limit changes.
+- Codex's own time limit on a call to Octoboard's tools (300 s by default) is raised to 660 seconds, above Octoboard's
+  own limit on a forwarded call (the 10 minutes in "Waiting for the answer" of `docs/product/session-requests.md`), so
+  that a call that waits for the user, such as a session request, can return its result. This is the limit on
+  Octoboard's tools alone; no other tool's limit changes.
 
 An explicit Codex approval reviewer chosen for Codex in Settings takes precedence on every launch of any of its
 accounts, a resume included. When the setting follows each account's configuration, whether Codex resolves approval
@@ -132,6 +164,11 @@ Grok's built-in bundles and its sandbox files — `bundled/`, `bundles/`, `hooks
 taken on every launch as well, whichever of them the source home holds. A bundle update Grok downloads during a session
 lands in Octoboard's copy and is not kept; the next launch copies whatever the user's own `grok` has fetched since.
 
+Three entries of the source home are left out altogether. Its `hooks/` directory is not linked: the per-session home's
+`hooks/` holds Octoboard's status hooks alone, so hooks the user keeps in the Grok home's own `hooks/` directory do not
+run in a session Octoboard starts, while a project's own hooks still do (see "A project's hooks and instruction files"
+below). Its `requirements.toml` and `managed_config.toml` are not carried either (see "Grok's own sandbox" below).
+
 ### Grok's own sandbox
 
 **A Grok Build launch that would run under Grok's own sandbox is refused** before the per-session home is built, with
@@ -159,11 +196,11 @@ per-session home, so Grok never loads them for an Octoboard session.
 ### The time limit on Octoboard's tools
 
 Octoboard's own MCP server is declared in that copy of the configuration file, and its entry sets **Grok Build's own
-time limit on a call to Octoboard's tools** above Octoboard's own limit on a forwarded call (the 10 minutes in "Waiting
-for the answer" of `docs/product/session-requests.md`), so that a call which waits for the user, such as a session
-request, is ended by Octoboard's limit and not by Grok's — Grok cancels a call it gives up on, and a cancellation
-withdraws such a request. The limit is set on Octoboard's own entry alone; no other MCP server of the user's is touched,
-and the injected MCP entry is never carried into the user's own configuration.
+time limit on a call to Octoboard's tools**, to 660 seconds, above Octoboard's own limit on a forwarded call (the 10
+minutes in "Waiting for the answer" of `docs/product/session-requests.md`), so that a call which waits for the user,
+such as a session request, is ended by Octoboard's limit and not by Grok's — Grok cancels a call it gives up on, and a
+cancellation withdraws such a request. The limit is set on Octoboard's own entry alone; no other MCP server of the
+user's is touched, and the injected MCP entry is never carried into the user's own configuration.
 
 ### Grok Build's theme
 

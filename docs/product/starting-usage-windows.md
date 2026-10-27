@@ -44,19 +44,22 @@ reading after it.
 A kick runs the agent's CLI the way a reading does (see "How a quota is read" in `docs/product/account-quotas.md`), from
 the home directory, as one request with no terminal: a one-word prompt, a one-line system prompt in place of the agent's
 own, as few tools as the CLI lets be left out (none at all for Claude Code and Grok Build), one turn, and, where the CLI
-can cap it, a reply of at most 128 output tokens. It uses the agent's cheapest model at its lowest reasoning effort:
+can cap it, a reply of at most 128 output tokens. It runs the agent's non-interactive mode with its cheapest model at
+its lowest reasoning effort:
 
-| Agent | Model | Reasoning effort |
-|---|---|---|
-| Claude Code | `haiku`, its alias for the newest Haiku | `low` |
-| Codex | `gpt-6-luna` | `low` |
-| Grok Build | `grok-4.7` | `low` |
+| Agent | What is run | Model | Reasoning effort |
+|---|---|---|---|
+| Claude Code | `claude -p hi …` | `haiku`, its alias for the newest Haiku | `low` |
+| Codex | `codex exec … hi` | `gpt-6-luna` | `low` |
+| Grok Build | `grok -p hi …` | `grok-4.7` | `low` |
 
-The reply is not read: a kick has done its work when the CLI ends with success. It is stopped after **60 seconds**, and
-when the daemon shuts down; none is started once shutdown has begun. A kick runs in the background, so the reading that
-called for it is shown at once and the reading after the kick follows when it ends. That reading is skipped when the
-daemon is shutting down, or when the account was removed or pointed at another directory meanwhile; when the account's
-login ended meanwhile, the login's own reading stands in for it (see "When quotas are read" in
+The reply is not read: a kick has done its work when the CLI ends with success, and one that writes more than 64 KiB to
+its standard output is stopped and fails; its error output is limited by nothing, and only its first 4 KiB are kept for
+the log. It is stopped after **60 seconds**, and when the daemon shuts down; whichever way it ends, the helper processes
+it started are ended with it. None is started once shutdown has begun. A kick runs in the background, so the reading
+that called for it is shown at once and the reading after the kick follows when it ends. That reading is skipped when
+the daemon is shutting down, or when the account was removed or pointed at another directory meanwhile; when the
+account's login ended meanwhile, the login's own reading stands in for it (see "When quotas are read" in
 `docs/product/account-quotas.md`). Should the reading after a kick show another window that calls for a kick, the
 account is kicked again.
 

@@ -1929,13 +1929,6 @@ impl Store {
         Ok(true)
     }
 
-    /// Reads the current console name without allocating a session ordinal.
-    pub fn preview_console_session_title(&self, console_id: &str) -> Result<String> {
-        self.get_console(console_id)?
-            .map(|console| console.name)
-            .ok_or_else(|| CodedError::unknown_console(console_id))
-    }
-
     /// Inserts a freshly-opened console session, assigning its colour and ordinal under the same
     /// lock as the row insert. With no explicit title, it uses the console's current name.
     ///
@@ -5945,14 +5938,6 @@ mod tests {
             .insert_console(&console(None, None, None))
             .expect("console");
 
-        assert_eq!(
-            store.preview_console_session_title("console-1").unwrap(),
-            "Console"
-        );
-        assert_eq!(
-            store.preview_console_session_title("console-1").unwrap(),
-            "Console"
-        );
         let first = store
             .insert_console_session(console_session("session-0"), None)
             .expect("inserted");
@@ -5970,10 +5955,6 @@ mod tests {
             .expect("delete")
             .is_some());
 
-        assert_eq!(
-            store.preview_console_session_title("console-1").unwrap(),
-            "Console"
-        );
         let third = store
             .insert_console_session(console_session("session-2"), None)
             .expect("inserted");
@@ -6006,10 +5987,6 @@ mod tests {
         let mut renamed = console(None, None, None);
         renamed.name = "Renamed console".to_string();
         store.update_console(&renamed).expect("renamed");
-        assert_eq!(
-            store.preview_console_session_title("console-1").unwrap(),
-            "Renamed console"
-        );
         let after_rename = store
             .insert_console_session(console_session("session-0c"), None)
             .expect("inserted");

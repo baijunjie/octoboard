@@ -2,12 +2,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../../daemon-client";
-import type { ChangeEntry, ChangeSide, Event, SideRead, SideVersion } from "../../protocol";
+import type { ChangeEntry, ChangeSide, Event, RequestBody, SideRead, SideVersion } from "../../protocol";
 import { hasHunks, joinedPatch, linesAfterLastHunk } from "../../viewer/patch";
 import { FixtureUnfillableError } from "../banner";
 import { createFixtureDaemon } from "../fixtureDaemon";
-import { EMPTY_TREE, listedCommits, type FixtureGit } from "./changeFixtures";
+import { EMPTY_TREE, listedCommits, type FixtureChange, type FixtureGit } from "./changeFixtures";
 import { objectIdCheck } from "./invariants";
+import { SCENARIOS } from ".";
 import { FORKED_GIT, LONG_HISTORY_GIT, NEVER_PUSHED_GIT, projectGitScenarios, SAMPLE_GIT, UNPUSHED_GIT } from "./projectGit";
 
 describe("the sample repository's changes", () => {
@@ -24,11 +25,15 @@ describe("the sample repository's changes", () => {
    * one with a branch ahead of its upstream, and the one with a branch never pushed. */
   const REPOSITORIES = [SAMPLE_GIT, UNPUSHED_GIT, NEVER_PUSHED_GIT];
   /** The two ends a comparison keyed `<left>..<right>` is read from, at the commits the branch list
-   * names (a remote-tracking branch at the one its branch's upstream names), and the fork it is made
-   * from, as the window names them back. */
+   * names (a remote-tracking branch at the one its branch's upstream names, else the default branch the
+   * list gives), and the fork it is made from, as the window names them back. */
   const endsOf = (git: FixtureGit, comparison: string) => {
     const commitOf = (branch: string) =>
-      branch === "" ? EMPTY_TREE : git.branches?.find((b) => b.name === branch)?.commit ?? git.branches?.find((b) => b.upstream?.name === branch)?.upstream?.commit ?? "";
+      branch === ""
+        ? EMPTY_TREE
+        : git.branches?.find((b) => b.name === branch)?.commit ??
+          git.branches?.find((b) => b.upstream?.name === branch)?.upstream?.commit ??
+          (git.defaultBranch?.name === branch ? git.defaultBranch.commit : "");
     const [left, right] = comparison.split("..");
     return {
       left: { branch: left, commit: commitOf(left) },
@@ -519,6 +524,122 @@ describe("the sample repository's changes", () => {
       "commit 6d5c4b3 package.json: old text 78/6, new text 78/6",
       "commit 3e2d1c0 tsconfig.json: old text 74/6, new text 74/6",
     ]);
+  });
+
+  // The guard over every scenario: whatever a scenario's repository offers to read is read here, so
+  // a reply the fixture daemon cannot fill faithfully fails the test run and not only the scenario
+  // someone opens. The repositories are taken from the scenario catalog rather than listed, so a
+  // fixture added later is read without being named; so are the repositories a branch switch or a
+  // restore replaces a project's with, and the sample repository every scenario without a `git`
+  // is answered from. A change shared by several repositories is read once. Each read has to reach
+  // its target: a daemon error passes only where the fixture stages that very error for the change,
+  // since scenarios answer with errors on purpose, and a commit list has the commits the fixture holds.
+  it("answer every read a scenario's repository offers without a refusal", async () => {
+    const repositories = new Set<FixtureGit>();
+    for (const scenario of SCENARIOS) {
+      if (scenario.git !== null) repositories.add(scenario.git ?? SAMPLE_GIT);
+      for (const result of Object.values(scenario.projectRestores ?? {})) if (!("code" in result)) repositories.add(result.git);
+      for (const switches of Object.values(scenario.projectBranchSwitches ?? {})) {
+        for (const result of Object.values(switches)) if (!("code" in result)) repositories.add(result.git);
+      }
+    }
+    // Several repositories are spread from one another, so most of their changes are one object.
+    const read = { changes: new WeakSet<object>(), comparisons: new WeakSet<object>(), commits: new WeakSet<object>() };
+    const count = { changes: 0, comparisons: 0, commits: 0, lists: 0 };
+    const unseen = (seen: WeakSet<object>, change: object) => !seen.has(change) && !!seen.add(change);
+    /** The error a read of the change is staged to end in, in the order the daemon meets them: what
+     * the request alone refuses, the patch it cannot make, then (for the bodies) a side that moved
+     * on, one that is no file, and the error reading them ends in. `undefined` for a read that is
+     * answered. */
+    const stagedError = (change: FixtureChange, entry: Exclude<ChangeEntry, { group: "conflicted" }>, bodies: boolean): string | undefined => {
+      const { error, expand } = change;
+      if (!bodies) return error?.code;
+      if (entry.group === "untracked" || entry.old.state === "out_of_scope" || entry.new.state === "out_of_scope") return "invalid_change";
+      if (error) return error.code;
+      if (expand?.movedOn) return "source_changed";
+      if ([entry.old, entry.new].some((side) => side.state === "present" && side.kind !== "file")) return "unsupported_file_type";
+      return expand?.error?.code;
+    };
+    const asked: Promise<void>[] = [];
+
+    for (const git of repositories) {
+      const daemon = sampleDaemon(git);
+      /** Asks the repository for a read and checks the reply is the one that was aimed at: the type
+       * wanted, or the very error staged for it; a refusal, or any other error, fails. */
+      const ask = (at: string, request: RequestBody, reply: Event["type"], error: string | undefined, then?: (event: Event) => void) => {
+        asked.push(
+          daemon.request(request).then(
+            (event) => {
+              expect(event.type, `${at} answers ${reply}`).toBe(reply);
+              expect(error, `${at} is staged to end in an error`).toBeUndefined();
+              then?.(event);
+            },
+            (failure: unknown) => {
+              if (!(failure instanceof DaemonRequestError)) throw failure;
+              expect(failure.code, `${at} fails with the error staged for it`).toBe(error);
+            },
+          ),
+        );
+      };
+
+      for (const [worktree, changes] of Object.entries(git.changes)) {
+        if (!Array.isArray(changes)) continue;
+        for (const change of changes) {
+          const { entry } = change;
+          if (entry.group === "conflicted" || entry.group === "committed" || !unseen(read.changes, change)) continue;
+          count.changes += 1;
+          const at = `${worktree} ${entry.group} ${pathOf(entry.new) || pathOf(entry.old)}`;
+          const named = { group: entry.group, old: entry.old, new: entry.new };
+          ask(at, { type: "read_project_change", project: "p-1", worktree, change: named }, "project_change", stagedError(change, entry, false));
+          ask(`${at} bodies`, { type: "read_project_change_bodies", project: "p-1", worktree, change: named, ...versionsOf(entry) }, "project_change_bodies", stagedError(change, entry, true));
+        }
+      }
+      const pairs = new Set([...Object.keys(git.comparisons ?? {}), ...Object.keys(git.commits ?? {})]);
+      for (const pair of pairs) {
+        const ends = endsOf(git, pair);
+        const commits = git.commits?.[pair];
+        // A list that is never answered is not read, nor is one of a pair that cannot be compared: it
+        // has no fork to name (`null`), or names a branch the branch list does not have (a repository
+        // whose `main` is not called that), where the window never gets as far as asking. Any other
+        // pair is read, so a pair key that does not name what the fixture holds fails here.
+        const known = (name: string) =>
+          name === "" || [git.branches?.some((b) => b.name === name || b.upstream?.name === name), git.defaultBranch?.name === name].includes(true);
+        const comparable = git.forks?.[pair] !== null && known(ends.left.branch) && known(ends.right.branch);
+        if (!(commits && "pending" in commits) && comparable) {
+          count.lists += 1;
+          const staged = commits && "error" in commits ? commits.error.code : undefined;
+          ask(`${pair} commits`, { type: "list_project_commits", project: "p-1", base: ends.base, tip: ends.right.commit }, "project_commits", staged, (event) => {
+            // The count is what shows the list read the pair asked for, and not another or none.
+            expect(event.type === "project_commits" ? event.commits.length : -1, `${pair} lists the commits the fixture holds`).toBe(commits ? listedCommits(commits).length : 0);
+          });
+        }
+        for (const change of git.comparisons?.[pair] ?? []) {
+          const { entry } = change;
+          if (entry.group === "conflicted" || !unseen(read.comparisons, change)) continue;
+          count.comparisons += 1;
+          const at = `${pair} ${pathOf(entry.new) || pathOf(entry.old)}`;
+          ask(at, { type: "read_project_comparison_change", project: "p-1", ...ends, change: entry }, "project_comparison_change", stagedError(change, entry, false));
+          ask(`${at} bodies`, { type: "read_project_comparison_change_bodies", project: "p-1", ...ends, change: entry, ...versionsOf(entry) }, "project_comparison_change_bodies", stagedError(change, entry, true));
+        }
+      }
+      for (const { commit, parent, changes } of commitsOf(git)) {
+        for (const change of changes) {
+          const { entry } = change;
+          if (entry.group === "conflicted" || !unseen(read.commits, change)) continue;
+          count.commits += 1;
+          const at = `commit ${short(commit)} ${pathOf(entry.new) || pathOf(entry.old)}`;
+          ask(at, { type: "read_project_commit_change", project: "p-1", commit, parent, change: entry }, "project_commit_change", stagedError(change, entry, false));
+          ask(`${at} bodies`, { type: "read_project_commit_change_bodies", project: "p-1", commit, parent, change: entry, ...versionsOf(entry) }, "project_commit_change_bodies", stagedError(change, entry, true));
+        }
+      }
+    }
+
+    // Every request is in flight before the first is awaited, as above.
+    for (const one of await Promise.allSettled(asked)) if (one.status === "rejected") throw one.reason;
+    // The catalog was walked, not an empty one: each kind of read has something to read.
+    expect(repositories.has(SAMPLE_GIT)).toBe(true);
+    expect(repositories.size).toBeGreaterThan(1);
+    for (const kind of Object.values(count)) expect(kind).toBeGreaterThan(0);
   });
 
   // The refusal the check above leans on: the fixture daemon answers nothing where the real daemon

@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { CircleCheck } from "lucide-react";
 
+import { AttendedStatusAnnouncer } from "../components/AttendedStatusAnnouncer";
 import { Button } from "../components/Button";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusBadge } from "../components/StatusBadge";
-import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/StatusAnnouncer";
-import { useWindowAttended } from "../components/useWindowAttended";
 import { Message, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { MacosPermissionKind } from "../platform";
@@ -119,7 +118,7 @@ export function PermissionsSection(): React.ReactElement {
                       English sentences and nowhere near the full stop a language like Chinese ends
                       its own with. A state still to act on is the row's own description, read where it
                       stands; a granted one is the success badge at the row's end instead. Either is
-                      announced from the section's status region (`PermissionsAnnouncer`). */}
+                      announced from the section's status region (`AttendedStatusAnnouncer`). */}
                   {!granted && <span className="block"><Message id={stateKey} /></span>}
                   {restart && <span className="block"><Message id="settings.permissions.restart" /></span>}
                 </>
@@ -150,31 +149,11 @@ export function PermissionsSection(): React.ReactElement {
   return (
     <>
       {body()}
-      <PermissionsAnnouncer text={announcement} />
+      {/* Where the permissions stand, from a status region of the section's own: the state is in place as the
+          section appears and changes as the user comes back from System Settings, both moments a status written at
+          once goes unsaid. The rows show the same states in their descriptions, which stay readable where they stand,
+          so a reader going through the rows meets each state twice. */}
+      <AttendedStatusAnnouncer text={announcement} />
     </>
   );
-}
-
-/**
- * Says where the permissions stand, from a status region of the section's own, visually hidden: the
- * rows show the same states as their descriptions, which stay readable where they stand and so are
- * not `aria-hidden` (a reader going through the rows meets each state twice, there and here).
- *
- * The state is in place as the section appears, when the user has just moved focus onto its tab or
- * opened Settings on it, and a status that is there from the region's first render, or written
- * within about 300 ms of a focus move, is not said. It changes, too, as the user comes back from
- * System Settings, which is where the switch is flipped; VoiceOver then speaks the control focus is
- * on, and a status written meanwhile is not said either. So every text, the first included, is
- * written `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrived, the wait started over each
- * time the user comes back; a text that is replaced while it waits is never said.
- */
-function PermissionsAnnouncer({ text }: { text: string | undefined }): React.ReactElement {
-  const attended = useWindowAttended();
-  const [said, setSaid] = useState<string>();
-  useEffect(() => {
-    if (text === said || !attended) return;
-    const timer = setTimeout(() => setSaid(text), AFTER_FOCUS_MOVE_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [text, said, attended]);
-  return <StatusAnnouncer text={said} />;
 }

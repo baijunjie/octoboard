@@ -1633,16 +1633,16 @@ first turn set a secret word; success means the model recalled it. Compression w
 ## Plan quota
 
 Each CLI can say how much of an account's plan quota is used, over a channel meant for its own front ends. All three
-are marked experimental by their makers, so a reply that does not parse is a reason to show the quota as unavailable,
-never to fail anything else. Measured against the default account of each on Claude Code 2.1.302, Codex 0.162.1 and
-Grok Build 1.0.60, with the working directory set to the home directory and the agent's configuration-directory
-variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`) set to a pinned account's directory, or left alone for the
-default account. The CLI handles its own login, Keychain access and token refresh, so nothing here reads a credential.
+are marked experimental by their makers. What Octoboard does with a reading is under "How a quota is read" and "What
+reading a quota leaves behind" in `docs/product/account-quotas.md`. Measured against the default account of each on
+Claude Code 2.1.302, Codex 0.162.1 and Grok Build 1.0.60, with the working directory set to the home directory and the
+agent's configuration-directory variable (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `GROK_HOME`) set to a pinned account's
+directory, or left alone for the default account. The CLI handles its own login, Keychain access and token refresh.
 
 Codex and Grok Build want **stdin kept open until the reply is on stdout**: they exit silently when it closes first.
 Claude Code answers with stdin open as well, so all three are asked the same way. Each answers in about one to three
 seconds, though a Claude Code start (2.1.308 and 2.1.309) took up to 17 seconds on a 10-core machine at a load average
-of about 54. A request that gets no reply within 60 seconds is given up on and the CLI's whole session killed.
+of about 54.
 
 **Claude Code** (do not pass `--bare`: it skips the Keychain, so the login is not found):
 
@@ -1726,9 +1726,9 @@ The server sends notifications of its own in between (`_x.ai/mcp/servers_updated
 (ISO 8601), and spend fields (`onDemandCap`, `onDemandUsed`, `prepaidBalance`) that are not a quota window. There is
 one credit pool, not a session and a weekly window.
 
-**What a probe touches.** The poller runs each probe every five minutes per account, so what a start does matters.
-Measured on the same builds by listing the files each probe changed in the agent's home and the processes alive in its
-process group when the reply arrived.
+**What a probe touches.** A probe is run repeatedly per account (see "When quotas are read" in
+`docs/product/account-quotas.md`), so what a start does matters. Measured on the same builds by listing the files each
+probe changed in the agent's home and the processes alive in its process group when the reply arrived.
 
 - **Claude Code** syncs plugins on start (it rewrites `plugins/synced/…` and a `.in_use` marker per installed plugin
   version) and registers the process in `sessions/<pid>.json` with a `.key` file. `--setting-sources local` stopped the
@@ -1757,14 +1757,13 @@ turn starts in a probe, and the hook events documented above are session events.
 ## Starting a quota window
 
 A window only starts counting at the account's first request after it resets; until then the CLI reports it with no
-reset time. A **kick** is one one-word request on that account that starts it. Each agent is run the way its quota probe
-is (login-shell environment, the configuration-directory variable set to the account's directory, the home directory as
-working directory, the CLI's whole session killed when it ends, after sixty seconds or when the daemon shuts down), with
-stdin closed and the reply not read: that it exited with status 0 is all that is wanted, and more than 64 KiB on stdout
-fails the kick (a runaway CLI is cut off, its output not kept). Each takes the cheapest model its catalogue offers and
-its lowest reasoning effort, and is made as small as the CLI allows: a one-line system prompt in place of its own, no
-tools, one turn, a capped reply, and as little of the user's setup as can be left out without changing which sign-in is
-used. No agent is run with an option that changes the credentials it reads (Claude Code's `--bare` skips the Keychain).
+reset time. A **kick** is one one-word request on that account that starts it. How Octoboard runs one (the environment,
+the time and output limits, what counts as success) is under "How a kick runs" in
+`docs/product/starting-usage-windows.md`. Each agent is run with stdin closed and its reply not read. Each takes the
+cheapest model its catalogue offers and its lowest reasoning effort, and is made as small as the CLI allows: a one-line
+system prompt in place of its own, no tools, one turn, a capped reply, and as little of the user's setup as can be left
+out without changing which sign-in is used. No agent is run with an option that changes the credentials it reads (Claude
+Code's `--bare` skips the Keychain).
 
 ```
 claude -p hi --model haiku --effort low --no-session-persistence --system-prompt "Reply with one word." --tools "" \
@@ -1871,8 +1870,8 @@ Codex or Grok Build window reports no reset time were not measured.
 How each agent is given Octoboard's status hooks, its MCP server and a role description, with the condition each one
 brings. Everything is per launch (arguments, an environment variable, or files Octoboard writes itself) and never an
 edit of the project's or the user's files, and was exercised against the versions above. What a user sees of it is in
-"What is injected on every launch" in `docs/product/launching-agents.md` and in
-`docs/product/per-agent-launch-specifics.md`.
+"What is injected on every launch" in `docs/product/launching-agents.md` and in "How each agent is given the injection"
+in `docs/product/per-agent-launch-specifics.md`.
 
 | Capability | Claude Code | Codex | Grok Build |
 |---|---|---|---|
@@ -1906,24 +1905,23 @@ edit of the project's or the user's files, and was exercised against the version
   - The profile a conversation started under is saved as `sandbox_profile` in its `summary.json` (`"off"` when
     unsandboxed) and restored on a resume.
 
-  Octoboard therefore refuses a launch whose profile it can read as non-`off` (`grok_sandbox_unsupported`).
+  Octoboard's refusal of such a launch is under "Grok's own sandbox" in `docs/product/per-agent-launch-specifics.md`.
 - **Codex** gates hooks behind a persisted trust hash: without it an interactive session raises a blocking review modal
   and a headless one **hangs indefinitely**. `--dangerously-bypass-hook-trust` clears that at the cost of two warning
   lines per launch. The hash is taken over the handler definition, which includes the hook command, and that command is
   the session's own script path, so hashes captured once could never match a later session. Removing the warning would
   mean a session-independent hook command. Project trust is not passed: a per-launch `projects` override is saved
-  nowhere, so Codex's own confirmation is pressed instead (see "Folder-trust confirmations" below).
+  nowhere, so Codex asks through its own confirmation (see "Folder-trust confirmations" below).
 - **Workspace trust gates the project's own configuration on Claude Code and Grok**, and fails silently. On Grok an
   untrusted folder makes the project's `AGENTS.md`, hooks and MCP servers not load; trust lives inside `GROK_HOME` (an
   undocumented `--trust` flag also exists), and Grok's project hooks, unlike its instruction files, also need a
-  recognized **git** root, since they did not load in a trusted non-git directory. Octoboard makes no trust decision of
-  its own in either agent's store and passes none for a launch; it presses the agent's own confirmation (see
-  "Folder-trust confirmations" below). On Claude Code an untrusted workspace makes the project's `allow` rules ignored
-  (with a line on stderr) while `deny` still applies, so the session is only ever more restrictive. Its trust lives in
-  the global config file (`~/.claude.json`, or `.claude.json` inside the config directory in effect), which Octoboard
-  reads and never writes. It is read rather than matching the stderr line because on a PTY stderr is the rendered UI,
-  and matching rendered text would need a VT emulator in the daemon; it warns only on an explicit negative, so a renamed
-  key does not warn on every launch.
+  recognized **git** root, since they did not load in a trusted non-git directory. What Octoboard does about each
+  confirmation is under "How a confirmation is pressed" in `docs/product/folder-trust.md`. On Claude Code an untrusted
+  workspace makes the project's `allow` rules ignored (with a line on stderr) while `deny` still applies, so the session
+  is only ever more restrictive. Its trust lives in the global config file (`~/.claude.json`, or `.claude.json` inside
+  the config directory in effect). Octoboard reads it, rather than matching the stderr line, because on a PTY stderr is
+  the rendered UI, and matching rendered text would need a VT emulator in the daemon (see "Claude Code" in
+  `docs/product/per-agent-launch-specifics.md` for what it reads and when it warns).
 - **Each agent reads a different instruction filename, matched by exact spelling.** Claude Code reads `CLAUDE.md` and
   `CLAUDE.local.md` and does **not** read `AGENTS.md`, and cannot be made to; where it must be shown a project's
   `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`. Grok reads
@@ -1991,7 +1989,7 @@ edit of the project's or the user's files, and was exercised against the version
 ### Folder-trust confirmations
 
 Each agent asks once per folder it has not been told to trust, on a confirmation of its own, before any hook runs.
-Octoboard recognizes it in the terminal output and presses it; what pressing it records is the agent's own business.
+What Octoboard sends to answer each is under "How a confirmation is pressed" in `docs/product/folder-trust.md`.
 
 - **Claude Code** shows its workspace-trust screen the first time it runs in a directory, with the cursor on "No,
   exit" and "Yes, I trust this folder" below it; a Down and then an Enter accept. It records the trust in its global
@@ -2008,15 +2006,15 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
   No hook fires before or right after the confirmation, and none at startup at all until the first prompt is submitted.
   Codex sets no terminal title before the confirmation or the sign-in screen that precedes it on an account's first
   launch; its first title (OSC 0/2) comes once its session starts (0.160.0–0.163.0), so that title marks it past both.
-  With `[tui] terminal_title = []` it never sets one, which is why Octoboard passes `-c tui.terminal_title=[…]`. The ">_
-  OpenAI Codex (v…)" banner is drawn before the sign-in screen and the confirmation alike, so it marks neither. Codex
-  redraws only the cells that changed, so text read off the screen can lose characters wherever the frame before held
-  the same one; the confirmation's own phrases came through intact in its first drawing, a path above it did not. The
-  review Codex raises for new hooks without `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all
-  and continue" and is a different modal. On 0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws
-  nothing but a bare synchronized-update frame (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the
-  screen and redraws it whole, starting with the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the
-  terminal is told apart.
+  With `[tui] terminal_title = []` it never sets one (see "Codex" in `docs/product/per-agent-launch-specifics.md` for
+  the override Octoboard passes). The ">_ OpenAI Codex (v…)" banner is drawn before the sign-in screen and the
+  confirmation alike, so it marks neither. Codex redraws only the cells that changed, so text read off the screen can
+  lose characters wherever the frame before held the same one; the confirmation's own phrases came through intact in its
+  first drawing, a path above it did not. The review Codex raises for new hooks without
+  `--dangerously-bypass-hook-trust` reads "Hooks need review … 2. Trust all and continue" and is a different modal. On
+  0.161.0 a key the confirmation ignores (a letter, Right, Tab, `?`) draws nothing but a bare synchronized-update frame
+  (`ESC[?2026h ESC[39m ESC[49m ESC[0m ESC[?2026l`); accepting it clears the screen and redraws it whole, starting with
+  the ">_ OpenAI Codex (v…)" banner, which is how an answer given in the terminal is told apart.
 - **Grok Build** shows its confirmation only when the folder holds content its trust gates, such as an `AGENTS.md`,
   whether or not it is a git repository, so a console directory holding an instruction file is asked about too. The
   screen reads "Do you trust the contents of this directory?", "Grok Build may run or modify contents in this directory,
@@ -2025,13 +2023,12 @@ Octoboard recognizes it in the terminal output and presses it; what pressing it 
   `$GROK_HOME/trusted_folders.toml`; on 1.0.62, if the existing store does not parse (a string `decided_at`, say), an
   accepted confirmation fails with "Couldn't save folder trust: the trust store could not be read…" and Grok exits. It
   saves by replacing the file, so against Octoboard's per-session `GROK_HOME` the entry lands only in the session's copy
-  and a symlink there is replaced rather than followed; no setting moves the store. Octoboard therefore carries that one
-  entry, unchanged, into the user's own store, after its own press and after the person answers in the terminal alike,
-  holding the `trusted_folders.toml.lock` Grok keeps beside it. Grok locks that same file before it replaces the store
-  (measured on 1.0.50: with an exclusive `flock` held on it elsewhere, an accepted confirmation wrote nothing until it
-  was released), and Octoboard's lock is exclusive, so the two writes exclude each other. `SessionStart` fires right
-  after the press. While it waits, Grok animates its logo at about 2 KB/s, so the first drawing soon leaves any window
-  of recent output and the terminal is never quiet.
+  and a symlink there is replaced rather than followed; no setting moves the store; how Octoboard carries the entry over
+  is under "Carrying Grok Build's trust record" in `docs/product/folder-trust.md`. Grok locks the
+  `trusted_folders.toml.lock` file kept beside the store before it replaces the store (measured on 1.0.50: with an
+  exclusive `flock` held on it elsewhere, an accepted confirmation wrote nothing until it was released). `SessionStart`
+  fires right after the press. While it waits, Grok animates its logo at about 2 KB/s, so the first drawing soon leaves
+  any window of recent output and the terminal is never quiet.
 
 ### Writing into a running session
 
