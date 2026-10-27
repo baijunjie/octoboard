@@ -16,8 +16,8 @@ meet an AA threshold. A library-default appearance below that threshold is not a
 approval. The visual thresholds below apply to application-authored custom styles; application-level keyboard access,
 accessible names, focus handling and announcements remain required.
 
-The user has kept a few shortfalls on purpose, each marked by a comment at its code saying so. Leave one that is marked
-as it is, and do not add a new exception without the user's say.
+The user has kept a few shortfalls and overrides on purpose, each marked by a comment at its code saying so. Leave one
+that is marked as it is, and do not add a new exception without the user's say.
 
 ### Confirmed visual choices
 
@@ -121,9 +121,16 @@ the row, taking its name below AA (about 2.9:1 in light, 4.2:1 in dark) by the u
 own veil while it is pointed at, selected, holds keyboard focus or has its menu open. The dimming is only a change of
 lightness, so the row's accessible name carries the state (", ignored").
 
-A select option or menu item that cannot be chosen and says why (an account whose quota is used up) keeps the reason
-line under its name at full opacity and fades only its name and icon with HeroUI's `--disabled-opacity`, instead of
-letting HeroUI fade the whole row: the reason is the text that explains the disabled state, so it must stay readable.
+A select option or menu item that cannot be chosen, whether or not it says why (an account whose quota is used up, a
+terminal's Copy with nothing to copy while the program takes the mouse), is dimmed as an agent row is: its name takes
+the secondary text colour (`text-app-muted`, at least 4.5:1 in both themes) and only its icon fades, with HeroUI's
+`--disabled-opacity`. HeroUI's fade of the whole row is switched off (`data-[disabled=true]:opacity-100` on a menu
+item; a select option never gets `data-disabled`, see below), and so is its fade of a menu item's `Label`
+(`[data-disabled=true] .label`, cancelled with `opacity-100` on the `Label`), so no text is faded below AA by opacity.
+The option's badge, checkmark and a reason line under the name stay at full opacity; the reason is the text that
+explains the disabled state, so it must stay readable. A menu's note, a line of text disabled only so that it cannot be
+chosen, keeps its muted text at full opacity the same way. These overrides change HeroUI's default disabled look, an
+approved exception by the user's decision (see "Do not change how a HeroUI component looks").
 
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
@@ -294,9 +301,20 @@ through the view's `StatusAnnouncer`, unless this window asked for that change, 
 speaks it instead (see "Where an error is shown"); the same mark found already there when the view opens, or after a
 restart, is not. When the mark goes while it or its popover holds focus, focus moves to the switch.
 
-A disabled select option or menu item that carries a reason stays in the arrow-key walk (`disabledBehavior:
-"selection"` on the menu and on any single-selection section inside it), so a keyboard user reaches it and hears why;
-it still cannot be activated or selected.
+Whether a disabled control says why depends on how long it stays disabled. One disabled by a state that can last (a
+session in the middle of a turn, a locked session, no other agent to hand off to, a platform without clipboard reading,
+nothing to copy while the program in a terminal takes the mouse) carries a reason: the user is left looking at it and
+needs to know what would make it available. (Without mouse reporting a plain drag selects text, so Copy has nothing
+useful to add.) One disabled only for the moment an operation takes (a session still starting, an account switch or a
+sharing change under way, a shell that is closing, a login under way) carries none: it comes back on its own before a
+reason would be read. Nor does one whose cause the screen already shows where it happens (a terminal that cannot take
+input, covered by its reconnecting spinner or its disconnected notice). A form still states a brief hold when it
+affects the value already chosen, as that field's error or as an alert.
+
+A disabled select option or menu item, with a reason or without, stays in the arrow-key walk (`disabledBehavior:
+"selection"` on the select, and on the menu and any single-selection section inside it), so a keyboard user reaches it
+and, where it has one, hears why; it still cannot be activated or selected. Under that setting react-aria sets no
+`aria-disabled` on a select option, so the option gets it by hand.
 
 ### A control inside a rendering library's shadow root
 
@@ -1522,9 +1540,11 @@ confirmation and the patterns known not to work.
 
 Keep HeroUI's default appearance, including its text and placeholder colours, hover opacity and the default fill,
 foreground and shadow of the variant or status chosen for a dialog or popover; the Alert's status background fill
-under "Confirmed visual choices" and a modal body's foreground text colour (see "One definition per semantic colour")
-are the approved exceptions. A contrast measurement alone does not justify changing its colours, theme tokens, borders,
-frames or outlines, so add no colour or opacity override to make a default component pass the custom-style thresholds. Use the component's own supported variants and slots; layout and sizing adaptations
+and the other departures recorded under "Confirmed visual choices" (the dimming of a disabled menu item or select option
+among them), and a modal body's foreground text colour (see "One definition per semantic colour"), are approved
+exceptions. A contrast measurement alone does not justify changing its colours, theme tokens, borders, frames or
+outlines, so add no colour or opacity override to make a default component pass the custom-style thresholds. Use the
+component's own supported variants and slots; layout and sizing adaptations
 do not authorize replacing its visual treatment. Application-authored text on a custom surface is checked against its
 actual background in both appearances.
 

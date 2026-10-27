@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
+import { avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, handoffBlock, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
@@ -463,5 +463,16 @@ describe("incompleteAccount", () => {
     ["an account whose sharing change runs, which the daemon refuses anyway", [half], new Map([["h", running]]), "h"],
   ] as const)("names nothing for %s", (_, stored, sharing, id) => {
     expect(incompleteAccount([...stored], sharing, id)).toBeUndefined();
+  });
+});
+
+describe("handoffBlock", () => {
+  const t = ((key: string) => key) as Translate;
+  const base = { status: "idle", locked: false, switching_account: false } as const;
+
+  it("says a session still starting is not ready, not that it is mid-turn", () => {
+    expect(handoffBlock(t, { ...base, status: "starting" }, false)).toEqual({ detail: "accountChoice.handoff.starting" });
+    expect(handoffBlock(t, { ...base, status: "working" }, false)?.detail).toBe("accountChoice.handoff.working");
+    expect(handoffBlock(t, base, false)).toBeUndefined();
   });
 });

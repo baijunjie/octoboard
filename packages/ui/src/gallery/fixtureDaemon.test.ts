@@ -407,6 +407,16 @@ describe("the fixture daemon's session locks", () => {
     await expect(daemon.request({ type: "set_session_locked", session: "missing", locked: true })).rejects.toMatchObject({ code: "unknown_session" });
   });
 
+  it("refuses locking an archived session but still unlocks it", async () => {
+    const archived = sessionOf("archived", "c", "p", "Archived", "archived");
+    const stale = sessionOf("stale", "c", "p", "Stale", "archived", { locked: true });
+    const daemon = createFixtureDaemon({ id: "locks-archived", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ sessions: [archived, stale] }) });
+    await expect(daemon.request({ type: "set_session_locked", session: archived.id, locked: true })).rejects.toMatchObject({ code: "session_archived" });
+    expect(daemon.store.getState().sessions.get(archived.id)).toEqual(archived);
+    await expect(daemon.request({ type: "set_session_locked", session: stale.id, locked: false })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().sessions.get(stale.id)).toEqual({ ...stale, locked: false });
+  });
+
   it("refuses archiving a locked grandchild atomically and allows it after unlocking", async () => {
     const owner = sessionOf("owner", "c", undefined, "Hub", "interrupted");
     const lead = sessionOf("lead", "c", "p", "Lead", "interrupted", { bound_to: owner.id });

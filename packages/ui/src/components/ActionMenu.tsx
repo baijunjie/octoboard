@@ -89,9 +89,10 @@ export interface ActionMenuItem {
   ariaLabel?: string;
   /** Drawn after the label, at the item's end edge (a status marker). */
   end?: React.ReactNode;
-  /** Why the item cannot be chosen: it is disabled and the reason is drawn under the label in place of
-   * `end`. The accessible name is the label (`ariaLabel` if set) followed by the reason, unless the
-   * item has a `description`, which then carries the reason in full and leaves the name the label. */
+  /** Why the item cannot be chosen, or how to make it available ("Option-drag to select"): it is
+   * disabled and the reason is drawn under the label in place of `end`. The accessible name is the
+   * label (`ariaLabel` if set) followed by the reason, unless the item has a `description`, which then
+   * carries the reason in full and leaves the name the label. */
   reason?: Reason;
   /** A note that assistive technology reads as the item's description and that is not drawn (what
    * remains of an account's quota, which the usage bar in `icon` shows only to the eye; for an item
@@ -143,6 +144,11 @@ export interface ActionMenuNote {
 }
 
 export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | ActionMenuNote | "separator";
+
+/** Whether an item cannot be chosen: it is disabled, or it gives a reason it cannot be. */
+function isDisabledItem(entry: ActionMenuItem): boolean {
+  return Boolean(entry.disabled || entry.reason);
+}
 
 /** A lucide glyph is drawn quieter than the label beside it, or in the danger colour with a
  * destructive item's label; an element (an agent's mark) keeps its own colours. */
@@ -218,8 +224,10 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
     if (entry && isLeaf(entry)) entry.onClick();
   };
 
-  // The disabled style fades the whole item, which would take the reason below the contrast the text
-  // needs; so an item with a reason stays at full opacity and only its icon and label fade.
+  // The disabled style fades the whole item, which would take its text below the contrast it needs; so a
+  // disabled item stays at full opacity and is dimmed by its icon fading and its label taking the secondary
+  // text colour. A shortcut at its end keeps its colour. Overriding HeroUI's disabled look this way, the row's
+  // fade and the label's (`[data-disabled=true] .label`), is by the user's decision.
   const renderItem = (entry: ActionMenuItem, index: number) => (
     <Dropdown.Item
       key={index}
@@ -227,12 +235,12 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
       textValue={entry.label}
       data-marquee-scope
       aria-label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
-      className={entry.reason ? "data-[disabled=true]:opacity-100" : undefined}
+      className={isDisabledItem(entry) ? "data-[disabled=true]:opacity-100" : undefined}
       variant={entry.destructive ? "danger" : "default"}
-      isDisabled={entry.disabled || Boolean(entry.reason)}
+      isDisabled={isDisabledItem(entry)}
       shouldCloseOnSelect={entry.closeOnSelect}
     >
-      {entry.reason ? (
+      {isDisabledItem(entry) ? (
         <span aria-hidden="true" className="flex shrink-0 opacity-(--disabled-opacity)">
           <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
         </span>
@@ -244,7 +252,7 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
       <span className="flex min-w-0 flex-1 flex-col">
         {/* HeroUI sizes a menu item's label to its text (`w-fit`), which would run a long one under
             `end`; `max-w-full` keeps it to its column, where it fades. */}
-        <Label className={`min-w-0 max-w-full text-clip${entry.reason ? " opacity-(--disabled-opacity)" : ""}`}>
+        <Label className={`min-w-0 max-w-full text-clip${isDisabledItem(entry) ? " text-app-muted opacity-100" : ""}`}>
           {entry.content ?? <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>}
         </Label>
         {entry.description && <Description className="sr-only">{entry.description}</Description>}
@@ -287,11 +295,12 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
     } else if ("note" in entry) {
       nodes.push(
         // Disabled so that it cannot be chosen, yet drawn at full opacity as the quiet text it is, not as a
-        // branch that is off; the spacer holds the place of the glyph the items have, and `ps-7` that of the check
-        // indicator a menu with choices reserves at the start of each of its items (HeroUI's `ps-7` for them).
+        // branch that is off (HeroUI's fade of the row and of its `Label` cancelled, by the user's decision); the
+        // spacer holds the place of the glyph the items have, and `ps-7` that of the check indicator a menu with
+        // choices reserves at the start of each of its items (HeroUI's `ps-7` for them).
         <Dropdown.Item key={index} id={itemId(index)} textValue={entry.label} isDisabled className={`cursor-default data-[disabled=true]:opacity-100${entries.some(isChoice) ? " ps-7" : ""}`}>
           <span aria-hidden="true" className="size-4 shrink-0" />
-          <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted" dir="auto">{entry.label}</Label>
+          <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted opacity-100" dir="auto">{entry.label}</Label>
         </Dropdown.Item>,
       );
     } else if ("items" in entry || "panel" in entry) {

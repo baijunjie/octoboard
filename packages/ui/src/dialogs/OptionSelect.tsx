@@ -30,19 +30,39 @@ export type Option<T extends string> = {
     /** A note about the option, which assistive technology reads as its description and which is not drawn. */
     detail: string;
     /** A short note drawn under the label (why a disabled option cannot be chosen), hidden from assistive
-     * technology, which has `detail`, so a `reason` always comes with one. On a disabled option it is not
-     * faded with the rest of the row, so it stays readable. */
+     * technology, which has `detail`, so a `reason` always comes with one. */
     reason?: Reason;
   }
 );
 
-/** The fade of a disabled option's name and icon, which the row itself keeps off when it has a reason to show. */
+/** The fade of a disabled option's icon. Its name is not faded, as text must stay readable: it takes the secondary
+ * text colour instead; that departs from HeroUI's disabled look by the user's decision. */
 const FADED = "opacity-(--disabled-opacity)";
 
-/** An option's label, followed by its badge when the badge is drawn inside the label's fade. In the
- * tooltip of a clipped label the badge wraps, as the tooltip's width is bounded. */
+/** The colour of a disabled option's name. */
+const DISABLED_NAME = "text-app-muted";
+
+/** react-aria-components drops an `aria-disabled` given to a list box item, and under `disabledBehavior="selection"`
+ * sets none itself, so a disabled option is announced as one that can be chosen; it is set on the element here. */
+function markDisabled(node: HTMLElement | null, disabled: boolean | undefined) {
+  if (!node) return;
+  if (disabled) node.setAttribute("aria-disabled", "true");
+  else node.removeAttribute("aria-disabled");
+}
+
+/** An option's label, followed by its badge when the badge is drawn inside the label's fade. The two sit in a row
+ * centred on one line, as an inline pill aligned to the baseline would sit off-centre beside CJK text and lengthen
+ * the line it is on, and with it the trigger. In the tooltip of a clipped label only the badge wraps (the label stays
+ * on one line), as the tooltip's width is bounded; outside it nothing shrinks, so the row overflows and the fade clips
+ * it. */
 function OptionText({ label, badge, inTooltip }: { label: React.ReactNode; badge?: string; inTooltip?: boolean }): React.ReactElement {
-  return <>{label}{badge && <StatusBadge dir="auto" overflow={inTooltip ? "wrap" : undefined} className="ms-2 inline-block align-middle">{badge}</StatusBadge>}</>;
+  if (!badge) return <>{label}</>;
+  return (
+    <span className={inTooltip ? "flex items-center gap-2" : "inline-flex items-center gap-2 align-top"}>
+      <span className="shrink-0">{label}</span>
+      <StatusBadge dir="auto" overflow={inTooltip ? "wrap" : undefined}>{badge}</StatusBadge>
+    </span>
+  );
 }
 
 /** An option's label in its fade, with the badge inside it when there is one, and the same text as the
@@ -261,9 +281,11 @@ export function OptionSelect<T extends string>({
             <ListBox.Item
               data-list-motion={option.value}
               data-marquee-scope
-              // A disabled option with a reason is not faded as a whole: the name and icon are, and the
-              // reason keeps the secondary text colour.
-              className={option.isDisabled && option.reason ? "pe-7 data-[disabled=true]:opacity-100" : "pe-7"}
+              // A disabled option is dimmed by its name taking the secondary text colour and its icon fading;
+              // react-aria marks no option disabled under `disabledBehavior="selection"`, so nothing fades the row.
+              className="pe-7"
+              // A new callback each render, so the attribute follows `isDisabled` as it changes.
+              ref={(node: HTMLElement | null) => markDisabled(node, option.isDisabled)}
               key={option.value}
               id={option.value}
               // Type-to-select matches on, and the hidden native option reads, "label, badge";
@@ -272,18 +294,18 @@ export function OptionSelect<T extends string>({
               isDisabled={option.isDisabled}
             >
               {option.icon && (
-                <span aria-hidden="true" className={`flex shrink-0 ${option.isDisabled && option.reason ? FADED : ""}`}>
+                <span aria-hidden="true" className={`flex shrink-0 ${option.isDisabled ? FADED : ""}`}>
                   {option.icon}
                 </span>
               )}
               {option.detail ? (
                 <span className={`flex min-w-0 flex-col ${option.badge && !option.badgeInLabel ? "" : "flex-1"}`}>
-                  <FadeLabel lang={option.lang} className={option.isDisabled && option.reason ? `min-w-0 ${FADED}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
+                  <FadeLabel lang={option.lang} className={option.isDisabled ? `min-w-0 ${DISABLED_NAME}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
                   <Description className="sr-only">{option.detail}</Description>
                   {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
                 </span>
               ) : (
-                <FadeLabel lang={option.lang} className={option.badge && !option.badgeInLabel ? "min-w-0" : "min-w-0 flex-1"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
+                <FadeLabel lang={option.lang} className={`${option.badge && !option.badgeInLabel ? "min-w-0" : "min-w-0 flex-1"}${option.isDisabled ? ` ${DISABLED_NAME}` : ""}`} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
               )}
               {option.badge && !option.badgeInLabel && <StatusBadge>{option.badge}</StatusBadge>}
               <ListBox.ItemIndicator />

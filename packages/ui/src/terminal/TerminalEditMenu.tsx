@@ -8,7 +8,7 @@ import { ActionableError } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";
-import type { TerminalController } from "./TerminalController";
+import { OPTION_FORCES_SELECTION, type TerminalController } from "./TerminalController";
 
 /** Editing works on xterm's buffer and input pipeline, never on its hidden textarea's value. */
 export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }: {
@@ -26,6 +26,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
     return () => { mounted.current = false; };
   }, []);
   const [selection, setSelection] = useState("");
+  const [mouseReporting, setMouseReporting] = useState(false);
   const [inputSession, setInputSession] = useState<string>();
   const paste = () => {
     const controller = controllerRef.current;
@@ -49,15 +50,24 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         // The terminal's own selection first; failing that, what a program that selects for itself
         // (under mouse reporting) last copied.
         setSelection(controller?.selectedText || controller?.programCopiedText || "");
+        // A program that selects and copies on its own may write the clipboard itself rather than through
+        // OSC 52, leaving nothing here to copy: the item then says how to select in the terminal instead.
+        setMouseReporting(controller?.mouseReporting ?? false);
         setInputSession(controller?.inputSessionId);
         controller?.focus();
       }}
       items={[
         {
           label: t("terminal.copy"), icon: Copy, disabled: !selection,
+          reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
           onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => toastError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), undefined, t("common.copyFailedTitle"))); },
         },
-        { label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId, onClick: paste },
+        {
+          label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId,
+          // A session that cannot take input says why on the terminal itself (a spinner, the disconnected notice).
+          reason: !clipboard?.readText ? { state: t("terminal.pasteNoClipboard") } : undefined,
+          onClick: paste,
+        },
         { label: t("terminal.selectAll"), icon: TextSelect, onClick: () => controllerRef.current?.selectAll() },
       ]}
     />

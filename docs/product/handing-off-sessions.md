@@ -57,8 +57,10 @@ deleted.
 
 A session's action menu offers **Hand off** right after Switch account (where that is offered), before Archive, for a
 project session or a console session that is not archived, wherever that menu is offered. It is disabled while the
-session is *working* or *starting*, and while the session is locked, as Archive is, and while no agent other than the
-session's own can be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`).
+session is locked, as Archive is, while it is *working* or *starting*, while no agent other than the session's own can
+be picked (see "Which agents the agent pickers list" in `docs/product/consoles.md`), while a switch of its account holds
+it and while its own account's sharing is being changed; which of these show a reason under the item is in "Session
+rows" in `docs/product/sidebar-session-rows.md`.
 
 It opens the **handoff dialog**, titled "Hand off session", which opens with keyboard focus on its **Hand off**
 button, or on **Cancel** while Hand off cannot be pressed. Its first sentence names the session to be handed off; it
@@ -209,8 +211,9 @@ longer available and to choose another; **Hand off session** cannot be pressed, 
 be changed, until the user picks.
 
 **Hand off session cannot be pressed either**, and an alert at the top of the dialog says why, while the session cannot
-be handed off from its menu: it is in the middle of a turn or still starting, it is locked, a switch of its account
-holds it, or its own account's sharing is being changed. Nor while no agent other than the session's own can be picked.
+be handed off from its menu: it is locked, it is in the middle of a turn, a switch of its account holds it, its own
+account's sharing is being changed, or it is still starting; when several hold, the alert names the first in that
+order. Nor while no agent other than the session's own can be picked.
 Where the chosen account's last change of sharing is incomplete and no change of it is running, an amber warning mark
 inside the account picker of **Hand off to**, named that sharing may be incomplete, says so instead of
 asking again on confirming: its popover says that the account's last sharing change did not finish, so its

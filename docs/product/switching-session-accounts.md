@@ -177,8 +177,8 @@ stopped on a usage limit included, nor the exceptions (see "Continuing after a s
   account the user turned off left out, unless it is the one chosen, when it is listed with its reason and not offered
   (the call is refused before the dialog when the account it asks for is turned off then, so this is an account turned
   off while the dialog is open), and an account whose sharing change runs — or every other account while the session's
-  own account's sharing changes or a switch holds the session — listed with the reason and not offered. It starts on
-  the account the call asked for.
+  own account's sharing changes or a switch holds the session — listed with its usage, with no reason under its name,
+  and not offered. It starts on the account the call asked for.
 - The collapsed **Advanced** section — the session's model and reasoning effort, starting on what the session would be
   launched with (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`), the models listed being
   those of the account chosen. Its note says that a value the user changes stays the session's own from then on. Only

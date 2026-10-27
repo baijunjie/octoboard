@@ -653,7 +653,14 @@ impl AppState {
                 &[("session", id)],
             ));
         }
-        self.store.set_session_locked(id, locked)
+        if locked {
+            if !self.store.set_session_locked_unless_archived(id)? {
+                return Err(crate::coordinator::session_archived(id));
+            }
+        } else {
+            self.store.set_session_locked(id, false)?;
+        }
+        Ok(())
     }
 
     /// Where the handoff packages are kept; see `crate::handoff`.

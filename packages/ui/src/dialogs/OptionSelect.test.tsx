@@ -116,3 +116,47 @@ it("marks the select invalid and describes it by its error, which stands under i
   render();
   expect(container.querySelector('[role="alert"]')).toBeNull();
 });
+
+it("dims a disabled option's name by colour and its icon by fade, and announces it, whether or not it gives a reason", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const icon = <svg data-testid="icon" />;
+  act(() => root.render(<OptionSelect label="Account" value="a" onChange={() => {}} options={[
+    { value: "a", label: "Free", icon },
+    { value: "b", label: "Busy", icon, isDisabled: true },
+    { value: "c", label: "Used up", icon, isDisabled: true, detail: "Limit reached", reason: { state: "Limit reached" } },
+  ]} />));
+  await act(async () => container.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
+  const option = (name: string) => [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.textContent?.startsWith(name))!;
+  expect(option("Free").getAttribute("aria-disabled")).toBeNull();
+  expect(option("Free").querySelector('[class*="text-app-muted"]')).toBeNull();
+  expect(option("Free").querySelector('[class*="opacity-(--disabled-opacity)"]')).toBeNull();
+  for (const name of ["Busy", "Used up"]) {
+    expect(option(name).getAttribute("aria-disabled")).toBe("true");
+    // The icon fades; the name takes the muted colour and is never faded by opacity.
+    expect(option(name).querySelector('[class*="opacity-(--disabled-opacity)"]')?.querySelector("svg")).not.toBeNull();
+    const nameBox = [...option(name).querySelectorAll<HTMLElement>('[class*="text-app-muted"]')].find((el) => el.textContent?.startsWith(name))!;
+    expect(nameBox.className).not.toContain("opacity-");
+    expect(option(name).className).not.toContain("opacity-100");
+  }
+  expect(option("Busy").textContent).toBe("Busy");
+});
+
+it("keeps aria-disabled in step with an option that becomes disabled and enabled again", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const render = (isDisabled: boolean) => act(() => root.render(<OptionSelect label="Account" value="a" onChange={() => {}} options={[
+    { value: "a", label: "Free" },
+    { value: "b", label: "Busy", isDisabled },
+  ]} />));
+  render(false);
+  await act(async () => container.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
+  const busy = () => [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.textContent?.startsWith("Busy"))!;
+  expect(busy().getAttribute("aria-disabled")).toBeNull();
+  render(true);
+  expect(busy().getAttribute("aria-disabled")).toBe("true");
+  render(false);
+  expect(busy().getAttribute("aria-disabled")).toBeNull();
+});

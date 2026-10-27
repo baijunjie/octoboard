@@ -3413,7 +3413,8 @@ pub(super) mod tests {
     async fn a_locked_session_cannot_archive_itself() {
         let (state, _dir) = peer_state("archive-self-locked");
         with_status(&state, "mine", SessionStatus::Archived);
-        state.set_session_locked("mine", true).unwrap();
+        // Straight to the store: locking an archived session is refused, an old lock is not.
+        state.store.set_session_locked("mine", true).unwrap();
         let message = archive_self_error(&state, "starter").await;
         assert!(message.contains("`mine` (\"Work mine\")"), "{message}");
         state.set_session_locked("mine", false).unwrap();

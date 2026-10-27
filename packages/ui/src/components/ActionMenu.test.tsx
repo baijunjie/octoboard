@@ -271,6 +271,7 @@ describe("a note", () => {
     // Drawn as quiet text, not as a faded (disabled) item.
     expect(note.className).toContain("data-[disabled=true]:opacity-100");
     expect(note.querySelector("label, span:not([aria-hidden])")?.className).toContain("text-app-muted");
+    expect(note.querySelector('[data-slot="label"]')?.className).toContain("opacity-100");
     expect(note.getAttribute("aria-disabled")).toBe("true");
     await act(async () => void menu.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
     await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
@@ -343,6 +344,26 @@ describe("a disabled item", () => {
     expect(onOff).not.toHaveBeenCalled();
     expect(radio("Off").getAttribute("aria-checked")).toBe("false");
     expect(radio("Current").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("is dimmed by its label's colour and its icon's fade, never by fading the row, with or without a reason", async () => {
+    await openMenu([
+      { label: "Plain", icon: Trash2, disabled: true, onClick: () => {} },
+      { label: "Reasoned", icon: Trash2, reason: { state: "used up" }, onClick: () => {} },
+      { label: "On", icon: Trash2, onClick: () => {} },
+    ]);
+    const item = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith(name))!;
+    for (const name of ["Plain", "Reasoned"]) {
+      expect(item(name).className).toContain("data-[disabled=true]:opacity-100");
+      expect(item(name).querySelector('[data-slot="label"]')?.className).toContain("text-app-muted");
+      // HeroUI fades `[data-disabled=true] .label`; the class cancels it (jsdom has no CSS to measure).
+      expect(item(name).querySelector('[data-slot="label"]')?.className).toContain("opacity-100");
+      expect(item(name).querySelector('span.flex.shrink-0[class*="opacity-(--disabled-opacity)"] svg')).not.toBeNull();
+    }
+    expect(item("On").className).not.toContain("opacity-100");
+    expect(item("On").querySelector('[data-slot="label"]')?.className).not.toContain("text-app-muted");
+    expect(item("On").querySelector('[data-slot="label"]')?.className).not.toContain("opacity-100");
+    expect(item("On").querySelector('[class*="opacity-(--disabled-opacity)"]')).toBeNull();
   });
 
   it("with a reason is disabled, shows the reason under its label and is named with it", async () => {

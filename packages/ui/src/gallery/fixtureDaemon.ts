@@ -592,6 +592,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
         case "set_session_locked": {
           const session = store.getState().sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          if (body.locked && session.status === "archived") return fail({ code: "session_archived", params: { session: body.session }, message: "An archived session cannot be locked" });
           store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, { ...session, locked: body.locked }) }));
           return { type: "ack" };
         }

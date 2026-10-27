@@ -15,7 +15,7 @@ let root: Root;
 let container: HTMLDivElement;
 let target: HTMLDivElement;
 let input: HTMLTextAreaElement;
-let controller: { selectedText: string; programCopiedText?: string; inputSessionId?: string; selectAll: () => void; paste: ReturnType<typeof vi.fn>; focus: () => void };
+let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; paste: ReturnType<typeof vi.fn>; focus: () => void };
 let clipboard: ClipboardCapability | undefined;
 let sessionId: string;
 const controllerRef = { current: undefined as TerminalController | undefined };
@@ -71,6 +71,18 @@ it("opens on the hidden input without a visible trigger or clipboard read", asyn
   expect(item("Paste").getAttribute("aria-disabled")).not.toBe("true");
 });
 
+it.each([
+  { mouseReporting: true, programCopiedText: undefined, hint: true },
+  { mouseReporting: true, programCopiedText: "program copy", hint: false },
+  { mouseReporting: false, programCopiedText: undefined, hint: false },
+])("says how to select in the terminal only when a program's drag left nothing to copy (%o)", async ({ mouseReporting, programCopiedText, hint }) => {
+  controller.mouseReporting = mouseReporting;
+  controller.programCopiedText = programCopiedText;
+  await open();
+  const copy = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent?.startsWith("Copy"))!;
+  expect(/(Option|Shift)-drag to select/.test(copy.textContent ?? "")).toBe(hint);
+});
+
 it("selects terminal output, then copies the selection captured at opening", async () => {
   await open();
   await choose("Select all");
@@ -112,13 +124,17 @@ it("dismisses on session switch and never redirects a pending clipboard read", a
   expect(controller.paste).not.toHaveBeenCalled();
 });
 
-it.each(["read", "input", "clipboard"])("disables Paste without %s", async (missing) => {
+it.each([
+  ["read", "Clipboard unavailable"],
+  ["input", ""],
+  ["clipboard", "Clipboard unavailable"],
+])("disables Paste without %s, giving a reason only for the clipboard", async (missing, reason) => {
   if (missing === "read") clipboard!.readText = undefined;
   if (missing === "input") controller.inputSessionId = undefined;
   if (missing === "clipboard") clipboard = undefined;
   render();
   await open();
-  expect(item("Paste").getAttribute("aria-disabled")).toBe("true");
+  expect(item(`Paste${reason}`).getAttribute("aria-disabled")).toBe("true");
 });
 
 it("copies the selection through the document without a clipboard, keeping Copy enabled", async () => {

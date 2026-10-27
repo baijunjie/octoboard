@@ -80,14 +80,15 @@ describe("the Switch account entry", () => {
     expect(menu([spent("w")], 7_200_000)[1].reason).toBeUndefined();
   });
 
-  it("disables an account whose sharing change runs, with why, whatever its quota, and never the current one", () => {
+  it("disables an account whose sharing change runs, without a reason, whatever its quota, and never the current one", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
     const entry = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], undefined, { sharing })
       .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
-    const [current, other] = entry.items as { reason?: { state: string }; description?: string }[];
+    const [current, other] = entry.items as { disabled?: boolean; reason?: { state: string }; description?: string }[];
     expect(current.reason).toBeUndefined();
-    expect(other.reason).toEqual({ state: "Changing sharing" });
-    expect(other.description).toBe("Unavailable while its sharing is being changed");
+    expect(other.disabled).toBe(true);
+    expect(other.reason).toBeUndefined();
+    expect(other.description).toBeUndefined();
     const free = sessionMenu(t, {} as SidebarHandlers, project(), [account("w", "claude")], undefined, { sharing: new Map() })
       .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
     expect((free.items[1] as { reason?: unknown }).reason).toBeUndefined();
@@ -97,24 +98,26 @@ describe("the Switch account entry", () => {
     expect((onto.items[1] as { reason?: unknown }).reason).toBeUndefined();
   });
 
-  it("disables every other account while the session's own account is changing its sharing", () => {
+  it("disables every other account, without a reason, while the session's own account is changing its sharing", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
     const entry = sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], undefined, { sharing })
       .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
-    const [dflt, current] = entry.items as { reason?: { state: string }; selected: boolean }[];
+    const [dflt, current] = entry.items as { disabled?: boolean; reason?: { state: string }; description?: string; selected: boolean }[];
     expect(current.selected).toBe(true);
     expect(current.reason).toBeUndefined();
-    expect(dflt.reason).toEqual({ state: "Account changing sharing" });
-    expect((dflt as { description?: string }).description).toBe("Unavailable while this session’s account is having its sharing changed");
+    expect(dflt.disabled).toBe(true);
+    expect(dflt.reason).toBeUndefined();
+    expect(dflt.description).toBeUndefined();
   });
 
-  it("disables Hand off with the same reason while the session's own account is changing its sharing", () => {
+  it("disables Hand off, without a reason, while the session's own account is changing its sharing", () => {
     const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
     const handOff = (opts: { sharing?: typeof sharing }) => sessionMenu(t, {} as SidebarHandlers, project({ account_id: "w", config_dir: "/home/w" }), [account("w", "claude")], undefined, opts)
       .find((entry) => typeof entry === "object" && "label" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; description?: string };
-    expect(handOff({ sharing }).reason).toEqual({ state: "Account changing sharing" });
-    expect(handOff({ sharing }).description).toBe("Unavailable while this session’s account is having its sharing changed");
-    expect(handOff({}).reason).toBeUndefined();
+    expect(handOff({ sharing }).disabled).toBe(true);
+    expect(handOff({ sharing }).reason).toBeUndefined();
+    expect(handOff({ sharing }).description).toBeUndefined();
+    expect(handOff({}).disabled).toBe(false);
     expect(handOff({ sharing: new Map() }).reason).toBeUndefined();
   });
 
@@ -122,11 +125,13 @@ describe("the Switch account entry", () => {
     const held = project({ account_id: "w", config_dir: "/home/w", bound_to: "hub", switching_account: true });
     const menu = sessionMenu(t, {} as SidebarHandlers, held, [account("w", "claude")], undefined, {});
     const entry = menu.find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu;
-    const [dflt, current] = entry.items as { reason?: { state: string }; selected: boolean }[];
+    const [dflt, current] = entry.items as { disabled?: boolean; reason?: { state: string }; selected: boolean }[];
     expect(current.reason).toBeUndefined();
-    expect(dflt.reason).toEqual({ state: "Switching account" });
+    expect(dflt.disabled).toBe(true);
+    expect(dflt.reason).toBeUndefined();
     const item = (label: string) => menu.find((candidate) => typeof candidate === "object" && "label" in candidate && candidate.label === label) as { disabled?: boolean; reason?: { state: string } };
-    expect(item("Hand off").reason).toEqual({ state: "Switching account" });
+    expect(item("Hand off").disabled).toBe(true);
+    expect(item("Hand off").reason).toBeUndefined();
     expect(item("Unbind").disabled).toBe(true);
   });
 
@@ -151,18 +156,59 @@ describe("the Switch account entry", () => {
 });
 
 describe("the Hand off entry", () => {
-  const item = (session: Session, handlers = {} as SidebarHandlers) =>
-    sessionMenu(t, handlers, session, [], undefined).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; onClick: () => void } | undefined;
+  const item = (session: Session, handlers = {} as SidebarHandlers, canHandOff = true) =>
+    sessionMenu(t, handlers, session, [], undefined, { canHandOff }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; onClick: () => void } | undefined;
 
   it.each([
-    ["idle", false, true],
-    ["waiting_user", false, true],
-    ["interrupted", false, true],
-    ["working", false, false],
-    ["starting", false, false],
-    ["idle", true, false],
-  ] as const)("on a %s session (locked: %s) is enabled: %s", (status, locked, enabled) => {
-    expect(item(sessionOf("s", "c", "p", "Title", status, { locked }))?.disabled ?? false).toBe(!enabled);
+    ["idle", false, undefined],
+    ["waiting_user", false, undefined],
+    ["interrupted", false, undefined],
+    ["working", false, "Session busy"],
+    ["starting", false, undefined],
+    ["idle", true, "Session locked"],
+  ] as const)("on a %s session (locked: %s) is disabled with the reason %s", (status, locked, reason) => {
+    const handOff = item(sessionOf("s", "c", "p", "Title", status, { locked }));
+    expect(handOff?.disabled ?? false).toBe(reason !== undefined || status === "starting");
+    expect(handOff?.reason?.state).toBe(reason);
+  });
+
+  it("still says the session is locked while an account switch holds it", () => {
+    const handOff = item(sessionOf("s", "c", "p", "Title", "idle", { locked: true, switching_account: true }));
+    expect(handOff?.disabled).toBe(true);
+    expect(handOff?.reason?.state).toBe("Session locked");
+  });
+
+  it("lets a lasting hold win over a brief one, so the reason shown is the one that lasts", () => {
+    const sharing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 1, total: 3, item: "skills" } }]]);
+    const handOff = (session: Session, opts: { sharing?: typeof sharing; canHandOff?: boolean }) => sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude")], undefined, opts)
+      .find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string } };
+    const onAccount = (extra: Partial<Session>) => sessionOf("s", "c", "p", "Title", "idle", extra);
+    const own = { account_id: "w", config_dir: "/home/w" };
+    expect(handOff(onAccount({ ...own, status: "working" }), { sharing })).toMatchObject({ disabled: true, reason: { state: "Session busy" } });
+    expect(handOff(onAccount({ ...own, status: "starting" }), { canHandOff: false })).toMatchObject({ disabled: true, reason: { state: "No other agent" } });
+    expect(handOff(onAccount({ ...own, switching_account: true }), { canHandOff: false })).toMatchObject({ disabled: true, reason: { state: "No other agent" } });
+    expect(handOff(onAccount({ ...own, locked: true }), { canHandOff: false })).toMatchObject({ reason: { state: "Session locked" } });
+    expect(handOff(onAccount({ ...own, status: "working" }), { canHandOff: false })).toMatchObject({ reason: { state: "Session busy" } });
+    expect(handOff(onAccount({ ...own, switching_account: true }), { sharing }).reason).toBeUndefined();
+  });
+
+  it("says why Archive and Delete are unavailable, and leaves Unbind's brief states unexplained", () => {
+    const entry = (session: Session, label: string, hasBoundSessions = true) =>
+      sessionMenu(t, {} as SidebarHandlers, session, [], undefined, { hasBoundSessions }).find((candidate) => typeof candidate === "object" && candidate.label === label) as { disabled?: boolean; reason?: { state: string } } | undefined;
+    const locked = sessionOf("s", "c", "p", "Title", "idle", { locked: true });
+    expect(entry(locked, "Archive")).toMatchObject({ disabled: true, reason: { state: "Session locked" } });
+    expect(entry({ ...locked, status: "archived" }, "Delete")).toMatchObject({ disabled: true, reason: { state: "Session locked" } });
+    expect(entry(sessionOf("s", "c", "p", "Title", "idle"), "Archive")?.reason).toBeUndefined();
+    const bound = sessionOf("s", "c", "p", "Title", "starting", { bound_to: "h" });
+    expect(entry(bound, "Unbind")).toMatchObject({ disabled: true });
+    expect(entry(bound, "Unbind")?.reason).toBeUndefined();
+    expect(entry({ ...bound, status: "idle" }, "Unbind")?.reason).toBeUndefined();
+  });
+
+  it("says no other agent could take the session over", () => {
+    const handOff = item(sessionOf("s", "c", "p", "Title", "idle"), undefined, false);
+    expect(handOff?.disabled).toBe(true);
+    expect(handOff?.reason).toEqual({ state: "No other agent" });
   });
 
   it("is offered for console sessions and not for an archived one, and opens the hand-off dialog", () => {

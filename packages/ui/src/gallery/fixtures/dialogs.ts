@@ -475,6 +475,13 @@ const unusedState = snapshotState({
     unusedGrok,
   ],
 });
+// An unused session the user locked: its Delete is refused, saying so.
+const lockedUnused = sessionOf("s-locked-unused", console_.id, web.id, "Sketch the onboarding copy", "idle", { has_conversation: false, locked: true, started_at: minutesAgo(6) });
+const lockedUnusedState = snapshotState({
+  consoles: [console_],
+  projects: [web],
+  sessions: [sessionOf("s-web-used", console_.id, web.id, "Fix the summary layout", "working"), lockedUnused],
+});
 const openUnusedMenu = (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title: unusedSession.title }));
 const openSwitchAccount = (title: string) => [
   (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title })),
@@ -589,6 +596,16 @@ const backgroundArchiveState = snapshotState({
 });
 
 export const dialogScenarios: Scenario[] = [
+  {
+    id: "sidebar-session-menu-unused-locked",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Menu of a locked session that was never used",
+    description: "The final Delete is greyed out with \"Session locked\" under its name, so the never-used session cannot be deleted; Unlock stays available.",
+    state: lockedUnusedState,
+    sessionRecords: { [lockedUnused.id]: "absent" },
+    steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: lockedUnused.title }))],
+  },
   {
     id: "sidebar-session-menu-unused",
     group: "Sidebar sessions",
@@ -775,7 +792,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "Project sessions agent choices",
-    description: "The list offers Same as console sessions (a grey Claude Code badge after it, beside the faded icon), Claude Code, and Codex as the held value, with a grey Not installed badge after its name in the option as well as in the field; Grok Build, also missing, is left out.",
+    description: "The list offers Same as console sessions (a grey Claude Code badge after it, beside the faded icon), Claude Code, and Codex as the held value, with its name in the secondary text colour, as an option that cannot be chosen, and a grey Not installed badge centred on the line after it (the badge shows in the field as well as in the option; the name is muted only in the option); Grok Build, also missing, is left out.",
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.edit")),

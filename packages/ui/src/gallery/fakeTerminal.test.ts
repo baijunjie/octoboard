@@ -39,6 +39,18 @@ it("preserves the gallery's default terminal output", async () => {
   socket.close();
 });
 
+it("draws the default sample with mouse reporting turned on for the mouse behaviour", async () => {
+  vi.useFakeTimers();
+  installFakeTerminal();
+  const socket = new WebSocket(terminalFixtureUrl("mouse", "gallery-session"));
+  let output = "";
+  socket.addEventListener("message", (event) => { output = new TextDecoder().decode(event.data); });
+  await vi.runAllTimersAsync();
+  expect(output).toContain("Welcome to Claude Code");
+  expect(output.endsWith("\x1b[?1002h\x1b[?1006h")).toBe(true);
+  socket.close();
+});
+
 /** The sample's rows as `brokenUrlsAt` reads them, after `clear` and the colour codes are stripped.
  * `cols` pads each row out to the terminal's width, which is what a real buffer does with the cells
  * after a piece that stops short. */
