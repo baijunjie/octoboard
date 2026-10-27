@@ -290,17 +290,24 @@ pub(crate) fn output_containing(live: &LiveSession, needle: &str) -> String {
 /// What a stand-in session has heard once a marker written to it now has arrived, so that an
 /// absence asserted in it is one of a reader that has caught up (its reader thread fills the output
 /// some time after a write). The session must have a process that takes messages.
+///
+/// Each call writes a marker of its own: one a call before left in the output would be found at
+/// once, before the reader has caught up with what was written since.
 pub(crate) fn heard_after_marker(state: &Arc<AppState>, live: &LiveSession) -> String {
-    const MARKER: &str = "marker-after-the-call";
+    static NEXT: AtomicU32 = AtomicU32::new(0);
+    let marker = format!(
+        "marker-after-the-call-{}",
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    );
     crate::reporting::write_message(
         state,
         &live.id,
-        MARKER,
+        &marker,
         crate::reporting::WhenBlocked::Queue,
     )
     .unwrap();
-    let heard = output_containing(live, MARKER);
-    assert!(heard.contains(MARKER), "{heard}");
+    let heard = output_containing(live, &marker);
+    assert!(heard.contains(&marker), "{heard}");
     heard
 }
 

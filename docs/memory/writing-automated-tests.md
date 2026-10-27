@@ -84,17 +84,25 @@ To recognise it: failures only under a parallel run, a run far slower than usual
 suite stalling for seconds in the same windows. That is the machine, not the code under test: do
 not raise production timeouts or serialize the suite over it.
 
-## Assert that a stand-in session was sent nothing only behind a marker sent after the call
+## Assert a stand-in session was sent nothing behind a marker, and that it was sent something by waiting for it
 
-Applies to daemon tests asserting that a message did not reach a stand-in session: an owner not told, a session not
-written to. A stand-in's output is filled in by its reader thread some time after the write, so reading
-`recent_output` straight after the call under test and asserting the text is absent passes whether or not the message
-was sent, and on a stand-in with no reader thread (`idle_stand_in`) it is always empty.
+Applies to daemon tests reading what reached a stand-in session: an owner told or not told, a session written to or
+not. A stand-in's output is filled in by its reader thread some time after the write, so reading `recent_output`
+straight after the call under test passes an absence whether or not the message was sent, and on a stand-in with no
+reader thread (`idle_stand_in`) it is always empty.
 
-So use a stand-in started with `test_support::running`, and after the call send it a marker through
-`reporting::write_message`, which queues every message so none overtakes one sent before it. Wait for the marker with
-`output_containing`, assert the marker is in what that returns (once `PATIENCE` runs out it returns the output as it
-stands, marker or not), and only then assert that the unwanted text is absent.
+So use a stand-in started with `test_support::running`, and read what it was sent through
+`test_support::heard_after_marker`: it sends a marker of its own through `reporting::write_message`, which queues
+every message so none overtakes one sent before it, waits for the marker to arrive, and only then hands back the
+output for the absence to be asserted in.
+
+The marker orders only against writes already made when it is sent. Some daemon paths write into a session from a
+task they spawn after recording the state a test can wait on — `AppState::watch_exit` saves the session's `ended_at`
+and only then spawns the task that tells the owner — so a marker sent once that state is seen can reach the stand-in
+first. A test asserting such a message is present therefore waits for the message's own text with
+`test_support::output_containing` and asserts it in what that returns, keeping the marker only for what must be
+absent or counted afterwards; reading behind the marker and asserting presence fails intermittently under the full
+suite's load. The marker does not make an absence of such a spawned write meaningful either.
 
 ## Seed the agent's model list before a daemon test gives anything a model or an effort
 
