@@ -96,7 +96,17 @@ export function ErrorAlerts({ daemon }: { daemon?: Daemon }): React.ReactElement
 
 function ErrorAlertHost(): React.ReactElement | null {
   const t = useT();
-  const [error] = useSyncExternalStore(errorAlerts.subscribe, errorAlerts.getSnapshot);
+  const [raised] = useSyncExternalStore(errorAlerts.subscribe, errorAlerts.getSnapshot);
+  // Show an alert only from the commit after the one it was raised in. A dialog opened in the same commit (a press
+  // that opens it and reports a failure in one task) hides the rest of the page with react-aria's `ariaHideOutside`
+  // from a passive effect of that commit: with the alert already in the document, that dialog's would hide the alert
+  // too, and the alert's own, which only hides what lies outside it, would never show it again, so the alert stays
+  // inert and the dialog, hidden in turn, drops focus to `<body>`. React runs a commit's passive effects before it
+  // renders again, so the dialog's has run by the time the alert mounts. The alert is set from a layout effect, which
+  // makes that render a synchronous one in the same task, before any frame and before the dialog's hiding answers the
+  // alert's insertion, and in time for the focusing below.
+  const [error, setError] = useState<typeof raised>();
+  useLayoutEffect(() => { setError(raised); }, [raised]);
   const acknowledge = useRef<HTMLButtonElement>(null);
   const issue = useIssueReport(error?.classification.kind === "unexpected" ? alertFailures(error, "report") : undefined);
   // Focus the alert in the render after the one that mounted it, before the task that raised it ends, and nowhere
