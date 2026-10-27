@@ -950,10 +950,8 @@ async fn handle_inner(
         }
 
         RequestBody::ListPages { console_session } => {
-            let session = state.session_record(&console_session)?;
-            if session.role != Role::Console {
-                return Err(CodedError::unknown_session(&console_session));
-            }
+            // A project session can have pages too; only a session that does not exist is unknown.
+            state.session_record(&console_session)?;
             let pages = state.store.list_pages(&console_session)?;
             Ok(Some(Event::PageList {
                 id: request_id,
@@ -3028,8 +3026,8 @@ async fn check_open_with(
     Ok((agent, account_id))
 }
 
-/// The model and reasoning effort a user changed for a switch, each absent to leave the session's
-/// own override as it is, `Some(None)` for the agent's own default.
+/// The model and reasoning effort a user changed for a switch or a reopen, each absent to leave the
+/// session's own override as it is, `Some(None)` for the agent's own default.
 #[derive(Default)]
 pub(crate) struct LaunchEdit {
     pub model: Option<Option<String>>,
@@ -3446,6 +3444,49 @@ async fn resume_session_with(
     terminal_appearance: Option<TerminalAppearance>,
     shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
 ) -> Result<()> {
+    resume_session_with_launch(
+        state,
+        id,
+        instruction,
+        terminal_appearance,
+        LaunchEdit::default(),
+        shell_snapshot,
+    )
+    .await
+}
+
+/// [`resume_session`] that also changes the model and reasoning effort the session is reopened
+/// with, as an owner reopening it over MCP asks. They are checked against what the session's agent
+/// offers under its own account before anything is launched, recorded as the session's own just
+/// before its relaunch, and put back when the relaunch fails. Any archived owner reopened with it
+/// keeps its settings.
+pub(crate) async fn resume_session_edited(
+    state: &Arc<AppState>,
+    id: &str,
+    instruction: Option<&str>,
+    terminal_appearance: Option<TerminalAppearance>,
+    launch_edit: LaunchEdit,
+) -> Result<()> {
+    resume_session_with_launch(
+        state,
+        id,
+        instruction,
+        terminal_appearance,
+        launch_edit,
+        env_shell::launch_snapshot,
+    )
+    .await
+}
+
+/// [`resume_session_with`] with the model and effort to reopen the session with.
+async fn resume_session_with_launch(
+    state: &Arc<AppState>,
+    id: &str,
+    instruction: Option<&str>,
+    terminal_appearance: Option<TerminalAppearance>,
+    launch_edit: LaunchEdit,
+    shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+) -> Result<()> {
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
     // before the record is read, so a delete cannot slip in between reading and launching.
     let claim = state.begin_launch(id)?;
@@ -3463,6 +3504,14 @@ async fn resume_session_with(
     if target.judgement.resumability == agent_records::Resumability::Unresumable {
         return Err(conversation_unresumable(&target.session));
     }
+    // Refused for a value the agent does not offer before anything is launched or recorded.
+    let overrides = checked_launch_overrides(
+        state,
+        &target.session,
+        target.session.account_id.clone(),
+        launch_edit,
+    )
+    .await?;
     // Before any owner is launched, so a failed unarchive leaves the whole group as it was.
     unarchive_rollout(&target, &shell).await?;
     for checked in checked_owners {
@@ -3501,7 +3550,10 @@ async fn resume_session_with(
         )
         .await?;
     }
-    relaunch_session(
+    if let Some((model, effort)) = &overrides {
+        state.set_session_launch_overrides(id, model, effort)?;
+    }
+    let relaunched = relaunch_session(
         state,
         &claim,
         id,
@@ -3510,7 +3562,19 @@ async fn resume_session_with(
         Some(shell),
         terminal_appearance,
     )
-    .await
+    .await;
+    if relaunched.is_err() && overrides.is_some() {
+        // A reopen that fails leaves the session as it was, the model and effort included.
+        let before = &target.session;
+        if let Err(revert) = state.set_session_launch_overrides(id, &before.model, &before.effort) {
+            tracing::warn!(
+                session = %id,
+                %revert,
+                "putting the session's model and effort back failed"
+            );
+        }
+    }
+    relaunched
 }
 
 /// Refuses, before a request to resume `id` is put to the user, what [`resume_session`] would
@@ -11549,6 +11613,69 @@ mod tests {
         assert_eq!(after.ended_at, Some(5));
     }
 
+    /// A reopen that changes the model and effort refuses a value the agent does not offer before
+    /// anything is launched or recorded, and puts the session's own back when the launch fails.
+    #[tokio::test]
+    async fn a_reopen_with_another_model_is_checked_and_put_back_when_it_fails() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-reopen-launch-edit");
+        state
+            .store
+            .insert_session(&Session {
+                ended_at: Some(5),
+                model: Some(Some("sonnet".to_string())),
+                ..project_session("s", Agent::Claude, SessionStatus::Archived)
+            })
+            .unwrap();
+        let edit = |model: &str, effort: Option<&str>| LaunchEdit {
+            model: Some(Some(model.to_string())),
+            effort: effort.map(|effort| Some(effort.to_string())),
+        };
+
+        let err = resume_session_with_launch(
+            &state,
+            "s",
+            None,
+            None,
+            edit("gpt-9", None),
+            stub_shell(&dir),
+        )
+        .await
+        .expect_err("model not offered");
+        assert_eq!(code_of(&err), error_code::INVALID_LAUNCH_SETTING);
+        let err = resume_session_with_launch(
+            &state,
+            "s",
+            None,
+            None,
+            edit("opus", Some("extreme")),
+            stub_shell(&dir),
+        )
+        .await
+        .expect_err("effort not offered");
+        assert_eq!(code_of(&err), error_code::INVALID_LAUNCH_SETTING);
+        let after = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(after.model, Some(Some("sonnet".to_string())));
+
+        // Offered, so recorded for the launch, which fails: the project's directory does not exist.
+        let err = resume_session_with_launch(
+            &state,
+            "s",
+            None,
+            None,
+            edit("opus", Some("high")),
+            stub_shell(&dir),
+        )
+        .await
+        .expect_err("the project's directory does not exist");
+        assert_eq!(code_of(&err), error_code::DIRECTORY_UNREACHABLE);
+        let after = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Archived);
+        assert_eq!(
+            (after.model, after.effort),
+            (Some(Some("sonnet".to_string())), None)
+        );
+    }
+
     const AGENT_ID: &str = "11111111-2222-3333-4444-555555555555";
 
     /// An archived session of `agent` with a conversation, pinned to `account`, archived at 5.
@@ -13816,10 +13943,15 @@ mod tests {
             state.store.insert_page(&page).unwrap();
         }
 
-        // Pages are listed by console session only: a project session is not one.
+        // A project session that faces the user can have pages too; only a session that does not
+        // exist is refused.
         state
             .store
             .insert_session(&bare_session("worker", Role::Project))
+            .unwrap();
+        state
+            .store
+            .insert_page(&page_of("w-1", "worker", 5))
             .unwrap();
         let listing = |session: &str| {
             handle(
@@ -13834,7 +13966,11 @@ mod tests {
             listing("owner-a").await.unwrap(),
             Some(Event::PageList { ref pages, .. }) if pages.len() == 2
         ));
-        let refused = listing("worker").await.expect_err("not a console session");
+        assert!(matches!(
+            listing("worker").await.unwrap(),
+            Some(Event::PageList { ref pages, .. }) if pages.len() == 1
+        ));
+        let refused = listing("nobody").await.expect_err("no such session");
         assert_eq!(code_of(&refused), error_code::UNKNOWN_SESSION);
 
         let refused = submit_page(&state, "a-old", serde_json::json!({}))

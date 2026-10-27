@@ -29,6 +29,8 @@ export interface Preferences {
    * are open (none open is no pane) and their shares of its height. An owner left out has every one of
    * its kinds open, the app's default. */
   panelStacks?: Partial<Record<OwnerKind, { open: PanelKind[]; shares: Record<string, number> }>>;
+  /** The project sessions, by id, whose Report panel the user has closed; a session left out has it open. */
+  closedReportPanels?: string[];
   /** The console the sidebar shows, and what is in focus mode. */
   sidebarConsole?: string;
   sidebarFocus?: `project:${string}` | `consoleSession:${string}`;

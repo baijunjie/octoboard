@@ -78,17 +78,19 @@ keyboard focus. These keys do not clear the choice while focus is on an option i
 the session dialog explicitly chooses the agent's own default for that value.
 
 What is stored is what was given, trimmed, with a blank value treated as the agent's own default. A value is checked
-when it is saved for a console or a project, or given to a session as it is opened: a model must be one the list in "The
-models offered" holds, and an effort one of the levels "The reasoning effort offered" gives for the model the console,
-project or session ends up with, both read for the account that agent's sessions would run under there. Where a project
-or a session sets an effort but no model of its own, the model it ends up with is the one it inherits — for a project,
-its console's project session model for that agent; for a session, as in the defaults above — and the effort is checked
-against that. Only the given values are checked: in a pair with one value given and the other inherited, the inherited
-one is not. A value the agent does not offer is refused, with a message naming it, whether it came from a dialog or from
-a console session's tool (see `docs/product/agent-settings-tools.md`). Only a value being changed is checked: one left
-as it is is never checked again, so a stored value the current list does not hold is kept, offered last and marked as
-not in the list, and the dialog never silently changes a setting. A list that could not be read (see the last section)
-checks nothing. Nothing is checked at launch, and a configuration import stores its document's values unchecked.
+when it is saved for a console or a project, or given to a session as it is opened or as its owner reopens it with
+`reopen_session` (see "The console session's tools" in `docs/product/hub-orchestration.md`): a model must be one the
+list in "The models offered" holds, and an effort one of the levels "The reasoning effort offered" gives for the model
+the console, project or session ends up with, both read for the account that agent's sessions would run under there.
+Where a project or a session sets an effort but no model of its own, the model it ends up with is the one it inherits —
+for a project, its console's project session model for that agent; for a session, as in the defaults above — and the
+effort is checked against that. Only the given values are checked: in a pair with one value given and the other
+inherited, the inherited one is not. A value the agent does not offer is refused, with a message naming it, whether it
+came from a dialog or from a session's tool (see `docs/product/agent-settings-tools.md`). Only a value being changed is
+checked: one left as it is is never checked again, so a stored value the current list does not hold is kept, offered
+last and marked as not in the list, and the dialog never silently changes a setting. A list that could not be read (see
+the last section) checks nothing. Nothing is checked at launch, and a configuration import stores its document's values
+unchecked.
 
 ## The models offered
 

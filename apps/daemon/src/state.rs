@@ -193,8 +193,11 @@ pub struct AppState {
     /// `git_status::due_for_check` — a second guard next to `git_checks` above, needed because that
     /// one only stops two checks from overlapping and does nothing about several clients each
     /// polling on their own 5-minute phase. Entries are removed wherever the project's `GitStatus`
-    /// is, by `remove_git_status`, so a reused project id never inherits a stale timestamp.
-    git_check_completed: Mutex<HashMap<String, Instant>>,
+    /// is, by `remove_git_status`, so a reused project id never inherits a stale timestamp. Each
+    /// carries the wall-clock time too, in milliseconds since the epoch: the `Instant` stops while
+    /// the machine sleeps, which suits the floor but not telling an agent how long ago the check
+    /// was.
+    git_check_completed: Mutex<HashMap<String, (Instant, i64)>>,
     /// Per repository, the gate every write to its branch origins takes and when rows were last
     /// added (`crate::branch_origin`).
     pub branch_origins: crate::branch_origin::Gates,
@@ -2680,6 +2683,28 @@ impl AppState {
             .cloned()
     }
 
+    /// One project's git status as clients see it, the push overlay included, and how long ago its
+    /// last check completed (`None` when none has since the daemon started), counted on the wall
+    /// clock so a sleep in between is part of it. `None` for the status when the daemon holds none
+    /// for the project. Read from memory: nothing is checked.
+    pub fn git_status_with_age(&self, project_id: &str) -> Option<(GitStatus, Option<Duration>)> {
+        let statuses = self
+            .git_statuses
+            .read()
+            .expect("git statuses lock poisoned");
+        let status = statuses.statuses.get(project_id).cloned()?;
+        let completed_ms = self
+            .git_check_completed
+            .lock()
+            .expect("git check completed lock poisoned")
+            .get(project_id)
+            .map(|(_, wall)| *wall);
+        // A wall clock set back since reads as no time at all, not as a negative age.
+        let age = completed_ms
+            .map(|wall| Duration::from_millis(u64::try_from(now_millis() - wall).unwrap_or(0)));
+        Some((statuses.visible(status), age))
+    }
+
     /// Drops a project's git status. Called when the project itself is removed, and when a whole
     /// console is — nothing else ever cleans up these entries, since the daemon keeps no timer of
     /// its own that would otherwise notice a project is gone.
@@ -2704,7 +2729,7 @@ impl AppState {
             .lock()
             .expect("git check completed lock poisoned")
             .get(project_id)
-            .copied()
+            .map(|(instant, _)| *instant)
     }
 
     /// Records that this project's check just completed, now.
@@ -2712,7 +2737,21 @@ impl AppState {
         self.git_check_completed
             .lock()
             .expect("git check completed lock poisoned")
-            .insert(project_id.to_string(), Instant::now());
+            .insert(project_id.to_string(), (Instant::now(), now_millis()));
+    }
+
+    /// Moves the wall-clock time of a project's recorded check, to test the age it reports without
+    /// waiting for it.
+    #[cfg(test)]
+    pub(crate) fn set_git_check_wall_time_for_test(&self, project_id: &str, wall_ms: i64) {
+        if let Some(entry) = self
+            .git_check_completed
+            .lock()
+            .expect("git check completed lock poisoned")
+            .get_mut(project_id)
+        {
+            entry.1 = wall_ms;
+        }
     }
 
     // -- agent availability ---------------------------------------------------

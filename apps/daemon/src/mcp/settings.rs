@@ -291,10 +291,49 @@ fn per_agent_object(entry: impl Fn(Agent) -> Value) -> Value {
     )
 }
 
+/// A project's git state as the daemon holds it, read from memory without going to the remote:
+/// `null` while it holds none (no check has run since it started, e.g. a project of a console never
+/// shown), else the `GitStatus` fields except `project` and `checked_seconds_ago`, how long ago
+/// the last check completed (`null` when none has since it started, so the counts then come from
+/// the local repository alone). A credential in the error `git` reported is removed, as the
+/// remote's is.
+fn describe_git_status(state: &Arc<AppState>, project: &Project) -> Value {
+    let Some((status, checked)) = state.git_status_with_age(&project.id) else {
+        return Value::Null;
+    };
+    json!({
+        "repository": status.repository,
+        "branch": status.branch,
+        "detached": status.detached,
+        "upstream": status.upstream,
+        "ahead": status.ahead,
+        "behind": status.behind,
+        "activity": status.activity,
+        "error": status.error.as_deref().map(without_credentials_in),
+        "checked_seconds_ago": checked.map(|age| age.as_secs()),
+    })
+}
+
+/// `text` with the credential of any URL in it removed.
+fn without_credentials_in(text: &str) -> String {
+    text.split(' ')
+        .map(|word| {
+            let url = word.trim_matches(|c: char| c.is_whitespace() || "'\"`(),".contains(c));
+            if url.contains("://") && git_remote::has_credentials(url) {
+                word.replace(url, &git_remote::without_credentials(url))
+            } else {
+                word.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// A project's settings as every tool that reports one gives them: the account setting of each
 /// agent as `inherit`, `default` or an account id, and the remote without any credential it
 /// carries, and its git workflow settings as the project's own choices (`null` follows the
-/// application-wide value) beside the values in force.
+/// application-wide value) beside the values in force, and its git state as last read (see
+/// [`describe_git_status`]).
 pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Result<Value> {
     Ok(json!({
         "project": project.id,
@@ -321,6 +360,7 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
             "override": project.git_workflow,
             "effective": git_workflow::effective(&state.store, project)?,
         },
+        "git_status": describe_git_status(state, project),
     }))
 }
 

@@ -77,8 +77,10 @@ archive view (see "The archive view" in `docs/product/archive-view.md`), or, for
 conversation's session ID in the session dialog's **Resume conversation** tab (see "Reopening an archived session from
 the tab" in `docs/product/resuming-a-conversation-by-its-session-id.md`). Each relaunches the same agent in the same
 directory and reassembles everything Octoboard injects. An owner session resumes or reopens a session of its own with
-`reopen_session` (see "The console session's tools" in `docs/product/hub-orchestration.md`); any other session can ask
-the user to resume or reopen a project session, by its conversation's session ID, with `request_resume_session` (see
+`reopen_session`, optionally with another model or reasoning effort (see "The console session's tools" in
+`docs/product/hub-orchestration.md`), finding its interrupted sessions with `list_sessions` and its archived ones with
+`list_archived` (see `docs/product/what-every-session-reads.md`); any other session can ask the user to resume or reopen
+a project session, by its conversation's session ID, with `request_resume_session` (see
 `docs/product/requests-to-resume-a-conversation.md`). Both relaunch it as above.
 
 - Where the agent has a stored conversation, that conversation is resumed.
@@ -192,7 +194,9 @@ reached:
 - from the project's or console's "View archive" submenu, as the archive preview described in "The archive view" in
   `docs/product/archive-view.md`;
 - from either focus mode, as that same preview, within that focus mode's scope;
-- from the archive view, with all of them.
+- from the archive view, with all of them;
+- by any session, with `list_archived`, newest archived first (see "Listing archived sessions" in
+  `docs/product/what-every-session-reads.md`).
 
 How each of those looks and behaves is in "Project rows" in `docs/product/sidebar-project-rows.md`, "The archive view"
 in `docs/product/archive-view.md`, and `docs/product/focus-mode.md`.

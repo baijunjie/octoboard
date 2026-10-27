@@ -141,8 +141,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [File viewer](product/file-viewer.md) — the read-only dialog showing one file: header, stand-ins, wrapping and
   navigation.
 - [Markdown documents in the file viewer](product/markdown-documents.md) — how a Markdown file renders as a document.
-- [Report panel](product/report-panel.md) — the panel where a console session pushes pages and receives form
-  submissions.
+- [Report panel](product/report-panel.md) — the panel where a console session, or a project session that faces the
+  user, pushes, withdraws and pages through its pages and receives form submissions.
 
 ### Desktop app and website
 

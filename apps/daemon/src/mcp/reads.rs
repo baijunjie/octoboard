@@ -7,15 +7,15 @@
 
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::protocol::{Session, SessionStatus};
+use crate::protocol::{Console, Project, Role, Session, SessionStatus};
 use crate::state::AppState;
 
 use super::args::{
-    console_projects, find_console, find_project, optional_bool, optional_count, optional_string,
-    required_str,
+    console_projects, find_console, find_project_in, optional_bool, optional_count,
+    optional_string, required_str,
 };
 use super::exec::{branch_names_of, describe_session, resolve_session};
 use super::settings::describe_project;
@@ -27,6 +27,14 @@ const DEFAULT_OUTPUT_TAIL: usize = 8 * 1024;
 
 /// The most output `get_session` hands back, however much is asked for.
 const MAX_OUTPUT_TAIL: usize = 64 * 1024;
+
+/// How many archived sessions `list_archived` returns when the caller names no `limit`: each comes
+/// with its whole description, so an unfiltered list of a long-lived install is not handed over
+/// whole.
+const DEFAULT_ARCHIVED_LIMIT: usize = 50;
+
+/// The most `list_archived` returns, however much is asked for.
+const MAX_ARCHIVED_LIMIT: usize = 200;
 
 /// Every console's id and name, and which is the caller's own.
 pub(super) fn list_consoles(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
@@ -146,38 +154,108 @@ async fn recent_output(state: &Arc<AppState>, id: &str, tail: usize) -> Option<S
     })
 }
 
-/// The archived sessions of a project of any console, for any role: reads are not limited to the
-/// caller's console, as the writes on them are.
+/// The `console`, `project` and `owner` filters `list_sessions` and `list_archived` share, resolved
+/// once from the call's arguments. Each given one must hold, so they combine as AND; one that
+/// names nothing is refused rather than read as a filter that matches nothing.
+struct SessionFilters {
+    console: Option<Console>,
+    project: Option<Project>,
+    owner: Option<Session>,
+}
+
+impl SessionFilters {
+    /// A `project` named beside a `console` is looked for in that console.
+    fn parse(
+        state: &Arc<AppState>,
+        caller: &Session,
+        arguments: &Map<String, Value>,
+    ) -> Result<Self> {
+        let console = optional_string(arguments, "console")
+            .map(|wanted| find_console(state, &wanted))
+            .transpose()?;
+        let project = optional_string(arguments, "project")
+            .map(|wanted| find_project_in(state, caller, console.as_ref(), &wanted))
+            .transpose()?;
+        let owner = optional_string(arguments, "owner")
+            .map(|wanted| resolve_session(state, &wanted))
+            .transpose()?;
+        Ok(Self {
+            console,
+            project,
+            owner,
+        })
+    }
+
+    fn matches(&self, session: &Session) -> bool {
+        self.console
+            .as_ref()
+            .is_none_or(|console| session.console_id == console.id)
+            && self
+                .project
+                .as_ref()
+                .is_none_or(|project| session.project_id.as_deref() == Some(&project.id))
+            && self
+                .owner
+                .as_ref()
+                .is_none_or(|owner| session.bound_to.as_deref() == Some(&owner.id))
+    }
+}
+
+/// The archived sessions of any console, for any role: reads are not limited to the caller's
+/// console, as the writes on them are.
+///
+/// `console`, `project`, `owner` and `kind` narrow the list; each given one must hold, so they
+/// combine as AND. A `console`, `project` or `owner` that names nothing is refused rather than
+/// read as a filter that matches nothing, as is a `kind` of console sessions beside a `project`,
+/// which holds only project sessions. The newest archived come first and at most `limit` are
+/// described; `total` counts all that match, so a `total` above the sessions listed means more
+/// exist.
 pub(super) async fn list_archived(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let project = find_project(state, caller, required_str(arguments, "project")?)?;
-    let archived: Vec<Session> = state
+    let filters = SessionFilters::parse(state, caller, arguments)?;
+    let kind = match optional_string(arguments, "kind").as_deref() {
+        None => None,
+        Some("console") => Some(Role::Console),
+        Some("project") => Some(Role::Project),
+        Some(other) => bail!("`kind` must be `console` or `project`, not `{other}`"),
+    };
+    if filters.project.is_some() && kind == Some(Role::Console) {
+        bail!("`kind: console` and `project` cannot both hold: a console session is in no project");
+    }
+    let limit = optional_count(arguments, "limit", 1, MAX_ARCHIVED_LIMIT)?
+        .unwrap_or(DEFAULT_ARCHIVED_LIMIT);
+    let mut archived: Vec<Session> = state
         .store
         .list_sessions()?
         .into_iter()
-        .filter(|session| {
-            session.project_id.as_deref() == Some(&project.id)
-                && session.status == SessionStatus::Archived
-        })
+        .filter(|session| session.status == SessionStatus::Archived)
+        .filter(|session| filters.matches(session))
+        .filter(|session| kind.is_none_or(|kind| session.role == kind))
         .collect();
+    // Newest archived first; `ended_at` is when it was archived. The id breaks a tie so the order
+    // does not move between calls.
+    archived.sort_by(|a, b| b.ended_at.cmp(&a.ended_at).then_with(|| a.id.cmp(&b.id)));
+    let total = archived.len();
+    archived.truncate(limit);
     let branches = branch_names_of(state, archived.clone()).await?;
     let sessions = archived
         .iter()
         .map(|session| describe_session(state, session, caller, &branches))
         .collect::<Result<Vec<Value>>>()?;
-    Ok(json!({ "sessions": sessions }))
+    Ok(json!({ "sessions": sessions, "total": total }))
 }
 
 /// Every running session but the caller (one a sharing change is restarting included), in every
 /// console and project, console sessions included: information may go to any of them, and an
-/// owner to hand a session to or bind to is one of them.
+/// owner to hand a session to or bind to is one of them. `status` widens or changes that to the
+/// interrupted sessions, which have no process but are resumable; archived ones are
+/// `list_archived`'s.
 ///
 /// `console`, `project`, `owner` and `yours` narrow the list; each given one must hold, so they
-/// combine as AND. A `console`, `project` or `owner` that names nothing is refused rather than
-/// read as a filter that matches nothing.
+/// combine as AND.
 ///
 /// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
 pub(crate) async fn list_sessions(
@@ -185,31 +263,28 @@ pub(crate) async fn list_sessions(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let console = optional_string(arguments, "console")
-        .map(|wanted| find_console(state, &wanted))
-        .transpose()?;
-    let project = optional_string(arguments, "project")
-        .map(|wanted| find_project(state, caller, &wanted))
-        .transpose()?;
-    let owner = optional_string(arguments, "owner")
-        .map(|wanted| resolve_session(state, &wanted))
-        .transpose()?;
+    let filters = SessionFilters::parse(state, caller, arguments)?;
     let yours = optional_bool(arguments, "yours")?;
+    let (live, interrupted) = match optional_string(arguments, "status").as_deref() {
+        None | Some("live") => (true, false),
+        Some("interrupted") => (false, true),
+        Some("any") => (true, true),
+        Some(other) => bail!("`status` must be `live`, `interrupted` or `any`, not `{other}`"),
+    };
     let running: Vec<Session> = state
         .store
         .list_sessions()?
         .into_iter()
-        .filter(|session| session.id != caller.id && !state.shown_status(session).is_dormant())
         .filter(|session| {
-            console
-                .as_ref()
-                .is_none_or(|console| session.console_id == console.id)
-                && project
-                    .as_ref()
-                    .is_none_or(|project| session.project_id.as_deref() == Some(&project.id))
-                && owner
-                    .as_ref()
-                    .is_none_or(|owner| session.bound_to.as_deref() == Some(&owner.id))
+            session.id != caller.id
+                && match state.shown_status(session) {
+                    SessionStatus::Archived => false,
+                    SessionStatus::Interrupted => interrupted,
+                    _ => live,
+                }
+        })
+        .filter(|session| {
+            filters.matches(session)
                 && yours
                     .is_none_or(|yours| (session.bound_to.as_deref() == Some(&caller.id)) == yours)
         })

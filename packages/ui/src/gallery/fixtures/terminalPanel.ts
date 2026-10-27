@@ -96,7 +96,7 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal stacked under Files",
     description:
-      "Files above and Terminal below in one pane, each its own card with its own header, the gap between them holding the grip separator. Drag the separator, or focus it and use the arrow keys, to share the height; double-click resets an even split. Only the Terminal header offers Maximize panel; Files has none. The top bar lists the Terminal toggle before the Files toggle, both pressed, though the Files card stacks above.",
+      "Files above and Terminal below in one pane, each its own card with its own header, the gap between them holding the grip separator. Drag the separator, or focus it and use the arrow keys, to share the height; double-click resets an even split. Only the Terminal header offers Maximize panel; Files has none. The top bar lists the Files toggle before the Terminal toggle, both pressed, in the order the cards stack.",
     state: stateOf(severalShells),
     preferences: { panelStacks: { project: { open: ["files", "terminal"], shares: {} } } },
     steps: openWebsiteWithFiles,

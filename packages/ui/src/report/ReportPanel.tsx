@@ -23,6 +23,7 @@ import type { Page } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { eventKey } from "../shortcuts/binding";
 import { useStableBinding } from "../shortcuts/store";
+import { listPages } from "./listPages";
 import { PageDocumentTransform } from "./pageDocumentTransform";
 import {
   composePageDocument,
@@ -35,23 +36,23 @@ import {
 } from "./pageDocument";
 
 /**
- * A console session's report panel: the Report panel of the right pane (`panels/panelRegistry.tsx`)
- * while that console session owns the pane (see `layout/asideOwner.ts`), which is what makes its
- * pages visible at all. Lists pages on mount and on
+ * A session's report panel: the Report panel of the right pane (`panels/panelRegistry.tsx`) while
+ * a console session owns the pane (see `layout/asideOwner.ts`) or a project session with pages is
+ * selected, which is what makes its pages visible at all. Lists pages (`listPages.ts`) on mount and on
  * every snapshot — the daemon never replays a missed `page_created` on its own (see the `page_list`
  * row under "Daemon to client" in `apps/daemon/PROTOCOL.md`), so re-listing is the only way to recover
- * from one. Switching to another console session mounting a fresh instance, so that its position is
+ * from one. Switching to another session mounting a fresh instance, so that its position is
  * not carried over from the previous one, is the call site's concern, not this component's.
  */
 export function ReportPanel({
-  consoleSessionId,
+  sessionId,
   peek,
   onEscape,
   onCycleRegion,
   onMoveHistory,
   onMoveConsoleSession,
 }: {
-  consoleSessionId: string;
+  sessionId: string;
   /** The floating pane's pointer callbacks, wired onto the page's frame, which sends this document
    * no pointer events of its own; `undefined` while the pane is docked. */
   peek: Pick<PanePeek, "keep" | "leave"> | undefined;
@@ -71,7 +72,7 @@ export function ReportPanel({
   const t = useT();
   const language = useCurrentLanguage();
   const { request, toastError } = useDaemon();
-  const sessionPages = useDaemonStore((s) => s.pages.get(consoleSessionId));
+  const sessionPages = useDaemonStore((s) => s.pages.get(sessionId));
   const connectionState = useDaemonStore((s) => s.connectionState);
   const snapshotEpoch = useDaemonStore((s) => s.snapshotEpoch);
 
@@ -103,10 +104,10 @@ export function ReportPanel({
       setRetrying(false);
       return;
     }
-    // Guards against a slow reply for a console session the user has since switched away from (and
+    // Guards against a slow reply for a session the user has since switched away from (and
     // possibly back to) landing a now-stale error after the fact.
     let stale = false;
-    request({ type: "list_pages", console_session: consoleSessionId }).then(
+    listPages(request, sessionId, snapshotEpoch).then(
       () => {
         if (stale) return;
         setListFailure(undefined);
@@ -122,7 +123,7 @@ export function ReportPanel({
     return () => {
       stale = true;
     };
-  }, [consoleSessionId, connectionState, snapshotEpoch, attempt, request]);
+  }, [sessionId, connectionState, snapshotEpoch, attempt, request]);
 
   if (listFailure !== undefined && !showsPages && spokenAsCard !== failures) setSpokenAsCard(failures);
 
@@ -133,20 +134,20 @@ export function ReportPanel({
 
   const handleSubmit = useCallback(
     (page: Page, data: unknown) => {
-      // The daemon refuses `submit_page` for any page that is not this console session's newest (see
+      // The daemon refuses `submit_page` for any page that is not this session's newest (see
       // "Client to daemon" in `apps/daemon/PROTOCOL.md`), so a stale submission in flight from a page
       // the user has since paged away from is caught there, not here — this just forwards it and
       // reports whatever comes back.
       //
-      // A submission is delivered to the console session that pushed the page, which is this
+      // A submission is delivered to the session that pushed the page, which is this
       // panel's, so that is what the daemon's refusals are about ("This session is not running.",
       // "This session is waiting for you."): naming it keeps the user from reading the message as being
       // about whatever session they are looking at.
       request({ type: "submit_page", page: page.id, data }).catch((err) => {
-        toastError(errorPresentation(err as Error), consoleSessionId, t("report.submitFailedTitle"));
+        toastError(errorPresentation(err as Error), sessionId, t("report.submitFailedTitle"));
       });
     },
-    [request, toastError, consoleSessionId, t],
+    [request, toastError, sessionId, t],
   );
 
   // Pages already here stay usable, so the failure to refresh them is a warning at the title, not an
@@ -171,7 +172,7 @@ export function ReportPanel({
     </>
   );
   // The panel keeps its place while the first `list_pages` is in flight: dropping out and back
-  // would resize the terminal pane, a real SIGWINCH to the agent, on every console session switch.
+  // would resize the terminal pane, a real SIGWINCH to the agent, on every session switch.
   const renderPanel = (): React.ReactElement => {
     // A fragment like the states after it, so the header, and focus on its Close button, survives the
     // list arriving.

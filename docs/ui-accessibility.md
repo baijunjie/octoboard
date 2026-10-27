@@ -308,24 +308,26 @@ The terminal keeps Tab and Shift+Tab for the agent, so F6 / Shift+F6 region cycl
 (`packages/ui/src/layout/useRegionCycle.ts`) is the only keyboard way out of it. Every new region of the window that
 holds controls — a pane, a panel, an overlay — is marked `data-region` and added to that hook's region order and
 `shown`, or F6 skips it and a keyboard user in the terminal has no way to reach it. A right pane panel is the exception:
-it reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order). While the Terminal panel
-is maximized it comes first among the panels, and the agent area it covers (the agent terminal or the archive view, made
-`inert`) is not a stop. A panel floating over the agent terminal in a window too narrow to dock the right pane covers it
-the same way: the agent terminal is `inert` and not a stop while the panel is shown, focus moves into the panel when it
-is opened and back to the agent terminal when it closes (after a tap, never into a text field; see "Focus moved by a
-change the user did not make"), Escape closes it (standing aside inside a shell terminal, as below), and the dimmed
-strip beside it is a "Close panel" button. A region lands F6 on its first control unless a control in it carries
-`data-region-landing` (a Files panel that failed to load lands on Try again, not on its header's Close panel). `shown`
-follows whether a region holds a control, not whether its element is in the document: the terminal counts while a
-session is selected, and also while its empty state offers a creation action for the current context or the Add agent
-button (agents are installed but none is added), since that button is then the one thing to do there; with only its
-empty line (nothing installed) it is skipped. An archived session's terminal is covered by its history and made `inert`,
-so the region lands on the history instead: its message list, or while there is none, its first control below its
-header (the header's link to the session's owner is never the landing), and failing that the floating bar's Reopen. A
-control in the pane that goes away while it holds focus (the owner link once the owner is shown, Reconnect, a creation
-action) hands focus on as focus meant for the agent terminal, so a panel its press brings up over the agent area takes
-it rather than the inert terminal. A region whose focus goes through a method of its own rather than its first control (the
-terminal's) is only a stop when that method actually leaves focus inside it, which is how the cycle tells the two apart.
+it reaches the hook through its `panels` argument (region `panel-<kind>`, in stacking order), and a kind that belongs to
+the selected session rather than to the pane's owner (a project's Report panel) is a stop only while that session has a
+panel to show. While the Terminal panel is maximized it comes first among the panels, and the agent area it covers (the
+agent terminal or the archive view, made `inert`) is not a stop. A panel floating over the agent terminal in a window
+too narrow to dock the right pane covers it the same way: the agent terminal is `inert` and not a stop while the panel
+is shown, focus moves into the panel when it is opened and back to the agent terminal when it closes (after a tap, never
+into a text field; see "Focus moved by a change the user did not make"), Escape closes it (standing aside inside a shell
+terminal, as below), and the dimmed strip beside it is a "Close panel" button. A region lands F6 on its first control
+unless a control in it carries `data-region-landing` (a Files panel that failed to load lands on Try again, not on its
+header's Close panel). `shown` follows whether a region holds a control, not whether its element is in the document: the
+terminal counts while a session is selected, and also while its empty state offers a creation action for the current
+context or the Add agent button (agents are installed but none is added), since that button is then the one thing to do
+there; with only its empty line (nothing installed) it is skipped. An archived session's terminal is covered by its
+history and made `inert`, so the region lands on the history instead: its message list, or while there is none, its
+first control below its header (the header's link to the session's owner is never the landing), and failing that the
+floating bar's Reopen. A control in the pane that goes away while it holds focus (the owner link once the owner is
+shown, Reconnect, a creation action) hands focus on as focus meant for the agent terminal, so a panel its press brings
+up over the agent area takes it rather than the inert terminal. A region whose focus goes through a method of its own
+rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside it, which is
+how the cycle tells the two apart.
 
 A shell terminal in the Terminal panel keeps Tab the same way, so the same holds for it: the Terminal panel is its own
 region, and F6 lands on the shown terminal's input, on its cover's Reconnect while that is offered, or on New terminal

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
 
-import { sessionOf } from "./gallery/fixtures/builders";
+import { pageOf, sessionOf } from "./gallery/fixtures/builders";
 import type { Event, Project, ShellTerminal } from "./protocol";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
 import { createDaemon, dismissAccountLogin, trackAccountLogin } from "./store";
@@ -208,4 +208,47 @@ it("does not offer a session request that lacks what its action needs or has an 
     { ...base, request_id: "r-4", action: "from_the_future" as never },
   ]);
   expect(daemon.store.getState().sessionRequests).toEqual([]);
+});
+
+it("drops the pages a pages_deleted event names from that session's list only, keeping an emptied list as a known one", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  client.onEvents!([
+    { type: "page_created", page: pageOf("a-1", "session-a", "<p>1</p>", 3) },
+    { type: "page_created", page: pageOf("a-2", "session-a", "<p>2</p>", 2) },
+    { type: "page_created", page: pageOf("b-1", "session-b", "<p>1</p>", 1) },
+  ]);
+  const ids = (session: string) => daemon.store.getState().pages.get(session)?.map((page) => page.id);
+
+  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-1", "b-1"] }]);
+  expect(ids("session-a")).toEqual(["a-2"]);
+  expect(ids("session-b")).toEqual(["b-1"]);
+
+  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-2"] }]);
+  expect(ids("session-a")).toEqual([]);
+
+  // A session whose pages were never listed has nothing to drop, and no list is made for it.
+  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-c", pages: ["c-1"] }]);
+  expect(daemon.store.getState().pages.has("session-c")).toBe(false);
+});
+
+it("does not bring back a deleted page when a list computed before the deletion is applied after it", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const stale: Event = {
+    type: "page_list", id: "r", console_session_id: "session-a",
+    pages: [pageOf("a-1", "session-a", "<p>1</p>", 2), pageOf("a-2", "session-a", "<p>2</p>", 1)],
+  };
+  const ids = () => daemon.store.getState().pages.get("session-a")?.map((page) => page.id);
+
+  // Twice: first with no list held yet, then with one held.
+  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-1"] }, stale]);
+  expect(ids()).toEqual(["a-2"]);
+  client.onEvents!([{ type: "pages_deleted", console_session_id: "session-a", pages: ["a-2"] }, stale]);
+  expect(ids()).toEqual([]);
+
+  // A snapshot forgets the deletions along with the pages.
+  client.onEvents!([{
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+  } as unknown as Event, stale]);
+  expect(ids()).toEqual(["a-1", "a-2"]);
 });

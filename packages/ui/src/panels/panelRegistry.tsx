@@ -23,6 +23,9 @@ export interface PanelContentProps {
   active: boolean;
   /** The session selected in the sidebar. */
   selectedSessionId: string | undefined;
+  /** The session whose pages the Report panel shows: the console session that owns the pane, or the
+   * selected project session while it has pages. */
+  reportSessionId: string | undefined;
   /** The panel appears in a pane that is already on screen, as the owner changes under it; not when
    * the pane itself docks or floats in. */
   switching: boolean;
@@ -72,8 +75,9 @@ function TerminalContent({ project, switching, resizing, onViewFile }: PanelCont
   return project ? <ShellTerminalPanel project={project} switching={switching} resizing={resizing} onViewFile={onViewFile} /> : null;
 }
 
-function ReportContent({ owner, peek, frameKeys }: PanelContentProps): React.ReactElement | null {
-  return owner.kind === "report" ? <ReportPanel consoleSessionId={owner.consoleSession} peek={peek} {...frameKeys} /> : null;
+function ReportContent({ reportSessionId, peek, frameKeys }: PanelContentProps): React.ReactElement | null {
+  // Keyed by the session, so another session's panel starts afresh, on its newest page.
+  return reportSessionId ? <ReportPanel key={reportSessionId} sessionId={reportSessionId} peek={peek} {...frameKeys} /> : null;
 }
 
 /** Every kind of panel the stack can hold: a later kind is one more entry here and in

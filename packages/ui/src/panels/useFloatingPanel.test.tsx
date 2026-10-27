@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { defaultStack, type PanelStacks } from "./stackState";
+import { defaultStack, type PanelKind, type PanelStacks } from "./stackState";
 import { useFloatingPanel, type FloatingPanel } from "./useFloatingPanel";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -11,13 +11,13 @@ import { useFloatingPanel, type FloatingPanel } from "./useFloatingPanel";
 const STACKS: PanelStacks = { project: { open: ["files", "terminal"], shares: {} }, report: defaultStack("report") };
 
 /** The hook with a card for the panel it floats, and a control outside it to hold focus. */
-function mount(props: { floats: boolean; drawerOpen?: boolean; owner?: "project" | "report"; loaded?: boolean; touch?: boolean; textLanding?: boolean }) {
+function mount(props: { floats: boolean; drawerOpen?: boolean; owner?: "project" | "report"; loaded?: boolean; touch?: boolean; textLanding?: boolean; unavailable?: PanelKind[] }) {
   const focusTerminal = vi.fn();
   let latest!: FloatingPanel;
   // Each test's interaction: a tap, or a mouse's press.
   document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: props.touch ? "touch" : "mouse", bubbles: true }));
-  function Harness({ floats, drawerOpen = false, owner = "project", loaded = true }: typeof props) {
-    latest = useFloatingPanel({ floats, owner, stacks: STACKS, drawerOpen, focusTerminal });
+  function Harness({ floats, drawerOpen = false, owner = "project", loaded = true, unavailable }: typeof props) {
+    latest = useFloatingPanel({ floats, owner, stacks: STACKS, drawerOpen, focusTerminal, unavailable });
     return (
       <>
         <button type="button" id="outside">outside</button>
@@ -139,4 +139,17 @@ it("lands focus that a closing panel leaves nowhere on the top bar when the term
   act(() => test.panel().close());
   expect(test.focusTerminal).toHaveBeenCalledTimes(1);
   expect(document.activeElement).toBe(back);
+});
+
+it("floats no panel of a kind that has none just now, and does not float it again when its panel is back", () => {
+  const test = mount({ floats: true });
+  act(() => test.panel().open("project", "report"));
+  expect(test.panel().kind).toBe("report");
+  test.render({ floats: true, unavailable: ["report"] });
+  expect(test.panel().kind).toBeUndefined();
+  test.render({ floats: true });
+  expect(test.panel().kind).toBeUndefined();
+  // Opened again by the user, it floats.
+  act(() => test.panel().open("project", "report"));
+  expect(test.panel().kind).toBe("report");
 });

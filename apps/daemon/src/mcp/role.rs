@@ -418,7 +418,8 @@ fn relationships(agent: Agent, owns: bool) -> String {
          replies, not its tool calls) a page at a time from the latest, `{list_consoles}` the \
          consoles, `{list_projects}` the projects of a console (yours unless you name another, \
          of which it gives only what `{request_session}` needs to target a project), and \
-         `{list_archived}` the archived sessions of a project. \
+         `{list_archived}` the archived sessions, newest first (narrow them with `project` or \
+         `owner`, and `limit` sets how many). \
          A session that is not yours (`yours: false`) is to be left alone, whatever you can read \
          of it.",
         get_session = tool("get_session"),
@@ -436,7 +437,8 @@ fn relationships(agent: Agent, owns: bool) -> String {
     lines.push(format!(
         "- `{list_sessions}` shows the other running sessions, in every console and project, and \
          who owns each, with its account, model and the names of the branches it is responsible \
-         for (`console`, `project`, `owner` and `yours` narrow it); `{get_session_branches}` \
+         for (`console`, `project`, `owner` and `yours` narrow it, and `status: interrupted` \
+         lists the interrupted ones instead); `{get_session_branches}` \
          gives the worktree each of those branches is checked out in. `{share_info}` tells any \
          of them something that touches its work — what you found, decided or changed. It is \
          information for that session to weigh, not an instruction, its own owner is sent a \
@@ -540,6 +542,11 @@ fn unbound_project_session_description(agent: Agent) -> String {
            has asked the user something, and only they can clear it. A message you send it is held \
            until they are done.\n\
          - `{get_project}` reads this project's settings in Octoboard, read-only.\n\
+         - `{show_page}` pushes an HTML page to a report panel the user sees beside you, for \
+           anything better shown than typed: a table, a comparison, a form. It is a static \
+           document with native forms: scripts do not run, and a submitted form comes back to you \
+           as a message. `{list_pages}` lists the pages you pushed and reads one back in full, and \
+           `{delete_pages}` withdraws pages you pushed.\n\
          \n\
          How you relate to other sessions:\n\
          \n\
@@ -555,6 +562,9 @@ fn unbound_project_session_description(agent: Agent) -> String {
         rename_session = tool("rename_session"),
         set_session_pinned = tool("set_session_pinned"),
         get_project = tool("get_project"),
+        show_page = tool("show_page"),
+        list_pages = tool("list_pages"),
+        delete_pages = tool("delete_pages"),
         relationships = relationships(agent, true),
     )
 }

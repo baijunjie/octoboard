@@ -140,6 +140,20 @@ macro_rules! started_by_a_session {
     };
 }
 
+/// What the descriptions of a project say of its `git_status`. A macro so the read tools'
+/// `&'static str` descriptions can take it with `concat!`.
+macro_rules! git_status_field {
+    () => {
+        "`git_status` is `null` while the daemon has read none yet; otherwise it is the project's \
+         git state as the daemon last read it, without going to the remote now: `repository` \
+         (false when the directory is no git repository, and the rest is then empty), `branch` \
+         (the short commit id when `detached`), `detached`, `upstream`, how far the branch is \
+         `ahead` and `behind` it, `activity` (`idle`, `checking`, `pulling` or `pushing`) and \
+         the `error` of a failed check. `checked_seconds_ago` is how long ago the last check \
+         completed, `null` when none has since the daemon started, so the counts may be stale."
+    };
+}
+
 /// What every description of a session says of its `context`. A macro so the read tools'
 /// `&'static str` descriptions can take it with `concat!`.
 macro_rules! session_context_field {
@@ -450,59 +464,95 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     LIST_CONSOLES,
     SHARE_INFO,
     GET_ACCOUNT_QUOTAS,
-    ToolDef {
-        name: "list_pages",
-        description: "The pages this session has pushed to the report panel with `show_page`, \
-                      oldest first, read-only: each one's id (`page`), `created_at` \
-                      (milliseconds since the epoch), `html_bytes` and `title` (its `<title>`; \
-                      null when it has none). Only this session's own pages are listed. Name a \
-                      `page` to read that one in full, `html` included. Use it to find the id of \
-                      an earlier page, which tells a form submission apart from one of another \
-                      page, or to build on what an earlier page showed.",
-        schema: || {
-            object_schema(
-                json!({
-                    "page": {
-                        "type": "string",
-                        "description": "A page's id, as `show_page` returned it. Left out, \
-                                        every page is listed without its HTML.",
-                    },
-                }),
-                &[],
-            )
-        },
-    },
-    ToolDef {
-        name: "show_page",
-        description: "Push a page to the report panel the user sees beside this session. Every \
-                      page pushed is kept, and the user can page back through earlier ones. `html` \
-                      is a static, self-contained HTML document: scripts and event handlers are \
-                      removed and never run, and nothing external loads (no `<link>` elements, \
-                      frames or external URLs), so inline any styles, stick to generic font \
-                      families rather than a custom typeface, and give an image as a `data:` URL. \
-                      Use it for anything better shown than typed into the terminal: a table, a \
-                      comparison, a set of choices. \
-                      A page may include a native HTML form: when the user submits it, its fields \
-                      are sent back to this session as a message, each field's `name` becoming a \
-                      key, so give every field you want back a `name`. For a choice use \
-                      `<button name=\"choice\" value=\"...\">`; the pressed button's value comes \
-                      back. `required` and `pattern` validation works. The call's result carries \
-                      the pushed page's id; keep it, since it is how a later submission is told to \
-                      have come from this page rather than one pushed after it (`list_pages` \
-                      lists the ids again).",
-        schema: || {
-            object_schema(
-                json!({
-                    "html": {
-                        "type": "string",
-                        "description": "The page's full HTML document.",
-                    },
-                }),
-                &["html"],
-            )
-        },
-    },
+    LIST_PAGES,
+    SHOW_PAGE,
+    DELETE_PAGES,
 ];
+
+const LIST_PAGES: ToolDef = ToolDef {
+    name: "list_pages",
+    description: "The pages this session has pushed with `show_page`, \
+                  oldest first, read-only: each one's id (`page`), `created_at` \
+                  (milliseconds since the epoch), `html_bytes` and `title` (its `<title>`; \
+                  null when it has none). Only this session's own pages are listed. Name a \
+                  `page` to read that one in full, `html` included. Use it to find the id of \
+                  an earlier page, which tells a form submission apart from one of another \
+                  page, or to build on what an earlier page showed.",
+    schema: || {
+        object_schema(
+            json!({
+                "page": {
+                    "type": "string",
+                    "description": "A page's id, as `show_page` returned it. Left out, \
+                                    every page is listed without its HTML.",
+                },
+            }),
+            &[],
+        )
+    },
+};
+const SHOW_PAGE: ToolDef = ToolDef {
+    name: "show_page",
+    description: "Push a page to the report panel the user sees beside this session. Every \
+                  page pushed is kept, and the user can page back through earlier ones. `html` \
+                  is a static, self-contained HTML document: scripts and event handlers are \
+                  removed and never run, and nothing external loads (no `<link>` elements, \
+                  frames or external URLs), so inline any styles, stick to generic font \
+                  families rather than a custom typeface, and give an image as a `data:` URL. \
+                  Use it for anything better shown than typed into the terminal: a table, a \
+                  comparison, a set of choices. \
+                  A page may include a native HTML form: when the user submits it, its fields \
+                  are sent back to this session as a message, each field's `name` becoming a \
+                  key, so give every field you want back a `name`. For a choice use \
+                  `<button name=\"choice\" value=\"...\">`; the pressed button's value comes \
+                  back. `required` and `pattern` validation works. The call's result carries \
+                  the pushed page's id; keep it, since it is how a later submission is told to \
+                  have come from this page rather than one pushed after it (`list_pages` \
+                  lists the ids again).",
+    schema: || {
+        object_schema(
+            json!({
+                "html": {
+                    "type": "string",
+                    "description": "The page's full HTML document.",
+                },
+            }),
+            &["html"],
+        )
+    },
+};
+
+const DELETE_PAGES: ToolDef = ToolDef {
+    name: "delete_pages",
+    description: "Withdraw pages this session pushed with `show_page` from its report panel, for \
+                  good: the user's panel drops them at once. When the last one goes, a \
+                  project session's Report panel and its toggle go with it, and a console \
+                  session's panel shows its empty state. Name them in `pages` (ids, as \
+                  `show_page` and `list_pages` give them), or pass `all: true` for every page \
+                  this session pushed; exactly one of the two. Only this session's own pages \
+                  can be deleted: an id that is not one of them is refused, the same way as an \
+                  id that names no page, and then nothing is deleted. Deleting the newest page \
+                  makes the one before it the newest, the one a form submission is accepted \
+                  from. Answers with the `deleted` ids.",
+    schema: || {
+        object_schema(
+            json!({
+                "pages": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1,
+                    "description": "The ids of the pages to delete.",
+                },
+                "all": {
+                    "type": "boolean",
+                    "description": "True to delete every page this session pushed. Not with \
+                                    `pages`.",
+                },
+            }),
+            &[],
+        )
+    },
+};
 
 const SEND_MESSAGE: ToolDef = ToolDef {
     name: "send_message",
@@ -623,9 +673,12 @@ const SET_SESSION_PINNED: ToolDef = ToolDef {
 const REOPEN_SESSION: ToolDef = ToolDef {
     name: "reopen_session",
     description: "Relaunch an archived or interrupted session of yours, continuing its \
-                  conversation, and optionally hand it the next instruction. Refused for a \
-                  session that is not yours (`yours: false`): it is somebody else's, to be \
-                  left alone.",
+                  conversation, and optionally hand it the next instruction or reopen it with \
+                  another model or reasoning effort (it stays on its agent and its account; to \
+                  move it to another account, use `switch_session_account`). A `model` or \
+                  `effort` the agent does not offer is refused, with nothing reopened. Refused \
+                  for a session that is not yours (`yours: false`): it is somebody else's, to \
+                  be left alone.",
     schema: || {
         object_schema(
             json!({
@@ -633,6 +686,20 @@ const REOPEN_SESSION: ToolDef = ToolDef {
                 "text": {
                     "type": "string",
                     "description": "An instruction to deliver once it is running.",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "Reopen it with this model, which then becomes the \
+                                    session's own; blank is the agent's own default. \
+                                    `list_agent_models` lists the ones its agent offers \
+                                    under its account. Left out, it keeps the model it had.",
+                },
+                "effort": {
+                    "type": "string",
+                    "description": "Reopen it with this reasoning effort, which then becomes \
+                                    the session's own; blank is the agent's own default. \
+                                    `list_agent_models` lists the levels each model offers. \
+                                    Left out, it keeps the effort it had.",
                 },
             }),
             &["session"],
@@ -936,8 +1003,8 @@ const LIST_PROJECTS: ToolDef = ToolDef {
          `launch`: each agent's model and reasoning effort), the `worktrees` settings \
          (the project's own `override`, `null` following the application-wide value, and the `effective` \
          values), whether the user has `trust_consent`ed to Octoboard pressing the \
-         agent's folder-trust confirmation (read-only), and the sessions currently \
-         running in each — \
+         agent's folder-trust confirmation (read-only), its `git_status`, and the sessions \
+         currently running in each — \
          every session of the console, whichever session owns it. Each carries `owner`, the \
          session it reports to, `owner_kind` (a `console` or a `project` session) \
          and `yours`; a project session with `owner: null` is unbound, which the user \
@@ -955,6 +1022,8 @@ const LIST_PROJECTS: ToolDef = ToolDef {
          what is needed to target a project of it with `request_session` or \
          `request_resume_session` is returned: each project's id (`project`), name, \
          description and tags, and none of its sessions or settings. ",
+        git_status_field!(),
+        " ",
         session_record_fields!(),
         session_context_field!()
     ),
@@ -989,9 +1058,15 @@ const LIST_CONSOLES: ToolDef = ToolDef {
 const LIST_ARCHIVED: ToolDef = ToolDef {
     name: "list_archived",
     description: concat!(
-        "List the archived sessions of one project, in any console, whichever session owns \
-         them. Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
-         one of yours can be reopened instead of starting over. A session with \
+        "List archived sessions, in any console, whichever session owns them: those of one \
+         project, or with `project` left out those of every project and the console \
+         sessions too. `console`, `project`, `owner` and `kind` narrow the list, and a \
+         session must match every one given; give `owner` or `project` when you can, since an \
+         unfiltered list is long. The newest archived come first, at most `limit` of them; \
+         `total` is how many match, so a `total` above the sessions listed means there are \
+         more: narrow the filters rather than raising `limit`. Each carries its `owner`, \
+         `owner_kind` and `yours`, so an earlier one of yours can be reopened instead of \
+         starting over (use `owner` with your own id to list just those). A session with \
          `yours: false` is somebody else's: leave it alone. ",
         session_record_fields!(),
         session_context_field!()
@@ -999,13 +1074,35 @@ const LIST_ARCHIVED: ToolDef = ToolDef {
     schema: || {
         object_schema(
             json!({
+                "console": {
+                    "type": "string",
+                    "description": "Only sessions in this console, by id or name.",
+                },
                 "project": {
                     "type": "string",
-                    "description": "The project's id, or its name when that is unambiguous \
-                                    (among this console's projects first, else among all).",
+                    "description": "Only sessions in this project: its id, or its name when \
+                                    that is unambiguous (among `console`'s projects when it \
+                                    is given, else among this console's projects first, then \
+                                    among all).",
+                },
+                "owner": {
+                    "type": "string",
+                    "description": "Only sessions that were reporting to this session when \
+                                    archived, by id.",
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["console", "project"],
+                    "description": "Only console sessions, or only project sessions.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 200,
+                    "description": "How many sessions to return, 50 when left out.",
                 },
             }),
-            &["project"],
+            &[],
         )
     },
 };
@@ -1097,21 +1194,20 @@ const LIST_SESSIONS: ToolDef = ToolDef {
     name: "list_sessions",
     description: concat!(
         "List the running sessions other than this one, in every console and project, \
-         console sessions included: id, title, agent, status, `role` (a console or a \
-         project session), `console`, `project` (null for a console session), and \
-         `owner` (the session it reports to, `owner_kind` saying whether that is a \
-         console or a project session; null when nobody owns it and it reports to the \
-         user). `yours` marks a session that reports to you, and `your_owner` the \
-         session you report to, which is also given at the top level. `console`, \
-         `project`, `owner` and `yours` narrow the list, and a session must match every \
-         one given. Use it to find who to share information with, or an owner to hand a \
-         session to or bind to. An \
-         idle session with a non-empty `background_tasks` takes messages like any idle \
-         session but still has work running in the background. \
-         A non-null `writes_held` says why messages for a running session are \
-         queued rather than written into it, whatever its `status` reads; \
-         `queued_messages` counts them, and the information kept for an interrupted \
-         session to take when it is resumed. ",
+         console sessions included (`status` selects the interrupted ones instead, or \
+         both): id, title, agent, status, `role` (a console or a project session), \
+         `console`, `project` (null for a console session), and `owner` (the session it \
+         reports to, `owner_kind` saying whether that is a console or a project session; \
+         null when nobody owns it and it reports to the user). `yours` marks a session \
+         that reports to you, and `your_owner` the session you report to, which is also \
+         given at the top level. `console`, `project`, `owner` and `yours` narrow the \
+         list, and a session must match every one given. Use it to find who to share \
+         information with, or an owner to hand a session to or bind to. An idle session \
+         with a non-empty `background_tasks` takes messages like any idle session but \
+         still has work running in the background. A non-null `writes_held` says why \
+         messages for a running session are queued rather than written into it, whatever \
+         its `status` reads; `queued_messages` counts them, and the information kept for \
+         an interrupted session to take when it is resumed. ",
         session_record_fields!(),
         session_context_field!()
     ),
@@ -1124,7 +1220,10 @@ const LIST_SESSIONS: ToolDef = ToolDef {
                 },
                 "project": {
                     "type": "string",
-                    "description": "Only sessions in this project, by id or name.",
+                    "description": "Only sessions in this project: its id, or its name when \
+                                    that is unambiguous (among `console`'s projects when it \
+                                    is given, else among this console's projects first, then \
+                                    among all).",
                 },
                 "owner": {
                     "type": "string",
@@ -1134,6 +1233,14 @@ const LIST_SESSIONS: ToolDef = ToolDef {
                     "type": "boolean",
                     "description": "`true`: only the sessions that report to you. `false`: only \
                                     the ones that do not.",
+                },
+                "status": {
+                    "type": "string",
+                    "enum": ["live", "interrupted", "any"],
+                    "description": "`live` (the default): the sessions with a process running. \
+                                    `interrupted`: the ones whose process ended without being \
+                                    archived, resumable with `reopen_session` when they are \
+                                    yours. `any`: both. Archived sessions are `list_archived`'s.",
                 },
             }),
             &[],
@@ -1179,7 +1286,9 @@ const GET_PROJECT: ToolDef = ToolDef {
          to the console's `project_session_launch`), and `git_workflow` (the project's own \
          `override` of the git workflow settings, `null` following the application-wide value, \
          and the `effective` resolved values; `rebase_before_merge` and `delivery` apply only \
-         while `development` is not `in_place`). Only this session's own project can be read. ",
+         while `development` is not `in_place`), and `git_status`. ",
+        git_status_field!(),
+        " Only this session's own project can be read. ",
         started_by_a_session!()
     ),
     schema: || object_schema(json!({}), &[]),
@@ -1419,7 +1528,9 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
 /// the way a console session drives its console's, and what it starts reports back to it.
 /// `report` is announced too, though a call is refused while the session is unbound: the
 /// catalogue does not change when an unbound session binds itself to a console session. For the
-/// same reason `archive_self` is announced to a lead session and refused at the call.
+/// same reason `archive_self` is announced to a lead session and refused at the call. It also has
+/// the report panel's three tools, since it is the project session that faces the user; a bound
+/// session reports to its owner and has none.
 const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "new_session",
@@ -1475,6 +1586,9 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     SHARE_INFO,
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
+    LIST_PAGES,
+    SHOW_PAGE,
+    DELETE_PAGES,
 ];
 
 /// The schema of `request_session`: `new_session`'s, and where the new session is to be.
@@ -1925,7 +2039,10 @@ mod tests {
                 "list_projects",
                 "share_info",
                 "get_project",
-                "get_account_quotas"
+                "get_account_quotas",
+                "list_pages",
+                "show_page",
+                "delete_pages"
             ]
         );
         assert_eq!(
@@ -1963,7 +2080,8 @@ mod tests {
                 "share_info",
                 "get_account_quotas",
                 "list_pages",
-                "show_page"
+                "show_page",
+                "delete_pages"
             ]
         );
         // The reads every role has, with one definition each, so that their descriptions cannot

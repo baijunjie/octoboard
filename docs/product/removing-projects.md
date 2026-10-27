@@ -3,12 +3,12 @@
 A locked session of the project, archived sessions included, refuses removal before any process is ended or
 folder is moved, under "Locking a session" in `docs/product/sessions.md`.
 
-Removing a project removes the association, and with it the records of that project's sessions, archived ones
-included. It also clears what Octoboard recorded about which session is working on which branch in the project's
-repository, unless another project still points into that repository (see "What the record is" in
-`docs/product/branch-responsible-session.md`). **The directory and everything in it are left as they are**, and so are
-the repository's branches and worktrees, unless the user chooses to move the folder to the Trash as well (see "Moving
-the project folder to the Trash" below).
+Removing a project removes the association, and with it the records of that project's sessions, archived ones included,
+and the report panel pages they pushed (see `docs/product/report-panel.md`). It also clears what Octoboard recorded
+about which session is working on which branch in the project's repository, unless another project still points into
+that repository (see "What the record is" in `docs/product/branch-responsible-session.md`). **The directory and
+everything in it are left as they are**, and so are the repository's branches and worktrees, unless the user chooses to
+move the folder to the Trash as well (see "Moving the project folder to the Trash" below).
 
 Removing a project asks for confirmation. **Sessions of the project that are still running do not block it**:
 

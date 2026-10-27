@@ -96,7 +96,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `archive_session` — end and archive a session you are done with.\n\
          - `archive_self` — end and archive yourself once your sessions are all archived.\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
-           starting over, handing it its next task.\n\
+           starting over, handing it its next task (`list_archived` is newest first: narrow it \
+           with `owner` or `project`, and `limit` sets how many).\n\
          - `get_account_quotas` — how much plan quota each account of each agent has left, as \
            percentages; check it before choosing an account or when one may be running out. \
            Readings are taken about every five minutes; `refresh` takes a new one, at most once \
@@ -118,11 +119,13 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            is opened on the agent's own record of it. For when the user asked for that \
            conversation.\n\
          - `list_sessions` / `share_info` — the running sessions everywhere (narrow them with \
-           `console`, `project`, `owner` or `yours`), and telling one of them something.\n\
+           `console`, `project`, `owner` or `yours`; `status: interrupted` lists the \
+           interrupted ones), and telling one of them something.\n\
          - `show_page` — push an HTML page to the report panel beside you, for anything better \
-           shown than typed: a table, a rich comparison, many items, a form. It is a static document \
-           with native forms: scripts do not run, and a submitted form comes back to you as a \
-           message. `list_pages` lists the pages you pushed, and reads one back in full.\n\
+           shown than typed: a table, a rich comparison, many items, a form. It is a static \
+           document with native forms: scripts do not run, and a submitted form comes back to \
+           you as a message. `list_pages` lists the pages you pushed, and reads one back in \
+           full; `delete_pages` withdraws pages you pushed.\n\
          \n\
          ## Settings\n\
          \n\

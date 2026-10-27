@@ -1,7 +1,8 @@
 # Project pane
 
 The **project pane** is the window's right pane while a project owns it. Its panels are the **Files panel**, described
-here, and the **Terminal panel**, the project's shell terminals (see `docs/product/terminal-panel.md`); how they are
+here, the **Terminal panel**, the project's shell terminals (see `docs/product/terminal-panel.md`), and, while the
+selected project session has pages, that session's **report panel** (see `docs/product/report-panel.md`); how they are
 stacked is in `docs/product/right-pane-panels.md`. The Files panel shows a project's files and its repository's changes,
 in two **modes**: **Files**, a tree of the project's directory, read live from disk with whatever an agent has written
 and not committed, and **Git**, the changes of one local branch of the project's repository, uncommitted and committed

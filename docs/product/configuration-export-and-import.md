@@ -240,7 +240,7 @@ meets it (see `docs/product/model-and-reasoning-effort.md`).
 
 ### What is not configuration and never travels
 
-Sessions and their records, the pages console sessions pushed to the report panel, the conversations the agents keep,
+Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep,
 and folder trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
 configuration, and are in no document. Neither is the default clone directory: that one is the importing machine's own
 to choose, and an import places what it clones under it (see "Default clone directory" in `docs/product/settings.md`).

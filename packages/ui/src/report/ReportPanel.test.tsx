@@ -44,7 +44,7 @@ it("composes the embedded report relay before its only srcdoc assignment, includ
       <PlatformProvider value={{ kind: "browser" }}>
         <PageDocumentTransform value={withReportScrollBridge}>
           <DaemonProvider value={daemon}>
-            <ReportPanel consoleSessionId="console-session" peek={undefined}
+            <ReportPanel sessionId="console-session" peek={undefined}
               onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
           </DaemonProvider>
         </PageDocumentTransform>
@@ -79,7 +79,7 @@ function renderReport(pageCount = 2) {
       <PlatformProvider value={{ kind: "browser" }}>
         <DaemonProvider value={daemon}>
           <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
-            <ReportPanel consoleSessionId="console-session" peek={undefined}
+            <ReportPanel sessionId="console-session" peek={undefined}
               onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
           </PanelFrameProvider>
         </DaemonProvider>
@@ -92,6 +92,9 @@ function renderReport(pageCount = 2) {
       applyDaemonEvent(store, {
         type: "page_created", page: pageOf("new-page", session, "<p>New page</p>", 10),
       });
+    }),
+    remove: (...ids: string[]) => act(async () => {
+      applyDaemonEvent(store, { type: "pages_deleted", console_session_id: "console-session", pages: ids });
     }),
   };
 }
@@ -167,7 +170,7 @@ it("shows a failed page listing in the panel with its reason and Try again, and 
     <PlatformProvider value={{ kind: "browser" }}>
       <DaemonProvider value={daemon}>
         <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
-          <ReportPanel consoleSessionId="console-session" peek={undefined}
+          <ReportPanel sessionId="console-session" peek={undefined}
             onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
         </PanelFrameProvider>
       </DaemonProvider>
@@ -208,7 +211,7 @@ async function renderWith(request: Daemon["request"], store: ReturnType<typeof c
     <PlatformProvider value={{ kind: "browser" }}>
       <DaemonProvider value={daemon}>
         <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
-          <ReportPanel consoleSessionId="console-session" peek={undefined}
+          <ReportPanel sessionId="console-session" peek={undefined}
             onEscape={() => {}} onCycleRegion={() => {}} onMoveHistory={() => {}} onMoveConsoleSession={() => {}} />
         </PanelFrameProvider>
       </DaemonProvider>
@@ -316,4 +319,32 @@ it("keeps the mark while Try again's listing is out and across a second failure,
   expect(container.querySelector(MARK)).toBe(mark);
   expect(container.querySelector("[role=alert]")).toBeNull();
   expect(announcement(container)).toBe("Could not load the pages of this session");
+});
+
+const position = (container: HTMLElement) => container.querySelector("[dir=ltr]")?.textContent;
+
+it("adjusts the pager when pages are deleted: the total shrinks, and the page paged to going falls back to the newest", async () => {
+  const { container, remove } = renderReport(3);
+  expect(position(container)).toBe("3 / 3");
+  const previous = () => container.querySelector<HTMLButtonElement>('[aria-label="Previous page"]')!;
+  await act(async () => previous().click());
+  await act(async () => previous().click());
+  expect(position(container)).toBe("1 / 3");
+
+  // A page other than the one on screen goes: the view stays where it is.
+  await remove("page-2");
+  expect(position(container)).toBe("1 / 2");
+  expect(container.textContent).toContain("Read-only");
+
+  // The page on screen goes: the view follows the newest, which is not history.
+  await remove("page-0");
+  expect(position(container)).toBe("1 / 1");
+  expect(container.textContent).not.toContain("Read-only");
+});
+
+it("shows the empty panel once every page is deleted", async () => {
+  const { container, remove } = renderReport(2);
+  await remove("page-0", "page-1");
+  expect(container.querySelector("iframe")).toBeNull();
+  expect(container.textContent).toContain("No pages yet");
 });

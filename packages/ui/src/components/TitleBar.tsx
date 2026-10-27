@@ -9,6 +9,7 @@ import { sessionDisplayTitle, sessionShownStatusKind } from "../sessionLabel";
 import { useDaemonStore } from "../store";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "./FadeOverflow";
+import { HandOffOnUnmount } from "./HandOffOnUnmount";
 import { StatusIcon } from "./StatusIcon";
 
 /** The bar's frame: full window width, above everything, painting nothing of its own (the window's
@@ -126,7 +127,8 @@ interface TitleBarProps {
    * and hide the right pane. `label` says what pressing it does, `open` is whether the kind's panel
    * is on screen (the button then keeps the fills of a pressed one, and `Icon` shows which), and
    * `regionId` is the panel's id while it is in the document. The pointer resting on one while no
-   * panel is open floats the pane in (`onHoverChange`). */
+   * panel is open floats the pane in (`onHoverChange`). A toggle that goes away while it has focus
+   * (its panel has nothing to show any more) hands it to `focusTerminal`. */
   panelToggles?: ReadonlyArray<{
     kind: string;
     label: string;
@@ -140,11 +142,14 @@ interface TitleBarProps {
   canGoForward: boolean;
   onBack: () => void;
   onForward: () => void;
+  focusTerminal: () => void;
   selectedSession?: Session;
   /** What the content area shows instead of the selected session's terminal (the archive view),
    * as the breadcrumb's names; it then takes the session's place in the bar. */
   viewTrail?: string[];
 }
+
+const toggleId = (kind: string) => `panel-toggle-${kind}`;
 
 /**
  * The bar across the top of the window, on the window chrome like the rail below it: Back and
@@ -171,6 +176,7 @@ export function TitleBar({
   canGoForward,
   onBack,
   onForward,
+  focusTerminal,
   selectedSession,
   viewTrail,
 }: TitleBarProps): React.ReactElement {
@@ -221,18 +227,22 @@ export function TitleBar({
         {panelToggles && panelToggles.length > 0 && (
           <div className="flex items-center gap-1 px-2">
             {panelToggles.map(({ kind, label, Icon, open, regionId, onPress, onHoverChange }) => (
-              <ChromeButton
-                key={kind}
-                label={label}
-                onPress={onPress}
-                expanded={open}
-                selected={open}
-                regionId={regionId}
-                paneToggle={PANE_ID.aside}
-                onMouseHoverChange={onHoverChange}
-              >
-                <Icon aria-hidden="true" className="size-4" />
-              </ChromeButton>
+              <React.Fragment key={kind}>
+                {/* First among what goes away with the toggle, so focus on it is still found. */}
+                <HandOffOnUnmount from={`#${toggleId(kind)}`} to={focusTerminal} />
+                <ChromeButton
+                  id={toggleId(kind)}
+                  label={label}
+                  onPress={onPress}
+                  expanded={open}
+                  selected={open}
+                  regionId={regionId}
+                  paneToggle={PANE_ID.aside}
+                  onMouseHoverChange={onHoverChange}
+                >
+                  <Icon aria-hidden="true" className="size-4" />
+                </ChromeButton>
+              </React.Fragment>
             ))}
           </div>
         )}

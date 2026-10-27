@@ -242,8 +242,9 @@ impl Store {
             );
             CREATE TABLE IF NOT EXISTS pages (
                 id                TEXT PRIMARY KEY,
-                -- The console session that pushed the page; deleting it takes its pages, and
-                -- deleting a console therefore takes all of them.
+                -- The session that pushed the page, a console session or a project session that
+                -- faces the user; deleting it takes its pages, and deleting a console or a project
+                -- therefore takes all of theirs.
                 console_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
                 html              TEXT NOT NULL,
                 anchor_message_id TEXT,
@@ -1871,27 +1872,78 @@ impl Store {
 
     /// Oldest first: `created_at` alone can tie at millisecond resolution, so `id` breaks the tie
     /// deterministically rather than leaving the order to SQLite's whim.
-    pub fn list_pages(&self, console_session_id: &str) -> Result<Vec<Page>> {
+    pub fn list_pages(&self, session_id: &str) -> Result<Vec<Page>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
             "SELECT id, console_session_id, html, anchor_message_id, created_at
              FROM pages WHERE console_session_id = ?1 ORDER BY created_at, id",
         )?;
         let rows = stmt
-            .query_map(params![console_session_id], read_page)?
+            .query_map(params![session_id], read_page)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(rows)
     }
 
-    /// The id of the console session's newest page, or `None` if it has none yet. The ordering is the exact
+    /// Deletes pages of the session `session_id` and returns the ids it removed: the `named` ones,
+    /// each once and in the order given, or with `None` every page it has, oldest first. Checked
+    /// and deleted in one transaction, so a page two callers delete at once is reported by only
+    /// one of them. A named id that is not one of the session's pages (another session's, one
+    /// already gone, one that never was) deletes nothing and comes back as the `Err`.
+    pub fn delete_pages(
+        &self,
+        session_id: &str,
+        named: Option<&[String]>,
+    ) -> Result<std::result::Result<Vec<String>, String>> {
+        let conn = self.lock();
+        let tx = conn.unchecked_transaction()?;
+        let ids: Vec<String> = match named {
+            Some(named) => {
+                let mut ids: Vec<String> = Vec::new();
+                for id in named {
+                    if !ids.contains(id) {
+                        ids.push(id.clone());
+                    }
+                }
+                ids
+            }
+            None => {
+                let mut stmt = tx.prepare(
+                    "SELECT id FROM pages WHERE console_session_id = ?1 ORDER BY created_at, id",
+                )?;
+                let ids = stmt
+                    .query_map(params![session_id], |row| row.get(0))?
+                    .collect::<rusqlite::Result<Vec<String>>>()?;
+                ids
+            }
+        };
+        let mut deleted = Vec::with_capacity(ids.len());
+        for id in ids {
+            let removed: Option<String> = tx
+                .query_row(
+                    "DELETE FROM pages WHERE id = ?1 AND console_session_id = ?2 RETURNING id",
+                    params![id, session_id],
+                    |row| row.get(0),
+                )
+                .optional()?;
+            match removed {
+                Some(removed) => deleted.push(removed),
+                // Dropping the transaction rolls back the ones deleted before this one.
+                None => return Ok(Err(id)),
+            }
+        }
+        tx.commit()?;
+        Ok(Ok(deleted))
+    }
+
+    /// The id of the session's newest page, or `None` if it has none yet. The ordering is the exact
     /// reverse of [`Self::list_pages`]'s, so the two never disagree about which page is newest when
     /// `created_at` ties.
-    pub fn newest_page_id(&self, console_session_id: &str) -> Result<Option<String>> {
+    pub fn newest_page_id(&self, session_id: &str) -> Result<Option<String>> {
         let id = self
             .lock()
             .query_row(
                 "SELECT id FROM pages WHERE console_session_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1",
-                params![console_session_id],
+                params![session_id],
                 |row| row.get(0),
             )
             .optional()?;
@@ -6061,6 +6113,53 @@ mod tests {
         store.delete_console("console-1").unwrap();
         assert!(ids("session-b").is_empty());
         assert!(store.get_page("b-1").unwrap().is_none());
+    }
+
+    /// `delete_pages` checks and removes in one transaction: it reports only what it removed, a
+    /// foreign or already-deleted id rolls the whole call back, and a repeated delete of the same
+    /// page reports it once.
+    #[test]
+    fn delete_pages_reports_only_what_it_removed_and_rolls_back_on_a_foreign_id() {
+        let path = temp_db("delete-pages");
+        let store = Store::open(&path).expect("store");
+        store.insert_console(&console(None, None, None)).unwrap();
+        for id in ["session-a", "session-b"] {
+            store.insert_session(&console_session(id)).unwrap();
+        }
+        for page in [
+            page("a-1", "session-a", 1),
+            page("a-2", "session-a", 2),
+            page("b-1", "session-b", 3),
+        ] {
+            store.insert_page(&page).unwrap();
+        }
+        let named = |ids: &[&str]| ids.iter().map(|id| id.to_string()).collect::<Vec<_>>();
+
+        // A foreign id after an own one undoes the own one.
+        let refused = store
+            .delete_pages("session-a", Some(&named(&["a-1", "b-1"])))
+            .unwrap();
+        assert_eq!(refused, Err("b-1".to_string()));
+        assert_eq!(store.list_pages("session-a").unwrap().len(), 2);
+        assert_eq!(store.list_pages("session-b").unwrap().len(), 1);
+
+        // A repeated id is removed, and reported, once.
+        let done = store
+            .delete_pages("session-a", Some(&named(&["a-2", "a-2"])))
+            .unwrap();
+        assert_eq!(done, Ok(named(&["a-2"])));
+        // The same delete again finds it gone, so a second caller does not report it too.
+        let again = store
+            .delete_pages("session-a", Some(&named(&["a-2"])))
+            .unwrap();
+        assert_eq!(again, Err("a-2".to_string()));
+
+        assert_eq!(
+            store.delete_pages("session-a", None).unwrap(),
+            Ok(named(&["a-1"]))
+        );
+        assert_eq!(store.delete_pages("session-a", None).unwrap(), Ok(vec![]));
+        assert_eq!(store.list_pages("session-b").unwrap().len(), 1);
     }
 
     #[test]

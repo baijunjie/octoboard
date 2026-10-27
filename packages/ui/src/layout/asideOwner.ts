@@ -4,7 +4,10 @@ import type { Project, Session } from "../protocol";
  * Who the aside belongs to: a console session, whose report panel it shows, or a project, whose
  * browser it shows. It is set by what the user does — selecting a session, opening a project's
  * files — and never derived from whatever else is on screen, so a project's browser can be open
- * with no session at all and a terminal of another project beside it. No owner, no aside.
+ * with no session at all and a terminal of another project beside it. No owner, no aside. A
+ * project's panels are the project's whichever of its sessions is selected, except the Report
+ * panel, which is the selected project session's own (`panels/usePanelStacks.ts`), so the selected
+ * session is not part of the owner.
  */
 export type AsideOwner = { kind: "report"; consoleSession: string } | { kind: "project"; project: string };
 

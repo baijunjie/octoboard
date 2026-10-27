@@ -214,11 +214,18 @@ export interface State {
   consoles: Map<string, Console>;
   projects: Map<string, Project>;
   sessions: Map<string, Session>;
-  /** Keyed by console session id, oldest first, as `page_list` delivers them. Absent for a console
-   * session the report panel has not (re-)listed yet — distinct from an empty array, which means it has and
-   * there genuinely are none. Pages are deliberately left out of `snapshot` (see `protocol.ts`),
-   * so this map starts empty and is filled only by the panel's own `list_pages` requests. */
+  /** Keyed by the id of the session that pushed them (a console session, or a project session),
+   * oldest first, as `page_list` delivers them. Absent for a session whose pages have not been
+   * (re-)listed yet — distinct from an empty array, which means they have and there genuinely are
+   * none. Pages are deliberately left out of `snapshot` (see `protocol.ts`), so this map starts
+   * empty and is filled only by `list_pages` requests: the report panel's, and for a project
+   * session the window's own, to know whether its Report panel has anything to show
+   * (`report/useProjectReportSession.ts`). */
   pages: Map<string, Page[]>;
+  /** The ids of the pages each session has had deleted, kept so that a `page_list` reply computed
+   * before a deletion but applied after it does not bring them back. Cleared on a `snapshot`,
+   * which clears `pages` too, and with the session. */
+  deletedPages: Map<string, ReadonlySet<string>>;
   /** Bumped on every `snapshot`. A snapshot arrives on the same socket for a lag recovery, not
    * just a fresh connection (see the `page_list` row under "Daemon to client" in
    * `apps/daemon/PROTOCOL.md`), so `connectionState` alone does not change — a consumer that needs to
@@ -300,6 +307,7 @@ const initialState: State = {
   projects: new Map(),
   sessions: new Map(),
   pages: new Map(),
+  deletedPages: new Map(),
   snapshotEpoch: 0,
   trustPrompts: [],
   trustedDirectories: [],
@@ -471,6 +479,7 @@ function reducer(state: State, action: Action): State {
             // pages forever — nothing else ever removes an entry for a session the snapshot no
             // longer lists.
             pages: new Map(),
+            deletedPages: new Map(),
             snapshotEpoch: state.snapshotEpoch + 1,
             trustPrompts: [],
             trustedDirectories: event.trusted_directories,
@@ -511,7 +520,7 @@ function reducer(state: State, action: Action): State {
           const sessions = new Map(
             Array.from(state.sessions).filter(([, s]) => s.console_id !== event.console),
           );
-          // A page goes with the console session that pushed it, so with the console's.
+          // A page goes with the session that pushed it, so with its console's.
           const pages = new Map(
             Array.from(state.pages).filter(([consoleSessionId]) => sessions.has(consoleSessionId)),
           );
@@ -520,7 +529,10 @@ function reducer(state: State, action: Action): State {
           const gitStatuses = new Map(
             Array.from(state.gitStatuses).filter(([projectId]) => projects.has(projectId)),
           );
-          return { ...state, consoles, projects, sessions, pages, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
+          const deletedPages = new Map(
+            Array.from(state.deletedPages).filter(([consoleSessionId]) => sessions.has(consoleSessionId)),
+          );
+          return { ...state, consoles, projects, sessions, pages, deletedPages, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
         }
         case "session_opened": {
           // A title or status broadcast can arrive before this launch-time reply. Keep the
@@ -572,12 +584,15 @@ function reducer(state: State, action: Action): State {
           // The daemon takes a console session's pages with it, and says so only through this event.
           const pages = new Map(state.pages);
           pages.delete(event.session);
+          const deletedPages = new Map(state.deletedPages);
+          deletedPages.delete(event.session);
           // A session deleted while it ran leaves no confirmation or request that anyone can answer.
           return {
             ...state,
             sessions,
             daemonSwitching: withMember(state.daemonSwitching, event.session, false),
             pages,
+            deletedPages,
             trustPrompts: state.trustPrompts.filter((p) => p.session !== event.session),
             sessionRequests: state.sessionRequests.filter((r) => r.session !== event.session),
           };
@@ -614,12 +629,15 @@ function reducer(state: State, action: Action): State {
           // reply was computed can have already landed here. Replacing wholesale would drop that
           // page; instead keep the reply's order first, then append whatever locally held page
           // the reply is missing.
-          // Pages are append-only and a `page_created` is always the newest, so appending after
-          // keeps the merged order correct.
+          // A `page_created` is always the newest page, so appending after keeps the merged order
+          // correct. Pages can also be deleted, and a reply computed before a deletion can be
+          // applied after its `pages_deleted`: the deleted ids are remembered and filtered out.
           const existing = state.pages.get(event.console_session_id) ?? [];
-          const seen = new Set(event.pages.map((p) => p.id));
+          const deleted = state.deletedPages.get(event.console_session_id);
+          const listed = deleted ? event.pages.filter((p) => !deleted.has(p.id)) : event.pages;
+          const seen = new Set(listed.map((p) => p.id));
           const pages = new Map(state.pages);
-          pages.set(event.console_session_id, [...event.pages, ...existing.filter((p) => !seen.has(p.id))]);
+          pages.set(event.console_session_id, [...listed, ...existing.filter((p) => !seen.has(p.id))]);
           return { ...state, pages };
         }
         case "page_created": {
@@ -631,6 +649,19 @@ function reducer(state: State, action: Action): State {
           const pages = new Map(state.pages);
           pages.set(event.page.console_session_id, [...existing, event.page]);
           return { ...state, pages };
+        }
+        case "pages_deleted": {
+          // Kept as an empty list rather than dropped when none is left: the session's pages are
+          // still known, and there are none.
+          // The ids are remembered even with no list yet, as the reply in flight may hold them.
+          const gone = new Set([...(state.deletedPages.get(event.console_session_id) ?? []), ...event.pages]);
+          const deletedPages = new Map(state.deletedPages);
+          deletedPages.set(event.console_session_id, gone);
+          const existing = state.pages.get(event.console_session_id);
+          if (!existing) return { ...state, deletedPages };
+          const pages = new Map(state.pages);
+          pages.set(event.console_session_id, existing.filter((page) => !gone.has(page.id)));
+          return { ...state, pages, deletedPages };
         }
         case "project_git_status": {
           if (sameValue(state.gitStatuses.get(event.status.project), event.status)) return state;
