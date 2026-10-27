@@ -21,15 +21,34 @@ use super::args::{optional_agent, optional_bool};
 const NOT_READ_YET: &str = "Not read yet: the daemon has not taken a reading of this account's \
                             quota. Try again shortly.";
 
+/// What is said of an account that is used up, as the reason it cannot open a session.
+const USED_UP: &str = "Its plan quota is used up; `exhausted_until` says when it resets.";
+
+/// What is said of an account the last reading found not logged in, as the reason it cannot open
+/// a session.
+const NOT_SIGNED_IN: &str = "It is not logged in; log in to it in Settings → Agent accounts.";
+
+/// What is said of an account whose change of sharing is running, as the reason it cannot open a
+/// session.
+const SHARING_IN_PROGRESS: &str = "A change of its sharing settings is in progress; try again \
+                                   when it has ended.";
+
 /// Every account of every agent a session could be opened on (or of `agent`, when the caller names
 /// one), with the reading held for it: the default account first, then the stored ones in the
-/// order they are kept. An agent that is not installed or not added has none (the poller still
-/// reads one that is installed but not added); one not yet detected is listed, its accounts not
-/// read yet. An account is judged
-/// exhausted by the rule that keeps it from opening a session (`AccountQuotas::exhausted`).
+/// order they are kept. An account the user turned off is left out, the caller's own included: it
+/// is shown on the account settings page alone. An agent that is not installed or not added has
+/// none (the poller still reads one that is installed but not added); one not yet detected is
+/// listed, its accounts not read yet. An account is judged exhausted by the rule that keeps it
+/// from opening a session (`AccountQuotas::exhausted`), and `can_open` also takes in an account
+/// the last reading found not logged in and a running change of its sharing, the reasons
+/// automatic account selection passes an account over for. `auto_select_account` is the setting,
+/// so a caller that cannot read the settings knows whether an account it leaves out is chosen for
+/// it.
 ///
-/// With `refresh` the readings of those accounts are first taken again where the last attempt is
-/// over a minute old; a call within the minute is not an error, it gets what is held.
+/// With `refresh` the readings of those accounts, and of an agent that is installed but not added
+/// (which the poller reads too), the ones the user turned off excepted, are first taken again
+/// where the last attempt is over a minute old; a call within the minute is not an error, it gets
+/// what is held.
 pub(super) async fn get_account_quotas(
     state: &Arc<AppState>,
     arguments: &Map<String, Value>,
@@ -53,6 +72,7 @@ async fn get_account_quotas_with(
         let scope = account_quotas::Scope {
             agent: only,
             account: None,
+            enabled_only: true,
         };
         account_quotas::refresh_on_demand(state, &scope, shell).await;
     }
@@ -64,18 +84,36 @@ async fn get_account_quotas_with(
             continue;
         }
         let stored = accounts.iter().filter(|account| account.agent == agent);
-        let candidates = std::iter::once((None, None, state.store.default_account_name(agent)?))
-            .chain(stored.map(|account| {
-                (
-                    Some(account.id.as_str()),
-                    Some(account.config_dir.as_str()),
-                    account.name.clone(),
-                )
-            }));
-        for (id, config_dir, name) in candidates {
+        let candidates = std::iter::once((
+            None,
+            None,
+            state.store.default_account_name(agent)?,
+            state.store.account_disabled(agent, None)?,
+        ))
+        .chain(stored.map(|account| {
+            (
+                Some(account.id.as_str()),
+                Some(account.config_dir.as_str()),
+                account.name.clone(),
+                account.disabled,
+            )
+        }));
+        for (id, config_dir, name, disabled) in candidates {
+            if disabled {
+                continue;
+            }
             let (held, exhausted) = state
                 .account_quotas
                 .held_and_exhausted(agent, id, config_dir, now);
+            let cannot_open = if exhausted.is_some() {
+                Some(USED_UP)
+            } else if state.account_quotas.signed_out(agent, id, config_dir) {
+                Some(NOT_SIGNED_IN)
+            } else if id.is_some_and(|id| state.sharing_locked(id).is_some()) {
+                Some(SHARING_IN_PROGRESS)
+            } else {
+                None
+            };
             listed.push(json!({
                 "agent": agent,
                 "account": id.unwrap_or("default"),
@@ -84,6 +122,8 @@ async fn get_account_quotas_with(
                 "fetched_at": held.as_ref().map(|quota| quota.fetched_at),
                 "exhausted": exhausted.is_some(),
                 "exhausted_until": exhausted.and_then(|exhausted| exhausted.resets_at),
+                "can_open": cannot_open.is_none(),
+                "cannot_open_reason": cannot_open,
                 "unavailable": match &held {
                     Some(quota) => quota.unavailable.as_ref().map(|reason| reason.message.as_str()),
                     None => Some(NOT_READ_YET),
@@ -95,7 +135,10 @@ async fn get_account_quotas_with(
             }));
         }
     }
-    Ok(json!({ "accounts": listed }))
+    Ok(json!({
+        "auto_select_account": state.store.auto_select_account()?,
+        "accounts": listed,
+    }))
 }
 
 fn describe_window(window: &QuotaWindow) -> Value {
@@ -215,6 +258,7 @@ mod tests {
         assert_eq!(default["fetched_at"], 1_000);
         assert_eq!(default["exhausted"], false);
         assert_eq!(default["exhausted_until"], Value::Null);
+        assert_eq!(default["can_open"], true);
         assert_eq!(default["unavailable"], Value::Null);
         assert_eq!(
             default["windows"],
@@ -274,6 +318,139 @@ mod tests {
         );
         assert_eq!(entry(&result, "codex", "codex-b")["exhausted"], false);
         assert_eq!(entry(&result, "codex", "default")["exhausted"], false);
+    }
+
+    /// A turned-off account is left out, the default account of its agent included; the others of
+    /// the agent stay, and turning it back on lists it again.
+    #[tokio::test]
+    async fn a_turned_off_account_is_not_listed() {
+        let (state, _dir) = shared_console_state("quotas-disabled");
+        available(&state, &[Agent::Claude]);
+        insert_account(&state, Agent::Claude, "claude-a");
+        insert_account(&state, Agent::Claude, "claude-b");
+        state.store.set_account_disabled("claude-a", true).unwrap();
+        state
+            .store
+            .set_default_account_disabled(Agent::Claude, true)
+            .unwrap();
+
+        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+            .await
+            .unwrap();
+        let ids: Vec<&Value> = result["accounts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|entry| &entry["account"])
+            .collect();
+        assert_eq!(ids, ["claude-b"]);
+
+        state.store.set_account_disabled("claude-a", false).unwrap();
+        let result = get_account_quotas(&state, &arguments(json!({ "agent": "claude" })))
+            .await
+            .unwrap();
+        assert_eq!(result["accounts"].as_array().unwrap().len(), 2);
+        assert_eq!(entry(&result, "claude", "claude-a")["can_open"], true);
+    }
+
+    /// `can_open` is false, with the reason, for an account that is used up or whose change of
+    /// sharing is running: the two things besides being turned off that make automatic account
+    /// selection pass an account over.
+    #[tokio::test]
+    async fn can_open_says_whether_a_session_could_open_on_the_account_and_why_not() {
+        let (state, _dir) = shared_console_state("quotas-can-open");
+        available(&state, &[Agent::Codex]);
+        insert_account(&state, Agent::Codex, "codex-a");
+        insert_account(&state, Agent::Codex, "codex-b");
+        let future = now_millis() + 3_600_000;
+        state.account_quotas.hold_in_dir_for_test(
+            &quota(Agent::Codex, Some("codex-a"), vec![weekly(100.0, future)]),
+            "/tmp/codex-a",
+        );
+        let account = state.store.get_account("codex-b").unwrap().unwrap();
+        let (_, lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+
+        let result = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
+        assert_eq!(entry(&result, "codex", "default")["can_open"], true);
+        assert_eq!(
+            entry(&result, "codex", "default")["cannot_open_reason"],
+            Value::Null
+        );
+        assert_eq!(entry(&result, "codex", "codex-a")["can_open"], false);
+        assert_eq!(
+            entry(&result, "codex", "codex-a")["cannot_open_reason"],
+            USED_UP
+        );
+        assert_eq!(entry(&result, "codex", "codex-b")["can_open"], false);
+        assert_eq!(
+            entry(&result, "codex", "codex-b")["cannot_open_reason"],
+            SHARING_IN_PROGRESS
+        );
+
+        drop(lock);
+        let result = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
+        assert_eq!(entry(&result, "codex", "codex-b")["can_open"], true);
+    }
+
+    /// An account the last reading found not logged in cannot open a session, and says so; one
+    /// whose reading failed for another reason still can.
+    #[tokio::test]
+    async fn can_open_is_false_for_an_account_that_is_not_logged_in() {
+        let (state, _dir) = shared_console_state("quotas-not-signed-in");
+        available(&state, &[Agent::Codex]);
+        insert_account(&state, Agent::Codex, "codex-a");
+        insert_account(&state, Agent::Codex, "codex-b");
+        let unavailable =
+            |code: &'static str| Some(QuotaUnavailable::new(code, "x", &[("agent", "Codex")]));
+        for (id, code) in [
+            (
+                "codex-a",
+                crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+            ),
+            (
+                "codex-b",
+                crate::protocol::quota_unavailable_code::TIMED_OUT,
+            ),
+        ] {
+            let mut held = quota(Agent::Codex, Some(id), Vec::new());
+            held.unavailable = unavailable(code);
+            state
+                .account_quotas
+                .hold_in_dir_for_test(&held, &format!("/tmp/{id}"));
+        }
+
+        let result = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
+
+        assert_eq!(entry(&result, "codex", "codex-a")["can_open"], false);
+        assert_eq!(
+            entry(&result, "codex", "codex-a")["cannot_open_reason"],
+            NOT_SIGNED_IN
+        );
+        assert_eq!(entry(&result, "codex", "codex-b")["can_open"], true);
+    }
+
+    /// `auto_select_account` is the setting as it stands.
+    #[tokio::test]
+    async fn the_result_carries_the_auto_select_account_setting() {
+        let (state, _dir) = shared_console_state("quotas-auto-select");
+        available(&state, &[Agent::Claude]);
+
+        let off = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
+        assert_eq!(off["auto_select_account"], false);
+
+        state.store.set_auto_select_account(true).unwrap();
+        let on = get_account_quotas(&state, &arguments(json!({})))
+            .await
+            .unwrap();
+        assert_eq!(on["auto_select_account"], true);
     }
 
     /// `agent` narrows the list to one agent. An agent that is not installed, or not on the added

@@ -145,6 +145,9 @@ pub(super) fn update_settings(
             // Likewise the interface language, which only the user's own client reports.
             interface_language: None,
             auto_select_account: optional_bool(arguments, "auto_select_account")?,
+            // Not settable by an agent: it has Octoboard end sessions' processes and spend
+            // another account's quota without asking.
+            auto_switch_on_usage_limit: None,
             sidebar_order_by_status: optional_bool(arguments, "sidebar_order_by_status")?,
             // Not settable by an agent: it spends the user's quota.
             auto_start_quota_windows: None,
@@ -157,8 +160,59 @@ pub(super) fn update_settings(
 
 /// The caller's own project's settings, and nobody else's: what a project session may read of
 /// Octoboard's own record of it.
-pub(super) fn get_project(state: &Arc<AppState>, caller: &Session) -> Result<Value> {
-    describe_project(state, &own_project(state, caller, None)?)
+///
+/// With `refresh`, the project's git status is checked against its remote first (see
+/// [`refresh_git_status`]), and the answer says whether the check finished.
+pub(super) async fn get_project(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Value> {
+    let project = own_project(state, caller, None)?;
+    let refreshed = if optional_bool(arguments, "refresh")?.unwrap_or(false) {
+        Some(refresh_git_status(state, vec![project.clone()]).await)
+    } else {
+        None
+    };
+    let mut description = describe_project(state, &project)?;
+    if let Some(refreshed) = refreshed {
+        description["git_refresh"] = refreshed;
+    }
+    Ok(description)
+}
+
+/// How long a `refresh` of the git status waits for the checks it asked for. A check that goes
+/// to a slow remote can take a minute or more, and the call must not hold its caller for that.
+const GIT_REFRESH_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Checks `projects` against their remotes as the application's own refresh does (the same
+/// one-minute floor and in-flight claim, and a fast-forward where `auto_pull_repositories` is on),
+/// waits up to [`GIT_REFRESH_WAIT`] for the results, and says in `{ finished, unfinished, note }`
+/// whether they all came in; the statuses are then read from the daemon as usual.
+pub(super) async fn refresh_git_status(state: &Arc<AppState>, projects: Vec<Project>) -> Value {
+    refresh_git_status_within(state, projects, GIT_REFRESH_WAIT).await
+}
+
+/// [`refresh_git_status`] waiting up to `wait`, which the tests shorten.
+pub(super) async fn refresh_git_status_within(
+    state: &Arc<AppState>,
+    projects: Vec<Project>,
+    wait: std::time::Duration,
+) -> Value {
+    let unfinished = crate::git_status::refresh_and_wait(state, projects, wait).await;
+    if unfinished.is_empty() {
+        return json!({ "finished": true });
+    }
+    json!({
+        "finished": false,
+        "unfinished": unfinished,
+        "note": format!(
+            "The check of these projects had not finished after {} seconds and goes on in the \
+             background; their `git_status` is what the daemon held before, so read it again \
+             later.",
+            wait.as_secs()
+        ),
+    })
 }
 
 /// The optional `git_workflow` argument, read as the control requests read theirs: an item left out

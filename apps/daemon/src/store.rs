@@ -296,6 +296,7 @@ impl Store {
                 auto_approve_handoffs INTEGER NOT NULL DEFAULT 0,
                 ask_questions_as_choices INTEGER NOT NULL DEFAULT 1,
                 auto_select_account INTEGER NOT NULL DEFAULT 0,
+                auto_switch_on_usage_limit INTEGER NOT NULL DEFAULT 0,
                 sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
                 auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
                 -- NULL until the user sets one; see `Store::default_clone_dir`.
@@ -449,6 +450,13 @@ impl Store {
             conn.execute(
                 "ALTER TABLE settings \
                  ADD COLUMN auto_select_account INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        if !column_exists(&conn, "settings", "auto_switch_on_usage_limit")? {
+            conn.execute(
+                "ALTER TABLE settings \
+                 ADD COLUMN auto_switch_on_usage_limit INTEGER NOT NULL DEFAULT 0",
                 [],
             )?;
         }
@@ -1314,6 +1322,7 @@ impl Store {
             ask_questions_as_choices: self.ask_questions_as_choices()?,
             interface_language: self.interface_language()?,
             auto_select_account: self.auto_select_account()?,
+            auto_switch_on_usage_limit: self.auto_switch_on_usage_limit()?,
             sidebar_order_by_status: self.sidebar_order_by_status()?,
             auto_start_quota_windows: self.auto_start_quota_windows()?,
             default_clone_dir: self.default_clone_dir()?,
@@ -1648,6 +1657,24 @@ impl Store {
         let changed = self.lock().execute(
             "UPDATE settings SET auto_select_account = ?2 \
              WHERE id = ?1 AND auto_select_account != ?2",
+            params![SETTINGS_ID, value],
+        )?;
+        Ok(changed > 0)
+    }
+
+    pub fn auto_switch_on_usage_limit(&self) -> Result<bool> {
+        Ok(self.lock().query_row(
+            "SELECT auto_switch_on_usage_limit FROM settings WHERE id = ?1",
+            params![SETTINGS_ID],
+            |row| row.get(0),
+        )?)
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_auto_switch_on_usage_limit(&self, value: bool) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET auto_switch_on_usage_limit = ?2 \
+             WHERE id = ?1 AND auto_switch_on_usage_limit != ?2",
             params![SETTINGS_ID, value],
         )?;
         Ok(changed > 0)
@@ -2306,6 +2333,15 @@ impl Store {
                 read_session,
             )
             .optional()?)
+    }
+
+    /// How many sessions are bound to `owner`, in any status, counted in the store.
+    pub fn count_bound_to(&self, owner: &str) -> Result<usize> {
+        Ok(self.lock().query_row(
+            "SELECT COUNT(*) FROM sessions WHERE bound_to = ?1",
+            params![owner],
+            |row| row.get(0),
+        )?)
     }
 
     /// Unbinds the project session `id`, currently bound to `from`: `bound_to` cleared and `lead`
@@ -5124,6 +5160,14 @@ mod tests {
                 read: |settings| settings.auto_select_account,
                 get: Store::auto_select_account,
                 set: Store::set_auto_select_account,
+                added_later: true,
+            },
+            Setting {
+                column: "auto_switch_on_usage_limit",
+                default: false,
+                read: |settings| settings.auto_switch_on_usage_limit,
+                get: Store::auto_switch_on_usage_limit,
+                set: Store::set_auto_switch_on_usage_limit,
                 added_later: true,
             },
             Setting {

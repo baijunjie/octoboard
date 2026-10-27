@@ -1,4 +1,4 @@
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { reportError } from "../reportError";
 import React, { useEffect, useRef, useState } from "react";
 

@@ -5,7 +5,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { isolate } from "../i18n/isolate";
 import type { MessageKey } from "../i18n/catalog";
 import { InlineReference } from "../components/InlineReference";

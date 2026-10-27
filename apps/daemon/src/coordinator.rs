@@ -271,6 +271,7 @@ async fn handle_inner(
             crate::shell_terminal::close_projects(state, &project_ids).await;
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
+                state.forget_left_for_limit(session_id);
                 state.forget_handoff_package(session_id);
             }
             // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
@@ -474,6 +475,7 @@ async fn handle_inner(
             crate::branch_origin::project_deleted_in(state, repository);
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
+                state.forget_left_for_limit(session_id);
                 state.forget_handoff_package(session_id);
             }
             state.broadcast(Event::ProjectDeleted {
@@ -599,6 +601,7 @@ async fn handle_inner(
                     account_quotas::Scope {
                         agent: Some(agent),
                         account,
+                        ..Default::default()
                     }
                 }
                 (None, Some(account)) => {
@@ -609,6 +612,7 @@ async fn handle_inner(
                     account_quotas::Scope {
                         agent: Some(stored.agent),
                         account: Some(account),
+                        ..Default::default()
                     }
                 }
                 (None, None) => account_quotas::Scope::default(),
@@ -1014,6 +1018,7 @@ async fn handle_inner(
             ask_questions_as_choices,
             interface_language,
             auto_select_account,
+            auto_switch_on_usage_limit,
             sidebar_order_by_status,
             auto_start_quota_windows,
             default_clone_dir,
@@ -1031,6 +1036,7 @@ async fn handle_inner(
                     ask_questions_as_choices,
                     interface_language,
                     auto_select_account,
+                    auto_switch_on_usage_limit,
                     sidebar_order_by_status,
                     auto_start_quota_windows,
                     default_clone_dir,
@@ -2674,6 +2680,12 @@ fn resolve_open_with(
             account_id.as_deref(),
             config_dir.as_deref(),
         )?;
+        refuse_if_account_not_signed_in(
+            state,
+            agent,
+            account_id.as_deref(),
+            config_dir.as_deref(),
+        )?;
     }
     // Asked again by the launch under its claim; asked here so that nothing is recorded.
     crate::shared_config::refuse_if_changing(state, account_id.as_deref())?;
@@ -2982,16 +2994,17 @@ async fn check_launch_settings(
 /// Refuses a session that [`open_session`] would refuse for what `request` asks, a console session
 /// included, before anything is launched or recorded: an unknown console, project or owner, an
 /// agent that is not available or not added, an account of another agent, a disabled account, an
-/// account whose plan quota is used up, a model or effort the agent does not offer. For a session
-/// whose opening waits on the user's answer, so that a request which could never be carried out is
-/// refused to the asker rather than put to the user. Returns the agent the session would be of.
+/// account whose plan quota is used up or that the last quota reading found not logged in, a model
+/// or effort the agent does not offer. For a session whose opening waits on the user's answer, so
+/// that a request which could never be carried out is refused to the asker rather than put to the
+/// user. Returns the agent the session would be of.
 pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<Agent> {
     Ok(check_open_with(state, request, true).await?.0)
 }
 
 /// [`check_open`] for a session whose opening waits on the user's choice of account, which is not
-/// refused for an account whose quota is used up (the user can pick another; the refusal comes at
-/// approval). Returns the account the session would open on.
+/// refused for an account whose quota is used up or that is not logged in (the user can pick
+/// another; the refusal comes at approval). Returns the account the session would open on.
 pub async fn check_open_asking(
     state: &Arc<AppState>,
     request: &OpenRequest,
@@ -2999,8 +3012,8 @@ pub async fn check_open_asking(
     Ok(check_open_with(state, request, false).await?.1)
 }
 
-/// The checks of [`check_open`], refusing an account whose quota is used up only when
-/// `enforce_quota`; returns the agent and the account the session would open on.
+/// The checks of [`check_open`], refusing an account whose quota is used up or that is not logged
+/// in only when `enforce_quota`; returns the agent and the account the session would open on.
 async fn check_open_with(
     state: &Arc<AppState>,
     request: &OpenRequest,
@@ -3451,6 +3464,7 @@ async fn resume_session_with(
         terminal_appearance,
         LaunchEdit::default(),
         shell_snapshot,
+        term::launch,
     )
     .await
 }
@@ -3460,12 +3474,18 @@ async fn resume_session_with(
 /// offers under its own account before anything is launched, recorded as the session's own just
 /// before its relaunch, and put back when the relaunch fails. Any archived owner reopened with it
 /// keeps its settings.
-pub(crate) async fn resume_session_edited(
+///
+/// The login-shell snapshot and the process start `launch` are supplied by the caller:
+/// `env_shell::launch_snapshot` and `term::launch` outside the tests, which cannot start an
+/// agent.
+pub(crate) async fn resume_session_edited_with(
     state: &Arc<AppState>,
     id: &str,
     instruction: Option<&str>,
     terminal_appearance: Option<TerminalAppearance>,
     launch_edit: LaunchEdit,
+    shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl Fn(term::LaunchRequest) -> Result<term::Launch> + Clone + Send + 'static,
 ) -> Result<()> {
     resume_session_with_launch(
         state,
@@ -3473,12 +3493,14 @@ pub(crate) async fn resume_session_edited(
         instruction,
         terminal_appearance,
         launch_edit,
-        env_shell::launch_snapshot,
+        shell_snapshot,
+        launch,
     )
     .await
 }
 
-/// [`resume_session_with`] with the model and effort to reopen the session with.
+/// [`resume_session_with`] with the model and effort to reopen the session with, and the process
+/// start `launch`, called once for each session reopened.
 async fn resume_session_with_launch(
     state: &Arc<AppState>,
     id: &str,
@@ -3486,6 +3508,7 @@ async fn resume_session_with_launch(
     terminal_appearance: Option<TerminalAppearance>,
     launch_edit: LaunchEdit,
     shell_snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl Fn(term::LaunchRequest) -> Result<term::Launch> + Clone + Send + 'static,
 ) -> Result<()> {
     // Claimed before anything else, so two overlapping relaunches cannot both get through, and
     // before the record is read, so a delete cannot slip in between reading and launching.
@@ -3539,7 +3562,7 @@ async fn resume_session_with_launch(
         } else {
             unarchive_rollout(&checked, &shell).await?;
         }
-        relaunch_session(
+        relaunch_session_with(
             state,
             &owner_claim,
             &owner,
@@ -3547,13 +3570,14 @@ async fn resume_session_with_launch(
             true,
             Some(shell.clone()),
             None,
+            launch.clone(),
         )
         .await?;
     }
     if let Some((model, effort)) = &overrides {
         state.set_session_launch_overrides(id, model, effort)?;
     }
-    let relaunched = relaunch_session(
+    let relaunched = relaunch_session_with(
         state,
         &claim,
         id,
@@ -3561,6 +3585,7 @@ async fn resume_session_with_launch(
         true,
         Some(shell),
         terminal_appearance,
+        launch,
     )
     .await;
     if relaunched.is_err() && overrides.is_some() {
@@ -3728,29 +3753,8 @@ pub(crate) fn archived_owners(state: &Arc<AppState>, id: &str) -> Result<Vec<Str
 /// the caller's, taken before it read anything and dropped by it when it is done; `reopen` says
 /// whether an archived session may be relaunched (a resume reopens one, a switch must not);
 /// `shell_env` is a snapshot the caller already resolved something from (see
-/// [`term::LaunchRequest::preresolved_shell_env`]).
-async fn relaunch_session(
-    state: &Arc<AppState>,
-    claim: &crate::state::LaunchClaim,
-    id: &str,
-    instruction: Option<&str>,
-    reopen: bool,
-    shell_env: Option<HashMap<String, String>>,
-    terminal_appearance: Option<TerminalAppearance>,
-) -> Result<()> {
-    relaunch_session_with(
-        state,
-        claim,
-        id,
-        instruction,
-        reopen,
-        shell_env,
-        terminal_appearance,
-        term::launch,
-    )
-    .await
-}
-
+/// [`term::LaunchRequest::preresolved_shell_env`]). `launch` is `term::launch` outside the tests,
+/// which cannot start an agent.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn relaunch_session_with(
     state: &Arc<AppState>,
@@ -3863,7 +3867,14 @@ pub(crate) async fn relaunch_session_with(
             // press of its trust screen, or once its trust watch has ended with none sighted
             // (`trust::supervise`). Never before, since the agent may be sitting on its trust or
             // approval screen, where the paste's trailing Enter would answer it.
-            let recorded = state.session_record(&session.id)?;
+            let recorded = match state.session_record(&session.id) {
+                Ok(recorded) => recorded,
+                Err(err) => {
+                    // The caller will not watch the process come up.
+                    state.release_launch_watch(&session.id);
+                    return Err(err);
+                }
+            };
             if recorded.status == SessionStatus::Archived {
                 // The archive may have landed while the launch was off the runtime, before
                 // there was a registered process for it to end.
@@ -3954,7 +3965,7 @@ fn project_launch_settings(
 /// project session pair behind it (see [`project_launch_settings`]), unless that field has a
 /// session override. Inherited values are read at every launch, while an override (including
 /// explicitly leaving the choice to the agent) survives resumes and account switches.
-fn launch_settings(
+pub(crate) fn launch_settings(
     state: &Arc<AppState>,
     session: &Session,
 ) -> Result<(Option<String>, Option<String>)> {
@@ -4012,7 +4023,7 @@ fn launch_git_workflow_settings(
 #[allow(clippy::too_many_arguments)]
 async fn start_process(
     state: &Arc<AppState>,
-    _claim: &crate::state::LaunchClaim,
+    claim: &crate::state::LaunchClaim,
     session: &Session,
     cwd: &Path,
     task: Option<&str>,
@@ -4064,6 +4075,11 @@ async fn start_process(
     // Launching snapshots the user's shell environment and forks a process, so it goes off the
     // runtime rather than holding up the socket it was asked on.
     let launch = tokio::task::spawn_blocking(move || launch(request)).await??;
+    // Octoboard's own account switch, or the restoring of a session after one, watches the
+    // process come up and reports the outcome itself.
+    if claim.watches_launch() {
+        launch.session.watch_under_claim();
+    }
 
     // The live map now says the session is running; `claim` stays with the caller, which drops it
     // when it is done with the launch.
@@ -4080,7 +4096,11 @@ async fn start_process(
     trust::supervise(state, &launch.session);
     agent_dialogs::watch(state, &launch.session);
     if let Some(agent_session_id) = launch.agent_session_id {
-        state.set_agent_session_id(&session.id, &agent_session_id)?;
+        if let Err(err) = state.set_agent_session_id(&session.id, &agent_session_id) {
+            // Registered already, and the caller will not watch it come up.
+            state.release_launch_watch(&session.id);
+            return Err(err);
+        }
     }
     if let Some(notice) = launch.notice {
         state.broadcast(notice.about(&session.id));
@@ -4258,6 +4278,44 @@ pub(crate) fn group_in<'a>(sessions: &'a [Session], root: &'a Session) -> Vec<&'
     group
 }
 
+/// How many sessions are bound to each owner of `sessions`, in any status, by the owner's id,
+/// counted as [`bound_in`] does: a session with the role of a bound one owns none, whatever rows
+/// say they are bound to it.
+pub(crate) fn owned_counts(sessions: &[Session]) -> HashMap<String, usize> {
+    let owns_none: HashSet<&str> = sessions
+        .iter()
+        .filter(|session| session.has_bound_role())
+        .map(|session| session.id.as_str())
+        .collect();
+    let mut counts = HashMap::new();
+    for owner in sessions
+        .iter()
+        .filter_map(|session| session.bound_to.as_deref())
+    {
+        if !owns_none.contains(owner) {
+            *counts.entry(owner.to_string()).or_default() += 1;
+        }
+    }
+    counts
+}
+
+/// [`owned_counts`] for the one session `owner`, without reading the table of sessions: its
+/// entry, or none when it owns none. Counted as [`bound_in`] does, so a session with the role of a
+/// bound one owns none.
+pub(crate) fn owned_count_of(
+    state: &Arc<AppState>,
+    owner: &Session,
+) -> Result<HashMap<String, usize>> {
+    let mut counts = HashMap::new();
+    if !owner.has_bound_role() {
+        let owned = state.store.count_bound_to(&owner.id)?;
+        if owned > 0 {
+            counts.insert(owner.id.clone(), owned);
+        }
+    }
+    Ok(counts)
+}
+
 /// The sessions bound to `owner`, in any status.
 pub(crate) fn bound_sessions(state: &Arc<AppState>, owner: &Session) -> Result<Vec<Session>> {
     let sessions = state.store.list_sessions()?;
@@ -4407,6 +4465,7 @@ fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
     session.status = SessionStatus::Archived;
     session.ended_at = Some(now_millis());
     state.save_session(&session)?;
+    state.forget_left_for_limit(id);
     if let Some(live) = state.live_session(id) {
         // Ending the process waits out the graceful period, which the caller should not.
         stop_process(live);
@@ -4427,9 +4486,10 @@ fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
 /// no status, archives nothing and reaches no other session. What archiving adds around it — the
 /// status, and whatever later follows an archived session to the sessions bound to it — is
 /// `archive_session`'s, which is why a switch of the session's account stops the process through
-/// this and not through archiving.
-pub(crate) fn stop_process(live: Arc<LiveSession>) -> tokio::task::JoinHandle<()> {
-    tokio::task::spawn_blocking(move || live.terminate())
+/// this and not through archiving. Answers whether it found the process running and stopped it
+/// (see [`LiveSession::end`]), which the exit watcher reads to know the end was asked for.
+pub(crate) fn stop_process(live: Arc<LiveSession>) -> tokio::task::JoinHandle<bool> {
+    tokio::task::spawn_blocking(move || live.end())
 }
 
 /// How long a relaunched session has to stay up before a switch counts it as having come up. An
@@ -4506,18 +4566,19 @@ fn prepare_switch(
 /// Moves a session to another account of its own agent: ends its process the way archiving does,
 /// copies its conversation into the target account's directory, records the account and the
 /// directory on the session, and relaunches it as a resume does — with a prompt to carry on where
-/// the switch cut a turn off or a usage limit had stopped one (see `crate::switch_continue`). Only
-/// the user or an owner asks for it — nothing calls this on a usage signal.
+/// the switch cut a turn off or a usage limit had stopped one (see `crate::switch_continue`). The
+/// user or an owner asks for it, and so does Octoboard itself for a session whose turn stopped on
+/// its account's usage limit, while `auto_switch_on_usage_limit` is on (see `crate::auto_switch`).
 ///
 /// `account` is the target by id, `None` for the default account. Refused, with nothing recorded
 /// and (where it can be told beforehand) the process left running: a launch, resume or switch of
 /// the session under way, an archived session, the account it is on already, an account that is
-/// not one of the session's agent, a disabled account, an account whose plan quota is used up, a
-/// Grok target that is not an initialized home, a conversation record that is not where it is
-/// expected, and a source or target whose sharing is being changed
-/// (`account_sharing_in_progress`). Once the process has been ended, a relocation that does not
-/// complete or a relaunch that is refused or does not come up leaves the session interrupted on
-/// the account it had, with the conversation still in both directories.
+/// not one of the session's agent, a disabled account, an account whose plan quota is used up, an
+/// account the last quota reading found not logged in, a Grok target that is not an initialized
+/// home, a conversation record that is not where it is expected, and a source or target whose
+/// sharing is being changed (`account_sharing_in_progress`). Once the process has been ended, a
+/// relocation that does not complete or a relaunch that is refused or does not come up leaves the
+/// session interrupted on the account it had, with the conversation still in both directories.
 ///
 /// Two windows break "always back on the account it had", neither harmful. A daemon that dies
 /// between recording the new account and the relaunch leaves the session on the new account, which
@@ -4571,20 +4632,138 @@ pub(crate) async fn switch_session_account_with(
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<bool> {
+    switch_session_account_if(
+        state,
+        id,
+        account,
+        asked_by,
+        SwitchOnlyIf::default(),
+        terminal_appearance,
+        launch_edit,
+        snapshot,
+        launch,
+    )
+    .await
+    .map_err(|failed| failed.error)
+}
+
+/// What a switch decided on a record read before its claim still needs to find once it holds the
+/// claim. Nothing is required by default.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct SwitchOnlyIf<'a> {
+    /// The account the session must still be on (`Some(None)` the default account).
+    pub on_account: Option<Option<&'a str>>,
+    /// The session must not be shown as waiting for the user, by whatever route: moving it would
+    /// end the prompt it waits at. Relaxed when `usage_limited` is set: the usage-limit dialog of
+    /// an agent's screen is the point of that switch and does not count as a wait.
+    pub not_waiting: bool,
+    /// The session must have a process at its prompt or in a turn (shown `working` or `idle`),
+    /// so one the user stopped, or whose process exited since the record was read, is not
+    /// brought back.
+    pub running: bool,
+    /// The session's last turn must have stopped on the plan's usage limit, as its conversation
+    /// record says (`switch_continue::stopped_on_usage_limit`), read once more under the claim
+    /// before the process is ended. A caller that may need to wait for the record to say so does
+    /// it ahead of the claim ([`wait_for_usage_limit`]).
+    pub usage_limited: bool,
+    /// Octoboard's own switch: the process it launches is watched under the claim, so the exit
+    /// watcher does not tell the owner that it ended on its own (`LaunchClaim::watches_launch`).
+    pub watch_launch: bool,
+    /// Text put ahead of the prompt to carry on, in the same prompt, so that the session is told
+    /// of the switch without a turn of its own. Not sent when the switch does not carry on.
+    pub note: Option<&'a str>,
+}
+
+/// Why [`switch_session_account_if`] failed: the error as every other caller sees it, untouched,
+/// and whether the switch had ended the session's process and seen it down by then, which leaves
+/// the session interrupted and not as it was. A process that did not stop in time, or one that had
+/// exited by itself before the stop, is not "ended" by the switch.
+#[derive(Debug)]
+pub(crate) struct SwitchFailed {
+    pub error: anyhow::Error,
+    pub ended_process: bool,
+}
+
+impl<E: Into<anyhow::Error>> From<E> for SwitchFailed {
+    fn from(error: E) -> Self {
+        Self {
+            error: error.into(),
+            ended_process: false,
+        }
+    }
+}
+
+/// The switch was refused because what it was decided on no longer holds; nothing was changed.
+#[derive(Debug)]
+pub(crate) struct NoLongerDue(pub &'static str);
+
+impl std::fmt::Display for NoLongerDue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl std::error::Error for NoLongerDue {}
+
+/// [`switch_session_account_with`] that also holds the session to `only_if`, checked under the
+/// claim against the record read there: a session that no longer meets it is refused with
+/// [`NoLongerDue`], nothing changed. A failure says, beside the error, whether this switch ended
+/// the session's process and `wait_until_down` saw it down ([`SwitchFailed`]), the caller's cue
+/// that the session is left interrupted; a failure before that, a process that did not stop in time
+/// (`session_did_not_stop`) included, or after a process that had ended by itself, is not.
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn switch_session_account_if(
+    state: &Arc<AppState>,
+    id: &str,
+    account: Option<Option<String>>,
+    asked_by: Option<&str>,
+    only_if: SwitchOnlyIf<'_>,
+    terminal_appearance: Option<TerminalAppearance>,
+    launch_edit: LaunchEdit,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<bool, SwitchFailed> {
     let account = account.ok_or_else(|| field_required("account"))?;
     // Held until this function returns, after the come-up verdict and any revert, so nothing else
     // can launch, resume, switch or delete the session while its process is down, while the
     // relaunched one is being watched, or while the account is put back; refused here when one
     // of those is under way.
-    let claim = state.begin_account_switch(id)?;
+    let claim = state.begin_account_switch(id, only_if.watch_launch)?;
     let before = state.session_record(id)?;
     refuse_unless_still_askers(&before, asked_by)?;
     refuse_if_archived(&before)?;
+    if only_if
+        .on_account
+        .is_some_and(|expected| expected != before.account_id.as_deref())
+    {
+        return Err(NoLongerDue("the session is on another account now").into());
+    }
+    // A turn the usage limit stopped may show the agent's limit dialog, which the switch ends.
+    let shown = if only_if.usage_limited {
+        state.status_for_switch(&before)
+    } else {
+        state.shown_status(&before)
+    };
+    if only_if.not_waiting && shown == SessionStatus::WaitingUser {
+        return Err(NoLongerDue("the session waits for the user now").into());
+    }
+    if only_if.running
+        && !(matches!(shown, SessionStatus::Working | SessionStatus::Idle)
+            && state.live_session(id).is_some())
+    {
+        return Err(NoLongerDue("the session has no running process now").into());
+    }
     let target_account = checked_account_reference(state, before.agent, account)?;
     refuse_if_on_account(&before, &target_account)?;
     let target_dir = state.store.account_dir(&target_account)?;
     refuse_if_account_disabled(state, before.agent, target_account.as_deref())?;
     refuse_if_account_quota_exhausted(
+        state,
+        before.agent,
+        target_account.as_deref(),
+        target_dir.as_deref(),
+    )?;
+    refuse_if_account_not_signed_in(
         state,
         before.agent,
         target_account.as_deref(),
@@ -4611,91 +4790,249 @@ pub(crate) async fn switch_session_account_with(
         .await??
     };
 
-    let ended = state.live_session(id);
-    let ended_a_process = ended.is_some();
-    if let Some(live) = ended {
-        stop_process(live).await?;
-    }
-    wait_until_down(state, id).await?;
-    // Archiving it meanwhile is the user's later word on the matter.
-    if state.session_record(id)?.status == SessionStatus::Archived {
-        return Err(session_archived(id));
-    }
-    // The process is down, so what the account it ran on holds now is final: a Codex thread may
-    // have started a segment since the plan, and that head is the one carried. Only a turn this
-    // switch ended, or that was waiting out a usage limit in the process it ended, is carried on: a
-    // session whose process had ended before was left there by something else.
-    let (relocation, carry_on) = match plan.relocation {
-        Some((from, to, record, agent_session_id)) => {
-            let agent = before.agent;
-            tokio::task::spawn_blocking(move || -> Result<_> {
-                let record = match agent {
-                    Agent::Codex => relocate::locate(agent, &from, &agent_session_id)?,
-                    _ => record,
-                };
-                let carry_on =
-                    ended_a_process && switch_continue::should_continue(agent, &from.join(&record));
-                Ok((Some((from, to, record, agent_session_id)), carry_on))
-            })
-            .await??
+    if only_if.usage_limited {
+        let stopped = match &plan.relocation {
+            Some((from, _, record, _)) => {
+                let (agent, record) = (before.agent, from.join(record));
+                tokio::task::spawn_blocking(move || {
+                    switch_continue::stopped_on_usage_limit(agent, &record)
+                })
+                .await?
+            }
+            None => false,
+        };
+        if !stopped {
+            return Err(
+                NoLongerDue("the session's last turn did not stop on a usage limit").into(),
+            );
         }
-        None => (None, false),
-    };
-
-    // Held from before the copy until the session is recorded on the target, and given up before
-    // the relaunch, which takes it itself: no change of sharing moves what the copy writes.
-    let copying =
-        crate::shared_config::before_switch_copy(state, before.agent, target_account.as_deref())
-            .await?;
-    if let Some((from, to, record, agent_session_id)) = relocation {
-        let agent = before.agent;
-        // The environment the relaunch will see, which with the target's `config.toml` says where
-        // a Codex home keeps its database.
-        let launch_env = plan.shell_env.clone().unwrap_or_default();
-        tokio::task::spawn_blocking(move || {
-            let companions = relocate::companions(agent, &from, &record, &agent_session_id);
-            relocate::copy(&from, &to, &record, &companions)?;
-            relocate::repoint_thread_row(agent, &to, &record, &agent_session_id, &launch_env)
-        })
-        .await??;
     }
-    state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
-    drop(copying);
-    if let Some((model, effort)) = &overrides {
-        if let Err(err) = state.set_session_launch_overrides(id, model, effort) {
+
+    // Whether this switch stopped a running process: one that had exited by itself already, and
+    // is only waiting to be deregistered, is not its doing.
+    let ended_a_process = match state.live_session(id) {
+        Some(live) => stop_process(live).await?,
+        None => false,
+    };
+    wait_until_down(state, id).await?;
+    // From here the process is down. A failure that follows leaves the session interrupted when
+    // this switch ended it, and is marked so; one whose process had ended before is not this
+    // switch's to report.
+    let after_stop = async {
+        // Archiving it meanwhile is the user's later word on the matter.
+        if state.session_record(id)?.status == SessionStatus::Archived {
+            return Err(session_archived(id));
+        }
+        // The process is down, so what the account it ran on holds now is final: a Codex thread may
+        // have started a segment since the plan, and that head is the one carried. Only a turn this
+        // switch ended, or that was waiting out a usage limit in the process it ended, is carried
+        // on: a session whose process had ended before was left there by something else.
+        let (relocation, carry_on) = match plan.relocation {
+            Some((from, to, record, agent_session_id)) => {
+                let agent = before.agent;
+                tokio::task::spawn_blocking(move || -> Result<_> {
+                    let record = match agent {
+                        Agent::Codex => relocate::locate(agent, &from, &agent_session_id)?,
+                        _ => record,
+                    };
+                    let carry_on = ended_a_process
+                        && switch_continue::should_continue(agent, &from.join(&record));
+                    Ok((Some((from, to, record, agent_session_id)), carry_on))
+                })
+                .await??
+            }
+            None => (None, false),
+        };
+
+        // Held from before the copy until the session is recorded on the target, and given up
+        // before the relaunch, which takes it itself: no change of sharing moves what the copy
+        // writes.
+        let copying = crate::shared_config::before_switch_copy(
+            state,
+            before.agent,
+            target_account.as_deref(),
+        )
+        .await?;
+        if let Some((from, to, record, agent_session_id)) = relocation {
+            let agent = before.agent;
+            // The environment the relaunch will see, which with the target's `config.toml` says
+            // where a Codex home keeps its database.
+            let launch_env = plan.shell_env.clone().unwrap_or_default();
+            tokio::task::spawn_blocking(move || {
+                let companions = relocate::companions(agent, &from, &record, &agent_session_id);
+                relocate::copy(&from, &to, &record, &companions)?;
+                relocate::repoint_thread_row(agent, &to, &record, &agent_session_id, &launch_env)
+            })
+            .await??;
+        }
+        state.set_session_account(id, target_account.as_deref(), target_dir.as_deref())?;
+        drop(copying);
+        if let Some((model, effort)) = &overrides {
+            if let Err(err) = state.set_session_launch_overrides(id, model, effort) {
+                put_back_on_account(state, &before);
+                return Err(err);
+            }
+        }
+
+        let prompt_to_carry_on = match only_if.note {
+            Some(note) => format!("{note}\n\n{}", switch_continue::CONTINUE_PROMPT),
+            None => switch_continue::CONTINUE_PROMPT.to_string(),
+        };
+        if let Err(err) = relaunch_session_with(
+            state,
+            &claim,
+            id,
+            carry_on.then_some(prompt_to_carry_on.as_str()),
+            false,
+            plan.shell_env,
+            terminal_appearance,
+            launch,
+        )
+        .await
+        {
             put_back_on_account(state, &before);
             return Err(err);
         }
-    }
-
-    if let Err(err) = relaunch_session_with(
-        state,
-        &claim,
-        id,
-        carry_on.then_some(switch_continue::CONTINUE_PROMPT),
-        false,
-        plan.shell_env,
-        terminal_appearance,
-        launch,
-    )
-    .await
-    {
-        put_back_on_account(state, &before);
-        return Err(err);
-    }
-    let came_up = match state.live_session(id) {
-        Some(live) => came_up(&live, SWITCH_SETTLE).await,
-        None => false,
+        if !came_up_under_claim(state, id).await {
+            put_back_once_down(state, &before).await;
+            return Err(CodedError::raised(
+                error_code::SWITCH_DID_NOT_COME_UP,
+                "the session ended as soon as it was relaunched, so it stays on the account it had",
+                &[("session", id)],
+            ));
+        }
+        Ok(carry_on)
     };
-    if !came_up {
-        put_back_once_down(state, &before).await;
+    after_stop.await.map_err(|error| SwitchFailed {
+        error,
+        ended_process: ended_a_process,
+    })
+}
+
+/// How long a switch for a usage limit waits for the limit to show in the conversation record. An
+/// agent may report a failed turn (its `StopFailure` hook) before it has written the entry that
+/// says why, so a record that does not say so yet is read again for this long before the turn is
+/// judged not to have stopped on the limit. The real ordering is not measured.
+#[cfg(not(test))]
+const USAGE_LIMIT_RECORD_WAIT: Duration = Duration::from_secs(4);
+#[cfg(test)]
+const USAGE_LIMIT_RECORD_WAIT: Duration = Duration::from_millis(1500);
+
+/// Whether finding `session`'s conversation record needs the shell snapshot: the default account
+/// has no directory of its own, which is resolved from the environment.
+pub(crate) fn record_needs_shell_env(session: &Session) -> bool {
+    session.config_dir.is_none()
+}
+
+/// Whether the conversation record of `session`, found the way [`prepare_switch`] finds it, says
+/// the last turn stopped on the usage limit, read again for up to [`USAGE_LIMIT_RECORD_WAIT`] until
+/// it does. Meant to run ahead of the switch's claim, so that the wait holds nothing: `shell_env`
+/// is the snapshot when [`record_needs_shell_env`]. Refused as `prepare_switch` is when the record
+/// is not where it is expected; a session with no conversation has not stopped on a limit.
+pub(crate) async fn wait_for_usage_limit(
+    session: &Session,
+    shell_env: Option<HashMap<String, String>>,
+) -> Result<bool> {
+    let Some(resume_id) = resumable_agent_session_id(session) else {
+        return Ok(false);
+    };
+    let (agent, source) = (session.agent, session.config_dir.clone());
+    let record = tokio::task::spawn_blocking(move || -> Result<PathBuf> {
+        if source.is_none() && shell_env.is_none() {
+            anyhow::bail!("the default account's directory needs the shell environment");
+        }
+        let from = account_dir(agent, source.as_deref(), shell_env.as_ref());
+        Ok(from.join(relocate::locate(agent, &from, &resume_id)?))
+    })
+    .await??;
+    let deadline = Instant::now() + USAGE_LIMIT_RECORD_WAIT;
+    loop {
+        let path = record.clone();
+        let agent = session.agent;
+        let stopped = tokio::task::spawn_blocking(move || {
+            switch_continue::stopped_on_usage_limit(agent, &path)
+        })
+        .await?;
+        if stopped || Instant::now() >= deadline {
+            return Ok(stopped);
+        }
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+/// Brings a session a failed account switch left interrupted back up on the account it had
+/// (`before` is its record from before the switch), as a resume does and without a prompt: it was
+/// at its prompt before the switch, and its turn is not carried on, since the account's usage
+/// limit would stop it again. Octoboard's own switch makes this, so that its failure leaves the
+/// session as it was (see `crate::auto_switch`). Refused, with nothing launched, when the session
+/// is running or being started by then (somebody brought it back meanwhile) or archived; fails
+/// when the process cannot be started or does not stay up.
+pub(crate) async fn restore_after_failed_switch(
+    state: &Arc<AppState>,
+    before: &Session,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<()> {
+    let id = before.id.as_str();
+    // Under an account switch's claim, so that the process it starts is watched as the switch's
+    // was. Another claim on the session (a handover of branches, a binding change) is waited for
+    // rather than given up on: the session is down and nobody else will bring it back.
+    let deadline = Instant::now() + RESTORE_CLAIM_WAIT;
+    let claim = loop {
+        match state.begin_account_switch(id, true) {
+            Ok(claim) => break claim,
+            Err(err) if is_already_starting(&err) && Instant::now() < deadline => {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            Err(err) => return Err(err),
+        }
+    };
+    let now = state.session_record(id)?;
+    if now.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+    if !now.status.is_dormant() {
         return Err(CodedError::raised(
-            error_code::SWITCH_DID_NOT_COME_UP,
-            "the session ended as soon as it was relaunched, so it stays on the account it had",
+            error_code::SESSION_ALREADY_RUNNING,
+            "this session is not interrupted or archived",
             &[("session", id)],
         ));
     }
-    Ok(carry_on)
+    // A revert that failed on the way is tried again.
+    if now.account_id != before.account_id {
+        put_back_on_account(state, before);
+    }
+    relaunch_session_with(state, &claim, id, None, false, None, None, launch).await?;
+    if !came_up_under_claim(state, id).await {
+        return Err(CodedError::raised(
+            error_code::SWITCH_DID_NOT_COME_UP,
+            "the session ended as soon as it was relaunched on the account it had",
+            &[("session", id)],
+        ));
+    }
+    Ok(())
+}
+
+/// How long a restore waits for another claim on the session to end before it gives up.
+const RESTORE_CLAIM_WAIT: Duration = Duration::from_secs(15);
+
+/// Whether `err` says another launch or claim holds the session.
+fn is_already_starting(err: &anyhow::Error) -> bool {
+    err.downcast_ref::<CodedError>()
+        .is_some_and(|coded| coded.code == error_code::SESSION_ALREADY_STARTING)
+}
+
+/// Whether the process an account switch (or a restore after one) relaunched is still running after
+/// [`SWITCH_SETTLE`]. One that is has been seen to come up, so its end from then on is the agent's
+/// own and is told to the owner as any is.
+async fn came_up_under_claim(state: &Arc<AppState>, id: &str) -> bool {
+    let Some(live) = state.live_session(id) else {
+        return false;
+    };
+    let up = came_up(&live, SWITCH_SETTLE).await;
+    if up {
+        live.release_watch();
+    }
+    up
 }
 
 /// Refuses, in prose, an operation an owner asked for on a session that is no longer its own. The
@@ -5212,6 +5549,34 @@ fn refuse_if_account_quota_exhausted(
     ))
 }
 
+/// Refuses an account the held quota reading found not signed in (see
+/// [`account_quotas::AccountQuotas::signed_out`]); a reading that failed for another reason, or
+/// none yet, never refuses. `config_dir` is the account's directory as [`Store::account_dir`]
+/// resolves it, so a reading taken under another directory is ignored.
+fn refuse_if_account_not_signed_in(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account_id: Option<&str>,
+    config_dir: Option<&str>,
+) -> Result<()> {
+    if !state
+        .account_quotas
+        .signed_out(agent, account_id, config_dir)
+    {
+        return Ok(());
+    }
+    let account = state.store.account_display_name(agent, account_id)?;
+    Err(CodedError::raised(
+        error_code::ACCOUNT_NOT_SIGNED_IN,
+        format!(
+            "{account} ({}) is not logged in. Choose another account, or log in to it in Settings \
+             → Agent accounts.",
+            agent.label()
+        ),
+        &[("agent", agent.label()), ("account", account.as_str())],
+    ))
+}
+
 /// The used-up window that keeps a new session off `account_id` (`None` the default account) of
 /// `agent` at `now`, judged from the reading held alone; `config_dir` is the account's directory,
 /// so a reading taken under another one does not count. What
@@ -5237,8 +5602,9 @@ pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: Agent) -> Result<bool
 
 /// Whether a new session of `agent` could run on `account_id` (`None` the default account) as
 /// things stand: the account is still one of that agent's ([`checked_account_reference`]), it is
-/// not turned off ([`refuse_if_account_disabled`]), and its quota is not used up
-/// ([`refuse_if_account_quota_exhausted`]). For a caller choosing a default
+/// not turned off ([`refuse_if_account_disabled`]), its quota is not used up
+/// ([`refuse_if_account_quota_exhausted`]) and it is not found logged out
+/// ([`refuse_if_account_not_signed_in`]). For a caller choosing a default
 /// it can fall back from, rather than a refusal.
 pub(crate) fn account_can_open(
     state: &Arc<AppState>,
@@ -5255,6 +5621,12 @@ pub(crate) fn account_can_open(
             None => return Ok(false),
         },
     };
+    if state
+        .account_quotas
+        .signed_out(agent, account_id, config_dir.as_deref())
+    {
+        return Ok(false);
+    }
     Ok(used_up_quota(
         state,
         agent,
@@ -5268,15 +5640,28 @@ pub(crate) fn account_can_open(
 /// The account of `agent` to use when a new session leaves its account out and
 /// `auto_select_account` is on. `Some(Some(id))` is a stored account, `Some(None)` the default
 /// account, and `None` when no account has a weekly window that still has quota and resets
-/// ahead, skipping a disabled account and an account whose sharing change is running (a launch
-/// on it would be refused as `account_sharing_in_progress`). The soonest reset wins; a larger
-/// remainder breaks a tie, and an earlier candidate wins one that is still tied — the default
-/// account, then the stored accounts in the order they are kept. Rank from the reading held for
-/// the account's current directory. The list of readings carries no directory, so one still
-/// stored under another directory would be chosen.
+/// ahead, skipping a disabled account, one found logged out, and an account whose sharing change
+/// is running (a launch on it would be refused as `account_sharing_in_progress`). The soonest
+/// reset wins; a larger remainder breaks a tie, and an earlier candidate wins one that is still
+/// tied — the default account, then the stored accounts in the order they are kept. Rank from the
+/// reading held for the account's current directory. The list of readings carries no directory,
+/// so one still stored under another directory would be chosen.
 pub(crate) fn preferred_weekly_account(
     state: &Arc<AppState>,
     agent: Agent,
+) -> Result<Option<Option<String>>> {
+    preferred_weekly_account_except(state, agent, &[], false)
+}
+
+/// [`preferred_weekly_account`] without the accounts in `except` (`None` the default account), for
+/// a session that is to be moved off one of them. With `readable_only` also without an account
+/// whose last attempt to read its quota failed, whatever the reading still holds: a session is
+/// not moved onto an account that cannot be seen to have quota left.
+pub(crate) fn preferred_weekly_account_except(
+    state: &Arc<AppState>,
+    agent: Agent,
+    except: &[Option<String>],
+    readable_only: bool,
 ) -> Result<Option<Option<String>>> {
     let mut candidates = vec![None];
     for account in state.store.list_accounts()? {
@@ -5284,6 +5669,7 @@ pub(crate) fn preferred_weekly_account(
             candidates.push(Some(account.id));
         }
     }
+    candidates.retain(|candidate| !except.contains(candidate));
     let now = now_millis();
     let mut best: Option<(i64, f64, Option<String>)> = None;
     for account_id in candidates {
@@ -5310,6 +5696,9 @@ pub(crate) fn preferred_weekly_account(
         else {
             continue;
         };
+        if readable_only && quota.unavailable.is_some() {
+            continue;
+        }
         let Some(weekly) = crate::account_quotas::expiring_weekly(&quota.windows, now) else {
             continue;
         };
@@ -6004,6 +6393,7 @@ pub struct SettingsChanges {
     /// Refused unless it is a tag the interface offers.
     pub interface_language: Option<String>,
     pub auto_select_account: Option<bool>,
+    pub auto_switch_on_usage_limit: Option<bool>,
     pub sidebar_order_by_status: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
     /// Blank text goes back to the built-in default.
@@ -6024,6 +6414,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         ask_questions_as_choices,
         interface_language,
         auto_select_account,
+        auto_switch_on_usage_limit,
         sidebar_order_by_status,
         auto_start_quota_windows,
         default_clone_dir,
@@ -6072,6 +6463,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_select_account {
         changed |= state.store.set_auto_select_account(value)?;
+    }
+    if let Some(value) = auto_switch_on_usage_limit {
+        changed |= state.store.set_auto_switch_on_usage_limit(value)?;
     }
     if let Some(value) = sidebar_order_by_status {
         changed |= state.store.set_sidebar_order_by_status(value)?;
@@ -6151,6 +6545,77 @@ mod tests {
         bare_session, console_session, console_with_project_and_accounts, fake_live_session,
         idle_stand_in, project_session, session_ids, ScratchDir,
     };
+
+    /// Owned sessions are counted as the walks of a team count them: in any status, and none for a
+    /// session with the role of a bound one, whatever a row says is bound to it.
+    #[test]
+    fn owned_counts_leave_out_owners_with_the_bound_role() {
+        let owned = |id: &str, owner: Option<&str>, lead: bool, status: SessionStatus| Session {
+            bound_to: owner.map(str::to_string),
+            lead,
+            ..project_session(id, Agent::Claude, status)
+        };
+        let sessions = [
+            console_session("console", SessionStatus::Idle),
+            owned("lead", Some("console"), true, SessionStatus::Idle),
+            owned("bound", Some("console"), false, SessionStatus::Archived),
+            owned(
+                "under-lead",
+                Some("lead"),
+                false,
+                SessionStatus::Interrupted,
+            ),
+            owned("under-bound", Some("bound"), false, SessionStatus::Idle),
+        ];
+
+        let counts = owned_counts(&sessions);
+
+        assert_eq!(counts.get("console"), Some(&2));
+        assert_eq!(counts.get("lead"), Some(&1));
+        assert_eq!(counts.get("bound"), None);
+        assert_eq!(counts.len(), 2);
+    }
+
+    /// The count of a single session is the one the count of every session gives, without
+    /// listing them: the same owners, the same numbers, and none for an owner with the role of a
+    /// bound one.
+    #[test]
+    fn the_count_of_one_session_agrees_with_the_count_of_all() {
+        let (state, dir) = crate::test_support::app_state("coordinator-owned-count-of");
+        let owned = |id: &str, owner: Option<&str>, lead: bool, status: SessionStatus| Session {
+            project_id: Some("p1".to_string()),
+            bound_to: owner.map(str::to_string),
+            lead,
+            ..project_session(id, Agent::Claude, status)
+        };
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        crate::test_support::insert_project(&state, &dir);
+        for session in [
+            console_session("console", SessionStatus::Idle),
+            owned("lead", Some("console"), true, SessionStatus::Idle),
+            owned("bound", Some("console"), false, SessionStatus::Archived),
+            owned(
+                "under-lead",
+                Some("lead"),
+                false,
+                SessionStatus::Interrupted,
+            ),
+            owned("under-bound", Some("bound"), false, SessionStatus::Idle),
+            owned("alone", None, false, SessionStatus::Idle),
+        ] {
+            state.store.insert_session(&session).unwrap();
+        }
+        let all = owned_counts(&state.store.list_sessions().unwrap());
+
+        for session in state.store.list_sessions().unwrap() {
+            let one = owned_count_of(&state, &session).unwrap();
+            assert_eq!(one.get(&session.id), all.get(&session.id), "{}", session.id);
+            assert!(one.len() <= 1);
+        }
+    }
 
     #[test]
     fn tags_are_trimmed_and_deduplicated_ignoring_case_keeping_the_first_spelling() {
@@ -7177,6 +7642,26 @@ mod tests {
         assert_eq!(code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
         assert_eq!(params["account"], crate::protocol::DEFAULT_ACCOUNT_NAME);
         assert!(!params.contains_key("resets_at"));
+
+        // An account the reading found not logged in is refused too, the default one included.
+        let signed_out = |account: Option<&str>| AccountQuota {
+            windows: Vec::new(),
+            unavailable: Some(crate::protocol::QuotaUnavailable::new(
+                crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+                "x",
+                &[("agent", "Claude Code")],
+            )),
+            ..used_up(account, None)
+        };
+        state
+            .account_quotas
+            .hold_in_dir_for_test(&signed_out(Some("claude-acct")), "/home/u/.claude-alt");
+        state.account_quotas.hold_for_test(&signed_out(None));
+        for account in [Some("claude-acct"), None] {
+            let (code, params) = coded(&refusal(account).expect("refused"));
+            assert_eq!(code, error_code::ACCOUNT_NOT_SIGNED_IN);
+            assert_eq!(params["agent"], Agent::Claude.label());
+        }
     }
 
     /// A disabled account, the default one included, is refused for a new session whether the
@@ -7416,6 +7901,101 @@ mod tests {
         let after = state.store.get_session("s").unwrap().unwrap();
         assert_eq!(after.account_id, None);
         assert_eq!(after.status, SessionStatus::Interrupted);
+    }
+
+    /// An account the last quota reading found not logged in is refused for a switch and passed
+    /// over by `account_can_open` and by the choice of a target, the signed-out reasons both
+    /// included; a reading that failed for another reason refuses and passes over nothing there
+    /// (the choice of a target for the automatic switch alone asks for a readable one).
+    #[tokio::test]
+    async fn an_account_found_not_logged_in_is_refused_and_a_failed_reading_is_not() {
+        use crate::protocol::{
+            quota_unavailable_code as code, AccountQuota, QuotaUnavailable, QuotaWindow,
+            QuotaWindowKind,
+        };
+
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-signed-out");
+        state
+            .store
+            .insert_session(&project_session(
+                "s",
+                Agent::Claude,
+                SessionStatus::Interrupted,
+            ))
+            .unwrap();
+        let alt_dir = state
+            .store
+            .account_dir(&Some("claude-a".to_string()))
+            .unwrap()
+            .unwrap();
+        let reading = |unavailable: Option<QuotaUnavailable>| AccountQuota {
+            agent: Agent::Claude,
+            account: Some("claude-a".to_string()),
+            fetched_at: 1,
+            plan: None,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Weekly,
+                label: None,
+                used_percent: 10.0,
+                resets_at: Some(now_millis() + 60_000),
+                window_minutes: None,
+            }],
+            unavailable,
+        };
+        let switch = || {
+            switch_session_account(
+                &state,
+                "s",
+                Some(Some("claude-a".to_string())),
+                None,
+                shell_env(&dir),
+            )
+        };
+
+        for reason in [code::NOT_SIGNED_IN, code::CONFIG_DIR_MISSING] {
+            let held = reading(Some(QuotaUnavailable::new(
+                reason,
+                "x",
+                &[("agent", "Claude")],
+            )));
+            state.account_quotas.hold_in_dir_for_test(&held, &alt_dir);
+            let err = switch().await.expect_err("refused");
+            assert_eq!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN, "{reason}");
+            let coded = err.downcast_ref::<CodedError>().unwrap();
+            assert_eq!(coded.params["agent"], Agent::Claude.label());
+            assert!(!account_can_open(&state, Agent::Claude, Some("claude-a")).unwrap());
+            assert_eq!(
+                preferred_weekly_account(&state, Agent::Claude).unwrap(),
+                None,
+                "{reason}: not picked for a new session either"
+            );
+            assert_eq!(
+                state.store.get_session("s").unwrap().unwrap().account_id,
+                None
+            );
+        }
+
+        // A reading that failed for a passing reason still counts for what it holds.
+        let failed = reading(Some(QuotaUnavailable::new(
+            code::COMMAND_FAILED,
+            "x",
+            &[("agent", "Claude"), ("detail", "network")],
+        )));
+        state.account_quotas.hold_in_dir_for_test(&failed, &alt_dir);
+        assert!(account_can_open(&state, Agent::Claude, Some("claude-a")).unwrap());
+        assert_eq!(
+            preferred_weekly_account(&state, Agent::Claude).unwrap(),
+            Some(Some("claude-a".to_string()))
+        );
+        assert_eq!(
+            preferred_weekly_account_except(&state, Agent::Claude, &[], true).unwrap(),
+            None,
+            "the automatic switch wants an account it can read now"
+        );
+        let err = switch()
+            .await
+            .expect_err("fails further on, for want of a process");
+        assert_ne!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN);
     }
 
     /// A session is opened only on an added agent, wherever the agent comes from: the request's
@@ -11369,7 +11949,7 @@ mod tests {
             last
         };
 
-        let claim = state.begin_account_switch("s").unwrap();
+        let claim = state.begin_account_switch("s", false).unwrap();
         assert!(state.is_switching_account("s"));
         assert!(
             state
@@ -11406,7 +11986,7 @@ mod tests {
             .unwrap();
         let claim = state.begin_switch("s").unwrap();
 
-        let err = relaunch_session(&state, &claim, "s", None, false, None, None)
+        let err = relaunch_session_with(&state, &claim, "s", None, false, None, None, term::launch)
             .await
             .expect_err("archived");
         assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED);
@@ -11638,6 +12218,7 @@ mod tests {
             None,
             edit("gpt-9", None),
             stub_shell(&dir),
+            term::launch,
         )
         .await
         .expect_err("model not offered");
@@ -11649,6 +12230,7 @@ mod tests {
             None,
             edit("opus", Some("extreme")),
             stub_shell(&dir),
+            term::launch,
         )
         .await
         .expect_err("effort not offered");
@@ -11664,6 +12246,7 @@ mod tests {
             None,
             edit("opus", Some("high")),
             stub_shell(&dir),
+            term::launch,
         )
         .await
         .expect_err("the project's directory does not exist");

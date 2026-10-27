@@ -1,7 +1,7 @@
 import { buttonVariants } from "@heroui/styles";
 import React, { useRef, useState } from "react";
 
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import type { Translate } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { useOptionalPlatform } from "../platform/react";

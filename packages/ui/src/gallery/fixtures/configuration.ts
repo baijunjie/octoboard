@@ -97,6 +97,8 @@ export const REVIEW: Omit<Inspection, "type"> = {
     current_auto_delete_unresumable_archives: true,
     auto_select_account: true,
     current_auto_select_account: false,
+    auto_switch_on_usage_limit: true,
+    current_auto_switch_on_usage_limit: false,
     sidebar_order_by_status: false,
     current_sidebar_order_by_status: true,
     auto_start_quota_windows: true,
@@ -264,7 +266,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW },
   consoles: [
     {
       name: "Work laptop",
@@ -646,7 +648,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review",
-    description: "Cards for three consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps and no state line under its name. A warning triangle follows the name of the Work laptop console in its heading and the name of Search API in its row, where an account the file names is not set up here (the popover is in the next scenario); no sentence or alert repeats it. The not-found project, Notes, carries one warning triangle after its name, \"Notes not found, and accounts not set up\": the project is missing and its account falls back too, which are one point and so one mark (its popover is in a scenario below). The last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line, lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
+    description: "Cards for three consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps and no state line under its name. A warning triangle follows the name of the Work laptop console in its heading and the name of Search API in its row, where an account the file names is not set up here (the popover is in the next scenario); no sentence or alert repeats it. The not-found project, Notes, carries one warning triangle after its name, \"Notes not found, and accounts not set up\": the project is missing and its account falls back too, which are one point and so one mark (its popover is in a scenario below). The last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [

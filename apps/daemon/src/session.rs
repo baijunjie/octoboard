@@ -40,17 +40,22 @@ struct TitleObserver {
 impl TitleObserver {
     fn publish(&self, session: &LiveSession) {
         if let (Some(state), Some(title)) = (self.state.upgrade(), &self.latest) {
-            if state.record_terminal_title(session, title.as_deref()) {
-                // Output arrives on the PTY reader thread, outside the Tokio runtime. A write
-                // must not block that reader while the agent is still draining its output.
-                if let Some(runtime) = &self.runtime {
-                    let id = session.id.clone();
-                    runtime.spawn_blocking(move || {
+            let cleared = state.record_terminal_title(session, title.as_deref());
+            let action_required = session.needs_user_action();
+            // Output arrives on the PTY reader thread, outside the Tokio runtime. A write
+            // must not block that reader while the agent is still draining its output.
+            if let (true, Some(runtime)) = (cleared || action_required, &self.runtime) {
+                let id = session.id.clone();
+                runtime.spawn_blocking(move || {
+                    if action_required {
+                        crate::reporting::tell_owner_it_waits(&state, &id);
+                    }
+                    if cleared {
                         if let Ok(record) = state.session_record(&id) {
                             state.flush_outbox(&id, state.agent_status(&record));
                         }
-                    });
-                }
+                    }
+                });
             }
         }
     }
@@ -94,6 +99,14 @@ pub struct LiveSession {
     /// of output so a dialog drawn and closed inside the write is still seen; see
     /// [`Self::watch_screen`].
     screen_watchers: AtomicU32,
+    /// Set by [`Self::end`] when it found the process running and stopped it: the end of this
+    /// process was somebody's doing, not the agent's own.
+    ended_on_purpose: AtomicBool,
+    /// Set while Octoboard's own account switch, or the restoring of a session after a failed one
+    /// (`LaunchClaim::watches_launch`), watches this process come up under its claim: if it dies
+    /// meanwhile that operation reports the outcome, and the owner is not also told the process
+    /// ended on its own.
+    watched_under_claim: AtomicBool,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -153,6 +166,8 @@ impl LiveSession {
             agent_error_at: Mutex::new(None),
             dialogs: Mutex::new(Sighting::default()),
             screen_watchers: AtomicU32::new(0),
+            ended_on_purpose: AtomicBool::new(false),
+            watched_under_claim: AtomicBool::new(false),
         }
     }
 
@@ -208,6 +223,16 @@ impl LiveSession {
     /// the screen as the latest look left it.
     pub(crate) fn waits_for_user(&self) -> bool {
         self.trust.needs_user() || self.needs_user_action() || self.agent_dialog().is_some()
+    }
+
+    /// [`Self::waits_for_user`], except that a usage-limit dialog on the screen (see
+    /// `Dialog::is_usage_limit`) is not a wait that keeps the session from being switched.
+    pub(crate) fn waits_for_user_beyond_usage_limit(&self) -> bool {
+        self.trust.needs_user()
+            || self.needs_user_action()
+            || self
+                .agent_dialog()
+                .is_some_and(|dialog| !dialog.is_usage_limit())
     }
 
     pub(crate) fn needs_user_action(&self) -> bool {
@@ -405,6 +430,41 @@ impl LiveSession {
         }
         self.pty.freeze_output();
         self.pty.stop(AGENT_STOP_SIGNAL);
+    }
+
+    /// [`Self::terminate`] for an operation that ends the process on purpose (an archive, an
+    /// account switch, a change of sharing), which records that it did: whether it found the
+    /// process still running and stopped it. A process that had exited by itself before is not the
+    /// operation's end, whatever the operation did next. **Blocks**.
+    pub fn end(&self) -> bool {
+        if self.pty.poll_exit() {
+            return false;
+        }
+        self.ended_on_purpose.store(true, Ordering::Release);
+        self.terminate();
+        true
+    }
+
+    /// Marks the process as watched by the operation that launched it under its claim, until that
+    /// operation calls [`Self::release_watch`].
+    pub fn watch_under_claim(&self) {
+        self.watched_under_claim.store(true, Ordering::Release);
+    }
+
+    /// The operation that watched the process has seen it come up: its end from here on is the
+    /// agent's own again.
+    pub fn release_watch(&self) {
+        self.watched_under_claim.store(false, Ordering::Release);
+    }
+
+    /// Whether an operation holding the session's claim is watching this process come up.
+    pub fn is_watched_under_claim(&self) -> bool {
+        self.watched_under_claim.load(Ordering::Acquire)
+    }
+
+    /// Whether [`Self::end`] stopped this process.
+    pub fn was_ended_on_purpose(&self) -> bool {
+        self.ended_on_purpose.load(Ordering::Acquire)
     }
 }
 

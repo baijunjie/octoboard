@@ -1,8 +1,9 @@
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchItems, richMessageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../daemonMessage";
-import { hasCodeParams, hasShellTimeoutDetails, isUncataloguedFailure, unwordedReason } from "../errorPresentation";
+import { hasCodeParams, hasShellTimeoutDetails, unwordedReason } from "../errorPresentation";
+import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { isMessageKey } from "../i18n/catalog";
-import type { MessageParams } from "../protocol";
+import { NESTED_FAILURE_CODES, NESTED_REMEDY_CODES, type MessageParams } from "../protocol";
 
 // What `DaemonErrorMessage` has to show for each of its parts, answered without rendering. Plain predicates, apart from
 // the node builders in `errorParts.tsx` so that `DaemonErrorMessage` can ask them without importing the file that
@@ -51,7 +52,7 @@ export function hasErrorRemedy(error: { code: string; params: MessageParams; mes
   if (!hasCodeParams(error) || !isMessageKey(`daemon.${richMessageCode(error.code, error.params)}`)) return false;
   if (RECOVERY_CODES.has(error.code) && isMessageKey(`daemon.${error.code}.recovery`)) return true;
   const nested = nestedFailure(error);
-  return nested !== undefined && hasErrorRemedy(nested);
+  return nested !== undefined && NESTED_REMEDY_CODES.has(error.code) && hasErrorRemedy(nested);
 }
 
 /** Whether an alert's default body already carries the failure's remedy sentence, so the alert adds no second one:
@@ -60,10 +61,10 @@ export function remedyInBody(content: unknown, shown: string | { code: string; p
   return content === undefined && typeof shown !== "string" && hasErrorRemedy(shown);
 }
 
-/** The structured cause a `launch_failed` carries under its own code, as a failure of its own. */
+/** The structured cause a `launch_failed` or a failed automatic switch carries under its own code, as a failure of its own. */
 export function nestedFailure(error: { code: string; params: MessageParams }): { code: string; params: MessageParams; message: string } | undefined {
   const { reason_code: reason } = error.params;
-  if (error.code !== "launch_failed" || !reason || reason === "launch_failed") return undefined;
+  if (!NESTED_FAILURE_CODES.has(error.code) || !reason || reason === error.code) return undefined;
   const nested = { code: reason, params: error.params, message: error.params.reason ?? "" };
   return hasCodeParams(nested) || hasShellTimeoutDetails(nested) ? nested : undefined;
 }

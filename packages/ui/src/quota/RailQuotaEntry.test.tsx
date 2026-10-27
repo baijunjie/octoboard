@@ -1004,3 +1004,209 @@ it("leaves the accounts alone for a keyboard opening after the mouse crossed the
   expect(panel()).not.toBeNull();
   expect(dimmedRows()).toEqual([]);
 });
+
+it("lists a turned-off account only for the selected session that is still running on it", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: accounts.map((account) => ({ ...account, disabled: true })), disabled_default_accounts: ["claude"] } }));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
+  const select = (id?: string) => act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  const claudeNames = () => {
+    openPanel(host.querySelector("button")!);
+    // Claude Code's tab is the first, when it is listed at all.
+    const text = tabs()[0]?.textContent === "Claude Code" ? document.querySelector<HTMLElement>('[role="tabpanel"]')!.textContent! : "";
+    leave(host.querySelector("button")!);
+    advance(1000);
+    return text;
+  };
+
+  // Nothing selected: every account of the agent is turned off, so none is listed.
+  select();
+  expect(claudeNames()).not.toMatch(/Work|Default/);
+  // The selected session runs on the owned account: that one alone is listed, the default account (also off) is not.
+  select(session.id);
+  const running = claudeNames();
+  expect(running).toContain("Work");
+  expect(running).not.toContain("Default");
+  // The same session no longer running: no exception.
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: "interrupted" }]]) }));
+  expect(claudeNames()).not.toContain("Work");
+  // Running on the agent's turned-off default account: it is listed, the owned one is not.
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, account_id: null, config_dir: null }]]) }));
+  const onDefault = claudeNames();
+  expect(onDefault).toContain("Default");
+  expect(onDefault).not.toContain("Work");
+});
+
+it("drops the tab of an agent whose accounts are all turned off, bar the one the selected running session is on, and explains an empty panel", () => {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  // Claude Code's accounts are both off; Codex's default account is on.
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status: "idle", has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  act(() => store.setState({ sessions: new Map([[session.id, session]]) }));
+  const select = (id?: string) => act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  const tabNames = () => {
+    openPanel(host.querySelector("button")!);
+    const names = tabs().map((tab) => tab.textContent);
+    leave(host.querySelector("button")!);
+    advance(1000);
+    return names;
+  };
+
+  select();
+  expect(tabNames()).toEqual(["Codex"]);
+  select(session.id);
+  expect(tabNames()).toEqual(["Claude Code", "Codex"]);
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: "interrupted" }]]) }));
+  expect(tabNames()).toEqual(["Codex"]);
+
+  // Nothing left to list: an empty state, not a blank panel, and the way to Settings stays.
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: store.getState().settings.accounts.map((account) => ({ ...account, disabled: true })), disabled_default_accounts: ["claude", "codex"] } }));
+  openPanel(host.querySelector("button")!);
+  expect(tabs()).toEqual([]);
+  expect(panel()!.textContent).toContain("No enabled account");
+  expect(panel()!.textContent).toContain("Disabled accounts are not shown here.");
+  expect(panel()!.textContent).not.toContain("turned on");
+  // The way to Settings is the empty state's own action, not also a footer link.
+  const manage = Array.from(panel()!.querySelectorAll("button")).filter((b) => b.textContent === "Manage accounts…");
+  expect(manage).toHaveLength(1);
+  expect(manage[0]!.closest(".groove-t")).toBeNull();
+  click(manage[0]!);
+  expect(onOpenSettingsAt).toHaveBeenCalledWith("accounts");
+  expect(panel()).toBeNull();
+});
+
+/** The entry with Claude Code's accounts both turned off and a session of the given status on the owned one, rendered
+ * into a host of its own so the test can change the session and the store. */
+function mountOnTurnedOff(status: Session["status"] = "idle") {
+  withFakeTimers();
+  const { store, container } = mount();
+  const host = container.appendChild(document.createElement("div"));
+  const root = createRoot(host);
+  onTestFinished(() => act(() => root.unmount()));
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: [{ ...accounts[0]!, disabled: true }, accounts[1]!], disabled_default_accounts: ["claude"] } }));
+  const session: Session = {
+    id: "selected", agent: "claude", account_id: "claude-work", config_dir: accounts[0]!.config_dir, console_id: "console", host_id: "local",
+    role: "console", origin: "console", title: "Selected", status, has_conversation: true,
+    pinned: false, locked: false, started_at: NOW,
+  };
+  const setStatus = (next: Session["status"]) => act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: next }]]) }));
+  setStatus(status);
+  act(() => root.render(
+    <DaemonProvider value={{ store, request } as unknown as Daemon}>
+      <RailQuotaEntry selectedSessionId={session.id} onOpenSettingsAt={onOpenSettingsAt} />
+    </DaemonProvider>,
+  ));
+  return { store, button: host.querySelector("button")!, setStatus };
+}
+
+it("draws the rail button's bars for a turned-off account only while the selected session runs on it", () => {
+  const { button, setStatus } = mountOnTurnedOff("idle");
+  expect(button.querySelector(CAPSULE)).not.toBeNull();
+  setStatus("interrupted");
+  expect(button.querySelector(CAPSULE)).toBeNull();
+  expect(button.getAttribute("aria-label")).toBe("Account usage");
+  setStatus("archived");
+  expect(button.querySelector(CAPSULE)).toBeNull();
+});
+
+it("marks the row that a turned-off account keeps with a neutral Disabled badge, and no other row", () => {
+  const { button } = mountOnTurnedOff("idle");
+  openPanel(button);
+  const kept = panel()!.querySelector('[data-list-motion="claude-work"]')!;
+  expect(kept.textContent).toContain("Disabled");
+  // Every agent's panel stays mounted: the badge is on the one kept row alone.
+  expect(panel()!.textContent!.match(/Disabled/g)).toHaveLength(1);
+});
+
+it("stands no row out and dims none when the selected session's account is not listed", () => {
+  const { store, button } = mountOnTurnedOff("idle");
+  // Claude Code is no longer added: the button keeps its bar, but the panel has no row for that account.
+  act(() => store.setState({ settings: { ...store.getState().settings, added_agents: ["codex"] } }));
+  expect(button.querySelector(CAPSULE)).not.toBeNull();
+  enter(button);
+  advance(OPEN_DELAY);
+  expect(tabs().map((tab) => tab.textContent)).toEqual(["Codex"]);
+  expect(dimmedRows()).toEqual([]);
+});
+
+it("stands the kept row out while the mouse is on the button", () => {
+  const { button } = mountOnTurnedOff("idle");
+  enter(button);
+  advance(OPEN_DELAY);
+  expect(dimmedRows()).toEqual(["default:codex", "codex-work"]);
+});
+
+/** Focuses the status mark of the kept row's failed reading, a control inside the row that goes with its tab. */
+function focusKeptRowMark(store: ReturnType<typeof mountOnTurnedOff>["store"]) {
+  const failed: AccountQuota = { ...quota("claude", "claude-work", "pro"), windows: [], unavailable: { code: "quota_failed", params: {}, message: "" } as never };
+  act(() => store.setState({ accountQuotas: [...store.getState().accountQuotas.filter((item) => item.account !== "claude-work"), failed] }));
+  const mark = document.querySelector<HTMLElement>('[data-list-motion="claude-work"] button')!;
+  expect(mark).not.toBeNull();
+  act(() => mark.focus());
+  expect(document.activeElement).toBe(mark);
+}
+
+it("hands focus on to the tab now selected when the row it was in goes with its tab as the session stops", () => {
+  const { store, button, setStatus } = mountOnTurnedOff("idle");
+  act(() => button.focus());
+  press(button, "Enter");
+  focusKeptRowMark(store);
+  setStatus("interrupted");
+  expect(tabs().map((tab) => tab.textContent)).toEqual(["Codex"]);
+  expect(panel()!.contains(document.activeElement)).toBe(true);
+  expect(document.activeElement).toBe(tabs()[0]);
+});
+
+it("hands focus to the panel's button when focus is in the row that goes with the last tab as the session stops", () => {
+  const { store, button, setStatus } = mountOnTurnedOff("idle");
+  act(() => store.setState({ settings: { ...store.getState().settings, accounts: store.getState().settings.accounts.map((account) => ({ ...account, disabled: true })), disabled_default_accounts: ["claude", "codex"] } }));
+  act(() => button.focus());
+  press(button, "Enter");
+  focusKeptRowMark(store);
+  setStatus("interrupted");
+  expect(tabs()).toEqual([]);
+  expect(document.activeElement?.textContent).toBe("Manage accounts…");
+});
+
+it("leaves focus alone when the panel was opened by the mouse and holds none", () => {
+  const { button, setStatus } = mountOnTurnedOff("idle");
+  act(() => button.focus());
+  openPanel(button);
+  expect(panel()!.contains(document.activeElement)).toBe(false);
+  setStatus("interrupted");
+  expect(panel()!.contains(document.activeElement)).toBe(false);
+});
+
+it("draws no bar on the rail button for a stopped session on a turned-off default account", () => {
+  const { store, button } = mountOnTurnedOff("idle");
+  const session = Array.from(store.getState().sessions.values())[0]!;
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, account_id: null, config_dir: null }]]) }));
+  expect(button.querySelector(CAPSULE)).not.toBeNull();
+  act(() => store.setState({ sessions: new Map([[session.id, { ...session, status: "interrupted", account_id: null, config_dir: null }]]) }));
+  expect(button.querySelector(CAPSULE)).toBeNull();
+});

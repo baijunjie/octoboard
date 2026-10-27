@@ -1,5 +1,7 @@
-import { pathLinkRefusedCause, relocationCause, sourceUnavailableCause, type MessageParams, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause } from "./protocol";
+import { pathLinkRefusedCause, relocationCause, sourceUnavailableCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, NESTED_REMEDY_CODES } from "./protocol";
+import { ActionableError } from "./actionableError";
 import { DaemonRequestError } from "./daemon-client";
+import { isUncataloguedFailure } from "./uncataloguedFailure";
 
 export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
@@ -7,25 +9,12 @@ export type ErrorRecovery =
   | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
-  | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
+  | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
+  | "diskSpaceNoRetry"
   | "none";
-
-/** A local failure whose user remedy is known without inspecting its translated message. Its message is the
- * application's own words; `detail` is the raw text it carries (what the system said), which is never part of the
- * message and is shown apart from it, behind Details. An operating-system signature in it or its cause still takes
- * over `recovery` (see `classifyError`), and those name remedies for writing (access, disk space): a failed read
- * passes `fileRead`, which always wins. */
-export class ActionableError extends DaemonRequestError {
-  readonly detail?: string;
-  constructor(message: string, readonly recovery: ErrorRecovery, options?: ErrorOptions & { code?: string; params?: MessageParams; detail?: string }) {
-    super(message, options?.code ?? "ui_actionable", options?.params ?? {});
-    this.cause = options?.cause;
-    this.detail = options?.detail;
-  }
-}
 
 const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   path: ["path_not_absolute", "path_not_found", "path_not_a_directory", "invalid_path", "directory_unreachable", "file_not_found", "config_dir_not_absolute", "config_dir_unreachable", "no_repositories_found", "repository_name_missing"],
@@ -59,6 +48,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   agentNotAdded: ["agent_not_added"],
   quotaUsedUp: ["account_quota_exhausted"],
   accountDisabled: ["account_disabled"],
+  accountNotSignedIn: ["account_not_signed_in"],
   shell: ["shell_environment_timeout"],
   account: ["unknown_account", "grok_home_not_initialized"],
   grokSandbox: ["grok_sandbox_unsupported"],
@@ -93,7 +83,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   // release_session without an owner, and offers Unbind only on a bound project session. `path_link_refused` is a path
   // link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is none for the
   // causes whose sentence says it all.
-  none: ["path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
+  none: ["daemon_shutting_down", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
 };
 const DOMAIN_RECOVERY = new Map(Object.entries(GROUPS).flatMap(([recovery, codes]) => codes.map((code) => [code, recovery as ErrorRecovery] as const)));
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
@@ -144,6 +134,12 @@ const PATH_LINK_REFUSED_RECOVERY: Record<PathLinkRefusedCause, ErrorRecovery> = 
   ambiguous: "pathLinkAmbiguous", launchable: "pathLinkLaunchable", not_private: "pathLinkNotPrivate", not_a_file_or_folder: "none", unreadable: "none", other: "none",
 };
 
+/** The remedy for a failure of an operation with nothing left to retry, a session that could not be brought back up:
+ * the recovery's variant without "retry the operation". */
+function withoutRetry(recovery: ErrorRecovery | undefined): ErrorRecovery | undefined {
+  return recovery === "diskSpace" ? "diskSpaceNoRetry" : recovery;
+}
+
 /** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */
 function isNotRestored(error: unknown): boolean {
   return error instanceof DaemonRequestError && error.code === "relocation_failed" && relocationCause(error.params.cause) === "not_restored";
@@ -153,7 +149,16 @@ function isNotRestored(error: unknown): boolean {
  * a failure that kept an older item aside asks for (free space, permissions), which `classifyError` leaves behind the
  * remedy that prevents losing that item. */
 export function additionalRecovery(error: unknown): ErrorRecovery | undefined {
-  return isNotRestored(error) ? environmentRecovery(error) : undefined;
+  if (isNotRestored(error)) return environmentRecovery(error);
+  const cause = error instanceof DaemonRequestError && error.code === "account_switch_automatically_failed" ? failedSwitchCause(error) : undefined;
+  return cause && isNotRestored(cause) ? withoutRetry(environmentRecovery(cause)) : undefined;
+}
+
+/** The failure a failed automatic switch reports, as a failure of its own (its `reason` as the message), or the
+ * switch's own failure when it names none. */
+function failedSwitchCause(error: DaemonRequestError): DaemonRequestError {
+  const cause = error.params.reason_code;
+  return cause && cause !== error.code ? new DaemonRequestError(error.params.reason ?? "", cause, error.params) : error;
 }
 
 export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorClassification {
@@ -165,10 +170,29 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   // A denied read keeps its own remedy over the access remedy its operating-system signature names, which is about
   // writing and choosing another folder.
   if (!explicit && error instanceof DaemonRequestError && DOMAIN_RECOVERY.get(error.code) === "readAccess") return { kind: "actionable", recovery: "readAccess" };
+  // A failed automatic switch has nothing left to retry, so none of its remedies says to: the session could not be
+  // brought back up, and the nested cause's remedy (wait for a change, correct a path) is not for the person to act
+  // on. The exceptions are an older item kept aside, which is lost unless it is copied out in time, and what the
+  // system said (a full disk, a denied access). A cause the application has no words for stays unexpected, with
+  // the guidance to report it, unless its raw text names what the system said, which the reason line already says.
+  if (error instanceof DaemonRequestError && error.code === "account_switch_automatically_failed") {
+    const nested = failedSwitchCause(error);
+    if (nested === error) return { kind: "unexpected" };
+    // Recognised as the cause names itself or as the system's text does, in lockstep with the generic sentence
+    // `uncataloguedSummaryKey` says for it; otherwise it is unexpected.
+    if (isUncataloguedFailure(nested)) {
+      const classified = classifyError(nested);
+      return classified.kind === "actionable" ? { kind: "actionable", recovery: withoutRetry(classified.recovery)! } : classified;
+    }
+    if (isNotRestored(nested)) return { kind: "actionable", recovery: "notRestoredAutomatic" };
+    // The domain remedies (wait for a change, correct a path) are not for the person to act on; what the system
+    // said (a full disk, a denied access) is.
+    return { kind: "actionable", recovery: withoutRetry(environmentRecovery(nested)) ?? "none" };
+  }
   const remedy = environmentRecovery(error) ?? explicit;
   if (remedy) return { kind: "actionable", recovery: remedy };
   if (error instanceof DaemonRequestError) {
-    const code = error.code === "launch_failed" ? error.params.reason_code : error.code;
+    const code = NESTED_REMEDY_CODES.has(error.code) ? error.params.reason_code : error.code;
     if (code === "source_unavailable") return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
     if (code === "path_link_refused") return { kind: "actionable", recovery: PATH_LINK_REFUSED_RECOVERY[pathLinkRefusedCause(error.params.cause)] };
     const domain = code && DOMAIN_RECOVERY.get(code);

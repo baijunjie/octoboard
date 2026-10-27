@@ -99,7 +99,9 @@ besides the variables a project session's agent is given for its git (see "The l
   owns it, and not to call `report`; that it may start sessions in its own project and drive them, which report back to
   it; and that if it binds itself to an owner, that call's result tells it what changes. A lead session, bound to a
   console session only after it was opened, is given that same unbound project session's text on every launch, as at its
-  first (see "Lead sessions" in `docs/product/hub-orchestration.md`). Every project session's text also sets out how it
+  first (see "Lead sessions" in `docs/product/hub-orchestration.md`). A bound session's text also tells it how to find
+  its own account and to report when its quota runs low (see "Reading quotas from a session" in
+  `docs/product/account-quotas.md`). Every project session's text also sets out how it
   relates to other sessions: `new_session` for a session of its own where it has it, together with when to start one and
   how to choose the session a task goes to (see "Choosing the session a task goes to" in
   `docs/product/hub-orchestration.md`), `handoff_session`, `switch_session_account`, `transfer_session`,

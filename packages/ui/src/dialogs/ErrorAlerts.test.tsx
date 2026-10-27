@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { setInteractionModality } from "react-aria";
 import { reportError } from "../reportError";
 import { appConfig } from "../appConfig";
 import { DaemonRequestError } from "../daemon-client";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
 import { errorAlerts } from "../errorAlerts";
@@ -27,10 +28,11 @@ vi.mock("../issueReport", async (importOriginal) => {
 
 afterEach(() => { vi.clearAllMocks(); act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
 
-function mount(child?: React.ReactNode, platform: PlatformAdapter = { kind: "browser" }, daemon?: Daemon): void {
+function mount(child?: React.ReactNode, platform: PlatformAdapter = { kind: "browser" }, daemon?: Daemon, strict = false): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={platform}>{child}<ErrorAlerts daemon={daemon} /></PlatformProvider>));
+  const tree = <PlatformProvider value={platform}>{child}<ErrorAlerts daemon={daemon} /></PlatformProvider>;
+  act(() => root.render(strict ? <StrictMode>{tree}</StrictMode> : tree));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
@@ -53,10 +55,11 @@ it("keeps errors across host mounting, deduplicates queued copies and acknowledg
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
-it("stays above an open form until acknowledged and leaves the form available for retry", () => {
+it("stays above an open form until acknowledged and leaves the form available for retry", async () => {
   const close = vi.fn();
   mount(<Dialog title="Edit project" onClose={close} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" defaultValue="Kept" /></Dialog>);
   act(() => errorAlerts.report({ message: "Save failed" }));
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
   const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
   expect(alert).not.toBeNull();
   expect(alert.querySelector('[aria-label="Close"]')).toBeNull();
@@ -234,6 +237,7 @@ it.each([
   ["account", "Manage accounts…", undefined],
   ["addedAgents", "Manage accounts…", undefined],
   ["accountDisabled", "Manage accounts…", undefined],
+  ["accountNotSignedIn", "Manage accounts…", undefined],
   ["agentNotAdded", "Add agent…", true],
 ] as const)("offers a button for %s recovery that opens Settings' Agent accounts", (recovery, label, addAgent) => {
   mount();
@@ -269,6 +273,66 @@ it("hands focus to the window's fallback when acknowledging the last alert leave
   (document.activeElement as HTMLElement | null)?.blur();
   await act(async () => { vi.advanceTimersByTime(500); });
   expect(fallback).toHaveBeenCalledOnce();
+});
+
+/** Mounts a dialog opened by a press without a pointer, so its own opening focus is deferred a frame and it holds no
+ * focus yet. An alert raised over it must still end up focused itself, not on its first control: focusing the alert in
+ * the commit that mounted it, by a layout or passive effect (its own, or its frame's), makes that dialog's focus
+ * containment queue a move to the alert's first control, which lands a frame later. Each frame comes as a 0 ms timer,
+ * so it runs ahead of any timer set after it was asked for, as a browser may render one before the next timer task:
+ * the dialog's opening focus then lands before anything an alert put off to a timer, the order a loaded test run or a
+ * busy window can produce. `strict` mounts it all in `StrictMode`, as the app and the gallery are, which runs every
+ * effect a second time on mount. */
+function mountOverVirtuallyOpenedDialog(strict: boolean): void {
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => Number(setTimeout(() => callback(performance.now()), 0)));
+  vi.stubGlobal("cancelAnimationFrame", (handle: number) => clearTimeout(handle));
+  onTestFinished(() => { vi.unstubAllGlobals(); });
+  act(() => setInteractionModality("virtual"));
+  onTestFinished(() => { act(() => setInteractionModality("pointer")); });
+  const opener = document.body.appendChild(document.createElement("button"));
+  onTestFinished(() => { opener.remove(); });
+  opener.focus();
+  mount(<Dialog title="Edit project" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" /></Dialog>, undefined, undefined, strict);
+}
+
+/** Runs every frame and timer pending, and those they set in turn. Timers of one delay run in the order they were set,
+ * so each round runs every frame asked for before it; ten rounds outlast the longest chain of frames that moves focus
+ * here (the dialog's opening focus, its containment taking focus back on a blur a frame later, and that focus put off
+ * a frame more). */
+async function settleFrames(): Promise<void> {
+  for (let round = 0; round < 10; round += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+}
+
+const alertHoldsFocus = (message: string) => {
+  const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  expect(alert.textContent).toContain(message);
+  expect(document.activeElement).toBe(alert);
+};
+
+describe.each([{ strict: false }, { strict: true }])("over a dialog opened without a pointer (StrictMode: $strict)", ({ strict }) => {
+  it("ends on the alert raised over it, not its first control", async () => {
+    mountOverVirtuallyOpenedDialog(strict);
+    act(() => errorAlerts.report({ message: "Refused", recovery: "accountNotSignedIn" }));
+    await settleFrames();
+    alertHoldsFocus("Refused");
+  });
+
+  it.each([
+    ["the queued alert shown once the first is acknowledged", false, false],
+    ["an immediate alert put in front of the first", false, true],
+    ["an immediate alert raised once the first has settled", true, true],
+  ])("ends on %s, not its first control", async (_case, settleFirst, immediate) => {
+    mountOverVirtuallyOpenedDialog(strict);
+    act(() => errorAlerts.report({ message: "Refused", recovery: "accountNotSignedIn" }));
+    if (settleFirst) await settleFrames();
+    act(() => errorAlerts.report({ message: "Still refused", recovery: "accountNotSignedIn" }, { immediate }));
+    if (!immediate) {
+      await settleFrames();
+      act(() => errorAlerts.acknowledge());
+    }
+    await settleFrames();
+    alertHoldsFocus("Still refused");
+  });
 });
 
 it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback", () => {

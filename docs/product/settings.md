@@ -253,9 +253,9 @@ application settings a full export carries" in `docs/product/configuration-expor
 
 The agents the user has added and every account of each, grouped by agent, with the means to add, reorder and remove
 agents, to add, edit, rename and remove accounts, to turn an account off and on, to sign an account in, each agent's
-permission approval, each account's plan quota and each account's details, and the two switches **Automatically select
-an account** and **Start usage windows automatically**. Where those switches sit, and what the rest of the section shows
-and offers, are in `docs/product/agent-accounts.md`.
+permission approval, each account's plan quota and each account's details, and the three switches **Automatically
+select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows automatically**.
+Where those switches sit, and what the rest of the section shows and offers, are in `docs/product/agent-accounts.md`.
 
 ### Automatically select an account
 
@@ -268,6 +268,23 @@ session may read and change it, and a full configuration export carries it (see 
 and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
 `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies the choice, are in "Which
 account a session uses" in `docs/product/opening-sessions.md`. Turning it on or off changes no session already open.
+It governs only how a new session picks its account: it does not move a session that is already running (see
+"Automatically switch accounts at the usage limit" below).
+
+### Automatically switch accounts at the usage limit
+
+A switch, **off to begin with** — installations from before the switch existed included: whether Octoboard switches a
+session to another account of its agent by itself when the session's turn stops on its account's usage limit, so that
+it carries on there. While the switch is off the row's description says that, once it is on, a session that stops at
+its account's usage limit is switched to another account with usage left and carries on; while it is on, it says that
+this is what happens. The daemon stores it as `auto_switch_on_usage_limit` and keeps it, so every window shows the
+same. A console session can neither read nor change it, since it ends sessions' processes and spends another account's
+quota without asking (see "Who reads and changes what" in `docs/product/agent-settings-tools.md`); a full configuration
+export carries it (see "The application settings a full export carries" in
+`docs/product/configuration-export-and-import.md`). Turning it on or off changes no session; it is read when a
+session's turn fails. It has no bearing on which account a new session takes, nor on whether an owner's request to
+switch an account asks the user (see "Automatically approve account switches" below). Which sessions are switched, to
+which account, and who is told, are in `docs/product/automatic-account-switch.md`.
 
 ### Start usage windows automatically
 
@@ -319,7 +336,8 @@ A switch, **off to begin with** — installations from before the switch existed
 `switch_session_account` call, which switches the account of one of its own sessions, is made without asking the user
 (see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md`). While the switch is
 off the row's description says that, once it is on, a session can do so without asking first; while it is on, it says
-that a session can do so without asking first. The Switch account the user makes from the window is not affected.
+that a session can do so without asking first. The Switch account the user makes from the window is not affected, and
+neither is Octoboard's own switch at the usage limit (see "Automatically switch accounts at the usage limit" above).
 
 ### Automatically approve handoffs
 

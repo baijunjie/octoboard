@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, handoffBlock, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
+import { avoidUnavailableAccount, choiceSignedOut, choiceChangingSharing, switchEntryBlock, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, consoleAccount, currentChoice, expiringWeekly, handoffBlock, incompleteAccount, inheritedAccount, preferExpiringWeekly, projectAccount, settledInitialChoice, switchEntries, type QuotaReadings } from "./accountChoices";
 import { consoleOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
@@ -188,6 +188,55 @@ const usedUp = (agent: Agent, account: string | null): AccountQuota => ({
   windows: [{ kind: "session", label: null, used_percent: 100, resets_at: NOW + 60_000, window_minutes: 300 }],
 });
 
+const signedOut = (agent: Agent, account: string | null, code = "quota_not_signed_in"): AccountQuota => ({
+  agent, account, fetched_at: NOW, plan: null, windows: [], unavailable: { code, params: { agent }, message: "x" },
+});
+
+describe("an account whose last reading found it not logged in", () => {
+  const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
+  const stored = [...accounts, account("w2", "claude", "Work 2")];
+  const readings = (quotas: AccountQuota[]) => ({ quotas, now: NOW });
+
+  it.each(["quota_not_signed_in", "quota_config_dir_missing"])("marks its entry, and no other, for %s", (code) => {
+    const groups = choiceGroups(stored, availability({}), null, () => "Default", readings([signedOut("claude", "w", code)]));
+    const claude = groups.find((group) => group.agent === "claude")!;
+    expect(claude.entries.map((entry) => entry.signedOut)).toEqual([false, true, false]);
+    expect(choiceSignedOut({ agent: "claude", account: "w" }, groups)).toBe(true);
+  });
+
+  it("does not mark an account whose reading failed for a passing reason", () => {
+    const groups = choiceGroups(stored, availability({}), null, () => "Default", readings([signedOut("claude", "w", "quota_command_failed")]));
+    expect(groups.flatMap((group) => group.entries).some((entry) => entry.signedOut)).toBe(false);
+  });
+
+  it("moves the opening choice to another account of the agent, and keeps it when none is left", () => {
+    const open = (quotas: AccountQuota[]) => settle(owner, undefined, stored, availability({}), null, readings(quotas));
+    expect(open([signedOut("claude", "w")]).choice).toEqual({ agent: "claude", account: null });
+    const all = open([signedOut("claude", "w"), signedOut("claude", null), signedOut("claude", "w2")]);
+    expect(all.choice).toEqual({ agent: "claude", account: "w" });
+    expect(all.signedOut).toBe(true);
+  });
+
+  it("is never the account automatic selection prefers", () => {
+    const withWeekly = (quota: AccountQuota): AccountQuota => ({ ...quota, windows: [{ kind: "weekly", label: null, used_percent: 10, resets_at: NOW + 1000, window_minutes: 10080 }] });
+    const groups = choiceGroups(stored, availability({}), null, () => "Default", readings([withWeekly(signedOut("claude", "w")), usedUp("claude", null)]));
+    expect(preferExpiringWeekly(groups.find((group) => group.agent === "claude")!.entries, NOW)).toBeUndefined();
+  });
+
+  it("is listed in the Switch account menu with why, and not offered", () => {
+    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle"), stored, t, undefined, readings([signedOut("claude", "w")]));
+    expect(entries.map((entry) => [entry.current, entry.signedOut])).toEqual([[true, false], [false, true], [false, false]]);
+    expect(switchEntryBlock(t, entries[1], { switching: false, ownChanging: false })?.reason).toEqual({ state: "Not logged in" });
+    expect(switchEntryBlock(t, entries[2], { switching: false, ownChanging: false })).toBeUndefined();
+  });
+
+  it("says why over a switch holding the session, which ends on its own and says nothing", () => {
+    const entries = switchEntries(sessionOf("s", "c-1", "p-1", "Title", "idle"), stored, t, undefined, readings([signedOut("claude", "w")]));
+    expect(switchEntryBlock(t, entries[1], { switching: true, ownChanging: false })?.reason).toEqual({ state: "Not logged in" });
+    expect(switchEntryBlock(t, entries[2], { switching: true, ownChanging: false })).toEqual({ detail: "Unavailable while this session is switching its account" });
+  });
+});
+
 describe("an account whose quota is used up", () => {
   const owner = consoleOf("c-1", "Main", { claude_account_id: "w" });
   const stored = [...accounts, account("w2", "claude", "Work 2")];
@@ -201,7 +250,7 @@ describe("an account whose quota is used up", () => {
   });
 
   it("moves the opening choice to the first other account of the agent, the default account first", () => {
-    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined, changingSharing: false, disabled: false });
+    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined, changingSharing: false, signedOut: false, disabled: false });
     expect(open([usedUp("claude", "w"), usedUp("claude", null)]).choice).toEqual({ agent: "claude", account: "w2" });
   });
 

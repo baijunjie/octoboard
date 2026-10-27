@@ -130,8 +130,9 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `Settings.disabled_default_accounts` (agent wire names) for an agent's default account, both written in the state's
   `settings`. The fixture daemon, like the real one, records `set_account_disabled` (so the Enabled switch works), refuses
   opening a session on, handing off to and switching to a disabled account with `account_disabled` before it looks at the
-  quota, and leaves the sessions already on the account alone. The pickers hide a turned-off account, apart from the one a
-  console, project or session holds.
+  quota (and, after the quota, one whose last reading says it is not logged in with `account_not_signed_in`), and leaves
+  the sessions already on the account alone. The pickers hide a turned-off account, apart from the one a console,
+  project or session holds.
 - `configuration` sets what the platform and daemon answer to configuration export and import
   (`src/gallery/fixtureConfiguration.ts`): `file` (`"dismissed"`, `"pending"`), `readError`, `saveError`, `downloads`,
   `unavailable`. Exporting needs nothing; an inspection and an import result are written out per scenario, and the
@@ -261,7 +262,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 
 | Path | Role |
 |---|---|
-| `src/daemonMessage.ts`, `src/errorPresentation.ts`, `src/errorText.ts`, `src/errorRecovery.ts` | Turning a failure into words: localized daemon wording, `ErrorPresentation` (the shared failure value and the predicates for how it is worded), plain-text forms, and `ErrorRecovery` / `classifyError` (known user remedies) |
+| `src/daemonMessage.ts`, `src/errorPresentation.ts`, `src/errorText.ts`, `src/errorRecovery.ts`, `src/actionableError.ts`, `src/uncataloguedFailure.ts` | Turning a failure into words: localized daemon wording, `ErrorPresentation` (the shared failure value and the predicates for how it is worded), plain-text forms, `ErrorRecovery` / `classifyError` (known user remedies), `ActionableError` (a local failure that carries its remedy) and `isUncataloguedFailure` (whether the application has wording of its own for a failure); the last two are separate files so the error modules do not import each other in a cycle (`src/errorModulesCycle.test.ts` checks it) |
 | `src/errorAlerts.ts`, `src/errorAlertParts.tsx`, `src/reportError.tsx`, `src/runtimeError.ts` | The window's error queue, an alert's title, body and details, structured failure submission, and extracting exceptions from browser error events |
 | `src/issueReport.ts` | `issueReportUrl`: the prefilled GitHub new-issue address behind an unexpected-failure alert's Report issue link, with `sanitizeReportText` and `recordNames` removing what is the user's from every text that goes into it |
 | `src/i18n/` | Internationalization: languages and system-language matching, the typed English catalog and translated ones (`messages/`), lookup, the language choice, the React side (`useT`, `Message`, `LanguageProvider`) and display-width text measuring; every user-facing string goes through it |

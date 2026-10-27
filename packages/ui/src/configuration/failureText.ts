@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { DaemonErrorPart } from "../components/DaemonErrorMessage";
 import { codedMessageNode } from "../components/errorParts";
 import { daemonMessage } from "../daemonMessage";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage } from "../i18n/react";
 import { ConfigurationFileError } from "../platform";

@@ -57,8 +57,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `list_projects` — the console's projects, each with the description the user gave it, \
            and what is running in each. Start here when you do not already know where a request \
            belongs. Name another console as `console` to find the projects there (their ids, \
-           names, descriptions and tags only), for `request_session`. `list_consoles` — the \
-           consoles, with the id and name that `console` takes.\n\
+           names, descriptions and tags only), for `request_session`. `project` narrows it to one \
+           project, and `refresh` checks the git status of the projects first, so you never run \
+           git yourself to learn where a repository stands. `list_consoles` — the consoles, with \
+           the id and name that `console` takes.\n\
          - `list_agent_models` — the models an agent offers and the reasoning efforts of each; \
            check it before naming a `model` or `effort` anywhere.\n\
          - `add_project` — associate a directory, or clone a repository and associate it.\n\
@@ -87,17 +89,20 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            instruction, which you send with `send_message`.\n\
          - `get_session` — a session's status, account, model, pin and lock, branch names and a \
            tail of its output (8 KiB, or up to 64 KiB if you ask for more); it reads any \
-           session, in any console. `get_session_branches` — the branches a session is \
+           session, in any console, and with no `session` it reads you, which is how you learn \
+           your own Octoboard id. `get_session_branches` — the branches a session is \
            responsible for and the worktree each is checked out in. \
            `read_session_history` — what a session's conversation held (the user's messages and \
            the agent's final replies, not its tool calls), a page at a time from the latest.\n\
          - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
            language, as for `new_session`) or pin a session of yours.\n\
-         - `archive_session` — end and archive a session you are done with.\n\
+         - `archive_session` — end and archive a session you are done with; its branches and \
+           worktrees are removed where git can do it without force, unless you pass `keep`.\n\
          - `archive_self` — end and archive yourself once your sessions are all archived.\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
            starting over, handing it its next task (`list_archived` is newest first: narrow it \
-           with `owner` or `project`, and `limit` sets how many).\n\
+           with `yours`, `owner` or `project`, `limit` sets how many, and `before` takes the \
+           previous answer's `next` to read the next page).\n\
          - `get_account_quotas` — how much plan quota each account of each agent has left, as \
            percentages; check it before choosing an account or when one may be running out. \
            Readings are taken about every five minutes; `refresh` takes a new one, at most once \

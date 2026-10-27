@@ -25,6 +25,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Deleting sessions](product/deleting-sessions.md) — deleting a session for good rather than archiving it.
 - [Switching a session's account](product/switching-session-accounts.md) — moving a session to another account of its
   agent and carrying its conversation.
+- [Automatic account switch](product/automatic-account-switch.md) — switching a session whose turn stopped at its
+  account's usage limit to another account by itself, and restoring it when that fails.
 - [Handing a session off to another agent](product/handing-off-sessions.md) — moving a session's work to a new session
   of a different agent.
 - [Changing a session's owner](product/changing-session-owners.md) — handing, releasing, unbinding and binding a
@@ -186,6 +188,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
   building, launching and isolating the real app and its daemon sidecar to verify a change.
 - [Building on HeroUI and react-aria](memory/building-on-heroui-and-react-aria.md) — pitfalls of HeroUI 3 and react-aria
   components: state attributes, context, tabs, lists and tooltips.
+- [Changing the agents' MCP tools](memory/changing-the-agents-mcp-tools.md) — adding, changing or auditing the MCP tools
+  and role texts from the agent's side: descriptions against results, parity with the UI, the agents' typical tasks.
 - [Catching a branch up with its target](memory/catching-a-branch-up-with-its-target.md) — which branch is the target,
   and why a guarded pushed branch is merged, not rebased.
 - [Driving and reading the real app window](memory/driving-and-reading-the-real-app-window.md) — scripting and

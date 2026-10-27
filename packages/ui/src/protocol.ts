@@ -67,6 +67,14 @@ export type ProjectSource = "local" | "parent" | "git";
  * the default account in the current language. */
 export const DEFAULT_ACCOUNT_NAME = "Default";
 
+/** The session notices that carry the failure they report as `reason_code` and the failure's own params, so the reason is
+ * worded from that failure's message. */
+export const NESTED_FAILURE_CODES: ReadonlySet<string> = new Set(["launch_failed", "account_switch_automatically_failed"]);
+
+/** Those among them whose nested failure's own remedy sentence is shown: a failed launch has none of its own. A failed
+ * automatic switch says what to do in its own sentence. */
+export const NESTED_REMEDY_CODES: ReadonlySet<string> = new Set(["launch_failed"]);
+
 /** A console session's badge colour (`Session.colour`): one of a fixed palette of sixteen, in hue
  * order around the colour wheel and then the muted ones, assigned on creation and changed
  * afterwards only by the user. The ids are never shown: the user sees the colour, not a name. What
@@ -651,6 +659,10 @@ export interface Settings {
    * reset is used before it is lost. Optional only so that a state built without it reads as off;
    * the daemon always sends it. */
   auto_select_account?: boolean;
+  /** Off (the default): a session whose turn stopped on its account's usage limit stays where it is. On:
+   * Octoboard switches it to another account of its agent by itself and carries on. Optional only so that a state
+   * built without it reads as off; the daemon always sends it. */
+  auto_switch_on_usage_limit?: boolean;
   /** On (the default): the sidebar ranks sessions and projects by status, so a row moves when its
    * status changes. Off: neither is ranked by status; a project still drops to the inactive group at
    * the end when its last unarchived session is archived, and leaves it when one is opened again.
@@ -756,6 +768,8 @@ export interface DocumentSettings {
   /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
   auto_select_account?: boolean | null;
   /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
+  auto_switch_on_usage_limit?: boolean | null;
+  /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
   sidebar_order_by_status?: boolean | null;
   /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
   auto_start_quota_windows?: boolean | null;
@@ -851,6 +865,10 @@ export interface InspectedSettings {
   auto_select_account?: boolean | null;
   /** This machine's value. Absent when the reply predates the setting. */
   current_auto_select_account?: boolean;
+  /** Absent when the document predates the setting. */
+  auto_switch_on_usage_limit?: boolean | null;
+  /** This machine's value. Absent when the reply predates the setting. */
+  current_auto_switch_on_usage_limit?: boolean;
   /** Absent when the document predates the setting. */
   sidebar_order_by_status?: boolean | null;
   /** This machine's value. Absent when the reply predates the setting. */
@@ -1446,7 +1464,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; interface_language?: string; auto_select_account?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; git_workflow?: GitWorkflowSettingsChanges }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; interface_language?: string; auto_select_account?: boolean; auto_switch_on_usage_limit?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; git_workflow?: GitWorkflowSettingsChanges }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

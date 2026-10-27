@@ -150,11 +150,11 @@ export function projectMenu(
 }
 
 /** "Switch account": the session's agent's accounts, the one the session is on marked as current
- * and doing nothing. An account whose quota is used up is unavailable, with why under its name. Without a reason
- * (each ends on its own) are an account whose sharing change runs, every other account while the session's own account
- * changes its sharing, and every account but the current one while an account switch holds the session. A turned-off
- * account is not listed, but the session's own stays. Absent when the agent has no other account to go to that is
- * turned on — hidden rather than disabled, as there is nothing the user could do with it. */
+ * and doing nothing. An account whose quota is used up, or that is not logged in, is unavailable, with why under its
+ * name. Without a reason (each ends on its own) are an account whose sharing change runs, every other account while
+ * the session's own account changes its sharing, and every account but the current one while an account switch holds
+ * the session. A turned-off account is not listed, but the session's own stays. Absent when the agent has no other
+ * account to go to that is turned on — hidden rather than disabled, as there is nothing the user could do with it. */
 function switchAccountSubmenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -173,15 +173,17 @@ function switchAccountSubmenu(
   return {
     label: t("sidebar.session.switchAccount"),
     icon: ArrowLeftRight,
-    items: entries.map(({ account, name, current, isPath, exhaustedBy, quota, changingSharing }) => {
+    items: entries.map(({ account, name, current, isPath, exhaustedBy, quota, changingSharing, signedOut }) => {
       // A usage bar as the icon, the remainder said to assistive technology, and for one
       // used up the short reason under its name. The current account is never offered, so it is
       // not marked used up; a removed account's directory has no quota.
       const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
-      // Nothing can be switched onto an account whose sharing change runs, nor away from one, nor while a switch
-      // runs; those end on their own, so the entry is disabled without a reason.
-      const held = switchEntryBlock(t, { current, changingSharing }, { switching, ownChanging }) !== undefined;
-      const { icon, detail, reason } = usage;
+      // Nothing can be switched onto an account that is not logged in, which lasts and says so in place of its usage;
+      // nor onto one whose sharing change runs, nor away from one, nor while a switch runs, which end on their own, so
+      // the entry is disabled without a reason.
+      const hold = switchEntryBlock(t, { current, changingSharing, signedOut }, { switching, ownChanging });
+      const held = hold !== undefined;
+      const { icon, detail, reason } = hold?.reason ? { icon: usage.icon, detail: hold.detail, reason: hold.reason } : usage;
       return {
         label: name,
         // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.

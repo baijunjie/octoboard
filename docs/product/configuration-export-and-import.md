@@ -254,9 +254,9 @@ accounts and which accounts are turned off (see "Added agents", "The default acc
 
 ### The application settings a full export carries
 
-Eleven, each under its own key. The first is in every document that has application settings. Each of the other ten
-is missing from a document exported before it was carried, and applying that document's settings then leaves the
-importing machine's value as it is; the import review notes each of the nine switches after the first only when the
+Twelve, each under its own key. The first is in every document that has application settings. Each of the other
+eleven is missing from a document exported before it was carried, and applying that document's settings then leaves
+the importing machine's value as it is; the import review notes each of the ten switches after the first only when the
 document carries it as a boolean. A document exported by a build that carried a "Talk to me in the interface language"
 switch, under `reply_in_interface_language`, still imports: that key is ignored. The language the daemon holds for the
 user is not carried either (see "The language the daemon holds" in `docs/product/language.md`): applying the document's
@@ -269,6 +269,9 @@ settings leaves it as the importing daemon holds it.
   conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
 - **Automatically select an account** (see that section in `docs/product/settings.md`), under `auto_select_account`.
   The review's line for turning it on says that a new session then uses the account whose weekly limit resets soonest.
+- **Automatically switch accounts at the usage limit** (see that section in `docs/product/settings.md`), under
+  `auto_switch_on_usage_limit`. The review's line for turning it on says that a session that stops at its account's
+  usage limit is then switched to another account with usage left and carries on.
 - **Order the sidebar by status** (see that section in `docs/product/settings.md`), under `sidebar_order_by_status`.
   The review's line for turning it on says that sessions and projects in the sidebar then move as their status changes.
 - **Start usage windows automatically** (see that section in `docs/product/settings.md`), under
@@ -407,8 +410,9 @@ fills the window in as it goes.
 A document's application settings are applied **only when the import is explicitly asked to apply them**, and are not
 applied by default. Automatically pull repositories makes the daemon fast-forward the user's own repositories by itself,
 automatically deleting archived sessions makes it delete sessions by itself, automatic account selection makes a later
-new session that names no account take the one whose weekly quota resets soonest, starting usage windows automatically
-spends a little of the accounts' quota by itself, and the four automatic approvals let agents' requests, account
+new session that names no account take the one whose weekly quota resets soonest, automatic switching at the usage
+limit ends sessions' processes and moves them to other accounts by itself, starting usage windows automatically spends
+a little of the accounts' quota by itself, and the four automatic approvals let agents' requests, account
 switches and handoffs through without asking the user, and asking questions as choices changes what sessions are told at
 launch, so applying them changes how the daemon's host behaves rather than only adding to what it holds. The inspection
 says both what the document sets and what is set now, so what applying would change can be shown before anything is
@@ -416,7 +420,8 @@ done. The settings are applied last, through the same path as a change made in S
 automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on"
 in `docs/product/project-git-status.md`), one that turns the automatic deletion on deletes nothing until the next
 scheduled check, as the switch does, one that turns automatic account selection on or off changes no session already
-open, one that turns the starting of usage windows on looks over the quota readings already held at once (see "When an
+open, one that turns automatic switching at the usage limit on or off changes no session, one that turns the
+starting of usage windows on looks over the quota readings already held at once (see "When an
 account is kicked" in `docs/product/starting-usage-windows.md`), one that turns an automatic approval on or off changes
 no request already waiting, and one that turns asking questions as choices on or off changes no session already running
 — and the result of the import reports what was applied. Asking to apply the settings of a document that carries none is

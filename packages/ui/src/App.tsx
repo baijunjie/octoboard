@@ -6,7 +6,7 @@ import { errorAlerts } from "./errorAlerts";
 import { noAgentState, pickableAgents } from "./agents";
 import { reportExternalLinkFailure } from "./components/ExternalLink";
 import { copyText } from "./components/copyText";
-import { ActionableError } from "./errorRecovery";
+import { ActionableError } from "./actionableError";
 import { FadeOverflow } from "./components/FadeOverflow";
 import { GitBranch } from "lucide-react";
 import type { ActionMenuEntry } from "./components/ActionMenu";

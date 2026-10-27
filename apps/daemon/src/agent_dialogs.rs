@@ -54,6 +54,21 @@ pub struct Dialog {
     pub written: WrittenMessage,
 }
 
+/// The name of the dialog Grok Build raises when its plan's usage limit is reached.
+const GROK_USAGE_LIMIT: &str = "grok_usage_limit";
+
+impl Dialog {
+    /// Whether this is the dialog an agent raises on reaching its usage limit. A session whose
+    /// only wait is this one is switched to another account all the same: ending the modal is the
+    /// point of the switch (see `crate::auto_switch`). Only Grok Build raises one when a turn
+    /// stops on the limit; Claude Code prints the limit in its conversation (its
+    /// `/rate-limit-options` menu is not recognised as a dialog here), and Codex's "Approaching
+    /// rate limits" screen is raised before the limit, and is not one.
+    pub fn is_usage_limit(&self) -> bool {
+        self.code == GROK_USAGE_LIMIT
+    }
+}
+
 struct Entry {
     agent: Agent,
     dialog: Dialog,
@@ -215,7 +230,7 @@ const DIALOGS: &[Entry] = &[
     ),
     entry(
         Agent::Grok,
-        "grok_usage_limit",
+        GROK_USAGE_LIMIT,
         WrittenMessage::Discarded,
         &["Upgradetier", "Buymorecredits", "Enter:submit"],
     ),
@@ -299,7 +314,9 @@ async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
         acted_at = now.changes;
         if let Ok(session) = state.session_record(&live.id) {
             state.publish_session(&session);
-            if now.current.is_none() {
+            if now.current.is_some() {
+                crate::reporting::spawn_tell_owner_it_waits(&state, &live.id);
+            } else {
                 state.spawn_flush_outbox(&live.id, state.agent_status(&session));
             }
         }

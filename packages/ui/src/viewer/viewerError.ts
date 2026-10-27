@@ -1,4 +1,5 @@
-import { hasCodeParams, isUncataloguedFailure, uncataloguedSummaryKey, type ErrorPresentation } from "../errorPresentation";
+import { hasCodeParams, uncataloguedSummaryKey, type ErrorPresentation } from "../errorPresentation";
+import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { rawFailureText } from "../errorText";
 import { daemonMessage, messageCode } from "../daemonMessage";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";

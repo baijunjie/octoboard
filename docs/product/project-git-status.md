@@ -161,7 +161,7 @@ again until its next check, or until its refs change (see "Following changes to 
 Every tool that gives a project with its settings — `get_project`, `list_projects` for the caller's own console,
 `add_project` and `update_project` (see "A project's settings" in `docs/product/agent-settings-tools.md`) — carries the
 project's **`git_status`**: the status the daemon holds for it, the one the badge shows. Reading it never starts a
-check, fetches nothing and runs no `git`, and no tool starts a check.
+check, fetches nothing and runs no `git`, unless the call asks for a refresh (below).
 
 `git_status` is `null` while the daemon holds no status for the project: nothing has checked it or re-read its refs
 since the daemon started, for instance because its console has not been the current one. Otherwise it is:
@@ -178,6 +178,23 @@ since the daemon started, for instance because its console has not been the curr
 | `checked_seconds_ago` | How many seconds ago the last check completed, counted on the wall clock, so time the machine spent asleep is part of it; `null` when none has completed since the daemon started, the branch and counts then being only what the repository's local refs gave. |
 
 The counts are as fresh as the last check, so they may be stale by `checked_seconds_ago`.
+
+**A refresh.** `list_projects`, for the caller's own console, and `get_project` take an optional `refresh` (`true` or
+`false`, `false` when left out; see "Listing a console's projects" in `docs/product/what-every-session-reads.md` and
+"A project's settings" in `docs/product/agent-settings-tools.md`). With it, the projects the answer lists are checked
+first, as the window's checks do (see "What one check does" above): the same one-minute floor and the same claim on a
+check already running or waiting, so a project checked less than a minute ago, or being checked, is not started again,
+and with **Automatically pull repositories** on a branch that is behind and has not diverged is fast-forwarded as
+in any check (see "Automatically pulling repositories" below). The checks take their turn among the four that may run
+at once, and are made whichever console the window shows. The call waits up
+to **30 seconds** for each check to complete, a project the floor skipped counting as complete, then reads the
+statuses, and its answer carries `git_refresh` — at the top of `list_projects`' answer, in the project's entry for
+`get_project`:
+
+- `{"finished": true}` when every check completed in time;
+- otherwise `{"finished": false, "unfinished": [...], "note": "…"}`, `unfinished` naming the ids of the projects whose
+  check had not completed, which goes on in the background, and the note saying their `git_status` is what the daemon
+  held before and to read it again later.
 
 ## Following changes to the repository's refs
 

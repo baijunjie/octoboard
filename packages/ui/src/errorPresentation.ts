@@ -1,30 +1,15 @@
 import { DaemonRequestError } from "./daemon-client";
 import { CODE_PARAMS, DETAIL_BLOCK_CODES, hasTrustDiagnostic, RECOVERY_CODES, referenceNameParams, leftBranchItems, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
-import { ActionableError, classifyError } from "./errorRecovery";
+import { classifyError } from "./errorRecovery";
 import { globalParam, isMessageKey, type PlainMessageKey } from "./i18n/catalog";
-import type { MessageParams } from "./protocol";
+import { NESTED_FAILURE_CODES, type MessageParams } from "./protocol";
+import { isUncataloguedFailure } from "./uncataloguedFailure";
 
 /** Daemon codes and parameters remain available for rendering and recovery classification. */
 export type ErrorPresentation = string | DaemonRequestError;
 
 export function hasShellTimeoutDetails(error: { code: string; params: MessageParams }): boolean {
   return error.code === "shell_environment_timeout" && ["shell", "command", "timeout"].every((name) => !!error.params[name]);
-}
-
-/** Codes `daemon-client.ts` gives the failures it raises itself, always with a catalog message (`connection.error.*`) in the
- * current language, never an English literal, so the message is already the application's own. */
-const CLIENT_CODES = new Set(["connection_closed", "request_timed_out"]);
-
-/** Whether the application has no message of its own for `error`, so the only words it has are the
- * daemon's raw text: a code the catalog lacks, or `internal_error` / `unexpected_error`, whose
- * message is whatever the system said. Such a failure is shown as the application's generic
- * sentence with the raw text behind Details. A failure with no code at all is the application's
- * own wording, and a string and an `ActionableError` are too, as are the codes the client raises
- * itself with a localized message (`CLIENT_CODES`). */
-export function isUncataloguedFailure(error: ErrorPresentation | { code: string; params: MessageParams }): boolean {
-  if (typeof error === "string" || error.code === "" || error instanceof ActionableError || CLIENT_CODES.has(error.code)) return false;
-  if (error.code === "internal_error" || error.code === "unexpected_error") return true;
-  return !isMessageKey(`daemon.${messageCode(error.code, withUiParams(error.code, error.params))}`);
 }
 
 /** The sentence an uncatalogued failure opens with: a cause the system's text names (a full disk, a denied access, a
@@ -48,13 +33,13 @@ export function isStructuredFailure(error: { code: string; params: MessageParams
 }
 
 /** The raw text of a cause the application has no words for, which the failure's sentence says only as a generic
- * reason: a `launch_failed` whose own failure is uncatalogued (see `isUncataloguedFailure`), or a trust failure whose
+ * reason: a `launch_failed` or failed automatic switch whose own failure is uncatalogued (see `isUncataloguedFailure`), or a trust failure whose
  * `reason_code` has no `daemon.trust_reason.<code>`, whose `reason` is then the daemon's English account. Undefined
  * where the cause is worded. */
 export function unwordedReason(code: string, params: MessageParams): string | undefined {
-  if (code === "launch_failed") {
+  if (NESTED_FAILURE_CODES.has(code)) {
     const reason = params.reason_code;
-    return reason && reason !== "launch_failed" && isUncataloguedFailure({ code: reason, params }) ? params.reason ?? "" : undefined;
+    return reason && reason !== code && isUncataloguedFailure({ code: reason, params }) ? params.reason ?? "" : undefined;
   }
   if (code !== "trust_answer_failed" && code !== "trust_not_carried_over") return undefined;
   return params.reason && !isMessageKey(`daemon.trust_reason.${params.reason_code}`) ? params.reason : undefined;
@@ -74,7 +59,7 @@ export function hasCodeParams(error: { code: string; params: MessageParams }): b
 }
 
 /** The session notices that are failures, shown as an error alert rather than a toast. */
-const FAILURE_NOTICES = new Set(["launch_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped", "sharing_messages_dropped", "sharing_resume_failed", "account_sharing_repair_failed", "message_not_sent"]);
+const FAILURE_NOTICES = new Set(["launch_failed", "account_switch_automatically_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped", "sharing_messages_dropped", "sharing_resume_failed", "account_sharing_repair_failed", "message_not_sent"]);
 
 /** How a session notice is shown: a failure as an error alert, anything else as a toast. A trust entry not carried
  * over is a notice, Grok Build only asking again the next time, unless it carries what the system said (a

@@ -7,14 +7,14 @@ archives of any console.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `get_session` | `session`, `output_bytes?` | The record of any session, of any console — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, and the names of the branches it is responsible for — plus a tail of what it has printed (see "Session records" below). |
+| `get_session` | `session?`, `output_bytes?` | The record of any session, of any console, or with `session` left out of the caller itself, which is how a session learns its own id — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, the names of the branches it is responsible for, and the rest of "Session records" below — plus a tail of what it has printed. |
 | `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `status?` | The running sessions other than the caller — or with `status` the interrupted ones, or both — in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
 | `read_session_history` | `session`, `limit?`, `before?` | What any session's conversation held, a page at a time from the latest. See "Reading a session's history" below. |
 | `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project and worktree. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
 | `list_agent_models` | `agent`, `account?` | The models an agent offers and the reasoning-effort levels of each. See "Reading the models an agent offers" below. |
 | `list_consoles` | — | Every console, each as `console` (its id), `name` and `yours` (whether it is the caller's own console). The id, or a name that names one console, is what a `console` argument takes. |
-| `list_projects` | `console?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects. See "Listing a console's projects" below. |
-| `list_archived` | `console?`, `project?`, `owner?`, `kind?`, `limit?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed. See "Listing archived sessions" below. |
+| `list_projects` | `console?`, `project?`, `refresh?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects; optionally one project, and optionally with their git status checked first. See "Listing a console's projects" below. |
+| `list_archived` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `limit?`, `before?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed, a page at a time. See "Listing archived sessions" below. |
 | `get_account_quotas` | `agent?`, `refresh?` | Each account's plan quota, optionally read again first. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
 
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
@@ -43,28 +43,46 @@ the console its project is in. Both answers carry `console`, the id of the conso
   `request_session` and `request_resume_session` need to target one of its projects — with no sessions and no
   settings.
 
+`project` narrows either answer to one project of the console listed, named by its id or by a name that names one
+project in that console; anything else is refused. It is how a console session reads a single project, `get_project`
+being the project sessions' own.
+
+`refresh` (`true` or `false`, `false` when left out) checks the git status of the projects listed against their
+remotes before answering, as the application's own check does, so that a session need not run `git` to learn where a
+repository stands (see "Reading the status from a session" in `docs/product/project-git-status.md`). It is refused
+with another console, whose projects are listed without a git status. The answer then carries `git_refresh` at its top
+level. The tool's description tells the agent to ask for it only when a status is too old to decide on.
+
 ## Listing archived sessions
 
 `list_archived` lists archived sessions of every console, project sessions and console sessions alike, whichever
 session owns them; an interrupted session is not archived, and is listed by `list_sessions` with `status` (see
 "Narrowing the list of sessions" in `docs/product/information-between-sessions.md`). It answers with `sessions`, each a
-session record as in "Session records" below, and `total`. Its optional arguments narrow the list, and a session is
-listed only when it matches every one given:
+session record as in "Session records" below, `total`, `older` and `next`. Its optional arguments narrow the list, and
+a session is listed only when it matches every one given:
 
 - `console`: only the sessions of that console, named by its id or by a name that names one console.
 - `project`: only the sessions of that project, named by its id, in any console, or by its name — looked for among the
   caller's own console's projects first, else among every console's. Given with `console`, the project is looked for
   among that console's projects only, by id or by name, and one that is not among them is refused.
 - `owner`: only the sessions that were bound to that session when they were archived, named by its id.
+- `yours`: `true` lists only the sessions that were bound to the caller when they were archived, `false` only those
+  that were not.
 - `kind`: `console` for console sessions only, `project` for project sessions only. `kind: console` together with a
   `project` is refused, a console session being in no project.
 - `limit`: how many sessions to return, a whole number from 1 to 200, 50 when left out.
+- `before`: the `next` of the previous page, passed back unchanged; only the sessions after that position are
+  returned. Left out, the list starts from the most recently archived.
 
-The **most recently archived come first**, at most `limit` of them; `total` counts every session that matches, so a
-`total` above the number of sessions returned means there are more. The tool's description tells the agent to narrow
-the filters — `owner`, with its own id to list just its own sessions, or `project` — rather than raise `limit`. A
-`console`, `project` or `owner` that names nothing, a name that names more than one console or project, a `kind` of
-any other value and a `limit` out of range are refused, with the reason in prose.
+The **most recently archived come first** — by when they were archived, then by id — at most `limit` of them. `total`
+counts every session that matches, and `older` how many of them come after the page returned. `next` is a cursor for
+the page after this one, to pass as `before`, and `null` when `older` is 0, so pages follow until `older` is 0. A
+cursor is a position in that order, not a session: it stays good when the session it was taken from is reopened,
+archived again or deleted between two calls. The tool's description tells the agent to narrow the filters — `yours`,
+`owner` or `project` — where it can, an unfiltered list being long. A `console`, `project` or `owner` that names
+nothing, a name that names more than one console or project, a `kind` of any other value, a `limit` out of range and a
+`before` that is not a cursor the daemon made, a session id say, are refused, with the reason in prose, and nothing is
+listed.
 
 ## Reading a session's history
 
@@ -179,3 +197,24 @@ Each record also carries the facts the tools that act on a session depend on, so
   console session. These are the branches `handover_branches`, and the `branches` of `new_session` and
   `request_session`, need the caller to be responsible for; where each is checked out is `get_session_branches`'
   answer. Reading a record runs no `git`.
+
+And each record carries what tells sessions apart and what an owner decides on:
+
+- `display_title`, the session's displayed name as the user's session list shows it, the agent's task title before
+  `title` (see "Displayed names" in `docs/product/session-titles.md`), so that a session the user calls by that name
+  can be matched to a record.
+- `agent_session_id`, the agent's own id of the conversation, `null` until the agent has reported one. It is what
+  `request_resume_session` takes as its `conversation` (see `docs/product/requests-to-resume-a-conversation.md`), which
+  the tool's description still says to use only when the user asked for that conversation.
+- `origin`: `console` for a session started with `new_session`; `user` for one the user opened and for one opened
+  through `request_session` or `request_resume_session`. A session that takes another's place in a handoff carries the
+  original's.
+- `has_conversation`: whether a turn was ever taken in the session. It does not say that the agent still holds the
+  conversation's record; a `reopen_session` that finds it gone is refused (`conversation_unresumable`).
+- `model` and `effort`, the session's own launch choices (see `docs/product/model-and-reasoning-effort.md`): a key is
+  absent when the session follows its project's, else its console's, setting, and `null` when the session leaves the
+  value to the agent's own default. They differ from `observed_model` and `observed_effort`, which say what the agent's
+  records show.
+- `lead`, whether the session is a lead session (see "Lead sessions" in `docs/product/hub-orchestration.md`), and
+  `owned_sessions`, how many sessions are bound to it in any status, archived ones included — the count that decides
+  whom it can be bound to (see "Who can own a session" in `docs/product/changing-session-owners.md`).

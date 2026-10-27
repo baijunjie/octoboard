@@ -106,6 +106,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
         auto_pull_repositories: state.settings.auto_pull_repositories,
         auto_delete_unresumable_archives: state.settings.auto_delete_unresumable_archives,
         ...(typeof state.settings.auto_select_account === "boolean" && { auto_select_account: state.settings.auto_select_account }),
+        ...(typeof state.settings.auto_switch_on_usage_limit === "boolean" && { auto_switch_on_usage_limit: state.settings.auto_switch_on_usage_limit }),
         ...(typeof state.settings.sidebar_order_by_status === "boolean" && { sidebar_order_by_status: state.settings.sidebar_order_by_status }),
         ...(typeof state.settings.auto_start_quota_windows === "boolean" && { auto_start_quota_windows: state.settings.auto_start_quota_windows }),
         ...(typeof state.settings.auto_approve_session_requests === "boolean" && { auto_approve_session_requests: state.settings.auto_approve_session_requests }),

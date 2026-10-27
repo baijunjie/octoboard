@@ -250,6 +250,23 @@ impl AccountQuotas {
             .map(|entry| entry.quota.clone())
     }
 
+    /// Whether the held reading of the account says the agent is not signed in there
+    /// (`quota_not_signed_in`) or that its directory does not exist yet
+    /// (`quota_config_dir_missing`). Any other reason a reading is missing, a failed command or
+    /// a timeout say, is a passing failure and is not this: it says nothing of the account.
+    pub fn signed_out(
+        &self,
+        agent: Agent,
+        account: Option<&str>,
+        config_dir: Option<&str>,
+    ) -> bool {
+        self.held(agent, account, config_dir)
+            .and_then(|quota| quota.unavailable)
+            .is_some_and(|reason| {
+                [code::NOT_SIGNED_IN, code::CONFIG_DIR_MISSING].contains(&reason.code.as_str())
+            })
+    }
+
     /// [`AccountQuotas::held`] and [`AccountQuotas::exhausted`] of the same account under one
     /// lock, so the reading and the judgement made from it cannot come from different moments.
     pub fn held_and_exhausted(
@@ -433,6 +450,8 @@ impl AccountQuotas {
 
     /// Whether the daemon, the user's setting and the account allow a kick at all: it is not
     /// shutting down, the setting that starts quota windows is on, and the account is not disabled.
+    /// An account found not logged in needs no check of its own: its reading carries a reason it
+    /// is unavailable, and `unkicked_windows` offers no window from such a reading.
     fn kick_allowed(&self, state: &AppState, key: &Key) -> bool {
         if self.stopping.load(Ordering::Relaxed) {
             return false;
@@ -539,6 +558,13 @@ impl AccountQuotas {
                     .account
                     .as_ref()
                     .is_none_or(|account| key.account.as_ref() == Some(account))
+            })
+            .filter(|key| {
+                !scope.enabled_only
+                    || !state
+                        .store
+                        .account_disabled(key.agent, key.account.as_deref())
+                        .unwrap_or(false)
             })
             .collect();
         Ok(self.claim_due_locked(&mut inner, selected, now, now_millis(), trigger))
@@ -852,6 +878,8 @@ enum Trigger {
 pub struct Scope {
     pub agent: Option<Agent>,
     pub account: Option<String>,
+    /// Leave out the accounts the user turned off.
+    pub enabled_only: bool,
 }
 
 /// The accounts worth reading: the default account and every stored account of each agent whose
@@ -1563,6 +1591,57 @@ mod tests {
         assert!(state.account_quotas.list()[0].unavailable.is_some());
     }
 
+    /// A scope that leaves out the accounts the user turned off selects the others only, the
+    /// default account among them, while the default scope selects every account.
+    #[tokio::test]
+    async fn a_scope_can_leave_out_the_accounts_the_user_turned_off() {
+        let (state, dir) = crate::test_support::app_state("quota-scope-enabled");
+        state.set_agent_availability(vec![crate::protocol::AgentAvailability {
+            agent: Agent::Codex,
+            availability: Availability::Available,
+            default_account_dir: None,
+        }]);
+        for (id, disabled) in [("on", false), ("off", true)] {
+            state
+                .store
+                .insert_account(&crate::protocol::Account {
+                    id: id.to_string(),
+                    agent: Agent::Codex,
+                    name: id.to_string(),
+                    config_dir: dir.join(id).to_string_lossy().into_owned(),
+                    share_default_config: false,
+                    share_default_config_incomplete: false,
+                    disabled,
+                })
+                .unwrap();
+        }
+        let selected = |scope: Scope| {
+            let mut accounts: Vec<Option<String>> = state
+                .account_quotas
+                .claim_scope(&state, &scope, Instant::now(), Trigger::Poll)
+                .unwrap()
+                .into_iter()
+                .map(|claim| claim.key.account.clone())
+                .collect();
+            // Let the next selection claim them again.
+            state.account_quotas.lock().in_flight.clear();
+            accounts.sort();
+            accounts
+        };
+
+        assert_eq!(
+            selected(Scope::default()),
+            [None, Some("off".to_string()), Some("on".to_string())]
+        );
+        assert_eq!(
+            selected(Scope {
+                enabled_only: true,
+                ..Scope::default()
+            }),
+            [None, Some("on".to_string())]
+        );
+    }
+
     /// A missing directory is reported without running anything, and read for real once it exists.
     #[tokio::test]
     async fn a_missing_config_directory_is_a_state_found_before_the_cli_is_run() {
@@ -1602,6 +1681,7 @@ mod tests {
         let scope = Scope {
             agent: Some(Agent::Codex),
             account: Some("work".to_string()),
+            ..Scope::default()
         };
 
         refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
@@ -1711,6 +1791,7 @@ mod tests {
         let scope = Scope {
             agent: Some(Agent::Codex),
             account: Some("work".to_string()),
+            ..Scope::default()
         };
         refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
         assert_eq!(held(&state), [(Agent::Codex, Some("work".to_string()))]);
@@ -1727,6 +1808,7 @@ mod tests {
         let scope = Scope {
             agent: Some(Agent::Grok),
             account: None,
+            ..Scope::default()
         };
         refresh_with(&state, &scope, Trigger::Poll, shell.clone()).await;
         assert_eq!((runs("codex"), runs("grok")), (1, 1));

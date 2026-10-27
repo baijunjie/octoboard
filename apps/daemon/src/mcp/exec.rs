@@ -40,6 +40,7 @@ use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked};
 use crate::session_request;
 use crate::sharing::{self, OwnerCopy};
 use crate::state::{AppState, WriteHold};
+use crate::term::{Launch, LaunchRequest};
 
 use super::account_switch;
 use super::args::{
@@ -92,7 +93,16 @@ pub async fn call(
         "archive_session" => archive_session(state, &session, arguments).await,
         "archive_self" => archive_self(state, &session).await,
         "list_archived" => reads::list_archived(state, &session, arguments).await,
-        "reopen_session" => reopen_session(state, &session, arguments).await,
+        "reopen_session" => {
+            reopen_session(
+                state,
+                &session,
+                arguments,
+                crate::env_shell::launch_snapshot,
+                crate::term::launch,
+            )
+            .await
+        }
         "handover_branches" => handover::handover_branches(state, &session, arguments).await,
         "handoff_session" => {
             handoff::handoff_session(state, &session, arguments, crate::term::launch).await
@@ -117,7 +127,7 @@ pub async fn call(
         }
         "list_agent_models" => models::list_agent_models(state, arguments).await,
         "read_session_history" => history::read_session_history(state, arguments).await,
-        "get_project" => settings::get_project(state, &session),
+        "get_project" => settings::get_project(state, &session, arguments).await,
         "get_account_quotas" => quotas::get_account_quotas(state, arguments).await,
         "share_info" => share_info(state, &session, arguments).await,
         "transfer_session" => bindings::transfer_session(state, &session, arguments).await,
@@ -263,7 +273,19 @@ async fn new_session(
         launch,
     )
     .await?;
-    let mut answer = json!({ "session": session.id, "agent": session.agent });
+    // The account is settled by the opening, not by the call alone: the weekly pick, the caller's
+    // own, or what the project or console sets, so the caller is told which one it got.
+    let (model, effort) = coordinator::launch_settings(state, &session)?;
+    let mut answer = json!({
+        "session": session.id,
+        "agent": session.agent,
+        "account": session.account_id.as_deref().unwrap_or("default"),
+        "account_name": state
+            .store
+            .account_display_name(session.agent, session.account_id.as_deref())?,
+        "model": model,
+        "effort": effort,
+    });
     if let Some(handover) = handover {
         let handed = move_branches(state, &handover, caller, &session).await;
         answer["branches"] = json!(match &handed {
@@ -490,8 +512,8 @@ fn delivery_note(delivery: Delivery) -> &'static str {
 }
 
 /// Archives a session of the caller's, and once its process has ended removes what can go of the
-/// branches and worktrees bound to it, never forcing anything; what stays is named in the answer,
-/// so the caller can deal with it.
+/// branches and worktrees bound to it, never forcing anything, unless `keep`; what stays is named
+/// in the answer, so the caller can deal with it.
 async fn archive_session(
     state: &Arc<AppState>,
     caller: &Session,
@@ -504,8 +526,18 @@ async fn archive_session(
              use `archive_self` to archive yourself"
         );
     }
+    let keep = optional_bool(arguments, "keep")?.unwrap_or(false);
     let target = resolve_owned_session(state, caller, wanted)?;
     let archived = coordinator::archive_session(state, &target.id)?;
+    let mut answer = json!({ "session": target.id, "status": SessionStatus::Archived });
+    if keep {
+        // Nothing is removed, so nothing is waited for: the records stay bound to the archived
+        // sessions, which `get_session_branches` lists and `handover_branches` can move.
+        answer["branches_kept"] = json!(true);
+        let kept = branch_names_of(state, archived.clone()).await?;
+        answer["note"] = json!(keep_note(&target, &archived, &kept));
+        return Ok(answer);
+    }
     // A task of its own, so the removal finishes even if the call it answers is dropped.
     let left = tokio::spawn(cleanup::remove_once_stopped(
         state.clone(),
@@ -517,7 +549,6 @@ async fn archive_session(
         tracing::warn!(%err, "removing the branches of an archived session did not finish");
         Vec::new()
     });
-    let mut answer = json!({ "session": target.id, "status": SessionStatus::Archived });
     if !left.is_empty() {
         answer["branches_left"] = cleanup::for_agent(&left);
         answer["note"] = json!(
@@ -528,6 +559,58 @@ async fn archive_session(
         );
     }
     Ok(answer)
+}
+
+/// What the caller is told of the branches `keep` left bound to the sessions an archive ended:
+/// `kept` is the names by session id. An archive of a lead session takes the sessions under it too,
+/// each of which keeps its own branches, and those are not the caller's to name as `from` to
+/// `handover_branches`, which takes the caller itself or a session bound to it: the archived
+/// session, once reopened, hands them to itself first.
+fn keep_note(
+    target: &Session,
+    archived: &[Session],
+    kept: &HashMap<String, Vec<String>>,
+) -> String {
+    let mut note = String::from(
+        "Archived. Its git branches and worktrees were left as they are, as asked. They stay \
+         bound to the sessions that are responsible for them (`get_session_branches` lists \
+         them) and come back with those sessions when they are reopened; a session under a lead \
+         session is reopened by its lead.",
+    );
+    let holders = |under: bool| {
+        archived
+            .iter()
+            .filter(move |session| (session.id != target.id) == under)
+            .filter(|session| kept.get(&session.id).is_some_and(|names| !names.is_empty()))
+    };
+    if holders(false).next().is_some() {
+        note.push_str(&format!(
+            " To move the branches of `{id}` itself to a session of yours now, use \
+             `handover_branches` with `from` `{id}`.",
+            id = target.id
+        ));
+    }
+    let under: Vec<&Session> = holders(true).collect();
+    if !under.is_empty() {
+        let kept_by = under
+            .iter()
+            .map(|session| format!("`{}` ({})", session.id, kept[&session.id].join(", ")))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let ids = under
+            .iter()
+            .map(|session| format!("`{}`", session.id))
+            .collect::<Vec<_>>()
+            .join(", ");
+        note.push_str(&format!(
+            " The sessions archived with it keep theirs: {kept_by}. They are not yours to name \
+             as `from`. To move them now, `reopen_session` `{id}` with a `text` asking it to \
+             `handover_branches` them from each of {ids} to itself, then hand them on with \
+             `handover_branches` `from` `{id}` once it is idle.",
+            id = target.id
+        ));
+    }
+    note
 }
 
 /// Archives the caller itself, which only a session that reports to nobody does: a lead session
@@ -654,7 +737,13 @@ async fn rename_session(
     let title = raw_text(arguments, "title")?.ok_or_else(|| anyhow!("`title` is required"))?;
     let renamed = coordinator::rename_session(state, &target.id, &title)?;
     let branches = branch_names_of(state, vec![renamed.clone()]).await?;
-    describe_session(state, &renamed, caller, &branches)
+    describe_session(
+        state,
+        &renamed,
+        caller,
+        &branches,
+        &owned_count_of(state, &renamed)?,
+    )
 }
 
 async fn set_session_pinned(
@@ -669,20 +758,30 @@ async fn set_session_pinned(
         .ok_or_else(|| anyhow!("`pinned` is required and must be true or false"))?;
     let updated = coordinator::set_session_pinned(state, &target.id, pinned)?;
     let branches = branch_names_of(state, vec![updated.clone()]).await?;
-    describe_session(state, &updated, caller, &branches)
+    describe_session(
+        state,
+        &updated,
+        caller,
+        &branches,
+        &owned_count_of(state, &updated)?,
+    )
 }
 
+/// Reopens through `launch` in the shell environment `snapshot` gives: `term::launch` and
+/// `env_shell::launch_snapshot` outside the tests, which cannot start an agent.
 async fn reopen_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
 ) -> Result<Value> {
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     // The instruction travels with the relaunch rather than being written after it. A Claude Code
     // resume takes it as the launch's prompt; for the other agents it is queued inside the
     // launch, because whichever hook would release it can fire the moment the agent starts, and a
     // refusal there also undoes it.
-    coordinator::resume_session_edited(
+    coordinator::resume_session_edited_with(
         state,
         &target.id,
         arguments.get("text").and_then(Value::as_str),
@@ -693,9 +792,23 @@ async fn reopen_session(
             model: present_text(arguments, "model")?,
             effort: present_text(arguments, "effort")?,
         },
+        snapshot,
+        launch,
     )
     .await?;
-    Ok(json!({ "session": target.id }))
+    // What the relaunch used, as the launch reads it: the session's own choice, else its project's
+    // (or console's) setting. `null` is the agent's own default.
+    let reopened = state.session_record(&target.id)?;
+    let (model, effort) = coordinator::launch_settings(state, &reopened)?;
+    Ok(json!({
+        "session": target.id,
+        "account": reopened.account_id.as_deref().unwrap_or("default"),
+        "account_name": state
+            .store
+            .account_display_name(reopened.agent, reopened.account_id.as_deref())?,
+        "model": model,
+        "effort": effort,
+    }))
 }
 
 // -- information exchange ----------------------------------------------------
@@ -919,6 +1032,19 @@ pub(super) fn resolve_owned_session(
     wanted: &str,
 ) -> Result<Session> {
     let session = resolve_session(state, wanted)?;
+    // `share_info` refuses an archived session, so it is not offered for one.
+    let share_info = super::qualified_tool_name(caller.agent, "share_info");
+    let archived = session.status == SessionStatus::Archived;
+    let tell_it = |tail: &str| {
+        if archived {
+            String::new()
+        } else {
+            format!(
+                " You can still tell it something with `{share_info}`, which it weighs rather \
+                 than obeys{tail}"
+            )
+        }
+    };
     // Including a console session's own: one that ended itself would leave its console's project
     // sessions reporting to nothing.
     if wanted == caller.id {
@@ -930,7 +1056,8 @@ pub(super) fn resolve_owned_session(
     if session.role == Role::Console {
         bail!(
             "session `{wanted}` is a console session; acting on one is the user's to do, not \
-             yours"
+             yours.{}",
+            tell_it("")
         );
     }
     match session.bound_to.as_deref() {
@@ -953,15 +1080,33 @@ pub(super) fn resolve_owned_session(
                 .map(|owner| format!(" (\"{}\")", owner.title))
                 .unwrap_or_default();
             bail!(
-                "session `{wanted}` is bound to {kind}, `{owner}`{title}. It is that session's \
-                 to drive, not yours; leave it alone"
+                "session `{wanted}` is bound to {kind}, `{owner}`{title}. Only that session \
+                 instructs or drives it, so this is not yours to do.{}",
+                tell_it(", and its owner is sent a copy")
             )
         }
         None => bail!(
             "session `{wanted}` is not bound to any session: the user opened it themselves and \
-             kept it outside the orchestration. It is theirs, not yours; leave it alone"
+             kept it outside the orchestration. It is theirs, not yours to drive.{}",
+            tell_it("")
         ),
     }
+}
+
+/// How many sessions are bound to `session`, for it to be described alone with (see
+/// [`describe_session`]): counted in the store, not by reading the whole table.
+pub(super) fn owned_count_of(
+    state: &Arc<AppState>,
+    session: &Session,
+) -> Result<HashMap<String, usize>> {
+    coordinator::owned_count_of(state, session)
+}
+
+/// How many sessions are bound to each session, by id, for the sessions of a listing to be
+/// described with (see [`describe_session`]). Read once for the listing: counting per session is
+/// a scan of the whole table each time.
+pub(super) fn owned_counts_of(state: &Arc<AppState>) -> Result<HashMap<String, usize>> {
+    Ok(coordinator::owned_counts(&state.store.list_sessions()?))
 }
 
 /// `caller` is the session asking. Everything here is the same whoever asks except `yours`, which
@@ -970,7 +1115,8 @@ pub(super) fn resolve_owned_session(
 ///
 /// `branches` is the names of the branches the sessions described are responsible for, by session
 /// id, as [`branch_names_of`] reads them for all the sessions of a listing at once; a session with
-/// no entry is responsible for none.
+/// no entry is responsible for none. `owned` is how many sessions are bound to each, as
+/// [`owned_counts_of`] reads them; likewise no entry is none.
 ///
 /// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
 pub(crate) fn describe_session(
@@ -978,6 +1124,7 @@ pub(crate) fn describe_session(
     session: &Session,
     caller: &Session,
     branches: &HashMap<String, Vec<String>>,
+    owned: &HashMap<String, usize>,
 ) -> Result<Value> {
     let owner_kind = match &session.bound_to {
         Some(owner) => state
@@ -994,10 +1141,17 @@ pub(crate) fn describe_session(
     let account_name = state
         .store
         .account_display_name(session.agent, session.account_id.as_deref())?;
-    Ok(json!({
+    let mut description = json!({
         "session": session.id,
         "title": session.title,
+        // What the session list shows for it: the agent's current task before the title, as the
+        // user reads it, so that "the session called X" can be matched to a record.
+        "display_title": state.display_title(session),
         "agent": session.agent,
+        // The agent's own id of the conversation, `request_resume_session`'s `conversation`.
+        // Null until the agent has reported one.
+        "agent_session_id": session.agent_session_id,
+        "origin": session.origin,
         "status": state.shown_status(session),
         // What an idle session has left running in the background: it takes a message like any
         // idle session, but its work is not over. Empty for every other status.
@@ -1014,6 +1168,10 @@ pub(crate) fn describe_session(
         "observed_model": session.observed_model,
         "observed_effort": session.observed_effort,
         "default_effort": state.default_effort_of(&session.id),
+        // Whether the agent has a conversation of this session to continue. It says a turn was
+        // taken, not that the agent still holds the record: a `reopen_session` that finds the
+        // record gone is refused as `conversation_unresumable`.
+        "has_conversation": session.has_conversation,
         "pinned": session.pinned,
         // A locked session cannot be archived.
         "locked": session.locked,
@@ -1029,6 +1187,11 @@ pub(crate) fn describe_session(
         "owner": session.bound_to,
         // Whether that owner is a console session or a project session; null with no owner.
         "owner_kind": owner_kind,
+        // A lead session: bound to a console session while keeping sessions of its own.
+        "lead": session.lead,
+        // The sessions bound to this one in any status, archived ones included, as the rules on
+        // who can own a session and on transferring one count them.
+        "owned_sessions": owned.get(&session.id).copied().unwrap_or(0),
         "yours": session.bound_to.as_deref() == Some(caller.id.as_str()),
         "started_at": session.started_at,
         "ended_at": session.ended_at,
@@ -1048,7 +1211,17 @@ pub(crate) fn describe_session(
             }
             held
         }),
-    }))
+    });
+    // The session's own launch overrides, kept apart from the observed ones: absent follows its
+    // project's (else console's) current setting, `null` leaves the choice to the agent, a value
+    // pins it.
+    if let Some(model) = &session.model {
+        description["model"] = json!(model);
+    }
+    if let Some(effort) = &session.effort {
+        description["effort"] = json!(effort);
+    }
+    Ok(description)
 }
 
 /// What an owner is told about a hold on a session's writes, and what, if anything, it can do.
@@ -3150,6 +3323,62 @@ pub(super) mod tests {
         assert_eq!(archived.status, SessionStatus::Archived);
     }
 
+    /// A refusal to drive a session that is not the caller's says why and what the caller can still
+    /// do, naming `share_info` as the caller's agent qualifies it; a session of the caller's own is
+    /// told to say it to the user instead, since `share_info` is refused for it.
+    #[tokio::test]
+    async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_share_info() {
+        let (state, _dir) = shared_console_state("tool-refusal-share-info");
+        for target in ["of-b", "loose", "b"] {
+            let message = refused(
+                &state,
+                "a",
+                "send_message",
+                json!({ "session": target, "text": "hi" }),
+            )
+            .await;
+            assert!(
+                message
+                    .contains("You can still tell it something with `mcp__octoboard__share_info`"),
+                "{target}: {message}"
+            );
+        }
+        let message = refused(
+            &state,
+            "a",
+            "send_message",
+            json!({ "session": "of-b", "text": "hi" }),
+        )
+        .await;
+        assert!(
+            message.contains("Only that session instructs or drives it")
+                && message.contains("its owner is sent a copy"),
+            "{message}"
+        );
+
+        let mut grok = state.session_record("a").unwrap();
+        grok.agent = Agent::Grok;
+        state.store.update_session(&grok).unwrap();
+        let message = refused(
+            &state,
+            "a",
+            "send_message",
+            json!({ "session": "loose", "text": "hi" }),
+        )
+        .await;
+        assert!(message.contains("`octoboard__share_info`"), "{message}");
+        assert!(!message.contains("mcp__octoboard__share_info"), "{message}");
+
+        let message = refused(
+            &state,
+            "a",
+            "send_message",
+            json!({ "session": "a", "text": "hi" }),
+        )
+        .await;
+        assert!(!message.contains("share_info"), "{message}");
+    }
+
     /// `interrupt_session` on a running session of the caller's answers with the function's
     /// result: here one at its prompt, with nothing to interrupt.
     #[tokio::test]
@@ -4187,7 +4416,7 @@ pub(super) mod tests {
             ] {
                 let message = refused(&state, "a", tool, args).await;
                 assert!(
-                    message.contains("leave it alone") || message.contains("your own"),
+                    message.contains("share_info") || message.contains("your own"),
                     "{message}"
                 );
             }
@@ -4510,6 +4739,18 @@ pub(super) mod tests {
         .unwrap();
         assert_eq!(selected["auto_select_account"], true);
         assert!(state.store.auto_select_account().unwrap());
+        // Octoboard's own switching of sessions is the user's alone to turn on: it is neither
+        // listed nor taken.
+        let ignored = call(
+            &state,
+            "a",
+            "update_settings",
+            &arguments(json!({ "auto_switch_on_usage_limit": true })),
+        )
+        .await
+        .unwrap();
+        assert!(ignored.get("auto_switch_on_usage_limit").is_none());
+        assert!(!state.store.auto_switch_on_usage_limit().unwrap());
         let ordered = call(
             &state,
             "a",
@@ -4733,7 +4974,8 @@ pub(super) mod tests {
         let caller = console_session("hub");
         let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
         let describe = |session: &Session| {
-            describe_session(&state, session, &caller, &HashMap::new()).unwrap()["background_tasks"]
+            describe_session(&state, session, &caller, &HashMap::new(), &HashMap::new()).unwrap()
+                ["background_tasks"]
                 .clone()
         };
 
@@ -4765,7 +5007,8 @@ pub(super) mod tests {
         let caller = console_session("hub");
         let session = crate::test_support::project_session("s", Agent::Claude, SessionStatus::Idle);
         assert!(
-            describe_session(&state, &session, &caller, &HashMap::new()).unwrap()["context"]
+            describe_session(&state, &session, &caller, &HashMap::new(), &HashMap::new()).unwrap()
+                ["context"]
                 .is_null()
         );
 
@@ -4778,7 +5021,8 @@ pub(super) mod tests {
             ..session
         };
         assert_eq!(
-            describe_session(&state, &used, &caller, &HashMap::new()).unwrap()["context"],
+            describe_session(&state, &used, &caller, &HashMap::new(), &HashMap::new()).unwrap()
+                ["context"],
             json!({"tokens": 120_000, "window": 200_000, "used_percent": 60})
         );
     }
@@ -5395,5 +5639,546 @@ pub(super) mod tests {
             title(json!({ "brief": brief })).as_deref(),
             Some("Fix the build")
         );
+    }
+
+    /// A session reads itself by leaving `session` out, which is how it learns its own id.
+    #[tokio::test]
+    async fn get_session_without_a_session_reads_the_caller() {
+        let fixture = RepoState::new("get-session-self");
+        for caller in ["a", "lead", "lead-kid"] {
+            let record = call(&fixture.state, caller, "get_session", &Map::new())
+                .await
+                .unwrap();
+            assert_eq!(record["session"], caller);
+        }
+        // Naming another session is unchanged.
+        let record = call(
+            &fixture.state,
+            "lead",
+            "get_session",
+            &arguments(json!({ "session": "kid" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(record["session"], "kid");
+    }
+
+    /// A record carries what an owner needs to tell sessions apart and to decide on a transfer.
+    #[tokio::test]
+    async fn a_session_record_carries_its_identity_launch_choices_and_owned_count() {
+        let fixture = RepoState::new("record-identity");
+        let state = &fixture.state;
+        state
+            .store
+            .insert_session(&Session {
+                project_id: Some("repo".to_string()),
+                agent_session_id: Some("0a1b2c3d-0000-4000-8000-000000000001".to_string()),
+                has_conversation: true,
+                model: Some(Some("opus".to_string())),
+                effort: Some(None),
+                lead: true,
+                ..project_session("lead-two", "console-1", Some("a"))
+            })
+            .unwrap();
+        // One live and one archived session under it: both count.
+        for (id, status) in [
+            ("under-live", SessionStatus::Idle),
+            ("under-archived", SessionStatus::Archived),
+        ] {
+            let mut under = project_session(id, "console-1", Some("lead-two"));
+            under.status = status;
+            state.store.insert_session(&under).unwrap();
+        }
+        let record = call(
+            state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "lead-two" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(record["owned_sessions"], 2);
+        assert_eq!(
+            record["agent_session_id"],
+            "0a1b2c3d-0000-4000-8000-000000000001"
+        );
+        assert_eq!(record["origin"], "user");
+        assert_eq!(record["has_conversation"], true);
+        assert_eq!(record["model"], "opus");
+        // An explicit choice of the agent's own default is a `null`, not an absent key.
+        assert!(record.get("effort").is_some_and(Value::is_null));
+        assert_eq!(record["lead"], true);
+
+        // A session that inherits its launch settings has neither key, and owns nothing.
+        let plain = call(
+            state,
+            "a",
+            "get_session",
+            &arguments(json!({ "session": "kid" })),
+        )
+        .await
+        .unwrap();
+        assert!(plain.get("model").is_none() && plain.get("effort").is_none());
+        assert_eq!(plain["owned_sessions"], 0);
+        assert_eq!(plain["lead"], false);
+        assert_eq!(plain["agent_session_id"], Value::Null);
+        assert_eq!(plain["display_title"], plain["title"]);
+    }
+
+    /// `list_archived` pages with `before`, and `yours` narrows it as it does `list_sessions`.
+    #[tokio::test]
+    async fn the_archive_is_paged_with_before_and_narrowed_to_yours() {
+        let (state, _dir) = shared_console_state("archive-before");
+        for (id, ended) in [("old", 10), ("mid", 20), ("new", 30), ("tie", 30)] {
+            let mut archived = project_session(id, "console-1", Some("a"));
+            archived.status = SessionStatus::Archived;
+            archived.ended_at = Some(ended);
+            state.store.insert_session(&archived).unwrap();
+        }
+        let list = |filters: Value| {
+            let state = state.clone();
+            async move {
+                call(&state, "a", "list_archived", &arguments(filters))
+                    .await
+                    .unwrap()
+            }
+        };
+        let ids = |listed: &Value| -> Vec<String> {
+            listed["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|session| session["session"].as_str().unwrap().to_string())
+                .collect()
+        };
+        // Newest first, the id breaking the tie; `archived-of-a` has no end time and comes last.
+        let first = list(json!({ "owner": "a", "limit": 2 })).await;
+        assert_eq!(ids(&first), ["new", "tie"]);
+        assert_eq!(
+            (first["total"].clone(), first["older"].clone()),
+            (json!(5), json!(3))
+        );
+        // The cursor is a position, so the session it came from may leave the archive between
+        // pages without moving the next one.
+        let mut reopened = state.store.get_session("tie").unwrap().unwrap();
+        reopened.status = SessionStatus::Idle;
+        state.store.update_session(&reopened).unwrap();
+        let second =
+            list(json!({ "owner": "a", "limit": 2, "before": first["next"].clone() })).await;
+        assert_eq!(ids(&second), ["mid", "old"]);
+        assert_eq!(second["older"], 1);
+        let third =
+            list(json!({ "owner": "a", "limit": 2, "before": second["next"].clone() })).await;
+        assert_eq!(ids(&third), ["archived-of-a"]);
+        assert_eq!(third["older"], 0);
+        assert_eq!(third["next"], Value::Null);
+
+        let yours = ids(&list(json!({ "yours": true })).await);
+        assert!(
+            yours.contains(&"mid".to_string()) && !yours.contains(&"archived-of-b".to_string())
+        );
+        let others = ids(&list(json!({ "yours": false })).await);
+        assert!(
+            others.contains(&"archived-of-b".to_string()) && !others.contains(&"mid".to_string())
+        );
+
+        let err = call(
+            &state,
+            "a",
+            "list_archived",
+            &arguments(json!({ "before": "tie" })),
+        )
+        .await
+        .expect_err("a session id is not a cursor");
+        assert!(err.to_string().contains("is not a cursor"), "{err}");
+    }
+
+    /// A console session reads one project with `project`; `refresh` checks the git status first
+    /// and says it finished, and is refused for another console, whose entries have no status.
+    #[tokio::test]
+    async fn list_projects_names_one_project_and_refreshes_its_git_status() {
+        let fixture = RepoState::new("list-projects-refresh");
+        let state = &fixture.state;
+        let listed = call(
+            state,
+            "a",
+            "list_projects",
+            &arguments(json!({ "project": "repo" })),
+        )
+        .await
+        .unwrap();
+        let projects = listed["projects"].as_array().unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0]["project"], "repo");
+        assert!(listed.get("git_refresh").is_none());
+
+        let refreshed = call(
+            state,
+            "a",
+            "list_projects",
+            &arguments(json!({ "project": "repo", "refresh": true })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(refreshed["git_refresh"], json!({ "finished": true }));
+        let status = &refreshed["projects"][0]["git_status"];
+        assert_eq!(status["repository"], true);
+        assert!(status["checked_seconds_ago"].is_u64(), "{status}");
+
+        // A project of another console is not among this one's.
+        let err = call(
+            state,
+            "a",
+            "list_projects",
+            &arguments(json!({ "project": "project-2" })),
+        )
+        .await
+        .expect_err("another console's project");
+        assert!(err.to_string().contains("has no project"), "{err}");
+        // Named beside its own console it is found, without the settings.
+        let other = call(
+            state,
+            "a",
+            "list_projects",
+            &arguments(json!({ "console": "console-2", "project": "project-2" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(other["projects"][0]["project"], "project-2");
+        let err = call(
+            state,
+            "a",
+            "list_projects",
+            &arguments(json!({ "console": "console-2", "refresh": true })),
+        )
+        .await
+        .expect_err("no status to refresh");
+        assert!(err.to_string().contains("`refresh`"), "{err}");
+    }
+
+    /// `get_project` with `refresh` checks the project's git status before answering.
+    #[tokio::test]
+    async fn get_project_can_refresh_the_git_status_first() {
+        let fixture = RepoState::new("get-project-refresh");
+        let plain = call(&fixture.state, "lead", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert!(plain.get("git_refresh").is_none());
+        let refreshed = call(
+            &fixture.state,
+            "lead",
+            "get_project",
+            &arguments(json!({ "refresh": true })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(refreshed["git_refresh"], json!({ "finished": true }));
+        assert!(refreshed["git_status"].is_object(), "{refreshed}");
+    }
+
+    /// `new_session` says which account the session opened on.
+    #[tokio::test]
+    async fn new_session_returns_the_account_it_opened_on() {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+
+        let (state, _dir) = shared_console_state("new-session-account");
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-b".to_string(),
+                agent: Agent::Claude,
+                name: "Second".to_string(),
+                config_dir: "/tmp/octoboard-new-session-account".to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        let caller = state.session_record("a").unwrap();
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+        for (input, account, name) in [
+            (json!({}), "default", crate::protocol::DEFAULT_ACCOUNT_NAME),
+            (json!({ "account": "Second" }), "claude-b", "Second"),
+        ] {
+            let mut input = input;
+            input["project"] = json!("project-1");
+            input["brief"] = json!({ "goal": "x" });
+            let answer = new_session(
+                &state,
+                &caller,
+                &arguments(input),
+                stand_in_launch(&started, &launches, || {}),
+            )
+            .await
+            .unwrap();
+            assert_eq!(answer["account"], account);
+            assert_eq!(answer["account_name"], name);
+        }
+    }
+
+    /// `share_info` is offered as the way to tell a session that is not the caller's only while it
+    /// can take one: not for an archived session, which it refuses.
+    #[test]
+    fn the_refusal_to_act_on_a_session_offers_share_info_only_while_it_can_take_it() {
+        let (state, _dir) = shared_console_state("refusal-hint");
+        let caller = state.session_record("a").unwrap();
+        let refusal = |id: &str| {
+            resolve_owned_session(&state, &caller, id)
+                .expect_err("not the caller's")
+                .to_string()
+        };
+        let mut archived_loose = state.session_record("loose").unwrap();
+        archived_loose.id = "archived-loose".to_string();
+        archived_loose.status = SessionStatus::Archived;
+        state.store.insert_session(&archived_loose).unwrap();
+
+        for (id, offered) in [
+            ("of-b", true),
+            ("archived-of-b", false),
+            ("loose", true),
+            ("archived-loose", false),
+        ] {
+            let message = refusal(id);
+            assert_eq!(message.contains("share_info"), offered, "{id}: {message}");
+            assert!(message.contains("not yours to"), "{id}: {message}");
+        }
+    }
+
+    /// A refresh that is not over when the wait is says so, and names the projects still being
+    /// checked; one the one-minute floor skips counts as over.
+    #[tokio::test]
+    async fn a_git_refresh_reports_the_checks_that_were_not_over_in_time() {
+        use crate::mcp::settings::refresh_git_status_within;
+        use std::time::Duration;
+
+        let fixture = RepoState::new("git-refresh-unfinished");
+        let state = &fixture.state;
+        let project = state.store.get_project("repo").unwrap().unwrap();
+
+        let late = refresh_git_status_within(state, vec![project.clone()], Duration::ZERO).await;
+        assert_eq!(late["finished"], false);
+        assert_eq!(late["unfinished"], json!(["repo"]));
+        assert!(
+            late["note"].as_str().unwrap().contains("had not finished"),
+            "{late}"
+        );
+
+        // A check completed within the floor is not started again, and not waited for.
+        state.record_git_check_completed("repo");
+        let skipped = refresh_git_status_within(state, vec![project], Duration::ZERO).await;
+        assert_eq!(skipped, json!({ "finished": true }));
+    }
+
+    /// `reopen_session` answers with the account, model and effort the relaunch used.
+    #[tokio::test]
+    async fn reopen_session_returns_the_account_model_and_effort_it_launched_with() {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+
+        let fixture = RepoState::new("reopen-returns-launch");
+        let state = &fixture.state;
+        let mut kid = state.store.get_session("kid").unwrap().unwrap();
+        kid.status = SessionStatus::Archived;
+        state.store.update_session(&kid).unwrap();
+        state
+            .set_session_launch_overrides("kid", &Some(Some("sonnet".to_string())), &Some(None))
+            .unwrap();
+        let caller = state.session_record("a").unwrap();
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+
+        let answer = reopen_session(
+            state,
+            &caller,
+            &arguments(json!({ "session": "kid" })),
+            || Ok(HashMap::new()),
+            {
+                let (started, launches) = (started.clone(), launches.clone());
+                move |request| stand_in_launch(&started, &launches, || {})(request)
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(launches.lock().unwrap().len(), 1);
+        assert_eq!(answer["session"], "kid");
+        assert_eq!(answer["account"], "default");
+        assert_eq!(
+            answer["account_name"],
+            crate::protocol::DEFAULT_ACCOUNT_NAME
+        );
+        assert_eq!(answer["model"], "sonnet");
+        assert_eq!(answer["effort"], Value::Null);
+    }
+
+    /// While accounts are selected automatically, `new_session` names the account that was
+    /// picked, not the caller's, and the model and effort it launched with.
+    #[tokio::test]
+    async fn new_session_returns_the_account_automatic_selection_picked() {
+        use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+
+        let (state, dir) = shared_console_state("new-session-picked-account");
+        let config_dir = dir.join("claude-b").to_string_lossy().into_owned();
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-b".to_string(),
+                agent: Agent::Claude,
+                name: "Second".to_string(),
+                config_dir: config_dir.clone(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        state.store.set_auto_select_account(true).unwrap();
+        let mut project = state.store.get_project("project-1").unwrap().unwrap();
+        project.claude_session_model = Some("sonnet".to_string());
+        project.claude_session_effort = Some("high".to_string());
+        state.store.update_project(&project).unwrap();
+        let hold = |account: Option<&str>, used_percent: f64| {
+            let quota = AccountQuota {
+                agent: Agent::Claude,
+                account: account.map(str::to_string),
+                fetched_at: 1,
+                plan: None,
+                windows: vec![QuotaWindow {
+                    kind: QuotaWindowKind::Weekly,
+                    label: None,
+                    used_percent,
+                    resets_at: Some(crate::protocol::now_millis() + 86_400_000),
+                    window_minutes: None,
+                }],
+                unavailable: None,
+            };
+            match account {
+                None => state.account_quotas.hold_for_test(&quota),
+                Some(_) => state
+                    .account_quotas
+                    .hold_in_dir_for_test(&quota, &config_dir),
+            }
+        };
+        // The caller's own account, the default one, is used up.
+        hold(None, 100.0);
+        hold(Some("claude-b"), 20.0);
+        let caller = state.session_record("a").unwrap();
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+
+        let answer = new_session(
+            &state,
+            &caller,
+            &arguments(json!({ "project": "project-1", "brief": { "goal": "x" } })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(answer["account"], "claude-b");
+        assert_eq!(answer["account_name"], "Second");
+        assert_eq!(answer["model"], "sonnet");
+        assert_eq!(answer["effort"], "high");
+    }
+
+    /// `archive_session` with `keep` removes no branch or worktree, where without it a merged
+    /// branch goes with its session.
+    #[tokio::test]
+    async fn archive_session_can_keep_the_branches() {
+        let fixture = RepoState::new("archive-keep");
+        let exists = |branch: &str| {
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(fixture.repo.to_string_lossy().as_ref())
+                .args(["branch", "--list", branch])
+                .output()
+                .unwrap();
+            !String::from_utf8_lossy(&out.stdout).trim().is_empty()
+        };
+        fixture.branch("kept", "kid");
+        fixture.branch("gone", "lead-kid");
+        let archived = call(
+            &fixture.state,
+            "a",
+            "archive_session",
+            &arguments(json!({ "session": "kid", "keep": true })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(archived["branches_kept"], true);
+        assert!(archived["note"]
+            .as_str()
+            .unwrap()
+            .contains("handover_branches"));
+        assert!(exists("kept"));
+
+        let archived = call(
+            &fixture.state,
+            "lead",
+            "archive_session",
+            &arguments(json!({ "session": "lead-kid" })),
+        )
+        .await
+        .unwrap();
+        assert!(archived.get("branches_kept").is_none());
+        assert!(!exists("gone"));
+    }
+
+    /// `keep` on a lead session leaves its branches and those of the sessions under it, which
+    /// are archived with it, and the note says which are not the caller's to name as `from`.
+    #[tokio::test]
+    async fn keeping_the_branches_of_an_archived_lead_names_those_of_its_sessions() {
+        let fixture = RepoState::new("archive-keep-lead");
+        for (id, owner) in [("mid", "a"), ("mid-kid", "mid"), ("mid-kid-2", "mid")] {
+            fixture
+                .state
+                .store
+                .insert_session(&Session {
+                    project_id: Some("repo".to_string()),
+                    lead: id == "mid",
+                    ..project_session(id, "console-1", Some(owner))
+                })
+                .unwrap();
+        }
+        fixture.branch("mid-work", "mid");
+        fixture.branch("kid-work", "mid-kid");
+        fixture.branch("kid-2-work", "mid-kid-2");
+
+        let archived = call(
+            &fixture.state,
+            "a",
+            "archive_session",
+            &arguments(json!({ "session": "mid", "keep": true })),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(archived["branches_kept"], true);
+        let note = archived["note"].as_str().unwrap();
+        assert!(
+            note.contains("`handover_branches` with `from` `mid`"),
+            "{note}"
+        );
+        assert!(note.contains("come back with those sessions"), "{note}");
+        assert!(
+            note.contains("`reopen_session` `mid` with a `text`")
+                && note.contains("from each of `mid-kid`, `mid-kid-2` to itself"),
+            "{note}"
+        );
+        assert!(
+            note.contains("`mid-kid` (kid-work)") && note.contains("`mid-kid-2` (kid-2-work)"),
+            "{note}"
+        );
+        assert!(note.contains("not yours to name as `from`"), "{note}");
+        assert!(!note.contains("`mid` (mid-work)"), "{note}");
+        for id in ["mid", "mid-kid", "mid-kid-2"] {
+            assert_eq!(
+                fixture.state.session_record(id).unwrap().status,
+                SessionStatus::Archived
+            );
+        }
     }
 }

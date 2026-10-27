@@ -479,6 +479,7 @@ async fn on_sighting(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<(
     let project = project.ok_or_else(|| anyhow!("the session's project is gone"))?;
     live.trust.needs_user.store(true, Ordering::Release);
     state.publish_session(&session);
+    crate::reporting::spawn_tell_owner_it_waits(state, &live.id);
     state.broadcast(prompt(&session, &project));
     Ok(())
 }
@@ -539,6 +540,9 @@ async fn answer_off_the_runtime(state: &Arc<AppState>, live: Arc<LiveSession>) -
         live.trust.needs_user.store(true, Ordering::Release);
     }
     publish_status(state, &live);
+    if live.trust.needs_user() {
+        crate::reporting::spawn_tell_owner_it_waits(state, &live.id);
+    }
     outcome?;
     if !hook_at_start {
         release_held(state, &id);

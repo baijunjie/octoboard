@@ -41,6 +41,7 @@ export const BOOLEAN_SETTINGS: {
   { label: "settings.git.autoPull.label", field: "auto_pull_repositories", consequence: "configuration.import.settings.consequence.autoPull" },
   { label: "settings.archiveCleanup.label", field: "auto_delete_unresumable_archives", consequence: "configuration.import.settings.consequence.archiveCleanup" },
   { label: "settings.autoSelect.label", field: "auto_select_account", consequence: "configuration.import.settings.consequence.autoSelectAccount" },
+  { label: "settings.autoSwitch.label", field: "auto_switch_on_usage_limit", consequence: "configuration.import.settings.consequence.autoSwitchOnUsageLimit" },
   { label: "settings.sidebarOrder.label", field: "sidebar_order_by_status", consequence: "configuration.import.settings.consequence.sidebarOrder" },
   { label: "settings.startQuotaWindows.label", field: "auto_start_quota_windows", consequence: "configuration.import.settings.consequence.autoStartQuotaWindows" },
   { label: "settings.autoApproveSession.label", field: "auto_approve_session_requests", consequence: "configuration.import.settings.consequence.autoApproveSession" },

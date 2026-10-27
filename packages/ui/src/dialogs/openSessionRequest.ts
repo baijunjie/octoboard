@@ -58,12 +58,19 @@ function settledQuickChoice(parentConsole: Console, project: Project | undefined
   );
 }
 
-/** Whether the agent a session created where `target` would be has all its accounts used up or turned off, so that
- * creating with the defaults has nothing to run on. The dialog still opens, as the user can pick
+/** Whether the agent a session created where `target` would be has all its accounts used up, not logged in or turned
+ * off, so that creating with the defaults has nothing to run on. The dialog still opens, as the user can pick
  * another agent there. */
 export function quickCreateUnavailable(target: NewSessionRequest, state: QuickCreateState, now: number): boolean {
-  const { exhaustedBy, disabled } = settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now);
-  return exhaustedBy !== undefined || disabled;
+  const { exhaustedBy, signedOut, disabled } = settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now);
+  return exhaustedBy !== undefined || signedOut || disabled;
+}
+
+/** The name the user knows `choice`'s account by: the agent's default account's name, or the account's own. */
+function choiceAccountName(t: Translate, state: QuickCreateState, choice: AccountChoice): string {
+  return choice.account === null
+    ? defaultAccountName(t, state.settings.default_account_names, choice.agent)
+    : state.settings.accounts.find((item) => item.id === choice.account)?.name ?? choice.account;
 }
 
 /** The request the session dialog sends when submitted untouched: the localized default name, the agent and account it
@@ -72,7 +79,8 @@ export function quickCreateUnavailable(target: NewSessionRequest, state: QuickCr
  * opens on another account of the agent; with every account of the agent used up there
  * is nothing to send, and `usedUp` says so instead (`quickCreateUnavailable`). The same for an account whose sharing
  * change runs, named by `changingSharing`. The same for an account the user turned off, which the daemon would
- * refuse, named by `disabled` (every account of the agent is off, or the inherited one is and nothing else is free). */
+ * refuse, named by `disabled` (every account of the agent is off, or the inherited one is and nothing else is free),
+ * and for one that is not logged in, named by `signedOut` on the same terms. */
 export function defaultOpenSessionRequest(
   t: Translate,
   parentConsole: Console,
@@ -81,17 +89,13 @@ export function defaultOpenSessionRequest(
   state: QuickCreateState,
   now: number,
   appearance: "light" | "dark",
-): { request: OpenSessionRequest } | { usedUp: true } | { changingSharing: { account: string; name: string } } | { disabled: { agent: Agent; account: string | null; name: string } } {
-  const { choice, exhaustedBy, changingSharing, disabled } = settledQuickChoice(parentConsole, project, state, now);
-  if (disabled) {
-    const name = choice.account === null
-      ? defaultAccountName(t, state.settings.default_account_names, choice.agent)
-      : state.settings.accounts.find((item) => item.id === choice.account)?.name ?? choice.account;
-    return { disabled: { agent: choice.agent, account: choice.account, name } };
-  }
+): { request: OpenSessionRequest } | { usedUp: true } | { changingSharing: { account: string; name: string } } | { signedOut: { agent: Agent; name: string } } | { disabled: { agent: Agent; account: string | null; name: string } } {
+  const { choice, exhaustedBy, changingSharing, signedOut, disabled } = settledQuickChoice(parentConsole, project, state, now);
+  if (disabled) return { disabled: { agent: choice.agent, account: choice.account, name: choiceAccountName(t, state, choice) } };
   if (exhaustedBy) return { usedUp: true };
+  if (signedOut) return { signedOut: { agent: choice.agent, name: choiceAccountName(t, state, choice) } };
   if (changingSharing && choice.account !== null) {
-    return { changingSharing: { account: choice.account, name: state.settings.accounts.find((item) => item.id === choice.account)?.name ?? choice.account } };
+    return { changingSharing: { account: choice.account, name: choiceAccountName(t, state, choice) } };
   }
   return {
     request: openSessionRequest(t, {

@@ -146,6 +146,9 @@ pub struct InspectedSettings {
     pub auto_select_account: Option<bool>,
     pub current_auto_select_account: bool,
     /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub auto_switch_on_usage_limit: Option<bool>,
+    pub current_auto_switch_on_usage_limit: bool,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
     pub sidebar_order_by_status: Option<bool>,
     pub current_sidebar_order_by_status: bool,
     /// Absent when the document predates the setting, which applying it then leaves as it is.
@@ -526,6 +529,8 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                 .auto_delete_unresumable_archives()?,
             auto_select_account: settings.auto_select_account,
             current_auto_select_account: state.store.auto_select_account()?,
+            auto_switch_on_usage_limit: settings.auto_switch_on_usage_limit,
+            current_auto_switch_on_usage_limit: state.store.auto_switch_on_usage_limit()?,
             sidebar_order_by_status: settings.sidebar_order_by_status,
             current_sidebar_order_by_status: state.store.sidebar_order_by_status()?,
             auto_start_quota_windows: settings.auto_start_quota_windows,
@@ -750,6 +755,7 @@ pub async fn apply(
             // Reported by a client, not carried by a document.
             interface_language: None,
             auto_select_account: settings.auto_select_account,
+            auto_switch_on_usage_limit: settings.auto_switch_on_usage_limit,
             sidebar_order_by_status: settings.sidebar_order_by_status,
             auto_start_quota_windows: settings.auto_start_quota_windows,
             default_clone_dir: None,
@@ -1847,6 +1853,7 @@ mod tests {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: Some(false),
                 auto_select_account: None,
+                auto_switch_on_usage_limit: None,
                 sidebar_order_by_status: None,
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
@@ -1873,6 +1880,7 @@ mod tests {
             .set_auto_delete_unresumable_archives(false)
             .unwrap();
         source.store.set_auto_select_account(true).unwrap();
+        source.store.set_auto_switch_on_usage_limit(true).unwrap();
         source.store.set_sidebar_order_by_status(false).unwrap();
         source.store.set_auto_start_quota_windows(true).unwrap();
         let hub = crate::test_support::console(&source_dir);
@@ -1897,6 +1905,10 @@ mod tests {
         assert!(!target.store.auto_delete_unresumable_archives().unwrap());
         assert!(target.store.auto_select_account().unwrap());
         assert!(full["settings"]["auto_select_account"].as_bool().unwrap());
+        assert!(target.store.auto_switch_on_usage_limit().unwrap());
+        assert!(full["settings"]["auto_switch_on_usage_limit"]
+            .as_bool()
+            .unwrap());
         assert!(!target.store.sidebar_order_by_status().unwrap());
         assert_eq!(full["settings"]["sidebar_order_by_status"], false);
         assert!(target.store.auto_start_quota_windows().unwrap());
@@ -2232,6 +2244,7 @@ mod tests {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: None,
                 auto_select_account: None,
+                auto_switch_on_usage_limit: None,
                 sidebar_order_by_status: None,
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,
@@ -2265,6 +2278,7 @@ mod tests {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: None,
                 auto_select_account: None,
+                auto_switch_on_usage_limit: None,
                 sidebar_order_by_status: None,
                 auto_start_quota_windows: None,
                 auto_approve_session_requests: None,

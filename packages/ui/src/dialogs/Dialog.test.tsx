@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { errorAlerts, type AcknowledgementView } from "../errorAlerts";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { Dialog, useDialogAction } from "./Dialog";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

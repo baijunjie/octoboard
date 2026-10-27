@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
 import { sessionOf } from "../gallery/fixtures/builders";
-import type { Account, Settings } from "../protocol";
+import type { Account, AccountQuota, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleAccountsField } from "./ConsoleAccountsField";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
@@ -16,8 +16,10 @@ vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }))
 
 const work: Account = { id: "claude-work", agent: "claude", name: "Work", config_dir: "/a/work" };
 
-function render(settings: Partial<Settings>, ui: React.ReactElement) {
-  const store = createStateStore({});
+const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } };
+
+function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = []) {
+  const store = createStateStore({ accountQuotas });
   store.setState({ settings: { ...store.getState().settings, ...settings } });
   const daemon = { store, request: vi.fn(), toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
@@ -44,9 +46,30 @@ it("says in the error alert dialog that a switch's target was turned off, switch
   await act(async () => confirm().click());
   expect(report).toHaveBeenCalledTimes(1);
   expect(report.mock.calls[0]![0].message).toContain("Work");
+  // The alert's own remedy and Manage accounts button carry the advice, so its sentence does not repeat it.
+  expect(report.mock.calls[0]![0]).toMatchObject({ recovery: "accountDisabled" });
+  expect(report.mock.calls[0]![0].message).not.toContain("Choose another account");
   expect(onSwitchAccounts).not.toHaveBeenCalled();
   expect(confirm()).toBeDefined();
   act(() => store.setState({ settings: { ...store.getState().settings, accounts: [work] } }));
+  await act(async () => confirm().click());
+  expect(report).toHaveBeenCalledTimes(1);
+  expect(onSwitchAccounts).toHaveBeenCalledTimes(1);
+});
+
+it("says in the error alert dialog that a switch's target is not logged in, with the Manage accounts remedy, switching nothing, and switches once it is", async () => {
+  const onSwitchAccounts = vi.fn();
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
+  const { store } = render({ accounts: [work] }, switchDialog("claude-work", onSwitchAccounts), [notLoggedIn]);
+  await act(async () => confirm().click());
+  expect(report).toHaveBeenCalledTimes(1);
+  expect(report.mock.calls[0]![0]).toMatchObject({ recovery: "accountNotSignedIn" });
+  expect(report.mock.calls[0]![0].message).toContain("Work");
+  expect(report.mock.calls[0]![0].message).toContain("is not logged in, so a session cannot use it.");
+  expect(report.mock.calls[0]![0].message).not.toContain("Choose another account");
+  expect(onSwitchAccounts).not.toHaveBeenCalled();
+  act(() => store.setState({ accountQuotas: [] }));
   await act(async () => confirm().click());
   expect(report).toHaveBeenCalledTimes(1);
   expect(onSwitchAccounts).toHaveBeenCalledTimes(1);

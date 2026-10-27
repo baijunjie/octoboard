@@ -345,4 +345,36 @@ describe("buildStatusItemMenu quota submenus", () => {
     expect(opener!.quota_remaining).toBe(100);
     expect(opener!.quota_label).toContain("Session 100% remaining");
   });
+
+  it("draws no bar or account name on the opener when the current console's account is turned off", () => {
+    const home = { id: "home", agent: "claude", name: "Home", config_dir: "/h" } as Account;
+    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w" } as Account;
+    const accountQuotas = [quotaOf("claude", null), quotaOf("claude", "home"), quotaOf("claude", "work")];
+    const onWork = consoleOf("c", "Main", { claude_account_id: "work" });
+    const [on] = buildQuotaSubmenus(t, source({ accounts: [home, work], agentAvailability: available("claude"), accountQuotas }), onWork);
+    expect(on!.quota_label).toContain("Work");
+    const [off] = buildQuotaSubmenus(t, source({ accounts: [home, { ...work, disabled: true }], agentAvailability: available("claude"), accountQuotas }), onWork);
+    expect(off!.quota_remaining).toBeUndefined();
+    expect(off!.quota_weekly_remaining).toBeUndefined();
+    expect(off!.quota_label).toBeUndefined();
+    // The agent's default account likewise.
+    const [defaultOff] = buildQuotaSubmenus(t, source({ accounts: [home], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude"), accountQuotas }), consoles[0]);
+    expect(defaultOff!.quota_label).toBeUndefined();
+    expect(defaultOff!.items.length).toBeGreaterThan(0);
+  });
+
+  it("draws the icon capsule for a turned-off account only while the selected session runs on it", () => {
+    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w", disabled: true } as Account;
+    const quota = source({ accounts: [work], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
+    const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
+    const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", byStatus: true,
+      consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
+    });
+    expect(menu("idle").quota_label).toContain("Work");
+    expect(menu("working").quota_remaining).toBe(82);
+    expect(menu("interrupted").quota_remaining).toBeUndefined();
+    expect(menu("interrupted").quota_label).toBeUndefined();
+    expect(menu("archived").quota_remaining).toBeUndefined();
+  });
 });

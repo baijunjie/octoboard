@@ -2633,8 +2633,14 @@ async fn a_session_being_restarted_is_described_to_agents_as_starting() {
         fixture.state.shown_status(&session),
         SessionStatus::Starting
     );
-    let described =
-        describe_session(&fixture.state, &session, &caller, &Default::default()).unwrap();
+    let described = describe_session(
+        &fixture.state,
+        &session,
+        &caller,
+        &Default::default(),
+        &Default::default(),
+    )
+    .unwrap();
     assert_eq!(described["status"], "starting");
     let listed = list_sessions(&fixture.state, &caller, &Default::default())
         .await
@@ -2664,8 +2670,14 @@ async fn the_hold_a_sharing_change_takes_on_a_queue_is_told_apart_from_a_handoff
     let _running = idle_session(&fixture, "idle", Agent::Claude);
     let session = fixture.state.store.get_session("idle").unwrap().unwrap();
     let held = |fixture: &Fixture| {
-        describe_session(&fixture.state, &session, &caller, &Default::default()).unwrap()
-            ["writes_held"]["reason"]
+        describe_session(
+            &fixture.state,
+            &session,
+            &caller,
+            &Default::default(),
+            &Default::default(),
+        )
+        .unwrap()["writes_held"]["reason"]
             .clone()
     };
     assert_eq!(fixture.state.write_hold("idle"), None);

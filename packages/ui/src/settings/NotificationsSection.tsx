@@ -2,7 +2,7 @@ import React from "react";
 
 import { Button } from "../components/Button";
 import { InlineReference } from "../components/InlineReference";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { Message, useT } from "../i18n/react";
 import { useNotificationPermission } from "../lifecycle/useNotificationPermission";
 import { usePlatform } from "../platform/react";

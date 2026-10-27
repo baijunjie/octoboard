@@ -12,7 +12,8 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/Status
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
 import { RecoveryGuidance } from "../components/ErrorGuidance";
-import { isUncataloguedFailure, uncataloguedSummaryKey } from "../errorPresentation";
+import { uncataloguedSummaryKey } from "../errorPresentation";
+import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { classifyError } from "../errorRecovery";
 import { Dialog } from "../dialogs/Dialog";
 import { useIssueReport } from "../dialogs/ErrorAlerts";

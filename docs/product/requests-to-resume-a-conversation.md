@@ -70,8 +70,8 @@ dialog shown and nothing changed:
   relaunching anything (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`);
 - for a conversation only an agent's record holds, whatever opening the session would meet in the session dialog: an
-  agent determined unavailable on this machine or not added, an account that is turned off, whose quota is used up or
-  whose sharing is being changed, a model or effort the agent does not offer (see "When the agent or the account cannot
+  agent determined unavailable on this machine or not added, an account that is turned off, whose quota is used up,
+  that is not logged in or whose sharing is being changed, a model or effort the agent does not offer (see "When the agent or the account cannot
   open a session" in `docs/product/opening-sessions.md`).
 
 A `title` that is an archived session's current name asks for no rename.

@@ -2,7 +2,7 @@ import type { Account, AccountQuota, Agent, AgentAvailability, Console, Project,
 import type { Scenario } from "../scenario";
 import type { Ui } from "../interact";
 import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, minutesFromNow, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
-import { quotaOf, quotaWindow } from "./quotas";
+import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Sidebar sessions";
@@ -181,12 +181,38 @@ const refusedWithReset = {
   message: "Work has reached its Claude Code usage limit (5-hour)",
 };
 
+/** The daemon refusing a session on Work, which it found not logged in since the window last heard. */
+const refusedSignedOut = {
+  code: "account_not_signed_in",
+  params: { agent: "Claude Code", account: "Work" },
+  message: "Work (Claude Code) is not logged in. Choose another account, or log in to it in Settings → Agent accounts.",
+};
+
 /** The daemon refusing a session on Work, which it turned off since the window last heard. */
 const refusedDisabled = {
   code: "account_disabled",
   params: { agent: "Claude Code", account: "Work" },
   message: "Work is disabled for Claude Code. Choose another account, or turn it back on in Settings → Agent accounts.",
 };
+
+/** Claude Code's readings with two accounts not logged in: Work, which never was, and Client, whose config directory
+ * does not exist yet. The default account and Personal have theirs as `claudeQuotas` has them. The daemon refuses a session
+ * on either, and the pickers list them but do not offer them. */
+const signedOutQuotas: AccountQuota[] = [
+  claudeQuotas[0],
+  quotaOf("claude", "a-work", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "Claude Code is not signed in: Error: not logged in") }),
+  claudeQuotas[2],
+  quotaOf("claude", "a-client", null, [], { unavailable: quotaFailure("quota_config_dir_missing", { agent: "Claude Code", dir: "/Users/dev/.claude-client" }, "The config directory does not exist") }),
+];
+
+/** Grok Build's one account, not logged in. */
+const grokSignedOut: AccountQuota[] = [quotaOf("grok", null, null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Grok Build" }, "Grok Build is not signed in") })];
+
+/** Both of Codex's accounts, not logged in. */
+const codexSignedOut: AccountQuota[] = [
+  quotaOf("codex", null, null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "Codex is not signed in") }),
+  quotaOf("codex", "a-team", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "Codex is not signed in") }),
+];
 
 /** Hub's own Codex handoff: the default account is spent and Team is not. */
 const handoffQuotas: AccountQuota[] = [
@@ -220,6 +246,15 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "New session, account picker with accounts turned off",
     description: "Website would run on Work, which is turned off, so the Claude Code account field opens on Personal, the first account that is on, with no alert. The open picker lists only the accounts that are on, Personal (selected) and Client, each with an empty usage track, none having a reading yet: Default and Work, turned off, are not listed at all.",
     state: { ...launchState([onWork], []), settings: claudeTurnedOff },
+    steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
+  },
+  {
+    id: "dialog-new-session-signed-out-picker",
+    group: GROUP,
+    category: "normal",
+    title: "New session, account picker with accounts not logged in",
+    description: "Website would run on Work, which is not logged in, so the Claude Code account field opens on Default, the first account that can run a session, with no alert. The open picker lists Default (selected), Work, Personal and Client. Work and Client, whose last reading found them not logged in, are unselectable, their names in the secondary text colour and their empty tracks faded, with the short reason \"Not logged in\" at full contrast under each name, styled like the reason of an account at its limit; Personal can be chosen.",
+    state: launchState([onWork], signedOutQuotas),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
   {
@@ -278,11 +313,20 @@ export const quotaGatingScenarios: Scenario[] = [
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Grok Build"))],
   },
   {
+    id: "dialog-new-session-signed-out-single-account",
+    group: GROUP,
+    category: "exceptional",
+    title: "New session, the agent's only account is not logged in",
+    description: "Grok Build has only its default account, which is not logged in, so none can be preselected: Open is disabled and the Agent field is marked invalid, with its own error under the agent and account pair saying that Default, shown as a chip, is not logged in and advising to choose another account or log in to it. The account picker, still there beside the agent select, is closed.",
+    state: launchState([chat], grokSignedOut),
+    steps: [openSessionDialog],
+  },
+  {
     id: "dialog-hand-off-all-disabled",
     group: GROUP,
     category: "exceptional",
     title: "Hand off, every Codex account is turned off",
-    description: "Hub hands off to Codex, whose two accounts, Default and Team, are both turned off, so none can be preselected: Hand off is disabled and the Hand off to field is marked invalid, with its own error under the agent and account pair saying that Default, the account the field holds, is disabled and advising to choose another account or turn it back on in Settings. No Alert stands above the lines about what moves.",
+    description: "Hub hands off to Codex, whose two accounts, Default and Team, are both turned off, so none can be preselected: Hand off is disabled and the Hand off to field is marked invalid, with its own error under the agent and account pair saying that Default, the account the field holds and shown as a chip, is disabled and advising to choose another account or turn it back on in Settings. No Alert stands above the lines about what moves.",
     state: { ...launchState([], []), settings: codexTurnedOff },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
@@ -375,12 +419,34 @@ export const quotaGatingScenarios: Scenario[] = [
     steps: [openSessionDialog, (ui) => ui.confirm()],
   },
   {
+    id: "dialog-new-session-signed-out-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Session launch refused, the account is not logged in",
+    description: "Work was found not logged in elsewhere after this window last heard, so it still looks usable and the dialog opened on it. Opening is refused by the daemon: an error dialog opens over the session dialog, which stays behind it, names the account and the agent and says it is not logged in so a session cannot be opened on it, then advises choosing another account or logging in to this one; a Manage accounts… button beside OK opens Settings on Agent accounts.",
+    state: launchState([onWork], []),
+    sessionOpenError: refusedSignedOut,
+    steps: [openSessionDialog, (ui) => ui.confirm()],
+  },
+  {
     id: "sidebar-session-switch-account-quota-menu",
     group: GROUP,
     category: "normal",
     title: "Switch account menu, an account at its limit",
     description: "The row's Switch account submenu lists Default (current), Work, Personal and Client; each account shows its compact usage bar in place of the key icon, as in the account picker. Work, whose session limit is reached, is greyed out and cannot be chosen, with its reason on two lines under its name, \"Limit reached\" and when it resets (arrow keys still reach it, and its accessible name carries the reason); Personal, nearly spent, and Client, not read yet (an empty track), can be chosen.",
     state: switchState(claudeQuotas),
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
+      (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+    ],
+  },
+  {
+    id: "sidebar-session-switch-account-signed-out-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Switch account menu, accounts not logged in",
+    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client. Work and Client, whose last reading found them not logged in, are greyed out and cannot be chosen, with the short reason \"Not logged in\" under each name, in the style of an account at its limit (arrow keys still reach them; the accessible name stays the account's name and its description reads \"Unavailable until it is logged in\"); Personal can be chosen.",
+    state: switchState(signedOutQuotas),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
       (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
@@ -444,9 +510,18 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Switch account, the account turned out disabled",
-    description: "The menu offered Client, and it was turned off after the menu was built (here by the steps, as another window would). The dialog shows no Alert and Switch is enabled; pressing it is refused here, and the refusal is an error alert dialog over the switch dialog, saying a session cannot use Client and advising to choose another account or turn it back on in Settings. The switch dialog stays open behind it.",
+    description: "The menu offered Client, and it was turned off after the menu was built (here by the steps, as another window would). The dialog shows no Alert and Switch is enabled; pressing it is refused here, and the refusal is an error alert dialog over the switch dialog, saying Account Client is disabled so a session cannot use it, then advising to choose another account or turn this account back on; a Manage accounts… button beside OK opens Settings on Agent accounts. The switch dialog stays open behind it.",
     state: switchState([]),
     steps: [...openSwitchTo("Client"), (ui) => ui.daemonEvents((state) => ({ type: "settings_updated", settings: { ...state.settings, accounts: state.settings.accounts.map((account) => (account.id === "a-client" ? { ...account, disabled: true } : account)) } })), (ui) => ui.confirm()],
+  },
+  {
+    id: "dialog-switch-account-signed-out",
+    group: GROUP,
+    category: "exceptional",
+    title: "Switch account, the account turned out not to be logged in",
+    description: "The menu offered Work, and a reading that found it not logged in landed after: the dialog shows no Alert and Switch is enabled. Pressing it is refused here, and the refusal is an error alert dialog over the switch dialog, saying Account Work is not logged in so a session cannot use it, then advising to choose another account or log in to this one; a Manage accounts… button beside OK opens Settings on Agent accounts. The switch dialog stays open behind it.",
+    state: switchState([]),
+    steps: [...openSwitchTo("Work"), (ui) => ui.setAccountQuotas(signedOutQuotas), (ui) => ui.confirm()],
   },
   {
     id: "dialog-switch-account-quota-used-up",
@@ -498,7 +573,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Quick create refused, the default agent's accounts at their limit",
-    description: "The console's sessions run on Codex, the default agent, whose accounts are all at their limit. A press of the new console session button with the modifier down, before the page noticed it, opens no session: an error dialog says that creating a new console session with defaults is unavailable because none of the default agent's accounts can open a session right now, each being at its limit or turned off, and advises choosing another agent in the new session dialog or trying again once a usage limit resets or an account is turned back on.",
+    description: "The console's sessions run on Codex, the default agent, whose accounts are all at their limit. A press of the new console session button with the modifier down, before the page noticed it, opens no session: an error dialog says that creating a new console session with defaults is unavailable because none of the default agent's accounts can open a session right now, each having reached its usage limit, being not logged in or being disabled, and advises choosing another agent in the new session dialog, or trying again once a usage limit resets, or once you log in to an account or turn one back on.",
     state: launchState([searchApi], codexSpent, codexConsole),
     steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
   },
@@ -509,6 +584,15 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "Quick create refused, the default agent's account is turned off",
     description: "The console's sessions run on Codex, the default agent, whose two accounts are both turned off, and nothing else is free to fall back on. A press of the new console session button with the modifier down, before the page noticed it, opens no session and shows the daemon's own refusal rather than the usage-limit one: an error dialog says that the account is disabled so a session cannot be opened on it, with a Manage accounts… button and the advice to choose another account or turn this account back on.",
     state: { ...launchState([searchApi], [], codexConsole), settings: codexTurnedOff },
+    steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
+  },
+  {
+    id: "sidebar-quick-create-signed-out-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Quick create refused, the default agent's accounts are not logged in",
+    description: "The console's sessions run on Codex, the default agent, whose two accounts are both not logged in, and nothing else is free to fall back on. A press of the new console session button with the modifier down, before the page noticed it, opens no session: an error dialog titled \"Cannot open a session\" says that the default account is not logged in so a session cannot be opened on it, with a Manage accounts… button and the advice to choose another account or log in to this one.",
+    state: launchState([searchApi], codexSignedOut, codexConsole),
     steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
   },
   {

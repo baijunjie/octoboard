@@ -1,0 +1,106 @@
+# Automatic account switch
+
+With **Automatically switch accounts at the usage limit** on (see that section in `docs/product/settings.md`), Octoboard
+switches a session to another account of its own agent by itself when the session's turn stops because its account
+reached the plan's usage limit, and the session carries on there. It is the same switch the user's **Switch account**
+and an owner's `switch_session_account` make — the conversation comes along, and the session reads as switching its
+account meanwhile (see "What a switch does", "Carrying the conversation" and "While a session is switching" in
+`docs/product/switching-session-accounts.md`) — made without anyone asking for it. It is off by default because it
+ends the session's process and spends another account's quota without asking.
+
+The setting governs only this. **Automatically select an account** decides only which account a new session takes (see
+"Which account a session uses" in `docs/product/opening-sessions.md`), and **Automatically approve account switches**
+only whether an owner's request for a switch asks the user (see "The user's approval of an owner's switch" in
+`docs/product/switching-session-accounts.md`). Octoboard never hands a session off to another agent by itself (see
+`docs/product/handing-off-sessions.md`).
+
+## When a session is switched
+
+**Only a turn that actually stopped on the usage limit triggers it.** At the end of a turn that failed — Claude Code's
+and Grok Build's `StopFailure` hook event, or a Codex turn its rollout shows as failed — Octoboard reads the session's
+conversation record, and switches only when the record says the turn stopped on the plan's usage limit, by the same
+rules that decide whether a switch continues a turn (see "Continuing after a switch" in
+`docs/product/switching-session-accounts.md`). A failed turn that did not stop on the limit, an overload or a network
+error say, switches nothing and never shows the session as switching.
+
+- **The record is read again for up to 4 seconds** when it does not say so yet, since an agent can report the failed
+  turn before it writes why. That wait comes before the switch takes hold of the session; the record is read once more
+  once it has, before the session's process is ended.
+- **A quota reading never triggers it.** A session is never switched because its account reads as used up, whether it
+  is working or awaiting instructions.
+- **Each such turn is a trigger of its own**: nothing holds off a second switch after the first.
+
+**Which sessions.** A session is switched only while it has a process that is *working* or *awaiting instructions*,
+nothing is launching, resuming or switching it, it is still on the account whose limit stopped the turn, and no change
+of the sharing of the default configuration runs on its account or on the target (see "When a change is carried out"
+in `docs/product/sharing-the-default-configuration.md`). A session waiting for the user, by whatever route — a
+permission prompt, a question, a trust confirmation, a dialog of its agent, a request of its own — is left alone, since
+switching it would end what it waits at. The one exception is the dialog Grok Build shows when its turn stops on the
+usage limit: ending that dialog is the point of the switch, so it does not count as waiting for the user here. A
+session switched or moved to another account meanwhile is left alone. A locked session is switched like any other:
+the lock keeps a session from being archived or deleted (see "Locking a session" in `docs/product/sessions.md`), and a
+switch does neither. A session left alone for any of these reasons is left as it was, and nobody is told.
+
+## Which account it is switched to
+
+The account a new session of that agent would be given while **Automatically select an account** is on — the account
+whose weekly quota resets soonest, ranked as in "Which account a session uses" in `docs/product/opening-sessions.md` —
+whether or not that setting is on, with these left out:
+
+- the account the session is on;
+- any account the session was switched off for a usage limit in the last **30 minutes**, so that two accounts both at
+  their limit are not swapped back and forth turn after turn;
+- any account that clearly cannot take the session: used up (see "A used-up account" in
+  `docs/product/account-quotas.md`), turned off (see "Turning an account off" in `docs/product/agent-accounts.md`), not
+  logged in (see "An account that is not logged in" in `docs/product/account-quotas.md`), with a change of its sharing
+  running, not one of the agent's accounts, or whose quota cannot be read now or has not been read yet — its last
+  reading failed, or none is held.
+
+No minimum of quota left is asked for. When no account qualifies, nothing is switched and nobody is told; the
+session stays stopped on its limit, as without the setting.
+
+## When the switch succeeds
+
+The session is relaunched on the new account and carries on with the turn the limit stopped: its relaunch prompt tells
+it that Octoboard switched it from the one account to the other by itself, that its conversation came along and that
+nothing else changed, and then asks it to continue its task, as any switch that continues a turn does. A session whose
+turn the switch's rules do not continue is sent that notice as a message instead, telling it to carry on or to wait
+for its next instruction.
+
+- **Its owner**, when it has one with a process running, is written a message naming the session and both accounts,
+  saying the conversation came along and either that the session was sent a prompt to continue its task, so the owner
+  is not to send one, or that it is back awaiting instructions and is to be sent its next step.
+- **The user** gets a toast titled with where the session is, saying that the account reached its usage limit, so
+  Octoboard switched the session, named by its displayed name, to the other account (see `docs/product/toasts.md`).
+  The daemon sends it as a `session_notice` with the code `account_switched_automatically`.
+
+## When the switch fails
+
+- **Before the session's process is ended**, or when the process does not stop in time and may still be running, the
+  switch leaves the session as it was. Nobody is told; it is only written to the daemon's log.
+- **After the process was ended** — a change of the target's sharing began meanwhile, the conversation could not be
+  copied, the relaunch was refused or its process did not come up — Octoboard brings the session back up on the
+  account it had, without a prompt, and tells nobody. When another operation holds the session at that moment (a
+  handover of its branches, a change of its owner), it waits up to **15 seconds** for it to finish before giving up.
+- **Only when that restore fails too** is anyone told. The session is left *interrupted* on its own account, for the
+  user or its owner to resume, and there is nothing left to retry:
+  - the user gets an error alert titled "Could not switch account", whose body says that the account reached its
+    usage limit and that Octoboard could neither switch the session to the other account nor bring it back up on the
+    one it had, so it is interrupted, followed by why the session could not be brought back up. The alert never
+    suggests trying again. Where the conversation could not be copied and an older item could not be put back (see
+    "Carrying the conversation" in `docs/product/switching-session-accounts.md`), it advises copying that item out of
+    the folder the reason names before it is cleared; where the cause is one the window recognises from what the
+    system said, such as a full disk, it gives that remedy, without the retry. A cause the window has no words for is
+    an unexpected failure, with **Report issue** (see "Recovery and unexpected errors" in
+    `docs/product/error-alerts.md`). The daemon sends it as a `session_notice` with the code
+    `account_switch_automatically_failed`, carrying the failure's own code and params;
+  - its owner, when it has one with a process running, is written a message saying the session reached its account's
+    usage limit and Octoboard could neither switch it nor bring it back up, with the reason, that it is interrupted
+    and its work stopped, and to look at it with `get_session` and relaunch it with `reopen_session` if the work
+    should go on.
+- **A process that had already exited by itself** before the switch stopped it is not the switch's: the session is
+  neither restored nor reported by the switch, and its owner is told it ended on its own (see "Notices to an owner" in
+  `docs/product/reporting-to-owners.md`). A process that the switch or the restore starts and that ends within its
+  first few seconds is that operation's outcome, and its owner is not also told it ended on its own.
+- **A session archived or deleted meanwhile, or a switch or its restore cut short by the daemon shutting down** (see
+  "Quitting" in `docs/product/application-lifecycle.md`), is neither told about nor logged.

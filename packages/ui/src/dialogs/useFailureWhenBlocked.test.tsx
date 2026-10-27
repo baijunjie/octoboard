@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it } from "vitest";
 
 import { hasCodeParams } from "../errorPresentation";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import type { ErrorAlertView } from "../errorAlerts";
 import { useFailureWhenBlocked } from "./useFailureWhenBlocked";
 

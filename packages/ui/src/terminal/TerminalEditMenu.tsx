@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActionMenu } from "../components/ActionMenu";
 import { copyText } from "../components/copyText";
 import { useLatest } from "../components/useLatest";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";

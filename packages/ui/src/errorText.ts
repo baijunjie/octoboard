@@ -1,6 +1,7 @@
 import { DaemonRequestError } from "./daemon-client";
 import { daemonMessage, DETAIL_BLOCK_CODES, type RecordNames } from "./daemonMessage";
-import { hasCodeParams, hasShellTimeoutDetails, isUncataloguedFailure, uncataloguedSummaryKey, type ErrorPresentation } from "./errorPresentation";
+import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, type ErrorPresentation } from "./errorPresentation";
+import { isUncataloguedFailure } from "./uncataloguedFailure";
 import type { Translate } from "./i18n/catalog";
 import type { Language } from "./i18n/languages";
 

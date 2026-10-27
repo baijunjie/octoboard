@@ -58,7 +58,7 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
               <th scope="col" className={HEADER}>
                 <span className="inline-flex items-center gap-1">
                   {t("settings.accounts.disable")}
-                  <HelpTip label={t("settings.accounts.disableHelp")}>{t("settings.accounts.disableExplanation")}</HelpTip>
+                  <HelpTip label={t("settings.accounts.disableHelp")}>{t("settings.accounts.disableHiddenExplanation")}</HelpTip>
                 </span>
               </th>
               <th ref={pinned} scope="col" className={`${HEADER} ${PINNED_EDGE} sticky end-0 z-1 bg-overlay`}>

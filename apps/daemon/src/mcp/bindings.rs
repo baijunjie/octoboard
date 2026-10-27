@@ -286,10 +286,12 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
          reported to, and you are the user's own session: take work only from the user typing in \
          this terminal, and do not call `{report}`, which is refused for a session with no owner. \
          This replaces what you were told of your owner when you were started. You can start and \
-         drive sessions of your own with `{new_session}` and the tools that go with it; of \
-         Octoboard's tools you now have {tools}.{note}",
+         drive sessions of your own with `{new_session}` and the tools that go with it, and you \
+         can still tell your former owner something with `{share_info}`, which it weighs rather \
+         than obeys; of Octoboard's tools you now have {tools}.{note}",
         report = tool("report"),
         new_session = tool("new_session"),
+        share_info = tool("share_info"),
         tools = project_tools(released.agent, false),
     )
 }
@@ -532,6 +534,10 @@ mod tests {
         assert!(told.contains("`mcp__octoboard__new_session`"), "{told}");
         assert!(
             told.contains("do not call `mcp__octoboard__report`"),
+            "{told}"
+        );
+        assert!(
+            told.contains("tell your former owner something with `mcp__octoboard__share_info`"),
             "{told}"
         );
         // A blank note adds nothing, and the owner that released it is not told what it did.

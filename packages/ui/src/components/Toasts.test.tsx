@@ -150,6 +150,159 @@ it.each([
   }
 });
 
+it.each([
+  ["account_sharing_in_progress", { account: "a1", name: "Work" }, "is being changed", "Wait for the change to finish"],
+  ["config_dir_unreachable", { agent: "Claude Code", path: "/home/w/.claude" }, "is not a directory the daemon can reach", "correct the path in the dialog"],
+  ["relocation_failed", { path: "/t", stage: "copy", cause: "other", detail: "odd" }, "could not be copied into", "Then try the switch again"],
+])("shows a failed automatic switch whose cause is %s with its own sentence as the only remedy", (reasonCode, nested, reasonLine, remedy) => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    // The notice's own params over the failure's, as the daemon puts them.
+    const params = { ...nested, agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: reasonCode };
+    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    expect(alert.textContent).toContain("Could not switch account");
+    expect(alert.textContent).toContain("nor bring it back up on");
+    expect(alert.textContent).toContain(reasonLine);
+    expect(alert.textContent).not.toContain(remedy);
+    expect(alert.textContent).not.toContain("Report issue");
+    // Only the acknowledgement: no button for the nested cause's remedy.
+    expect(alert.querySelectorAll("button")).toHaveLength(1);
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("tells a failed automatic switch's user to copy out the older item it kept aside, without asking them to try the switch again", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const params = { path: "/t", stage: "kept_staging", cause: "not_restored", kept_in: "/t/.octoboard-switch/x", detail: "disk full", agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: "relocation_failed" };
+    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
+    const text = document.querySelector('[role="alertdialog"]')!.textContent;
+    expect(text).toContain("nor bring it back up on");
+    expect(text).toContain("An older item could not be put back");
+    expect(text).toContain("copy it out of the folder named above");
+    expect(text).not.toContain("Then try the switch again");
+    // When the older item is cleared is said once, by the reason; the advice does not repeat it.
+    expect(text.split("until the daemon next starts")).toHaveLength(2);
+    expect(text.split("next switched into that account")).toHaveLength(2);
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("adds the remedy for what the system said to the copy-out advice of a failed automatic switch, each once", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const params = { path: "/t", stage: "kept_staging", cause: "not_restored", kept_in: "/t/.octoboard-switch/x", detail: "No space left on device (os error 28)", agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: "relocation_failed" };
+    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
+    const text = document.querySelector('[role="alertdialog"]')!.textContent ?? "";
+    const copyOut = text.indexOf("copy it out of the folder named above");
+    const free = text.indexOf("Free space on the disk");
+    expect(copyOut).toBeGreaterThan(-1);
+    expect(free).toBeGreaterThan(copyOut);
+    expect(text.split("Free space on the disk")).toHaveLength(2);
+    expect(text.split("copy it out of the folder named above")).toHaveLength(2);
+    expect(text).not.toContain("Then try the switch again");
+    expect(text).not.toContain("retry the operation");
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("adds the remedy for what the system said to a failed automatic switch with a worded cause", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const params = { path: "/t", stage: "copy", cause: "other", detail: "No space left on device (os error 28)", agent: "Claude Code", from: "Work", account: "Spare", reason: "raw", reason_code: "relocation_failed" };
+    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
+    const text = document.querySelector('[role="alertdialog"]')!.textContent ?? "";
+    expect(text).toContain("nor bring it back up on");
+    expect(text).toContain("could not be copied into");
+    expect(text.split("Free space on the disk")).toHaveLength(2);
+    expect(text).not.toContain("retry the operation");
+    // The sentence, then why, then what to do.
+    expect(text.indexOf("nor bring it back up on")).toBeLessThan(text.indexOf("could not be copied into"));
+    expect(text.indexOf("could not be copied into")).toBeLessThan(text.indexOf("Free space on the disk"));
+    expect(text).not.toContain("Report issue");
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it.each([
+  ["a cause the application has no words for", "future_code", "a newer daemon's reason", true],
+  ["an internal cause with nothing recognisable in its text", "internal_error", "spawn failed", true],
+  ["an internal cause whose text names a full disk", "internal_error", "No space left on device (os error 28)", false],
+])("keeps the report guidance for a failed automatic switch with %s only when nothing in it is recognised", (_case, reasonCode, reason, reported) => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = { ...daemon, onToast: (listener) => { deliver = listener; return () => {}; } };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const params = { agent: "Claude Code", from: "Work", account: "Spare", reason, reason_code: reasonCode };
+    const error = new DaemonRequestError("plain fallback", "account_switch_automatically_failed", params);
+    act(() => deliver({ kind: "error", message: error.message, daemonError: error }));
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    expect(alert.textContent).toContain("nor bring it back up on");
+    expect([...alert.querySelectorAll("a")].some((link) => link.textContent === "Report issue")).toBe(reported);
+    expect(alert.textContent?.includes("This may be a bug")).toBe(reported);
+    // The reason line is the generic sentence for what the system said, or for nothing recognised.
+    expect(alert.textContent).toContain(reported ? "Something unexpected went wrong." : "The disk is full.");
+    // A recognised system failure adds its remedy to the sentence's.
+    expect(alert.textContent?.includes("Free space on the disk")).toBe(!reported);
+    // The raw text is behind "Error details" either way.
+    expect(alert.querySelector("pre")?.textContent).toBe(reason);
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
 it("sets the path of a coded daemon error as code in its acknowledgement dialog", () => {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
@@ -351,6 +504,37 @@ it("titles a failed launch's alert for the failure, never with the session's nam
     expect(gone?.querySelector("h2")?.textContent).toBe("Could not start the session");
     expect(gone?.querySelector("h2")?.textContent).not.toContain("Fix login");
     expect(gone?.textContent).toContain("Session: Fix login");
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
+
+it("titles the toast of an automatic account switch with the session's project and names the switched session in its description", () => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({
+      sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]),
+      projects: new Map([["p1", { id: "p1", name: "Hub" } as unknown as import("../protocol").Project]]),
+    }),
+    onToast: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const params = { agent: "Claude Code", from: "Work", account: "Spare", session: "s1" };
+    const message = daemonMessage("en", "account_switched_automatically", params, "fallback", source.store.getState());
+    const error = new DaemonRequestError(message, "account_switched_automatically", params);
+    act(() => deliver({ kind: "notice", message, daemonError: error, session: "s1" }));
+    // The title says where the session is (its project); the sentence names the session itself.
+    expect(document.querySelector('[data-slot="toast-title"]')?.textContent).toBe("Hub");
+    expect(document.querySelector('[data-slot="toast-description"]')?.textContent).toContain("switched Fix login to");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

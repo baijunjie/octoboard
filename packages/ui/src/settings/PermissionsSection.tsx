@@ -6,7 +6,7 @@ import { Button } from "../components/Button";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { InlineReference } from "../components/InlineReference";
 import { StatusBadge } from "../components/StatusBadge";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { Message, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { MacosPermissionKind } from "../platform";

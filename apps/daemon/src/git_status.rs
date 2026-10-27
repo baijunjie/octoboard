@@ -78,6 +78,40 @@ pub fn refresh(state: &Arc<AppState>, projects: Vec<Project>) {
     }
 }
 
+/// [`refresh`] for a caller that answers with the result, such as an MCP tool: waits until each of
+/// `projects` has a check that completed after the call (one already running, or one the floor
+/// skipped because it completed within `GIT_CHECK_MIN_INTERVAL`, counts), or `wait` has passed.
+/// Returns the ids of the projects whose check had not completed by then; those checks go on
+/// running and publish their results as any check does.
+pub async fn refresh_and_wait(
+    state: &Arc<AppState>,
+    projects: Vec<Project>,
+    wait: Duration,
+) -> Vec<String> {
+    let asked = Instant::now();
+    // A project the floor skips has a result younger than the floor already, so it is not waited
+    // for; every other one is waiting for its completion to differ from what it was.
+    let mut pending: Vec<(String, Option<Instant>)> = projects
+        .iter()
+        .map(|project| {
+            (
+                project.id.clone(),
+                state.git_check_completed_at(&project.id),
+            )
+        })
+        .filter(|(_, before)| due_for_check(*before, asked, GIT_CHECK_MIN_INTERVAL))
+        .collect();
+    refresh(state, projects);
+    let deadline = asked + wait;
+    loop {
+        pending.retain(|(id, before)| state.git_check_completed_at(id) == *before);
+        if pending.is_empty() || Instant::now() >= deadline {
+            return pending.into_iter().map(|(id, _)| id).collect();
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 /// Waits for a sweep place, or for a manual pull to promote the claim past the wait, then starts
 /// the claim. Returns the place (none when promoted), whether the check is forced, and the project
 /// read again, since the wait may have been long: a project removed meanwhile must not be

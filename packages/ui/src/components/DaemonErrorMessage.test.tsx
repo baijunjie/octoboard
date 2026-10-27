@@ -2,7 +2,7 @@
 import { Description, Input, Label, TextField } from "@heroui/react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
@@ -11,7 +11,7 @@ import { DaemonRequestError } from "../daemon-client";
 import { format } from "../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation } from "../errorPresentation";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { useDialogAction } from "../dialogs/Dialog";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
@@ -353,6 +353,42 @@ it.each([
   expect(body.textContent).not.toContain(rawText);
   expect(raw.querySelector("pre")?.textContent).toBe(rawText);
   expect(hasErrorDetails(error)).toBe(true);
+});
+
+describe("a failed automatic account switch", () => {
+  const params = { agent: "Codex", from: "Work", account: "Spare", reason_code: "path_not_found", path: "/missing/project" };
+
+  it("says what happened, then why on a line of its own with the nested failure's own chips", () => {
+    const daemon = { store: createStateStore({}) } as Daemon;
+    const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={new DaemonRequestError("fallback", "account_switch_automatically_failed", params)} /></DaemonProvider>);
+    expect(Array.from(container.querySelectorAll("[data-inline-reference]:not(:has(code))"), (chip) => chip.textContent)).toEqual(expect.arrayContaining(["Work", "Codex", "Spare"]));
+    expect(container.querySelector("code")?.textContent).toBe("/missing/project");
+    const text = container.textContent?.replace(/[\u2066-\u2069]/g, "");
+    expect(text).toContain("nor bring it back up on");
+    expect(text).not.toMatch(/retry|try again/i);
+    expect(text).toContain("/missing/project does not exist.");
+  });
+
+  it("leaves the nested failure's own remedy to the sentence's, which a failed launch's does not have", () => {
+    const nested = { reason_code: "config_dir_unreachable", agent: "Codex", path: "/missing" };
+    const switched = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, ...nested });
+    const launched = new DaemonRequestError("fallback", "launch_failed", { title: "Draft", ...nested });
+    expect(mount(<DaemonErrorMessage error={launched} />).textContent).toContain("Recreate it");
+    const text = mount(<DaemonErrorMessage error={switched} />).textContent;
+    expect(text).toContain("/missing");
+    expect(text).not.toContain("Recreate it");
+    expect(hasErrorRemedy(switched)).toBe(false);
+    expect(hasErrorRemedy(launched)).toBe(true);
+  });
+
+  it("says a reason the catalog lacks as the generic sentence, its own text only in the raw part", () => {
+    const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "future_code", reason: "a newer daemon's reason" });
+    const { body, raw } = mountApart(error);
+    expect(body.textContent).toContain("Something unexpected went wrong.");
+    expect(body.textContent).not.toContain("a newer daemon's reason");
+    expect(raw.querySelector("pre")?.textContent).toBe("a newer daemon's reason");
+    expect(hasErrorDetails(error)).toBe(true);
+  });
 });
 
 it("uses name chips for fixed agent and product references while leaving plain messages usable", () => {

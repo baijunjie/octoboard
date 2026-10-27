@@ -120,8 +120,9 @@ tool, every refusal reaches the model as its reason in prose.
 cannot take one; see "Messages held until a session can take them" in `docs/product/message-delivery.md`), that it has
 no owner now, having been released from the session it reported to, and is the user's own session; that it takes work
 only from the user typing in its terminal and is not to call `report`, which is refused for a session with no owner;
-that this replaces what it was told of its owner when it was started; and that it can start and drive sessions of its
-own with `new_session` and the tools that go with it, with the list of the Octoboard tools it now has. A release made
+that this replaces what it was told of its owner when it was started; that it can start and drive sessions of its
+own with `new_session` and the tools that go with it, and can still tell its former owner something with
+`share_info`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A release made
 with a `note` ends that message with the note, marked as its former owner's, every line quoted, followed by a closing
 line. One with no process running is told when it next starts instead, and so is one whose message could not be
 written; the note is kept with what it is owed (see "A change of owner told at the next launch" below).

@@ -2,7 +2,7 @@ import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickab
 import type { Translate } from "./i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
-import { exhaustedQuotaWindow } from "./quota/quotaFormat";
+import { exhaustedQuotaWindow, isNotLoggedIn } from "./quota/quotaFormat";
 import { sessionAccountName } from "./sessionLabel";
 import type { Reason } from "./components/ReasonText";
 
@@ -27,6 +27,10 @@ export interface ChoiceEntry {
   /** A change of the account's sharing of the default configuration is running; the daemon refuses a new
    * session on the account until it ends, so the entry may be shown, but not chosen. */
   changingSharing: boolean;
+  /** The last reading found the account not logged in; the daemon refuses a session on it
+   * (`account_not_signed_in`), so the entry may be shown, but not chosen. A reading that failed for another reason
+   * does not count. */
+  signedOut: boolean;
   /** The user turned the account off for new sessions; the daemon refuses one on it (`account_disabled`). Pickers
    * leave it out, unless it is the value they hold. */
   disabled: boolean;
@@ -51,6 +55,18 @@ export function sharingChangeRuns(sharing: Map<string, AccountSharing> | undefin
 export function incompleteAccount(accounts: Account[], sharing: Map<string, AccountSharing> | undefined, account: string | null | undefined): Account | undefined {
   if (account === null || account === undefined || sharingChangeRuns(sharing, account)) return undefined;
   return accounts.find((item) => item.id === account && item.share_default_config_incomplete === true);
+}
+
+/** Whether the reading of an account says the agent is not logged in there, which keeps a session off it. */
+export function quotaSignedOut(quota: AccountQuota | undefined): boolean {
+  return isNotLoggedIn(quota?.unavailable ?? null);
+}
+
+/** What an account that is not logged in shows in a list in place of its usage: why it cannot be chosen in short as
+ * the `reason` under its name, and in full as the `detail` for assistive technology. It lasts until the user logs in,
+ * so unlike a sharing change it is said. */
+export function accountSignedOutUnavailable(t: Translate): { detail: string; reason: Reason } {
+  return { detail: t("accountChoice.signedOut.detail"), reason: { state: t("accountChoice.signedOut.reason") } };
 }
 
 /** What an account the user turned off shows in a list in place of its usage: why it cannot be chosen in short as the
@@ -105,7 +121,7 @@ export function choiceGroups(
       ...owned.map((account) => ({ account: account.id, name: account.name })),
     ].map((entry) => {
       const quota = readings && accountQuotaOf(readings.quotas, agent, entry.account);
-      return { ...entry, agent, key: choiceKey({ agent, account: entry.account }), quota, exhaustedBy: readings && exhaustedQuotaWindow(quota, readings.now), changingSharing: sharingChangeRuns(sharing, entry.account), disabled: accountDisabled(accounts, disabledDefaults, agent, entry.account) };
+      return { ...entry, agent, key: choiceKey({ agent, account: entry.account }), quota, exhaustedBy: readings && exhaustedQuotaWindow(quota, readings.now), changingSharing: sharingChangeRuns(sharing, entry.account), signedOut: quotaSignedOut(quota), disabled: accountDisabled(accounts, disabledDefaults, agent, entry.account) };
     }),
   }));
 }
@@ -162,6 +178,11 @@ export function choiceExhaustion(choice: AccountChoice, groups: ChoiceGroup[]): 
   return findEntry(groups, choiceKey(choice))?.exhaustedBy;
 }
 
+/** Whether the last reading of the account `choice` names found it not logged in, which keeps a session from opening on it. */
+export function choiceSignedOut(choice: AccountChoice, groups: ChoiceGroup[]): boolean {
+  return findEntry(groups, choiceKey(choice))?.signedOut === true;
+}
+
 /** Whether the account `choice` names is disabled, which keeps a session from opening on it. */
 export function choiceDisabled(choice: AccountChoice, groups: ChoiceGroup[]): boolean {
   return findEntry(groups, choiceKey(choice))?.disabled === true;
@@ -210,7 +231,7 @@ export function preferExpiringWeekly(entries: ChoiceEntry[], now: number): Choic
   let best: ChoiceEntry | undefined;
   let bestSignal: { resetsAt: number; remaining: number } | undefined;
   for (const entry of entries) {
-    if (entry.exhaustedBy || entry.changingSharing || entry.disabled) continue;
+    if (entry.exhaustedBy || entry.changingSharing || entry.signedOut || entry.disabled) continue;
     const signal = expiringWeekly(entry.quota, now);
     if (!signal) continue;
     if (!bestSignal || signal.resetsAt < bestSignal.resetsAt || (signal.resetsAt === bestSignal.resetsAt && signal.remaining > bestSignal.remaining)) {
@@ -238,13 +259,13 @@ export function accountOpenedOn(
   return inheritedAccount(owner, project, agent, accounts);
 }
 
-/** `choice`, or when its account is disabled, used up or its sharing change runs, and its agent may be picked, the first
+/** `choice`, or when its account is disabled, used up, not logged in or its sharing change runs, and its agent may be picked, the first
  * account of the same agent that is none of these, in the order of the agent's group (the default account first). With
  * every account of the agent unavailable `choice` stays, for the caller to refuse. */
 export function avoidUnavailableAccount(choice: AccountChoice, groups: ChoiceGroup[]): AccountChoice {
   const group = groups.find((candidate) => candidate.agent === choice.agent);
-  if (!group?.selectable || (!choiceExhaustion(choice, groups) && !choiceChangingSharing(choice, groups) && !choiceDisabled(choice, groups))) return choice;
-  const usable = group.entries.find((entry) => !entry.exhaustedBy && !entry.changingSharing && !entry.disabled);
+  if (!group?.selectable || (!choiceExhaustion(choice, groups) && !choiceChangingSharing(choice, groups) && !choiceSignedOut(choice, groups) && !choiceDisabled(choice, groups))) return choice;
+  const usable = group.entries.find((entry) => !entry.exhaustedBy && !entry.changingSharing && !entry.signedOut && !entry.disabled);
   return usable ? { agent: choice.agent, account: usable.account } : choice;
 }
 
@@ -253,13 +274,13 @@ export function avoidUnavailableAccount(choice: AccountChoice, groups: ChoiceGro
  * session's: the console's default — moved to one that may be picked when that one is known
  * to be missing or is not added, with the account that agent resolves to when none is chosen: the project's
  * setting for it, else the console `owner`'s, moved to another account of the agent when that one's quota is
- * used up or its sharing change runs (`avoidUnavailableAccount`). With `autoSelect`, an account of that agent whose weekly quota resets
+ * used up, its sharing change runs, it is not logged in or it is turned off (`avoidUnavailableAccount`). With `autoSelect`, an account of that agent whose weekly quota resets
  * soonest (`preferExpiringWeekly`) replaces the inherited one before that move, when the group has one;
  * omitted, the inherited account is used as before. The choice made in the dialog sits above this, as the
  * daemon's own chain puts a session's choice above both. `groups` are the agents' entries with their quotas
  * judged (`choiceGroups`). `exhaustedBy` is the window that still keeps the account from running a session
- * when every account of the agent is used up, and `changingSharing` and `disabled` the same for a running
- * sharing change and for a turned-off account. */
+ * when every account of the agent is used up, and `changingSharing`, `signedOut` and `disabled` the same for a running
+ * sharing change, an account found not logged in and a turned-off account. */
 export function settledInitialChoice(
   owner: Console,
   project: Project | undefined,
@@ -268,10 +289,10 @@ export function settledInitialChoice(
   added: Agent[] | null,
   groups: ChoiceGroup[],
   autoSelect?: { now: number },
-): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined; changingSharing: boolean; disabled: boolean } {
+): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined; changingSharing: boolean; signedOut: boolean; disabled: boolean } {
   const agent = selectableAgent(agentAvailability, added, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
   const choice = avoidUnavailableAccount({ agent, account: accountOpenedOn(owner, project, agent, accounts, groups, autoSelect) }, groups);
-  return { choice, exhaustedBy: choiceExhaustion(choice, groups), changingSharing: choiceChangingSharing(choice, groups), disabled: choiceDisabled(choice, groups) };
+  return { choice, exhaustedBy: choiceExhaustion(choice, groups), changingSharing: choiceChangingSharing(choice, groups), signedOut: choiceSignedOut(choice, groups), disabled: choiceDisabled(choice, groups) };
 }
 
 /** What the control currently shows: the user's pick while it is still an entry that may be
@@ -299,23 +320,27 @@ export interface SwitchEntry {
   quota: AccountQuota | undefined;
   /** A change of the account's sharing runs; the daemon refuses a switch onto it, so it is listed, but not offered. */
   changingSharing: boolean;
+  /** The last reading found the account not logged in; the daemon refuses a switch onto it, so it is listed, but not
+   * offered. */
+  signedOut: boolean;
   /** The user turned the account off; the menu leaves it out unless it is the session's own. */
   disabled: boolean;
 }
 
 /** Why a Switch account entry cannot be chosen apart from its quota being used up, or `undefined`
- * when nothing else keeps it: an account switch holds the session (`switching`), the entry's own
- * sharing change runs, or the account the session is on is changing its sharing (`ownChanging`,
- * which keeps every other account from taking it). Each of these ends on its own, so the `detail` is
- * for a message where a form needs one; a menu or list disables the entry without a reason. The
- * current entry is never blocked, as it is never offered. The Switch account submenu and the form of
- * a switch request share these rules. */
+ * when nothing else keeps it: the entry is not logged in, an account switch holds the session (`switching`), the
+ * entry's own sharing change runs, or the account the session is on is changing its sharing (`ownChanging`, which
+ * keeps every other account from taking it). Not being logged in lasts, so it is checked first and comes with a
+ * `reason` to draw under the entry's name; the others end on their own, so their `detail` is for a message where a
+ * form needs one, and a menu or list disables the entry without a reason. The current entry is never blocked, as it
+ * is never offered. The Switch account submenu and the form of a switch request share these rules. */
 export function switchEntryBlock(
   t: Translate,
-  entry: Pick<SwitchEntry, "current" | "changingSharing">,
+  entry: Pick<SwitchEntry, "current" | "changingSharing" | "signedOut">,
   session: { switching: boolean; ownChanging: boolean },
-): { detail: string } | undefined {
+): { detail: string; reason?: Reason } | undefined {
   if (entry.current) return undefined;
+  if (entry.signedOut) return accountSignedOutUnavailable(t);
   if (session.switching) return { detail: t("accountChoice.switching.detail") };
   if (entry.changingSharing) return { detail: t("accountChoice.sharingChange.detail") };
   if (session.ownChanging) return { detail: t("accountChoice.ownSharingChange.detail") };
@@ -377,6 +402,7 @@ export function switchEntries(
       exhaustedBy: readings ? exhaustedQuotaWindow(quota, readings.now) : undefined,
       quota,
       changingSharing: !entry.isPath && sharingChangeRuns(sharing, entry.account),
+      signedOut: quotaSignedOut(quota),
       disabled: !entry.isPath && accountDisabled(accounts, disabledDefaults, session.agent, entry.account),
     };
   });

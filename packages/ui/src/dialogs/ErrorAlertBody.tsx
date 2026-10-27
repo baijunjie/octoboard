@@ -4,6 +4,7 @@ import { DiagnosticBlock } from "../components/DiagnosticBlock";
 import { DetailsDisclosure } from "../components/ErrorDetailsDisclosure";
 import { RecoveryGuidance } from "../components/ErrorGuidance";
 import type { ErrorAlertView } from "../errorAlerts";
+import { additionalRecovery } from "../errorRecovery";
 import { diagnosticText } from "../errorText";
 import type { useT } from "../i18n/react";
 
@@ -17,6 +18,8 @@ export function alertTitle(t: ReturnType<typeof useT>, alert: ErrorAlertView): s
  * sentence asking for a report of an unexpected failure (see `useIssueReport`), which a failure modal, never about an
  * unexpected failure, has no need of. */
 export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView; issueGuidance?: React.ReactNode }): React.ReactElement {
+  // What a recognised system failure asks for besides the remedy that comes first (see `additionalRecovery`).
+  const also = alert.error === undefined ? undefined : additionalRecovery(alert.error);
   const diagnostics = [alert.error, ...(alert.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== alert.message);
   return (
     <>
@@ -26,7 +29,10 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
           {issueGuidance && <p>{issueGuidance}</p>}
           {alert.details === undefined && diagnostics.length > 0 && <DetailsDisclosure><DiagnosticBlock>{[...new Set(diagnostics)].join("\n\n")}</DiagnosticBlock></DetailsDisclosure>}
         </>
-        : !alert.failures?.length && !alert.remedyInBody && alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} /></p>}
+        : !alert.failures?.length && !alert.remedyInBody && <>
+          {alert.classification.recovery !== "none" && <p><RecoveryGuidance recovery={alert.classification.recovery} /></p>}
+          {also && also !== alert.classification.recovery && <p><RecoveryGuidance recovery={also} /></p>}
+        </>}
       {alert.details ? <DetailsDisclosure>{alert.details}</DetailsDisclosure> : null}
     </>
   );

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { errorAlertParts } from "../errorAlertParts";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { errorAlerts, type AcknowledgementView } from "../errorAlerts";
 import { errorToast } from "../store";
 

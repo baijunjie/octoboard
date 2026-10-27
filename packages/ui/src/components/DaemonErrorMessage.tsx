@@ -2,13 +2,14 @@ import React, { useId } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
 import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, type LeftBranchItem } from "../daemonMessage";
-import { hasCodeParams, hasShellTimeoutDetails, isUncataloguedFailure, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../errorPresentation";
-import { ActionableError } from "../errorRecovery";
+import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../errorPresentation";
+import { isUncataloguedFailure } from "../uncataloguedFailure";
+import { ActionableError } from "../actionableError";
 import { errorText, unexpectedFailureDiagnostic } from "../errorText";
 import { globalParam, isMessageKey } from "../i18n/catalog";
 import { joinNodes } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { MessageParams } from "../protocol";
+import { NESTED_FAILURE_CODES, NESTED_REMEDY_CODES, type MessageParams } from "../protocol";
 import { sessionTask } from "../sessionLabel";
 import { useErrorRecords } from "../store";
 import { BranchGroups } from "./BranchGroups";
@@ -113,7 +114,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   if (running) {
     params.sessions = joinNodes(language, running, (id, key) => <InlineReference key={key} dir={sessions.has(id) ? "auto" : "ltr"} monospace={!sessions.has(id)} wrap>{sessions.get(id)?.title ?? id}</InlineReference>);
   }
-  const nested = error.code === "launch_failed" && error.params.reason_code && error.params.reason_code !== "launch_failed"
+  const nested = NESTED_FAILURE_CODES.has(error.code) && error.params.reason_code && error.params.reason_code !== error.code
     ? new DaemonRequestError(String(params.reason ?? ""), error.params.reason_code, error.params)
     : undefined;
   const structuredNested = nested && (hasCodeParams(nested) || hasShellTimeoutDetails(nested));
@@ -152,7 +153,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const furtherId = `daemon.${error.code}.details`;
   const further = isMessageKey(furtherId) ? <span className="block"><Message id={furtherId} params={params as never} /></span> : null;
   // The nested cause's recovery is the failure's own, a launch failure having none of its own.
-  const remedy = recovery ?? (structuredNested && hasErrorRemedy(nested) ? <DaemonErrorMessage error={nested} part="remedy" /> : null);
+  const remedy = recovery ?? (structuredNested && NESTED_REMEDY_CODES.has(error.code) && hasErrorRemedy(nested) ? <DaemonErrorMessage error={nested} part="remedy" /> : null);
   const nestedFurther = structuredNested ? <DaemonErrorMessage error={nested} part="further" /> : null;
   const nestedRaw = structuredNested ? <DaemonErrorMessage error={nested} part="raw" /> : null;
   const explanation = <>{further}{reasonLines}{nestedFurther}</>;
@@ -164,11 +165,15 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
   const sentence = <span><Message id={id} params={params as never} /></span>;
-  if (part === "summary" || (!hasErrorRemedy(error) && !hasErrorDetails(error))) return sentence;
+  // A failed automatic switch says what happened in its sentence and why on a line of its own, which is
+  // the nested failure's summary (or the generic sentence of one the application has no words for).
+  const reasonLine = error.code === "account_switch_automatically_failed" && params.reason !== undefined ? <span className="block">{params.reason}</span> : null;
+  if (part === "summary" || (!reasonLine && !hasErrorRemedy(error) && !hasErrorDetails(error))) return sentence;
   // The whole message is the application's own words; the raw text is the `raw` part, kept behind a disclosure.
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {sentence}
+      {reasonLine}
       {remedy}
       {explanation}
     </div>
