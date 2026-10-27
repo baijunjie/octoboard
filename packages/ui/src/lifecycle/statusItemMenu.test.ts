@@ -361,6 +361,24 @@ describe("buildStatusItemMenu quota submenus", () => {
     const [defaultOff] = buildQuotaSubmenus(t, source({ accounts: [home], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude"), accountQuotas }), consoles[0]);
     expect(defaultOff!.quota_label).toBeUndefined();
     expect(defaultOff!.items.length).toBeGreaterThan(0);
+    // Unless the selected running session is on it: the submenu then lists it, so the opener heads it again.
+    const [inUse] = buildQuotaSubmenus(t, source({ accounts: [home, { ...work, disabled: true }], agentAvailability: available("claude"), accountQuotas }), onWork, { agent: "claude", account: "work" });
+    expect(inUse!.quota_label).toContain("Work");
+  });
+
+  it("lists a turned-off account in the submenu, marked Disabled, only while the selected session runs on it", () => {
+    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w", disabled: true } as Account;
+    const quota = source({ accounts: [work], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
+    const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
+    const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
+      quota, consoles, projects, sessions: [on(status)], selectedSessionId: "s", byStatus: true,
+      consoleMap: new Map(consoles.map((c) => [c.id, c])), projectMap: new Map(projects.map((p) => [p.id, p])),
+    });
+    const headers = (status: SessionStatus) => menu(status).submenus.flatMap((submenu) => submenu.items.filter((item) => item.kind === "header").map((item) => (item as { title: string }).title.replace(/[\u2068\u2069]/g, "")));
+    expect(headers("working")).toEqual(["Work · Max · Available · Disabled"]);
+    expect(headers("idle")).toEqual(["Work · Max · Available · Disabled"]);
+    expect(menu("interrupted").submenus).toEqual([]);
+    expect(menu("archived").submenus).toEqual([]);
   });
 
   it("draws the icon capsule for a turned-off account only while the selected session runs on it", () => {

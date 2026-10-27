@@ -3899,10 +3899,10 @@ pub mod notice_code {
     /// Octoboard tried to switch the session to another account by itself, the switch failed after
     /// the session's process was ended, and bringing it back up on the account it had failed too,
     /// so it is left interrupted there. `params` are those of `account_switched_automatically`
-    /// (`agent`, `from`, `account`, `from_id?`, `account_id?`, naming the account it was on and the
-    /// one it was to be switched to), with why it could not be brought back up beside them as a
-    /// `launch_failed` carries its own failure: `reason`, `reason_code` and the failure's own
-    /// params.
+    /// (`agent`, `from`, `account`, `session`, `from_id?`, `account_id?`, naming the account it was
+    /// on and the one it was to be switched to), with why it could not be brought back up beside
+    /// them as a `launch_failed` carries its own failure: `reason`, `reason_code` and the failure's
+    /// own params.
     pub const ACCOUNT_SWITCH_AUTOMATICALLY_FAILED: &str = "account_switch_automatically_failed";
     /// A message written into the session went to a view of its agent's background agents (a
     /// subagent, or a new background session) rather than the conversation, and is not written

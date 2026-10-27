@@ -1032,6 +1032,11 @@ impl AppState {
         Ok(false)
     }
 
+    /// Whether the daemon has begun to shut down, after which nothing is started.
+    pub fn is_shutting_down(&self) -> bool {
+        self.shutting_down.load(Ordering::Acquire)
+    }
+
     fn refuse_while_shutting_down(&self) -> Result<()> {
         if self.shutting_down.load(Ordering::Acquire) {
             return Err(CodedError::raised(

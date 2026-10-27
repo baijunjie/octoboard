@@ -5,23 +5,23 @@
 //! - **Claude Code** is `claude -p` in stream-JSON mode, given an `initialize` control request
 //!   and then `get_usage`. The reply's `limits[]` lists the windows with their kind; the older
 //!   `five_hour`, `seven_day` and `model_scoped` fields are read only when `limits[]` yields none.
-//! - **Codex** is `codex app-server`, given `initialize`, `initialized` and
-//!   `account/rateLimits/read`: a primary and a secondary window and the plan.
+//! - **Codex** is `codex app-server`, given `initialize`, `initialized`, `account/rateLimits/read`
+//!   and `account/read`: a primary and a secondary window and the plan, and who is signed in.
 //! - **Grok Build** is `grok agent --no-leader stdio`, given ACP `initialize` and `_x.ai/billing`:
 //!   one credit pool over a billing period and the subscription tier.
 //!
 //! The agents mark these calls experimental, so a reply that cannot be read is an
 //! [`QuotaUnavailable`] for that account and nothing else. An account that is not signed in is
 //! told from each agent's own structured signal and reported as its own state rather than as a
-//! failure: Claude Code's `initialize` reply says its `account.tokenSource` is `none` (its usage
-//! reply alone cannot say, an account without a subscription answers the same), Codex's and Grok
-//! Build's quota requests are refused with an "authentication required" error, and Grok Build's is
-//! refused with an error whose `data` says its credentials are invalid or expired once a stored
-//! sign-in has expired. A probe runs in the login-shell snapshot with the agent's
+//! failure, and only where the agent's own reply rules out every other way of being signed in: an
+//! API key, a cloud provider or a custom provider also leaves a quota request refused or empty
+//! (see [`claude_signed_out`], [`read_codex`] and [`read_grok`]). Grok Build's quota request is
+//! also refused with an error whose `data` says its credentials are invalid or expired once a
+//! stored sign-in has expired. A probe runs in the login-shell snapshot with the agent's
 //! configuration-directory variable pointed at the account's directory, and with the CLI told to
 //! load as little of the user's setup as it can without losing its sign-in.
 
-use std::cell::Cell;
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -106,7 +106,13 @@ struct Conversation {
     args: &'static [&'static str],
     input: Vec<String>,
     is_reply: fn(&Value) -> bool,
-    read: fn(&Value) -> Result<Reading, ReplyProblem>,
+    /// The part of another reply that [`Conversation::read`] needs along with the reply: who is
+    /// signed in, as each agent says it.
+    companion: fn(&Value) -> Option<Value>,
+    /// Whether the exchange must hold the companion before the reply can be read, which is decided
+    /// by the reply, so that a reading that needs no companion is not held up for one.
+    needs_companion: fn(&Value) -> bool,
+    read: fn(&Value, Option<&Value>) -> Result<Reading, ReplyProblem>,
 }
 
 fn conversation(agent: Agent) -> Conversation {
@@ -143,6 +149,12 @@ fn conversation(agent: Agent) -> Conversation {
                         .and_then(Value::as_str)
                         == Some("r2")
             },
+            companion: |value| {
+                (value.get("type").and_then(Value::as_str) == Some("control_response"))
+                    .then(|| value.pointer("/response/response/account").cloned())
+                    .flatten()
+            },
+            needs_companion: |_| false,
             read: read_claude,
         },
         Agent::Codex => Conversation {
@@ -153,8 +165,11 @@ fn conversation(agent: Agent) -> Conversation {
                         "version": env!("CARGO_PKG_VERSION")}}}),
                 json!({"jsonrpc": "2.0", "method": "initialized"}),
                 json!({"jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read"}),
+                json!({"jsonrpc": "2.0", "id": 3, "method": "account/read", "params": {}}),
             ]),
             is_reply: is_second_response,
+            companion: |value| is_response(value, 3).then(|| value.clone()),
+            needs_companion: |reply| is_codex_auth_refusal(reply),
             read: read_codex,
         },
         Agent::Grok => Conversation {
@@ -165,6 +180,17 @@ fn conversation(agent: Agent) -> Conversation {
                 json!({"jsonrpc": "2.0", "id": 2, "method": "_x.ai/billing", "params": {}}),
             ]),
             is_reply: is_second_response,
+            // Only the field that says which sign-in methods the CLI would use by default.
+            companion: |value| {
+                is_response(value, 1).then(|| {
+                    value
+                        .pointer("/result/_meta")
+                        .filter(|meta| meta.is_object())
+                        .cloned()
+                        .unwrap_or(Value::Null)
+                })
+            },
+            needs_companion: |reply| is_grok_auth_refusal(reply),
             read: read_grok,
         },
     }
@@ -173,7 +199,12 @@ fn conversation(agent: Agent) -> Conversation {
 /// The JSON-RPC response to the request with id 2, as opposed to a notification or a request the
 /// server makes of its own.
 fn is_second_response(value: &Value) -> bool {
-    value.get("id").and_then(Value::as_i64) == Some(2) && value.get("method").is_none()
+    is_response(value, 2)
+}
+
+/// The JSON-RPC response to the request with `id`.
+fn is_response(value: &Value, id: i64) -> bool {
+    value.get("id").and_then(Value::as_i64) == Some(id) && value.get("method").is_none()
 }
 
 /// Runs the probe for `agent` and reads its reply. Blocking; setting `cancel` stops it, which
@@ -202,20 +233,35 @@ pub(super) fn probe(
         stderr_limit: STDERR_LIMIT,
         reach: Reach::Session,
     };
-    let is_reply = conversation.is_reply;
-    // Claude Code's sign-in state is in a reply other than the one that is read.
-    let signed_out = Cell::new(false);
-    let reply = run_exchange(&mut command, &conversation.input, &bounds, cancel, |line| {
+    let (is_reply, companion_of, needs_companion) = (
+        conversation.is_reply,
+        conversation.companion,
+        conversation.needs_companion,
+    );
+    // The reply that is read, and the part of another reply that says who is signed in: the two
+    // arrive in either order.
+    let reply: RefCell<Option<Value>> = RefCell::new(None);
+    let companion: RefCell<Option<Value>> = RefCell::new(None);
+    run_exchange(&mut command, &conversation.input, &bounds, cancel, |line| {
         let Ok(value) = serde_json::from_str::<Value>(line) else {
             return false;
         };
-        if agent == Agent::Claude && claude_signed_out(&value) {
-            signed_out.set(true);
+        if let Some(part) = companion_of(&value) {
+            *companion.borrow_mut() = Some(part);
         }
-        is_reply(&value)
+        if is_reply(&value) {
+            *reply.borrow_mut() = Some(value);
+        }
+        reply
+            .borrow()
+            .as_ref()
+            .is_some_and(|reply| !needs_companion(reply) || companion.borrow().is_some())
     })
     .map_err(|failure| match failure {
-        _ if signed_out.get() => not_signed_in(agent),
+        // Claude Code's sign-in state is in a reply other than the one that is read.
+        _ if agent == Agent::Claude && claude_signed_out(companion.borrow().as_ref()) => {
+            not_signed_in(agent)
+        }
         ExchangeFailure::TimedOut(_) => QuotaUnavailable::new(
             code::TIMED_OUT,
             format!("{} did not report its quota in time", agent.label()),
@@ -229,9 +275,9 @@ pub(super) fn probe(
             }
         }
     })?;
-    let value: Value = serde_json::from_str(&reply).map_err(|_| unreadable(agent))?;
-    (conversation.read)(&value).map_err(|problem| match problem {
-        _ if signed_out.get() => not_signed_in(agent),
+    let value = reply.take().ok_or_else(|| unreadable(agent))?;
+    let companion = companion.take();
+    (conversation.read)(&value, companion.as_ref()).map_err(|problem| match problem {
         ReplyProblem::NotSignedIn => not_signed_in(agent),
         ReplyProblem::Unreadable => unreadable(agent),
         ReplyProblem::NoWindows => QuotaUnavailable::new(
@@ -274,15 +320,22 @@ fn not_signed_in(agent: Agent) -> QuotaUnavailable {
     )
 }
 
-/// Whether `reply` is Claude Code's answer to `initialize` saying it holds no credential at all.
-/// A subscription login replaces the `none` with the subscription's details and an API key adds
-/// its source, so nothing but a missing sign-in reads `none`.
-fn claude_signed_out(reply: &Value) -> bool {
-    reply.get("type").and_then(Value::as_str) == Some("control_response")
-        && reply
-            .pointer("/response/response/account/tokenSource")
-            .and_then(Value::as_str)
-            == Some("none")
+/// Whether `account`, the `account` of Claude Code's answer to `initialize`, says it holds no
+/// credential of any kind. Measured (2.1.311): an empty configuration directory answers
+/// `{"tokenSource":"none","apiProvider":"firstParty"}`, but an API key (from the environment, the
+/// settings' `env` or a key `/login` stored) also leaves `tokenSource` at `none` and adds
+/// `apiKeySource`, a subscription login names its `tokenSource` and a cloud provider (Bedrock,
+/// Vertex, Foundry) names itself as `apiProvider` without any `tokenSource`. So the account is
+/// signed out only where the first-party provider is in use and none of those is there.
+fn claude_signed_out(account: Option<&Value>) -> bool {
+    let Some(account) = account else {
+        return false;
+    };
+    let text = |field: &str| account.get(field).and_then(Value::as_str);
+    matches!(text("apiProvider"), None | Some("firstParty"))
+        && text("tokenSource") == Some("none")
+        && text("apiKeySource").is_none_or(str::is_empty)
+        && account.get("subscriptionType").is_none_or(Value::is_null)
 }
 
 pub(super) fn failed(agent: Agent, detail: &str) -> QuotaUnavailable {
@@ -328,7 +381,11 @@ fn reading(
     })
 }
 
-fn read_claude(reply: &Value) -> Result<Reading, ReplyProblem> {
+fn read_claude(reply: &Value, account: Option<&Value>) -> Result<Reading, ReplyProblem> {
+    // The usage reply of an account without a subscription is the same as a signed-out one's.
+    if claude_signed_out(account) {
+        return Err(ReplyProblem::NotSignedIn);
+    }
     let response = reply.get("response").ok_or(ReplyProblem::Unreadable)?;
     if response.get("subtype").and_then(Value::as_str) == Some("error") {
         let detail = response
@@ -431,15 +488,11 @@ fn claude_fallback(limits: &Value) -> Vec<QuotaWindow> {
     windows
 }
 
-/// A JSON-RPC error response's problem, if the reply is one. Codex ("codex account authentication
-/// required to read rate limits") and Grok Build ("Authentication required", code -32000) both
-/// refuse the quota request of an account that is not signed in with that message; the code alone
-/// is generic for Codex, so it is the message that marks the case. Grok Build refuses an account
-/// whose stored credentials have expired with a bare "Internal error" (code -32603) and the cause
-/// only in `data` ("Billing service error: Invalid or expired credentials (...)"), so `data` is
-/// read too: it is searched for the sign-in marks along with the message, and joined to the
-/// message as the detail of any other error.
-fn rpc_error(reply: &Value) -> Option<ReplyProblem> {
+/// A JSON-RPC error response's detail, if the reply is one: its message joined to its `data`,
+/// since Grok Build refuses an account whose stored credentials have expired with a bare "Internal
+/// error" (code -32603) and the cause only in `data` ("Billing service error: Invalid or expired
+/// credentials (...)").
+fn rpc_error_detail(reply: &Value) -> Option<String> {
     let error = reply.get("error")?;
     let message = error
         .get("message")
@@ -451,24 +504,64 @@ fn rpc_error(reply: &Value) -> Option<ReplyProblem> {
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|data| !data.is_empty() && Some(*data) != message);
-    let detail = match (message, data) {
+    Some(match (message, data) {
         (Some(message), Some(data)) => format!("{message}: {data}"),
         (Some(text), None) | (None, Some(text)) => text.to_string(),
         (None, None) => "the request was refused".to_string(),
-    };
-    let lowered = detail.to_lowercase();
-    if ["authentication required", "invalid or expired credentials"]
-        .iter()
-        .any(|mark| lowered.contains(mark))
-    {
-        return Some(ReplyProblem::NotSignedIn);
-    }
-    Some(ReplyProblem::Error(detail))
+    })
 }
 
-fn read_codex(reply: &Value) -> Result<Reading, ReplyProblem> {
-    if let Some(problem) = rpc_error(reply) {
-        return Err(problem);
+/// Codex refuses `account/rateLimits/read` ("codex account authentication required to read rate
+/// limits", or "chatgpt authentication required ..." for a ChatGPT login) both for a home that is
+/// signed in to nothing and for one that holds an API key or uses another provider, which have no
+/// quota to read. The code alone is generic, so it is the message that marks the refusal; which of
+/// the cases it is comes from `account/read`.
+fn is_codex_auth_refusal(reply: &Value) -> bool {
+    rpc_error_detail(reply).is_some_and(|detail| {
+        detail
+            .to_lowercase()
+            .contains("authentication required to read rate limits")
+    })
+}
+
+/// Grok Build's refusal of the billing request of an account with no credentials (code -32000,
+/// "Authentication required"). Like Codex's it does not say whether another way of signing in is
+/// in use; the `initialize` reply does.
+fn is_grok_auth_refusal(reply: &Value) -> bool {
+    reply.pointer("/error/code").and_then(Value::as_i64) == Some(-32000)
+        && rpc_error_detail(reply)
+            .is_some_and(|detail| detail.to_lowercase().contains("authentication required"))
+}
+
+/// Who a refused quota request leaves the account as, told from `signed_out`: `Some(true)` when
+/// the agent says nothing is signed in, `Some(false)` when it says something else is, and `None`
+/// when what it says cannot be read.
+fn refusal_problem(signed_out: Option<bool>, agent_name: &str) -> ReplyProblem {
+    match signed_out {
+        Some(true) => ReplyProblem::NotSignedIn,
+        Some(false) => ReplyProblem::NoWindows,
+        None => ReplyProblem::Error(format!(
+            "{agent_name} refused the quota request and did not say whether it is signed in"
+        )),
+    }
+}
+
+/// Codex's `account/read` reply as "signed out" (`account: null` with `requiresOpenaiAuth: true`),
+/// "signed in some other way" (an account such as `{"type":"apiKey"}`, or a provider that needs no
+/// OpenAI login), or unreadable, which includes an error reply.
+fn codex_signed_out(account_reply: Option<&Value>) -> Option<bool> {
+    let result = account_reply?.get("result")?;
+    let account = result.get("account")?;
+    let requires_auth = result.get("requiresOpenaiAuth").and_then(Value::as_bool)?;
+    Some(account.is_null() && requires_auth)
+}
+
+fn read_codex(reply: &Value, account_reply: Option<&Value>) -> Result<Reading, ReplyProblem> {
+    if is_codex_auth_refusal(reply) {
+        return Err(refusal_problem(codex_signed_out(account_reply), "Codex"));
+    }
+    if let Some(detail) = rpc_error_detail(reply) {
+        return Err(ReplyProblem::Error(detail));
     }
     let limits = reply
         .pointer("/result/rateLimits")
@@ -505,9 +598,26 @@ fn read_codex(reply: &Value) -> Result<Reading, ReplyProblem> {
     reading(limits.get("planType"), windows, false)
 }
 
-fn read_grok(reply: &Value) -> Result<Reading, ReplyProblem> {
-    if let Some(problem) = rpc_error(reply) {
-        return Err(problem);
+fn read_grok(reply: &Value, initialize_meta: Option<&Value>) -> Result<Reading, ReplyProblem> {
+    if is_grok_auth_refusal(reply) {
+        // Signed out where no sign-in method other than grok.com is the default; an API key in
+        // the environment or the configuration is offered as the default instead.
+        let signed_out = initialize_meta
+            .and_then(|meta| meta.get("defaultAuthMethodId"))
+            .map(Value::is_null);
+        return Err(refusal_problem(signed_out, "Grok Build"));
+    }
+    if let Some(detail) = rpc_error_detail(reply) {
+        return Err(
+            if detail
+                .to_lowercase()
+                .contains("invalid or expired credentials")
+            {
+                ReplyProblem::NotSignedIn
+            } else {
+                ReplyProblem::Error(detail)
+            },
+        );
     }
     let result = reply.get("result").ok_or(ReplyProblem::Unreadable)?;
     let config = result.get("config").ok_or(ReplyProblem::Unreadable)?;
@@ -654,7 +764,7 @@ mod tests {
                         {"display_name": "Fable", "utilization": 3,
                          "resets_at": "2026-10-24T12:00:00Z"},
                         {"display_name": " ", "utilization": 50}]}}}});
-        let reading = read_claude(&reply).expect("readable");
+        let reading = read_claude(&reply, None).expect("readable");
         let summary: Vec<_> = reading
             .windows
             .iter()
@@ -677,17 +787,82 @@ mod tests {
             "subtype": "success", "request_id": "r2", "response": {
                 "subscription_type": null, "rate_limits_available": false,
                 "rate_limits": null}}});
-        assert_eq!(read_claude(&none), Err(ReplyProblem::NoWindows));
+        assert_eq!(read_claude(&none, None), Err(ReplyProblem::NoWindows));
         let refused = json!({"type": "control_response", "response": {
             "subtype": "error", "request_id": "r2", "error": "Not logged in"}});
         assert_eq!(
-            read_claude(&refused),
+            read_claude(&refused, None),
             Err(ReplyProblem::Error("Not logged in".to_string()))
         );
     }
 
+    /// A fake agent that prints, for each input line containing a marker, the reply beside it, in
+    /// the order the markers are listed here.
+    fn replying_agent(
+        dir: &Path,
+        agent: Agent,
+        replies: &[(&str, &Value)],
+    ) -> HashMap<String, String> {
+        let arms: String = replies
+            .iter()
+            .map(|(marker, reply)| format!("*'{marker}'*) echo '{reply}';;\n"))
+            .collect();
+        fake(
+            dir,
+            agent,
+            &format!("while read line; do case \"$line\" in\n{arms}esac; done"),
+        )
+    }
+
+    fn probe_of(agent: Agent, env: &HashMap<String, String>) -> Result<Reading, QuotaUnavailable> {
+        probe(
+            agent,
+            env,
+            None,
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        )
+    }
+
     #[test]
-    fn claude_whose_initialize_reply_holds_no_token_is_not_signed_in() {
+    fn claude_is_signed_out_only_with_no_token_key_subscription_or_other_provider() {
+        // Measured against Claude Code 2.1.311 in scratch homes.
+        let account = |text: &str| serde_json::from_str::<Value>(text).unwrap();
+        for (text, signed_out) in [
+            (r#"{"tokenSource":"none","apiProvider":"firstParty"}"#, true),
+            (r#"{"tokenSource":"none"}"#, true),
+            // An API key, from the environment, the settings' env or `/login`.
+            (
+                r#"{"tokenSource":"none","apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"firstParty"}"#,
+                false,
+            ),
+            (r#"{"apiKeySource":"ANTHROPIC_API_KEY"}"#, false),
+            // A cloud provider names itself and has no token source.
+            (r#"{"apiProvider":"bedrock"}"#, false),
+            (r#"{"apiProvider":"vertex"}"#, false),
+            (r#"{"apiProvider":"foundry"}"#, false),
+            (r#"{"tokenSource":"none","apiProvider":"bedrock"}"#, false),
+            // A subscription login.
+            (
+                r#"{"tokenSource":"claude.ai","apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"firstParty"}"#,
+                false,
+            ),
+            (
+                r#"{"tokenSource":"none","subscriptionType":"max","apiProvider":"firstParty"}"#,
+                false,
+            ),
+        ] {
+            assert_eq!(
+                claude_signed_out(Some(&account(text))),
+                signed_out,
+                "{text}"
+            );
+        }
+        assert!(!claude_signed_out(None));
+    }
+
+    #[test]
+    fn claude_whose_initialize_reply_holds_no_credential_is_not_signed_in() {
         let dir = ScratchDir::new("quota-claude-signed-out");
         let initialize = |account: &str| {
             json!({"type": "control_response", "response": {"subtype": "success",
@@ -698,67 +873,183 @@ mod tests {
         let no_limits = json!({"type": "control_response", "response": {
             "subtype": "success", "request_id": "r2", "response": {
                 "subscription_type": null, "rate_limits_available": false, "rate_limits": null}}});
-        let fake_claude = |initialize: Value| {
-            fake(
+        for (account, expected) in [
+            (
+                r#"{"tokenSource":"none","apiProvider":"firstParty"}"#,
+                code::NOT_SIGNED_IN,
+            ),
+            (
+                r#"{"tokenSource":"none","apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"firstParty"}"#,
+                code::NO_WINDOWS,
+            ),
+            (r#"{"apiProvider":"bedrock"}"#, code::NO_WINDOWS),
+        ] {
+            let init = initialize(account);
+            let env = replying_agent(
                 &dir,
                 Agent::Claude,
-                &format!(
-                    "while read line; do case \"$line\" in\n\
-                     *initialize*) echo '{initialize}';;\n\
-                     *get_usage*) echo '{no_limits}';; esac; done"
-                ),
-            )
-        };
-
-        let env = fake_claude(initialize(
-            r#"{"tokenSource":"none","apiProvider":"firstParty"}"#,
-        ));
-        let signed_out = probe(
-            Agent::Claude,
-            &env,
-            None,
-            crate::test_support::PATIENCE,
-            &AtomicBool::new(false),
-        );
-        assert_eq!(unavailable_code(signed_out), code::NOT_SIGNED_IN);
-
-        let env = fake_claude(initialize(r#"{"apiKeySource":"ANTHROPIC_API_KEY"}"#));
-        let api_key = probe(
-            Agent::Claude,
-            &env,
-            None,
-            crate::test_support::PATIENCE,
-            &AtomicBool::new(false),
-        );
-        assert_eq!(unavailable_code(api_key), code::NO_WINDOWS);
+                &[("initialize", &init), ("get_usage", &no_limits)],
+            );
+            assert_eq!(
+                unavailable_code(probe_of(Agent::Claude, &env)),
+                expected,
+                "{account}"
+            );
+        }
     }
 
     #[test]
-    fn codex_and_grok_refusing_for_want_of_authentication_are_not_signed_in() {
-        let codex = json!({"id": 2, "error": {"code": -32600,
+    fn claude_with_a_subscription_reads_its_windows_whatever_its_account_says() {
+        let dir = ScratchDir::new("quota-claude-subscription");
+        let init = json!({"type": "control_response", "response": {"subtype": "success",
+            "request_id": "r1", "response": {"account": {"tokenSource": "claude.ai",
+                "subscriptionType": "max", "apiProvider": "firstParty"}}}});
+        let usage: Value = serde_json::from_str(CLAUDE_REPLY).unwrap();
+        let env = replying_agent(
+            &dir,
+            Agent::Claude,
+            &[("initialize", &init), ("get_usage", &usage)],
+        );
+        assert!(probe_of(Agent::Claude, &env).is_ok());
+    }
+
+    /// The replies to `account/read` Codex 0.163.0 gave in scratch homes.
+    fn codex_account(account: Value, requires_openai_auth: bool) -> Value {
+        json!({"id": 3, "result": {"account": account,
+            "requiresOpenaiAuth": requires_openai_auth, "workspaceRouting": null}})
+    }
+
+    #[test]
+    fn codex_refusing_its_quota_is_signed_out_only_with_no_account_and_openai_auth_required() {
+        for message in [
+            "codex account authentication required to read rate limits",
+            "chatgpt authentication required to read rate limits",
+        ] {
+            let refusal = json!({"id": 2, "error": {"code": -32600, "message": message}});
+            let read = |account: Option<Value>| read_codex(&refusal, account.as_ref());
+            // Nothing signed in.
+            assert_eq!(
+                read(Some(codex_account(Value::Null, true))),
+                Err(ReplyProblem::NotSignedIn)
+            );
+            // An API key, Amazon Bedrock, and custom or local providers: no quota to read.
+            for other in [
+                codex_account(json!({"type": "apiKey"}), true),
+                codex_account(
+                    json!({"type": "amazonBedrock", "usesCodexManagedCredentials": false}),
+                    false,
+                ),
+                codex_account(Value::Null, false),
+            ] {
+                assert_eq!(read(Some(other)), Err(ReplyProblem::NoWindows));
+            }
+            // `account/read` failing or missing leaves it unknown, which is a failed reading.
+            for unknown in [
+                Some(json!({"id": 3, "error": {"code": -32603, "message": "unauthorized (401)"}})),
+                Some(json!({"id": 3, "result": {}})),
+                None,
+            ] {
+                assert!(matches!(read(unknown), Err(ReplyProblem::Error(_))));
+            }
+        }
+        // Any other error is still just an error.
+        let other = json!({"id": 2, "error": {"code": -32603,
+            "message": "failed to fetch codex rate limits: 401 Unauthorized"}});
+        assert!(matches!(
+            read_codex(&other, Some(&codex_account(Value::Null, true))),
+            Err(ReplyProblem::Error(_))
+        ));
+    }
+
+    #[test]
+    fn codex_probe_waits_for_account_read_only_when_its_quota_is_refused() {
+        let refusal = json!({"id": 2, "error": {"code": -32600,
             "message": "codex account authentication required to read rate limits"}});
-        assert_eq!(read_codex(&codex), Err(ReplyProblem::NotSignedIn));
-        let grok = json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32000,
+        let dir = ScratchDir::new("quota-codex-signed-out");
+        for (account, expected) in [
+            (codex_account(Value::Null, true), code::NOT_SIGNED_IN),
+            (
+                codex_account(json!({"type": "apiKey"}), true),
+                code::NO_WINDOWS,
+            ),
+            (codex_account(Value::Null, false), code::NO_WINDOWS),
+        ] {
+            let env = replying_agent(
+                &dir,
+                Agent::Codex,
+                &[
+                    ("account/rateLimits/read", &refusal),
+                    ("account/read", &account),
+                ],
+            );
+            assert_eq!(unavailable_code(probe_of(Agent::Codex, &env)), expected);
+        }
+        // A reading that arrives is returned without `account/read` ever answering.
+        let readings: Value = serde_json::from_str(CODEX_REPLY).unwrap();
+        let env = replying_agent(
+            &dir,
+            Agent::Codex,
+            &[("account/rateLimits/read", &readings)],
+        );
+        assert!(probe_of(Agent::Codex, &env).is_ok());
+    }
+
+    #[test]
+    fn grok_refusing_its_billing_is_signed_out_only_without_another_default_sign_in() {
+        let refusal = json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32000,
             "message": "Authentication required",
             "data": "Authentication required to fetch billing data"}});
-        assert_eq!(read_grok(&grok), Err(ReplyProblem::NotSignedIn));
+        // `_meta` of Grok Build 1.0.70's `initialize` reply.
+        let signed_out = json!({"defaultAuthMethodId": null});
+        let api_key = json!({"defaultAuthMethodId": "xai.api_key"});
+        assert_eq!(
+            read_grok(&refusal, Some(&signed_out)),
+            Err(ReplyProblem::NotSignedIn)
+        );
+        assert_eq!(
+            read_grok(&refusal, Some(&api_key)),
+            Err(ReplyProblem::NoWindows)
+        );
+        // An `initialize` reply that cannot be read leaves it unknown.
+        for unknown in [None, Some(Value::Null), Some(json!({}))] {
+            assert!(matches!(
+                read_grok(&refusal, unknown.as_ref()),
+                Err(ReplyProblem::Error(_))
+            ));
+        }
         let expired = json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32603,
             "message": "Internal error",
             "data": "Billing service error: Invalid or expired credentials (auth_kind=bearer, \
                      x_xai_token_auth=xai-grok-cli, upstream=PermissionDenied, \
                      reason=no auth context)"}});
-        assert_eq!(read_grok(&expired), Err(ReplyProblem::NotSignedIn));
+        assert_eq!(read_grok(&expired, None), Err(ReplyProblem::NotSignedIn));
+    }
 
-        let dir = ScratchDir::new("quota-grok-signed-out");
-        let env = answering_agent(&dir, Agent::Grok, &format!("{grok}\n"));
-        let result = probe(
-            Agent::Grok,
-            &env,
-            None,
-            crate::test_support::PATIENCE,
-            &AtomicBool::new(false),
-        );
-        assert_eq!(unavailable_code(result), code::NOT_SIGNED_IN);
+    #[test]
+    fn grok_probe_tells_a_refused_account_by_its_initialize_reply_in_either_order() {
+        let refusal = json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32000,
+            "message": "Authentication required",
+            "data": "Authentication required to fetch billing data"}});
+        let initialize = |default: Value| {
+            json!({"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": 1,
+                "_meta": {"defaultAuthMethodId": default}}})
+        };
+        let dir = ScratchDir::new("quota-grok-refused");
+        for (default, expected) in [
+            (Value::Null, code::NOT_SIGNED_IN),
+            (json!("xai.api_key"), code::NO_WINDOWS),
+        ] {
+            let init = initialize(default);
+            // Grok Build has been seen to refuse billing before it answers `initialize`, and the
+            // other way round.
+            for replies in [
+                [("_x.ai/billing", &refusal), ("initialize", &init)],
+                [("initialize", &init), ("_x.ai/billing", &refusal)],
+            ] {
+                let env = replying_agent(&dir, Agent::Grok, &replies);
+                assert_eq!(unavailable_code(probe_of(Agent::Grok, &env)), expected);
+            }
+        }
     }
 
     #[test]
@@ -804,10 +1095,12 @@ mod tests {
             .map(|line| serde_json::from_str::<Value>(line).unwrap())
             .map(|line| line["method"].as_str().unwrap().to_string())
             .collect();
+        // The reply ends the run, so the fake may stop before it has logged the last request.
         assert_eq!(
-            methods,
+            methods[..3],
             ["initialize", "initialized", "account/rateLimits/read"]
         );
+        assert!(methods.get(3).is_none_or(|method| method == "account/read"));
     }
 
     #[test]
@@ -816,12 +1109,15 @@ mod tests {
             "primary": {"usedPercent": 10, "windowDurationMins": 10080},
             "secondary": {"usedPercent": 20},
             "planType": "free"}}});
-        let reading = read_codex(&reply).expect("readable");
+        let reading = read_codex(&reply, None).expect("readable");
         assert_eq!(reading.windows[0].kind, QuotaWindowKind::Weekly);
         assert_eq!(reading.windows[1].kind, QuotaWindowKind::Weekly);
         assert_eq!(reading.windows[1].window_minutes, None);
         assert_eq!(
-            read_codex(&json!({"id": 2, "error": {"code": -32600, "message": "not signed in"}})),
+            read_codex(
+                &json!({"id": 2, "error": {"code": -32600, "message": "not signed in"}}),
+                None
+            ),
             Err(ReplyProblem::Error("not signed in".to_string()))
         );
     }
@@ -831,15 +1127,19 @@ mod tests {
         assert_eq!(
             read_grok(
                 &json!({"id": 2, "error": {"code": -32603, "message": "Internal error",
-                "data": "Billing service error: upstream unavailable"}})
+                "data": "Billing service error: upstream unavailable"}}),
+                None
             ),
             Err(ReplyProblem::Error(
                 "Internal error: Billing service error: upstream unavailable".to_string()
             ))
         );
         assert_eq!(
-            read_grok(&json!({"id": 2, "error": {"message": "Internal error",
-                "data": "Internal error"}})),
+            read_grok(
+                &json!({"id": 2, "error": {"message": "Internal error",
+                "data": "Internal error"}}),
+                None
+            ),
             Err(ReplyProblem::Error("Internal error".to_string()))
         );
     }
@@ -884,7 +1184,7 @@ mod tests {
     fn a_grok_pool_without_a_period_still_reads() {
         let reply = json!({"jsonrpc": "2.0", "id": 2, "result": {
             "config": {"creditUsagePercent": 12.5}}});
-        let reading = read_grok(&reply).expect("readable");
+        let reading = read_grok(&reply, None).expect("readable");
         assert_eq!(reading.plan, None);
         assert_eq!(reading.windows[0].resets_at, None);
         assert_eq!(reading.windows[0].window_minutes, None);

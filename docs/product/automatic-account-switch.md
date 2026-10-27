@@ -33,7 +33,11 @@ error say, switches nothing and never shows the session as switching.
 **Which sessions.** A session is switched only while it has a process that is *working* or *awaiting instructions*,
 nothing is launching, resuming or switching it, it is still on the account whose limit stopped the turn, and no change
 of the sharing of the default configuration runs on its account or on the target (see "When a change is carried out"
-in `docs/product/sharing-the-default-configuration.md`). A session waiting for the user, by whatever route — a
+in `docs/product/sharing-the-default-configuration.md`). A turn that stops on the limit while a launch, a resume or a
+switch still holds the session — such as the turn a switch continues, which can stop within the few seconds the
+switch keeps its hold after the relaunch — is not dropped: it waits up to **15 seconds** for that hold to end and is
+judged then. It is dropped if the session was moved to another account during that wait, and the session is left
+alone if it is still held when the wait is over. A session waiting for the user, by whatever route — a
 permission prompt, a question, a trust confirmation, a dialog of its agent, a request of its own — is left alone, since
 switching it would end what it waits at. The one exception is the dialog Grok Build shows when its turn stops on the
 usage limit: ending that dialog is the point of the switch, so it does not count as waiting for the user here. A
@@ -82,6 +86,9 @@ for its next instruction.
   copied, the relaunch was refused or its process did not come up — Octoboard brings the session back up on the
   account it had, without a prompt, and tells nobody. When another operation holds the session at that moment (a
   handover of its branches, a change of its owner), it waits up to **15 seconds** for it to finish before giving up.
+  The restore brings the session back only while it is on the account it had or on the one the failed switch was
+  moving it to; one somebody else moved to a third account meanwhile is left as they left it, neither moved back nor
+  relaunched, and nobody is told.
 - **Only when that restore fails too** is anyone told. The session is left *interrupted* on its own account, for the
   user or its owner to resume, and there is nothing left to retry:
   - the user gets an error alert titled "Could not switch account", whose body says that the account reached its
@@ -90,7 +97,9 @@ for its next instruction.
     suggests trying again. Where the conversation could not be copied and an older item could not be put back (see
     "Carrying the conversation" in `docs/product/switching-session-accounts.md`), it advises copying that item out of
     the folder the reason names before it is cleared; where the cause is one the window recognises from what the
-    system said, such as a full disk, it gives that remedy, without the retry. A cause the window has no words for is
+    system said, such as a full disk or denied access, it gives that remedy without any step that retries — for denied
+    access, to check the folder's permissions and that its disk is writable and to grant Octoboard access in the
+    system's privacy settings if needed, without choosing another folder. A cause the window has no words for is
     an unexpected failure, with **Report issue** (see "Recovery and unexpected errors" in
     `docs/product/error-alerts.md`). The daemon sends it as a `session_notice` with the code
     `account_switch_automatically_failed`, carrying the failure's own code and params;

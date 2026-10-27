@@ -81,6 +81,9 @@ running is not told, then or later.
   whether or not the session has reported in it, and once for a wait before the session's first turn; the next turn
   tells it again. Nothing is said when the session is no longer shown as waiting by the time the notice would be
   written. No report is synthesised for a turn while the session waits, so this notice is how the owner learns of it.
+  Grok Build's usage-limit screen is the exception: the session stopped on its limit with nothing open for the user to
+  answer, so its owner is not told, though the session still shows as *waiting for the user* (see "What the statuses
+  are derived from" in `docs/product/session-statuses.md`).
 - **Octoboard switched a session's account by itself**, or tried to and could not bring it back up: see "When the
   switch succeeds" and "When the switch fails" in `docs/product/automatic-account-switch.md`.
 

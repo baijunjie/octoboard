@@ -4660,7 +4660,9 @@ pub(crate) struct SwitchOnlyIf<'a> {
     /// The session's last turn must have stopped on the plan's usage limit, as its conversation
     /// record says (`switch_continue::stopped_on_usage_limit`), read once more under the claim
     /// before the process is ended. A caller that may need to wait for the record to say so does
-    /// it ahead of the claim ([`wait_for_usage_limit`]).
+    /// it ahead of the claim ([`wait_for_usage_limit`]). Also marks the switch as one made for the
+    /// limit: once the process has come up, the account left is noted for the session
+    /// (`AppState::note_left_for_limit`), under the claim.
     pub usage_limited: bool,
     /// Octoboard's own switch: the process it launches is watched under the claim, so the exit
     /// watcher does not tell the owner that it ended on its own (`LaunchClaim::watches_launch`).
@@ -4897,6 +4899,10 @@ pub(crate) async fn switch_session_account_if(
                 &[("session", id)],
             ));
         }
+        if only_if.usage_limited {
+            // Noted under the claim, so that a turn waiting for it to end never picks this account.
+            state.note_left_for_limit(id, before.account_id.as_deref());
+        }
         Ok(carry_on)
     };
     after_stop.await.map_err(|error| SwitchFailed {
@@ -4962,10 +4968,13 @@ pub(crate) async fn wait_for_usage_limit(
 /// limit would stop it again. Octoboard's own switch makes this, so that its failure leaves the
 /// session as it was (see `crate::auto_switch`). Refused, with nothing launched, when the session
 /// is running or being started by then (somebody brought it back meanwhile) or archived; fails
-/// when the process cannot be started or does not stay up.
+/// when the process cannot be started or does not stay up. `target` is the account the failed
+/// switch was to move it to (`None` the default account): a session found on neither that nor
+/// `before`'s account was moved by somebody else meanwhile, and is left as they left it.
 pub(crate) async fn restore_after_failed_switch(
     state: &Arc<AppState>,
     before: &Session,
+    target: Option<&str>,
     launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
 ) -> Result<()> {
     let id = before.id.as_str();
@@ -4993,8 +5002,11 @@ pub(crate) async fn restore_after_failed_switch(
             &[("session", id)],
         ));
     }
-    // A revert that failed on the way is tried again.
     if now.account_id != before.account_id {
+        if now.account_id.as_deref() != target {
+            return Ok(());
+        }
+        // A revert that failed on the way is tried again.
         put_back_on_account(state, before);
     }
     relaunch_session_with(state, &claim, id, None, false, None, None, launch).await?;

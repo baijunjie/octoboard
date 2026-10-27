@@ -294,6 +294,13 @@ pub fn watch(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     tokio::spawn(async move { poll(state, live).await });
 }
 
+/// Whether `dialog` is the session waiting for the user, which its owner is told of. A usage-limit
+/// dialog is not: the session stopped on the limit, and neither a permission nor a question is
+/// open for the user to answer.
+fn is_a_wait_for_the_user(dialog: &Dialog) -> bool {
+    !dialog.is_usage_limit()
+}
+
 async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
     let mut output = 0;
     let mut acted_at = 0;
@@ -312,13 +319,22 @@ async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
             continue;
         }
         acted_at = now.changes;
-        if let Ok(session) = state.session_record(&live.id) {
-            state.publish_session(&session);
-            if now.current.is_some() {
-                crate::reporting::spawn_tell_owner_it_waits(&state, &live.id);
-            } else {
-                state.spawn_flush_outbox(&live.id, state.agent_status(&session));
+        react_to_dialog(&state, &live.id, now.current);
+    }
+}
+
+/// What clients and the owner are told once the screen of the session `id` shows `current` after
+/// showing something else: the session is published, and its owner is told it waits for the user,
+/// or what was queued is flushed when the dialog is gone.
+pub(crate) fn react_to_dialog(state: &Arc<AppState>, id: &str, current: Option<Dialog>) {
+    if let Ok(session) = state.session_record(id) {
+        state.publish_session(&session);
+        match current {
+            None => state.spawn_flush_outbox(id, state.agent_status(&session)),
+            Some(dialog) if is_a_wait_for_the_user(&dialog) => {
+                crate::reporting::spawn_tell_owner_it_waits(state, id)
             }
+            Some(_) => {}
         }
     }
 }
@@ -477,6 +493,15 @@ mod tests {
         assert_eq!(up.after(launch).changes, 2);
         assert_eq!(up.after(None).changes, 2);
         assert_eq!(Sighting::default().after(None).changes, 0);
+    }
+
+    /// A usage-limit dialog is no wait for the user, so its owner is not told the session waits.
+    #[test]
+    fn only_a_dialog_that_is_not_the_usage_limit_is_a_wait_for_the_user() {
+        let limit = recognise(Agent::Grok, GROK_USAGE_LIMIT).unwrap();
+        let resume = recognise(Agent::Claude, RESUME_IDLE).unwrap();
+        assert!(!is_a_wait_for_the_user(&limit));
+        assert!(is_a_wait_for_the_user(&resume));
     }
 
     /// Screens as Codex 0.162.1 draws them: padded rows, a path wrapped inside an option, a

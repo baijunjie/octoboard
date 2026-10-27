@@ -1130,10 +1130,21 @@ exist and one created empty:
   answer as for an empty one. The probe's `get_usage` succeeds, with
   `{"subscription_type":null,"rate_limits_available":false,"rate_limits":null,"behaviors":null,"session":{…}}`. That is
   presumably what an account without a subscription answers as well (not measured), so it does not say "not signed in"
-  alone. The `initialize` reply in the same exchange does: its `account` is
-  `{"tokenSource":"none","apiProvider":"firstParty"}`. Read from the executable, not measured against a signed-in
-  directory: a subscription login replaces `tokenSource` with `subscriptionType` (with `email` and `organization`), and
-  an API key adds `apiKeySource`. `claude auth status` (JSON by default) prints on stdout
+  alone. The `initialize` reply in the same exchange says more: its `account` is
+  `{"tokenSource":"none","apiProvider":"firstParty"}`. But `tokenSource: "none"` alone is not a sign-out. Measured on
+  Claude Code 2.1.311, in scratch homes with fake keys and fake credential files (nothing was sent to a real account),
+  `account` was: for `ANTHROPIC_API_KEY` in the environment, in the settings' `env`, or a key stored by `/login`,
+  `{"tokenSource":"none","apiKeySource":"ANTHROPIC_API_KEY"` (or `"/login managed key"`)`,"apiProvider":"firstParty"}`;
+  for an `apiKeyHelper`, `ANTHROPIC_AUTH_TOKEN` or `CLAUDE_CODE_OAUTH_TOKEN`, `tokenSource` is `"apiKeyHelper"`,
+  `"ANTHROPIC_AUTH_TOKEN"` or `"CLAUDE_CODE_OAUTH_TOKEN"`; for Bedrock, Vertex or Foundry, just `{"apiProvider":"bedrock"}`
+  (`"vertex"`, `"foundry"`), with no `tokenSource`; for a credentials file holding a subscription,
+  `{"subscriptionType":"Claude Max","apiProvider":"firstParty"}`; and for a subscription together with a key,
+  `{"tokenSource":"claude.ai","apiKeySource":"ANTHROPIC_API_KEY","apiProvider":"firstParty"}`. A custom
+  `ANTHROPIC_BASE_URL` alone left it at `none`. Every one of them answered `get_usage` with `rate_limits: null` like the
+  empty home (the fake subscription's too, as nothing could reach the API), so the usage reply cannot tell them apart. So not signed in means: `apiProvider`
+  is `"firstParty"` (or absent), `tokenSource` is `"none"`, `apiKeySource` is absent or empty, and `subscriptionType` is
+  absent. **Not measurable here:** the key a Console login keeps in the macOS Keychain (the `/login managed key` case was
+  a key file in the scratch home). `claude auth status` (JSON by default) prints on stdout
   `{"loggedIn":false,"authMethod":"none","apiProvider":"firstParty",…,"configDirectory":"<dir>"}` and exits **1**;
   `--text` prints `Not logged in. Run claude auth login to authenticate.`, exit 1. The probe and `claude auth status`
   each answered in under half a second. The probe also writes `Ignoring <n> permissions.allow entries from
@@ -1145,9 +1156,20 @@ exist and one created empty:
   exist`, after a `WARNING: proceeding, even though we could not create PATH aliases: …` line naming the same path. It
   does not create the directory. Empty, it starts, and `account/rateLimits/read` answers
   `{"error":{"code":-32600,"message":"codex account authentication required to read rate limits"},"id":2}`. The code
-  alone is JSON-RPC's generic invalid request, so it is the message that marks the case. `account/read` (params `{}`) is
-  the structured answer: `{"result":{"account":null,"requiresOpenaiAuth":true,"workspaceRouting":null}}`, where a
-  signed-in home has `account` set to `{"type":"chatgpt","email","planType"}` or `{"type":"apiKey"}` (per the schema).
+  alone is JSON-RPC's generic invalid request, and the message is not specific to a home signed in to nothing: measured
+  on Codex 0.163.0 in scratch homes with fake keys, the same refusal (also as `chatgpt authentication required to read
+  rate limits`) came for a home holding an API key in `auth.json`, for `OPENAI_API_KEY` or `CODEX_API_KEY` in the
+  environment, for a custom model provider, for Azure and for a local Ollama provider, and for Amazon Bedrock. None of
+  those has a quota to read. `account/read` (params `{}`, sent after `account/rateLimits/read` as id 3) is the
+  structured answer, and it tells them apart: `{"result":{"account":null,"requiresOpenaiAuth":true,"workspaceRouting":null}}`
+  for the empty home, `{"account":{"type":"apiKey"},"requiresOpenaiAuth":true}` for an `auth.json` key,
+  `{"account":{"type":"amazonBedrock","usesCodexManagedCredentials":false},"requiresOpenaiAuth":false}` for Amazon
+  Bedrock, and `{"account":null,"requiresOpenaiAuth":false}` for the custom, Azure and Ollama providers. The
+  environment variables `OPENAI_API_KEY` and `CODEX_API_KEY` alone left `account` `null` with `requiresOpenaiAuth`
+  `true`, as the empty home does, so a home signed in that way reads as signed out. A live ChatGPT login is documented
+  by the schema as `{"type":"chatgpt","email","planType"}`; **not measurable here** (no real login): what
+  `account/read` answers for one, and for a fake ChatGPT token it answered with an error (`workspace routing discovery
+  unauthorized (401)`), so an error from `account/read` is not a sign-out.
   `codex login status` prints `Not logged in` on stderr and exits 1 for the empty home, and `Error loading
   configuration: CODEX_HOME points to …` with exit 1 for the missing one. The empty home is not left empty: the app
   server writes its databases, `skills/` and `installation_id` into it.
@@ -1158,19 +1180,33 @@ exist and one created empty:
   `{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"Authentication required","data":"Authentication required to
   fetch billing data"}}`. The `initialize` reply in a home with no login has `agentCapabilities.auth` `{}`,
   `authMethods` `[{"id":"grok.com","name":"Grok","description":"Sign in with Grok"}]` and `_meta.defaultAuthMethodId`
-  `null`. What those fields hold once signed in was not measured, so they are not yet a signal. A home whose stored
-  sign-in has expired (grok 1.0.62) answers `_x.ai/billing` with a generic error and the cause only in `data`:
+  `null`. Billing is refused the same way, `-32000` `Authentication required`, in every home measured, so it cannot
+  say a key is in use; the `initialize` reply can, but only for a key Grok Build accepts. On Grok Build 1.0.70 a fake
+  key in `config.toml` (`api_key`) and fake `auth.json` files holding an `xai::api_key` entry in most shapes left
+  `_meta.defaultAuthMethodId` `null` with `grok.com` the only method. It became `"xai.api_key"` (with `authMethods`
+  offering `{"id":"xai.api_key","name":"xai.api_key","description":"XAI_API_KEY or api_key/env_key in config.toml"}`
+  before `grok.com`) for an `auth.json` with `{"xai::api_key":{"key":…,"auth_mode":"api_key","create_time":…,"user_id":…}}`
+  and for runs against a local mock standing in for the x.ai key check (`GET /v1/api-key`); billing was still refused with
+  `-32000` in all of them. **Not measurable here:** a real API key's billing answer, and what a real `grok.com` login puts
+  in these fields. The two replies come in either order (billing was refused before `initialize` was answered).
+  A home whose stored sign-in has expired (grok 1.0.62) answers `_x.ai/billing` with a generic error and the cause only in `data`:
   `{"jsonrpc":"2.0","id":2,"error":{"code":-32603,"message":"Internal error","data":"Billing service error: Invalid or
   expired credentials (auth_kind=bearer, x_xai_token_auth=xai-grok-cli, upstream=PermissionDenied, reason=no auth
   context)"}}`.
 
 So "the directory is missing" can only be told reliably by looking for the directory before the probe runs. Codex is the
 only one that refuses a missing directory; Claude Code and Grok Build quietly recreate it, empty, and then report it as
-not signed in. "Not signed in" has a stable marker for each: Claude Code's `account.tokenSource` of `"none"` in the
-`initialize` reply, or `claude auth status` exiting 1 with `loggedIn: false`; Codex's `account/read` with `account:
-null`, or the `authentication required` message; Grok Build's `-32000` `Authentication required` error, or for expired
-credentials the `-32603` error whose `data` says `Invalid or expired credentials`. Each of these markers comes from one
-build, so a reply that matches none of them should still be shown as a plain failure.
+not signed in. "Not signed in" has a marker for each, but the quota request alone is not it, because an API key, a cloud
+provider or a custom provider is refused or empty the same way and works: Claude Code's `initialize` `account` with
+`apiProvider` `firstParty` (or absent), `tokenSource` `"none"`, no `apiKeySource` and no `subscriptionType`, or
+`claude auth status` exiting 1 with `loggedIn: false`; Codex's `account/rateLimits/read` refused as above **and**
+`account/read` answering `account: null` with `requiresOpenaiAuth: true`; Grok Build's `-32000` `Authentication
+required` billing refusal **and** an `initialize` `_meta.defaultAuthMethodId` of `null`, or for expired credentials the
+`-32603` error whose `data` says `Invalid or expired credentials`. Where Codex or Grok Build refuses and the other reply
+shows another sign-in, the account has no quota; where `account/read` fails or `initialize` carries no
+`defaultAuthMethodId`, it is unknown and shown as a failed reading. These markers were measured on Claude Code
+**2.1.311**, Codex **0.163.0** and Grok Build **1.0.70**, against scratch homes with fake keys, so a reply that matches
+none of them should still be shown as a plain failure.
 
 ## Sharing a session directory between accounts
 
@@ -1700,9 +1736,11 @@ Write JSON-RPC lines (the server's own lines carry no `jsonrpc` member):
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"octoboard","version":"0.1.0"}}}
 {"jsonrpc":"2.0","method":"initialized"}
 {"jsonrpc":"2.0","id":2,"method":"account/rateLimits/read"}
+{"jsonrpc":"2.0","id":3,"method":"account/read","params":{}}
 ```
 
-Notifications (`remoteControl/status/changed`, `account/updated`) arrive between the replies and are passed over. The
+The `account/read` request (id 3) is read only where `account/rateLimits/read` is refused with `authentication required
+to read rate limits` (see "Before a login, on the quota path"). Notifications (`remoteControl/status/changed`, `account/updated`) arrive between the replies and are passed over. The
 reply to id 2 is `{"id":2,"result":{...}}`, or `{"id":2,"error":{"code","message"}}`. `result.rateLimits` is
 `{limitId:"codex", primary, secondary, credits, planType, ...}` where `primary` and `secondary` are
 `{usedPercent, windowDurationMins, resetsAt}` — `300` and `10080` minutes on the measured account, `resetsAt` in

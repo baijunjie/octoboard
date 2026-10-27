@@ -13,7 +13,7 @@ export type ErrorRecovery =
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
-  | "diskSpaceNoRetry"
+  | "diskSpaceNoRetry" | "accessNoRetry"
   | "none";
 
 const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
@@ -135,9 +135,9 @@ const PATH_LINK_REFUSED_RECOVERY: Record<PathLinkRefusedCause, ErrorRecovery> = 
 };
 
 /** The remedy for a failure of an operation with nothing left to retry, a session that could not be brought back up:
- * the recovery's variant without "retry the operation". */
+ * the recovery's variant without a step that retries it ("retry the operation", "choose another accessible folder"). */
 function withoutRetry(recovery: ErrorRecovery | undefined): ErrorRecovery | undefined {
-  return recovery === "diskSpace" ? "diskSpaceNoRetry" : recovery;
+  return recovery === "diskSpace" ? "diskSpaceNoRetry" : recovery === "access" ? "accessNoRetry" : recovery;
 }
 
 /** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */

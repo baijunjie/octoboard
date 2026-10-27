@@ -142,6 +142,11 @@ quota submenus draw such an account's bars in the same grey, `--meter-used-up-fi
 while the account's heading says "Limit reached" in words. A veil over the row is not used for that state: it would take
 its text below AA.
 
+A disabled account is left out of that panel and of the menu bar icon's quota submenus, except the one the selected
+session is running on. That row is drawn like any other, its name, meters and bars unmuted, since the account is in use,
+and a neutral "Disabled" badge after its plan says in words why it is listed; the submenu's heading for it ends in
+"Disabled" after its quota state. Neither carries a colour of its own for the state.
+
 A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the
 button's own is covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in
 `packages/ui/src/components/inactiveVeil.ts`), until the mouse enters the panel or the panel closes. The veiled text

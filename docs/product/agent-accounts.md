@@ -226,12 +226,12 @@ Every account, the default account included, has a **Disable** switch, off to be
 and, as the **Disable account** row, last in its account settings dialog. Turning the switch on turns the account off.
 Its accessible name is "Disable" (or "Disable account") and the account. The column heading's "?" help tip says,
 whatever the switches' positions, what being off means: the account no longer appears in account choices or usage
-displays and new sessions will not use it, while running sessions keep running. The **Disable account** row's line
-follows its switch: while it is off, that once it is on the account no longer appears in account choices or usage
-displays and new sessions won't use it; while it is on, that the account is disabled, with the same consequences; both
-add that running sessions keep running. The account
-stays out of use for new work until the user turns the switch off again: nothing turns an account back on by itself,
-after a time or otherwise.
+displays, except while a running session still uses it, and new sessions will not use it, while running sessions keep
+running. The **Disable account** row's line follows its switch: while it is off, that once it is on the account no
+longer appears in account choices or usage displays, except while a running session still uses it; while it is on,
+that the account is disabled, with the same consequences; both add that new sessions will not use it and running
+sessions keep running. The account stays out of use for new work until the user turns the switch off again: nothing
+turns an account back on by itself, after a time or otherwise.
 
 While an account is turned off:
 
@@ -266,8 +266,9 @@ While an account is turned off:
   and `get_account_quotas` does not list it, the caller's own account included (see "Reading quotas from a session"
   in `docs/product/account-quotas.md`). The one exception is the selected session's own account while that session is
   running on it — starting, working, waiting for the user or awaiting instructions, not interrupted or archived: the
-  rail's indicator and the menu bar icon still show its quota, and the quota panel still lists it, marked
-  **Disabled**.
+  rail's indicator and the menu bar icon still show its quota, and the quota panel and the menu bar icon's quota
+  submenu still list it, marked **Disabled**; when it is also the current console's account, that submenu's opening
+  line draws its bars.
 
 The sessions already running on it are not affected, and resuming, restarting or reopening a session on it is never
 refused for this. Its quota goes on being read in the background. Its row in the accounts table looks like any other,

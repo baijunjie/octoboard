@@ -2,7 +2,7 @@ import type { Translate } from "../i18n/catalog";
 import type { StatusItemEntry, StatusItemMenu, StatusItemSection } from "../platform";
 import type { Console, Project, Session } from "../protocol";
 import { remainingPercentAt } from "../quota/quotaFormat";
-import { accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
+import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionStatusKind, sessionWithLocation, statusLabel, type StatusKind } from "../sessionLabel";
 import { sessionsInTreeOrder, STATUS_RANK } from "../sidebar/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
@@ -67,7 +67,7 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
       quota_label: accountQuotaLabel(t, selected.agent, accountName, bar, quota.defaultAccountNames, quota.now),
     } : {}),
     sections: sections.length > 0 ? sections : [{ heading: t("statusItem.noSessions"), items: [] }],
-    submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? "")),
+    submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? ""), accountInUse(selected)),
     open: t("statusItem.open"),
     quit: t("menu.quit"),
     // Taken from the listed sessions, so the dot never shows over a menu with no waiting section.
