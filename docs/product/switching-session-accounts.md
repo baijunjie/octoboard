@@ -69,7 +69,7 @@ The failures of one confirmed set are reported together, in one error alert (see
   that code, a login shell environment that could not be read in time included; the other failures with a known
   remedy share one sentence per kind of remedy. A conversation that could not be moved has the remedy of its cause,
   or two of them (see "When a switch fails" below), and counts as unexpected when its cause is none the window knows.
-- **When any failure is unexpected**, the alert's own paragraph asking for a screenshot and an issue report follows,
+- **When any failure is unexpected**, the alert's own paragraph asking for an issue report follows,
   with **Report issue** in the footer (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 - **Error details** holds, under a heading naming each session, what says more than its row: the system's own text
   of a conversation that could not be moved; for a login shell environment that could not be read in time, the

@@ -57,7 +57,7 @@ it("keeps a file read's own remedy over the writing remedy an OS signature names
   expect(classifyError(new ActionableError("Could not save the file", "fileWrite", { cause }))).toEqual({ kind: "actionable", recovery: "access" });
 });
 
-it.each(["issueLink", "openExternal"] as const)("keeps %s recovery specific to opening the external destination", (recovery) => {
+it.each(["issueAddress", "openExternal"] as const)("keeps %s recovery specific to opening the external destination", (recovery) => {
   const cause = Object.assign(new Error("opener denied"), { code: "EACCES" });
   expect(classifyError(new ActionableError("Could not open", recovery, { cause }))).toEqual({ kind: "actionable", recovery });
   expect(classifyError(cause, recovery)).toEqual({ kind: "actionable", recovery });

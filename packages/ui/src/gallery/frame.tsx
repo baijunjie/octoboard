@@ -80,21 +80,23 @@ let daemonExited: ((detail: string) => void) | undefined;
  * `desktopApp`, the native menu bar (which no menu is drawn for), the macOS privacy grants stubbed
  * from the scenario's `macosPermissions` (its request rejected when it gives a `macosRequestError`,
  * its System Settings pane refused when it gives a `macosSettingsOpenError`), there being no other
- * way to look at those rows than to really change a system setting, and `backgroundRun` for a
- * scenario that says so (the Settings switch), the macOS app's system-managed `notifications` for
- * one that says `systemNotifications` (nothing is shown or opened; the pane refused when it gives
- * an `openError`), the clipboard taken away for a scenario that says so, and the configuration-file
- * capability stubbed from the scenario's `configuration` (absent where it says the platform has
- * none) so that no download or file picker is raised from a capture, and the exit capability for a
- * scenario that says `quitRequested`, whose quit request is raised once its steps have run and
- * whose confirmation ends nothing (or fails with the text of its `exitFailure`), the daemon exiting
- * by itself for a scenario that says `daemonExited`, and the updater for a scenario that has one
- * (`updater`), with that same exit capability, since a restart goes through it. Nothing else
- * native. */
+ * way to look at those rows than to really change a system setting, a link opener that refuses with
+ * the error of a scenario's `externalLinkError` (otherwise the browser's own opener stands, which
+ * opens a new tab), and `backgroundRun` for a scenario that says so (the Settings switch), the
+ * macOS app's system-managed `notifications` for one that says `systemNotifications` (nothing is
+ * shown or opened; the pane refused when it gives an `openError`), the clipboard taken away for a
+ * scenario that says so, and the configuration-file capability stubbed from the scenario's
+ * `configuration` (absent where it says the platform has none) so that no download or file picker
+ * is raised from a capture, and the exit capability for a scenario that says `quitRequested`, whose
+ * quit request is raised once its steps have run and whose confirmation ends nothing (or fails with
+ * the text of its `exitFailure`), the daemon exiting by itself for a scenario that says
+ * `daemonExited`, and the updater for a scenario that has one (`updater`), with that same exit
+ * capability, since a restart goes through it. Nothing else native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
   const configuration = scenario?.configuration;
+  const externalLinkError = scenario?.externalLinkError;
   let clipboardText = typeof scenario?.clipboard === "object" ? scenario.clipboard.text : "";
   return {
     ...platform,
@@ -112,10 +114,8 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
           : Promise.reject(new Error(scenario.macosSettingsOpenError)),
       },
     }),
-    ...(scenario?.externalLinks && {
-      links: { open: async () => {
-        if (typeof scenario.externalLinks === "object") throw new Error(scenario.externalLinks.error);
-      } },
+    ...(externalLinkError !== undefined && {
+      links: { open: async () => { throw new Error(externalLinkError); } },
     }),
     ...(scenario?.updater && { updater: fixtureUpdater(scenario.updater) }),
     ...((scenario?.quitRequested || scenario?.updater || scenario?.daemonExited !== undefined || scenario?.exitFailure !== undefined) && {

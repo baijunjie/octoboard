@@ -90,7 +90,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `shellTerminal` (how the Terminal panel's shell terminals behave: `"shell"` at its prompt by default, or `"refuse"`; an exited shell
   always draws its last screen and closes, and `terminal` never reaches them), `shellTerminalStart: "pending"` (a shell start that is never answered, for the panel's "Starting terminal…" state), `quitRequested` (the platform gets a stubbed exit capability and
   asks the window to quit once the steps have run, so the quit confirmation is on screen; confirming ends nothing),
-  `externalLinks` (the external-link capability stub),
+  `externalLinkError` (opening an external link fails with that text, as a refused desktop opener does; without it the link opens in a new tab as in the browser),
   `updater` (the desktop shell's updater, so the Settings version rows and the update notice exist: what a check answers, what an install reports and how it ends, and `checked` to have an automatic check already run when the window opens; it also gives the platform the exit capability a restart goes through) with `preferences.updateChannel`,
   `licensesDialog` (the third-party licenses dialog alone, over a list the scenario gives, in its loading or failed state, or as `{ failsOnce: list }`, which fails the first load and answers with the list from Try again: the real dialog reads the list the build generated, so `licensesGallery.tsx` mounts the real dialog with a loader answering that, since Settings > About cannot be given one),
   `sessionHandoffs` (a handoff the daemon fails or never answers, ahead of the refusals it works out from the session),
@@ -263,6 +263,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 |---|---|
 | `src/daemonMessage.ts`, `src/errorPresentation.ts`, `src/errorText.ts`, `src/errorRecovery.ts` | Turning a failure into words: localized daemon wording, `ErrorPresentation` (the shared failure value and the predicates for how it is worded), plain-text forms, and `ErrorRecovery` / `classifyError` (known user remedies) |
 | `src/errorAlerts.ts`, `src/errorAlertParts.tsx`, `src/reportError.tsx`, `src/runtimeError.ts` | The window's error queue, an alert's title, body and details, structured failure submission, and extracting exceptions from browser error events |
+| `src/issueReport.ts` | `issueReportUrl`: the prefilled GitHub new-issue address behind an unexpected-failure alert's Report issue link, with `sanitizeReportText` and `recordNames` removing what is the user's from every text that goes into it |
 | `src/i18n/` | Internationalization: languages and system-language matching, the typed English catalog and translated ones (`messages/`), lookup, the language choice, the React side (`useT`, `Message`, `LanguageProvider`) and display-width text measuring; every user-facing string goes through it |
 | `src/theme.tsx` | `ThemeProvider` / `useOctoboardTheme`: the light, dark or system choice |
 | `src/style.css` | The Tailwind theme and the window's design tokens |

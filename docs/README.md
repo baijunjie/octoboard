@@ -116,6 +116,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Right-to-left layout](product/right-to-left-layout.md) — what is mirrored under a right-to-left language.
 - [Dialogs](product/dialogs.md) — dialog titles, initial focus, and what Enter and confirm buttons do.
 - [Error alerts](product/error-alerts.md) — where a failure, warning or note is shown, by how it arises.
+- [Issue reports](product/issue-reports.md) — what Report issue prefills into a new Issue and what is removed from
+  it first.
 - [Toasts](product/toasts.md) — the notices that need no answer.
 - [Empty states](product/empty-states.md) — how a view with nothing to show says so.
 - [Labels and tooltips](product/labels-and-tooltips.md) — tooltips, help tips and handling of names that do not fit.

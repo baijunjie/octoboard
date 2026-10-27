@@ -960,7 +960,10 @@ a form leaves that form available after acknowledgement, with its values and ret
 
 Distinguish failures the user can resolve from unexpected failures. A recoverable failure explains the specific
 remedy, such as freeing disk space, unlocking a session or correcting a folder's access. An unexpected failure
-preserves its diagnostics, asks the user to take a screenshot and file an issue, and provides the issue entry.
+preserves its diagnostics, asks the user to file an issue describing the steps that led to it, and provides the issue
+entry; an entry the application opens itself carries the diagnostics with personal information removed, while an
+address the user opens by hand asks only for the steps. It never asks for a screenshot or for the raw diagnostics,
+which can capture what the user would not share.
 Do not ask the user to fix a likely application defect or present a known environmental problem as a bug.
 An error alert dialog's recovery action is a secondary button in its footer beside the acknowledgement button, never a
 button inside its body. The footer is trailing-aligned, so Report issue and the recovery action come first and the

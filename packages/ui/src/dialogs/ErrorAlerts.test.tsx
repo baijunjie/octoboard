@@ -13,16 +13,24 @@ import { errorAlerts } from "../errorAlerts";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import { ErrorAlerts, issueUrl } from "./ErrorAlerts";
+import { createStateStore, type Daemon } from "../store";
+import { reportDaemonExit } from "../lifecycle/exitFailure";
+import { issueReportUrl, recordNames } from "../issueReport";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
+
+vi.mock("../issueReport", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../issueReport")>();
+  return { ...actual, issueReportUrl: vi.fn(actual.issueReportUrl), recordNames: vi.fn(actual.recordNames) };
+});
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-afterEach(() => { act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
+afterEach(() => { vi.clearAllMocks(); act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }); });
 
-function mount(child?: React.ReactNode, platform: PlatformAdapter = { kind: "browser" }): void {
+function mount(child?: React.ReactNode, platform: PlatformAdapter = { kind: "browser" }, daemon?: Daemon): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() => root.render(<PlatformProvider value={platform}>{child}<ErrorAlerts /></PlatformProvider>));
+  act(() => root.render(<PlatformProvider value={platform}>{child}<ErrorAlerts daemon={daemon} /></PlatformProvider>));
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
@@ -82,31 +90,36 @@ it("gives known disk and lock failures specific remedies without bug-report inst
   mount();
   act(() => errorAlerts.report({ message: "No space left on device (os error 28)", error: new DaemonRequestError("No space left on device (os error 28)", "internal_error", {}) }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Free space on the disk");
-  expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toContain("Take a screenshot");
+  expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toContain("This may be a bug");
   act(() => errorAlerts.acknowledge());
   act(() => errorAlerts.report({ message: "Session locked", error: new DaemonRequestError("Session locked", "session_locked", { session: "s1" }) }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("choose Unlock");
 });
 
-it("offers screenshot and Issue guidance for unexpected failures, opening only after a user click", async () => {
+it("offers Issue guidance for unexpected failures, opening only after a user click", async () => {
   let opened!: () => void;
   const open = vi.fn(() => new Promise<void>((resolve) => { opened = resolve; }));
   mount(undefined, { kind: "browser", links: { open } });
   const source = new Error("Renderer invariant failed");
   act(() => errorAlerts.report({ message: source.message, error: source }));
   const alert = document.querySelector('[role="alertdialog"]')!;
-  expect(alert.textContent).toContain("Take a screenshot");
+  expect(alert.textContent).toContain("This may be a bug");
   expect(alert.textContent).toContain("Renderer invariant failed");
   expect(open).not.toHaveBeenCalled();
   const report = [...alert.querySelectorAll("a")].find((link) => link.textContent === "Report issue")!;
-  expect(report.getAttribute("href")).toBe(appConfig.issueUrl);
+  // The link carries a description of the failure, with the title and the body of a new issue.
+  const reportUrl = report.getAttribute("href")!;
+  expect(reportUrl.startsWith(`${appConfig.issueUrl}?`)).toBe(true);
+  const prefilled = new URL(reportUrl).searchParams;
+  expect(prefilled.get("title")).toBe("Unexpected error: Renderer invariant failed");
+  expect(prefilled.get("body")).toContain("Renderer invariant failed");
   expect(report.classList.contains("button--secondary")).toBe(true);
   expect(alert.querySelector("p [data-inline-reference]")?.textContent).toBe("Report issue");
   expect(alert.querySelector("p a")).toBeNull();
   expect(report.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
-  expect(alert.querySelectorAll('a[href="' + appConfig.issueUrl + '"]')).toHaveLength(1);
+  expect(alert.querySelectorAll(`a[href^="${appConfig.issueUrl}"]`)).toHaveLength(1);
   await act(async () => report.click());
-  expect(open).toHaveBeenCalledExactlyOnceWith(issueUrl);
+  expect(open).toHaveBeenCalledExactlyOnceWith(reportUrl);
   expect(report.getAttribute("aria-busy")).toBe("true");
   await act(async () => report.click());
   expect(open).toHaveBeenCalledTimes(1);
@@ -121,9 +134,13 @@ it("immediately shows an actionable manual URL fallback if opening an Issue fail
   act(() => errorAlerts.report({ message: "Unexpected failure" }));
   const report = [...document.querySelectorAll("a")].find((link) => link.textContent === "Report issue")!;
   await act(async () => report.click());
+  expect(open).toHaveBeenCalledExactlyOnceWith(report.getAttribute("href"));
+  expect(open.mock.calls[0]).toEqual([expect.stringMatching(/^[^?]+\?title=Unexpected\+error&body=/)]);
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.textContent).toContain("The browser did not open the Issue page, so its address is shown below.");
+  // The address shown to be typed is the bare one, not the long prefilled link.
   expect(alert.textContent).toContain(issueUrl);
+  expect(alert.textContent).not.toContain("title=");
   expect(alert.textContent).toContain("open it manually");
   // The system's reason is not part of the alert's words; it is behind Error details, on a surface of its own.
   const details = alert.querySelector("details")!;
@@ -134,6 +151,65 @@ it("immediately shows an actionable manual URL fallback if opening an Issue fail
   expect(errorAlerts.getSnapshot()).toHaveLength(2);
   act(() => errorAlerts.acknowledge());
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Unexpected failure");
+});
+
+it("carries the plain text of an alert's own details into the report", () => {
+  mount();
+  act(() => errorAlerts.report({ message: "Crashed", details: <pre>shown</pre>, diagnostic: "Error: render failed\n    at /Users/alice/app/x.ts:1:2" }));
+  const report = [...document.querySelectorAll("a")].find((link) => link.textContent === "Report issue")!;
+  const prefilled = new URL(report.getAttribute("href")!).searchParams;
+  expect(prefilled.get("title")).toBe("Unexpected error: Error: render failed");
+  expect(prefilled.get("body")).toContain("```\nError: render failed\n    at <path>:1:2\n```");
+});
+
+const reportLink = () => [...document.querySelectorAll("a")].find((link) => link.textContent === "Report issue");
+const reportOf = () => new URL(reportLink()!.getAttribute("href")!).searchParams;
+
+it("redacts the daemon's record names and home directory from the report", () => {
+  const store = createStateStore({
+    homeDir: "/Users/alice",
+    projects: new Map([["p", { name: "Zeta Project", path: "/Users/alice/zeta" }]]) as never,
+  });
+  mount(undefined, { kind: "browser" }, { store } as unknown as Daemon);
+  const error = new Error("Cannot open Zeta Project at /Users/alice/zeta/a.ts");
+  act(() => errorAlerts.report({ message: error.message, error }));
+  const prefilled = reportOf();
+  expect(prefilled.get("title")).toBe("Unexpected error: Cannot open <name> at <path>");
+  expect(`${prefilled.get("title")}${prefilled.get("body")}`).not.toMatch(/Zeta|alice/);
+});
+
+it("leaves the alert's own words, session and body out of the report", () => {
+  mount();
+  const error = new DaemonRequestError("raw", "unexpected_error", {});
+  error.stack = "Error: raw failure\n    at x (tauri://localhost/assets/a.js:1:2)";
+  act(() => errorAlerts.report({ message: "Could not save Secret Plan", title: "Saving Secret Plan failed", session: "s-secret", content: <p>Body about Secret Plan</p>, error }));
+  const prefilled = reportOf();
+  expect(prefilled.get("title")).toBe("Unexpected error: raw");
+  expect(`${prefilled.get("title")}${prefilled.get("body")}`).not.toMatch(/Secret|s-secret/);
+});
+
+it("puts the application's version, from the platform, in the report", async () => {
+  mount(undefined, { kind: "tauri", links: { open: vi.fn() }, updater: { currentVersion: async () => "9.8.7" } as PlatformAdapter["updater"] });
+  await act(async () => errorAlerts.report({ message: "x", error: new Error("boom") }));
+  expect(reportOf().get("body")).toContain(`- ${appConfig.name}: 9.8.7`);
+});
+
+it("neither walks the records nor builds a report for an actionable failure that has only a message", () => {
+  mount();
+  act(() => errorAlerts.report({ message: "Copy failed", recovery: "clipboard" }));
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
+  expect(reportLink()).toBeUndefined();
+  expect(vi.mocked(recordNames)).not.toHaveBeenCalled();
+  expect(vi.mocked(issueReportUrl)).not.toHaveBeenCalled();
+  act(() => errorAlerts.report({ message: "Boom", error: new Error("boom") }, { immediate: true }));
+  expect(vi.mocked(issueReportUrl)).toHaveBeenCalled();
+  expect(vi.mocked(recordNames)).toHaveBeenCalled();
+});
+
+it("carries the detail of a lifecycle failure into the report", () => {
+  mount();
+  act(() => reportDaemonExit("daemon exited at /Users/alice/run: status 1"));
+  expect(reportOf().get("body")).toContain("```\ndaemon exited at <path>: status 1\n```");
 });
 
 it("retains explicit clipboard recovery metadata through the queue", () => {
@@ -201,7 +277,7 @@ it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback"
   act(() => errorAlerts.report({ message: error.message, error }));
   const alert = document.querySelector('[role="alertdialog"]')!;
   expect(alert.querySelector("details")?.textContent).toContain("Foreign stack trace");
-  expect(alert.textContent).toContain("open https://github.com/baijunjie/octoboard/issues/new in your browser");
+  expect(alert.textContent).toContain("Open https://github.com/baijunjie/octoboard/issues/new in your browser");
   expect(alert.textContent).toContain(issueUrl);
   expect(alert.textContent).not.toContain("use Report issue");
 });

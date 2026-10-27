@@ -112,6 +112,9 @@ What does not follow it:
   prompts injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI
   is localized. What a session is told of the user's language names it, in English, without translating anything else
   (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
+- **The prefilled Issue report.** The title and body **Report issue** fills in are English whatever the language,
+  being written for the maintainers (see `docs/product/issue-reports.md`); the guidance around it in the alert follows
+  the language.
 - **What a daemon error quotes from elsewhere** is shown as it came: a path or an agent's name inside the localized
   wording, and the operating system's, `git`'s or an agent's own message never inside it but apart, as raw text (see
   "Names and diagnostic details" in `docs/product/error-alerts.md`).

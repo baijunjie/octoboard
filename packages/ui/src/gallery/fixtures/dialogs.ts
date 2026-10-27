@@ -615,7 +615,6 @@ export const dialogScenarios: Scenario[] = [
     title: "Console account switch partial failure",
     description: "The dialog has closed and the batch has finished: one alert titled \"Could not switch account\", whose first line, \"2 sessions could not move to\" and the Work account's chip, is followed by a line saying they stay on their current account. One row per failed session, its name in bold over a short reason: the copy failure's sentence for one, and for the other only the application's \"Failed unexpectedly.\", with no daemon text in the row. The remedy for the full disk follows the list once, then the paragraph about a possible bug, which is there because one failure is unexpected. Error details is open, with a heading per session and under it that session's raw text in a block of its own: the system's own words for the copy and the daemon's text for the unexpected failure. The footer holds Report issue and OK; the session that did switch stays on the new account.",
     state: switchAccountState,
-    externalLinks: "available",
     sessionAccountSwitches: {
       "s-switch-bound": {
         code: "internal_error",

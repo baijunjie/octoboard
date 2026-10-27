@@ -318,6 +318,18 @@ it("asks for a login failure nothing can be said of to be reported", async () =>
   expect(dialog.textContent).toContain("Report issue");
 });
 
+it("reports a login failure by its code, parameter names and the daemon's own text, never the values or the wording shown", async () => {
+  const dialog = await failedLoginDialog({ code: "future_code", params: { detail: "private-value" }, message: "raw daemon text" });
+  const prefilled = new URL(dialog.querySelector<HTMLAnchorElement>("a[href*='title=']")!.href).searchParams;
+  expect(prefilled.get("title")).toBe("Unexpected error: future_code");
+  const body = prefilled.get("body")!;
+  expect(body).toContain("- Code: `future_code`");
+  expect(body).toContain("- Parameters: `detail`");
+  expect(body).toContain("```\nraw daemon text\n```");
+  expect(body).not.toContain("private-value");
+  expect(body).not.toContain("Something unexpected went wrong");
+});
+
 it("waits for the first reading of an account of an available agent that has no entry yet", () => {
   availability.set("codex", { agent: "codex", availability: "available" });
   const { container } = mount("Codex");

@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 
 import { errorAlerts } from "./errorAlerts";
+import { errorDiagnostic } from "./errorText";
 import { DiagnosticBlock } from "./components/DiagnosticBlock";
 import { Message, useT } from "./i18n/react";
 import { StartupScreen } from "./StartupScreen";
@@ -38,20 +39,12 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 }
 
-/** The error's own text for the diagnostic block: its stack, led by the error's name and message
- * where the stack leaves them out, as WebKit's does. */
-function diagnostic(error: Error): string {
-  const heading = error.message ? `${error.name}: ${error.message}` : error.name;
-  if (!error.stack) return heading;
-  return error.stack.startsWith(heading) ? error.stack : `${heading}\n${error.stack}`;
-}
-
 /** The fallback, a function component because only one can read the current language. The error's
  * own text is raw, so the page says what happened and what to do in the application's words and the
  * text is in the popover of the mark after the heading. */
 function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   const t = useT();
-  const text = diagnostic(error);
+  const text = errorDiagnostic(error);
   // Reported once per error: the alert's words are components that follow the language, so a change of language needs
   // no new report. The alert says it in the application's words; the error's own text is its "Error details".
   useEffect(() => {
@@ -60,6 +53,7 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
       title: <Message id="error.crashed.heading" />,
       content: <p><Message id="error.crashed" /></p>,
       details: <DiagnosticBlock wrap tall>{text}</DiagnosticBlock>,
+      diagnostic: text,
     });
   }, [error, text]);
   return (

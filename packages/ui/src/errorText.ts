@@ -23,12 +23,24 @@ export function failureSummaryText(t: Translate, language: Language, error: Erro
   return hasCodeParams(error) ? daemonMessage(language, error.code, error.params, error.message, records, true) : error.message;
 }
 
+/** A stack led by `heading` (the error's name and message, or its message): as it is where it already starts or
+ * ends its first line with it, else with the heading put before it, WebKit's stacks holding frames only. */
+export function stackLedBy(heading: string, stack: string | undefined): string {
+  if (!stack) return heading;
+  return stack.startsWith(heading) || stack.split("\n", 1)[0].endsWith(heading) ? stack : `${heading}\n${stack}`;
+}
+
+/** The text of a thrown error for a diagnostic block: its stack, led by its name and message (see `stackLedBy`). */
+export function errorDiagnostic(error: { name: string; message: string; stack?: string }): string {
+  return stackLedBy(error.message ? `${error.name}: ${error.message}` : error.name, error.stack);
+}
+
 /** What a diagnostic block keeps of an unexpected failure shown without its message: a failure the daemon coded is its
  * message; a wrapped JavaScript error is its message and then its stack, the message put first when the stack lacks it
- * (WebKit's stacks hold frames only). */
+ * (see `stackLedBy`). */
 export function unexpectedFailureDiagnostic(error: { code: string; message: string; stack?: string }): string {
   if (error.code !== "unexpected_error" || !error.stack) return error.message;
-  return error.stack.split("\n", 1)[0].endsWith(error.message) ? error.stack : `${error.message}\n${error.stack}`;
+  return stackLedBy(error.message, error.stack);
 }
 
 /** The raw text of exactly two kinds of failure, for a diagnostic block of its own: the daemon's `detail` of a code whose

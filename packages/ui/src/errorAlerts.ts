@@ -10,6 +10,13 @@ export interface ErrorAlertFailure {
   recovery?: ErrorRecovery;
 }
 
+/** A failure for an issue report. `unexpected` is the caller's own judgement that it is one, which stands where the
+ * error alone would classify otherwise (a crash's stack that happens to mention an operating-system error); absent,
+ * the failure is classified from its error. */
+export interface ReportableFailure extends ErrorAlertFailure {
+  unexpected?: boolean;
+}
+
 export interface ErrorAlertRequest {
   message: string;
   /** The body in place of `message`. Its box adds no spacing, so a body of several paragraphs lays them out itself
@@ -31,6 +38,9 @@ export interface ErrorAlertRequest {
    * no remedy line of the failure's kind after it: that line is the general advice for the kind, and would repeat or
    * contradict it. Set where the body is the failure's own message: by `reportError`, and from `errorAlertParts`. */
   remedyInBody?: boolean;
+  /** The plain text of what `details` holds, for an alert that has no `error` to read it from: the issue report an
+   * unexpected failure offers is built from the errors and from this, never from the rendered `details`. */
+  diagnostic?: string;
 }
 
 /** A request with what is worked out from its errors: the classification that sets the alert's guidance, the one
@@ -53,8 +63,19 @@ const cancelFallback = () => {
 };
 const FOCUS_FALLBACK_DELAY_MS = 400;
 
+/** The failures an alert is about: those it lists, else its one `error`. Where it has none, the alert's message stands
+ * for it in `"view"` (it is what the alert shows); in `"report"` its `diagnostic`, if it has one, does instead, the
+ * message being worded for the user and no part of an issue report. For a report the alert is one classified
+ * unexpected, and the one failure standing for it is then unexpected whatever its error alone would classify as; each
+ * listed failure keeps its own classification, which the alert's is made of. */
+export function alertFailures(request: ErrorAlertRequest, purpose: "view" | "report"): readonly ReportableFailure[] {
+  if (request.failures?.length) return request.failures;
+  const error = request.error ?? (purpose === "view" ? request.message : request.diagnostic);
+  return error === undefined ? [] : [{ error, recovery: request.recovery, unexpected: purpose === "report" || undefined }];
+}
+
 function viewOf(request: ErrorAlertRequest): { view: ErrorAlertView; signature: string } {
-  const failures = request.failures?.length ? request.failures : [{ error: request.error ?? request.message, recovery: request.recovery }];
+  const failures = alertFailures(request, "view");
   const classifications = failures.map((failure) => classifyError(failure.error, failure.recovery));
   const classification = classifications.find((failure) => failure.kind === "unexpected") ?? classifications[0];
   const metadata = failures.map(({ error: source }, index) => [

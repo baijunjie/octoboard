@@ -369,8 +369,9 @@ export interface Scenario {
    * switch of its own and the Settings row links to System Settings instead. Nothing is shown or
    * opened; `{ openError }` is the reason the system gives for not opening the pane. */
   systemNotifications?: boolean | { openError: string };
-  /** Stub external links without opening a host browser; an error models a refused desktop opener. */
-  externalLinks?: "available" | { error: string };
+  /** Opening an external link fails with this text, as a refused desktop opener does. Without it the browser
+   * platform's own opener stands and opens the address in a new tab. */
+  externalLinkError?: string;
   configuration?: ConfigurationFixture;
   /** The platform can update the application, as the desktop app does: the Settings rows for the version and
    * channel, and the update notice once a check finds a version. It also has the exit capability that a restart
