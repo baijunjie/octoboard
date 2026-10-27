@@ -139,7 +139,7 @@ version goes to, names, addresses, the manifest) are `scripts/release-manifest.m
 
 ## External interfaces
 
-The shell defines thirteen Tauri IPC commands, permitted through `src-tauri/capabilities/default.json` and
+The shell defines fourteen Tauri IPC commands, permitted through `src-tauri/capabilities/default.json` and
 `src-tauri/permissions/*.toml`:
 
 - `frontend_exit_heartbeat` — marks the webview as the one handling the exit flow, and is re-invoked on every quit gesture.
@@ -152,6 +152,8 @@ The shell defines thirteen Tauri IPC commands, permitted through `src-tauri/capa
 - `bring_to_front` (`background.rs`) — shows, restores and activates the window.
 - `macos_permissions_status`, `macos_request_permission`, `macos_open_privacy_settings` (`permissions.rs`) — read, request
   and open the pane of the Screen Recording and Accessibility grants.
+- `macos_open_notification_settings` (`notification_settings.rs`) — opens the app's own pane in System Settings >
+  Notifications.
 - `save_configuration_file`, `open_configuration_file` (`configuration_file.rs`) — move the configuration document
   through the system's save and open dialogs.
 - `check_for_update`, `install_update` (`updater.rs`) — look for a newer version on a channel (`stable` or `beta`), answering
@@ -180,6 +182,7 @@ window theme, window show and window drag/zoom commands the UI uses.
 | `src-tauri/src/menu.rs` | The native macOS menu bar built from the UI's labels, including the About item (a plain item that emits `about-requested`, not the native panel) and the Settings… item, whose accelerator the UI sets at runtime |
 | `src-tauri/src/sidecar.rs` | Spawns `octoboardd`, parses its startup port line, reports how it terminated, keeps `DaemonState` and the sidecar's child, and `stop_daemon`, which a restart waits on |
 | `src-tauri/src/permissions.rs` | The macOS privacy permission commands and `capture_launch_state()` |
+| `src-tauri/src/notification_settings.rs` | The command that opens the app's own pane in System Settings > Notifications, choosing the address by macOS version |
 | `src-tauri/src/configuration_file.rs` | The two configuration-file commands |
 | `src-tauri/src/updater.rs` | The two update commands, the channel-to-manifest mapping and the state that keeps a check and an install from overlapping |
 | `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state across launches and validates it against the connected displays |

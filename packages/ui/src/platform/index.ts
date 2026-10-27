@@ -100,6 +100,10 @@ export interface NotificationCapability {
     request(): Promise<void>;
   };
   notify(notification: { title: string; body: string }): Promise<void>;
+  /** Opens the app's own pane in the system's notification settings. Present only where the system
+   * manages the app's notifications and the app keeps no switch of its own (the macOS app), so the
+   * UI links there instead. Rejects when the system did not open the pane. */
+  openSystemSettings?(): Promise<void>;
 }
 
 export interface BadgeCapability {
