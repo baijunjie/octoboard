@@ -1537,7 +1537,7 @@ nothing a client sends is used as a path to read from, apart from the relative `
 ```
 ProjectSourceInfo { project, root, resolved_root, root_id, git: GitSourceInfo?, git_error? }
 GitSourceInfo     { repository, common_dir, worktree, scope, worktrees: WorktreeInfo[] }
-WorktreeInfo      { id, root, main, head?, branch?, scope_present }
+WorktreeInfo      { id, root, main, head?, branch?, scope_present, scope_cause? }
 BrowseEntry       { name, kind: "file"|"directory"|"symlink"|"other", size?, version?,
                     target?: "file"|"directory"|"other"|"missing"|"outside",
                     ignored?: true }  // present only when Git ignores the entry
@@ -1585,11 +1585,13 @@ browsed.
   which may be a linked worktree, never whichever one has some branch checked out.
 - `scope` is the project's directory relative to that worktree's root, as a wire path: empty for a project at the
   root, `packages/ui` for a project associated with that subdirectory. Git review of the project stays inside it.
-- `worktrees` lists every worktree of the repository that is there now, the one holding the project included: each
-  one's `id`, its `root`, whether it is the `main` worktree, the commit at its `HEAD` (null before the first commit),
-  the branch checked out (a wire path, null when `HEAD` is detached; an unborn branch is named, with a null commit),
-  and `scope_present`, whether the project's scope is a directory in it reached through no symbolic link (see
-  below). A bare main repository, and a worktree `git` reports as prunable, are not listed.
+- `worktrees` lists every worktree of the repository that is there now, the one holding the project included: each one's
+  `id`, its `root`, whether it is the `main` worktree, the commit at its `HEAD` (null before the first commit), the
+  branch checked out (a wire path, null when `HEAD` is detached; an unborn branch is named, with a null commit),
+  `scope_present`, whether the project's scope is a directory in it reached through no symbolic link (see below), and,
+  when it is not, `scope_cause`: why, in the vocabulary of `source_unavailable`'s `cause` (`missing`, `link`,
+  `not_a_directory`, or `other` for any other failure to read it), or `permission_denied` when the system denied reading
+  it. A bare main repository, and a worktree `git` reports as prunable, are not listed.
 
 A worktree's id is the identity of its own git directory — the common directory for the main worktree,
 `<common>/worktrees/<name>` for a linked one — and is checked against the repository again on every request that

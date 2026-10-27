@@ -382,6 +382,7 @@ fn a_subdirectory_maps_into_another_worktree_and_never_broadens() {
         .find(|w| w.root == canonical(&linked_scope))
         .unwrap();
     assert!(!linked_entry.scope_present);
+    assert_eq!(linked_entry.scope_cause, Some("link"));
     assert_eq!(
         unavailable_cause(fixture.read(
             &project,
@@ -392,18 +393,21 @@ fn a_subdirectory_maps_into_another_worktree_and_never_broadens() {
         "link",
         "a link in another worktree must not widen the scope to its root"
     );
-    let other_id = &git_info
+    let other_entry = git_info
         .worktrees
         .iter()
         .find(|w| w.root == canonical(&other))
-        .unwrap()
-        .id;
+        .unwrap();
+    assert!(other_entry.scope_present);
+    assert_eq!(other_entry.scope_cause, None);
+    let other_id = &other_entry.id;
     let bare_entry = git_info
         .worktrees
         .iter()
         .find(|w| w.root == canonical(&bare))
         .unwrap();
     assert!(!bare_entry.scope_present);
+    assert_eq!(bare_entry.scope_cause, Some("missing"));
 
     let (_, file) = fixture
         .read(&project, Some(other_id), "a.txt", ReadFrom::Live)

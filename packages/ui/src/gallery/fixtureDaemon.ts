@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import { currentLanguage, t } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow } from "../quota/quotaFormat";
 import { applyDaemonEvent, createStateStore, errorToast, type Daemon, type ToastRequest } from "../store";
@@ -15,7 +15,7 @@ import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies } from "./fixtureGit";
 import { refuseUnfillable } from "./banner";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
-import { SAMPLE_FILES, sourceUnavailable, type FixtureError, type FixtureFile, type FixtureFiles, type SourceUnavailableCause } from "./fixtures/projectFiles";
+import { SAMPLE_FILES, permissionDenied, sourceUnavailable, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
 
 /** How long after the app subscribes to toasts the scenario's own are raised, for the stack to be
@@ -29,11 +29,19 @@ export type FixtureDaemon = Daemon & { readonly scenarioToastsRaised: Promise<vo
 
 const HOME = "/Users/dev";
 
-/** What the daemon sends for the project's place in another worktree when it cannot be used, by why. */
-const SCOPE_UNAVAILABLE: Record<"missing" | "link", { cause: SourceUnavailableCause; detail: string }> = {
-  missing: { cause: "missing", detail: "the project's directory is not in this worktree" },
-  link: { cause: "link", detail: "the path to the project's directory goes through a link in this worktree" },
+/** What the daemon sends for the project's place in another worktree when it cannot be used, by why (the worktree's
+ * `scope_cause`): its own text for a folder that is not there, one reached through a link and one that is not a folder,
+ * and the system's for any other failure to read it. A read the system denied is no `source_unavailable` and has its own
+ * refusal (`permissionDenied`). */
+const SCOPE_UNAVAILABLE: Record<SourceUnavailableCause, string> = {
+  missing: "the project's directory is not in this worktree",
+  link: "the path to the project's directory goes through a link in this worktree",
+  not_a_directory: "not a directory",
+  other: "Input/output error (os error 5)",
 };
+
+/** The system's text for a read it denied. */
+const PERMISSION_DENIED_DETAIL = "Permission denied (os error 13)";
 
 /** What the CLI said when a login the scenario ends as `failed` did not go through. */
 const LOGIN_FAILURE_DETAIL = [
@@ -1105,11 +1113,13 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const target = body.worktree === undefined ? undefined : git?.worktrees.find((worktree) => worktree.id === body.worktree);
           if (body.worktree !== undefined && !target) return fail({ code: "worktree_unavailable", params: { worktree: body.worktree }, message: `worktree ${body.worktree} is gone` });
           const placeIn = (worktree: { root: string }) => (git?.scope ? `${worktree.root}/${git.scope}` : worktree.root);
-          // `scope_present` is false when the project's folder in that worktree is not there or is reached through a link
-          // (`scopeUnavailable` says which, and the error carries the daemon's own wording of it).
+          // `scope_present` is false when the project's folder in that worktree cannot be used; the worktree's `scope_cause`
+          // says why, and the refusal carries that cause with the daemon's own wording of it, as the daemon's one check gives both;
+          // a read the system denied is refused as `permission_denied` instead, with the path and the system's text.
           if (target && !target.scope_present) {
-            const { cause, detail } = SCOPE_UNAVAILABLE[scenario.scopeUnavailable ?? "missing"];
-            return fail(sourceUnavailable(placeIn(target), cause, detail));
+            const cause = scopeCause(target.scope_cause);
+            if (cause === "permission_denied") return fail(permissionDenied(placeIn(target), PERMISSION_DENIED_DETAIL));
+            return fail(sourceUnavailable(placeIn(target), cause, SCOPE_UNAVAILABLE[cause]));
           }
           const shellTerminal: ShellTerminal = {
             id: `shell-gallery-${++createdShellTerminalCount}`,

@@ -1374,8 +1374,21 @@ describe("the fixture daemon's shell terminals", () => {
     expect(daemon.store.getState().shellTerminals.size).toBe(0);
   });
 
-  it("says a worktree's folder is a link when the scenario does", async () => {
-    const daemon = daemonWithProject({ scopeUnavailable: "link" });
+  it("refuses a worktree with the cause the worktree itself carries", async () => {
+    const withCause = (cause: string | undefined) =>
+      daemonWithProject({ git: { ...SAMPLE_GIT, worktrees: SAMPLE_GIT.worktrees.map((tree) => (tree.id === "wt-detached" ? { ...tree, scope_cause: cause } : tree)) } });
+    await expect(withCause("not_a_directory").request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({
+      code: "source_unavailable",
+      params: { cause: "not_a_directory", detail: "not a directory" },
+    });
+    await expect(withCause("other").request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({ params: { cause: "other" } });
+    await expect(withCause(undefined).request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({ params: { cause: "missing" } });
+    await expect(withCause("something-new").request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({ params: { cause: "other" } });
+    await expect(withCause("permission_denied").request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({
+      code: "permission_denied",
+      params: { path: "/Users/dev/.worktrees/search-api/review", detail: "Permission denied (os error 13)" },
+    });
+    const daemon = withCause("link");
     await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({
       code: "source_unavailable",
       params: { cause: "link", detail: "the path to the project's directory goes through a link in this worktree" },
@@ -1383,7 +1396,7 @@ describe("the fixture daemon's shell terminals", () => {
   });
 
   it("refuses the project's place in another worktree at the worktree's root joined with the scope", async () => {
-    const daemon = daemonWithProject({ scopeUnavailable: "link", git: { ...SAMPLE_GIT, scope: "apps/web" } });
+    const daemon = daemonWithProject({ git: { ...SAMPLE_GIT, scope: "apps/web", worktrees: SAMPLE_GIT.worktrees.map((tree) => (tree.id === "wt-detached" ? { ...tree, scope_cause: "link" } : tree)) } });
     await expect(daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-detached" })).rejects.toMatchObject({
       code: "source_unavailable",
       params: { path: "/Users/dev/.worktrees/search-api/review/apps/web", cause: "link" },

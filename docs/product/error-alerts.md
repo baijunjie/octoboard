@@ -311,9 +311,11 @@ The places with a warning mark:
 - the Files tab's root listing that was cut short, after the pane's title, a folder of the tree whose listing was cut
   short, after its name, and a file name search that is incomplete, inside the search field (see "Rows and the
   keyboard" and "Filtering by file name" in `docs/product/project-pane.md`);
-- in the Git mode, uncommitted changes of the change list that were cut short, at the end of the Worktree line, and
+- in the Git mode: uncommitted changes of the change list that were cut short, and a worktree whose copy of the
+  project's folder cannot be read, at the end of the Worktree line, one mark saying both when both hold (see
+  "Uncommitted changes" and "What the list says instead" in `docs/product/project-pane-git-change-list.md`);
   committed changes that were cut short, on the Committed heading (see "What the list says instead" in
-  `docs/product/project-pane-git-change-list.md`), and the base of the comparison on screen that no longer exists,
+  `docs/product/project-pane-git-change-list.md`); and the base of the comparison on screen that no longer exists,
   right after its name in the Forked from line (see "A branch that goes away" in
   `docs/product/project-pane-git-change-list.md`);
 - the report panel's pages that could not be listed while it shows a page, right after the panel's title (see "Paging
@@ -385,8 +387,10 @@ For example:
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
 - An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location. A file or
-  folder that File manager or Default application no longer finds instead says it may have been moved, renamed or
-  deleted (see "A row's actions" in `docs/product/project-pane.md`).
+  folder that File manager or Default application no longer finds, or a file a terminal's path link names that is
+  gone when the click reads it, instead says it may have been moved, renamed or deleted, and that one moved or renamed
+  can be found in the project's files and tried again from there (see "A row's actions" in
+  `docs/product/project-pane.md` and "Opened from the terminal" in `docs/product/file-viewer.md`).
 - A folder a request is scoped to that cannot be read (`source_unavailable`) — the project's own directory, or its
   place in a worktree of its repository — is not something the user typed or picked, so its remedy asks for it to be
   put back rather than corrected, worded by the cause the daemon names. The alert's sentence says the folder cannot

@@ -2,7 +2,7 @@
 // when is one place and tested on its own, and the component is left to lay it out.
 import type { ErrorPresentation } from "../errorPresentation";
 import type { PlainMessageKey } from "../i18n/catalog";
-import type { WorktreeInfo } from "../protocol";
+import { scopeCause, type ScopeCause, type WorktreeInfo } from "../protocol";
 import { displayWirePath, wireBaseName } from "../wirePath";
 import { comparisonNews } from "./comparisonNews";
 import { shortCommit } from "./shortCommit";
@@ -11,11 +11,11 @@ import type { CommittedState, UncommittedState } from "./useGitReview";
 
 /** A line above the list, as the words it is made of; paths and branches are in display form, except
  * the worktree's `root`, a wire path, which the line's copy button turns into display form itself. `cut` is
- * whether its uncommitted changes were cut short, which the line ends on a mark for. */
+ * whether its uncommitted changes were cut short, and `scope` why the project's folder cannot be read in it, which
+ * the line ends on one mark for, saying both when both hold. */
 export type ChangesNotice =
   | { id: "unborn" }
-  | { id: "worktree"; name: string; root: string; cut?: true }
-  | { id: "scopeMissing" }
+  | { id: "worktree"; name: string; root: string; cut?: true; scope?: ScopeCause }
   | { id: "noRemote"; branch: string }
   | { id: "noBase" }
   | { id: "comparing"; base: string }
@@ -78,11 +78,14 @@ export function changesStatus({
   const partialUncommitted = uncommitted.state === "listed" && uncommitted.list.state === "loaded" && !uncommitted.list.complete;
   if (uncommitted.state === "listed") {
     const { worktree, own, list } = uncommitted;
-    // The worktree is named when it is not the project's own; the project's own is named too when its changes were
-    // cut short, since the warning is about it and its line is where the warning's mark goes.
-    if (!own || partialUncommitted) notices.push({ id: "worktree", name: wireBaseName(worktree.root), root: worktree.root, ...(partialUncommitted && { cut: true as const }) });
+    // The worktree is named when it is not the project's own; the project's own is named too when a warning is about
+    // it — its changes cut short, or its copy of the project's folder unreadable — since its line is where the
+    // warning's mark goes.
+    const scope = worktree.scope_present ? undefined : scopeCause(worktree.scope_cause);
+    if (!own || partialUncommitted || scope) {
+      notices.push({ id: "worktree", name: wireBaseName(worktree.root), root: worktree.root, ...(partialUncommitted && { cut: true as const }), ...(scope && { scope }) });
+    }
     if (worktree.head === null) notices.push({ id: "unborn" });
-    if (!worktree.scope_present) notices.push({ id: "scopeMissing" });
     if (list.state === "error") failures.push({ key: "uncommitted", title: "git.error.list", line: "git.changes.listError", message: list.message });
   }
   if (committed.state === "noBase") {

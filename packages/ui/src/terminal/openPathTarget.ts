@@ -1,6 +1,7 @@
 import { DaemonRequestError } from "../daemon-client";
 import type { Event, RequestBody } from "../protocol";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
+import { hostPathRecovery, type ErrorRecovery } from "../errorRecovery";
 import { t } from "../i18n/language";
 import { bodyFromFileContent } from "../viewer/content";
 import type { PathLinkTarget } from "./pathLinks";
@@ -13,7 +14,7 @@ import type { PathLinkTarget } from "./pathLinks";
  * (without a line), but is opened on the host instead when the file cannot be read or shown, and at
  * once when `onHost` asks. A file the system could launch (`viewerOnly`) goes to the viewer unread,
  * which says what it cannot show, and is never opened on the host. A failed read of a file is
- * reported.
+ * reported, a file gone since the link was drawn with the remedy of finding it in the project's files.
  */
 export async function openPathTarget({
   target,
@@ -31,9 +32,9 @@ export async function openPathTarget({
   request: (body: RequestBody) => Promise<Event>;
   /** Shows a file in the viewer; absent where there is none. */
   viewFile: ((file: ViewedFile) => void) | undefined;
-  toastError: (error: Error | string, session?: string, title?: string) => void;
+  toastError: (error: Error | string, session?: string, title?: string, recovery?: ErrorRecovery) => void;
 }): Promise<void> {
-  const report = (error: unknown) => toastError(error instanceof Error ? error : String(error), undefined, t("terminal.openPathFailedTitle"));
+  const report = (error: unknown) => toastError(error instanceof Error ? error : String(error), undefined, t("terminal.openPathFailedTitle"), hostPathRecovery(error));
   const openOnHost = () =>
     request({ type: "open_path_link", project, path: target.path }).then(() => undefined, report);
   const { view } = target;

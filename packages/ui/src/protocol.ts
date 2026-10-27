@@ -949,6 +949,28 @@ export interface WorktreeInfo {
   branch: string | null;
   /** Whether the project's scope is a directory in this worktree, reached through no symbolic link. */
   scope_present: boolean;
+  /** Why it is not (see `scopeCause`); absent while it is. */
+  scope_cause?: string;
+}
+
+const SOURCE_UNAVAILABLE_CAUSES = ["missing", "link", "not_a_directory", "other"] as const;
+
+/** The `cause` of a `source_unavailable`: why a folder a request is scoped to cannot be read. */
+export type SourceUnavailableCause = (typeof SOURCE_UNAVAILABLE_CAUSES)[number];
+
+/** A worktree's `scope_cause`: a `source_unavailable` cause, or a read the system denied. */
+export type ScopeCause = SourceUnavailableCause | "permission_denied";
+
+/** `raw` as a `source_unavailable` cause: none, from a daemon that does not send one, is `missing`, and one this
+ * client does not know is `other`. */
+export function sourceUnavailableCause(raw: string | undefined): SourceUnavailableCause {
+  if (raw === undefined) return "missing";
+  return SOURCE_UNAVAILABLE_CAUSES.find((cause) => cause === raw) ?? "other";
+}
+
+/** `raw` as a worktree's `scope_cause`, by the same rules as `sourceUnavailableCause`. */
+export function scopeCause(raw: string | undefined): ScopeCause {
+  return raw === "permission_denied" ? raw : sourceUnavailableCause(raw);
 }
 
 /** One entry of `project_dir`, in byte order of the names' wire forms. */

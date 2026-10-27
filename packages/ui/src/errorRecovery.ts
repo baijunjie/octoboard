@@ -1,4 +1,4 @@
-import type { MessageParams } from "./protocol";
+import { sourceUnavailableCause, type MessageParams, type SourceUnavailableCause } from "./protocol";
 import { DaemonRequestError } from "./daemon-client";
 
 export type ErrorRecovery =
@@ -129,9 +129,8 @@ const RELOCATION_CAUSE_RECOVERY: Record<string, ErrorRecovery> = {
   sqlite_home: "sqliteHome", symlink: "symlink", not_restored: "notRestored",
 };
 
-/** The remedy of a `source_unavailable` by its `cause`; with none, the code's group's (`sourceGone`), as from a daemon
- * that does not send one. */
-const SOURCE_CAUSE_RECOVERY: Record<string, ErrorRecovery> = {
+/** The remedy of a `source_unavailable` by its `cause`, as `sourceUnavailableCause` reads it. */
+const SOURCE_CAUSE_RECOVERY: Record<SourceUnavailableCause, ErrorRecovery> = {
   missing: "sourceGone", link: "sourceLink", not_a_directory: "sourceNotFolder", other: "sourceUnreadable",
 };
 
@@ -157,7 +156,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   if (remedy) return { kind: "actionable", recovery: remedy };
   if (error instanceof DaemonRequestError) {
     const code = error.code === "launch_failed" ? error.params.reason_code : error.code;
-    if (code === "source_unavailable" && error.params.cause) return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[error.params.cause] ?? "sourceUnreadable" };
+    if (code === "source_unavailable") return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
     const domain = code && DOMAIN_RECOVERY.get(code);
     if (domain) return { kind: "actionable", recovery: domain };
     const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[error.params.cause] : undefined;
@@ -175,4 +174,14 @@ const STATE_IS_THE_ANSWER = new Set(["gitHistory", "repository", "scope", "limit
  * thing asked about (see `STATE_IS_THE_ANSWER`), where a Try again would only fail the same way. */
 export function retryCanHelp(error: unknown): boolean {
   return !(error instanceof DaemonRequestError && STATE_IS_THE_ANSWER.has(error.code));
+}
+
+/** The codes of a file or folder in a project that is not there any more. */
+const GONE = new Set(["file_not_found", "path_not_found"]);
+
+/** The remedy for a file or folder an action on the project's files no longer finds: it is found again in the project's
+ * files, not by the general remedy of its codes, which picks one with Browse in a form. Undefined for any other failure,
+ * which keeps its own. */
+export function hostPathRecovery(error: unknown): ErrorRecovery | undefined {
+  return error instanceof DaemonRequestError && GONE.has(error.code) ? "hostPathGone" : undefined;
 }

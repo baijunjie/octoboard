@@ -573,13 +573,17 @@ fn project_source(record: &Project, git: &Git, cancel: &AtomicBool) -> Result<Pr
     };
     let worktrees = worktrees
         .into_iter()
-        .map(|worktree| WorktreeInfo {
-            scope_present: source::scope_root(&worktree.root, &repository.scope).is_ok(),
-            id: worktree.id,
-            root: wire_path::encode(worktree.root.as_os_str().as_bytes()),
-            main: worktree.main,
-            head: worktree.head,
-            branch: worktree.branch.as_deref().map(wire_path::encode),
+        .map(|worktree| {
+            let scope = source::scope_root(&worktree.root, &repository.scope);
+            WorktreeInfo {
+                scope_present: scope.is_ok(),
+                scope_cause: scope.err().map(|err| source::unavailable_cause(&err)),
+                id: worktree.id,
+                root: wire_path::encode(worktree.root.as_os_str().as_bytes()),
+                main: worktree.main,
+                head: worktree.head,
+                branch: worktree.branch.as_deref().map(wire_path::encode),
+            }
         })
         .collect();
     info.git = Some(GitSourceInfo {

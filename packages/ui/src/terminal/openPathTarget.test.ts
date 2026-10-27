@@ -31,7 +31,7 @@ it("shows an image too, but opens other binary on the host", async () => {
   expect(binary.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/a.ts" });
 });
 
-it("opens a file past the read cap on the host, and reports any other failed read", async () => {
+it("opens a file past the read cap on the host, and reports any other failed read, a gone file with the remedy of finding it again", async () => {
   const big = click(target, () => Promise.reject(new DaemonRequestError("too large", "limit_exceeded", {})));
   await big.done;
   expect(big.viewFile).not.toHaveBeenCalled();
@@ -39,7 +39,11 @@ it("opens a file past the read cap on the host, and reports any other failed rea
   const failed = click(target, () => Promise.reject(new DaemonRequestError("gone", "file_not_found", {})));
   await failed.done;
   expect(failed.toastError).toHaveBeenCalledOnce();
+  expect(failed.toastError.mock.calls[0][3]).toBe("hostPathGone");
   expect(failed.request).toHaveBeenCalledTimes(1);
+  const refused = click(target, () => Promise.reject(new DaemonRequestError("denied", "permission_denied", { path: "a.ts", detail: "x" })));
+  await refused.done;
+  expect(refused.toastError.mock.calls[0][3]).toBeUndefined();
 });
 
 it("shows a file the system could launch in the viewer unread, and never opens it on the host", async () => {

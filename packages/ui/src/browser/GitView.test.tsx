@@ -507,3 +507,43 @@ it("puts no mark beside the Branch select for a compared branch that is gone, th
   expect(selectorsRef.current!.querySelector("[data-status-mark]")).toBeNull();
   expect(selectorsRef.current!.textContent).toContain("No longer exists");
 });
+
+it("marks a worktree whose copy of the project's folder is a link at the end of its line, saying why and what to do, with no loose text", () => {
+  const { container } = mountPartFailure({
+    uncommitted: {
+      state: "listed",
+      list: { state: "loaded", head: "c1", items: [], complete: true, refreshing: false },
+      worktree: { id: "w2", root: "/r-2", main: false, head: "c1", branch: "feature", scope_present: false, scope_cause: "link" },
+      own: false,
+    },
+  });
+  const marks = container.querySelectorAll<HTMLButtonElement>('button[aria-label="The project\'s folder is unavailable in this worktree"]');
+  expect(marks).toHaveLength(1);
+  const line = marks[0].closest("p")!;
+  expect(line.textContent).toContain("Worktree r-2");
+  expect(line.lastElementChild).toBe(marks[0]);
+  expect(container.textContent).not.toContain("symbolic link");
+  press(marks[0]);
+  expect(document.querySelector('[role="dialog"]')!.textContent).toBe(
+    "The path to the project's folder in this worktree goes through a symbolic link, which Octoboard does not follow."
+      + "Replace the link with a real folder, then refresh.",
+  );
+});
+
+it("says changes cut short and an unreadable folder in one mark on the worktree's line, never two side by side", () => {
+  const { container } = mountPartFailure({
+    uncommitted: {
+      state: "listed",
+      list: { state: "loaded", head: "c1", items: [], complete: false, refreshing: false },
+      worktree: { id: "w2", root: "/r-2", main: false, head: "c1", branch: "feature", scope_present: false, scope_cause: "permission_denied" },
+      own: false,
+    },
+  });
+  const line = container.querySelector<HTMLButtonElement>('p button[aria-label="Copy worktree path"]')!.closest("p")!;
+  const marks = line.querySelectorAll<HTMLButtonElement>("button[aria-label]:not([aria-label='Copy worktree path'])");
+  expect(marks).toHaveLength(1);
+  expect(marks[0].getAttribute("aria-label")).toBe("Not every uncommitted change is listed, and the project's folder is unavailable in this worktree");
+  press(marks[0]);
+  expect(document.querySelectorAll('[role="dialog"] p')).toHaveLength(4);
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Octoboard is not allowed to read the project's folder in this worktree.");
+});

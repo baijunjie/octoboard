@@ -291,7 +291,10 @@ file, from the directory it was found in:
   at once rather than saying it is loading;
 - **any other binary file, or a file larger than the 4 MiB a read delivers**, opens on the machine the daemon runs on
   with its default application instead, as a path outside the project does;
-- **a read that fails for any other reason** raises an error alert with the reason, and nothing opens.
+- **a read that fails for any other reason** raises an error alert titled that the path could not be opened, with the
+  reason, and nothing opens. A file no longer there — removed, moved or renamed since the link was drawn — gets the
+  remedy of a file that is gone, not that of a path to correct (see "Recovery and unexpected errors" in
+  `docs/product/error-alerts.md`).
 
 **A file the system could launch** (which files those are is in "File paths" in `docs/product/terminal-links.md`) is not
 read first: it always opens in the viewer, which reads and shows it as any file, saying it cannot be displayed where it

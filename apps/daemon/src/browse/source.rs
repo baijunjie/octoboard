@@ -373,6 +373,26 @@ fn unavailable(path: &Path, cause: &str, detail: &str) -> anyhow::Error {
     )
 }
 
+/// Why a source directory was refused with `err`: the `cause` `source_unavailable` gives,
+/// `permission_denied` for a read the system denied, and `other` for any other refusal.
+pub fn unavailable_cause(err: &anyhow::Error) -> &'static str {
+    let Some(coded) = err.downcast_ref::<CodedError>() else {
+        return OTHER;
+    };
+    if coded.code == error_code::PERMISSION_DENIED {
+        return error_code::PERMISSION_DENIED;
+    }
+    if coded.code != error_code::SOURCE_UNAVAILABLE {
+        return OTHER;
+    }
+    match coded.params.get("cause").map(String::as_str) {
+        Some(MISSING) => MISSING,
+        Some(LINK) => LINK,
+        Some(NOT_A_DIRECTORY) => NOT_A_DIRECTORY,
+        _ => OTHER,
+    }
+}
+
 /// An I/O failure on a source directory, as the code a client words it by.
 fn io_failure(path: &Path, err: &io::Error) -> anyhow::Error {
     let shown = wire_path::encode(path.as_os_str().as_bytes());
@@ -394,6 +414,24 @@ fn io_failure(path: &Path, err: &io::Error) -> anyhow::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_refused_scope_is_told_by_its_cause_a_denied_read_apart_and_any_other_refusal_is_other() {
+        let path = Path::new("/nowhere");
+        assert_eq!(unavailable_cause(&unavailable(path, MISSING, "x")), MISSING);
+        assert_eq!(unavailable_cause(&unavailable(path, LINK, "x")), LINK);
+        assert_eq!(
+            unavailable_cause(&unavailable(path, NOT_A_DIRECTORY, "x")),
+            NOT_A_DIRECTORY
+        );
+        assert_eq!(unavailable_cause(&unavailable(path, OTHER, "x")), OTHER);
+        let denied = io::Error::from(io::ErrorKind::PermissionDenied);
+        assert_eq!(
+            unavailable_cause(&io_failure(path, &denied)),
+            error_code::PERMISSION_DENIED
+        );
+        assert_eq!(unavailable_cause(&anyhow::anyhow!("not coded")), OTHER);
+    }
 
     #[test]
     fn discovery_never_climbs_into_the_ceiling() {

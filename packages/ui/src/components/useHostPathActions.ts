@@ -1,4 +1,4 @@
-import { DaemonRequestError } from "../daemon-client";
+import { hostPathRecovery } from "../errorRecovery";
 import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 
@@ -10,10 +10,6 @@ export interface HostPath {
   path: string;
 }
 
-/** The codes of a file or folder that is not there any more. It is found again in the project's files, not by the
- * remedy of a missing path in general, which picks one with Browse in a form. */
-const GONE = new Set(["file_not_found", "path_not_found"]);
-
 /** What File manager and Default application do, on a row of the project pane and in the file
  * viewer's header alike: asks the daemon to reveal the live file or folder in the host's file
  * manager, or to open it with its default application, and raises an error alert when the host
@@ -23,8 +19,7 @@ export function useHostPathActions(): (type: "open_project_path" | "reveal_proje
   const { request, toastError } = useDaemon();
   return (type, { project, worktree, path }) => {
     void request({ type, project, ...(worktree !== undefined && { worktree }), path }).catch((error: Error) => {
-      const gone = error instanceof DaemonRequestError && GONE.has(error.code);
-      toastError(error, undefined, t(type === "open_project_path" ? "common.openDefaultApplicationFailedTitle" : "common.revealFailedTitle"), gone ? "hostPathGone" : undefined);
+      toastError(error, undefined, t(type === "open_project_path" ? "common.openDefaultApplicationFailedTitle" : "common.revealFailedTitle"), hostPathRecovery(error));
     });
   };
 }

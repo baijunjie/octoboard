@@ -61,10 +61,28 @@ The uncommitted sections are read from the worktree that has the branch checked 
   absolute path otherwise, either as the window shows paths (see "A row's actions" in `docs/product/project-pane.md`).
   A copy that fails raises an error alert saying the worktree's path could not be copied. The worktree holding the
   project's folder has that line too, with its folder's name and the copy button, while its uncommitted changes are cut
-  short, as the warning about them is marked at the end of it (see "What the list says instead" below).
-- **A worktree in which the project's folder is not a directory** — missing there, or reached only through a symbolic
-  link — has a line in the branch selector's area saying the project's folder is not in the worktree the branch is
-  checked out in, below the worktree name where one is shown.
+  short or its copy of the project's folder cannot be read, as the warning about either is marked at the end of it (see
+  "What the list says instead" below, and the next item).
+- **A worktree whose copy of the project's folder cannot be read** — missing there, reached through a symbolic link,
+  not a folder, or unreadable — has its line end on an amber warning mark, after its name and copy button, within the
+  line's text (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`); nothing
+  about it is written as a line of its own. The mark is named that the project's folder is unavailable in this
+  worktree, and its popover says why and what to do, by the cause the daemon gives:
+  - **missing**: the folder is not in this worktree — the branch checked out there may not have it, or it may have been
+    moved, renamed or deleted; restore it in this worktree, or check out a branch that has it, then refresh. A daemon
+    that gives no cause gets this too.
+  - **link**: the path to the folder in this worktree goes through a symbolic link, which Octoboard does not follow;
+    replace the link with a real folder, then refresh.
+  - **not a directory**: something other than a folder is where the folder should be in this worktree; put the folder
+    back there, then refresh.
+  - **permission denied**: Octoboard is not allowed to read the folder in this worktree; check the folder's
+    permissions, and grant Octoboard access in the system's privacy settings if needed, then refresh.
+  - **any other cause**, or one the window does not know: the folder in this worktree cannot be read; make sure it is
+    still there and its disk is connected, then refresh.
+
+  When the worktree's uncommitted changes are cut short as well, the line still carries one mark, saying both (see
+  "What the list says instead" below). The mark has no recovery action, comes with its line, and is not announced to
+  assistive technology on its own.
 - **A branch checked out in no worktree** has no uncommitted changes and no explanatory notice; only what it has
   committed is listed.
 - **A branch with no commit yet** — checked out in a worktree whose `HEAD` has none — has a line saying there are no
@@ -403,8 +421,11 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
     that the worktree has more uncommitted changes than the list can show, often because generated files are not
     ignored, and what to do: add files that should not be tracked to `.gitignore`, or commit or discard some of the
     changes, then refresh. It has no recovery action. It stands for as long as the uncommitted changes are listed cut
-    short, a filter that matches nothing included. A worktree whose whole `git status` output is more than 8 MiB has its
-    uncommitted changes not listed at all, and says so.
+    short, a filter that matches nothing included. When the worktree's copy of the project's folder cannot be read as
+    well (see "Uncommitted changes" above), the line holds one mark, never two side by side: it is named that not every
+    uncommitted change is listed and that the project's folder is unavailable in this worktree, and its popover gives
+    the reason and remedy of the changes cut short, then those of the folder. A worktree whose whole `git status` output
+    is more than 8 MiB has its uncommitted changes not listed at all, and says so.
   - **Committed changes cut short**, or, grouped by commit, only the newest commits being listed — only when the
     branch has more than 100 commits since the fork, or in all when listed with its whole history (see "Grouped by
     commit" above) — put an amber warning mark named that committed changes are cut short on the Committed heading, in

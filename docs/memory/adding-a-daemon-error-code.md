@@ -23,12 +23,16 @@ adds, in `packages/ui`:
   is the daemon's own message then shows that step in place of the group's remedy.
 - Where one code covers several situations the user fixes in different ways (a folder gone, a link in the way, a file
   where a folder should be), the daemon sends a fixed-vocabulary `cause` param, and `classifyError` picks the remedy
-  from a table keyed by it (`SOURCE_CAUSE_RECOVERY`, `RELOCATION_CAUSE_RECOVERY`), each remedy an `ErrorRecovery` of its
-  own. Map it there, never with an explicit `recovery` at the call sites: every route that raises the code then gets it,
-  the easily missed ones too (opening a terminal path link reads through the same browse requests). Decide, and cover in
-  `errorRecovery.test.ts`, what a `cause` the window does not know and an error with no `cause` each get; nothing else
-  makes you, and either can otherwise land on a remedy that does not fit or on the unexpected alert. Name the param
-  `cause`, never `reason`, `reason_code` or `title`: when the failure ends a launch, `report_failed_launch`
+  from a table keyed by it (`SOURCE_CAUSE_RECOVERY`), each remedy an `ErrorRecovery` of its own. Map it there, never
+  with an explicit `recovery` at the call sites: every route that raises the code then gets it, the easily missed ones
+  too (opening a terminal path link reads through the same browse requests). Put the vocabulary in
+  `packages/ui/src/protocol.ts` as a closed type with a normaliser that decides what a `cause` the window does not know
+  and an error with no `cause` each become (as `SourceUnavailableCause` and `sourceUnavailableCause` do), key the table
+  by that type, and read the param through the normaliser there and in every other place that reads it (a view, the
+  gallery fixtures): written by hand in each place, those two defaults drift apart, and a new cause is not caught by the
+  type check where a place lacks it. Cover both defaults in `errorRecovery.test.ts`; nothing else makes you decide them,
+  and either can otherwise land on a remedy that does not fit or on the unexpected alert. Name the param `cause`, never
+  `reason`, `reason_code` or `title`: when the failure ends a launch, `report_failed_launch`
   (`apps/daemon/src/coordinator.rs`) writes those over the failure's own params. `reason` is also the daemon's English
   text, which the window scans for an operating-system error signature.
 - Where the remedy is done in Settings' Agent accounts section, a case in `recoveryAction`

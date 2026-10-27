@@ -30,7 +30,10 @@ bug and asks the user to file an Issue, however ordinary the cause. So raise suc
 remedy fits, or `"none"` where the alert's body already says what to do.
 
 The same explicit `recovery` is how a call site gives a daemon failure a better remedy than its code's group has. It
-replaces the group's remedy for whatever the call raises (an operating-system signature can still win over it), so
-where it fits only some codes, pass it only when the error's code is one of them, as `useHostPathActions` does. A
-remedy that depends on why the daemon refused rather than on which action asked is not passed here at all: it goes by
-the code's `cause` in `classifyError`, so that every route raising the code gets it.
+replaces the group's remedy for whatever the call raises (an operating-system signature can still win over it), so where
+it fits only some codes, pass it only when the error's code is one of them, choosing it in one function in
+`packages/ui/src/errorRecovery.ts` that every route raising that kind of failure calls, never in a code set of the call
+site's own: `hostPathRecovery` is that function for a project file or folder that is gone, used both by the host-path
+actions and by terminal path links, so reuse it there. A remedy that depends on why the daemon refused rather than on
+which action asked is not passed here at all: it goes by the code's `cause` in `classifyError`, so that every route
+raising the code gets it.

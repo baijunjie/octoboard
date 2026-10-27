@@ -1005,6 +1005,10 @@ pub struct WorktreeInfo {
     pub branch: Option<String>,
     /// Whether the project's scope exists as a directory in this worktree.
     pub scope_present: bool,
+    /// Why it does not: `source_unavailable`'s `cause`, or `permission_denied` for a read the system
+    /// denied; absent while it does.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope_cause: Option<&'static str>,
 }
 
 /// One entry of a project directory listing.

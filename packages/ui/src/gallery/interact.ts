@@ -365,7 +365,7 @@ export interface Ui {
   hoverTerminalUrl: (text: string) => Promise<void>;
   /** Clicks the terminal's text `text`, once the pointer on it shows the pointer cursor of a link, as
    * `hoverTerminalUrl` waits for, and returns when a dialog is up over the window, for a file path
-   * that opens in the file viewer. Fails if the text is not a link or no dialog opens. */
+   * that opens in the file viewer (or the error alert of one that cannot be opened). Fails if the text is not a link or no dialog opens. */
   clickTerminalLink: (text: string) => Promise<void>;
   /** Moves focus onto the first control named `matcher`, waiting for it to appear, with the keyboard
    * as its source, so that the focus ring is drawn as it is for a user who tabbed there, and a key
@@ -956,7 +956,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       for (const type of ["mousedown", "mouseup"]) {
         screen.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY }));
       }
-      await waitFor(() => doc.querySelector("[role=dialog]") ?? undefined, `Clicking ${text} in the terminal opened no dialog`, VIEWER_LOAD_TIMEOUT_MS);
+      await waitFor(() => doc.querySelector("[role=dialog], [role=alertdialog]") ?? undefined, `Clicking ${text} in the terminal opened no dialog`, VIEWER_LOAD_TIMEOUT_MS);
       await wait(600);
     },
     async hoverChangeStatus(row, status) {

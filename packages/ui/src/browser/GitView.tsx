@@ -16,8 +16,9 @@ import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useStableHandler } from "../components/useLatest";
 import type { ErrorPresentation } from "../errorPresentation";
+import type { ScopeCause } from "../protocol";
 import { retryCanHelp } from "../errorRecovery";
-import type { Translate } from "../i18n/catalog";
+import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
@@ -134,6 +135,16 @@ function BranchGoneMark({ name }: { name: string }): React.ReactElement {
   );
 }
 
+/** What the mark of a worktree whose copy of the project's folder cannot be read says, by why: the reason, then what
+ * to do about it. */
+const SCOPE_MARK = {
+  missing: ["git.changes.scope.missing", "git.changes.scope.missingRemedy"],
+  link: ["git.changes.scope.link", "git.changes.scope.linkRemedy"],
+  not_a_directory: ["git.changes.scope.notFolder", "git.changes.scope.notFolderRemedy"],
+  other: ["git.changes.scope.unreadable", "git.changes.scope.unreadableRemedy"],
+  permission_denied: ["git.changes.scope.denied", "git.changes.scope.deniedRemedy"],
+} as const satisfies Record<ScopeCause, readonly [PlainMessageKey, PlainMessageKey]>;
+
 /** A line above the list, said in the words of the message it is. `goneBranches` are the branches of the
  * comparison the repository no longer has, whose name a line draws carries the mark. */
 function Notice({ notice, projectRoots, goneBranches }: { notice: ChangesNotice; projectRoots: readonly string[]; goneBranches: readonly string[] }): React.ReactElement {
@@ -141,7 +152,8 @@ function Notice({ notice, projectRoots, goneBranches }: { notice: ChangesNotice;
   switch (notice.id) {
     case "unborn":
       return <>{t("git.changes.unborn")}</>;
-    case "worktree":
+    case "worktree": {
+      const markLabel = notice.cut && notice.scope ? "git.changes.cutAndScope" : notice.cut ? "git.changes.cut.uncommitted" : notice.scope ? "git.changes.scope.mark" : undefined;
       return (
         <>
           <Message id="git.changes.worktree" params={{ name: code(notice.name) }} />
@@ -153,16 +165,21 @@ function Notice({ notice, projectRoots, goneBranches }: { notice: ChangesNotice;
             variant="ghost"
             className={`${ROW_ICON_BUTTON_CLASS} ms-1 align-top`}
           />
-          {notice.cut && (
-            <StatusMark tone="warning" inline label={t("git.changes.cut.uncommitted")}>
-              <p>{t("git.changes.cut.uncommittedReason")}</p>
-              <p><Message id="git.changes.cut.uncommittedRemedy" params={{ gitignore: code(".gitignore") }} /></p>
+          {/* A line holds one mark: changes cut short and an unreadable folder are both said in it. */}
+          {markLabel && (
+            <StatusMark tone="warning" inline label={t(markLabel)}>
+              {notice.cut && (
+                <>
+                  <p>{t("git.changes.cut.uncommittedReason")}</p>
+                  <p><Message id="git.changes.cut.uncommittedRemedy" params={{ gitignore: code(".gitignore") }} /></p>
+                </>
+              )}
+              {notice.scope && SCOPE_MARK[notice.scope].map((id) => <p key={id}><Message id={id} /></p>)}
             </StatusMark>
           )}
         </>
       );
-    case "scopeMissing":
-      return <>{t("git.changes.scopeMissing")}</>;
+    }
     case "noRemote":
       return <Message id="git.changes.noRemote" params={{ branch: code(notice.branch) }} />;
     case "noBase":

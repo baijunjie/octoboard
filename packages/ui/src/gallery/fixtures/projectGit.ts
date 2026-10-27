@@ -3,7 +3,7 @@ import { GIT_STDERR } from "./structuredErrors";
 // and the gallery's "Project pane: Git" scenarios over it: the branch selector, the change list in
 // its sections, whole or by commit, a diff of each kind opened from it, and the states a source or a
 // list can end in. Every change here is built by the factory for its kind (`changeFixtures.ts`).
-import type { BranchInfo, ContentSource, FileContent, WorktreeInfo } from "../../protocol";
+import type { BranchInfo, ContentSource, FileContent, ScopeCause, WorktreeInfo } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Preferences, Scenario } from "../scenario";
 import type { FixtureChange, FixtureCommit, FixtureGit, Versions } from "./changeFixtures";
@@ -508,7 +508,7 @@ const CROWDED_BRANCHES: BranchInfo[] = [
 const WORKTREES: WorktreeInfo[] = [
   { id: "wt-main", root: "/Users/dev/code/search-api", main: true, head: "4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39", branch: "main", scope_present: true },
   { id: "wt-side", root: "/Users/dev/code/search-api-experiments", main: false, head: "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807", branch: "feature/ranking-experiments", scope_present: true },
-  { id: "wt-detached", root: "/Users/dev/.worktrees/search-api/review", main: false, head: "0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d", branch: null, scope_present: false },
+  { id: "wt-detached", root: "/Users/dev/.worktrees/search-api/review", main: false, head: "0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d", branch: null, scope_present: false, scope_cause: "missing" },
 ];
 
 /** The repository every gallery project's Git mode shows unless its scenario gives another: the
@@ -636,14 +636,16 @@ const DETACHED_GIT = withWorktrees(SAMPLE_GIT, [{ ...WORKTREES[0], branch: null 
  * out and there is no branch to choose. */
 const BRANCHLESS_GIT: FixtureGit = { worktrees: [{ ...WORKTREES[0], branch: null }], changes: { "wt-main": [] }, branches: [] };
 
-/** The side worktree has no copy of the project's folder, as a sparse checkout leaves it. The project is a subfolder
- * of the repository, so its place in the side worktree is a path of its own below that worktree's root. */
-const SPARSE_GIT: FixtureGit = {
+/** The side worktree cannot use the project's folder, for the `cause` given (by default it has no copy, as a sparse
+ * checkout leaves it); with `cutShort`, the daemon also stopped listing changes early. The project is a subfolder of the
+ * repository, so its place in the side worktree is a path of its own below that worktree's root. */
+const sparse = (cause: ScopeCause = "missing", cutShort = false): FixtureGit => ({
   ...SAMPLE_GIT,
+  ...(cutShort && { cutShort }),
   scope: "apps/web",
-  worktrees: [WORKTREES[0], { ...WORKTREES[1], scope_present: false }, WORKTREES[2]],
+  worktrees: [WORKTREES[0], { ...WORKTREES[1], scope_present: false, scope_cause: cause }, WORKTREES[2]],
   changes: { ...SAMPLE_GIT.changes, "wt-side": [] },
-};
+});
 
 /** The side worktree has `gh-pages` checked out, which shares no commit with `main`. */
 const orphaned = (shallow: boolean): FixtureGit => ({
@@ -891,11 +893,22 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A branch whose worktree lacks the project's folder",
-    description: "The side worktree has feature/ranking-experiments checked out without the project's folder. One header groups the branch selector, worktree name and Copy path button, missing-folder warning, and fork comparison. The detail lines share the same spacing, and the committed changes are still listed below the header.",
+    description: "The side worktree has feature/ranking-experiments checked out without the project's folder. One header groups the branch selector, the worktree name with its Copy path button and a warning triangle at the end of that line, and the fork comparison. The detail lines share the same spacing, and the committed changes are still listed below the header. The triangle's popover is in the next scenario.",
     state,
     preferences,
-    git: SPARSE_GIT,
+    git: sparse(),
     steps: selecting(rankingSession),
+  },
+  {
+    id: "git-changes-scope-missing-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "Why the project's folder is unavailable in a worktree, from a resting mouse",
+    description: "The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying the project's folder is not in this worktree (the branch may lack it, or it may have been moved, renamed or deleted) and to restore it or check out a branch that has it.",
+    state,
+    preferences,
+    git: sparse(),
+    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
   },
   {
     id: "git-changes-scope-missing-terminal",
@@ -905,7 +918,7 @@ const reviewScenarios: Scenario[] = [
     description: "The Changes tab shows the side worktree, which has no copy of the project's folder, and Show terminal panel is pressed: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read. Its remedy says the folder may have been moved, renamed or deleted, or be missing from the branch checked out there, and to restore it at that path and try again; the system's reason is behind Error details, closed.",
     state,
     preferences,
-    git: SPARSE_GIT,
+    git: sparse(),
     steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
   },
   {
@@ -913,12 +926,77 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A terminal started in a worktree whose project folder is a link",
-    description: "As with the worktree lacking the project's folder, Show terminal panel is pressed on the side worktree and the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read. Its remedy says that part of that path is a symbolic link, which Octoboard does not follow in a worktree, and to replace the link with a real folder; it does not suggest the folder was deleted. The system's reason is behind Error details, closed. The Changes tab behind it says, as it does for a missing folder, that the folder isn't in the worktree: that is the app's current wording, since the worktree list cannot tell a missing folder from a link.",
+    description: "As with the worktree lacking the project's folder, Show terminal panel is pressed on the side worktree and the error alert opens, titled \"Could not create the terminal\" and saying the folder /Users/dev/code/search-api-experiments/apps/web cannot be read. Its remedy says that part of that path is a symbolic link, which Octoboard does not follow in a worktree, and to replace the link with a real folder; it does not suggest the folder was deleted. The system's reason is behind Error details, closed. The Changes tab behind it carries the warning triangle at the end of the worktree name's line, closed; its popover is in the next scenario.",
     state,
     preferences,
-    git: SPARSE_GIT,
-    scopeUnavailable: "link",
+    git: sparse("link"),
     steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
+  },
+  {
+    id: "git-changes-scope-link-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "A branch whose worktree reaches the project's folder through a link",
+    description: "The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying the path to the project's folder in that worktree goes through a symbolic link, which Octoboard does not follow, and to replace the link with a real folder. It does not suggest the folder was deleted.",
+    state,
+    preferences,
+    git: sparse("link"),
+    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
+  },
+  {
+    id: "git-changes-scope-not-a-directory-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "A branch whose worktree has a file where the project's folder should be",
+    description: "The side worktree has feature/ranking-experiments checked out. The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying that something other than a folder is where the project's folder should be in that worktree, and to put the folder back there.",
+    state,
+    preferences,
+    git: sparse("not_a_directory"),
+    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
+  },
+  {
+    id: "git-changes-scope-unreadable-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "A branch whose worktree's project folder cannot be read",
+    description: "The side worktree has feature/ranking-experiments checked out. The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying that the project's folder in that worktree cannot be read, and to make sure the folder is still there and its disk is connected.",
+    state,
+    preferences,
+    git: sparse("other"),
+    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
+  },
+  {
+    id: "git-changes-scope-denied-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "A branch whose worktree's project folder is off limits to the app",
+    description: "The side worktree has feature/ranking-experiments checked out. The mouse rests on the warning triangle at the end of the worktree name's line: its popover opens with no click and no focus taken, saying that Octoboard is not allowed to read the project's folder in that worktree, and to check the folder's permissions and grant access in the system's privacy settings if needed.",
+    state,
+    preferences,
+    git: sparse("permission_denied"),
+    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.scope.mark"))],
+  },
+  {
+    id: "git-changes-scope-denied-terminal",
+    group: GROUP,
+    category: "exceptional",
+    title: "A terminal started in a worktree whose project folder the app may not read",
+    description: "Show terminal panel is pressed on the side worktree: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying Octoboard is not allowed to read /Users/dev/code/search-api-experiments/apps/web. Its remedy is about access (check the folder's permissions, grant access in the system's privacy settings, or choose another folder), not about the folder being gone; the system's reason is behind Error details, closed.",
+    state,
+    preferences,
+    git: sparse("permission_denied"),
+    steps: [...selecting(rankingSession), (ui) => ui.press(ui.t("titleBar.terminal.show")), (ui) => ui.wait(400)],
+  },
+  {
+    id: "git-changes-scope-and-cut-hover",
+    group: GROUP,
+    category: "exceptional",
+    title: "A worktree both cut short and without the project's folder, from a resting mouse",
+    description: "The side worktree lacks the project's folder and its change list was also cut short, so the Worktree line carries one warning triangle for both, not two. The mouse rests on it: its popover opens with no click and no focus taken, giving the cut reason with its remedy first, then why the project's folder is unavailable with its remedy.",
+    state,
+    preferences,
+    git: sparse("missing", true),
+    steps: [...selecting(rankingSession), (ui) => ui.hoverStatusMark(ui.t("git.changes.cutAndScope"))],
   },
   {
     id: "git-changes-listing-commits",
@@ -1042,7 +1120,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A main working copy on no branch",
-    description: "The project's folder is a linked worktree on feature/ranking-experiments, and the main working copy is detached: the line above the list says the branch's commits cannot be compared, and only its uncommitted change is listed.",
+    description: "The project's folder is a linked worktree on feature/ranking-experiments, and the main working copy is detached: the line above the list says the main working copy is not on a branch, so the branch's commits cannot be compared, and only its uncommitted change is listed.",
     state,
     preferences,
     git: NO_BASE_GIT,

@@ -1,7 +1,7 @@
 // The files the fixture daemon serves for a project's browser (`fixtureDaemon.ts`), and the
 // gallery's "Project files" scenarios over them: the tree, the viewer opened from it, and the states
 // a listing or a read can end in.
-import type { MessageParams } from "../../protocol";
+import type { MessageParams, SourceUnavailableCause } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import { SAMPLE, snapshotState } from "./builders";
@@ -16,14 +16,17 @@ export interface FixtureError {
   message: string;
 }
 
-/** What `source_unavailable`'s `cause` says about why a directory a request is scoped to cannot be read. */
-export type SourceUnavailableCause = "missing" | "link" | "not_a_directory" | "other";
-
 /** A `source_unavailable` as the daemon sends it, with the `cause` its remedy is worded by. `detail` is the daemon's own
  * text for a scope that is not in another worktree or is reached through a link there, and for a folder that is not a
  * folder ("not a directory"); for any other failure (including the project's own folder gone) it is the system's text. */
 export function sourceUnavailable(path: string, cause: SourceUnavailableCause, detail: string): FixtureError {
   return { code: "source_unavailable", params: { path, cause, detail }, message: `${path} is unavailable: ${detail}` };
+}
+
+/** A `permission_denied` as the daemon sends it when the system denied reading a directory a request is scoped to: no
+ * `cause`, the path and the system's own text. */
+export function permissionDenied(path: string, detail: string): FixtureError {
+  return { code: "permission_denied", params: { path, detail }, message: `${path} could not be read: ${detail}` };
 }
 
 /** One path of a fixture project: a directory (cut short when `complete` is false), a file's text,

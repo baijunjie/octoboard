@@ -49,9 +49,16 @@ it("says nothing about a branch checked out nowhere or in the project's own work
 
 it("names the worktree another branch's changes are read from by its folder's name, and a scope it lacks", () => {
   expect(status(listed("loaded", { own: false, worktree: tree("c1", false) }), { state: "none" }).notices).toEqual([
-    { id: "worktree", name: "repo", root: "/home/me/code/repo" },
-    { id: "scopeMissing" },
+    { id: "worktree", name: "repo", root: "/home/me/code/repo", scope: "missing" },
   ]);
+});
+
+it.each([
+  ["missing", "missing"], ["link", "link"], ["not_a_directory", "not_a_directory"], ["other", "other"],
+  ["permission_denied", "permission_denied"], ["a_future_cause", "other"],
+] as const)("says why the worktree lacks the scope when its cause is %s", (scopeCause, cause) => {
+  const worktree = { ...tree("c1", false), scope_cause: scopeCause };
+  expect(status(listed("loaded", { own: false, worktree }), { state: "none" }).notices).toEqual([{ id: "worktree", name: "repo", root: "/home/me/code/repo", scope: cause }]);
 });
 
 it("says a worktree with no commit yet has none", () => {
@@ -133,4 +140,9 @@ it("takes a branch for gone only when a complete list lacks it and no worktree h
   expect(branchGone(undefined, branchesOf([]), undefined)).toBe(false);
   // The repository's first branch is in no list until it has a commit.
   expect(branchGone("topic", branchesOf([]), tree(null))).toBe(false);
+});
+
+it("names the project's own worktree too when its copy of the project's folder cannot be read, the line carrying the mark", () => {
+  const worktree = { ...tree("c1", false), scope_cause: "link" };
+  expect(status(listed("loaded", { own: true, worktree }), { state: "none" }).notices).toEqual([{ id: "worktree", name: "repo", root: "/home/me/code/repo", scope: "link" }]);
 });

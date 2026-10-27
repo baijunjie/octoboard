@@ -276,6 +276,18 @@ export const connectionScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Interrupted by a restart"))],
   },
   {
+    id: "terminal-path-link-removed",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A path to a file removed since the link was drawn",
+    description:
+      "Clicking src/summary/Draft.ts, which the daemon found when the output was drawn but which is gone now, opened the error alert instead of the viewer, titled \"Could not open the path\" and saying src/summary/Draft.ts does not exist any more. " +
+      "Its remedy says the file may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/src/summary/Draft.ts": { view: { path: "src/summary/Draft.ts" } } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Draft.ts")],
+  },
+  {
     id: "terminal-reconnecting",
     group: TERMINAL,
     category: "exceptional",
