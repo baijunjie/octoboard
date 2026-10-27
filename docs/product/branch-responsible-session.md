@@ -272,10 +272,6 @@ process outside the agent's tree.
   branches, the records of the repository are brought up to date: the record of a branch that
   is gone is removed, one whose branch was deleted and made again is dropped, and a renamed branch's record moves to
   its new name. Nothing runs on a periodic timer.
-- **Records from an earlier version.** A database from an earlier version of Octoboard keeps only the records that
-  came from a session's git report: any other is deleted when the daemon opens it, and its branch is not attributed
-  again. A record kept makes the reporting session the branch's responsible session from the branch's creation, named
-  by the created name recorded with the report.
 - **Removing a project** clears the records of its repository, unless another project still points into that repository
   (see `docs/product/removing-projects.md`). Deleting a console removes every project under it, so it clears theirs the
   same way.

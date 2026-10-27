@@ -131,9 +131,11 @@ without it the throwaway `HOME`'s login shell finds no agent executable at all â
 as `CODEX_HOME` or `GROK_HOME` pointing at the run's own throwaway configuration.
 
 A probe that needs a logged-in agent whose login cannot be brought into the throwaway `HOME` has to run on the real
-one. Expect it to create consoles and sessions in the user's real board and to run any pending schema migration
-against the user's live database â€” copy that database aside first whenever the change being probed touches the
-schema, and plan the cleanup as part of the probe rather than after the fact.
+one. Expect it to create consoles and sessions in the user's real board. When the build being probed has a newer
+schema version than the user's live database, opening that database moves it aside and starts an empty one at the
+newer version, and the user's own build then refuses to open the empty one. So copy that database aside first whenever
+the change being probed touches the schema, put it back during cleanup, and plan the cleanup as part of the probe
+rather than after the fact.
 
 Clean up in the order the daemon enforces, and leave time between the steps: archiving a session returns as soon as its
 record is written, while the agent process is still only being asked to exit, so deleting the console straight

@@ -88,8 +88,7 @@ The statuses a session goes through, their glyphs, what they are derived from an
 
 ## Locking a session
 
-Locking is the user's protection against archiving or deleting a session. Every session starts unlocked, including
-sessions already stored without a lock setting. The lock is shared by every client, survives a daemon restart, and stays
+Locking is the user's protection against archiving or deleting a session. Every session starts unlocked. The lock is shared by every client, survives a daemon restart, and stays
 set when the session is resumed or reopened. Locking does not change its position in a list, its status, or its binding.
 The controls are described in "Session lock controls" in `docs/product/sidebar-session-rows.md`. Agents have no tool to
 lock or unlock a session.

@@ -192,10 +192,7 @@ every one is held; an archived console session's colour is free for others. Afte
 later console session's colour as an assigned one does. A console session keeps its colour, assigned or chosen, when
 it is archived and when it is resumed, so with more than 16 at once, with one resumed after its colour has gone to
 another, or with a colour chosen that another already has, two console sessions of one console can share a colour,
-which is the other reason nothing is ever told apart by colour alone. A colour stored by an earlier version of
-Octoboard is moved onto the nearest family of this palette when the daemon opens its store — olive to lime, jade to
-green, azure to sky and rose to pink, while teal and violet stay as they are — so such a console session keeps much
-the same colour. Each colour has its own light and dark value (see "What follows the choice" in
+which is the other reason nothing is ever told apart by colour alone. Each colour has its own light and dark value (see "What follows the choice" in
 `docs/product/appearance.md`).
 
 **Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar row

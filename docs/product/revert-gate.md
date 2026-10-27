@@ -40,8 +40,7 @@ responsible session" in `docs/product/branch-responsible-session.md`), the same 
 - its **fork point**, the commit it was created at.
 
 Both follow the branch's record: a rename carries them to the new name, a handover leaves them as they are, and they go
-when the record goes. A branch whose creation was recorded by an earlier version of Octoboard has a fork point but no
-target branch. A branch no session's git reported creating has neither.
+when the record goes. A branch no session's git reported creating has neither.
 
 ## What it refuses
 
@@ -121,8 +120,6 @@ changing them" in `docs/product/git-workflow-settings.md`.
   such a gate runs as any user hook does. A project that wants only its own turns the built-in one off.
 - **Nothing is written** to the repository or its configuration; what the gate needs is kept in Octoboard's own
   storage.
-- A session launched by an earlier version of Octoboard keeps the dispatchers it was launched with and is not checked
-  until its next launch.
 
 ## When it cannot decide
 

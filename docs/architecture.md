@@ -285,6 +285,13 @@ Stored entities: console, host, project, session, account, report-panel page, tr
 interrupted session, branch origin (the session responsible for a branch) and application-wide settings. The shapes
 are in `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind a few fields.
 
+The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store.rs`), and a new database gets the
+whole current schema at once. Octoboard is unreleased, so there are no in-place migrations: a file at the current version
+is used as is, a file with no tables is initialized in place, and a file of an older version that has tables is moved aside
+as `<name>.superseded-<unix seconds>` (never deleted, with a warning logged) while a fresh database starts. A file of a
+newer version, or one that is not SQLite, is refused and left untouched. A later schema change is a step from version N to
+N+1.
+
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
 - `Session.bound_to` is the id of the session a session reports to — a console session, or an unbound project session
@@ -319,9 +326,7 @@ are in `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind
   resume. Nothing but the agent interprets them, which is why they are stored as free text per agent rather than as an
   enumeration, and why the models a dialog offers are asked of the agent itself for the account in question, kept only
   as a short-lived cache in the daemon: a list maintained in Octoboard would be a second source of truth that goes
-  stale with every agent release. A console's `console_session_agent` is not a setting of its own: it is kept
-  equal to `default_agent`, is not sent to clients and nothing reads it; the column is kept so that existing databases
-  need no rewrite.
+  stale with every agent release.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
 - `Page.console_session_id` is the session that pushed the page — a console session, or an unbound or lead project

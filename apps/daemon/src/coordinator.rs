@@ -1393,7 +1393,6 @@ fn store_new_console(
         id,
         name: new.name.trim().to_string(),
         workdir: workdir.to_string_lossy().into_owned(),
-        console_session_agent: new.default_agent,
         default_agent: new.default_agent,
         project_session_agent: new.project_session_agent,
         claude_account_id: new.claude_account_id,
@@ -1519,9 +1518,6 @@ pub async fn update_console(
         if let Some(project_session_agent) = changes.project_session_agent {
             console.project_session_agent = project_session_agent;
         }
-        // Set on every save rather than only when the default agent changes, so a console
-        // whose stored value somehow diverged is healed by the next one.
-        console.console_session_agent = console.default_agent;
         // Only sessions opened afterwards take a new reference; each existing one keeps the
         // account and the directory it was started with (see `Session::account_id`).
         for (agent, reference) in &accounts {
@@ -6786,13 +6782,12 @@ mod tests {
         assert!(!state.account_quotas.is_kicked_for_test(Agent::Grok, None));
     }
 
-    fn console(console_session_agent: Agent, workdir: &Path) -> Console {
+    fn console(default_agent: Agent, workdir: &Path) -> Console {
         Console {
             id: "console-1".to_string(),
             name: "Console".to_string(),
             workdir: workdir.to_string_lossy().into_owned(),
-            console_session_agent,
-            default_agent: console_session_agent,
+            default_agent,
             project_session_agent: None,
             claude_project_session_model: None,
             claude_project_session_effort: None,
@@ -9686,7 +9681,7 @@ mod tests {
         .expect("created");
         let created = state.store.list_consoles().unwrap().remove(0);
         assert!(Path::new(&created.workdir).starts_with(&*dir));
-        assert_eq!(created.console_session_agent, Agent::Codex);
+        assert_eq!(created.default_agent, Agent::Codex);
         assert_eq!(created.claude_console_session_model, None);
         assert_eq!(
             created.codex_console_session_model.as_deref(),
@@ -9731,42 +9726,9 @@ mod tests {
         assert_eq!(state.store.list_consoles().unwrap().len(), 1);
     }
 
-    /// Saving a console puts the console session agent back on the default agent, whether or not
-    /// the request touches the default agent.
-    #[tokio::test]
-    async fn saving_a_console_keeps_its_console_session_agent_on_the_default_agent() {
-        let (state, dir) = crate::test_support::app_state("coordinator-update-console-agent");
-        let workdir = console_workdir(&dir);
-        let mut diverged = console(Agent::Grok, &workdir);
-        diverged.default_agent = Agent::Claude;
-        state.store.insert_console(&diverged).unwrap();
-
-        handle(&state, None, update_console_request("console-1", |_| {}))
-            .await
-            .unwrap();
-        let healed = state.store.get_console("console-1").unwrap().unwrap();
-        assert_eq!(healed.console_session_agent, Agent::Claude);
-
-        handle(
-            &state,
-            None,
-            update_console_request("console-1", |request| {
-                let RequestBody::UpdateConsole { default_agent, .. } = request else {
-                    unreachable!()
-                };
-                *default_agent = Some(Agent::Codex);
-            }),
-        )
-        .await
-        .unwrap();
-        let moved = state.store.get_console("console-1").unwrap().unwrap();
-        assert_eq!(moved.default_agent, Agent::Codex);
-        assert_eq!(moved.console_session_agent, Agent::Codex);
-    }
-
     /// A project session falls back to the project's own default, then the console's project
-    /// session agent, then (for a console without one, as every console stored before the setting
-    /// was) `default_agent`; a console session always takes `default_agent`.
+    /// session agent, then (for a console that names none) `default_agent`; a console session
+    /// always takes `default_agent`.
     #[test]
     fn a_session_agent_falls_back_through_the_project_to_the_project_session_default() {
         let workdir = Path::new("/tmp/console-1");
@@ -10327,7 +10289,7 @@ mod tests {
 
     /// A project session takes each value from its project, else from its console's project
     /// session pair, else leaves it to the agent, independently per value and per agent; a
-    /// console stored without the pair behaves as before, and a console session never reads it.
+    /// console that names no pair leaves it to the agent, and a console session never reads it.
     #[test]
     fn a_project_session_falls_back_to_the_consoles_project_session_pair_per_value() {
         let (state, _dir) = crate::test_support::app_state("coordinator-project-session-pair");
@@ -10339,7 +10301,7 @@ mod tests {
         let mut session = bare_session("s", Role::Project);
         session.project_id = Some("project-1".to_string());
 
-        // A console stored before the pair existed: nothing to fall back to.
+        // A console that names no pair: nothing to fall back to.
         assert_eq!(launch_settings(&state, &session).unwrap(), (None, None));
 
         owner.claude_project_session_model = Some("fallback-model".to_string());

@@ -53,6 +53,284 @@ pub enum ReorderOutcome {
     Reordered,
 }
 
+/// The schema version a database is created at, recorded in SQLite's `user_version`. A database
+/// at any other version is not opened as it stands; see [`settle_existing_file`].
+///
+/// Every change to [`SCHEMA`] raises this by one: `SCHEMA` only ever runs on an empty file, so
+/// an existing database at an unchanged version keeps its old shape and fails at query time —
+/// while every test, starting from a fresh file, still passes. Once a build at the old version
+/// has been released, the change also adds the step from that version to `settle_existing_file`,
+/// keyed on `user_version` rather than on probing for columns, with a test that opens a database
+/// at the old version; without the step, a released user's database is moved aside.
+const SCHEMA_VERSION: i64 = 1;
+
+/// Every table, index and trigger of the current schema.
+const SCHEMA: &str = r#"
+CREATE TABLE hosts (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    ssh_config  TEXT
+);
+CREATE TABLE accounts (
+    id         TEXT PRIMARY KEY,
+    agent      TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    config_dir TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    -- Whether the account reads the default account's configuration, and where that
+    -- stands: a change that did not finish reads as incomplete, for the user to retry.
+    share_default_config           INTEGER NOT NULL DEFAULT 0,
+    share_default_config_incomplete INTEGER NOT NULL DEFAULT 0,
+    share_default_config_completed INTEGER NOT NULL DEFAULT 0,
+    share_default_config_backup    TEXT,
+    share_default_config_dir       TEXT,
+    -- 1 while the account is switched off.
+    disabled                       INTEGER NOT NULL DEFAULT 0
+);
+-- Backstop for the rule that an account's name is required and unique within its
+-- agent: `coordinator` checks this before every write that can affect a name, but
+-- the invariant belongs on the table it protects, not only on the callers that happen
+-- to remember to check it. `LOWER` matches `coordinator::account_name_key`'s
+-- case-insensitive comparison; it is ASCII-only in SQLite, which is a narrower fold
+-- than `str::to_lowercase`, so this index is a backstop and not a full substitute for
+-- that check. A write that trips it surfaces through `Store::account_write_error` as
+-- the protocol's own `account_name_taken` rather than a raw SQLite error.
+CREATE UNIQUE INDEX accounts_agent_name_unique
+    ON accounts (agent, LOWER(name));
+CREATE TABLE consoles (
+    id            TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    workdir       TEXT NOT NULL,
+    default_agent TEXT NOT NULL,
+    -- The agent a project session here falls back to when its project names none;
+    -- NULL follows `default_agent`.
+    project_session_agent TEXT,
+    -- The account each agent's sessions here read, by id; NULL means that agent's
+    -- default account. No `REFERENCES`: `Store::delete_account` clears these itself,
+    -- in the same locked step as the row's removal, rather than relying on a cascade.
+    claude_account_id TEXT,
+    codex_account_id  TEXT,
+    grok_account_id   TEXT,
+    -- The model and reasoning effort a console session here is launched with, per
+    -- agent because each has its own model names; NULL means the agent's own default.
+    -- Read at launch, so nothing is copied onto the session.
+    claude_console_session_model  TEXT,
+    claude_console_session_effort TEXT,
+    codex_console_session_model   TEXT,
+    codex_console_session_effort  TEXT,
+    grok_console_session_model    TEXT,
+    grok_console_session_effort   TEXT,
+    -- The model and reasoning effort a project session here is launched with when
+    -- neither it nor its project names one; NULL means the agent's own default.
+    claude_project_session_model TEXT,
+    claude_project_session_effort TEXT,
+    codex_project_session_model TEXT,
+    codex_project_session_effort TEXT,
+    grok_project_session_model TEXT,
+    grok_project_session_effort TEXT,
+    icon          TEXT,
+    -- The user's own addition to the console session's instruction file; NULL means
+    -- none.
+    console_session_prompt TEXT,
+    -- The ordinal a console session created in this console is given next, one past
+    -- the highest ever used here. Kept on the console rather than derived from the
+    -- sessions in it, because a console session that is later deleted must not free its
+    -- number for reuse (see `Store::insert_console_session`).
+    next_console_session_ordinal INTEGER NOT NULL DEFAULT 1,
+    created_at    INTEGER NOT NULL
+);
+CREATE TABLE projects (
+    id            TEXT PRIMARY KEY,
+    console_id    TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+    host_id       TEXT NOT NULL,
+    name          TEXT NOT NULL,
+    path          TEXT NOT NULL,
+    default_agent TEXT,
+    source        TEXT NOT NULL,
+    remote_url    TEXT,
+    -- The account each agent's sessions here read, by id; NULL with the flag clear
+    -- inherits the console's reference for that agent. The flag, set only where the id
+    -- is NULL, says the project pins the agent's default account instead, even where
+    -- the console names an account: a separate column so that no stored value in the
+    -- id column can be mistaken for an account id. The id is cleared by
+    -- `Store::delete_account`, like the console's; the flag names no account.
+    claude_account_id TEXT,
+    codex_account_id  TEXT,
+    grok_account_id   TEXT,
+    claude_account_default INTEGER NOT NULL DEFAULT 0,
+    codex_account_default  INTEGER NOT NULL DEFAULT 0,
+    grok_account_default   INTEGER NOT NULL DEFAULT 0,
+    -- The model and reasoning effort a session here is launched with, per agent;
+    -- NULL means the agent's own default. Read at launch, so nothing is copied onto
+    -- the session.
+    claude_session_model  TEXT,
+    claude_session_effort TEXT,
+    codex_session_model   TEXT,
+    codex_session_effort  TEXT,
+    grok_session_model    TEXT,
+    grok_session_effort   TEXT,
+    trust_consent INTEGER NOT NULL DEFAULT 0,
+    pinned        INTEGER NOT NULL DEFAULT 0,
+    tags          TEXT NOT NULL DEFAULT '[]',
+    description   TEXT,
+    -- NULL follows the application-wide value; see `Store::git_workflow_settings`.
+    development         TEXT,
+    rebase_before_merge INTEGER,
+    delivery            TEXT,
+    revert_gate         INTEGER
+);
+CREATE TABLE sessions (
+    id               TEXT PRIMARY KEY,
+    agent            TEXT NOT NULL,
+    agent_session_id TEXT,
+    console_id       TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
+    project_id       TEXT REFERENCES projects(id) ON DELETE CASCADE,
+    host_id          TEXT NOT NULL,
+    role             TEXT NOT NULL,
+    origin           TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    terminal_title   TEXT,
+    -- What the agent's own records call the session: a title it was named with, and a
+    -- stand-in from its first prompt.
+    record_title     TEXT,
+    record_prompt    TEXT,
+    context          TEXT,
+    -- The model and reasoning effort the agent's records show the session running with.
+    observed_model   TEXT,
+    observed_effort  TEXT,
+    status           TEXT NOT NULL,
+    has_conversation INTEGER NOT NULL DEFAULT 0,
+    -- The console session this (project) session reports to, or NULL outside the
+    -- orchestration. Always NULL for a console session itself. No `REFERENCES`, because
+    -- what follows a console session is decided by the coordinator, not by the
+    -- database: archiving one archives its interrupted bound sessions, and deleting an
+    -- archived one deletes its archived bound sessions. An `ON DELETE CASCADE` would be
+    -- wrong twice over: it would take a bound session that is not archived, and it
+    -- would remove rows behind the daemon's back, so no `session_deleted` would be
+    -- broadcast and every client would keep a ghost row.
+    bound_to         TEXT,
+    -- 1 for a lead session: a project session bound to a console session that can
+    -- still own sessions of its own (see `Session::lead`).
+    lead             INTEGER NOT NULL DEFAULT 0,
+    -- Above 0 while the session has a change of its owner it was not running to be
+    -- told of (one count per change): its next launch tells it, from the binding as
+    -- it then stands, and clears what it saw.
+    owner_notice_pending INTEGER NOT NULL DEFAULT 0,
+    -- The parting note of the owner that released the session while it was not running,
+    -- told with the notice while the session is still unbound; NULL for none. Written
+    -- with the release, or with the mark a failed write to the running session left,
+    -- and cleared by the next change of owner and by the delivery.
+    owner_notice_note TEXT,
+    -- Set only for a console session (`role = 'console'`); NULL for a project session.
+    colour           TEXT,
+    ordinal          INTEGER,
+    -- The account this session's own agent reads, by id; NULL means the default
+    -- account. Written with `config_dir` below, which is that account's directory at
+    -- the time, when the session is opened and when its account is switched — see
+    -- `Session::account_id`.
+    account_id       TEXT,
+    config_dir       TEXT,
+    -- A clear override flag inherits the project's or console's current setting.
+    -- A set flag with a NULL value explicitly leaves the choice to the agent.
+    model            TEXT,
+    effort           TEXT,
+    model_override   INTEGER NOT NULL DEFAULT 0,
+    effort_override  INTEGER NOT NULL DEFAULT 0,
+    pinned           INTEGER NOT NULL DEFAULT 0,
+    locked           INTEGER NOT NULL DEFAULT 0,
+    started_at       INTEGER NOT NULL,
+    ended_at         INTEGER
+);
+CREATE TRIGGER protect_locked_session_delete
+BEFORE DELETE ON sessions WHEN OLD.locked = 1
+BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be deleted'); END;
+CREATE TRIGGER protect_locked_session_archive
+BEFORE UPDATE OF status ON sessions
+WHEN OLD.locked = 1 AND NEW.status = 'archived' AND OLD.status != 'archived'
+BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be archived'); END;
+CREATE TABLE trusted_directories (
+    path TEXT PRIMARY KEY
+);
+CREATE TABLE pages (
+    id                TEXT PRIMARY KEY,
+    -- The session that pushed the page, a console session or a project session that
+    -- faces the user; deleting it takes its pages, and deleting a console or a project
+    -- therefore takes all of theirs.
+    console_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    html              TEXT NOT NULL,
+    anchor_message_id TEXT,
+    created_at        INTEGER NOT NULL
+);
+-- Information shared with a session that was interrupted, held to be written into it
+-- once it is resumed (`Store::add_pending_info`), oldest first by `id`. Deleting the
+-- session takes its rows.
+CREATE TABLE pending_info (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    text       TEXT NOT NULL
+);
+-- The session working on a branch, keyed on the branch because one session works on
+-- many and a branch has one responsible session. It starts as the session whose own git
+-- reported creating the branch and moves only by a handover. No `REFERENCES` on
+-- `responsible_session_id`: a project's deletion cascades its sessions away and the
+-- record outlives them, which is what `responsible_title`, the title the session had
+-- when it became responsible, is for. `responsible_since` is when that was, in
+-- milliseconds. `repository` is the repository's canonical common directory, so a row
+-- belongs to the repository and not to any project.
+-- `birth_commit` and `birth_time` are the commit and the second the branch was created
+-- at, which tell a branch deleted and made again under the same name from the one the
+-- row was made for; `created_at` is that time in milliseconds, or when the creation was
+-- reported.
+-- `target_branch` is the branch the branch was created from, which the revert gate
+-- holds its commits against, together with `birth_commit` as the fork point; NULL for
+-- one created from something that is no branch.
+CREATE TABLE branch_origins (
+    repository     TEXT NOT NULL,
+    branch         TEXT NOT NULL,
+    created_at     INTEGER NOT NULL,
+    birth_commit   TEXT,
+    birth_time     INTEGER,
+    responsible_session_id TEXT,
+    responsible_since      INTEGER,
+    responsible_title      TEXT,
+    target_branch          TEXT,
+    PRIMARY KEY (repository, branch)
+);
+CREATE TABLE settings (
+    id                     TEXT PRIMARY KEY,
+    auto_pull_repositories INTEGER NOT NULL DEFAULT 0,
+    auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1,
+    auto_approve_session_requests INTEGER NOT NULL DEFAULT 0,
+    auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0,
+    auto_approve_account_switches INTEGER NOT NULL DEFAULT 0,
+    auto_approve_handoffs INTEGER NOT NULL DEFAULT 0,
+    ask_questions_as_choices INTEGER NOT NULL DEFAULT 1,
+    auto_select_account INTEGER NOT NULL DEFAULT 0,
+    auto_switch_on_usage_limit INTEGER NOT NULL DEFAULT 0,
+    sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
+    auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
+    -- NULL until the user sets one; see `Store::default_clone_dir`.
+    default_clone_dir      TEXT,
+    -- NULL until a client reports the language the user picked; see
+    -- `Store::interface_language`.
+    interface_language     TEXT,
+    -- NULL until the list is first decided; see `Store::added_agents`.
+    added_agents           TEXT,
+    -- NULL until the user names a default account; see `Store::default_account_names`.
+    default_account_names  TEXT,
+    -- NULL until a default account is turned off; see `Store::disabled_default_accounts`.
+    disabled_default_accounts TEXT,
+    -- One choice per agent; NULL until the user makes one.
+    codex_approval_reviewer TEXT,
+    claude_approval_mode   TEXT,
+    development         TEXT NOT NULL DEFAULT 'worktree',
+    rebase_before_merge INTEGER NOT NULL DEFAULT 1,
+    delivery            TEXT NOT NULL DEFAULT 'ask',
+    revert_gate         INTEGER NOT NULL DEFAULT 0
+);
+"#;
+
 pub struct Store {
     conn: Mutex<Connection>,
 }
@@ -64,687 +342,17 @@ impl Store {
                 .with_context(|| format!("creating {}", parent.display()))?;
         }
         if path.exists() {
-            supersede_if_outdated(path)?;
+            settle_existing_file(path)?;
         }
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
-        conn.execute_batch(
-            r#"
-            CREATE TABLE IF NOT EXISTS hosts (
-                id          TEXT PRIMARY KEY,
-                name        TEXT NOT NULL,
-                kind        TEXT NOT NULL,
-                ssh_config  TEXT
-            );
-            CREATE TABLE IF NOT EXISTS accounts (
-                id         TEXT PRIMARY KEY,
-                agent      TEXT NOT NULL,
-                name       TEXT NOT NULL,
-                config_dir TEXT NOT NULL,
-                created_at INTEGER NOT NULL
-            );
-            -- Backstop for the rule that an account's name is required and unique within its
-            -- agent: `coordinator` checks this before every write that can affect a name, but
-            -- the invariant belongs on the table it protects, not only on the callers that happen
-            -- to remember to check it. `LOWER` matches `coordinator::account_name_key`'s
-            -- case-insensitive comparison; it is ASCII-only in SQLite, which is a narrower fold
-            -- than `str::to_lowercase`, so this index is a backstop and not a full substitute for
-            -- that check. A write that trips it surfaces through `Store::account_write_error` as
-            -- the protocol's own `account_name_taken` rather than a raw SQLite error.
-            CREATE UNIQUE INDEX IF NOT EXISTS accounts_agent_name_unique
-                ON accounts (agent, LOWER(name));
-            CREATE TABLE IF NOT EXISTS consoles (
-                id            TEXT PRIMARY KEY,
-                name          TEXT NOT NULL,
-                workdir       TEXT NOT NULL,
-                console_session_agent TEXT NOT NULL,
-                default_agent TEXT NOT NULL,
-                -- The agent a project session here falls back to when its project names none;
-                -- NULL follows `default_agent`.
-                project_session_agent TEXT,
-                -- The account each agent's sessions here read, by id; NULL means that agent's
-                -- default account. No `REFERENCES`: `Store::delete_account` clears these itself,
-                -- in the same locked step as the row's removal, rather than relying on a cascade.
-                claude_account_id TEXT,
-                codex_account_id  TEXT,
-                grok_account_id   TEXT,
-                -- The model and reasoning effort a console session here is launched with, per
-                -- agent because each has its own model names; NULL means the agent's own default.
-                -- Read at launch, so nothing is copied onto the session.
-                claude_console_session_model  TEXT,
-                claude_console_session_effort TEXT,
-                codex_console_session_model   TEXT,
-                codex_console_session_effort  TEXT,
-                grok_console_session_model    TEXT,
-                grok_console_session_effort   TEXT,
-                -- The model and reasoning effort a project session here is launched with when
-                -- neither it nor its project names one; NULL means the agent's own default.
-                claude_project_session_model TEXT,
-                claude_project_session_effort TEXT,
-                codex_project_session_model TEXT,
-                codex_project_session_effort TEXT,
-                grok_project_session_model TEXT,
-                grok_project_session_effort TEXT,
-                icon          TEXT,
-                -- The user's own addition to the console session's instruction file; NULL means
-                -- none.
-                console_session_prompt TEXT,
-                -- The ordinal a console session created in this console is given next, one past
-                -- the highest ever used here. Kept on the console rather than derived from the
-                -- sessions in it, because a console session that is later deleted must not free its
-                -- number for reuse (see `Store::insert_console_session`).
-                next_console_session_ordinal INTEGER NOT NULL DEFAULT 1,
-                created_at    INTEGER NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS projects (
-                id            TEXT PRIMARY KEY,
-                console_id    TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
-                host_id       TEXT NOT NULL,
-                name          TEXT NOT NULL,
-                path          TEXT NOT NULL,
-                default_agent TEXT,
-                source        TEXT NOT NULL,
-                remote_url    TEXT,
-                -- The account each agent's sessions here read, by id; NULL with the flag clear
-                -- inherits the console's reference for that agent. The flag, set only where the id
-                -- is NULL, says the project pins the agent's default account instead, even where
-                -- the console names an account: a separate column so that no stored value in the
-                -- id column can be mistaken for an account id. The id is cleared by
-                -- `Store::delete_account`, like the console's; the flag names no account.
-                claude_account_id TEXT,
-                codex_account_id  TEXT,
-                grok_account_id   TEXT,
-                claude_account_default INTEGER NOT NULL DEFAULT 0,
-                codex_account_default  INTEGER NOT NULL DEFAULT 0,
-                grok_account_default   INTEGER NOT NULL DEFAULT 0,
-                -- The model and reasoning effort a session here is launched with, per agent;
-                -- NULL means the agent's own default. Read at launch, so nothing is copied onto
-                -- the session.
-                claude_session_model  TEXT,
-                claude_session_effort TEXT,
-                codex_session_model   TEXT,
-                codex_session_effort  TEXT,
-                grok_session_model    TEXT,
-                grok_session_effort   TEXT,
-                trust_consent INTEGER NOT NULL DEFAULT 0,
-                pinned        INTEGER NOT NULL DEFAULT 0,
-                tags          TEXT NOT NULL DEFAULT '[]',
-                description   TEXT,
-                -- NULL follows the application-wide value; see `Store::git_workflow_settings`.
-                development         TEXT,
-                rebase_before_merge INTEGER,
-                delivery            TEXT,
-                revert_gate         INTEGER
-            );
-            CREATE TABLE IF NOT EXISTS sessions (
-                id               TEXT PRIMARY KEY,
-                agent            TEXT NOT NULL,
-                agent_session_id TEXT,
-                console_id       TEXT NOT NULL REFERENCES consoles(id) ON DELETE CASCADE,
-                project_id       TEXT REFERENCES projects(id) ON DELETE CASCADE,
-                host_id          TEXT NOT NULL,
-                role             TEXT NOT NULL,
-                origin           TEXT NOT NULL,
-                title            TEXT NOT NULL,
-                terminal_title   TEXT,
-                -- What the agent's own records call the session: a title it was named with, and a
-                -- stand-in from its first prompt.
-                record_title     TEXT,
-                record_prompt    TEXT,
-                context          TEXT,
-                -- The model and reasoning effort the agent's records show the session running with.
-                observed_model   TEXT,
-                observed_effort  TEXT,
-                status           TEXT NOT NULL,
-                has_conversation INTEGER NOT NULL DEFAULT 0,
-                -- The console session this (project) session reports to, or NULL outside the
-                -- orchestration. Always NULL for a console session itself. No `REFERENCES`, because
-                -- what follows a console session is decided by the coordinator, not by the
-                -- database: archiving one archives its interrupted bound sessions, and deleting an
-                -- archived one deletes its archived bound sessions. An `ON DELETE CASCADE` would be
-                -- wrong twice over: it would take a bound session that is not archived, and it
-                -- would remove rows behind the daemon's back, so no `session_deleted` would be
-                -- broadcast and every client would keep a ghost row.
-                bound_to         TEXT,
-                -- 1 for a lead session: a project session bound to a console session that can
-                -- still own sessions of its own (see `Session::lead`).
-                lead             INTEGER NOT NULL DEFAULT 0,
-                -- Above 0 while the session has a change of its owner it was not running to be
-                -- told of (one count per change): its next launch tells it, from the binding as
-                -- it then stands, and clears what it saw.
-                owner_notice_pending INTEGER NOT NULL DEFAULT 0,
-                -- The parting note of the owner that released the session while it was not running,
-                -- told with the notice while the session is still unbound; NULL for none. Written
-                -- with the release, or with the mark a failed write to the running session left,
-                -- and cleared by the next change of owner and by the delivery.
-                owner_notice_note TEXT,
-                -- Set only for a console session (`role = 'console'`); NULL for a project session.
-                colour           TEXT,
-                ordinal          INTEGER,
-                -- The account this session's own agent reads, by id; NULL means the default
-                -- account. Written with `config_dir` below, which is that account's directory at
-                -- the time, when the session is opened and when its account is switched — see
-                -- `Session::account_id`.
-                account_id       TEXT,
-                config_dir       TEXT,
-                -- A clear override flag inherits the project's or console's current setting.
-                -- A set flag with a NULL value explicitly leaves the choice to the agent.
-                model            TEXT,
-                effort           TEXT,
-                model_override   INTEGER NOT NULL DEFAULT 0,
-                effort_override  INTEGER NOT NULL DEFAULT 0,
-                pinned           INTEGER NOT NULL DEFAULT 0,
-                started_at       INTEGER NOT NULL,
-                ended_at         INTEGER
-            );
-            CREATE TABLE IF NOT EXISTS trusted_directories (
-                path TEXT PRIMARY KEY
-            );
-            CREATE TABLE IF NOT EXISTS pages (
-                id                TEXT PRIMARY KEY,
-                -- The session that pushed the page, a console session or a project session that
-                -- faces the user; deleting it takes its pages, and deleting a console or a project
-                -- therefore takes all of theirs.
-                console_session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                html              TEXT NOT NULL,
-                anchor_message_id TEXT,
-                created_at        INTEGER NOT NULL
-            );
-            -- Information shared with a session that was interrupted, held to be written into it
-            -- once it is resumed (`Store::add_pending_info`), oldest first by `id`. Deleting the
-            -- session takes its rows.
-            CREATE TABLE IF NOT EXISTS pending_info (
-                id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-                text       TEXT NOT NULL
-            );
-            -- The session working on a branch, keyed on the branch because one session works on
-            -- many and a branch has one responsible session. It starts as the session whose own git
-            -- reported creating the branch and moves only by a handover. No `REFERENCES` on
-            -- `responsible_session_id`: a project's deletion cascades its sessions away and the
-            -- record outlives them, which is what `responsible_title`, the title the session had
-            -- when it became responsible, is for. `responsible_since` is when that was, in
-            -- milliseconds. `repository` is the repository's canonical common directory, so a row
-            -- belongs to the repository and not to any project.
-            -- `birth_commit` and `birth_time` are the commit and the second the branch was created
-            -- at, which tell a branch deleted and made again under the same name from the one the
-            -- row was made for; `created_at` is that time in milliseconds, or when the creation was
-            -- reported.
-            -- `target_branch` is the branch the branch was created from, which the revert gate
-            -- holds its commits against, together with `birth_commit` as the fork point; NULL for
-            -- a branch whose creation was reported before it was recorded, and for one created
-            -- from something that is no branch.
-            CREATE TABLE IF NOT EXISTS branch_origins (
-                repository     TEXT NOT NULL,
-                branch         TEXT NOT NULL,
-                created_at     INTEGER NOT NULL,
-                birth_commit   TEXT,
-                birth_time     INTEGER,
-                responsible_session_id TEXT,
-                responsible_since      INTEGER,
-                responsible_title      TEXT,
-                target_branch          TEXT,
-                PRIMARY KEY (repository, branch)
-            );
-            CREATE TABLE IF NOT EXISTS settings (
-                id                     TEXT PRIMARY KEY,
-                auto_pull_repositories INTEGER NOT NULL DEFAULT 0,
-                auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1,
-                auto_approve_session_requests INTEGER NOT NULL DEFAULT 0,
-                auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0,
-                auto_approve_account_switches INTEGER NOT NULL DEFAULT 0,
-                auto_approve_handoffs INTEGER NOT NULL DEFAULT 0,
-                ask_questions_as_choices INTEGER NOT NULL DEFAULT 1,
-                auto_select_account INTEGER NOT NULL DEFAULT 0,
-                auto_switch_on_usage_limit INTEGER NOT NULL DEFAULT 0,
-                sidebar_order_by_status INTEGER NOT NULL DEFAULT 1,
-                auto_start_quota_windows INTEGER NOT NULL DEFAULT 0,
-                -- NULL until the user sets one; see `Store::default_clone_dir`.
-                default_clone_dir      TEXT,
-                -- NULL until a client reports the language the user picked; see
-                -- `Store::interface_language`.
-                interface_language     TEXT,
-                -- NULL until the list is first decided; see `Store::added_agents`.
-                added_agents           TEXT,
-                -- NULL until the user names a default account; see `Store::default_account_names`.
-                default_account_names  TEXT,
-                development         TEXT NOT NULL DEFAULT 'worktree',
-                rebase_before_merge INTEGER NOT NULL DEFAULT 1,
-                delivery            TEXT NOT NULL DEFAULT 'ask',
-                revert_gate         INTEGER NOT NULL DEFAULT 0
-            );
-            "#,
-        )?;
-        // Older milestone schemas are moved aside above. Compatible additions are migrated in
-        // place so consoles, projects, accounts and sessions keep their stored state.
-        //
-        // Branch origins once recorded the creating session apart from the responsible one. The
-        // creator is not kept: it becomes the responsible session, with its title, where none was
-        // recorded; a session the branch was handed to takes its own title, cut as a record cuts
-        // it, if it still exists, else the creator's. The creator's columns go.
-        //
-        // They once came from heuristics as well as from the session's own git, and a row of one
-        // of those may name the wrong session; only the git's own report is kept, so that every
-        // origin shown is one the session's git made, and the column saying where a row came from
-        // goes with the rest.
-        //
-        // One transaction, so that an interrupted migration cannot leave a half-moved table.
-        let tx = conn.unchecked_transaction()?;
-        let creator_recorded = column_exists(&tx, "branch_origins", "session_id")?;
-        if creator_recorded {
-            tx.execute(
-                "DELETE FROM branch_origins WHERE source <> 'ref_hook' OR session_id IS NULL
-                     OR session_title IS NULL OR birth_commit IS NULL OR birth_time IS NULL",
-                [],
-            )?;
-        }
-        for (column, definition) in [
-            ("responsible_session_id", "TEXT"),
-            ("responsible_since", "INTEGER"),
-            ("responsible_title", "TEXT"),
-        ] {
-            if !column_exists(&tx, "branch_origins", column)? {
-                tx.execute(
-                    &format!("ALTER TABLE branch_origins ADD COLUMN {column} {definition}"),
-                    [],
-                )?;
-            }
-        }
-        if creator_recorded {
-            tx.execute(
-                "UPDATE branch_origins SET responsible_session_id = session_id,
-                     responsible_since = created_at
-                 WHERE responsible_session_id IS NULL OR responsible_since IS NULL",
-                [],
-            )?;
-            tx.execute(
-                &format!(
-                    "UPDATE branch_origins SET responsible_title = COALESCE(
-                         (SELECT substr(sessions.title, 1, {}) FROM sessions
-                          WHERE sessions.id = responsible_session_id
-                            AND responsible_session_id <> session_id),
-                         session_title)
-                     WHERE responsible_title IS NULL",
-                    crate::browse::budget::MAX_ORIGIN_TITLE_CHARS
-                ),
-                [],
-            )?;
-            for column in ["session_id", "session_title"] {
-                tx.execute(
-                    &format!("ALTER TABLE branch_origins DROP COLUMN {column}"),
-                    [],
-                )?;
-            }
-        }
-        if column_exists(&tx, "branch_origins", "source")? {
-            tx.execute("ALTER TABLE branch_origins DROP COLUMN source", [])?;
-        }
-        if !column_exists(&tx, "branch_origins", "target_branch")? {
-            tx.execute(
-                "ALTER TABLE branch_origins ADD COLUMN target_branch TEXT",
-                [],
-            )?;
-        }
-        tx.commit()?;
-        if !column_exists(&conn, "settings", "default_clone_dir")? {
-            conn.execute("ALTER TABLE settings ADD COLUMN default_clone_dir TEXT", [])?;
-        }
-        if !column_exists(&conn, "settings", "added_agents")? {
-            conn.execute("ALTER TABLE settings ADD COLUMN added_agents TEXT", [])?;
-        }
-        if !column_exists(&conn, "settings", "default_account_names")? {
-            conn.execute(
-                "ALTER TABLE settings ADD COLUMN default_account_names TEXT",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_delete_unresumable_archives")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_delete_unresumable_archives INTEGER NOT NULL DEFAULT 1",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_approve_session_requests")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_approve_session_requests INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_approve_resume_requests")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_approve_resume_requests INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_approve_account_switches")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_approve_account_switches INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_approve_handoffs")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_approve_handoffs INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "ask_questions_as_choices")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN ask_questions_as_choices INTEGER NOT NULL DEFAULT 1",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "interface_language")? {
-            conn.execute(
-                "ALTER TABLE settings ADD COLUMN interface_language TEXT",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_select_account")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_select_account INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_switch_on_usage_limit")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_switch_on_usage_limit INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "sidebar_order_by_status")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN sidebar_order_by_status INTEGER NOT NULL DEFAULT 1",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "settings", "auto_start_quota_windows")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN auto_start_quota_windows INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        // `development` replaced the boolean `use_worktrees`: on is `worktree`, off `in_place`.
-        // The old column is read only for the migration that adds the new one, so a value the user
-        // has set since is not overwritten when an older build leaves the old column behind again.
-        // One transaction, so that an interruption between the copy and the drop cannot lose it.
-        let tx = conn.unchecked_transaction()?;
-        let settings_had_development = column_exists(&tx, "settings", "development")?;
-        for (column, definition) in GIT_WORKFLOW_SETTING_COLUMNS {
-            if !column_exists(&tx, "settings", column)? {
-                tx.execute(
-                    &format!("ALTER TABLE settings ADD COLUMN {column} {definition}"),
-                    [],
-                )?;
-            }
-        }
-        if column_exists(&tx, "settings", "use_worktrees")? {
-            if !settings_had_development {
-                tx.execute(
-                    "UPDATE settings SET development =
-                         CASE WHEN use_worktrees THEN 'worktree' ELSE 'in_place' END",
-                    [],
-                )?;
-            }
-            tx.execute("ALTER TABLE settings DROP COLUMN use_worktrees", [])?;
-        }
-        tx.commit()?;
-        // The approval choice was once kept per account, the default account's in `settings`
-        // under a name that said so. It is one choice per agent now, and the default account's
-        // is the one that stays; the other accounts' are dropped.
-        for (old, new) in [
-            ("codex_default_approval_reviewer", "codex_approval_reviewer"),
-            ("claude_default_approval_mode", "claude_approval_mode"),
-        ] {
-            if !column_exists(&conn, "settings", old)? {
-                continue;
-            }
-            // Every build shares one database file, so an older build may have added the old
-            // column back beside the new one: its value fills the new column only while that
-            // holds none, and the old column goes.
-            if column_exists(&conn, "settings", new)? {
-                conn.execute(
-                    &format!("UPDATE settings SET {new} = COALESCE({new}, {old})"),
-                    [],
-                )?;
-                conn.execute(&format!("ALTER TABLE settings DROP COLUMN {old}"), [])?;
-            } else {
-                conn.execute(
-                    &format!("ALTER TABLE settings RENAME COLUMN {old} TO {new}"),
-                    [],
-                )?;
-            }
-        }
-        // A `reply_in_interface_language` column left by an older build is removed; the language
-        // itself is kept in `interface_language`.
-        if column_exists(&conn, "settings", "reply_in_interface_language")? {
-            conn.execute(
-                "ALTER TABLE settings DROP COLUMN reply_in_interface_language",
-                [],
-            )?;
-        }
-        for column in ["approval_reviewer", "approval_mode"] {
-            if column_exists(&conn, "accounts", column)? {
-                conn.execute(&format!("ALTER TABLE accounts DROP COLUMN {column}"), [])?;
-            }
-        }
-        for (table, column) in [
-            ("settings", "codex_approval_reviewer"),
-            ("settings", "claude_approval_mode"),
-            ("accounts", "share_default_config_backup"),
-            ("accounts", "share_default_config_dir"),
-            // NULL until a default account is turned off; see `Store::disabled_default_accounts`.
-            ("settings", "disabled_default_accounts"),
-        ] {
-            if !column_exists(&conn, table, column)? {
-                conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} TEXT"), [])?;
-            }
-        }
-        // A change recorded as pending, to be carried out later, did not finish: it reads as
-        // incomplete, for the user to retry.
-        if column_exists(&conn, "accounts", "share_default_config_pending")? {
-            conn.execute(
-                "ALTER TABLE accounts RENAME COLUMN share_default_config_pending \
-                 TO share_default_config_incomplete",
-                [],
-            )?;
-        }
-        for column in [
-            "share_default_config",
-            "share_default_config_incomplete",
-            "share_default_config_completed",
-            "disabled",
-        ] {
-            if !column_exists(&conn, "accounts", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE accounts ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"),
-                    [],
-                )?;
-            }
-        }
-        // The first palette had six labels; a branch's first later palette added plain labels (all
-        // of them families now but `purple`), and its second wrote `<family>-<shade>`. Every label
-        // of those is rewritten to the family it is nearest to (by hue) once, so a stored label
-        // always reads.
-        for (old, new) in LEGACY_CONSOLE_SESSION_COLOURS {
-            conn.execute(
-                "UPDATE sessions SET colour = ?2 WHERE colour = ?1",
-                params![old, new],
-            )?;
-        }
-        conn.execute(
-            "UPDATE sessions SET colour = substr(colour, 1, length(colour) - 2)
-             WHERE colour GLOB '*-[123]'",
-            [],
-        )?;
-        if !column_exists(&conn, "sessions", "lead")? {
-            conn.execute(
-                "ALTER TABLE sessions ADD COLUMN lead INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "sessions", "owner_notice_pending")? {
-            conn.execute(
-                "ALTER TABLE sessions ADD COLUMN owner_notice_pending INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "sessions", "owner_notice_note")? {
-            conn.execute("ALTER TABLE sessions ADD COLUMN owner_notice_note TEXT", [])?;
-        }
-        if !column_exists(&conn, "sessions", "context")? {
-            conn.execute("ALTER TABLE sessions ADD COLUMN context TEXT", [])?;
-        }
-        // The cumulative token totals this column once held mean something else than the context
-        // size that replaces them; the collector reads the records again to fill the new one.
-        if column_exists(&conn, "sessions", "usage")? {
-            conn.execute("ALTER TABLE sessions DROP COLUMN usage", [])?;
-        }
-        for column in ["observed_model", "observed_effort"] {
-            if !column_exists(&conn, "sessions", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE sessions ADD COLUMN {column} TEXT"),
-                    [],
-                )?;
-            }
-        }
-        if !column_exists(&conn, "sessions", "terminal_title")? {
-            conn.execute("ALTER TABLE sessions ADD COLUMN terminal_title TEXT", [])?;
-        }
-        for column in ["record_title", "record_prompt"] {
-            if !column_exists(&conn, "sessions", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE sessions ADD COLUMN {column} TEXT"),
-                    [],
-                )?;
-            }
-        }
-        for column in ["model", "effort"] {
-            if !column_exists(&conn, "sessions", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE sessions ADD COLUMN {column} TEXT"),
-                    [],
-                )?;
-            }
-        }
-        for column in ["model_override", "effort_override", "locked"] {
-            if !column_exists(&conn, "sessions", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE sessions ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"),
-                    [],
-                )?;
-            }
-        }
-        conn.execute_batch(
-            "CREATE TRIGGER IF NOT EXISTS protect_locked_session_delete
-             BEFORE DELETE ON sessions WHEN OLD.locked = 1
-             BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be deleted'); END;
-             CREATE TRIGGER IF NOT EXISTS protect_locked_session_archive
-             BEFORE UPDATE OF status ON sessions
-             WHEN OLD.locked = 1 AND NEW.status = 'archived' AND OLD.status != 'archived'
-             BEGIN SELECT RAISE(ABORT, 'locked sessions cannot be archived'); END;",
-        )?;
-        for column in CONSOLE_PROJECT_SESSION_LAUNCH_COLUMNS {
-            if !column_exists(&conn, "consoles", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE consoles ADD COLUMN {column} TEXT"),
-                    [],
-                )?;
-            }
-        }
-        for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
-            if !column_exists(&conn, "consoles", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE consoles ADD COLUMN {column} TEXT"),
-                    [],
-                )?;
-            }
-        }
-        if !column_exists(&conn, "consoles", "project_session_agent")? {
-            conn.execute(
-                "ALTER TABLE consoles ADD COLUMN project_session_agent TEXT",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "consoles", "console_session_prompt")? {
-            conn.execute(
-                "ALTER TABLE consoles ADD COLUMN console_session_prompt TEXT",
-                [],
-            )?;
-        }
-        if !column_exists(&conn, "projects", "description")? {
-            conn.execute("ALTER TABLE projects ADD COLUMN description TEXT", [])?;
-        }
-        for column in PROJECT_SETTING_COLUMNS {
-            if !column_exists(&conn, "projects", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE projects ADD COLUMN {column} TEXT"),
-                    [],
-                )?;
-            }
-        }
-        // As for `settings`; a project that followed the application-wide value (NULL) still does.
-        let tx = conn.unchecked_transaction()?;
-        let projects_had_development = column_exists(&tx, "projects", "development")?;
-        for (column, definition) in GIT_WORKFLOW_OVERRIDE_COLUMNS {
-            if !column_exists(&tx, "projects", column)? {
-                tx.execute(
-                    &format!("ALTER TABLE projects ADD COLUMN {column} {definition}"),
-                    [],
-                )?;
-            }
-        }
-        if column_exists(&tx, "projects", "use_worktrees")? {
-            if !projects_had_development {
-                tx.execute(
-                    "UPDATE projects SET development =
-                         CASE WHEN use_worktrees IS NULL THEN NULL
-                              WHEN use_worktrees THEN 'worktree' ELSE 'in_place' END",
-                    [],
-                )?;
-            }
-            tx.execute("ALTER TABLE projects DROP COLUMN use_worktrees", [])?;
-        }
-        tx.commit()?;
-        for column in PROJECT_ACCOUNT_DEFAULT_COLUMNS {
-            if !column_exists(&conn, "projects", column)? {
-                conn.execute(
-                    &format!("ALTER TABLE projects ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0"),
-                    [],
-                )?;
-            }
-        }
-        // The legacy console session agent column mirrors the console's default and is no longer
-        // read for agent selection. Rows from before that may differ; later opens are a no-op.
-        conn.execute(
-            "UPDATE consoles SET console_session_agent = default_agent
-             WHERE console_session_agent <> default_agent",
-            [],
-        )?;
-        if column_exists(&conn, "projects", "claude_trust_consent")? {
-            conn.execute(
-                "ALTER TABLE projects RENAME COLUMN claude_trust_consent TO trust_consent",
-                [],
-            )?;
-        }
-        // A database from an earlier build keeps this setting under its older name; renaming the
-        // column in place keeps the saved value.
-        if column_exists(&conn, "settings", "auto_sync_repositories")? {
-            conn.execute(
-                "ALTER TABLE settings \
-                 RENAME COLUMN auto_sync_repositories TO auto_pull_repositories",
-                [],
-            )?;
+        // A file that is still at version 0 here is empty (a new one, or one moved aside above),
+        // so the whole current schema goes in, stamped, in one step.
+        if user_version(&conn)? == 0 {
+            let tx = conn.unchecked_transaction()?;
+            tx.execute_batch(SCHEMA)?;
+            tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            tx.commit()?;
         }
         let store = Self {
             conn: Mutex::new(conn),
@@ -808,7 +416,7 @@ impl Store {
 
     pub fn insert_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
-            "INSERT INTO consoles (id, name, workdir, console_session_agent, default_agent, claude_account_id,
+            "INSERT INTO consoles (id, name, workdir, default_agent, claude_account_id,
                                    codex_account_id, grok_account_id, claude_console_session_model,
                                    claude_console_session_effort, codex_console_session_model,
                                    codex_console_session_effort, grok_console_session_model,
@@ -818,12 +426,11 @@ impl Store {
                                    codex_project_session_model, codex_project_session_effort,
                                    grok_project_session_model, grok_project_session_effort)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                     ?18, ?19, ?20, ?21, ?22, ?23, ?24)",
+                     ?18, ?19, ?20, ?21, ?22, ?23)",
             params![
                 console.id,
                 console.name,
                 console.workdir,
-                enum_to_text(&console.console_session_agent),
                 enum_to_text(&console.default_agent),
                 console.claude_account_id,
                 console.codex_account_id,
@@ -851,26 +458,25 @@ impl Store {
 
     pub fn update_console(&self, console: &Console) -> Result<()> {
         self.lock().execute(
-            "UPDATE consoles SET name = ?2, console_session_agent = ?3, default_agent = ?4,
-                                 claude_account_id = ?5, codex_account_id = ?6,
-                                 grok_account_id = ?7, claude_console_session_model = ?8,
-                                 claude_console_session_effort = ?9,
-                                 codex_console_session_model = ?10,
-                                 codex_console_session_effort = ?11,
-                                 grok_console_session_model = ?12,
-                                 grok_console_session_effort = ?13, icon = ?14,
-                                 console_session_prompt = ?15, project_session_agent = ?16,
-                                 claude_project_session_model = ?17,
-                                 claude_project_session_effort = ?18,
-                                 codex_project_session_model = ?19,
-                                 codex_project_session_effort = ?20,
-                                 grok_project_session_model = ?21,
-                                 grok_project_session_effort = ?22
+            "UPDATE consoles SET name = ?2, default_agent = ?3,
+                                 claude_account_id = ?4, codex_account_id = ?5,
+                                 grok_account_id = ?6, claude_console_session_model = ?7,
+                                 claude_console_session_effort = ?8,
+                                 codex_console_session_model = ?9,
+                                 codex_console_session_effort = ?10,
+                                 grok_console_session_model = ?11,
+                                 grok_console_session_effort = ?12, icon = ?13,
+                                 console_session_prompt = ?14, project_session_agent = ?15,
+                                 claude_project_session_model = ?16,
+                                 claude_project_session_effort = ?17,
+                                 codex_project_session_model = ?18,
+                                 codex_project_session_effort = ?19,
+                                 grok_project_session_model = ?20,
+                                 grok_project_session_effort = ?21
              WHERE id = ?1",
             params![
                 console.id,
                 console.name,
-                enum_to_text(&console.console_session_agent),
                 enum_to_text(&console.default_agent),
                 console.claude_account_id,
                 console.codex_account_id,
@@ -1750,8 +1356,8 @@ impl Store {
         Ok(true)
     }
 
-    /// The agents the user has added, in the order the user set (a newly added agent goes last); `None` while the list has never
-    /// been decided (a database from before the list existed, or a fresh one, until
+    /// The agents the user has added, in the order the user set (a newly added agent goes last);
+    /// `None` while the list has never been decided (a fresh database, until
     /// `availability::fill_added_agents` fills it). A list saved empty on purpose is `Some` of
     /// nothing, which is what tells the two apart.
     pub fn added_agents(&self) -> Result<Option<Vec<Agent>>> {
@@ -2816,7 +2422,7 @@ pub struct BranchOrigin {
     /// The responsible session's title when it became so, so the row outlives that session.
     pub responsible_title: String,
     /// The branch this one was created from, as a wire path; `None` when it was created from
-    /// something that is no local branch, or its creation was recorded before this was kept.
+    /// something that is no local branch.
     pub target_branch: Option<String>,
 }
 
@@ -2827,59 +2433,48 @@ pub struct BranchMove {
     pub unmoved: Vec<String>,
 }
 
-/// Whether a table has a column of this name.
-fn column_exists(conn: &Connection, table: &str, column: &str) -> Result<bool> {
-    let found: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM pragma_table_info(?1) WHERE name = ?2",
-        params![table, column],
-        |row| row.get(0),
-    )?;
-    Ok(found > 0)
+/// The schema version the file at `conn` is at; 0 for a file never given a schema.
+fn user_version(conn: &Connection) -> Result<i64> {
+    Ok(conn.pragma_query_value(None, "user_version", |row| row.get(0))?)
 }
 
-/// A column each table must already have for a database to be in the current shape, one entry per
-/// schema change that has no migration. A table that does not exist at all is not outdated — it is
-/// what `CREATE TABLE IF NOT EXISTS` is about to create fresh — so only a table that is present
-/// without its column counts against the file.
-const CURRENT_SHAPE_COLUMNS: [(&str, &str); 3] = [
-    ("sessions", "bound_to"),
-    ("sessions", "account_id"),
-    ("pages", "console_session_id"),
-];
-
-/// Moves `path` aside and out of the way when it is a database from before this schema, so that
-/// `Store::open`'s own `CREATE TABLE IF NOT EXISTS` always lands on either an empty file or one
-/// already in the current shape, and runs no migration of its own. "Before this schema" is
-/// detected cheaply and specifically, rather than by letting a later query fail deep in a request
-/// path: a `sessions` table that predates the binding milestone 2 added has no `bound_to` column,
-/// and one that predates the accounts milestone (4) has no `account_id` column — every build that
-/// has ever carried one of those also carries the rest of the shape as of its own milestone, so
-/// the two columns together tell an outdated table apart from a current one. A `pages` table that
-/// still names the console rather than the console session (milestone 9) is outdated the same way;
-/// see [`CURRENT_SHAPE_COLUMNS`]. A `projects` table whose trust permission column still has its
-/// older name is not: `Store::open` renames that column in place, as it does a `settings` table's
-/// automatic-pull column. Nor is a `consoles` or `projects` table without its per-agent launch or
-/// account columns: `Store::open` adds those in place
-/// (see [`CONSOLE_SESSION_LAUNCH_COLUMNS`] and [`PROJECT_SETTING_COLUMNS`]).
+/// Decides what `Store::open` does with a database file that already exists, before it opens it
+/// for use:
 ///
-/// The old file is renamed rather than deleted, so a user who needs what was in it still has it on
-/// disk; see "Files Octoboard owns" in
-/// `docs/product/application-lifecycle.md`.
-fn supersede_if_outdated(path: &Path) -> Result<()> {
+/// - at [`SCHEMA_VERSION`], or holding no tables at all (an empty file, which `open` initializes):
+///   left as it is;
+/// - at an older version with tables in it, which includes every database from before versions
+///   were recorded: moved aside, so `open` starts a fresh one. There is no step from such a
+///   database to the current schema. The old file is renamed rather than deleted, so a user who
+///   needs what was in it still has it on disk; see "Files Octoboard owns" in
+///   `docs/product/application-lifecycle.md`. A step from a recorded older version to the current
+///   one belongs here, ahead of this case;
+/// - at a newer version: refused. It was written by a newer build, whose data moving it aside
+///   would lose, and this build cannot read it.
+fn settle_existing_file(path: &Path) -> Result<()> {
     {
         let conn = Connection::open(path).with_context(|| format!("opening {}", path.display()))?;
-        let mut current = true;
-        for (table, column) in CURRENT_SHAPE_COLUMNS {
-            let table_exists: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
-                params![table],
-                |row| row.get(0),
-            )?;
-            if table_exists > 0 && !column_exists(&conn, table, column)? {
-                current = false;
-            }
+        let version = user_version(&conn)
+            .with_context(|| format!("reading the schema version of {}", path.display()))?;
+        if version == SCHEMA_VERSION {
+            return Ok(());
         }
-        if current {
+        if version > SCHEMA_VERSION {
+            anyhow::bail!(
+                "the database at {} is at schema version {version}, newer than the {SCHEMA_VERSION} \
+                 this build reads; it was written by a newer build of Octoboard, so use that build \
+                 or move the file aside",
+                path.display()
+            );
+        }
+        let tables: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'",
+                [],
+                |row| row.get(0),
+            )
+            .with_context(|| format!("listing the tables of {}", path.display()))?;
+        if tables == 0 {
             return Ok(());
         }
     }
@@ -2904,8 +2499,8 @@ fn supersede_if_outdated(path: &Path) -> Result<()> {
     tracing::warn!(
         old = %moved_aside.display(),
         new = %path.display(),
-        "the database at this path predates the current schema and has no migration to it; \
-         moved it aside and starting a fresh one in its place"
+        "the database at this path is from before the current schema version and has no step to \
+         it; moved it aside and starting a fresh one in its place"
     );
     Ok(())
 }
@@ -2917,49 +2512,6 @@ const PROJECT_COLUMNS: &str = "id, console_id, host_id, name, path, default_agen
                                codex_session_effort, grok_session_model, grok_session_effort,
                                trust_consent, pinned, tags, description, development,
                                rebase_before_merge, delivery, revert_gate";
-
-/// The projects columns flagging that a project pins an agent's default account. Added in place
-/// like [`PROJECT_SETTING_COLUMNS`] and absent from `CURRENT_SHAPE_COLUMNS` for the same reason;
-/// a row from before them reads as clear, which is inheriting.
-const PROJECT_ACCOUNT_DEFAULT_COLUMNS: [&str; 3] = [
-    "claude_account_default",
-    "codex_account_default",
-    "grok_account_default",
-];
-
-/// The projects columns holding a project's per-agent account, model and reasoning effort. Added
-/// in place to a database that predates them, and deliberately absent from
-/// `CURRENT_SHAPE_COLUMNS`: listing them there would move every existing database aside.
-const PROJECT_SETTING_COLUMNS: [&str; 9] = [
-    "claude_account_id",
-    "codex_account_id",
-    "grok_account_id",
-    "claude_session_model",
-    "claude_session_effort",
-    "codex_session_model",
-    "codex_session_effort",
-    "grok_session_model",
-    "grok_session_effort",
-];
-
-/// The `settings` columns of the git workflow settings, with their definitions. Added in place to a
-/// database that predates them, at the application-wide defaults.
-const GIT_WORKFLOW_SETTING_COLUMNS: [(&str, &str); 4] = [
-    ("development", "TEXT NOT NULL DEFAULT 'worktree'"),
-    ("rebase_before_merge", "INTEGER NOT NULL DEFAULT 1"),
-    ("delivery", "TEXT NOT NULL DEFAULT 'ask'"),
-    ("revert_gate", "INTEGER NOT NULL DEFAULT 0"),
-];
-
-/// The `projects` columns of a project's git workflow override. Added in place like
-/// [`PROJECT_SETTING_COLUMNS`]; NULL, which a row from before them reads as, follows the
-/// application-wide value.
-const GIT_WORKFLOW_OVERRIDE_COLUMNS: [(&str, &str); 4] = [
-    ("development", "TEXT"),
-    ("rebase_before_merge", "INTEGER"),
-    ("delivery", "TEXT"),
-    ("revert_gate", "INTEGER"),
-];
 
 /// What the agent's records gave a session, to be stored if it differs from what is.
 pub struct RecordUpdate {
@@ -2981,7 +2533,7 @@ const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_
                                lead, terminal_title, model, effort, model_override, effort_override, context,
                                record_title, record_prompt, locked, observed_model, observed_effort";
 
-const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default_agent,
+const CONSOLE_COLUMNS: &str = "id, name, workdir, default_agent,
                                claude_account_id, codex_account_id, grok_account_id,
                                claude_console_session_model, claude_console_session_effort,
                                codex_console_session_model, codex_console_session_effort,
@@ -2990,41 +2542,6 @@ const CONSOLE_COLUMNS: &str = "id, name, workdir, console_session_agent, default
                                claude_project_session_model, claude_project_session_effort,
                                codex_project_session_model, codex_project_session_effort,
                                grok_project_session_model, grok_project_session_effort";
-
-/// The consoles columns holding the model and reasoning effort a project session falls back to.
-/// Added in place like [`CONSOLE_SESSION_LAUNCH_COLUMNS`], and absent from
-/// `CURRENT_SHAPE_COLUMNS` for the same reason.
-const CONSOLE_PROJECT_SESSION_LAUNCH_COLUMNS: [&str; 6] = [
-    "claude_project_session_model",
-    "claude_project_session_effort",
-    "codex_project_session_model",
-    "codex_project_session_effort",
-    "grok_project_session_model",
-    "grok_project_session_effort",
-];
-
-/// The consoles columns holding the model and reasoning effort a console session is launched
-/// with. Added in place to a database that predates them, and deliberately absent from
-/// `CURRENT_SHAPE_COLUMNS`: listing them there would move every existing database aside.
-const CONSOLE_SESSION_LAUNCH_COLUMNS: [&str; 6] = [
-    "claude_console_session_model",
-    "claude_console_session_effort",
-    "codex_console_session_model",
-    "codex_console_session_effort",
-    "grok_console_session_model",
-    "grok_console_session_effort",
-];
-
-/// The labels of the first release's palette that no family is named after, with the family each
-/// is rewritten to when the store opens; its `teal` and `violet` are families too. `purple` only
-/// ever existed on a branch.
-const LEGACY_CONSOLE_SESSION_COLOURS: [(&str, &str); 5] = [
-    ("olive", "lime"),
-    ("jade", "green"),
-    ("azure", "sky"),
-    ("rose", "pink"),
-    ("purple", "fuchsia"),
-];
 
 /// The colour for a new console session: the entry `roll` selects among the palette entries not
 /// in `held` (the other non-archived console sessions of its console), or among the whole palette
@@ -3097,27 +2614,26 @@ fn read_console(row: &Row<'_>) -> rusqlite::Result<Console> {
         id: row.get(0)?,
         name: row.get(1)?,
         workdir: row.get(2)?,
-        console_session_agent: enum_from_row(row, 3)?,
-        default_agent: enum_from_row(row, 4)?,
-        claude_account_id: row.get(5)?,
-        codex_account_id: row.get(6)?,
-        grok_account_id: row.get(7)?,
-        claude_console_session_model: row.get(8)?,
-        claude_console_session_effort: row.get(9)?,
-        codex_console_session_model: row.get(10)?,
-        codex_console_session_effort: row.get(11)?,
-        grok_console_session_model: row.get(12)?,
-        grok_console_session_effort: row.get(13)?,
-        icon: row.get(14)?,
-        console_session_prompt: row.get(15)?,
-        created_at: row.get(16)?,
-        project_session_agent: enum_from_row_opt::<Agent>(row, 17)?,
-        claude_project_session_model: row.get(18)?,
-        claude_project_session_effort: row.get(19)?,
-        codex_project_session_model: row.get(20)?,
-        codex_project_session_effort: row.get(21)?,
-        grok_project_session_model: row.get(22)?,
-        grok_project_session_effort: row.get(23)?,
+        default_agent: enum_from_row(row, 3)?,
+        claude_account_id: row.get(4)?,
+        codex_account_id: row.get(5)?,
+        grok_account_id: row.get(6)?,
+        claude_console_session_model: row.get(7)?,
+        claude_console_session_effort: row.get(8)?,
+        codex_console_session_model: row.get(9)?,
+        codex_console_session_effort: row.get(10)?,
+        grok_console_session_model: row.get(11)?,
+        grok_console_session_effort: row.get(12)?,
+        icon: row.get(13)?,
+        console_session_prompt: row.get(14)?,
+        created_at: row.get(15)?,
+        project_session_agent: enum_from_row_opt::<Agent>(row, 16)?,
+        claude_project_session_model: row.get(17)?,
+        claude_project_session_effort: row.get(18)?,
+        codex_project_session_model: row.get(19)?,
+        codex_project_session_effort: row.get(20)?,
+        grok_project_session_model: row.get(21)?,
+        grok_project_session_effort: row.get(22)?,
     })
 }
 
@@ -3401,7 +2917,6 @@ mod tests {
             id: "console-1".to_string(),
             name: "Console".to_string(),
             workdir: "/tmp/console-1".to_string(),
-            console_session_agent: Agent::Claude,
             default_agent: Agent::Claude,
             claude_account_id: claude.map(str::to_string),
             codex_account_id: codex.map(str::to_string),
@@ -3473,123 +2988,127 @@ mod tests {
         }
     }
 
-    /// A database written by a build before the binding (one that still has `sessions` rows but
-    /// no `bound_to` column, as every build before this milestone does) is moved aside rather than
-    /// opened in place: the file gains a `.superseded-<timestamp>` sibling holding the old bytes,
-    /// and the daemon comes up on an empty database at the original path instead of failing deep
-    /// in a later query with "no such column: bound_to".
+    /// The names of the files in `path`'s directory that are databases moved aside.
+    fn moved_aside(path: &Path) -> Vec<String> {
+        path.parent()
+            .unwrap()
+            .read_dir()
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("octoboard.db.superseded-"))
+            .collect()
+    }
+
+    /// A new database is stamped with the schema version, and reopening it keeps its data and
+    /// moves nothing aside.
     #[test]
-    fn an_old_shape_database_is_moved_aside_and_the_daemon_comes_up_on_an_empty_one() {
-        let path = temp_db("old-shape");
+    fn a_new_database_is_stamped_and_reopening_it_keeps_its_data() {
+        let path = temp_db("fresh-version");
+        {
+            let store = Store::open(&path).expect("store");
+            assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+            store
+                .insert_console(&console(None, None, None))
+                .expect("console");
+        }
+        let store = Store::open(&path).expect("reopened");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert!(store.get_console("console-1").unwrap().is_some());
+        assert!(moved_aside(&path).is_empty());
+    }
+
+    /// A database from before versions were recorded (version 0, with tables in it) is moved
+    /// aside rather than opened or deleted, and the daemon comes up on a fresh one at the original
+    /// path.
+    #[test]
+    fn a_database_without_a_version_is_moved_aside_and_a_fresh_one_opened() {
+        let path = temp_db("unversioned");
         {
             let conn = Connection::open(&path).expect("old database");
             conn.execute_batch(
-                r#"
-                CREATE TABLE consoles (
-                    id TEXT PRIMARY KEY, name TEXT NOT NULL, workdir TEXT NOT NULL,
-                    console_session_agent TEXT NOT NULL, default_agent TEXT NOT NULL,
-                    created_at INTEGER NOT NULL
-                );
-                INSERT INTO consoles VALUES ('console-1', 'Old', '/tmp/old', 'claude', 'claude', 5);
-                CREATE TABLE sessions (
-                    id TEXT PRIMARY KEY, agent TEXT NOT NULL, agent_session_id TEXT,
-                    console_id TEXT NOT NULL, project_id TEXT, host_id TEXT NOT NULL,
-                    role TEXT NOT NULL, origin TEXT NOT NULL, title TEXT NOT NULL,
-                    status TEXT NOT NULL, has_conversation INTEGER NOT NULL DEFAULT 0,
-                    include_in_hub INTEGER NOT NULL DEFAULT 0, pinned INTEGER NOT NULL DEFAULT 0,
-                    started_at INTEGER NOT NULL, ended_at INTEGER
-                );
-                INSERT INTO sessions VALUES ('session-1', 'claude', 'agent-1', 'console-1', NULL,
-                    'local', 'console', 'user', 'Hub', 'idle', 1, 0, 0, 6, NULL);
-                "#,
+                "CREATE TABLE consoles (id TEXT PRIMARY KEY, name TEXT NOT NULL);
+                 INSERT INTO consoles VALUES ('console-1', 'Old');",
             )
             .expect("old schema");
         }
 
         let store = Store::open(&path).expect("opens a fresh database in its place");
-        assert!(store.list_sessions().unwrap().is_empty());
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
         assert!(store.get_console("console-1").unwrap().is_none());
-
-        let siblings: Vec<_> = path
-            .parent()
-            .unwrap()
-            .read_dir()
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-            .collect();
-        assert!(
-            siblings
-                .iter()
-                .any(|name| name.starts_with("octoboard.db.superseded-")),
-            "the old file should have been moved aside, not deleted: found {siblings:?}"
+        assert_eq!(
+            moved_aside(&path).len(),
+            1,
+            "the old file is kept, not deleted"
         );
-    }
-
-    /// A database from before the trust permission was shared keeps its projects, each with the
-    /// permission it had, under the column's new name.
-    #[test]
-    fn the_older_trust_permission_column_is_renamed_in_place() {
-        let path = temp_db("trust-consent-rename");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            store.insert_project(&project(true)).expect("project");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute(
-                "ALTER TABLE projects RENAME COLUMN trust_consent TO claude_trust_consent",
+        let kept = path.with_file_name(&moved_aside(&path)[0]);
+        let old = Connection::open(&kept).expect("moved-aside file");
+        let name: String = old
+            .query_row(
+                "SELECT name FROM consoles WHERE id = 'console-1'",
                 [],
+                |row| row.get(0),
             )
-            .expect("the older name");
-        }
-
-        let store = Store::open(&path).expect("reopened in place");
-        let project = store.get_project("project-1").unwrap().expect("kept");
-        assert!(project.trust_consent);
+            .expect("the old row is still there");
+        assert_eq!(name, "Old");
     }
 
-    /// A database from before a session could be a lead session keeps its sessions, none of them
-    /// one, and gains the column in place.
+    /// A file that is not a SQLite database makes `open` fail and is left byte for byte as it was.
     #[test]
-    fn the_lead_column_is_added_in_place() {
-        let path = temp_db("lead-column");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            store.insert_session(&session(None)).expect("session");
-        }
+    fn a_file_that_is_not_a_database_is_refused_and_left_alone() {
+        let path = temp_db("not-a-database");
+        let bytes = b"this is not a sqlite database, only text padded out to more than a header's worth of bytes"
+            .to_vec();
+        std::fs::write(&path, &bytes).expect("file");
+
+        let error = Store::open(&path).err().expect("refused");
+        assert!(
+            format!("{error:#}").contains("reading the schema version of"),
+            "{error:#}"
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        assert!(moved_aside(&path).is_empty());
+    }
+
+    /// An existing file with no tables is initialized in place, not moved aside.
+    #[test]
+    fn an_empty_database_file_is_initialized_in_place() {
+        let path = temp_db("empty-file");
+        drop(Connection::open(&path).expect("empty database"));
+        assert!(path.exists());
+
+        let store = Store::open(&path).expect("initialized");
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert!(moved_aside(&path).is_empty());
+    }
+
+    /// A database from a newer build is refused and left where it is: moving it aside would lose
+    /// what that build wrote.
+    #[test]
+    fn a_database_from_a_newer_build_is_refused_and_left_alone() {
+        let path = temp_db("newer-version");
         {
             let conn = Connection::open(&path).expect("database");
-            conn.execute("ALTER TABLE sessions DROP COLUMN lead", [])
-                .expect("the older shape");
+            conn.execute_batch("CREATE TABLE consoles (id TEXT PRIMARY KEY);")
+                .expect("schema");
+            conn.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+                .expect("version");
         }
 
-        let store = Store::open(&path).expect("reopened in place");
-        let session = store.get_session("session-1").unwrap().expect("kept");
-        assert!(!session.lead);
+        let error = Store::open(&path).err().expect("refused");
+        assert!(error.to_string().contains("newer"), "{error}");
+        assert!(path.exists());
+        assert!(moved_aside(&path).is_empty());
     }
 
-    /// Migration keeps older sessions inheriting. New overrides, including explicit nulls,
-    /// survive unrelated writes, account changes and opening the database again.
+    /// A session without overrides inherits. Overrides, including explicit nulls, survive
+    /// unrelated writes, account changes and opening the database again.
     #[test]
-    fn session_launch_overrides_migrate_and_survive_reopening() {
+    fn session_launch_overrides_survive_reopening() {
         let path = temp_db("session-launch-overrides");
         {
             let store = Store::open(&path).unwrap();
             store.insert_console(&console(None, None, None)).unwrap();
             store.insert_session(&session(None)).unwrap();
-        }
-        {
-            let conn = Connection::open(&path).unwrap();
-            for column in ["model", "effort", "model_override", "effort_override"] {
-                conn.execute(&format!("ALTER TABLE sessions DROP COLUMN {column}"), [])
-                    .unwrap();
-            }
         }
         let store = Store::open(&path).unwrap();
         let kept = store.get_session("session-1").unwrap().unwrap();
@@ -3627,10 +3146,10 @@ mod tests {
         }
     }
 
-    /// A database from before a console carried a console session model and effort keeps its
-    /// consoles, and gains the columns in place.
+    /// A console's console session model and effort round-trip through update, insert and a
+    /// reopening, each of the six independent.
     #[test]
-    fn the_console_session_launch_columns_are_added_in_place() {
+    fn the_console_session_launch_columns_round_trip() {
         let path = temp_db("console-session-launch-columns");
         {
             let store = Store::open(&path).expect("store");
@@ -3638,15 +3157,8 @@ mod tests {
                 .insert_console(&console(None, None, None))
                 .expect("console");
         }
-        {
-            let conn = Connection::open(&path).expect("database");
-            for column in CONSOLE_SESSION_LAUNCH_COLUMNS {
-                conn.execute(&format!("ALTER TABLE consoles DROP COLUMN {column}"), [])
-                    .expect("the older shape");
-            }
-        }
 
-        let store = Store::open(&path).expect("reopened in place");
+        let store = Store::open(&path).expect("reopened");
         let mut kept = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(kept.claude_console_session_model, None);
         // Six distinct values, so a pair of columns swapped between the SELECT list and the
@@ -3657,7 +3169,7 @@ mod tests {
         kept.codex_console_session_effort = Some("codex-effort".to_string());
         kept.grok_console_session_model = Some("grok-model".to_string());
         kept.grok_console_session_effort = Some("grok-effort".to_string());
-        store.update_console(&kept).expect("writes the new columns");
+        store.update_console(&kept).expect("writes the columns");
         let reread = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(
             reread.claude_console_session_model.as_deref(),
@@ -3726,52 +3238,32 @@ mod tests {
         );
     }
 
-    /// A database from before a console could name a project session agent keeps its consoles
-    /// following `default_agent`, and gains the column in place.
+    /// A console follows `default_agent` until it names a project session agent, which then
+    /// round-trips.
     #[test]
-    fn the_project_session_agent_column_is_added_in_place() {
+    fn the_project_session_agent_round_trips() {
         let path = temp_db("project-session-agent-column");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute("ALTER TABLE consoles DROP COLUMN project_session_agent", [])
-                .expect("the older shape");
-        }
-
-        let store = Store::open(&path).expect("reopened in place");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
         let mut kept = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(kept.project_session_agent, None);
         kept.project_session_agent = Some(Agent::Grok);
-        store.update_console(&kept).expect("writes the new column");
+        store.update_console(&kept).expect("writes the column");
         let reread = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(reread.project_session_agent, Some(Agent::Grok));
     }
 
-    /// A database from before a console carried a project session model and effort keeps its
-    /// consoles, with none set, and gains the columns in place.
+    /// A console's project session model and effort start unset and round-trip, each of the six
+    /// independent.
     #[test]
-    fn the_console_project_session_launch_columns_are_added_in_place() {
+    fn the_console_project_session_launch_columns_round_trip() {
         let path = temp_db("console-project-session-launch-columns");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            for column in CONSOLE_PROJECT_SESSION_LAUNCH_COLUMNS {
-                conn.execute(&format!("ALTER TABLE consoles DROP COLUMN {column}"), [])
-                    .expect("the older shape");
-            }
-        }
-
-        let store = Store::open(&path).expect("reopened in place");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
         let mut kept = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(kept.claude_project_session_model, None);
         assert_eq!(kept.grok_project_session_effort, None);
@@ -3783,7 +3275,7 @@ mod tests {
         kept.codex_project_session_effort = Some("codex-effort".to_string());
         kept.grok_project_session_model = Some("grok-model".to_string());
         kept.grok_project_session_effort = Some("grok-effort".to_string());
-        store.update_console(&kept).expect("writes the new columns");
+        store.update_console(&kept).expect("writes the columns");
         let reread = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(
             reread.claude_project_session_model.as_deref(),
@@ -3811,31 +3303,19 @@ mod tests {
         );
     }
 
-    /// A database from before a console could carry the user's own console session instructions
-    /// keeps its consoles, and gains the column in place.
+    /// A console carries no console session instructions of the user's own until it is given
+    /// some, which then round-trip.
     #[test]
-    fn the_console_session_prompt_column_is_added_in_place() {
+    fn the_console_session_prompt_round_trips() {
         let path = temp_db("console-session-prompt-column");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute(
-                "ALTER TABLE consoles DROP COLUMN console_session_prompt",
-                [],
-            )
-            .expect("the older shape");
-        }
-
-        let store = Store::open(&path).expect("reopened in place");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
         let mut kept = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(kept.console_session_prompt, None);
         kept.console_session_prompt = Some("Be brief.".to_string());
-        store.update_console(&kept).expect("writes the new column");
+        store.update_console(&kept).expect("writes the column");
         let reread = store.get_console("console-1").unwrap().expect("kept");
         assert_eq!(reread.console_session_prompt.as_deref(), Some("Be brief."));
     }
@@ -3901,30 +3381,16 @@ mod tests {
         assert_eq!((id, flag), (None, true));
     }
 
-    /// A database from before a project carried its own accounts, models and efforts keeps its
-    /// projects, and gains the columns in place; all nine are written and read back distinct.
+    /// A project's own accounts, models and efforts start unset; all nine are written and read back
+    /// distinct.
     #[test]
-    fn the_project_setting_columns_are_added_in_place() {
+    fn the_project_setting_columns_round_trip() {
         let path = temp_db("project-setting-columns");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            store.insert_project(&project(true)).expect("project");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            for column in PROJECT_SETTING_COLUMNS
-                .into_iter()
-                .chain(PROJECT_ACCOUNT_DEFAULT_COLUMNS)
-            {
-                conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
-                    .expect("the older shape");
-            }
-        }
-
-        let store = Store::open(&path).expect("reopened in place");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(true)).expect("project");
         let mut kept = store.get_project("project-1").unwrap().expect("kept");
         assert!(kept.trust_consent);
         assert_eq!(kept.claude_account_id, ProjectAccount::Inherit);
@@ -3938,7 +3404,7 @@ mod tests {
         kept.codex_session_effort = Some("codex-effort".to_string());
         kept.grok_session_model = Some("grok-model".to_string());
         kept.grok_session_effort = Some("grok-effort".to_string());
-        store.update_project(&kept).expect("writes the new columns");
+        store.update_project(&kept).expect("writes the columns");
 
         let fields = |project: &Project| {
             [
@@ -3967,7 +3433,7 @@ mod tests {
         ];
         let reread = store.get_project("project-1").unwrap().expect("kept");
         assert_eq!(fields(&reread), expected);
-        // The trust permission and the pin sit after the new columns in the row and are read by
+        // The trust permission and the pin sit after those columns in the row and are read by
         // position, so they are checked to have stayed where they were.
         assert!(reread.trust_consent);
         assert!(!reread.pinned);
@@ -3994,28 +3460,6 @@ mod tests {
             .expect("listed");
         assert_eq!(fields(&listed), expected);
         assert!(!listed.trust_consent);
-    }
-
-    /// A console stored when the console session's agent was its own setting may name an agent
-    /// other than the default; opening the database brings it in line.
-    #[test]
-    fn a_divergent_console_session_agent_is_reconciled_on_open() {
-        let path = temp_db("console-session-agent");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute("UPDATE consoles SET console_session_agent = 'grok'", [])
-                .expect("the older data");
-        }
-
-        let store = Store::open(&path).expect("reopened");
-        let reconciled = store.get_console("console-1").unwrap().expect("kept");
-        assert_eq!(reconciled.console_session_agent, Agent::Claude);
     }
 
     /// A reporter whose conclusion only holds while the session has not moved on writes through
@@ -4098,131 +3542,11 @@ mod tests {
         }
     }
 
-    /// The table is created on a database that predates it, and its rows are not the sessions':
-    /// deleting the project takes the sessions with it and leaves the attribution.
+    /// The branch records are not the sessions' rows: deleting the project takes the sessions with
+    /// it and leaves the attribution.
     #[test]
-    fn branch_origins_are_added_in_place_and_outlive_their_session() {
+    fn branch_origins_outlive_their_session() {
         let path = temp_db("branch-origins");
-        let origin = BranchOrigin {
-            repository: "/r/.git".to_string(),
-            branch: "feature".to_string(),
-            created_at: 7,
-            birth_commit: "abc".to_string(),
-            birth_time: 7,
-            responsible_session: "session-1".to_string(),
-            responsible_since: 7,
-            responsible_title: "Title".to_string(),
-            target_branch: None,
-        };
-        let put = |store: &Store| {
-            store
-                .apply_branch_origins("/r/.git", &[], std::slice::from_ref(&origin), 10)
-                .expect("origin");
-        };
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            store.insert_project(&project(false)).expect("project");
-            put(&store);
-            let conn = store.lock();
-            conn.execute_batch("DROP TABLE branch_origins").unwrap();
-        }
-        let store = Store::open(&path).expect("opens a database without the table");
-        assert!(store.branch_origins("/r/.git").unwrap().is_empty());
-
-        put(&store);
-        store.delete_project("project-1").expect("project deleted");
-        assert_eq!(store.branch_origins("/r/.git").unwrap(), [origin]);
-    }
-
-    /// A database from before the responsible session's title was recorded gets, for a branch
-    /// handed to a session that still exists, that session's title cut as a record cuts it, and
-    /// the recorded creator's otherwise; the creator columns are gone afterwards.
-    #[test]
-    fn branch_origins_without_a_responsible_title_get_the_creators_and_lose_the_creator() {
-        let path = temp_db("branch-origins-responsible-title");
-        let long_title = format!("é{}", "x".repeat(100));
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            let holder = Session {
-                id: "session-3".to_string(),
-                title: long_title.clone(),
-                ..session(None)
-            };
-            store.insert_session(&holder).expect("session");
-            let conn = store.lock();
-            conn.execute_batch(
-                "DROP TABLE branch_origins;
-                 CREATE TABLE branch_origins (
-                     repository TEXT NOT NULL, branch TEXT NOT NULL, session_id TEXT,
-                     session_title TEXT, source TEXT NOT NULL, created_at INTEGER NOT NULL,
-                     birth_commit TEXT, birth_time INTEGER, responsible_session_id TEXT,
-                     responsible_since INTEGER, PRIMARY KEY (repository, branch));
-                 INSERT INTO branch_origins VALUES
-                     ('/r/.git', 'feature', 'session-1', 'Title', 'ref_hook', 7000, 'abc', 7,
-                      'session-2', 8000),
-                     ('/r/.git', 'handed', 'session-1', 'Title', 'ref_hook', 7000, 'abc', 7,
-                      'session-3', 8000);",
-            )
-            .unwrap();
-        }
-        let store = Store::open(&path).expect("migrates the table in place");
-        let rows = store.branch_origins("/r/.git").unwrap();
-        assert_eq!(rows[0].branch, "feature");
-        assert_eq!(rows[0].responsible_session, "session-2");
-        assert_eq!(rows[0].responsible_title, "Title");
-        assert_eq!(rows[1].branch, "handed");
-        assert_eq!(
-            rows[1].responsible_title,
-            long_title.chars().take(80).collect::<String>()
-        );
-        let conn = store.lock();
-        assert!(!column_exists(&conn, "branch_origins", "session_id").unwrap());
-        assert!(!column_exists(&conn, "branch_origins", "session_title").unwrap());
-        assert!(!column_exists(&conn, "branch_origins", "source").unwrap());
-    }
-
-    /// A database from before the responsible session was recorded gets each branch's recorded
-    /// creator as its responsible session, from when the branch was created, with its title; a row
-    /// no git of a session reported, or one that names no session, is dropped.
-    #[test]
-    fn branch_origins_without_a_responsible_session_get_the_recorded_creator() {
-        let path = temp_db("branch-origins-responsible");
-        {
-            let store = Store::open(&path).expect("store");
-            let conn = store.lock();
-            conn.execute_batch(
-                "DROP TABLE branch_origins;
-                 CREATE TABLE branch_origins (
-                     repository TEXT NOT NULL, branch TEXT NOT NULL, session_id TEXT,
-                     session_title TEXT, source TEXT NOT NULL, created_at INTEGER NOT NULL,
-                     birth_commit TEXT, birth_time INTEGER, PRIMARY KEY (repository, branch));
-                 INSERT INTO branch_origins VALUES
-                     ('/r/.git', 'feature', 'session-1', 'Title', 'ref_hook', 7000, 'abc', 7),
-                     ('/r/.git', 'no-session', NULL, 'Title', 'ref_hook', 7000, 'abc', 7),
-                     ('/r/.git', 'guessed', 'session-1', 'Title', 'heuristic', 7000, 'abc', 7);",
-            )
-            .unwrap();
-        }
-        let store = Store::open(&path).expect("migrates the table in place");
-        let rows = store.branch_origins("/r/.git").unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].branch, "feature");
-        assert_eq!(rows[0].responsible_session, "session-1");
-        assert_eq!(rows[0].responsible_since, 7000);
-        assert_eq!(rows[0].responsible_title, "Title");
-    }
-
-    /// A database from before the target branch was recorded keeps its rows, without one, and
-    /// gains the column in place.
-    #[test]
-    fn the_target_branch_column_is_added_in_place() {
-        let path = temp_db("branch-origin-target");
         let origin = BranchOrigin {
             repository: "/r/.git".to_string(),
             branch: "feature".to_string(),
@@ -4234,25 +3558,21 @@ mod tests {
             responsible_title: "Title".to_string(),
             target_branch: Some("main".to_string()),
         };
-        {
-            let store = Store::open(&path).expect("store");
+        let put = |store: &Store| {
             store
                 .apply_branch_origins("/r/.git", &[], std::slice::from_ref(&origin), 10)
-                .unwrap();
-            assert_eq!(
-                store.branch_origins("/r/.git").unwrap(),
-                std::slice::from_ref(&origin)
-            );
-            let conn = store.lock();
-            conn.execute("ALTER TABLE branch_origins DROP COLUMN target_branch", [])
-                .expect("the older shape");
-        }
+                .expect("origin");
+        };
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_project(&project(false)).expect("project");
+        assert!(store.branch_origins("/r/.git").unwrap().is_empty());
 
-        let store = Store::open(&path).expect("reopened in place");
-        let kept = store.branch_origins("/r/.git").unwrap();
-        assert_eq!(kept.len(), 1);
-        assert_eq!(kept[0].responsible_session, "session-1");
-        assert_eq!(kept[0].target_branch, None);
+        put(&store);
+        store.delete_project("project-1").expect("project deleted");
+        assert_eq!(store.branch_origins("/r/.git").unwrap(), [origin]);
     }
 
     /// Each branch of a handover is compared and set on its own: the ones the expected session
@@ -4350,25 +3670,14 @@ mod tests {
     }
 
     #[test]
-    fn session_locks_migrate_persist_and_guard_every_store_removal() {
+    fn session_locks_persist_and_guard_every_store_removal() {
         let path = temp_db("session-locked");
-        {
-            let store = Store::open(&path).unwrap();
-            store.insert_console(&console(None, None, None)).unwrap();
-            store.insert_project(&project(false)).unwrap();
-            let mut record = session(None);
-            record.project_id = Some("project-1".to_string());
-            store.insert_session(&record).unwrap();
-            store
-                .lock()
-                .execute_batch(
-                    "DROP TRIGGER protect_locked_session_delete;
-                 DROP TRIGGER protect_locked_session_archive;
-                 ALTER TABLE sessions DROP COLUMN locked;",
-                )
-                .unwrap();
-        }
         let store = Store::open(&path).unwrap();
+        store.insert_console(&console(None, None, None)).unwrap();
+        store.insert_project(&project(false)).unwrap();
+        let mut record = session(None);
+        record.project_id = Some("project-1".to_string());
+        store.insert_session(&record).unwrap();
         let mut stale = store.get_session("session-1").unwrap().unwrap();
         assert!(!stale.locked);
         store.set_session_locked("session-1", true).unwrap();
@@ -4664,22 +3973,14 @@ mod tests {
         assert_eq!(untouched.claude_account_id.as_deref(), Some("claude-other"));
     }
 
-    /// The added agents are undecided on a fresh database and on one from before the column
-    /// existed, survive a restart once decided, and a list saved empty is still decided.
+    /// The added agents are undecided on a fresh database, survive a restart once decided, and a
+    /// list saved empty is still decided.
     #[test]
     fn added_agents_are_undecided_until_filled_and_survive_a_restart() {
         let path = temp_db("added-agents");
         let store = Store::open(&path).unwrap();
         assert_eq!(store.added_agents().unwrap(), None);
         assert_eq!(store.get_settings().unwrap().added_agents, None);
-        {
-            let conn = store.lock();
-            conn.execute("ALTER TABLE settings DROP COLUMN added_agents", [])
-                .unwrap();
-        }
-        drop(store);
-        let store = Store::open(&path).unwrap();
-        assert_eq!(store.added_agents().unwrap(), None, "an upgraded database");
 
         assert!(store
             .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude])
@@ -4725,23 +4026,10 @@ mod tests {
         assert_eq!(store.added_agents().unwrap(), Some(vec![Agent::Codex]));
     }
 
-    /// The approval settings are added to a database from before they existed, read as unset
-    /// there, and round-trip.
+    /// The approval settings read as unset until chosen, and round-trip.
     #[test]
-    fn approval_settings_migrate_and_round_trip() {
-        let path = temp_db("approval-columns-migration");
-        let store = Store::open(&path).unwrap();
-        {
-            let conn = store.lock();
-            conn.execute(
-                "ALTER TABLE settings DROP COLUMN codex_approval_reviewer",
-                [],
-            )
-            .unwrap();
-            conn.execute("ALTER TABLE settings DROP COLUMN claude_approval_mode", [])
-                .unwrap();
-        }
-        drop(store);
+    fn approval_settings_round_trip() {
+        let path = temp_db("approval-columns");
         let store = Store::open(&path).unwrap();
         assert_eq!(store.codex_approval_reviewer().unwrap(), None);
         assert_eq!(store.claude_approval_mode().unwrap(), None);
@@ -4767,104 +4055,6 @@ mod tests {
         assert_eq!(store.codex_approval_reviewer().unwrap(), None);
         store.set_claude_approval_mode(None).unwrap();
         assert_eq!(store.claude_approval_mode().unwrap(), None);
-    }
-
-    /// A database that kept the choice per account keeps the default account's choice as the
-    /// agent's, and the accounts lose their own columns.
-    #[test]
-    fn per_account_approval_choices_collapse_into_the_default_accounts() {
-        let path = temp_db("approval-per-account-migration");
-        let store = Store::open(&path).unwrap();
-        store
-            .insert_account(&account("acct-claude", Agent::Claude, "/tmp/claude"))
-            .unwrap();
-        {
-            let conn = store.lock();
-            conn.execute("ALTER TABLE accounts ADD COLUMN approval_reviewer TEXT", [])
-                .unwrap();
-            conn.execute("ALTER TABLE accounts ADD COLUMN approval_mode TEXT", [])
-                .unwrap();
-            conn.execute("UPDATE accounts SET approval_mode = 'manual'", [])
-                .unwrap();
-            conn.execute(
-                "ALTER TABLE settings RENAME COLUMN claude_approval_mode \
-                 TO claude_default_approval_mode",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "UPDATE settings SET claude_default_approval_mode = 'bypass'",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "ALTER TABLE settings RENAME COLUMN codex_approval_reviewer \
-                 TO codex_default_approval_reviewer",
-                [],
-            )
-            .unwrap();
-            conn.execute(
-                "UPDATE settings SET codex_default_approval_reviewer = 'auto_review'",
-                [],
-            )
-            .unwrap();
-        }
-        drop(store);
-        let store = Store::open(&path).unwrap();
-        assert_eq!(
-            store.claude_approval_mode().unwrap(),
-            Some(ClaudeApprovalMode::Bypass)
-        );
-        assert_eq!(
-            store.codex_approval_reviewer().unwrap(),
-            Some(ApprovalReviewer::AutoReview)
-        );
-        assert!(store.get_account("acct-claude").unwrap().is_some());
-        let conn = store.lock();
-        assert!(!column_exists(&conn, "accounts", "approval_mode").unwrap());
-        assert!(!column_exists(&conn, "accounts", "approval_reviewer").unwrap());
-        assert!(!column_exists(&conn, "settings", "claude_default_approval_mode").unwrap());
-    }
-
-    /// An older build sharing the database file adds the old columns back beside the new ones: the
-    /// next start fills the new column only where it holds nothing, and drops the old one.
-    #[test]
-    fn a_database_holding_both_approval_columns_opens_and_keeps_the_new_value() {
-        let path = temp_db("approval-both-columns");
-        let store = Store::open(&path).unwrap();
-        {
-            let conn = store.lock();
-            for column in [
-                "codex_default_approval_reviewer",
-                "claude_default_approval_mode",
-            ] {
-                conn.execute(
-                    &format!("ALTER TABLE settings ADD COLUMN {column} TEXT"),
-                    [],
-                )
-                .unwrap();
-            }
-            conn.execute(
-                "UPDATE settings SET claude_approval_mode = 'auto', \
-                 claude_default_approval_mode = 'bypass', \
-                 codex_default_approval_reviewer = 'user'",
-                [],
-            )
-            .unwrap();
-        }
-        drop(store);
-        let store = Store::open(&path).unwrap();
-        assert_eq!(
-            store.claude_approval_mode().unwrap(),
-            Some(ClaudeApprovalMode::Auto)
-        );
-        assert_eq!(
-            store.codex_approval_reviewer().unwrap(),
-            Some(ApprovalReviewer::User)
-        );
-        let conn = store.lock();
-        assert!(!column_exists(&conn, "settings", "codex_default_approval_reviewer").unwrap());
-        assert!(!column_exists(&conn, "settings", "claude_default_approval_mode").unwrap());
     }
 
     /// An account's name and directory round-trip, and `update_account` can change either
@@ -4973,31 +4163,6 @@ mod tests {
         );
     }
 
-    /// A change an earlier version recorded as pending, to be carried out later, reads as
-    /// incomplete.
-    #[test]
-    fn a_stored_pending_sharing_change_reads_as_incomplete() {
-        let path = temp_db("account-sharing-pending");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_account(&account("acct-1", Agent::Codex, "/home/u/.codex-alt"))
-                .expect("account");
-        }
-        {
-            let conn = Connection::open(&path).unwrap();
-            conn.execute_batch(
-                "ALTER TABLE accounts RENAME COLUMN share_default_config_incomplete
-                     TO share_default_config_pending;
-                 UPDATE accounts SET share_default_config = 1, share_default_config_pending = 1;",
-            )
-            .unwrap();
-        }
-        let store = Store::open(&path).expect("reopened");
-        let account = store.get_account("acct-1").unwrap().unwrap();
-        assert!(account.share_default_config && account.share_default_config_incomplete);
-    }
-
     /// A freshly created project has no tags, and tags round-trip through an update.
     #[test]
     fn a_projects_tags_round_trip() {
@@ -5051,41 +4216,13 @@ mod tests {
         );
     }
 
-    /// A database from before a project could carry a description keeps its projects, and gains
-    /// the column in place.
-    #[test]
-    fn the_project_description_column_is_added_in_place() {
-        let path = temp_db("project-description-column");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            store.insert_project(&project(false)).expect("project");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute("ALTER TABLE projects DROP COLUMN description", [])
-                .expect("the older shape");
-        }
-
-        let store = Store::open(&path).expect("reopened in place");
-        let mut kept = store.get_project("project-1").unwrap().expect("kept");
-        assert_eq!(kept.description, None);
-        kept.description = Some("A billing service.".to_string());
-        store.update_project(&kept).expect("writes the new column");
-        let reread = store.get_project("project-1").unwrap().expect("kept");
-        assert_eq!(reread.description.as_deref(), Some("A billing service."));
-    }
-
     #[test]
     fn tags_that_are_not_a_json_array_of_strings_read_as_untagged() {
         assert!(tags_from_text("project-1", "not json").is_empty());
     }
 
-    /// Each boolean setting starts at its default on a fresh database and on one from before its
-    /// column existed, round-trips, and a repeat write reports no change; the settings are
-    /// independent of one another.
+    /// Each boolean setting starts at its default, round-trips, and a repeat write reports no
+    /// change; the settings are independent of one another.
     #[test]
     fn the_boolean_settings_default_round_trip_and_a_repeat_write_changes_nothing() {
         struct Setting {
@@ -5094,8 +4231,6 @@ mod tests {
             read: fn(&Settings) -> bool,
             get: fn(&Store) -> Result<bool>,
             set: fn(&Store, bool) -> Result<bool>,
-            /// Whether the column was added after the table, so a database can lack it.
-            added_later: bool,
         }
         let settings = [
             Setting {
@@ -5104,7 +4239,6 @@ mod tests {
                 read: |settings| settings.auto_pull_repositories,
                 get: Store::auto_pull_repositories,
                 set: Store::set_auto_pull_repositories,
-                added_later: false,
             },
             Setting {
                 column: "auto_delete_unresumable_archives",
@@ -5112,7 +4246,6 @@ mod tests {
                 read: |settings| settings.auto_delete_unresumable_archives,
                 get: Store::auto_delete_unresumable_archives,
                 set: Store::set_auto_delete_unresumable_archives,
-                added_later: true,
             },
             Setting {
                 column: "auto_approve_session_requests",
@@ -5120,7 +4253,6 @@ mod tests {
                 read: |settings| settings.auto_approve_session_requests,
                 get: Store::auto_approve_session_requests,
                 set: Store::set_auto_approve_session_requests,
-                added_later: true,
             },
             Setting {
                 column: "auto_approve_resume_requests",
@@ -5128,7 +4260,6 @@ mod tests {
                 read: |settings| settings.auto_approve_resume_requests,
                 get: Store::auto_approve_resume_requests,
                 set: Store::set_auto_approve_resume_requests,
-                added_later: true,
             },
             Setting {
                 column: "auto_approve_account_switches",
@@ -5136,7 +4267,6 @@ mod tests {
                 read: |settings| settings.auto_approve_account_switches,
                 get: Store::auto_approve_account_switches,
                 set: Store::set_auto_approve_account_switches,
-                added_later: true,
             },
             Setting {
                 column: "auto_approve_handoffs",
@@ -5144,7 +4274,6 @@ mod tests {
                 read: |settings| settings.auto_approve_handoffs,
                 get: Store::auto_approve_handoffs,
                 set: Store::set_auto_approve_handoffs,
-                added_later: true,
             },
             Setting {
                 column: "ask_questions_as_choices",
@@ -5152,7 +4281,6 @@ mod tests {
                 read: |settings| settings.ask_questions_as_choices,
                 get: Store::ask_questions_as_choices,
                 set: Store::set_ask_questions_as_choices,
-                added_later: true,
             },
             Setting {
                 column: "auto_select_account",
@@ -5160,7 +4288,6 @@ mod tests {
                 read: |settings| settings.auto_select_account,
                 get: Store::auto_select_account,
                 set: Store::set_auto_select_account,
-                added_later: true,
             },
             Setting {
                 column: "auto_switch_on_usage_limit",
@@ -5168,7 +4295,6 @@ mod tests {
                 read: |settings| settings.auto_switch_on_usage_limit,
                 get: Store::auto_switch_on_usage_limit,
                 set: Store::set_auto_switch_on_usage_limit,
-                added_later: true,
             },
             Setting {
                 column: "sidebar_order_by_status",
@@ -5176,7 +4302,6 @@ mod tests {
                 read: |settings| settings.sidebar_order_by_status,
                 get: Store::sidebar_order_by_status,
                 set: Store::set_sidebar_order_by_status,
-                added_later: true,
             },
             Setting {
                 column: "auto_start_quota_windows",
@@ -5184,7 +4309,6 @@ mod tests {
                 read: |settings| settings.auto_start_quota_windows,
                 get: Store::auto_start_quota_windows,
                 set: Store::set_auto_start_quota_windows,
-                added_later: true,
             },
         ];
 
@@ -5219,29 +4343,13 @@ mod tests {
                 );
             }
             assert!((setting.set)(&store, setting.default).unwrap(), "{column}");
-
-            if setting.added_later {
-                (setting.set)(&store, changed).unwrap();
-                store
-                    .lock()
-                    .execute(&format!("ALTER TABLE settings DROP COLUMN {column}"), [])
-                    .unwrap();
-                drop(store);
-                let store = Store::open(&path).expect("store");
-                assert_eq!(
-                    (setting.get)(&store).unwrap(),
-                    setting.default,
-                    "{column} on a database from before it existed"
-                );
-            }
         }
     }
 
     /// The application-wide git workflow settings start at worktree, on, ask, off, change item by
-    /// item with a repeat write reporting no change, and a database from before the columns existed
-    /// gains them at those defaults.
+    /// item with a repeat write reporting no change.
     #[test]
-    fn the_git_workflow_settings_default_change_per_item_and_migrate() {
+    fn the_git_workflow_settings_default_and_change_per_item() {
         let path = temp_db("git-workflow-settings");
         let store = Store::open(&path).expect("store");
         assert_eq!(
@@ -5272,29 +4380,11 @@ mod tests {
                 revert_gate: true,
             }
         );
-        drop(store);
-
-        {
-            let conn = Connection::open(&path).expect("database");
-            for (column, _) in GIT_WORKFLOW_SETTING_COLUMNS {
-                conn.execute(&format!("ALTER TABLE settings DROP COLUMN {column}"), [])
-                    .expect("drop column");
-            }
-            for (column, _) in GIT_WORKFLOW_OVERRIDE_COLUMNS {
-                conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
-                    .expect("drop column");
-            }
-        }
-        let store = Store::open(&path).expect("reopened in place");
-        assert_eq!(
-            store.git_workflow_settings().unwrap(),
-            GitWorkflowSettings::default()
-        );
     }
 
     /// A project's override is stored per item with NULL for following the application-wide
-    /// value; a row from before the columns reads as following, and `effective` tracks a later
-    /// change of the application-wide value for the items the project does not hold.
+    /// value, and `effective` tracks a later change of the application-wide value for the items
+    /// the project does not hold.
     #[test]
     fn a_project_override_falls_back_to_the_global_value_and_follows_its_changes() {
         let path = temp_db("git-workflow-override");
@@ -5345,91 +4435,6 @@ mod tests {
         cleared.git_workflow = GitWorkflowOverride::default();
         store.update_project(&cleared).expect("update");
         assert_eq!(stored().git_workflow, GitWorkflowOverride::default());
-        drop(store);
-
-        {
-            let conn = Connection::open(&path).expect("database");
-            for (column, _) in GIT_WORKFLOW_OVERRIDE_COLUMNS {
-                conn.execute(&format!("ALTER TABLE projects DROP COLUMN {column}"), [])
-                    .expect("drop column");
-            }
-        }
-        let store = Store::open(&path).expect("reopened in place");
-        assert_eq!(
-            store
-                .get_project("project-1")
-                .unwrap()
-                .unwrap()
-                .git_workflow,
-            GitWorkflowOverride::default()
-        );
-    }
-
-    /// A database that still holds the boolean `use_worktrees` gets `development` from it: on is
-    /// `worktree`, off `in_place`, and a project that followed the application-wide value still
-    /// does. The old columns go, and a second open reads what was migrated.
-    #[test]
-    fn use_worktrees_migrates_to_development_and_the_old_columns_go() {
-        let path = temp_db("use-worktrees-migration");
-        let store = Store::open(&path).expect("store");
-        store
-            .insert_console(&console(None, None, None))
-            .expect("console");
-        let mut off = project(false);
-        off.git_workflow.delivery = Some(Delivery::Merge);
-        store.insert_project(&off).expect("project");
-        let mut on = project(false);
-        on.id = "project-2".to_string();
-        store.insert_project(&on).expect("project");
-        let mut follows = project(false);
-        follows.id = "project-3".to_string();
-        store.insert_project(&follows).expect("project");
-        drop(store);
-
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute_batch(
-                "ALTER TABLE settings DROP COLUMN development;
-                 ALTER TABLE projects DROP COLUMN development;
-                 ALTER TABLE settings ADD COLUMN use_worktrees INTEGER NOT NULL DEFAULT 1;
-                 ALTER TABLE projects ADD COLUMN use_worktrees INTEGER;
-                 UPDATE settings SET use_worktrees = 0;
-                 UPDATE projects SET use_worktrees = 0 WHERE id = 'project-1';
-                 UPDATE projects SET use_worktrees = 1 WHERE id = 'project-2';",
-            )
-            .expect("old shape");
-        }
-        let check = |path: &std::path::Path| {
-            let store = Store::open(path).expect("reopened in place");
-            assert_eq!(
-                store.git_workflow_settings().unwrap().development,
-                Development::InPlace
-            );
-            let development = |id: &str| {
-                store
-                    .get_project(id)
-                    .unwrap()
-                    .unwrap()
-                    .git_workflow
-                    .development
-            };
-            assert_eq!(development("project-1"), Some(Development::InPlace));
-            assert_eq!(development("project-2"), Some(Development::Worktree));
-            assert_eq!(development("project-3"), None);
-            assert_eq!(
-                store
-                    .get_project("project-1")
-                    .unwrap()
-                    .unwrap()
-                    .git_workflow
-                    .delivery,
-                Some(Delivery::Merge)
-            );
-            assert!(!column_exists(&store.lock(), "settings", "use_worktrees").unwrap());
-            assert!(!column_exists(&store.lock(), "projects", "use_worktrees").unwrap());
-        };
-        check(&path);
-        check(&path);
     }
 
     /// Turning a default account off and on records it per agent, a repeat write reports no change,
@@ -5508,10 +4513,10 @@ mod tests {
         assert!(!store.account_disabled(Agent::Claude, Some("work")).unwrap());
     }
 
-    /// The default clone directory is the built-in one until set, a blank value goes back to it,
-    /// and a database created before the setting existed gains the column and keeps its data.
+    /// The default clone directory is the built-in one until set, and a blank value goes back to
+    /// it.
     #[test]
-    fn the_default_clone_dir_falls_back_and_a_database_without_the_column_still_opens() {
+    fn the_default_clone_dir_falls_back_to_the_built_in_one() {
         let path = temp_db("clone-dir");
         let store = Store::open(&path).expect("store");
         let built_in = crate::hostfs::expand("~/Projects")
@@ -5527,20 +4532,10 @@ mod tests {
         );
         assert!(store.set_default_clone_dir(None).unwrap());
         assert_eq!(store.default_clone_dir().unwrap(), built_in);
-        drop(store);
-
-        {
-            let conn = Connection::open(&path).expect("conn");
-            conn.execute("ALTER TABLE settings DROP COLUMN default_clone_dir", [])
-                .expect("drop column");
-        }
-        let store = Store::open(&path).expect("reopened");
-        assert_eq!(store.default_clone_dir().unwrap(), built_in);
     }
 
     /// The interface language is unset until a client reports one, a repeat of the same tag
-    /// changes nothing, a later one replaces it, and a database from before the column existed
-    /// opens with none.
+    /// changes nothing, and a later one replaces it.
     #[test]
     fn the_interface_language_is_unset_until_reported() {
         let path = temp_db("interface-language");
@@ -5555,63 +4550,6 @@ mod tests {
         );
         assert!(store.set_interface_language("de").unwrap());
         assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
-        drop(store);
-
-        {
-            let conn = Connection::open(&path).expect("conn");
-            conn.execute("ALTER TABLE settings DROP COLUMN interface_language", [])
-                .expect("drop column");
-        }
-        let store = Store::open(&path).expect("reopened");
-        assert_eq!(store.interface_language().unwrap(), None);
-    }
-
-    /// A database from while the switch for replying in the interface language existed opens with
-    /// that column gone and the language it held kept.
-    #[test]
-    fn the_dropped_reply_switch_column_is_removed_and_the_language_kept() {
-        let path = temp_db("reply-switch-column");
-        {
-            let store = Store::open(&path).expect("store");
-            assert!(store.set_interface_language("ja").unwrap());
-        }
-        {
-            let conn = Connection::open(&path).expect("conn");
-            conn.execute(
-                "ALTER TABLE settings \
-                 ADD COLUMN reply_in_interface_language INTEGER NOT NULL DEFAULT 1",
-                [],
-            )
-            .expect("add column");
-        }
-        let store = Store::open(&path).expect("reopened");
-        assert_eq!(store.interface_language().unwrap().as_deref(), Some("ja"));
-        drop(store);
-        let conn = Connection::open(&path).expect("conn");
-        assert!(!column_exists(&conn, "settings", "reply_in_interface_language").unwrap());
-    }
-
-    /// A database whose setting column still has its older name keeps the saved value under the
-    /// new one.
-    #[test]
-    fn the_older_auto_sync_column_is_renamed_in_place() {
-        let path = temp_db("auto-pull-rename");
-        {
-            let store = Store::open(&path).expect("store");
-            assert!(store.set_auto_pull_repositories(true).unwrap());
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute(
-                "ALTER TABLE settings \
-                 RENAME COLUMN auto_pull_repositories TO auto_sync_repositories",
-                [],
-            )
-            .expect("the older name");
-        }
-
-        let store = Store::open(&path).expect("reopened in place");
-        assert!(store.auto_pull_repositories().unwrap());
     }
 
     /// A project stored with the source's old name still reads, and is written back as `git`.
@@ -5713,26 +4651,16 @@ mod tests {
         assert!(store.get_session("nobody").unwrap().is_none());
     }
 
-    /// A database from before owner notices could be left pending gains the column in place, and
-    /// the count is marked, read and cleared by session, a clear naming the count it saw.
+    /// The owner notice count is marked, read and cleared by session, a clear naming the count it
+    /// saw.
     #[test]
-    fn the_owner_notice_flag_is_added_in_place_and_follows_the_session() {
+    fn the_owner_notice_flag_follows_the_session() {
         let path = temp_db("owner-notice");
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            store.insert_session(&session(None)).expect("session");
-        }
-        {
-            let conn = Connection::open(&path).expect("database");
-            conn.execute("ALTER TABLE sessions DROP COLUMN owner_notice_note", [])
-                .expect("the older shape");
-            conn.execute("ALTER TABLE sessions DROP COLUMN owner_notice_pending", [])
-                .expect("the older shape");
-        }
-        let store = Store::open(&path).expect("reopened in place");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_session(&session(None)).expect("session");
         assert_eq!(store.owner_notice_pending("session-1").unwrap(), 0);
         assert_eq!(store.owner_notice_note("session-1").unwrap(), None);
         store.mark_owner_notice("session-1").unwrap();
@@ -5981,54 +4909,6 @@ mod tests {
         );
     }
 
-    /// A label of an earlier palette is rewritten to its nearest family when the store opens, and
-    /// the store then reads it; a family name is left alone, and opening again changes nothing.
-    #[test]
-    fn colours_of_earlier_palettes_are_rewritten_on_opening() {
-        let path = temp_db("colour-legacy");
-        let earlier = [
-            ("olive", "lime"),
-            ("jade", "green"),
-            ("azure", "sky"),
-            ("rose", "pink"),
-            ("purple", "fuchsia"),
-            ("yellow-1", "yellow"),
-            ("gray-3", "gray"),
-            ("teal-2", "teal"),
-            ("violet", "violet"),
-            ("red", "red"),
-        ];
-        {
-            let store = Store::open(&path).expect("store");
-            store
-                .insert_console(&console(None, None, None))
-                .expect("console");
-            for (i, (old, _)) in earlier.iter().enumerate() {
-                store
-                    .insert_console_session(console_session(&format!("session-{i}")), None)
-                    .expect("inserted");
-                let conn = Connection::open(&path).expect("database");
-                conn.execute(
-                    "UPDATE sessions SET colour = ?2 WHERE id = ?1",
-                    params![format!("session-{i}"), old],
-                )
-                .expect("the earlier palette");
-            }
-        }
-
-        for _ in 0..2 {
-            let store = Store::open(&path).expect("reopened");
-            for (i, (_, family)) in earlier.iter().enumerate() {
-                let colour = store
-                    .get_session(&format!("session-{i}"))
-                    .unwrap()
-                    .unwrap()
-                    .colour;
-                assert_eq!(enum_to_text(&colour.unwrap()), *family);
-            }
-        }
-    }
-
     /// A colour the user chose replaces the assigned one, survives a stale write-back of the
     /// record, counts as held for the next console session, and is ignored for a project session.
     #[test]
@@ -6259,31 +5139,19 @@ mod tests {
     }
 
     #[test]
-    fn context_migrates_survives_unrelated_writes_and_rejects_stale_sources() {
+    fn context_survives_unrelated_writes_and_rejects_stale_sources() {
         let path = temp_db("context");
         let store = Store::open(&path).unwrap();
         store.insert_console(&console(None, None, None)).unwrap();
         let mut source = session(Some("/account-a"));
         source.agent_session_id = Some("native-1".to_owned());
         store.insert_session(&source).unwrap();
-        drop(store);
-        // A database from before the column was renamed holds cumulative totals under `usage`.
-        let old = Connection::open(&path).unwrap();
-        old.execute("ALTER TABLE sessions DROP COLUMN context", [])
-            .unwrap();
-        old.execute("ALTER TABLE sessions ADD COLUMN usage TEXT", [])
-            .unwrap();
-        old.execute("UPDATE sessions SET usage = '{\"total_tokens\":9}'", [])
-            .unwrap();
-        drop(old);
-        let store = Store::open(&path).unwrap();
         assert!(store
             .get_session(&source.id)
             .unwrap()
             .unwrap()
             .context
             .is_none());
-        assert!(!column_exists(&store.lock(), "sessions", "usage").unwrap());
         let context = crate::protocol::SessionContext {
             tokens: 120,
             window: Some(475_000),
@@ -6364,19 +5232,11 @@ mod tests {
     }
 
     #[test]
-    fn record_titles_migrate_persist_and_follow_the_agent_session() {
+    fn record_titles_persist_and_follow_the_agent_session() {
         let path = temp_db("record-titles");
         let store = Store::open(&path).unwrap();
         store.insert_console(&console(None, None, None)).unwrap();
         store.insert_session(&session(None)).unwrap();
-        drop(store);
-        let conn = Connection::open(&path).unwrap();
-        for column in ["record_title", "record_prompt"] {
-            conn.execute(&format!("ALTER TABLE sessions DROP COLUMN {column}"), [])
-                .unwrap();
-        }
-        drop(conn);
-        let store = Store::open(&path).unwrap();
         let mut source = store.get_session("session-1").unwrap().unwrap();
         assert_eq!(source.record_titles, RecordTitles::default());
         let titles = RecordTitles {
@@ -6418,19 +5278,11 @@ mod tests {
     }
 
     #[test]
-    fn observed_model_and_effort_migrate_persist_and_follow_the_agent_session() {
+    fn observed_model_and_effort_persist_and_follow_the_agent_session() {
         let path = temp_db("observed");
         let store = Store::open(&path).unwrap();
         store.insert_console(&console(None, None, None)).unwrap();
         store.insert_session(&session(None)).unwrap();
-        drop(store);
-        let conn = Connection::open(&path).unwrap();
-        for column in ["observed_model", "observed_effort"] {
-            conn.execute(&format!("ALTER TABLE sessions DROP COLUMN {column}"), [])
-                .unwrap();
-        }
-        drop(conn);
-        let store = Store::open(&path).unwrap();
         let mut source = store.get_session("session-1").unwrap().unwrap();
         let updates = [RecordUpdate {
             session: source.clone(),
@@ -6470,17 +5322,11 @@ mod tests {
     }
 
     #[test]
-    fn terminal_titles_migrate_and_survive_unrelated_writes_and_reopening() {
+    fn terminal_titles_survive_unrelated_writes_and_reopening() {
         let path = temp_db("terminal-title");
         let store = Store::open(&path).unwrap();
         store.insert_console(&console(None, None, None)).unwrap();
         store.insert_session(&session(None)).unwrap();
-        drop(store);
-        Connection::open(&path)
-            .unwrap()
-            .execute("ALTER TABLE sessions DROP COLUMN terminal_title", [])
-            .unwrap();
-        let store = Store::open(&path).unwrap();
         let mut stale = store.get_session("session-1").unwrap().unwrap();
         assert!(stale.terminal_title.is_none());
         assert!(store
@@ -6544,40 +5390,5 @@ mod tests {
             .set_terminal_title("session-1", Some("Late title"))
             .unwrap()
             .is_none());
-    }
-
-    /// A database already in the current shape is opened in place, and one whose `pages` table
-    /// still names the console rather than the console session — the only difference from the
-    /// current shape — is moved aside, though its `sessions` table is current.
-    #[test]
-    fn a_pages_table_naming_the_console_marks_the_database_outdated() {
-        let moved_aside = |old_pages: bool| -> bool {
-            let path = temp_db(if old_pages {
-                "old-pages"
-            } else {
-                "current-pages"
-            });
-            drop(Store::open(&path).expect("current shape"));
-            if old_pages {
-                let conn = Connection::open(&path).expect("reopened");
-                conn.execute_batch(
-                    "DROP TABLE pages;
-                     CREATE TABLE pages (id TEXT PRIMARY KEY, console_id TEXT NOT NULL,
-                         html TEXT NOT NULL, anchor_message_id TEXT, created_at INTEGER NOT NULL);",
-                )
-                .expect("old pages table");
-            }
-            Store::open(&path).expect("opens");
-            let moved = path.parent().unwrap().read_dir().unwrap().any(|entry| {
-                entry
-                    .unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with("octoboard.db.superseded-")
-            });
-            moved
-        };
-        assert!(!moved_aside(false));
-        assert!(moved_aside(true));
     }
 }

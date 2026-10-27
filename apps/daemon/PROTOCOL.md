@@ -512,8 +512,6 @@ daemon computes it so that clients stay agent-agnostic.
   so starts with its parent's figure.
 
 A change of native conversation id clears the old context; switching accounts with the same conversation preserves it.
-The store drops the cumulative `usage` that earlier versions kept and reads the records again, so an archived session
-gets its final context size once from what remains of its records.
 
 `Session.observed_model` and `Session.observed_effort` are the model and reasoning effort the agent's own records show
 the session running with, in the agent's spelling; they are not `model` and `effort`, which are the launch overrides.
@@ -588,7 +586,7 @@ client is told about any change to it through `settings_updated` — there is no
 `Settings.added_agents` is the ordered list of agents the user has added, persisted with the other settings and sent
 with them; only these are offered for a new choice. `add_agent` appends an installed agent and `remove_agent` takes one
 off, keeping its accounts, which reappear when it is added again, and `reorder_agents` sets the order, which clients use
-wherever agents are listed. The list is decided once: a database from before the list existed, and a fresh one, start
+wherever agents are listed. The list is decided once: a fresh database starts
 undecided and are filled as soon as every agent's availability is determined (`agent_availability_updated`) with the
 agents that are `available` plus those that have accounts, in the order `claude`, `codex`, `grok`, announced by
 `settings_updated`. An undecided list is sent as `null`, which a client must not
@@ -601,21 +599,19 @@ a list the user emptied stays empty. The list is not part of a configuration exp
 account. A null value inherits the effective Codex home's `config.toml`. Non-null values become per-launch
 `approvals_reviewer` CLI overrides on fresh launches and resumes, without editing that file, sandbox settings or the
 approval policy. The value is read at launch time, so a change reaches the next launch of a session of any Codex
-account, a legacy pinned directory with no account id included.
+account.
 
 `Settings.claude_approval_mode` is `null` (the default), `auto`, `manual` or `bypass`, one choice for every Claude Code
 account. A null value passes no flag, so the account's own `settings.json` decides. The others become
 `--permission-mode auto`, `--permission-mode default` (not `manual`, which only Claude Code 2.1.200 and later accepts)
 and `--permission-mode bypassPermissions` on fresh launches and resumes alike, without editing any configuration file;
 `bypass` also adds `"skipDangerousModePermissionPrompt": true` to the launch's `--settings` JSON, so Claude Code's
-own first-use warning never appears. Neither value is exported. Earlier versions kept the choice per account; on
-upgrade each agent's value is its default account's choice and the other accounts' are dropped.
+own first-use warning never appears. Neither value is exported.
 
 `Account.share_default_config` is whether the account shares the agent's default configuration, and
 `Account.share_default_config_incomplete` whether the last change toward that choice did not finish: it is set when a
 change starts and cleared when one completes, so a change that failed part-way, or one the daemon stopped in, leaves
-it set; only asking again for the recorded value or the opposite change clears it. A `pending` flag recorded by an
-earlier version reads as incomplete. This daemon always sends both; a client reads an absent one as false. Both start
+it set; only asking again for the recorded value or the opposite change clears it. This daemon always sends both; a client reads an absent one as false. Both start
 false, are set by `set_account_sharing` (`update_account` repointing the account and `delete_account` turn it off
 first), survive a daemon restart and stay local like the overrides above.
 
@@ -732,7 +728,7 @@ console's project session value, else the agent's own default; a console session
 field inherits the project's current setting (else the console's project session setting), or the console's console
 session setting for a console session, read at every launch; an explicit `null` uses the agent's own default even
 when the parent sets a value. A string pins that value. Every launch, resume and account switch uses these overrides
-before the inherited values. Sessions stored before the fields existed keep inheriting, and an override survives
+before the inherited values. An override survives
 daemon restarts.
 `Console.icon` is the console's custom avatar, a `data:image/...` URL of at most 256 KiB (the UI sends a 128x128
 WebP or PNG); unset means the default glyph.
@@ -758,10 +754,7 @@ name: `red`, `orange`, `amber`, `yellow`, `lime`, `green`, `teal`, `cyan`, `sky`
 `fuchsia`, `pink`, `brown` and `gray`. The ids are never shown to the user; what each one looks like is the client's.
 A colour is assigned on creation (picked at random among the entries no other non-archived console session of its
 console holds, or among all of them when every entry is held) and changed afterwards only by `set_session_colour`;
-unset for a project session. The labels of the earlier palettes are rewritten when the store opens, so none is ever
-sent: `olive` to `lime`, `jade` to `green`, `azure` to `sky`, `rose` to `pink`, the branch-only `purple` to `fuchsia`,
-and every `<family>-<shade>` (`red-1` to `gray-3`) to its family.
-`Session.ordinal` is a console session's place in its console's history — one past the highest ever used there, never
+unset for a project session. `Session.ordinal` is a console session's place in its console's history — one past the highest ever used there, never
 reused after archiving or deletion; unset for a project session.
 `Session.account_id` is the account this session's own agent reads, by id, resolved as above when
 the session is opened (unset means the default account), and changed afterwards only by a successful
@@ -782,13 +775,12 @@ switching and does not change ordering. Archive, delete and bulk delete refuse t
 a console or project follows the same rule. A bound session's completed report is still delivered while it or its
 archive group is locked, but it is not automatically archived. The MCP tools cannot change the lock. Changing a lock while any archive or delete operation is in progress is
 refused with `session_lock_busy`; retry after that operation finishes.
-`Project.tags` are the user's free-form labels, used by the client to filter the project list; there is no tag registry, so the tags in use are the distinct ones across projects. `add_project` and `update_project` normalise what they are given: each tag is trimmed, the empty ones are dropped, and a tag matching an earlier one ignoring case is dropped (the first spelling wins). The order is kept, and a tags list never fails validation. A project from before tags existed has none.
+`Project.tags` are the user's free-form labels, used by the client to filter the project list; there is no tag registry, so the tags in use are the distinct ones across projects. `add_project` and `update_project` normalise what they are given: each tag is trimmed, the empty ones are dropped, and a tag matching an earlier one ignoring case is dropped (the first spelling wins). The order is kept, and a tags list never fails validation.
 `Project.description` is the user's own free text on what the project is for, read by agent sessions through the MCP
 tools. New or changed text is trimmed, with blank as none, and limited to 2,000 Unicode scalar values. A new explicit
 `Project.name` or a changed name is trimmed and limited to 100 Unicode scalar values. Neither field is truncated.
 An unchanged legacy value keeps its stored text, including surrounding whitespace and overlong content; equality is
 compared after trimming. Directory-derived names and configuration imports preserve text beyond these editing limits.
-A project from before descriptions existed has none.
 `Page.anchor_message_id` is stored and never read (see "Data model" in `docs/architecture.md`). Timestamps are
 epoch milliseconds (the UI formats them).
 `Settings` is the app-wide user settings the daemon stores, plus the account list — already a record that grows
@@ -798,12 +790,12 @@ off, the periodic check still fetches the remote and reports how far ahead or be
 it; on, a branch that is behind and can fast-forward is fast-forwarded. It never pushes, and it never merges
 non-fast-forward. Turning it on also fast-forwards straight away, without waiting for the next check — see
 "Fast-forwarding when the setting is turned on" below.
-`auto_delete_unresumable_archives` (default `true`, also for a database from before it existed) governs the daemon's
+`auto_delete_unresumable_archives` (default `true`) governs the daemon's
 automatic deletion of archived sessions whose conversation record is proven gone: while it is `false` that scan
 deletes nothing. The scan reads it when it starts and again before each delete, so a change needs no restart and takes
 hold mid-scan. It does not affect `resume_session` refusing a session whose conversation is gone
 (`conversation_unresumable`).
-`auto_approve_session_requests` (default `false`, also for a database from before it existed) makes a `request_session`
+`auto_approve_session_requests` (default `false`) makes a `request_session`
 call that passed every check made before the user is asked be approved at once, through the
 same carrying out as an approval from the dialog: no `session_request` is broadcast and the session raises no hand, so
 no window shows a dialog. The session started, the handover of branches, the result and the outcome
@@ -813,12 +805,12 @@ is turned on stays in its dialog. While an earlier approval of the same session 
 refused as before, and an automatic request takes the place of a request the session has waiting. Only a client changes
 it: the settings tools of the MCP server neither read nor write it, so an agent cannot turn it on. A full configuration
 export carries it and an import that applies the settings sets it, like the other portable settings.
-`auto_approve_resume_requests` (default `false`, also for a database from before it existed) is the same for a
+`auto_approve_resume_requests` (default `false`) is the same for a
 `request_resume_session` call, independently of `auto_approve_session_requests`: either can be on while the other is
 off. An automatic approval under it is worded in the outcome as the user's choice to have resume requests approved
 without asking, and it is as out of an agent's reach as the other one, and a full configuration export carries it as
 that one does.
-`auto_approve_account_switches` (default `false`, also for a database from before it existed) is the same for an
+`auto_approve_account_switches` (default `false`) is the same for an
 owner's `switch_session_account` call, and `auto_approve_handoffs` (likewise) for its `handoff_session` call, each
 independent of the others. While its setting is off such a call is a request like `request_session`'s: it waits for the
 user's answer and is shown to the user as a `session_request` (`switch` or `handoff`). While it is on, the call runs the
@@ -827,7 +819,7 @@ of its own, so a call cancelled meanwhile does not interrupt it (when the call i
 written into the caller's session as a message). A waiting request of the same kind for the same session is withdrawn
 first. Each is read once when the call is made, is as out of an agent's reach as the other approvals, and is carried by
 a full configuration export as they are.
-`auto_select_account` (default `false`, also for a database from before it existed) makes a session started by
+`auto_select_account` (default `false`) makes a session started by
 `new_session`, `request_session` or `handoff_session` whose account was left out run on the account of that session's
 agent whose weekly quota resets soonest. An account is a candidate only when it can still open a session: a 5-hour,
 account-wide weekly, or credit-period window that is used up drops the whole account, and a reading taken under another
@@ -844,7 +836,7 @@ another console, the project's, else the console's, with no fall-back to the cal
 the caller's own console. Agents may read and change the setting. A full configuration export carries it; a document
 exported before it existed omits it, and importing that document leaves the stored value unchanged.
 
-`ask_questions_as_choices` (default `true`, also for a database from before it existed) is whether the instructions
+`ask_questions_as_choices` (default `true`) is whether the instructions
 every session is launched with ask it to put each question that needs the user's decision or answer as options to pick
 from (through the agent's own tool for it: Claude Code's `AskUserQuestion` and Grok Build's `ask_user_question` are
 named, Codex is told generically), and otherwise as numbered questions with lettered options at the end of its reply; a
@@ -869,12 +861,12 @@ keeps the same static description: the language of a name is the one the section
 the one the user writes in. The field is not visible to agents (`get_settings` omits it, `update_settings` ignores it)
 and a configuration export does not carry it: a client reports it. A document exported by a build that carried a
 `reply_in_interface_language` switch still imports: the field is ignored.
-`sidebar_order_by_status` (default `true`, also for a database from before it existed) is whether the client's sidebar
+`sidebar_order_by_status` (default `true`) is whether the client's sidebar
 orders sessions and projects by status. The daemon only stores and serves it; the ordering is the client's. Off, the
 sidebar ranks no session or project by status: sessions go pinned first, then most recently started, and projects keep
 active first, then pinned, then name. Agents may read and change the setting. A full configuration export carries it; a
 document exported before it existed omits it, and importing that document leaves the stored value unchanged.
-`auto_start_quota_windows` (default `false`, also for a database from before it existed) is whether the daemon starts a
+`auto_start_quota_windows` (default `false`) is whether the daemon starts a
 usage window that has reset but not begun counting; see "Account quotas" below. Agents cannot read or change it, as it
 spends the user's quota. A full configuration export carries it; a document exported before it existed omits it, and
 importing that document leaves the stored value unchanged.
@@ -893,7 +885,7 @@ in time.
 
 ### Switching a session whose turn hit the usage limit
 
-`auto_switch_on_usage_limit` (default `false`, also for a database from before it existed) has the daemon switch a
+`auto_switch_on_usage_limit` (default `false`) has the daemon switch a
 session to another account of its agent by itself when the session's turn stopped because its account reached the plan's
 usage limit, with the switch `switch_session_account` makes (the conversation comes along, and the turn the limit
 stopped is continued). It is off by default because it ends the session's process and spends another account's quota

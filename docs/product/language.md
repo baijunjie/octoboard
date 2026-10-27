@@ -139,7 +139,7 @@ A client reports its language:
 
 - **when the user picks one in Settings**. The window changes language whatever becomes of the report; a report the
   daemon does not receive or refuses is shown as an error and is not sent again later;
-- **on connecting, only while the daemon holds none yet**, which seeds an installation from before the daemon held one.
+- **on connecting, only while the daemon holds none yet**, so the daemon starts from the language the client shows.
   A client never reports on connecting otherwise, so clients set to different languages do not overwrite each other at
   every start: the daemon keeps the most recent report.
 
