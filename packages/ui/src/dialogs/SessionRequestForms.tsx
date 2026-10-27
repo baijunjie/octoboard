@@ -111,13 +111,14 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
 
   const entries = session ? switchEntries(session, accounts, t, defaultNames, { quotas, now }, sharing, disabledDefaults) : [];
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
+  const turnedOff = (entry: (typeof entries)[number]) => entry.disabled && !entry.current;
   const blockOf = (entry: (typeof entries)[number]) =>
-    switchEntryBlock(t, entry, { switching: session?.switching_account === true, ownChanging }) ?? (entry.disabled && !entry.current ? accountDisabledUnavailable(t) : undefined);
+    switchEntryBlock(t, entry, { switching: session?.switching_account === true, ownChanging }) ?? (turnedOff(entry) ? accountDisabledUnavailable(t) : undefined);
   const chosen = entries.find((entry) => entry.account === account);
   const incomplete = incompleteAccount(accounts, sharing, account);
   const missing = session !== undefined && chosen === undefined;
   const chosenBlock = chosen && blockOf(chosen);
-  const chosenDisabled = chosen !== undefined && !chosen.current && chosen.disabled;
+  const chosenDisabled = chosen !== undefined && turnedOff(chosen);
   // The menu leaves Switch account out for a session that is still starting or archived; an archived one ends the
   // dialog's purpose and is the dialog's own failure (`useSessionRequestDialogProps`).
   const sessionBlock = session?.status === "starting" ? t("dialog.sessionRequest.switch.starting") : undefined;
@@ -141,7 +142,10 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
   const options = entries.filter((entry) => entry.current || !entry.disabled || entry.account === account).map((entry): Option<string> => {
     const usage = accountUsage(t, session.agent, entry.quota, entry.current ? undefined : entry.exhaustedBy, now);
     const block = blockOf(entry);
-    const note = block ?? usage;
+    // A turned-off account and a used-up one (through its usage) say why on the option. The chosen account's own
+    // sharing change is the field's error and a hold on the session the alert above; an unchosen option's brief hold
+    // is stated nowhere.
+    const note = turnedOff(entry) ? accountDisabledUnavailable(t) : usage;
     const option: Option<string> = {
       value: entry.account ?? DEFAULT_ACCOUNT_KEY,
       label: entry.name,

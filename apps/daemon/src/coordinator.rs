@@ -4772,10 +4772,10 @@ pub(crate) fn refuse_if_archived(session: &Session) -> Result<()> {
     Ok(())
 }
 
-fn session_archived(id: &str) -> anyhow::Error {
+pub(crate) fn session_archived(id: &str) -> anyhow::Error {
     CodedError::raised(
         error_code::SESSION_ARCHIVED,
-        "an archived session cannot be switched; reopen it first",
+        "an archived session cannot be locked, switched or handed off; reopen it first",
         &[("session", id)],
     )
 }
@@ -12459,6 +12459,29 @@ mod tests {
     }
 
     #[test]
+    fn locking_an_archived_session_is_refused_but_unlocking_one_is_not() {
+        use SessionStatus::{Archived, Interrupted};
+        let (state, _dir) = console_with_project_and_accounts("coordinator-lock-archived");
+        for (id, status) in [("live", Interrupted), ("old", Archived)] {
+            state
+                .store
+                .insert_session(&console_session(id, status))
+                .unwrap();
+        }
+
+        assert_eq!(
+            code_of(&set_session_locked(&state, "old", true).unwrap_err()),
+            error_code::SESSION_ARCHIVED
+        );
+        assert!(!state.session_record("old").unwrap().locked);
+
+        state.store.set_session_locked("old", true).unwrap();
+        assert!(!set_session_locked(&state, "old", false).unwrap().locked);
+
+        assert!(set_session_locked(&state, "live", true).unwrap().locked);
+    }
+
+    #[test]
     fn locked_sessions_refuse_archive_and_delete_cascades_without_partial_changes() {
         use SessionStatus::{Archived, Interrupted};
         let (state, _dir) = console_with_project_and_accounts("coordinator-locked-cascades");
@@ -12479,7 +12502,8 @@ mod tests {
         }
         set_session_locked(&state, "worker", false).unwrap();
         archive_session(&state, "hub").unwrap();
-        set_session_locked(&state, "worker", true).unwrap();
+        // Straight to the store: the lock a session archived before locking was refused still carries.
+        state.store.set_session_locked("worker", true).unwrap();
         assert_eq!(
             code_of(&delete_session(&state, "hub").unwrap_err()),
             error_code::SESSION_LOCKED

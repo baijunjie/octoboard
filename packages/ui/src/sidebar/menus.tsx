@@ -150,11 +150,11 @@ export function projectMenu(
 }
 
 /** "Switch account": the session's agent's accounts, the one the session is on marked as current
- * and doing nothing. An account whose quota is used up or whose sharing change runs is unavailable, with why under
- * its name; so is every account while the session's own account is changing, and every account but the current one
- * while an account switch holds the session. A turned-off account is not listed, but the session's own stays. Absent
- * when the agent has no other account to go to that is turned on — hidden rather than disabled, as there is nothing
- * the user could do with it. */
+ * and doing nothing. An account whose quota is used up is unavailable, with why under its name. Without a reason
+ * (each ends on its own) are an account whose sharing change runs, every other account while the session's own account
+ * changes its sharing, and every account but the current one while an account switch holds the session. A turned-off
+ * account is not listed, but the session's own stays. Absent when the agent has no other account to go to that is
+ * turned on — hidden rather than disabled, as there is nothing the user could do with it. */
 function switchAccountSubmenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -178,9 +178,10 @@ function switchAccountSubmenu(
       // used up the short reason under its name. The current account is never offered, so it is
       // not marked used up; a removed account's directory has no quota.
       const usage = accountUsage(t, session.agent, quota, current ? undefined : exhaustedBy, readings?.now ?? 0);
-      // Nothing can be switched onto an account whose sharing change runs, nor away from one, whatever its quota.
-      const unavailable = switchEntryBlock(t, { current, changingSharing }, { switching, ownChanging });
-      const { icon, detail, reason } = unavailable ? { icon: usage.icon, ...unavailable } : usage;
+      // Nothing can be switched onto an account whose sharing change runs, nor away from one, nor while a switch
+      // runs; those end on their own, so the entry is disabled without a reason.
+      const held = switchEntryBlock(t, { current, changingSharing }, { switching, ownChanging }) !== undefined;
+      const { icon, detail, reason } = usage;
       return {
         label: name,
         // A directory is a path, so it reads left to right and shows its end, as it does elsewhere.
@@ -190,6 +191,7 @@ function switchAccountSubmenu(
         icon: isPath ? <span aria-hidden="true" className="flex w-8 shrink-0 justify-center"><KeyRound className="size-4 text-app-muted" /></span> : icon,
         reason,
         description: detail,
+        ...(held ? { disabled: true } : {}),
         selected: current,
         onClick: current
           ? () => {}
@@ -199,21 +201,28 @@ function switchAccountSubmenu(
   };
 }
 
-/** "Hand off": offered for a session that is not archived. Disabled while the session is in the
- * middle of a turn or still starting, which the daemon refuses (`session_working`), while it
- * is locked, as Archive is, and while no other agent could take it over (`hasTarget`); and, with the reason
- * shown, while the session's own account is changing its sharing (`ownChanging`), which the daemon refuses, and
- * while an account switch holds the session (see `handoffBlock`). */
+/** "Hand off": offered for a session that is not archived. Disabled while the session is in the middle of a turn
+ * or still starting, which the daemon refuses (`session_working`), while it is locked, as Archive is, while the
+ * session's own account is changing its sharing (`ownChanging`), which the daemon refuses, and while an account
+ * switch holds the session (see `handoffBlock`); and while no other agent could take it over (`hasTarget`). A
+ * lasting hold (locked, in a turn, no other agent) shows its reason and wins over one that ends on its own (a
+ * switch, a sharing change, starting), which shows none. */
 function handOffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, ownChanging: boolean): ActionMenuItem {
   const block = handoffBlock(t, session, ownChanging);
+  const lasting = block?.reason ? block : hasTarget ? undefined : { detail: t("sidebar.session.handOffNoTarget"), reason: { state: t("sidebar.session.handOffNoTarget.reason") } };
   return {
-    ...(block?.reason ? { description: block.detail, reason: block.reason } : {}),
+    ...(lasting ? { description: lasting.detail, reason: lasting.reason } : {}),
     label: t("sidebar.session.handOff"),
     icon: Forward,
     iconClassName: "rtl:-scale-x-100",
     onClick: () => handlers.onOpenDialog({ kind: "hand-off", session }),
-    disabled: !hasTarget || block !== undefined,
+    disabled: block !== undefined || lasting !== undefined,
   };
+}
+
+/** Archive and Delete are disabled while the session is locked, saying so. */
+function lockedItemState(t: Translate, session: Session, descriptionKey: "sidebar.session.archiveLocked" | "sidebar.session.deleteLocked"): Partial<ActionMenuItem> {
+  return session.locked ? { disabled: true, description: t(descriptionKey), reason: { state: t("accountChoice.sessionLocked.reason") } } : {};
 }
 
 /** Whether a session's menu offers Delete in place of Archive: it is archived already, or it has
@@ -305,7 +314,7 @@ export function sessionMenu(
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || session.switching_account === true, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
     offersDelete(session, hasBoundSessions)
-      ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, disabled: session.locked }
-      : { label: t("sidebar.session.archive"), icon: Archive, end: <ShortcutKbd command="archive" />, onClick: () => handlers.onArchiveSession(session), disabled: session.locked },
+      ? { label: t("sidebar.session.delete"), icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, ...lockedItemState(t, session, "sidebar.session.deleteLocked") }
+      : { label: t("sidebar.session.archive"), icon: Archive, end: <ShortcutKbd command="archive" />, onClick: () => handlers.onArchiveSession(session), ...lockedItemState(t, session, "sidebar.session.archiveLocked") },
   ];
 }

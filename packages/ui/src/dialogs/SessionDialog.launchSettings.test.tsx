@@ -234,7 +234,7 @@ it("keeps the Name hint visible", () => {
   expect(document.body.textContent).toContain("Leave this empty to use the default session name.");
 });
 
-it("lists an account whose sharing change runs as unavailable in the account picker", async () => {
+it("lists an account whose sharing change runs as unavailable, without a reason, in the account picker", async () => {
   const { container, root } = renderDialog([], {
     settings: {
       auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
@@ -246,8 +246,10 @@ it("lists an account whose sharing change runs as unavailable in the account pic
   await act(async () => pickerNamed("Claude Code account").click());
   const options = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')];
   const work = options.find((option) => option.textContent?.includes("Work"))!;
-  expect(work.textContent).toContain("Changing sharing");
-  expect(work.getAttribute("aria-describedby") && document.getElementById(work.getAttribute("aria-describedby")!)?.textContent).toBe("Unavailable while its sharing is being changed");
+  // No reason line is drawn, but the option is still announced as unavailable.
+  expect(work.textContent).toBe("Work");
+  expect(work.getAttribute("aria-describedby")).toBeNull();
+  expect(work.getAttribute("aria-disabled")).toBe("true");
   // It cannot be picked: pressing it leaves the account as it was.
   await act(async () => work.click());
   expect(pickerNamed("Claude Code account").textContent).not.toContain("Work");

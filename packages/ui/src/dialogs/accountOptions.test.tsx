@@ -17,11 +17,11 @@ describe("accountOption", () => {
     expect(option.reason).toBeUndefined();
   });
 
-  it("lists an account whose sharing change runs as unavailable, with why in short and in full", () => {
+  it("lists an account whose sharing change runs as unavailable, without a reason", () => {
     const option = accountOption(t, entry({ changingSharing: true }), 0, false);
     expect(option.isDisabled).toBe(true);
-    expect(option.reason).toEqual({ state: "Changing sharing" });
-    expect(option.detail).toBe("Unavailable while its sharing is being changed");
+    expect(option.reason).toBeUndefined();
+    expect(option.detail).toBeUndefined();
   });
 
   it("lists a disabled account as unavailable, with why in short and in full, ahead of a running sharing change", () => {
@@ -31,10 +31,10 @@ describe("accountOption", () => {
     expect(option.detail).toBe("Unavailable while this account is disabled");
   });
 
-  it("gives the running change as the reason when the quota is used up as well", () => {
+  it("gives the used-up quota as the reason when a sharing change runs as well", () => {
     const exhaustedBy = { kind: "session", label: null, used_percent: 100, resets_at: null, window_minutes: 300 } as const;
-    const option = accountOption(t, entry({ changingSharing: true, exhaustedBy }), 0, false);
+    const option = accountOption(t, entry({ changingSharing: true, exhaustedBy, quota: { agent: "claude", account: "w", fetched_at: 0, plan: null, unavailable: null, windows: [{ ...exhaustedBy }] } }), 0, false);
     expect(option.isDisabled).toBe(true);
-    expect(option.reason).toEqual({ state: "Changing sharing" });
+    expect(option.reason).toEqual({ state: "Limit reached" });
   });
 });

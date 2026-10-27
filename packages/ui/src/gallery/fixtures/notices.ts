@@ -508,6 +508,14 @@ export const noticeScenarios: Scenario[] = [
     state: moveState(handoffRequest),
   },
   {
+    id: "session-request-handoff-starting",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to hand off a session that is still starting",
+    description: "The session to hand off has not finished starting. An error above the picker, titled \"The session is still starting, so it cannot be handed off yet.\", takes the place of the mid-turn text, and Confirm is disabled, though Team is chosen and available. Refuse is the way out.",
+    state: moveState(handoffRequest, { target: startingOwnedSession }),
+  },
+  {
     id: "toast-error",
     group: TRUST,
     category: "exceptional",

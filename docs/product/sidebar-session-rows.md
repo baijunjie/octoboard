@@ -75,18 +75,19 @@ A session row's action menu offers:
   the session's own that is turned off (see "Turning an account off" in `docs/product/agent-accounts.md`), as judged
   when the menu opens, is not listed; the session's own account is listed, checked, even when it is turned off. An
   account other than the session's own whose sharing of the default configuration is being changed, as judged when the
-  menu opens, is disabled like a used-up one, whatever its quota, with a short reason saying so; while the session's own
-  account is having its sharing changed, every other account is disabled with a reason saying that the session's account
-  is changing, as the session cannot be switched away from it either (see "When a change is carried out" in
-  `docs/product/sharing-the-default-configuration.md`). While the session is shown as switching its account, every other
-  account is disabled with a reason saying that the session is switching its account. A removed account named by its
+  menu opens, is disabled whatever its quota, with no reason given; so is every other account while the session's own
+  account is having its sharing changed, as the session cannot be switched away from it either (see "When a change is
+  carried out" in `docs/product/sharing-the-default-configuration.md`), and while the session is shown as switching its
+  account. These entries keep their usage bar and its description. A removed account named by its
   directory shows a key icon in the bar's place, lined up with the bars, and is never marked used up.
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
-  console session's row; an archived session has no such entry. Disabled while the session is *working* or
-  *starting*, while it is locked, while no agent other than its own can be picked, while the session's own account is
-  having its sharing changed, with that reason, and while the session is shown as switching its account, with that
-  reason.
+  console session's row; an archived session has no such entry. Disabled while the session is locked, while it is
+  *working*, while no agent other than its own can be picked, while the session is shown as switching its account,
+  while its own account is having its sharing changed, and while it is *starting*. The first three show a reason under
+  its name, "Session locked", "Session busy" and "No other agent", with a full sentence as its description for
+  assistive technology; the others show none. When several hold, the first in that order is the one shown, so one that
+  shows a reason always wins over one that does not.
 - **Unbind** — asks for confirmation, then releases the session from its owner, leaving it the user's own, unbound
   session (see "Unbinding a session from the window" in `docs/product/changing-session-owners.md`); its row then shows
   it as unbound (see "Project rows" in `docs/product/sidebar-project-rows.md` and "The binding badge" below). Present
@@ -108,7 +109,9 @@ A session row's action menu offers:
   it outright, leaving nothing in the archive. Deletion needs no confirmation and automatically moves its agent records
   to the Trash, as described in that section.
 
-Archive and Delete menu items are disabled while the session is locked.
+Archive and Delete menu items are disabled while the session is locked, showing "Session locked" under their name
+(in place of Archive's shortcut) and a sentence that the session is locked, so it cannot be archived or deleted, as
+their description for assistive technology.
 
 **The Delete or Archive button.** Just before its action-menu button, an unlocked session row — a console session's
 included — carries a **Delete** button while the session is unused and not still starting (see "Deleting an unused

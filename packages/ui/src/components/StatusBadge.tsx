@@ -5,10 +5,12 @@ export type StatusBadgeColor = "default" | "accent" | "help" | "success" | "warn
 export type StatusBadgeVariant = "soft" | "bordered";
 export type StatusBadgeSize = "sm" | "md" | "lg";
 
-const SIZES: Record<StatusBadgeSize, { spacing: string; single: string }> = {
-  sm: { spacing: "px-2 py-0.5 text-xs leading-4", single: "w-5" },
-  md: { spacing: "px-2 py-0.5 text-xs leading-5", single: "w-6" },
-  lg: { spacing: "px-3 py-1 text-sm leading-5", single: "w-7" },
+/* `wrapRadius` is half the one-line height, so a wrapping badge that fits on one line is the same pill as any
+   other, and one that wraps keeps the corners of that pill instead of turning into a blob. */
+const SIZES: Record<StatusBadgeSize, { spacing: string; single: string; wrapRadius: string }> = {
+  sm: { spacing: "px-2 py-0.5 text-xs leading-4", single: "w-5", wrapRadius: "rounded-[10px]" },
+  md: { spacing: "px-2 py-0.5 text-xs leading-5", single: "w-6", wrapRadius: "rounded-[12px]" },
+  lg: { spacing: "px-3 py-1 text-sm leading-5", single: "w-7", wrapRadius: "rounded-[14px]" },
 };
 
 /* Fill, text and edge are the shared tints of style.css (`--tint-{colour}-bg`, `-fg` and `-edge`), the same
@@ -87,7 +89,7 @@ export function StatusBadge({ children, className = "", color = "default", varia
         data-color={color}
         data-variant={variant}
         data-size={size}
-        className={`inline w-auto font-[weight:inherit] ${overflow === "wrap" ? "min-w-0 shrink rounded-lg whitespace-normal [overflow-wrap:anywhere]" : "shrink-0 whitespace-nowrap rounded-full"} ${colorClasses(color, variant)} ${SIZES[size].spacing} ${single ? `inline-block ${SIZES[size].single} px-0 text-center` : ""} ${className}`}
+        className={`inline w-auto font-[weight:inherit] ${overflow === "wrap" ? `min-w-0 shrink ${SIZES[size].wrapRadius} whitespace-normal [overflow-wrap:anywhere]` : "shrink-0 whitespace-nowrap rounded-full"} ${colorClasses(color, variant)} ${SIZES[size].spacing} ${single ? `inline-block ${SIZES[size].single} px-0 text-center` : ""} ${className}`}
       >
         {/* Keep content directly in the badge: Chip's automatic text label adds padding that a
             single-character badge and the compact metadata badges cannot take. */}

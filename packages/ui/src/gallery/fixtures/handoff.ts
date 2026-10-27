@@ -20,6 +20,8 @@ const bare = sessionOf("s-handoff-bare", console_.id, api.id, "Add idempotency k
 const sibling = sessionOf("s-handoff-sibling", console_.id, web.id, "Update the dependencies", "idle", { bound_to: hub.id, started_at: minutesAgo(45) });
 // A bound session the menu cannot hand off now, though it can still be unbound.
 const working = sessionOf("s-handoff-working", console_.id, web.id, "Fix the summary layout", "working", { bound_to: sibling.id, started_at: minutesAgo(20) });
+// A bound session whose launch has not finished: the menu cannot hand it off or unbind it yet, though it can be archived.
+const starting = sessionOf("s-handoff-starting", console_.id, web.id, "Set up the search index", "starting", { bound_to: sibling.id, started_at: minutesAgo(1) });
 const hubOwned = [
   sibling,
   sessionOf("s-handoff-hub-old", console_.id, api.id, "Earlier release check", "archived", { bound_to: hub.id, started_at: minutesAgo(180) }),
@@ -40,6 +42,24 @@ const state = snapshotState({
   consoles: [console_],
   projects: [web, api],
   sessions: [hub, lead, ...owned, ...hubOwned, bare, working],
+  settings,
+});
+
+// The same sessions plus an idle one the user locked, which Hand off and Archive refuse; kept out of `state` so
+// the lock mark does not appear in the other scenarios.
+const locked = sessionOf("s-handoff-locked", console_.id, api.id, "Review the rate limits", "idle", { locked: true, started_at: minutesAgo(25) });
+const lockedState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [hub, lead, ...owned, ...hubOwned, bare, working, locked],
+  settings,
+});
+
+// The same sessions plus the one still starting, kept out of `state` so it does not appear in the other scenarios.
+const startingState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [hub, lead, ...owned, ...hubOwned, bare, working, starting],
   settings,
 });
 
@@ -120,16 +140,34 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of a bound session in the middle of a turn, Hand off disabled",
-    description: "Hand off is greyed out while the session is in the middle of a turn, while Unbind right after it and Archive stay available.",
+    description: "Hand off is greyed out with \"Session busy\" under its name while the session is in the middle of a turn, while Unbind right after it and Archive stay available.",
     state,
     steps: [openMenu(working.title)],
+  },
+  {
+    id: "sidebar-session-menu-starting",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of a bound session that is still starting, Hand off and Unbind disabled",
+    description: "Hand off and Unbind are both greyed out with no reason under their names, since the session is only briefly unavailable, where a session in the middle of a turn would say \"Session busy\" under Hand off; Archive stays available.",
+    state: startingState,
+    steps: [openMenu(starting.title)],
+  },
+  {
+    id: "sidebar-session-menu-hand-off-locked",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of a locked session, Hand off disabled",
+    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its keyboard shortcut. Unlock stays available.",
+    state: lockedState,
+    steps: [openMenu(locked.title)],
   },
   {
     id: "sidebar-session-menu-hand-off-no-agent",
     group: GROUP,
     category: "normal",
     title: "Menu of an idle session, no other agent to hand off to",
-    description: "Codex and Grok Build are not installed, so no other agent could take the session over: Hand off is greyed out although the session is idle, and Archive stays available.",
+    description: "Codex and Grok Build are not installed, so no other agent could take the session over: Hand off is greyed out with \"No other agent\" under its name although the session is idle, and Archive stays available.",
     state: { ...state, agentAvailability: onlyClaude },
     steps: [openMenu(bare.title)],
   },

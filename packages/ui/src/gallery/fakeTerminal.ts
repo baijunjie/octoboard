@@ -2,15 +2,16 @@
  * The terminal sockets of the gallery. A session's terminal URL points at `FIXTURE_ORIGIN`, which
  * `installFakeTerminal` answers in the page itself, so there is no daemon and no failed network
  * request to read off the console: `output` connects and draws a sample (for a dormant session, as
- * the output its last process left), `fullscreen` draws in the alternate screen, `paths` draws
- * output that names files and folders, `shell` draws a shell at its prompt (the Terminal panel's
- * shells), `exited` draws the last screen of a shell that has ended and then closes, and `refuse`
- * closes at once without ever opening, which is a live session whose terminal cannot be reached.
+ * the output its last process left), `mouse` draws that sample from a program with mouse reporting
+ * on, `fullscreen` draws in the alternate screen, `paths` draws output that names files and
+ * folders, `shell` draws a shell at its prompt (the Terminal panel's shells), `exited` draws the
+ * last screen of a shell that has ended and then closes, and `refuse` closes at once without ever
+ * opening, which is a live session whose terminal cannot be reached.
  */
 
 const FIXTURE_ORIGIN = "ws://gallery.invalid/";
 
-export type TerminalBehaviour = "output" | "fullscreen" | "paths" | "shell" | "exited" | "refuse";
+export type TerminalBehaviour = "output" | "mouse" | "fullscreen" | "paths" | "shell" | "exited" | "refuse";
 
 export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string): string {
   return `${FIXTURE_ORIGIN}${behaviour}/${session}`;
@@ -210,6 +211,10 @@ const pathsSample = () => [
   "",
 ].join("\r\n");
 
+/** The scrolling sample from a program that reports the mouse (button tracking with SGR coordinates),
+ * so the terminal sends it a plain drag and has nothing of its own selected. */
+const mouseSample = (cols: number) => `${sample(cols)}${ESC}?1002h${ESC}?1006h`;
+
 /** A settled full-screen response, rather than the scrolling output used by the other fixtures. */
 const fullscreenSample = () => `${ESC}?1049h${ESC}H${ESC}2J` + [
   `${ESC}1;38;5;208m ✻ Claude Code${ESC}0m`,
@@ -255,6 +260,7 @@ const exitedSample = () => [
 /** What each behaviour draws once it connects. `refuse` never connects, so it draws nothing. */
 const SAMPLES: Record<TerminalBehaviour, (cols: number) => string> = {
   output: sample,
+  mouse: mouseSample,
   fullscreen: fullscreenSample,
   paths: pathsSample,
   shell: shellSample,
@@ -309,7 +315,7 @@ class FakeTerminalSocket extends EventTarget {
     // either (or where the consumer declines) the behaviour's own sample is written.
     const supplied = this.script ?? this.supplied?.();
     if (typeof supplied === "object") this.script = supplied;
-    this.sized = this.script !== undefined || (supplied === undefined && this.behaviour === "output");
+    this.sized = this.script !== undefined || (supplied === undefined && (this.behaviour === "output" || this.behaviour === "mouse"));
     const text = typeof supplied === "string"
       ? supplied
       : this.script?.screen(this.cols, this.step) ?? SAMPLES[this.behaviour](this.cols);

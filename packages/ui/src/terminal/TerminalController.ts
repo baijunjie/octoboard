@@ -172,6 +172,12 @@ export interface TerminalControllerHandlers {
   };
 }
 
+/** Whether xterm forces a selection under mouse reporting with Option (`macOptionClickForcesSelection`)
+ * rather than Shift: xterm counts only these platforms as macOS, not an iPhone or an iPad in its
+ * mobile mode. */
+export const OPTION_FORCES_SELECTION =
+  typeof navigator !== "undefined" && ["Macintosh", "MacIntel", "MacPPC", "Mac68K"].includes(navigator.platform);
+
 /**
  * Owns the terminal pane end to end: the one `xterm.js` instance, the active session's socket,
  * the connection status, and keyboard focus — all four change together inside `attach()`, which
@@ -518,6 +524,12 @@ export class TerminalController {
    * `programCopy`. */
   get programCopiedText(): string | undefined {
     return this.programCopy;
+  }
+
+  /** Whether the program on screen has mouse reporting on, which sends a plain drag to it rather than
+   * selecting here. */
+  get mouseReporting(): boolean {
+    return this.term.modes.mouseTrackingMode !== "none";
   }
 
   selectAll(): void {

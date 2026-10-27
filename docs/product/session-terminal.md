@@ -37,9 +37,16 @@ closing it returns keyboard focus to the terminal. There is no separate menu but
 
 - **Copy** copies the terminal text selected when the menu opened or, with nothing selected in the terminal, the text a
   program last copied, while that is still on offer (see "Text a program copies" below). It is disabled with neither.
+  When it is disabled while the running program has mouse reporting on, it says under its name how to make a
+  selection anyway (see **Selecting with the mouse** below): "Option-drag to select" on macOS, "Shift-drag to select"
+  elsewhere. macOS here is what the terminal itself treats as macOS, a browser platform of `Macintosh`, `MacIntel`,
+  `MacPPC` or `Mac68K`, so an iPhone or iPad gets the Shift-drag hint. Without mouse reporting it is disabled with no
+  reason given.
   Where the platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead.
 - **Paste** reads text from the clipboard and sends it as terminal input, respecting the running program's bracketed
-  paste mode. It is disabled without clipboard reading support or while the selected session cannot accept input.
+  paste mode. It is disabled without clipboard reading support, saying under its name that the clipboard is
+  unavailable, and while the selected session cannot accept input, with no reason given (the terminal itself shows why,
+  by its reconnecting spinner or its disconnected notice).
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If

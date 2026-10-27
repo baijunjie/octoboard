@@ -101,6 +101,10 @@ descendant is already archived. A bulk operation is refused as a whole rather th
 session before retrying. A completion report still reaches its owner but does not archive a protected session or owner
 (see "Automatic archiving" in `docs/product/reporting-to-owners.md`).
 
+An archived session cannot be locked: locking one is refused with `session_archived` (reopen it first), decided in the
+same step that writes the lock, so a lock never lands on a session archived a moment before. Unlocking an archived
+session is allowed, and a lock an archived session already carries keeps protecting it as described above.
+
 While an archive or deletion is in progress, changing any session's lock is refused with `session_lock_busy`; retry
 after that operation finishes. A failed lock change leaves the stored lock unchanged.
 

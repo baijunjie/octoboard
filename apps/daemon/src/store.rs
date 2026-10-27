@@ -2391,6 +2391,30 @@ impl Store {
         Ok(())
     }
 
+    /// Locks session `id` unless it is archived, deciding that and writing the lock in one
+    /// statement, so a lock cannot land on a session archived a moment before. Returns false when
+    /// it refused for that reason; an unknown session changes nothing and is not refused, as
+    /// [`Self::set_session_locked`] does.
+    pub fn set_session_locked_unless_archived(&self, id: &str) -> Result<bool> {
+        let conn = self.lock();
+        let changed = conn.execute(
+            "UPDATE sessions SET locked = 1 WHERE id = ?1 AND status != 'archived'",
+            params![id],
+        )?;
+        if changed != 0 {
+            return Ok(true);
+        }
+        let archived = conn
+            .query_row(
+                "SELECT 1 FROM sessions WHERE id = ?1 AND status = 'archived'",
+                params![id],
+                |_| Ok(()),
+            )
+            .optional()?
+            .is_some();
+        Ok(!archived)
+    }
+
     /// Records that session `id` is owed a notice of a change of its owner: it was not running to
     /// be told, and its next launch delivers it. Kept apart from the session record, which clients
     /// read. The notice carries no text, since it is built from the binding at delivery, so a later
@@ -5615,6 +5639,34 @@ mod tests {
         assert!(!store
             .insert_session_under_owner(&project_session("orphan", Some("nobody")), "nobody")
             .expect("insert"));
+    }
+
+    /// Locking is refused only for an archived session, which stays unlocked; a live session is
+    /// locked, and an unknown id is not refused.
+    #[test]
+    fn a_session_is_locked_unless_archived() {
+        let path = temp_db("lock-unless-archived");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store
+            .insert_session(&project_session("live", None))
+            .expect("live");
+        let mut archived = project_session("archived", None);
+        archived.status = SessionStatus::Archived;
+        store.insert_session(&archived).expect("archived");
+
+        assert!(store.set_session_locked_unless_archived("live").unwrap());
+        assert!(store.get_session("live").unwrap().unwrap().locked);
+
+        assert!(!store
+            .set_session_locked_unless_archived("archived")
+            .unwrap());
+        assert!(!store.get_session("archived").unwrap().unwrap().locked);
+
+        assert!(store.set_session_locked_unless_archived("nobody").unwrap());
+        assert!(store.get_session("nobody").unwrap().is_none());
     }
 
     /// A database from before owner notices could be left pending gains the column in place, and

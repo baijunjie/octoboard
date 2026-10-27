@@ -43,13 +43,12 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   account cannot be used for now, naming the quota it has reached and when it resets, and the dialog cannot be submitted
   until another agent or account is chosen or the account is no longer used up. An account whose sharing of the default
   configuration is being changed, which the daemon refuses a session on meanwhile (see "When a change is carried out" in
-  `docs/product/sharing-the-default-configuration.md`), is treated the same way while the change runs: it is listed but
-  cannot be picked, its usage bar staying and a short note under its name saying why, with the full reason as its
-  description for assistive technology in place of what remains of its quota; the field passes over it as it passes over
-  a used-up account; and when the chosen account is one all the same, the field says under its pickers that its sharing
-  is being changed, to choose another account or wait, and the dialog cannot be submitted until then. A turned-off
-  account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the field passes over it
-  as it passes over a used-up account. Only when the account the field ends on is turned off all the same — every
+  `docs/product/sharing-the-default-configuration.md`), is listed but cannot be picked while the change runs, keeping its
+  usage bar and its description but with no note under its name, as the change ends on its own; the field passes over
+  it as it passes over a used-up account; and when the chosen account is one all the same, the field says under its
+  pickers that its sharing is being changed, to choose another account or wait, and the dialog cannot be submitted until
+  then. A turned-off account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the
+  field passes over it as it passes over a used-up account. Only when the account the field ends on is turned off all the same — every
   account of the agent is unavailable, the account was turned off while the dialog is open, or the **Resume
   conversation** tab settles on it — is it listed, and then it cannot be picked: its usage bar stays and a short note
   under its name reads "Disabled", with the full reason as its description for assistive technology; the field says

@@ -200,7 +200,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "New session, account picker with usage bars",
-    description: "Website would run on Work, whose usage limit is reached, so the Claude Code account field opens on Default, the first account with usage left, and the open picker lists every account with a compact usage bar before its name: the session window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name and bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
+    description: "Website would run on Work, whose usage limit is reached, so the Claude Code account field opens on Default, the first account with usage left, and the open picker lists every account with a compact usage bar before its name: the session window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name in the secondary text colour and its bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
     state: launchState([onWork], claudeQuotas),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
@@ -209,7 +209,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "New session, account picker with a sharing change running",
-    description: "Website would run on Client, whose sharing change is running, so the Claude Code account field opens on Default instead, with no alert. The open picker lists Default (selected), Work, Personal and Client, each with an empty usage track, none having a reading yet. Client is unselectable, its name and track faded and the short reason \"Changing sharing\" at full contrast under the name; the other accounts can be chosen.",
+    description: "Website would run on Client, whose sharing change is running, so the Claude Code account field opens on Default instead, with no alert. The open picker lists Default (selected), Work, Personal and Client, each with an empty usage track, none having a reading yet. Client is unselectable, its name in the secondary text colour and its track faded, with no reason under the name since the change ends on its own; the other accounts can be chosen.",
     state: { ...launchState([onClient], []), accountSharing: clientChangingSharing },
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
@@ -273,7 +273,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "New session, the agent's only account has reached its limit",
-    description: "Grok Build has only its default account, and its account picker is still there beside the agent select, offering that one option. Its credit pool has reached its limit: the open picker lists Default unselectable, its name and empty bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets. Open is disabled and the Agent field is marked invalid, its error naming the account and giving the limit reason and reset time under the pair, partly behind the open list (the closed picker is the scenario above).",
+    description: "Grok Build has only its default account, and its account picker is still there beside the agent select, offering that one option. Its credit pool has reached its limit: the open picker lists Default unselectable, its name in the secondary text colour and its empty bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets. Open is disabled and the Agent field is marked invalid, its error naming the account and giving the limit reason and reset time under the pair, partly behind the open list (the closed picker is the scenario above).",
     state: launchState([chat], grokSpent),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Grok Build"))],
   },
@@ -391,7 +391,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Switch account menu, an account whose sharing change runs",
-    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client. Client, whose sharing change is running, is greyed out and cannot be chosen, with the short reason \"Changing sharing\" under its name (arrow keys still reach it; its accessible name stays \"Client\" and the reason is its description); the others can be chosen.",
+    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client. Client, whose sharing change is running, is greyed out and cannot be chosen, with no reason under its name since the change ends on its own (arrow keys still reach it); the others can be chosen.",
     state: { ...switchState([]), accountSharing: clientChangingSharing },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
@@ -403,7 +403,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of a session switching its account",
-    description: "Verify the migration, bound to Release coordinator, reads interrupted while the daemon holds it for its account switch. In its menu, Hand off and Unbind are greyed out, Hand off with \"Switching account\" under its name; in the Switch account submenu, Default stays marked as current and Work, Personal and Client are greyed out with the same reason under each name and cannot be chosen.",
+    description: "Verify the migration, bound to Release coordinator, reads interrupted while the daemon holds it for its account switch. In its menu, Hand off and Unbind are greyed out with no reason under their names, since the switch ends on its own; in the Switch account submenu, Default stays marked as current and Work, Personal and Client are greyed out the same way and cannot be chosen.",
     state: (() => {
       const base = switchState([]);
       const sessions = new Map(base.sessions);
@@ -420,7 +420,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Switch account menu, the session's own account is changing its sharing",
-    description: "The row's session is on Client, whose sharing change is running, so the daemon would refuse to move it away or hand it off. Every other entry in the Switch account submenu, Default, Work and Personal, is greyed out with the short reason \"Account changing sharing\" under its name and cannot be chosen; Client stays marked as current. In the menu behind it, Hand off is disabled too, with the same reason under its name.",
+    description: "The row's session is on Client, whose sharing change is running, so the daemon would refuse to move it away or hand it off. Every other entry in the Switch account submenu, Default, Work and Personal, is greyed out with no reason under its name and cannot be chosen; Client stays marked as current. In the menu behind it, Hand off is disabled the same way.",
     state: { ...switchState([], accounts[2]), accountSharing: clientChangingSharing },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
@@ -462,7 +462,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Hand off, the inherited Codex account has reached its limit",
-    description: "Hub hands off to Codex, whose default account has reached its limit: the field opens on Team, the account with usage left, and the open picker lists the default account unselectable, its name and bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets.",
+    description: "Hub hands off to Codex, whose default account has reached its limit: the field opens on Team, the account with usage left, and the open picker lists the default account unselectable, its name in the secondary text colour and its bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets.",
     state: launchState([], handoffQuotas),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),

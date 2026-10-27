@@ -53,12 +53,6 @@ export function incompleteAccount(accounts: Account[], sharing: Map<string, Acco
   return accounts.find((item) => item.id === account && item.share_default_config_incomplete === true);
 }
 
-/** What an account shows in a list in place of its usage while its sharing change runs: why it cannot be chosen in
- * short as the `reason` under its name, and in full as the `detail` for assistive technology. */
-export function sharingChangeUnavailable(t: Translate): { detail: string; reason: Reason } {
-  return { detail: t("accountChoice.sharingChange.detail"), reason: { state: t("accountChoice.sharingChange.reason") } };
-}
-
 /** What an account the user turned off shows in a list in place of its usage: why it cannot be chosen in short as the
  * `reason` under its name, and in full as the `detail` for assistive technology. */
 export function accountDisabledUnavailable(t: Translate): { detail: string; reason: Reason } {
@@ -70,18 +64,6 @@ export function accountDisabledUnavailable(t: Translate): { detail: string; reas
  * `accountDisabledUnavailable`, with a description that says sessions cannot open on it. */
 export function accountDisabledPickable(t: Translate): { detail: string; reason: Reason } {
   return { detail: t("accountChoice.disabled.pickableDetail"), reason: accountDisabledUnavailable(t).reason };
-}
-
-/** What a session's other accounts show in the Switch account menu, and its Hand off item, while the session's own
- * account is changing its sharing: the session cannot be moved off it until the change ends. */
-export function ownAccountChangingUnavailable(t: Translate): { detail: string; reason: Reason } {
-  return { detail: t("accountChoice.ownSharingChange.detail"), reason: { state: t("accountChoice.ownSharingChange.reason") } };
-}
-
-/** What a session's menu items show while an account switch holds it (`Session.switching_account`): nothing
- * else can be done to it until the switch lets go. */
-export function sessionSwitchingUnavailable(t: Translate): { detail: string; reason: Reason } {
-  return { detail: t("accountChoice.switching.detail"), reason: { state: t("accountChoice.switching.reason") } };
 }
 
 export function choiceKey({ agent, account }: AccountChoice): string {
@@ -324,33 +306,37 @@ export interface SwitchEntry {
 /** Why a Switch account entry cannot be chosen apart from its quota being used up, or `undefined`
  * when nothing else keeps it: an account switch holds the session (`switching`), the entry's own
  * sharing change runs, or the account the session is on is changing its sharing (`ownChanging`,
- * which keeps every other account from taking it). The current entry is never blocked, as it is
- * never offered. The Switch account submenu and the form of a switch request share these rules. */
+ * which keeps every other account from taking it). Each of these ends on its own, so the `detail` is
+ * for a message where a form needs one; a menu or list disables the entry without a reason. The
+ * current entry is never blocked, as it is never offered. The Switch account submenu and the form of
+ * a switch request share these rules. */
 export function switchEntryBlock(
   t: Translate,
   entry: Pick<SwitchEntry, "current" | "changingSharing">,
   session: { switching: boolean; ownChanging: boolean },
-): { detail: string; reason: Reason } | undefined {
+): { detail: string } | undefined {
   if (entry.current) return undefined;
-  if (session.switching) return sessionSwitchingUnavailable(t);
-  if (entry.changingSharing) return sharingChangeUnavailable(t);
-  if (session.ownChanging) return ownAccountChangingUnavailable(t);
+  if (session.switching) return { detail: t("accountChoice.switching.detail") };
+  if (entry.changingSharing) return { detail: t("accountChoice.sharingChange.detail") };
+  if (session.ownChanging) return { detail: t("accountChoice.ownSharingChange.detail") };
   return undefined;
 }
 
-/** Why a session cannot be handed off, or `undefined` when nothing keeps it: an account switch holds it,
- * its own account is changing its sharing (`ownChanging`), it is locked, or it is in the middle of a
- * turn or still starting, which the daemon refuses. The first two come with a `reason` to draw under a
- * menu item. The Hand off menu item and the form of a handoff request share these rules. */
+/** Why a session cannot be handed off, or `undefined` when nothing keeps it: it is locked, it is in the middle of a
+ * turn, an account switch holds it, its own account is changing its sharing (`ownChanging`), or it is still starting,
+ * which the daemon refuses. The lasting holds (locked, a turn that can run for long) are checked first and come with a
+ * `reason` to draw under a menu item; the others end on their own, come with none, and lose to a lasting hold. The Hand
+ * off menu item and the form of a handoff request share these rules. */
 export function handoffBlock(
   t: Translate,
   session: Pick<Session, "status" | "locked" | "switching_account">,
   ownChanging: boolean,
 ): { detail: string; reason?: Reason } | undefined {
-  if (session.switching_account) return sessionSwitchingUnavailable(t);
-  if (ownChanging) return ownAccountChangingUnavailable(t);
-  if (session.locked) return { detail: t("accountChoice.handoff.locked") };
-  if (session.status === "working" || session.status === "starting") return { detail: t("accountChoice.handoff.working") };
+  if (session.locked) return { detail: t("accountChoice.handoff.locked"), reason: { state: t("accountChoice.sessionLocked.reason") } };
+  if (session.status === "working") return { detail: t("accountChoice.handoff.working"), reason: { state: t("accountChoice.handoff.working.reason") } };
+  if (session.switching_account) return { detail: t("accountChoice.switching.detail") };
+  if (ownChanging) return { detail: t("accountChoice.ownSharingChange.detail") };
+  if (session.status === "starting") return { detail: t("accountChoice.handoff.starting") };
   return undefined;
 }
 
