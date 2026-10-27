@@ -13,6 +13,7 @@ function report(key: "exit.daemonExited" | "exit.restartFailed" | "exit.failed",
     title: t(`${key}.title`),
     content: <Message id={key} />,
     details: detail ? <DiagnosticBlock>{detail}</DiagnosticBlock> : null,
+    diagnostic: detail || undefined,
   });
 }
 

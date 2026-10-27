@@ -142,7 +142,7 @@ it.each([
     expect(text).toContain(sentence);
     expect(text).toContain(remedy);
     expect(text).not.toContain("plain fallback");
-    expect(text).not.toContain("Take a screenshot");
+    expect(text).not.toContain("This may be a bug");
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

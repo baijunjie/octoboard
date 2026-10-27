@@ -5,7 +5,7 @@ export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
-  | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
+  | "refresh" | "scope" | "limit" | "openExternal" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
@@ -160,7 +160,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   const explicit = recovery ?? (error instanceof ActionableError ? error.recovery : undefined);
   // A file that could not be read keeps its own remedy over the one an operating-system signature names: the
   // signature's access and disk-space remedies are about writing, which reading a file never needed.
-  if (explicit === "issueLink" || explicit === "openExternal" || explicit === "fileRead") return { kind: "actionable", recovery: explicit };
+  if (explicit === "issueAddress" || explicit === "openExternal" || explicit === "fileRead") return { kind: "actionable", recovery: explicit };
   if (isNotRestored(error)) return { kind: "actionable", recovery: "notRestored" };
   // A denied read keeps its own remedy over the access remedy its operating-system signature names, which is about
   // writing and choosing another folder.

@@ -52,7 +52,6 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   onClose: (succeeded: boolean, cancelling?: Promise<void>) => void;
 }): React.ReactElement {
   const t = useT();
-  const issue = useIssueReport();
   const language = useCurrentLanguage();
   const { store, toastError } = useDaemon();
   const actions = useAccountLoginActions();
@@ -143,17 +142,20 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   const timedOut = login?.status === "timed_out" && !refusal;
   const agentChip = <InlineReference dir="auto" wrap>{AGENT_LABEL[agent]}</InlineReference>;
 
+  const presentation = failure && reason !== undefined ? new DaemonRequestError(reason, failure.code, failure.params) : undefined;
+  // A failure the application has no words for is its generic sentence as the cause, and where it is classified
+  // unexpected, that sentence is "Something unexpected went wrong" with the request to report it.
+  const uncatalogued = !!presentation && !timedOut && isUncataloguedFailure(presentation);
+  const classification = uncatalogued ? classifyError(presentation) : undefined;
+  const unexpected = classification?.kind === "unexpected";
+  // The report is made from the daemon's own text, not `reason`, which is worded for the user.
+  const issue = useIssueReport(unexpected && failure ? [{ error: new DaemonRequestError(failure.message, failure.code, failure.params), unexpected: true }] : undefined);
+
   if (ended) {
-    const presentation = failure && reason !== undefined ? new DaemonRequestError(reason, failure.code, failure.params) : undefined;
     const remedy = presentation && errorRemedy(presentation);
     const raw = presentation && rawErrorDetails(presentation);
     // A login that failed with no cause the agent named (`login_failed`) has a summary that only says again that it
-    // failed, which the lead has said already; only a failed login has a cause at all. A failure the application has
-    // no words for is its generic sentence as the cause, and where it is classified unexpected, that sentence is
-    // "Something unexpected went wrong" with the request to report it.
-    const uncatalogued = !!presentation && !timedOut && isUncataloguedFailure(presentation);
-    const classification = uncatalogued ? classifyError(presentation) : undefined;
-    const unexpected = classification?.kind === "unexpected";
+    // failed, which the lead has said already; only a failed login has a cause at all.
     const cause = presentation && !timedOut && presentation.code !== "login_failed"
       ? uncatalogued ? t(uncataloguedSummaryKey(presentation)) : <DaemonErrorMessage error={presentation} part="summary" />
       : undefined;

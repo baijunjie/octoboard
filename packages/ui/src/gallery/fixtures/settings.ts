@@ -1044,7 +1044,6 @@ export const settingsScenarios: Scenario[] = [
     title: "Account login, waiting for the browser",
     description: "Settings finds Work's login already running, so its modal is open: titled with the plain name \"Log in\", the first sentence of the body saying it is logging in to Claude Code account Work… (agent and account as chips, the sentence ending in an ellipsis), then a spinner with \"Waiting for you to authorize in your browser…\", and in the footer \"Open the page again\" beside Cancel login. The same modal serves Claude Code and Codex.",
     state: withLogins(signedInState, loginOf("claude", "a-work", { authorization_url: CLAUDE_PAGE })),
-    externalLinks: "available",
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
@@ -1057,7 +1056,6 @@ export const settingsScenarios: Scenario[] = [
     title: "Account login, starting",
     description: "The login's modal while the daemon is still starting it, before any page or code exists: the same \"Log in\" modal over Claude Code account Work, with a spinner row that has no visible text beside it (the status is spoken, not shown). Cancel login alone is in the footer and has the focus; there is no Open the page again, since there is no page yet.",
     state: withLogins(signedInState, loginOf("claude", "a-work", { status: "starting" })),
-    externalLinks: "available",
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
@@ -1074,7 +1072,6 @@ export const settingsScenarios: Scenario[] = [
       device_code: "ABCD-1234",
       opened_by_agent: true,
     })),
-    externalLinks: "available",
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),

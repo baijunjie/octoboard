@@ -489,30 +489,35 @@ above).
 **An unexpected failure** explains that it may be a bug the user cannot resolve in the current interface. The alert
 keeps the error explanation and offers expandable diagnostic details, **Error details**, when the original message or
 stack trace adds information to its summary. This includes diagnostic strings and errors from another rendering
-context, even when they have no stack trace. It asks the user to take a screenshot and file an Issue describing the
-steps that led to the failure.
+context, even when they have no stack trace. It asks the user to use **Report issue** to file an Issue with the steps
+that led to the failure.
 
 **Report issue** is a secondary action in the footer, before the acknowledgement button, with a trailing
 external-link icon. The guidance names it with a non-interactive inline reference; only the footer action is a link. It
-opens the explicit `issueUrl` configured in `config/app.json` when the user activates it. Repeated activation is
-blocked while opening is pending. It does not create an Issue or attach diagnostics or a screenshot automatically.
-The error stays open until acknowledged.
+opens the explicit `issueUrl` configured in `config/app.json` when the user activates it, as a new Issue prefilled
+with a title and a body that describe the failure, its personal information removed (see `docs/product/issue-reports.md`).
+Repeated activation is blocked while opening is pending. It does not create the Issue itself, and attaches no
+screenshot or file. The error stays open until acknowledged.
 If opening the page fails, a separate actionable error immediately appears above the original error, titled "Could not
 open the Issue page", saying that the browser did not open the Issue page and so its address is shown below, with the
-address as selectable text on a line of its own and instructions to open it manually; the reason the system gave, where
-it gave one, is under that alert's **Error details**. Acknowledging that failure
+bare address, with no prefilled title or body, as selectable text on a line of its own, and the remedy to copy it, open
+it manually in the browser and describe the steps that led to the error when reporting; the reason the system gave,
+where it gave one, is under that alert's **Error details**. Acknowledging that failure
 returns to the original pending error. Any other link Octoboard has the system open in the browser that does not open
 is reported the same way, in an alert of its own titled "Could not open the link", with its address on a line of its
 own and the remedy to check that the application it needs is installed or to open the address manually. Where the
-desktop platform cannot open external links, the guidance includes the address as a selectable chip for manual use.
+desktop platform cannot open external links, there is no **Report issue**: the guidance includes the bare address as a
+selectable chip, asking the user to open it in the browser to report the failure and to describe the steps that led to
+it.
 
 **A batch of failures**, such as a set of account switches, uses one acknowledgement dialog listing each failed item.
 It gives each failed item only its short reason, and says each remedy once after the list: a code's own remedy once
 for that code, and one sentence per kind of remedy for the rest (see "The alert for failed switches" in
 `docs/product/switching-session-accounts.md`).
 
-If any item is unexpected, the dialog adds one shared screenshot and Issue-reporting instruction and the same Issue
-entry or manual address described above; it does not replace the other items' remedies with a common instruction.
+If any item is unexpected, the dialog adds one shared Issue-reporting instruction and the same Issue entry or manual
+address described above, the report describing every item of the batch (see "Which failures a report describes" in
+`docs/product/issue-reports.md`); it does not replace the other items' remedies with a common instruction.
 The footer carries a remedy's button (see above) only when every failure in the batch has that same remedy. A batch
 whose items have raw text of their own, such as a set of account switches, sets **Error details** apart by item, a
 heading naming the item over its own block, in place of the details worked out from the errors: it shows the
