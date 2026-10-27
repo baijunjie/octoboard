@@ -49,11 +49,23 @@ than a check of your own: the browser blurs a control as it is disabled, before 
 hand-rolled "forget the element on blur" has already forgotten it by then. Its caller has to stay mounted and render
 nothing for that check to run in, rather than unmount with the element.
 
-## A modal that focuses itself as it opens over another dialog does it one render after mounting, not at mount or from a timer
+## A modal raised over another dialog mounts a commit after it, and focuses itself one render after mounting
 
-Applies to `packages/ui`, to code that moves focus into a modal by hand as the modal mounts (`dialogAround(ref)?.focus()`
-and the like) where the modal can open over another dialog — an alert or a question raised while one is open. Focus it
-from a layout effect of the render after the mount: a mount `useLayoutEffect` sets a state value, and a second
+Applies to `packages/ui`, to a modal shown from state of its own (a store, a daemon push) rather than by the press that
+opens it — an error alert, a pending question — wherever that state can change in the same update that opens another
+dialog, as when a press opens a dialog and reports a failure in the same task. Never let two react-aria modals mount in
+one commit. Each hides the rest of the page with `ariaHideOutside` (`inert` in a browser) from a passive effect, and
+those run once both are in the document, so each hides the other; a hider only hides what lies outside its own modal
+and never lifts what another one hid, even an ancestor of its modal. Both stay inert while the dialog is open, the
+modal's focus call does nothing, and focus falls to `<body>`. Show the raised modal from the commit after: copy the
+raised value into state from a `useLayoutEffect` and render from that state, as `ErrorAlertHost` in
+`packages/ui/src/dialogs/ErrorAlerts.tsx` does. Not from a passive effect: that render lands in a later task, by which
+time the dialog's hider has noticed the insertion and hides the new modal; the layout effect's synchronous render
+stays in the same task, after the dialog's hider has run and before its observer reports.
+
+Code that moves focus into such a modal by hand as it mounts (`dialogAround(ref)?.focus()` and the like), where the
+modal can open over another dialog — an alert or a question raised while one is open — focuses it from a layout
+effect of the render after the mount: a mount `useLayoutEffect` sets a state value, and a second
 `useLayoutEffect` keyed on that state does the focusing, as `ErrorAlertHost` in `packages/ui/src/dialogs/ErrorAlerts.tsx`
 does. The trouble is a dialog underneath with no focused element of its own yet — one opened by a press without a
 pointer (assistive technology, a script), whose opening focus react-aria defers to a frame. Both obvious timings lose to
@@ -78,7 +90,10 @@ finishes), `requestAnimationFrame` stubbed as a 0 ms timer (so a frame runs ahea
 and a drain of several awaited `setTimeout(0)` rounds rather than a fixed wait. Cover the replacing cases too — a
 queued modal shown once the first is acknowledged, and one put in front of it. Copy the "over a dialog opened without
 a pointer" cases in `packages/ui/src/dialogs/ErrorAlerts.test.tsx`. A test without the stub passes against the timer
-version.
+version. jsdom has no `inert`, so react-aria hides with `aria-hidden` there, which does not stop focus: a test that
+asserts only where focus is passes against two modals mounted in one commit. Also raise the modal in the same `act` as
+opening the dialog underneath, and assert that it is not inside `[aria-hidden="true"], [inert]` as well as holding
+focus, as that file's `alertHoldsFocus` does.
 
 ## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`
 

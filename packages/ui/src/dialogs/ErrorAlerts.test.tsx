@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, StrictMode } from "react";
+import { act, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
@@ -282,8 +282,9 @@ it("hands focus to the window's fallback when acknowledging the last alert leave
  * so it runs ahead of any timer set after it was asked for, as a browser may render one before the next timer task:
  * the dialog's opening focus then lands before anything an alert put off to a timer, the order a loaded test run or a
  * busy window can produce. `strict` mounts it all in `StrictMode`, as the app and the gallery are, which runs every
- * effect a second time on mount. */
-function mountOverVirtuallyOpenedDialog(strict: boolean): void {
+ * effect a second time on mount. With `deferred`, the dialog is not opened but the function that opens it is
+ * returned, for a test to call in one update with raising an alert, the way a press that fails at once does. */
+function mountOverVirtuallyOpenedDialog(strict: boolean, deferred = false): () => void {
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => Number(setTimeout(() => callback(performance.now()), 0)));
   vi.stubGlobal("cancelAnimationFrame", (handle: number) => clearTimeout(handle));
   onTestFinished(() => { vi.unstubAllGlobals(); });
@@ -292,7 +293,15 @@ function mountOverVirtuallyOpenedDialog(strict: boolean): void {
   const opener = document.body.appendChild(document.createElement("button"));
   onTestFinished(() => { opener.remove(); });
   opener.focus();
-  mount(<Dialog title="Edit project" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" /></Dialog>, undefined, undefined, strict);
+  const dialog = <Dialog title="Edit project" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" /></Dialog>;
+  let open = (): void => {};
+  function Opener() {
+    const [shown, setShown] = useState(!deferred);
+    open = () => setShown(true);
+    return shown ? dialog : null;
+  }
+  mount(<Opener />, undefined, undefined, strict);
+  return () => open();
 }
 
 /** Runs every frame and timer pending, and those they set in turn. Timers of one delay run in the order they were set,
@@ -306,6 +315,7 @@ async function settleFrames(): Promise<void> {
 const alertHoldsFocus = (message: string) => {
   const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
   expect(alert.textContent).toContain(message);
+  expect(alert.closest('[aria-hidden="true"], [inert]')).toBeNull();
   expect(document.activeElement).toBe(alert);
 };
 
@@ -313,6 +323,16 @@ describe.each([{ strict: false }, { strict: true }])("over a dialog opened witho
   it("ends on the alert raised over it, not its first control", async () => {
     mountOverVirtuallyOpenedDialog(strict);
     act(() => errorAlerts.report({ message: "Refused", recovery: "accountNotSignedIn" }));
+    await settleFrames();
+    alertHoldsFocus("Refused");
+  });
+
+  it("ends on the alert raised in the same task as the press that opens it", async () => {
+    const open = mountOverVirtuallyOpenedDialog(strict, true);
+    act(() => {
+      open();
+      errorAlerts.report({ message: "Refused", recovery: "accountNotSignedIn" });
+    });
     await settleFrames();
     alertHoldsFocus("Refused");
   });
