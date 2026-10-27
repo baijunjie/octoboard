@@ -4,6 +4,7 @@ import React, { Suspense, lazy, useCallback, useId, useRef } from "react";
 
 import { useHasPainted } from "../components/useHasPainted";
 import { EmptyPanel } from "../components/EmptyPanel";
+import { FadeOverflow } from "../components/FadeOverflow";
 import { PaneFailure } from "../components/PaneFailure";
 import { PaneTitle } from "../components/PaneTitle";
 import { ArchivedSessionMetadata, SessionContextLabel } from "../components/SessionMetadata";
@@ -12,9 +13,11 @@ import { useFocusVisibleProps } from "../components/useFocusVisibleProps";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useFadeRegion, useScrollFade } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
-import { useCurrentLanguage, useT } from "../i18n/react";
+import { Message as CatalogMessage, useCurrentLanguage, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import type { HistoryMessage, Session } from "../protocol";
+import { sessionDisplayTitle } from "../sessionLabel";
+import { useSession } from "../sessions/useSessions";
 import { useOctoboardTheme } from "../theme";
 import { RendererBoundary } from "../viewer/codeRenderer";
 import { FencedCode } from "../viewer/FencedCode";
@@ -27,10 +30,18 @@ const MarkdownDocument = lazy(() => import("../viewer/MarkdownDocument").then((m
 
 /**
  * What an archived session was about, in place of its terminal: the messages the user sent and
- * the agent's final reply to each turn, with its context size beside the heading. Read-only; the way back to the
- * terminal is reopening the session.
+ * the agent's final reply to each turn, with its context size beside the heading and, for a session
+ * bound to an owner, a link to it beneath. Read-only; the way back to the terminal is reopening the
+ * session.
  */
-export function SessionHistoryView({ session }: { session: Pick<Session, "id" | "context" | "started_at" | "ended_at"> }): React.ReactElement {
+export function SessionHistoryView({
+  session,
+  onSelectSession,
+}: {
+  session: Pick<Session, "id" | "context" | "started_at" | "ended_at" | "bound_to">;
+  /** Shows a session as selecting it in the sidebar would; without it the owner is not linked. */
+  onSelectSession?: (session: Session) => void;
+}): React.ReactElement {
   const t = useT();
   const { history, reload } = useSessionHistory(session.id);
   const painted = useHasPainted();
@@ -62,10 +73,13 @@ export function SessionHistoryView({ session }: { session: Pick<Session, "id" | 
     >
       {/* At narrow widths the header wraps its contents so the dates stay readable. */}
       <header className="flex min-h-(--pane-header-height) shrink-0 flex-wrap items-center gap-x-3 gap-y-2 groove-b px-(--pane-inset) py-1.5">
-        {/* The context badge follows the heading and never shrinks; the heading clips first. */}
-        <div className="flex min-w-24 flex-1 items-center gap-2">
-          <PaneTitle heading={t("history.title")} className="min-w-0" />
-          <SessionContextLabel context={session.context} />
+        <div className="flex min-w-24 flex-1 flex-col gap-0.5">
+          {/* The context badge follows the heading and never shrinks; the heading clips first. */}
+          <div className="flex items-center gap-2">
+            <PaneTitle heading={t("history.title")} className="min-w-0" />
+            <SessionContextLabel context={session.context} />
+          </div>
+          <OwnerLine ownerId={session.bound_to} onSelectSession={onSelectSession} />
         </div>
         <ArchivedSessionMetadata session={session} />
       </header>
@@ -94,6 +108,40 @@ export function SessionHistoryView({ session }: { session: Pick<Session, "id" | 
           <MessageList messages={messages} />
         ))}
     </section>
+  );
+}
+
+/** The "Reports to" line under the heading: the owner as a link that shows it as selecting it in the
+ * sidebar would. Nothing without an owner this window knows, or without a way to show it. */
+function OwnerLine({ ownerId, onSelectSession }: { ownerId: string | null | undefined; onSelectSession?: (session: Session) => void }): React.ReactElement | null {
+  const t = useT();
+  const focus = useFocusVisibleProps();
+  const owner = useSession(ownerId);
+  if (!owner || !onSelectSession) return null;
+  const title = sessionDisplayTitle(t, owner);
+  return (
+    <p className="flex min-w-0 whitespace-pre text-xs text-app-muted">
+      <CatalogMessage
+        id="history.owner"
+        params={{
+          owner: (
+            // Not HeroUI's Button: an inline link inside a sentence, whose text flows with the line and
+            // fades in its own label; the Button imposes its own height, padding, press-shrink and
+            // hover fill.
+            <button
+              type="button"
+              {...focus}
+              onClick={() => onSelectSession(owner)}
+              className="min-w-0 rounded-sm text-(--tint-accent-fg) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+            >
+              <FadeOverflow as="span" className="block min-w-0" dir="auto" titleWhenClipped={title}>
+                {title}
+              </FadeOverflow>
+            </button>
+          ),
+        }}
+      />
+    </p>
   );
 }
 

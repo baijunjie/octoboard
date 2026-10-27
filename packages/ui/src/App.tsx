@@ -1121,6 +1121,8 @@ export function App(): React.ReactElement {
                     ref={terminalRef}
                     resizing={isDockEasing(sidebarColumnPhase)}
                     onViewFile={viewLinkedFile}
+                    onSelectSession={stableSelectSession}
+                    restoreFocus={focusTerminal}
                     session={selectedSession}
                     onResume={resumeSession}
                     resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}

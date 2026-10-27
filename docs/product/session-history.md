@@ -78,13 +78,29 @@ the context size unknown or zero, no context-size chip follows the heading.
 As the header narrows, the heading clips and fades while the chip keeps its size; the header wraps its contents
 when needed to keep the dates readable. Pressing the chip does not move keyboard focus.
 
+## The owner the session reports to
+
+When the archived session is bound to an owner (see `docs/product/hub-orchestration.md`), the history's header shows a
+line below the heading and its context-size chip saying the session reports to that owner, the owner named by its
+displayed name (see "Displayed names" in `docs/product/session-titles.md`) as a link. The line is there whatever state
+the history is in. There is none when the session is bound to no owner, or when its owner is not among the sessions
+the window knows, such as an owner that was deleted; it goes as soon as the owner does.
+
+- **Pressing the link shows the owner as selecting it does** (see "Selecting a session" in
+  `docs/product/sidebar.md`): an archived owner is shown with its own history, an interrupted one is resumed, and the
+  sidebar follows the owner to its console.
+- **A long owner name fades where it is cut off** rather than ending in an ellipsis (see "Names too long for their
+  space" in `docs/product/labels-and-tooltips.md`); the dates keep their place at the header's trailing side.
+- Keyboard focus on the link is described in "Keyboard focus" below.
+
 ## Archive and creation times
 
 The history's header shows the archive time first, when known, then the creation time on the line below it, at the
-trailing end after the heading and its optional context-size chip. Each is labeled by its meaning and aligned to the
-trailing edge of the date block. Both are absolute dates with year, month, day, hour and minute, formatted in the
-current language and the client's local time zone. An unknown archive time is omitted; the creation time never stands
-in for it. The dates remain visible while messages scroll and in every loading, empty, unavailable or failed state.
+trailing end after the heading, its optional context-size chip and the optional owner line. Each is labeled by its
+meaning and aligned to the trailing edge of the date block. Both are absolute dates with year, month, day, hour and
+minute, formatted in the current language and the client's local time zone. An unknown archive time is omitted; the
+creation time never stands in for it. The dates remain visible while messages scroll and in every loading, empty,
+unavailable or failed state.
 
 ## Loading, empty, unavailable and failed
 
@@ -111,9 +127,17 @@ its failure when it appears after the history was drawn.
 The messages are a scrolling region of their own, which takes keyboard focus so they can be scrolled from the
 keyboard. Whatever hands keyboard focus to the terminal — `F6` reaching the terminal's region, for one (see "Moving
 focus between regions with F6" in `docs/product/moving-focus-between-regions.md`) — puts it on that region instead for
-an archived session; while there are no messages to list, on the history's first available control, such as Try again
-in a failed state; otherwise on the history view itself, and failing that, on the floating bar's Reopen. Focus in the
-terminal when the session on screen is archived moves to the history the same way, and so does focus left on nothing
-by a refused reopen. When Try again holds focus
-and goes away as the history reloads, focus goes to the messages, or to the history view itself while there are none.
-Both the scrolling region and the history view show a visible ring when focused from the keyboard.
+an archived session; while there are no messages to list, on the history's first available control below its header,
+such as Try again in a failed state, never on the header's owner link; otherwise on the history view itself, and
+failing that, on the floating bar's Reopen. Focus in the terminal when the session on screen is archived moves to the
+history the same way, and so does focus left on nothing by a refused reopen. When Try again holds focus and goes away
+as the history reloads, focus goes to the messages, or to the history view itself while there are none. Both the
+scrolling region and the history view show a visible ring when focused from the keyboard.
+
+The owner link is a `Tab` stop in the history, with a visible ring when focused from the keyboard. Pressing it while it
+holds keyboard focus hands focus to the terminal once the owner is shown: into a panel covering the terminal when
+showing the owner brings one up, such as a console session owner's report panel floating over the terminal below
+782 px (see "Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and
+otherwise into the owner's terminal, or, for an archived owner, its history as described above. When the link goes
+away while holding focus, because its owner did, focus is handed to the terminal the same way, so it lands in this
+session's history.

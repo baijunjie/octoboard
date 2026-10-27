@@ -173,7 +173,9 @@ export function ReportPanel({
   // The panel keeps its place while the first `list_pages` is in flight: dropping out and back
   // would resize the terminal pane, a real SIGWINCH to the agent, on every console session switch.
   const renderPanel = (): React.ReactElement => {
-    if (sessionPages === undefined && listFailure === undefined) return <PanelHeader title={t("panel.report.name")} />;
+    // A fragment like the states after it, so the header, and focus on its Close button, survives the
+    // list arriving.
+    if (sessionPages === undefined && listFailure === undefined) return <><PanelHeader title={t("panel.report.name")} /></>;
     if (sessionPages === undefined || (sessionPages.length === 0 && listFailure !== undefined)) {
       return (
         <>

@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { openDetails } from "../components/detailsTestSupport";
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
-import type { Event, HistoryMessage, SessionContext } from "../protocol";
+import type { Event, HistoryMessage, Session, SessionContext } from "../protocol";
 import { SessionHistoryView } from "./SessionHistoryView";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -31,6 +32,7 @@ const roots: Root[] = [];
 beforeEach(() => {
   daemon.request.mockReset();
   store.snapshotEpoch = 0;
+  store.sessions = new Map();
   vi.mocked(errorAlerts.report).mockClear();
 });
 afterEach(() => {
@@ -222,4 +224,50 @@ it("retains the daemon reason for rich rendering inside the Alert, which announc
   await act(async () => roots[0]!.render(<SessionHistoryView session={session} />));
   expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
   expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Try again")).toBe(true);
+});
+
+const owner = { id: "owner-1", title: "Release captain", role: "console" } as Session;
+
+async function mountChild(boundTo: string | undefined, onSelectSession: ((session: Session) => void) | null = vi.fn()): Promise<HTMLElement> {
+  daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(<SessionHistoryView session={{ ...session, bound_to: boundTo }} onSelectSession={onSelectSession ?? undefined} />));
+  await act(async () => {});
+  return container;
+}
+
+it("links an owned session's history to its owner under the heading, and pressing it selects the owner", async () => {
+  store.sessions = new Map([[owner.id, owner]]);
+  const onSelectSession = vi.fn();
+  const container = await mountChild("owner-1", onSelectSession);
+  const link = [...container.querySelectorAll("header button")].find((button) => button.textContent?.includes("Release captain"))!;
+  expect(link.closest("p")?.textContent).toBe("Reports to Release captain");
+  await act(async () => (link as HTMLButtonElement).click());
+  expect(onSelectSession).toHaveBeenCalledWith(owner);
+});
+
+it("rings the owner link only when it has keyboard focus itself, not when the history section does", async () => {
+  store.sessions = new Map([[owner.id, owner]]);
+  const container = await mountChild("owner-1");
+  const section = container.querySelector<HTMLElement>("section")!;
+  const link = container.querySelector<HTMLElement>("header button")!;
+  act(() => setInteractionModality("keyboard"));
+  act(() => section.focus());
+  expect(section.hasAttribute("data-focus-visible")).toBe(true);
+  expect(link.hasAttribute("data-focus-visible")).toBe(false);
+  act(() => link.focus());
+  expect(link.hasAttribute("data-focus-visible")).toBe(true);
+});
+
+it("shows no owner line for an unbound session or an owner the client does not know", async () => {
+  store.sessions = new Map([[owner.id, owner]]);
+  expect((await mountChild(undefined)).querySelector("header p")).toBeNull();
+  expect((await mountChild("deleted-owner")).querySelector("header p")).toBeNull();
+});
+
+it("shows no owner line when nothing can show the owner", async () => {
+  store.sessions = new Map([[owner.id, owner]]);
+  expect((await mountChild("owner-1", null)).querySelector("header p")).toBeNull();
 });

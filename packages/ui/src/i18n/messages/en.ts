@@ -947,6 +947,7 @@ export const en = {
   "terminal.resume": "Resume",
   "terminal.reconnect": "Reconnect",
   "history.title": "Session history",
+  "history.owner": "Reports to {owner}",
   "history.messages": "Messages of this session",
   "history.loading": "Loading history…",
   "history.speaker.user": "You",

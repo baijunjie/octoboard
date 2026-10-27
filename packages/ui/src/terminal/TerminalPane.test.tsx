@@ -67,7 +67,7 @@ const { FakeController } = vi.hoisted(() => {
 vi.mock("./TerminalController", () => ({ TerminalController: FakeController }));
 // One object for every render: the pane re-attaches when `terminalUrl` changes identity.
 const daemon = vi.hoisted(() => ({ terminalUrl: () => "", request: vi.fn(async (_body: unknown) => ({ type: "ack" })), toastError: vi.fn() }));
-const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open" }));
+const store = vi.hoisted(() => ({ snapshotEpoch: 0, connectionState: "open", sessions: new Map<string, unknown>() }));
 vi.mock("../store", () => ({
   useDaemon: () => daemon,
   useDaemonStore: (select: (state: typeof store) => unknown) => select(store),
@@ -82,6 +82,7 @@ beforeEach(() => {
   platform.links = undefined;
   store.snapshotEpoch = 0;
   store.connectionState = "open";
+  store.sessions = new Map();
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -511,6 +512,28 @@ it("reaches the history itself through the handle while it is still loading", ()
   const { container, handle } = mountArchived();
   act(() => handle.current?.focus());
   expect(document.activeElement).toBe(container.querySelector("section"));
+});
+
+it("keeps focus asked for the terminal off the header's owner link while the history loads", () => {
+  const owner = sessionOf("s-owner", "c-1", undefined, "Release captain", "idle");
+  store.sessions = new Map([[owner.id, owner]]);
+  daemon.request.mockImplementationOnce(() => new Promise(() => {}));
+  const { container, handle } = mountArchived({ session: { ...archived, bound_to: owner.id }, onSelectSession: () => {} });
+  expect(container.querySelector("header button")?.textContent).toContain("Release captain");
+  act(() => handle.current?.focus());
+  expect(document.activeElement).toBe(container.querySelector("section"));
+});
+
+it("hands focus lost with the control that held it to the window's restore, not the inert terminal", async () => {
+  const owner = sessionOf("s-owner", "c-1", undefined, "Release captain", "idle");
+  store.sessions = new Map([[owner.id, owner]]);
+  const restoreFocus = vi.fn();
+  const { container, show } = mountArchived({ session: { ...archived, bound_to: owner.id }, onSelectSession: () => {}, restoreFocus });
+  await act(async () => {});
+  const link = container.querySelector<HTMLElement>("header button")!;
+  act(() => link.focus());
+  show({ session: owner, onSelectSession: () => {}, restoreFocus });
+  expect(restoreFocus).toHaveBeenCalledOnce();
 });
 
 it("falls back to the Reopen button when the history has no control to focus", () => {

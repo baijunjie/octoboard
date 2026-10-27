@@ -287,6 +287,18 @@ it("hands focus on from the mark to a header control when the listing succeeds a
   expect(document.activeElement?.tagName).toBe("BUTTON");
 });
 
+it("keeps focus on the header's button when the first listing arrives and the pages replace the bare header", async () => {
+  const store = createStateStore({ connectionState: "open" });
+  const container = await renderWith(vi.fn().mockReturnValue(new Promise(() => {})), store);
+  const button = container.querySelector("button")!;
+  act(() => button.focus());
+  await act(async () => {
+    applyDaemonEvent(store, { type: "page_created", page: pageOf("page-0", "console-session", "<p>Page 0</p>", 0) });
+  });
+  expect(button.isConnected).toBe(true);
+  expect(document.activeElement).toBe(button);
+});
+
 it("keeps the mark while Try again's listing is out and across a second failure, which is not said again", async () => {
   let finish!: (error: Error) => void;
   const request = vi
