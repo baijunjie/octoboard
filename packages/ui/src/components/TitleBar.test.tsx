@@ -2,6 +2,8 @@
 import { Folder } from "lucide-react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { PlatformProvider } from "../platform/react";
@@ -22,7 +24,7 @@ const toggle = (open: boolean, onPress: () => void) => ({
 function mount(props: Partial<React.ComponentProps<typeof TitleBar>>) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  act(() =>
+  const render = (next: Partial<React.ComponentProps<typeof TitleBar>>) => act(() =>
     root.render(
       <PlatformProvider value={{ kind: "browser" }}>
         <TitleBar
@@ -38,16 +40,18 @@ function mount(props: Partial<React.ComponentProps<typeof TitleBar>>) {
           canGoForward={false}
           onBack={() => {}}
           onForward={() => {}}
-          {...props}
+          focusTerminal={() => {}}
+          {...next}
         />
       </PlatformProvider>,
     ),
   );
+  render(props);
   onTestFinished(() => {
     act(() => root.unmount());
     container.remove();
   });
-  return { container };
+  return { container, render };
 }
 
 it("has a toggle per panel kind and none of its own for the pane, labelled with what it does and carrying its expanded state", () => {
@@ -71,4 +75,22 @@ it("says a closed panel's toggle shows it, and has no toggles while nothing owns
   expect(button.hasAttribute("aria-controls")).toBe(false);
   const none = mount({});
   expect(none.container.querySelectorAll(".title-bar-end button")).toHaveLength(0);
+});
+
+it("hands focus to the terminal, with the focus ring, when the toggle that holds it goes away", () => {
+  const focusTerminal = vi.fn();
+  const onPress = vi.fn();
+  const { container, render } = mount({ panelToggles: [toggle(false, onPress)], focusTerminal });
+  act(() => container.querySelector<HTMLElement>(".title-bar-end button")!.focus());
+  act(() => setInteractionModality("pointer"));
+  render({ panelToggles: [], focusTerminal });
+  expect(focusTerminal).toHaveBeenCalledOnce();
+  expect(getInteractionModality()).toBe("keyboard");
+});
+
+it("leaves focus alone when a toggle goes away while focus is elsewhere", () => {
+  const focusTerminal = vi.fn();
+  const { render } = mount({ panelToggles: [toggle(false, () => {})], focusTerminal });
+  render({ panelToggles: [], focusTerminal });
+  expect(focusTerminal).not.toHaveBeenCalled();
 });

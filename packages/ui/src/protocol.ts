@@ -403,8 +403,10 @@ export interface Session {
   default_effort?: string;
 }
 
-/** One page a console session pushed to its report panel; it belongs to that console session, not to its
- * console. `anchor_message_id` is stored only — the rewind linkage that would read it does not exist. */
+/** One page a session pushed to its report panel (a console session, or a project session that faces
+ * the user); it belongs to that session, not to its console or project. `console_session_id` keeps the
+ * name it had when only a console session could push pages. `anchor_message_id` is stored only — the
+ * rewind linkage that would read it does not exist. */
 export interface Page {
   id: string;
   console_session_id: string;
@@ -1823,8 +1825,11 @@ export type Event =
    * that falls too far behind the daemon's broadcasts is sent a fresh snapshot in place of the
    * events it missed, on the same socket, so re-listing is the only way back to a correct list. */
   | { type: "page_list"; id?: string; console_session_id: string; pages: Page[] }
-  /** A page the console session just pushed. The panel showing that console session refreshes to it. */
+  /** A page a session just pushed. The panel showing that session refreshes to it. */
   | { type: "page_created"; page: Page }
+  /** Pages the session `console_session_id` withdrew with `delete_pages`, by id. The panel showing
+   * that session drops them. */
+  | { type: "pages_deleted"; console_session_id: string; pages: string[] }
   | { type: "project_source"; id?: string; source: ProjectSourceInfo }
   /** `project`, `worktree` and `path` echo the request; `complete` is false when the listing was
    * cut at a budget or an entry could not be read. */

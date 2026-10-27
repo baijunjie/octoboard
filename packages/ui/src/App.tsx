@@ -11,7 +11,7 @@ import { FadeOverflow } from "./components/FadeOverflow";
 import { GitBranch } from "lucide-react";
 import type { ActionMenuEntry } from "./components/ActionMenu";
 import { displayWirePath } from "./wirePath";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { errorPresentation } from "./errorPresentation";
 import { flushSync } from "react-dom";
@@ -63,9 +63,10 @@ import { ALREADY_RUNNING_CODES, type Console, type ConsoleSessionColour, type Pr
 import { sessionDisplayTitle } from "./sessionLabel";
 import { PANEL_ENTRIES } from "./panels/panelRegistry";
 import { RightPane } from "./panels/RightPane";
-import { maximizedKind, openPanel, OWNER_KINDS, panelId, panelRegion, OWNER_TOGGLE_KINDS, restoreStack, shownKinds, shownPanelRegions, stackedKinds, toggleKind, type OwnerKind, type PanelKind } from "./panels/stackState";
+import { maximizedKind, openPanel, OWNER_KINDS, panelId, panelRegion, restoreStack, shownKinds, shownPanelRegions, stackedKinds, toggleKind, unavailableKinds as unavailableKindsOf, type OwnerKind, type PanelKind } from "./panels/stackState";
 import { useFloatingPanel } from "./panels/useFloatingPanel";
 import { usePanelStacks } from "./panels/usePanelStacks";
+import { useProjectReportSession } from "./report/useProjectReportSession";
 import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { registerSettingsLauncher } from "./settings/settingsLauncher";
@@ -217,16 +218,22 @@ export function App(): React.ReactElement {
   // The right pane is a stack of its owner's panels (`panels/stackState.ts`) and shows while one is
   // open: the top bar's toggles, the F6 cycle and the pane itself all read the owner's stack. With
   // none open the pane floats in while the pointer is on a kind's toggle, showing that panel.
-  const { stacks: panelStacks, setStack: setPanelStack } = usePanelStacks();
+  // Its Report panel is a session's, not the project's (`panels/usePanelStacks.ts`): the pages are
+  // those of the console session that owns the pane, or of the selected project session.
+  const projectReportSession = useProjectReportSession(asideOwner, selectedSession);
+  const { stacks: panelStacks, setStack: setPanelStack } = usePanelStacks(projectReportSession);
   const ownerKind = asideOwner?.kind;
   const ownerOrder = ownerKind ? OWNER_KINDS[ownerKind] : [];
+  const reportSessionId = asideOwner?.kind === "report" ? asideOwner.consoleSession : projectReportSession;
+  // A session's kind has no toggle and no panel while its session has no pages to show.
+  const unavailableKinds = unavailableKindsOf(ownerKind, reportSessionId);
   // Too narrow a window to dock the pane (a phone): one panel at a time floats over the agent
   // terminal, which keeps the whole width (`useAsideFloats`, `panels/useFloatingPanel.ts`). The
   // drawer's open state is kept here, as the floating panel has to know it before the pane toggles
   // run.
   const asideFloats = useAsideFloats();
   const drawer = useState(false);
-  const floating = useFloatingPanel({ floats: asideFloats, owner: ownerKind, stacks: panelStacks, drawerOpen: drawer[0], focusTerminal });
+  const floating = useFloatingPanel({ floats: asideFloats, owner: ownerKind, stacks: panelStacks, drawerOpen: drawer[0], focusTerminal, unavailable: unavailableKinds });
   const floatingShown = floating.kind !== undefined;
   const storedStack = ownerKind ? panelStacks[ownerKind] : undefined;
   const ownerStack = asideFloats && ownerKind ? { open: floating.kind ? [floating.kind] : [], shares: {} } : storedStack;
@@ -289,6 +296,14 @@ export function App(): React.ReactElement {
       if (kind !== ownerKind && panelStacks[kind].maximized !== undefined) setPanelStack(kind, restoreStack(panelStacks[kind]), { persist: false });
     }
   }, [ownerKind]);
+  // The pointer resting on a toggle that goes away (the Report toggle, once its last page is
+  // deleted) never leaves it, so no pointerleave would end the peek, and the card would float back
+  // by itself when a page arrives long after the pointer has moved on.
+  const peekGone = peekKind !== undefined && unavailableKinds.includes(peekKind);
+  const hidePeek = panes.asidePeek.hide;
+  useLayoutEffect(() => {
+    if (peekGone) hidePeek();
+  }, [peekGone]);
   const hoverPanelToggle = (kind: PanelKind, hovered: boolean) => {
     if (!hovered) return panes.asidePeek.leave();
     if (columnShown || openPanels.includes(kind)) return;
@@ -965,7 +980,7 @@ export function App(): React.ReactElement {
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
         asideSpan={asideDocked ? asideWidth.width : 0}
-        panelToggles={ownerKind ? OWNER_TOGGLE_KINDS[ownerKind].map((kind) => {
+        panelToggles={ownerKind ? OWNER_KINDS[ownerKind].filter((kind) => !unavailableKinds.includes(kind)).map((kind) => {
           const entry = PANEL_ENTRIES[kind];
           const open = openPanels.includes(kind);
           return {
@@ -982,6 +997,7 @@ export function App(): React.ReactElement {
         canGoForward={navigation.canGoForward}
         onBack={stableBack}
         onForward={stableForward}
+        focusTerminal={focusTerminal}
         selectedSession={selectedSession}
         viewTrail={
           archiveOpen && archiveConsole
@@ -1150,6 +1166,7 @@ export function App(): React.ReactElement {
                     layout={asideLayout}
                     active={paneShown || panes.asidePeek.active}
                     selectedSessionId={selectedSessionId}
+                    reportSessionId={reportSessionId}
                     focusTerminal={focusTerminal}
                     frameKeys={{
                       onEscape: panes.dismissOverlays,

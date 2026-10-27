@@ -6,15 +6,15 @@ width and, under it, a narrow **rail** down the window's left edge (its right ed
 right: the **sidebar**, showing one console's console sessions, projects and sessions (see `docs/product/sidebar.md`),
 the selected session's **terminal**, which the archive view covers while it is open (see "The archive view" in
 `docs/product/archive-view.md`), and the **right pane**, a stack of panel cards belonging to its owner: a console
-session's **report panel** (see `docs/product/report-panel.md`) or a project's **Files panel** (see
-`docs/product/project-pane.md`). The right pane is not there at all while it has no owner or none of its owner's panels
-is open (see "What the right pane shows" below and `docs/product/right-pane-panels.md`). The connection banner, while
-the daemon connection is down, is a full-width strip along the window's bottom edge, under the rail and the content
-panel (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`). In the macOS application the
-update notice, while there is an update to tell the user about, is another such strip, directly above the banner when
-both are shown (see "The update notice" in `docs/product/in-app-updates.md`); whatever this doc says ends above the
-connection banner ends above the update notice as well. Toasts float over the bottom right, above those strips while
-they are shown (see `docs/product/toasts.md`).
+session's **report panel** (see `docs/product/report-panel.md`), or a project's **Files panel** (see
+`docs/product/project-pane.md`) and its other panels (see `docs/product/right-pane-panels.md`). The right pane is not
+there at all while it has no owner or none of its owner's panels is open (see "What the right pane shows" below and
+`docs/product/right-pane-panels.md`). The connection banner, while the daemon connection is down, is a full-width strip
+along the window's bottom edge, under the rail and the content panel (see "Losing the daemon connection" in
+`docs/product/application-lifecycle.md`). In the macOS application the update notice, while there is an update to tell
+the user about, is another such strip, directly above the banner when both are shown (see "The update notice" in
+`docs/product/in-app-updates.md`); whatever this doc says ends above the connection banner ends above the update notice
+as well. Toasts float over the bottom right, above those strips while they are shown (see `docs/product/toasts.md`).
 
 **With no console at all the content panel holds none of those panes**: a single **welcome screen** fills it instead,
 offering the one thing there is to do, and the top bar carries no sidebar toggle (see
@@ -284,19 +284,21 @@ focus moves to the terminal, or to the top bar's first enabled control when the 
 ## What the right pane shows
 
 The right pane has one **owner** at a time: a console session, whose report panel it holds, or a project, whose Files
-and Terminal panels it holds (see `docs/product/right-pane-panels.md`). With no owner there is no right pane at all, no
-panel toggle in the top bar, and its width goes to the terminal. With an owner, the right pane is on screen while one of
-its owner's panels is open. The owner is set only by what the user does, never worked out from whatever else is on
-screen, so a project's Files panel can be shown with no session selected, or beside the terminal of a session of another
-project.
+and Terminal panels it holds, together with the selected project session's report panel while that session has pages
+(see `docs/product/right-pane-panels.md`). With no owner there is no right pane at all, no panel toggle in the top bar,
+and its width goes to the terminal. With an owner, the right pane is on screen while one of its owner's panels is open.
+The owner is set only by what the user does, never worked out from whatever else is on screen, so a project's Files
+panel can be shown with no session selected, or beside the terminal of a session of another project.
 
 Each session has a **pane of its own**: a console session its report panel, a project session its project's Files
-and Terminal panels.
+and Terminal panels and, while it has pages, its own report panel (see "A project session's Report panel" in
+`docs/product/right-pane-panels.md`).
 
 - **Selecting a session** gives the right pane to the session's own owner, whatever the session is selected from (see
-  "Selecting a session" in `docs/product/sidebar.md`), a session this window has just opened included. Selecting
-  another session of the project that owns the pane leaves the pane as it is. Whether the pane is then on screen is
-  up to which of that owner's panels are open (see "What is remembered" in `docs/product/right-pane-panels.md`).
+  "Selecting a session" in `docs/product/sidebar.md`), a session this window has just opened included. Selecting another
+  session of the project that owns the pane leaves the project's panels as they are; only the report panel follows the
+  selection, showing the newly selected session's pages, or going when it has none. Whether the pane is then on screen
+  is up to which of that owner's panels are open (see "What is remembered" in `docs/product/right-pane-panels.md`).
 - **Browse files**, when offered in a project's action menu (see "Opening a project's files" in
   `docs/product/project-pane.md`), gives the right pane to that project and opens its Files panel (see "Opening and
   closing panels" in `docs/product/right-pane-panels.md`), which puts the pane on screen — below 782 px it floats the

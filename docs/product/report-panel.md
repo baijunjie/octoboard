@@ -1,36 +1,47 @@
 # Report panel
 
-The **report panel** is the panel the window's right pane holds while a **console session** owns it, to the right of the
-terminal (to its left under a right-to-left language, see `docs/product/right-to-left-layout.md`). It is the console
-session's one kind of panel, the Report panel, a card like any other in the right pane, with its own toggle in the top
-bar (see `docs/product/right-pane-panels.md`). It belongs to the console session rather than to its console: each
-console session has its own pages, and the panel shows those of the selected console session, so two console sessions in
-one console do not share a history. Selecting a console session gives it the right pane, where the report panel shows
-while it is open; when the right pane shows something else instead — a project's Files panel, or nothing — is in "What
-the right pane shows" in `docs/product/window-layout.md`. How the panel is opened, closed and floated in is in
-`docs/product/right-pane-panels.md`, and how wide the pane is and how the user resizes it in
+The **report panel** is the right pane's Report panel, to the right of the terminal (to its left under a right-to-left
+language, see `docs/product/right-to-left-layout.md`): a card like any other in the right pane, with its own toggle in
+the top bar (see `docs/product/right-pane-panels.md`), showing the pages a session pushed. Two kinds of session push
+pages: a **console session**, and a project session that faces the user — an **unbound project session** or a **lead
+session** (see `docs/product/hub-orchestration.md`). A project session with the role of a bound one has no tool to
+push pages, since it reports to its owner rather than to the user.
+
+**Pages belong to the session that pushed them**, not to its console or project: each session has its own pages, and
+the panel shows those of the selected session only, so two sessions never share a history.
+
+- **A console session**: the report panel is its one kind of panel. Selecting the console session gives it the right
+  pane, where the report panel shows while it is open.
+- **A project session**: its Report panel sits in its project's right pane, above the project's Files and Terminal
+  panels, which stay the project's own and are shared by all its sessions. It is offered only while the selected
+  project session has pages, or listing them failed (see "A project session's Report panel" in
+  `docs/product/right-pane-panels.md`).
+
+When the right pane shows something else instead — a project's Files panel in a console session's place, or nothing —
+is in "What the right pane shows" in `docs/product/window-layout.md`. How the panel is opened, closed and floated in
+is in `docs/product/right-pane-panels.md`, and how wide the pane is and how the user resizes it in
 `docs/product/window-layout.md`.
 
-A page is a whole HTML document the console session wrote, for anything better shown than typed
-into the terminal — a table, a comparison, a set of choices. A page may carry a form, and what the
-user submits comes back into the console session as a message.
+A page is a whole HTML document the session wrote, for anything better shown than typed into the terminal — a table, a
+comparison, a set of choices. A page may carry a form, and what the user submits comes back into the session as a
+message.
 
 ## Pushing a page
 
-The console session pushes a page with its `show_page` tool (see "The console session's tools" in
-`docs/product/hub-orchestration.md`). The call answers with the new page's **id**, which is what a
-later form submission names, so a console session that has pushed several pages can tell which one a
-submission came from. An `html` argument that is empty or only whitespace is refused.
+The session pushes a page with its `show_page` tool (see "The console session's tools" and "The unbound project
+session's tools" in `docs/product/hub-orchestration.md`). The call answers with the new page's **id**, which is what a
+later form submission names, so a session that has pushed several pages can tell which one a submission came from. An
+`html` argument that is empty or only whitespace is refused.
 
-Pushing a page keeps it and moves the panel to it. Nothing else in Octoboard shows a page and nothing
-announces one: a page pushed while the user was looking at another session is simply there in the
-panel when they come back to the console session.
+Pushing a page keeps it and moves the panel to it. Nothing else in Octoboard shows a page and nothing announces one: a
+page pushed while the user was looking at another session is simply there in the panel when they come back to the
+session that pushed it.
 
 ## Reading back the pages pushed
 
-The console session reads back the pages it has pushed with its `list_pages` tool, offered to console sessions only,
-as `show_page` is. It reads only the caller's own pages, the same ones its report panel pages through: another console
-session's pages are no more readable to it than they are in that session's panel.
+The session reads back the pages it has pushed with its `list_pages` tool, offered to the same sessions as `show_page`.
+It reads only the caller's own pages, the same ones its report panel pages through: another session's pages are no more
+readable to it than they are in that session's panel.
 
 - Without arguments it answers with `pages`, every page the caller pushed, oldest first, each as `page` (its id, as
   `show_page` returned it), `created_at` (milliseconds since the epoch), `html_bytes` (the size of its HTML in bytes)
@@ -40,22 +51,45 @@ session's pages are no more readable to it than they are in that session's panel
   that is not one of the caller's pages — another session's included — is refused, the same way as an id that names
   no page, so the answer does not reveal that the page exists.
 
-It is how a console session finds the id of an earlier page, which tells a form submission from that page apart from
-one from another, and builds on what an earlier page showed.
+It is how a session finds the id of an earlier page, which tells a form submission from that page apart from one from
+another, and builds on what an earlier page showed.
+
+## Withdrawing pages
+
+The session withdraws pages it has pushed with its `delete_pages` tool, offered to the same sessions as `show_page`.
+Deleting is for good: there is no undo.
+
+- It takes exactly one of `pages`, a non-empty list of page ids (as `show_page` and `list_pages` give them), or
+  `all: true`, every page the caller pushed. Neither, both, an empty list or a list that is not of ids is refused.
+- **Only the caller's own pages can be deleted, and a call is all or nothing.** A named id that is not one of the
+  caller's pages — another session's, one already deleted, one that never was — is refused, the same way whichever it
+  is, so the refusal does not reveal another session's page, and then nothing is deleted, the other ids named
+  included. An id named twice counts once.
+- It answers with `deleted`, the ids it removed: an empty list when `all` found no page. Of two calls deleting the same
+  page at once, only one reports it.
+- Deleting the newest page makes the one before it the newest, the one a form can be submitted from (see "History
+  pages are read-only" below).
+
+The panel follows a deletion at once, in every window: the deleted pages leave the pager, and the total shrinks. A
+view on a page that was deleted moves to the newest page; one on a history page that is still there stays on it. When
+the last page goes, a console session's panel shows its empty state (see "Paging through the history" below), while a
+project session's Report panel goes, its toggle with it (see "A project session's Report panel" in
+`docs/product/right-pane-panels.md`).
 
 ## Paging through the history
 
-**Every page ever pushed is kept.** Pages belong to the console session that pushed them and are deleted with it,
-and so with its console, which deletes its console sessions (see "Deleting a console" in
-`docs/product/consoles.md`). Nothing else deletes a page, and the console session cannot withdraw one it
-has pushed.
+**Every page pushed is kept** until the session that pushed it withdraws it (see "Withdrawing pages" above) or is
+deleted itself: a page is deleted with its session, and so with the session's project or console, which delete their
+sessions (see "Deleting archived sessions" and "Deleting an unused session" in `docs/product/deleting-sessions.md`,
+`docs/product/removing-projects.md` and "Deleting a console" in `docs/product/consoles.md`). Nothing else deletes a
+page.
 
 The panel's header (see "A panel's header" in `docs/product/right-pane-panels.md`) carries, after its title, left to
 right (mirrored under a right-to-left language, except for what `docs/product/right-to-left-layout.md` lists as keeping
 its order): ◀ and ▶ to step one page back and one forward, and between them the position as "current / total", counted
 from 1 with the oldest page first. A thin row under the header carries the page's creation time formatted for the UI's
 current language (see "What follows the language" in `docs/product/language.md`) and — on any page but the newest — a
-"Read-only" badge. The position, the total and the badge all count the selected console session's pages only. The place
+"Read-only" badge. The position, the total and the badge all count the selected session's pages only. The place
 the user has paged to is not kept: whenever the report panel gives way in the right pane — another session selected, or
 Browse files putting a project's Files panel in its place — coming back to it shows its newest page again, started over
 from its markup, with anything typed into its form and not submitted gone.
@@ -66,11 +100,13 @@ from its markup, with anything typed into its form and not submitted gone.
   they paged to, and only the total grows.
 - Paging away from a page discards it: paging back to it starts the page over from its markup, and whatever had
   been typed into its form is gone.
-- A console session that has never pushed a page shows, under the panel's header, an empty panel filling the card,
-  saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the console session's
-  pages are first being listed, the card shows its header alone; keyboard focus on a header control stays there when
-  the listing arrives.
-- The pages are listed when the console session's panel is shown, and again whenever the window reloads its state
+- A console session with no pages — none pushed yet, or all withdrawn — shows, under the panel's header, an empty panel
+  filling the card, saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the
+  console session's pages are first being listed, the card shows its header alone; keyboard focus on a header control
+  stays there when the listing arrives. A project session's Report panel never shows this empty state: it is not offered
+  while the session has no pages.
+- The pages are listed when the session's panel is shown — for a project session, as soon as it is selected, to know
+  whether its Report panel is offered — and again whenever the window reloads its state
   from the daemon (a reconnect, or catching up after falling behind). **A listing that fails** is shown in the panel,
   with the reason and **Try again**, which lists them again, and opens no error alert. With no pages to show, an
   empty-state failure under the header fills the card; it is announced to assistive technology, a repeated one again
@@ -87,19 +123,19 @@ stays within it instead. Replacing a page leaves focus elsewhere in the window w
 
 ## History pages are read-only
 
-Only a console session's **newest** page can be submitted from. On every older page:
+Only a session's **newest** page can be submitted from. On every older page:
 
 - the page's form controls are disabled, and submitting its form sends nothing;
 - the "Read-only" badge is shown in the row under the panel's header.
 
 The rule does not depend on the panel: the daemon refuses any submission naming a page that is not
-its console session's newest, whatever that page's own markup does.
+its session's newest, whatever that page's own markup does.
 
 ## What a page may contain, and what it cannot do
 
 A page is a **static, self-contained HTML document**. None of its own scripts run, nothing external
-loads, and the only way data leaves it is a form the user submits (see "Submitting a form back to the
-console session" below).
+loads, and the only way data leaves it is a form the user submits (see "Submitting a form back to the session"
+below).
 
 Before a page is shown, its HTML is cleaned inside the page's frame. Removed, silently — the push is
 not refused, and the rest of the page is shown without them:
@@ -146,7 +182,7 @@ A page's body gets a default inline margin of **16 px** on each side, in place o
 starts where the panel's header does. Any margin the page sets itself takes precedence, a universal reset such as
 `* { margin: 0 }` included; the default leaves the body's top and bottom margins to the browser.
 
-## Submitting a form back to the console session
+## Submitting a form back to the session
 
 A page sends data back **only through a native HTML form**, and only when the user submits it —
 pressing a submit button, or pressing Enter in a field where the browser submits the form. Native
@@ -161,21 +197,20 @@ is offered: `<button name="choice" value="…">`. Several fields sharing one nam
 checkboxes, say — become one field whose values are joined with ", ". A file field sends only the
 chosen file's name, never its contents.
 
-The submission is written into the console session as a **user message**: a line naming
+The submission is written into the session that pushed the page as a **user message**: a line naming
 the page it came from, then one `key: value` line per field. A form with no named fields is still
 delivered, with `{}` in place of the field lines.
 
 Delivery takes the same path as every other write into a running session (see "Messages held until a
 session can take them" in `docs/product/message-delivery.md`): written straight away while the
-console session is working or awaiting instructions, and **queued** while the console session is
-waiting for the user — queued rather than refused, because the user is the one submitting and there
-is nobody to ask to answer the console session's prompt first.
+session is working or awaiting instructions, and **queued** while the session is waiting for the user — queued rather
+than refused, because the user is the one submitting and there is nobody to ask to answer the session's prompt first.
 
-The submission goes to the console session that pushed the page, found from the page itself, whichever console
-session the user happens to be looking at. It fails, and the failure is shown to the user, when the page is no longer
-its console session's newest or the console session's process is not running. A failed submission changes nothing. The
-message names which console session the submission was meant for, so that it cannot be
-read as being about whichever session the user happens to be looking at.
+The submission goes to the session that pushed the page, found from the page itself, whichever session the user happens
+to be looking at. It fails, and the failure is shown to the user, when the page is no longer its session's newest or
+the session's process is not running. A failed submission changes nothing. The message names which session the
+submission was meant for, so that it cannot be read as being about whichever session the user happens to be looking
+at.
 
 ## Escape and F6 inside a page
 

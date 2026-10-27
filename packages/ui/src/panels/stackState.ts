@@ -3,17 +3,25 @@ import type { AsideOwner } from "../layout/asideOwner";
 /** The kinds of panel the right pane can stack, in the order they are stacked top to bottom and the
  * order F6 visits them. A later kind (a browser) is one more entry here and one in
  * `panelRegistry.tsx`. */
-export const PANEL_KINDS = ["files", "terminal", "report"] as const;
+export const PANEL_KINDS = ["report", "files", "terminal"] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 
 /** Who owns the right pane (`layout/asideOwner.ts`'s kinds): each owner has a stack of its own kinds,
- * in stacking order. */
+ * in stacking order, which is also the order of their toggles in the top bar. A project's includes
+ * the Report panel, which is not the project's but that of the project session selected, and so is
+ * kept apart from the stack the project's sessions share (`SESSION_KINDS`, `usePanelStacks.ts`). */
 export type OwnerKind = AsideOwner["kind"];
-export const OWNER_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["files", "terminal"], report: ["report"] };
+export const OWNER_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["report", "files", "terminal"], report: ["report"] };
 
-/** The order of an owner's kinds' toggles in the top bar, which is not the stacking order: the
- * Terminal panel's toggle comes before the Files panel's. */
-export const OWNER_TOGGLE_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["terminal", "files"], report: ["report"] };
+/** The kinds of an owner's stack that belong to a session rather than to the owner: whether one is
+ * open is kept per session, not in the stack every session of the owner shares. */
+export const SESSION_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["report"], report: [] };
+
+/** The kinds of `owner` with nothing to show just now: its session kinds, while there is no session
+ * to show them for (`reportSessionId` undefined: a project's selected session with no pages). */
+export function unavailableKinds(owner: OwnerKind | undefined, reportSessionId: string | undefined): readonly string[] {
+  return owner && reportSessionId === undefined ? SESSION_KINDS[owner] : [];
+}
 
 /** The kinds open in an owner's stack until the user changes it. The Terminal panel is not among
  * them: opening it starts a shell when the project has none, which only the user's own opening
@@ -173,12 +181,13 @@ export function resetBoundary(stack: PanelStack, index: number, order: Order = P
 export type PanelStacks = Record<OwnerKind, PanelStack>;
 
 function parseOne(value: unknown, owner: OwnerKind): PanelStack {
+  const stored = OWNER_KINDS[owner].filter((kind) => !SESSION_KINDS[owner].includes(kind));
   if (typeof value !== "object" || value === null) return defaultStack(owner);
   const { open, shares } = value as { open?: unknown; shares?: unknown };
   if (!Array.isArray(open)) return defaultStack(owner);
-  const kinds = ordered(open.filter((kind): kind is string => typeof kind === "string"), OWNER_KINDS[owner]);
-  const stored = typeof shares === "object" && shares !== null ? (shares as Record<string, unknown>) : {};
-  const kept = Object.fromEntries(kinds.flatMap((kind) => (typeof stored[kind] === "number" ? [[kind, stored[kind]]] : [])));
+  const kinds = ordered(open.filter((kind): kind is string => typeof kind === "string"), stored);
+  const storedShares = typeof shares === "object" && shares !== null ? (shares as Record<string, unknown>) : {};
+  const kept = Object.fromEntries(kinds.flatMap((kind) => (typeof storedShares[kind] === "number" ? [[kind, storedShares[kind]]] : [])));
   return { open: kinds, shares: kept };
 }
 

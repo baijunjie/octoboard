@@ -30,7 +30,7 @@ use crate::branch_origin::handover::{
     branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
 };
 use crate::branch_origin::session_branches;
-use crate::coordinator::{self, OpenRequest};
+use crate::coordinator::{self, LaunchEdit, OpenRequest};
 use crate::git_remote;
 use crate::protocol::{
     error_code, Agent, CodedError, Console, Origin, Project, ProjectSource, Role, Session,
@@ -109,6 +109,7 @@ pub async fn call(
         }
         "show_page" => pages::show_page(state, &session, arguments),
         "list_pages" => pages::list_pages(state, &session, arguments),
+        "delete_pages" => pages::delete_pages(state, &session, arguments),
         "report" => report(state, &session, arguments).await,
         "list_sessions" => reads::list_sessions(state, &session, arguments).await,
         "get_session_branches" => {
@@ -681,12 +682,17 @@ async fn reopen_session(
     // resume takes it as the launch's prompt; for the other agents it is queued inside the
     // launch, because whichever hook would release it can fire the moment the agent starts, and a
     // refusal there also undoes it.
-    coordinator::resume_session(
+    coordinator::resume_session_edited(
         state,
         &target.id,
         arguments.get("text").and_then(Value::as_str),
         // An owner asks over MCP, which has no window appearance to match.
         None,
+        // Checked against what the agent offers before anything is reopened.
+        LaunchEdit {
+            model: present_text(arguments, "model")?,
+            effort: present_text(arguments, "effort")?,
+        },
     )
     .await?;
     Ok(json!({ "session": target.id }))
@@ -2205,6 +2211,379 @@ pub(super) mod tests {
         }
     }
 
+    /// `list_sessions` lists the sessions with a process by default, the interrupted ones with
+    /// `status: interrupted`, and both with `any`; an archived session is in none of them.
+    #[tokio::test]
+    async fn list_sessions_can_select_the_interrupted_sessions() {
+        let (state, _dir) = peer_state("peer-list-status");
+        with_status(&state, "of-a", SessionStatus::Interrupted);
+        let ids = |filters: Value| {
+            let state = state.clone();
+            async move {
+                let listed = call(&state, "loose", "list_sessions", &arguments(filters))
+                    .await
+                    .unwrap();
+                let mut ids: Vec<String> = listed["sessions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|session| session["session"].as_str().unwrap().to_string())
+                    .collect();
+                ids.sort();
+                ids
+            }
+        };
+
+        let live = ids(json!({})).await;
+        assert!(!live.contains(&"of-a".to_string()), "{live:?}");
+        assert_eq!(ids(json!({ "status": "live" })).await, live);
+        assert_eq!(ids(json!({ "status": "interrupted" })).await, ["of-a"]);
+        let any = ids(json!({ "status": "any" })).await;
+        let mut both = live.clone();
+        both.push("of-a".to_string());
+        both.sort();
+        assert_eq!(any, both);
+        assert!(!any.contains(&"archived-of-a".to_string()), "{any:?}");
+        // It combines with the other filters, and shows the status the listing selected.
+        assert_eq!(
+            ids(json!({ "status": "interrupted", "owner": "b" })).await,
+            Vec::<String>::new()
+        );
+        let listed = call(
+            &state,
+            "loose",
+            "list_sessions",
+            &arguments(json!({ "status": "interrupted" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(listed["sessions"][0]["status"], "interrupted");
+
+        let err = call(
+            &state,
+            "loose",
+            "list_sessions",
+            &arguments(json!({ "status": "archived" })),
+        )
+        .await
+        .expect_err("not a status");
+        assert!(err.to_string().contains("`status` must be"), "{err}");
+    }
+
+    /// `list_archived` needs no project: with none it lists every console's archive, console
+    /// sessions included, and `console`, `project`, `owner` and `kind` narrow it, all having to
+    /// hold.
+    #[tokio::test]
+    async fn the_archive_can_be_listed_without_a_project_and_narrowed() {
+        let (state, _dir) = shared_console_state("tool-surface-archive-filters");
+        let mut console_archived = console_session("archived-console");
+        console_archived.status = SessionStatus::Archived;
+        console_archived.bound_to = Some("a".to_string());
+        let mut elsewhere = project_session("archived-elsewhere", "console-2", None);
+        elsewhere.project_id = Some("project-2".to_string());
+        elsewhere.status = SessionStatus::Archived;
+        for session in [&console_archived, &elsewhere] {
+            state.store.insert_session(session).unwrap();
+        }
+        let ids = |filters: Value| {
+            let state = state.clone();
+            async move {
+                let listed = call(&state, "loose", "list_archived", &arguments(filters))
+                    .await
+                    .unwrap();
+                let mut ids: Vec<String> = listed["sessions"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|session| session["session"].as_str().unwrap().to_string())
+                    .collect();
+                ids.sort();
+                ids
+            }
+        };
+
+        assert_eq!(
+            ids(json!({})).await,
+            [
+                "archived-console",
+                "archived-elsewhere",
+                "archived-of-a",
+                "archived-of-b"
+            ]
+        );
+        assert_eq!(
+            ids(json!({ "kind": "console" })).await,
+            ["archived-console"]
+        );
+        assert_eq!(
+            ids(json!({ "kind": "project" })).await,
+            ["archived-elsewhere", "archived-of-a", "archived-of-b"]
+        );
+        assert_eq!(
+            ids(json!({ "owner": "a" })).await,
+            ["archived-console", "archived-of-a"]
+        );
+        assert_eq!(
+            ids(json!({ "owner": "a", "kind": "project" })).await,
+            ["archived-of-a"]
+        );
+        assert_eq!(
+            ids(json!({ "console": "console-2" })).await,
+            ["archived-elsewhere"]
+        );
+        assert_eq!(
+            ids(json!({ "project": "project-1", "owner": "b" })).await,
+            ["archived-of-b"]
+        );
+
+        for (filter, refusal) in [
+            (
+                json!({ "console": "nowhere" }),
+                "there is no console `nowhere`",
+            ),
+            (
+                json!({ "owner": "nowhere" }),
+                "there is no session `nowhere`",
+            ),
+            (
+                json!({ "kind": "hub" }),
+                "`kind` must be `console` or `project`, not `hub`",
+            ),
+            (
+                json!({ "kind": "console", "project": "project-1" }),
+                "`kind: console` and `project` cannot both hold: a console session is in no \
+                 project",
+            ),
+        ] {
+            let err = call(&state, "loose", "list_archived", &arguments(filter.clone()))
+                .await
+                .expect_err(&filter.to_string());
+            assert_eq!(err.to_string(), refusal);
+        }
+    }
+
+    /// A `project` named beside a `console` is looked for in that console, not in the caller's
+    /// first: another console's project of the same name as the caller's own is reachable.
+    #[tokio::test]
+    async fn a_project_name_is_resolved_within_the_console_given() {
+        let (state, _dir) = shared_console_state("tool-surface-archive-project-in-console");
+        let template = state.store.get_project("project-2").unwrap().unwrap();
+        state
+            .store
+            .insert_project(&Project {
+                id: "twin".to_string(),
+                name: "project-1".to_string(),
+                path: "/tmp/twin".to_string(),
+                ..template
+            })
+            .unwrap();
+        let mut archived = project_session("archived-twin", "console-2", None);
+        archived.project_id = Some("twin".to_string());
+        archived.status = SessionStatus::Archived;
+        state.store.insert_session(&archived).unwrap();
+
+        for tool in ["list_archived", "list_sessions"] {
+            let filters = if tool == "list_sessions" {
+                json!({ "console": "console-2", "project": "project-1", "status": "any" })
+            } else {
+                json!({ "console": "console-2", "project": "project-1" })
+            };
+            let listed = call(&state, "loose", tool, &arguments(filters))
+                .await
+                .unwrap();
+            let ids: Vec<&str> = listed["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|session| session["session"].as_str().unwrap())
+                .collect();
+            let expected: &[&str] = if tool == "list_archived" {
+                &["archived-twin"]
+            } else {
+                &[]
+            };
+            assert_eq!(ids, expected, "{tool}");
+        }
+        // Without a console the caller's own console's `project-1` wins.
+        let own = call(
+            &state,
+            "loose",
+            "list_archived",
+            &arguments(json!({ "project": "project-1" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(own["sessions"].as_array().unwrap().len(), 2);
+        // Two projects of the console with one name are ambiguous there, and the refusal names it.
+        let template = state.store.get_project("twin").unwrap().unwrap();
+        state
+            .store
+            .insert_project(&Project {
+                id: "twin-2".to_string(),
+                path: "/tmp/twin-2".to_string(),
+                ..template
+            })
+            .unwrap();
+        let err = call(
+            &state,
+            "loose",
+            "list_archived",
+            &arguments(json!({ "console": "console-2", "project": "project-1" })),
+        )
+        .await
+        .expect_err("two projects named project-1");
+        assert!(err.to_string().contains("in console `console-2`"), "{err}");
+        // A project that is in no such console is refused.
+        let err = call(
+            &state,
+            "loose",
+            "list_archived",
+            &arguments(json!({ "console": "console-1", "project": "twin" })),
+        )
+        .await
+        .expect_err("twin is console-2's");
+        assert!(err.to_string().contains("no project `twin`"), "{err}");
+    }
+
+    /// The archive is listed newest archived first and at most `limit` long, with `total` saying
+    /// how many match.
+    #[tokio::test]
+    async fn the_archive_is_newest_first_and_capped_by_limit() {
+        let (state, _dir) = shared_console_state("tool-surface-archive-limit");
+        for (id, ended_at) in [
+            ("old", Some(10)),
+            ("new", Some(30)),
+            ("mid", Some(20)),
+            ("never", None),
+        ] {
+            let mut session = project_session(id, "console-1", None);
+            session.status = SessionStatus::Archived;
+            session.ended_at = ended_at;
+            state.store.insert_session(&session).unwrap();
+        }
+        let list = |filters: Value| {
+            let state = state.clone();
+            async move { call(&state, "loose", "list_archived", &arguments(filters)).await }
+        };
+        let listed = list(json!({ "kind": "project", "limit": 3 }))
+            .await
+            .unwrap();
+        let ids: Vec<&str> = listed["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|session| session["session"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, ["new", "mid", "old"]);
+        assert_eq!(listed["total"], 6);
+
+        let everything = list(json!({})).await.unwrap();
+        assert_eq!(everything["sessions"].as_array().unwrap().len(), 6);
+        assert_eq!(everything["total"], 6);
+        for bad in [
+            json!({ "limit": 0 }),
+            json!({ "limit": 201 }),
+            json!({ "limit": "5" }),
+        ] {
+            list(bad).await.expect_err("limit out of range");
+        }
+    }
+
+    /// Both ways of reading a project give its git state as the daemon holds it: `null` before any
+    /// has been read, then the branch and counts with how long ago the last check completed, and a
+    /// credential in the error `git` reported removed.
+    #[tokio::test]
+    async fn a_projects_git_status_is_given_as_last_read() {
+        let (state, _dir) = shared_console_state("tool-surface-git-status");
+        let project_of_a = |listed: &Value| {
+            listed["projects"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|project| project["project"] == "project-1")
+                .unwrap()["git_status"]
+                .clone()
+        };
+
+        let listed = call(&state, "a", "list_projects", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(project_of_a(&listed), Value::Null);
+        let owned = call(&state, "of-a", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(owned["git_status"], Value::Null);
+
+        state.publish_git_status(crate::protocol::GitStatus {
+            project: "project-1".to_string(),
+            repository: true,
+            branch: Some("main".to_string()),
+            detached: false,
+            upstream: Some("origin/main".to_string()),
+            ahead: 2,
+            behind: 1,
+            activity: crate::protocol::GitActivity::Idle,
+            error: Some("unable to access 'https://user:token@example.com/r.git/'".to_string()),
+        });
+        let listed = call(&state, "a", "list_projects", &Map::new())
+            .await
+            .unwrap();
+        let status = project_of_a(&listed);
+        assert_eq!(status["branch"], "main");
+        assert_eq!(status["upstream"], "origin/main");
+        assert_eq!(
+            (&status["ahead"], &status["behind"]),
+            (&json!(2), &json!(1))
+        );
+        assert_eq!(status["activity"], "idle");
+        assert_eq!(
+            status["error"],
+            "unable to access 'https://example.com/r.git/'"
+        );
+        // No remote check has completed in this daemon's run.
+        assert_eq!(status["checked_seconds_ago"], Value::Null);
+        let owned = call(&state, "of-a", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(owned["git_status"], status);
+
+        state.record_git_check_completed("project-1");
+        let owned = call(&state, "of-a", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(owned["git_status"]["checked_seconds_ago"], 0);
+
+        // The age counts on the wall clock: the monotonic clock stands still while the machine
+        // sleeps, so a check made an hour ago must read as an hour whatever the `Instant` says.
+        state.set_git_check_wall_time_for_test(
+            "project-1",
+            crate::protocol::now_millis() - 3_600_000,
+        );
+        let owned = call(&state, "of-a", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(owned["git_status"]["checked_seconds_ago"], 3600);
+    }
+
+    /// A `model` or `effort` that is not text is refused before anything is reopened.
+    #[tokio::test]
+    async fn a_reopen_refuses_a_model_that_is_not_text() {
+        let (state, _dir) = shared_console_state("tool-surface-reopen-model");
+        for key in ["model", "effort"] {
+            let err = call(
+                &state,
+                "a",
+                "reopen_session",
+                &arguments(json!({ "session": "archived-of-a", key: 5 })),
+            )
+            .await
+            .expect_err("not text");
+            assert_eq!(err.to_string(), format!("`{key}` must be a string or null"));
+        }
+        let after = state.store.get_session("archived-of-a").unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Archived);
+    }
+
     /// Information for an interrupted session is kept in the store for its resume (which the
     /// coordinator's tests follow); its owner's copy is sent or kept by the owner's own state;
     /// archiving the session drops what was kept, and an archived session is refused outright.
@@ -2443,10 +2822,6 @@ pub(super) mod tests {
                 sorted.sort();
                 assert_eq!(sorted, expected, "{caller} {project}");
             }
-            let err = call(&state, caller, "list_archived", &Map::new())
-                .await
-                .expect_err("no project");
-            assert!(err.to_string().contains("`project` is required"), "{err}");
             let err = call(
                 &state,
                 caller,
@@ -2858,8 +3233,9 @@ pub(super) mod tests {
             ("mine", "send_message"),
             ("of-a", "archive_session"),
             ("starter", "add_project"),
-            ("starter", "show_page"),
-            ("starter", "list_pages"),
+            ("mine", "show_page"),
+            ("mine", "list_pages"),
+            ("mine", "delete_pages"),
             ("a", "report"),
             ("mine", "transfer_session"),
             ("mine", "release_session"),
@@ -2885,7 +3261,7 @@ pub(super) mod tests {
 
     /// `peer_state` with `starter` bound to the console session `a` as its lead session, still
     /// owning `mine`.
-    fn lead_state(name: &str) -> (Arc<AppState>, ScratchDir) {
+    pub(in crate::mcp) fn lead_state(name: &str) -> (Arc<AppState>, ScratchDir) {
         let (state, dir) = peer_state(name);
         state
             .store

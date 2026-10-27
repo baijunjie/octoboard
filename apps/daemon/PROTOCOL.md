@@ -94,8 +94,8 @@ the request id as if it were a record id.
 | `interrupt_session` | `session` | Stops the turn the session's agent is running, as the user pressing its interrupt key in the terminal would, and replies with `session_interrupted`; no ownership is checked. The process and its conversation stay, and the session goes back to `idle`. The key is the agent's own, written on its own and never joined to a message: one Esc for Claude Code and Codex, Ctrl-U then Ctrl-C for Grok Build (which ignores Esc, and whose Ctrl-C clears text in its composer instead of cancelling the turn). A draft in Grok's composer is cleared first with Ctrl-U, one press at a time until the screen shows the composer empty, and the note says so (Grok may let the user undo it with ctrl+z); a draft that does not clear gets no Ctrl-C. The input box is read off the screen with faint text left out, such as Claude Code's placeholder in a fresh session's empty box. It is written only while the session reads `working` by its hooks and its terminal title shows the turn running, checked right before each key, so a turn that ends meanwhile gets no key. When Claude Code or Grok Build puts the interrupted prompt back in its input box (a key before the model has shown anything), the daemon clears it with Ctrl-U, one press at a time while the screen shows text there, as long as the box was empty before the interrupt key and nothing else has been written meanwhile; text left there is reported in the note. Messages Octoboard has for the session are held from the first key until the reply, so none joins the restored text, and are written afterwards. A cancel the user makes in the terminal is left as the agent leaves it. The reply waits up to five seconds for the turn to end, which counts even when a message the agent had queued starts the next turn at once. A session not in a turn (at its prompt, with or without background work) is answered with `interrupted: false` and nothing is written; so is a session another `interrupt_session` is already interrupting. Refused, with nothing written: `session_not_running` for a session that is archived or interrupted, has no process, or is still being launched or not yet past its startup screens; `session_trust_pending` while its agent shows its folder-trust confirmation; `session_waiting_for_user` while its agent waits on the user (a permission prompt or question, a screen of its own recognised on the terminal, Codex's `Action Required` title) or a `request_session` call of its own holds its hand up; `session_busy` while it is being switched to another account, handed off, having its branches handed over, given another owner or restarted for a change of its account's sharing. An id that names no session is `unknown_session` |
 | `rename_session` | `session`, `title` | The title is stored trimmed and cannot be blank (`field_required`) |
 | `release_session` | `session` | Unbinds a bound project session from its owner, whoever it is, and broadcasts `session_upserted`: `bound_to` is cleared and the session is an ordinary unbound project session, the user's own. A lead session keeps the sessions bound to it, and branches stay with their session. Allowed whether the session is running or not, and refused for a console session, an unbound session, and a session, or the owner it is bound to, that is being started, resumed, handed off, switched to another account or having its owner changed. The refusals are `console_session_never_bound`, `session_not_bound`, `session_binding_changed` (the binding moved between the check and the write), `session_changing` and `session_owner_changing`; an id that names no session is `unknown_session`. A running session is told in a message, queued while it cannot take one, that it has no owner and which tools it has; one with no process is told when it next starts, ahead of any instruction of that launch, as the notice every change of owner leaves for a session that was not running (see `release_session` under the MCP tools). The former owner is told in a message, queued while it cannot take one, that the user released the session, so it can no longer drive, message or archive it and should treat any work it handed the session as left with the user; an owner with no process is not told, and a later attempt by it to drive the session is refused as not its own |
-| `list_pages` | `console_session` | The console session's report panel pages, oldest first. Answered with `page_list` on the asking socket. A `console_session` that does not name a console session (one that names a project session, say) is refused with `unknown_session` |
-| `submit_page` | `page`, `data` | A report panel form submission; `data` is the submitted form's fields as an object of strings, field name to value (a repeated name's values joined by `, `), in document order, including the pressed submit button's `name`/`value`. Written into the console session that pushed the page, found from the page itself, as a user message naming the page; held rather than refused while the console session is `waiting_user`, since the console session is not the one who has to answer that prompt. Refused when `page` is not its console session's newest page — history pages are read-only |
+| `list_pages` | `console_session` | A session's report panel pages, oldest first. Answered with `page_list` on the asking socket. `console_session` is the session that pushed the pages, a console session or a project session; one that names no session is refused with `unknown_session` |
+| `submit_page` | `page`, `data` | A report panel form submission; `data` is the submitted form's fields as an object of strings, field name to value (a repeated name's values joined by `, `), in document order, including the pressed submit button's `name`/`value`. Written into the session that pushed the page, found from the page itself, as a user message naming the page; held rather than refused while that session is `waiting_user`, since the session is not the one who has to answer that prompt. Refused when `page` is not its session's newest page — history pages are read-only |
 | `confirm_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `trust_prompt`, whichever agent is asking: Octoboard may press that session's own folder-trust confirmation, which it does by typing at the session's terminal after checking that the confirmation is still up — for Claude Code a Down and an Enter, once the cursor is seen to move to "Yes, I trust this folder"; for Codex an Enter, with the cursor seen on "1. Trust and continue" and nothing written into the session since the confirmation was sighted; for Grok Build a `y`, while no hook has run, the process is still there and nothing has been written into the session since the confirmation was sighted. Pressing it is what makes the agent record the trust in its own configuration, so its later launches do not ask; for Grok Build the entry Grok wrote into the session's own copy of its trust store is then carried over, unchanged, into the user's own store, and the press counts only once that is done, or, when no hook comes to carry it (a Grok policy that runs none), once the confirmation is seen to have gone from the screen; a hook that comes later still carries the entry. `remember` also records the project's permission (`Project.trust_consent`) once the confirmation has been pressed, so a later confirmation of any agent in that project is pressed without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the confirmation has been pressed, and then `remember` adds nothing. Every project whose path lies under that directory is covered by it, for every agent — those already there, those added later by any means, repositories the console session clones or adds into it included — and each agent then applies that project's own configuration once it has recorded its trust. The confirmations already waiting under it are pressed at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is pressed, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute (`trust_path_not_absolute`), and so is any case where the home directory cannot be determined to check against (`trust_home_unknown`). Refused, with nothing recorded and nothing sent, unless `session` is a running project session that is still waiting at its own agent's confirmation and has not been answered (one that is no longer waiting is answered with `error` code `trust_not_waiting`, which a client shows nothing for); a failure to press once it was accepted (the confirmation is not as expected, or something else typed into the session meanwhile) is an `error` with code `trust_answer_failed`, and a Grok Build press whose entry could not be carried over is one with code `trust_not_carried_over`; either records no permission and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never writes a trust decision into an agent's configuration itself; the one file it writes is the user's Grok Build trust store, with the entry Grok wrote |
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own permissions, sessions already running and the trust each agent has already recorded are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_trust` |
 | `answer_session_request` | `request_id`, `approve`, `agent?`, `account?`, `model?`, `effort?` | The user's answer to a `session_request`. `approve` true does what the request's `action` says. For `start` it starts the session the request describes — a project session in its project, or a console session in its console — as `open_session` would, with no `bound_to`: it has no owner and reports to the user, and the requesting session carries on unchanged, neither bound to it nor owning it. For `reopen` and `resume` it brings back the session `target` as `resume_session` does, without an instruction, and its owner and everything bound to it stay as they are; archived owners are reopened first, topmost down, and a name the request carried for an archived session is then given as `rename_session` does (a name that cannot be given is told to the requester and does not undo the reopen). A target that is already running or starting when the answer arrives is left alone and counts as done, as does one that `resume_session` refuses with `session_already_running`, or with `session_already_starting` for the target's own launch or after which the target is no longer dormant; a `session_already_starting` that is a claim for an account switch, a handoff, a handover of branches or a binding change on the target, or for an archived owner, while the target is still dormant, is not done: the answer fails with that refusal's own error and the requester is told the approval could not be carried out. A name the request carried that was not given because the target was not archived by then is told as `renamed: false` in the result. For `resume_record` it opens a session as `open_session` does on the record the request names, with no `bound_to`, so that it reports to the user. For `switch` it runs the owner's `switch_session_account` on the session `target` and for `handoff` its `handoff_session`, each with the values the user ended the dialog on: `agent` (a handoff's receiving agent) and `account` (a switch's target account, a handoff's receiving account; an explicit `null` is the agent's default account), and `model` and `effort`, each absent where the request's own value stands, an explicit `null` for the agent's own default and a string to pin it. The other values of `agent`, `account`, `model` and `effort` are ignored for the other actions. A switch records a model or effort that is given as the session's own override, checked as `open_session` checks them against the account the session is switched to, before the relaunch that reads it; the previous overrides are put back when the switch fails. A handoff's account left out stands as the request showed it, for the agent the request named; for another agent it is settled as a `handoff_session` call naming that agent with no `account` would settle it. The call's `model` and `effort` stand for the agent it named only. The result of either tool names what was done: a handoff's carries `account`, `account_name` and, where set, `model` and `effort`, a switch's carries `account`, `account_name` and `model` and `effort` where the session has an override, and the `note` says when the user chose differently from what was asked. Everything the operations refuse is refused at that moment as for the tool without a dialog, and the call returns the tool's result. False refuses it and changes nothing (a client sends false when the dialog is dismissed). Approval is answered with `session_opened` carrying the new session, or for `reopen`, `resume` and `switch` the target as it then stands, and for `handoff` the receiving session; refusal with `ack`. The first answer wins. An answer for a request that has already been answered, or that the daemon does not know, gets `session_request_answered`. An approval for one that was withdrawn or timed out, or whose session's process ended before it could be carried out, gets `session_request_not_waiting`; a refusal for one gets the same code. An approval that fails while launching returns that launch's own error |
@@ -175,9 +175,10 @@ the request id as if it were a record id.
 | `configuration_exported` | `id`, `document` — the reply to `export_configuration`; `document` is a configuration document (see "Configuration export") |
 | `configuration_inspected` | `id`, `settings?`, `consoles` — the reply to `inspect_configuration`; `settings` is what the document's application settings are and what they are on this machine now; one `InspectedConsole` per console of the document, in its order (see "Configuration import") |
 | `configuration_imported` | `id`, `settings_applied?`, `settings_error?`, `consoles` — the reply to `import_configuration`; `settings_applied` holds the settings that were applied, and is absent when they were not asked for or could not be applied, in which case `settings_error` says why; one `ImportedConsole` per console of the document, in its order (see "Configuration import") |
-| `page_list` | `id`, `console_session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the console session on screen needs its pages, so the panel asks. Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
+| `page_list` | `id`, `console_session_id`, `pages` — oldest first. Pages are not in `snapshot`: one carries a whole HTML document, and only the session on screen needs its pages, so the panel asks (and so does the window for a project session it has selected, to know whether the Report panel has anything to show). Asking again after every `snapshot` is what keeps it correct across a `page_created` a lagging client never received: such a client is sent a fresh snapshot in place of the events it missed, on the socket it already has |
 | `path_links` | `id`, `links` — one `{path, kind, view?, viewer_only?}` per asked path, in order, `path` as asked, `kind` `file`, `directory` or `none`, `view` (`{worktree?, path}`) and `viewer_only` (present only when true) as `probe_path_links` describes |
-| `page_created` | `page` — the whole record. The console session pushed a page with `show_page` |
+| `page_created` | `page` — the whole record. A session pushed a page with `show_page` |
+| `pages_deleted` | `console_session_id` (the session that pushed them), `pages` — the ids withdrawn with `delete_pages`, never empty. A client drops them from its list for that session |
 | `ack` | `id` |
 | `error` | `code`, `params`, `message`, `id?` — a failure of a request (carrying its `id`) or, with no `id`, one that belongs to no request. See "Coded messages" |
 
@@ -296,7 +297,7 @@ A client also branches on some codes, instead of only showing them:
 | `session_trust_pending` | `session` | The session's agent is showing, or may still show, its folder-trust confirmation, which the message's trailing Enter would answer, so a message is refused; an `interrupt_session` is refused while the confirmation is up |
 | `session_busy` | `session` | An `interrupt_session` for a session that is being switched to another account, handed off, having its branches handed over, given another owner, or restarted for a change of its account's sharing; nothing was sent |
 | `queued_messages_lost` | — | A message queued for a session could not be written in full, and it and what was behind it were dropped |
-| `page_not_current` | — | A form can be submitted only from its console session's newest page |
+| `page_not_current` | — | A form can be submitted only from its session's newest page |
 | `trust_directory_too_broad` | `path` | The directory is the filesystem root, the home directory or one containing it |
 | `trust_path_not_absolute` | `path` | The project's path is not absolute |
 | `trust_home_unknown` | — | The home directory cannot be determined |
@@ -427,7 +428,7 @@ Session { id, agent, agent_session_id?, console_id, project_id?, host_id,
           account_id?, config_dir?, model?: string|null, effort?: string|null, pinned, locked, started_at, ended_at? }
 BackgroundTask { id, type?, description? }
 SessionContext { tokens, window?, used_percent? }
-Page    { id, console_session_id, html, anchor_message_id?, created_at }
+Page    { id, console_session_id, html, anchor_message_id?, created_at }  // console_session_id: the session that pushed it, a console session or a project session
 Settings  { auto_pull_repositories, auto_delete_unresumable_archives, auto_approve_session_requests, auto_approve_resume_requests,
             auto_approve_account_switches, auto_approve_handoffs, ask_questions_as_choices,
             interface_language: string|null, auto_select_account, sidebar_order_by_status, auto_start_quota_windows, default_clone_dir, accounts: Account[],
@@ -2298,7 +2299,8 @@ in `docs/product/session-requests.md` ("Waiting for the answer", "How a request 
 
 | Tool | Console session | Unbound or lead project session | Bound project session |
 |---|---|---|---|
-| `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings`, `show_page`, `list_pages` | yes | — | — |
+| `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings` | yes | — | — |
+| `show_page`, `list_pages`, `delete_pages` | yes | yes (a lead session included) | — |
 | `new_session`, `send_message`, `interrupt_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
 | `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`, `share_info`, `get_account_quotas` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
@@ -2347,20 +2349,28 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   `get_console` and `get_settings` (the console session's own console and the application's settings), and the writes.
   `list_consoles` answers `{ consoles: [{ console, name, yours }] }`, every console with the id and name that `console`
   takes, `yours` marking the caller's own.
-- `list_projects` takes an optional `console` (an id, or a name that names one console), defaulting to the caller's
-  own, so for a project session the console it is in. Both answers carry `console`, the console's id. For another
-  console it answers `{ console, projects }`, each project only `{ project, name, description, tags }` — what
-  `request_session` and `request_resume_session` need to target it, with no sessions or settings; reads reach any
-  console, writes stay in the caller's own. For the caller's own console it answers the same shape a console session
-  gets, `yours` and `owner` worked out against the caller, each project with `project`,
-  `name`, `host`, `path`, `source`, `remote_url`, `default_agent`,
-  `pinned`, `tags`, `description`, `trust_consent`, `accounts`, `launch`, `git_workflow` and `sessions`. `get_project`,
-  `update_project` and `add_project` answer with the same entries without `sessions`. A `remote_url` is always given
-  without the credentials it carries, as `https://example.com/r.git` for `https://user:token@example.com/r.git`. A
-  project's `git_workflow` is `{ "override": GitWorkflowOverride, "effective": GitWorkflowSettings }`: the project's own choices
-  (`null` for an item that follows the application-wide value) beside the resolved values, each item taking the
-  project's own choice else the current application-wide value. `rebase_before_merge` and `delivery`
-  apply only while the resolved `development` is not `in_place`.
+- `list_projects` takes an optional `console` (an id, or a name that names one console), defaulting to the caller's own,
+  so for a project session the console it is in. Both answers carry `console`, the console's id. For another console it
+  answers `{ console, projects }`, each project only `{ project, name, description, tags }` — what `request_session` and
+  `request_resume_session` need to target it, with no sessions or settings; reads reach any console, writes stay in the
+  caller's own. For the caller's own console it answers the same shape a console session gets, `yours` and `owner`
+  worked out against the caller, each project with `project`, `name`, `host`, `path`, `source`, `remote_url`,
+  `default_agent`, `pinned`, `tags`, `description`, `trust_consent`, `accounts`, `launch`, `git_workflow`, `git_status`
+  and `sessions`. `get_project`, `update_project` and `add_project` answer with the same entries without `sessions`. A
+  `remote_url` is always given without the credentials it carries, as `https://example.com/r.git` for
+  `https://user:token@example.com/r.git`. A project's `git_workflow` is
+  `{ "override": GitWorkflowOverride, "effective": GitWorkflowSettings }`: the project's own choices (`null` for an item
+  that follows the application-wide value) beside the resolved values, each item taking the project's own choice else
+  the current application-wide value. `rebase_before_merge` and `delivery` apply only while the resolved `development`
+  is not `in_place`. A project's `git_status` is its `GitStatus` as the daemon holds it in memory (see `GitStatus`
+  above), read without going to the remote or running `git`: `null` while the daemon holds none for the project (nothing
+  has checked it since the daemon started, or its console has not been the current one), else
+  `{ repository, branch, detached, upstream, ahead, behind, activity, error, checked_seconds_ago }`, `activity`
+  including `pushing` while a push runs. `error` has any credential in a URL it names removed, as `remote_url` has.
+  `checked_seconds_ago` is how long ago the last check completed (a project with no repository or no remote has checks
+  too), counted on the wall clock so a sleep of the machine is part of it, `null` when none has completed since the
+  daemon started: the branch and counts are then only what the local re-reads gave, and in any case they may be stale by
+  that age. The call never starts a check (that is the `refresh_git_status` control request, which no tool reaches).
 - `add_project` takes `tags`, `description`, `accounts`, `launch`, `pinned` and `git_workflow` besides its location
   (`git_workflow` as in `update_project`, except that an item absent or `null` follows the application-wide value, there
   being nothing to leave alone; every project a `parent` source adds takes the same values). A `git`
@@ -2522,17 +2532,29 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   agent, and anything `switch_session_account` refuses is refused in prose and changes nothing; the session must still
   be the caller's once the switch holds its claim.
 - `list_sessions` answers every running session but the caller's, in every console and project, console sessions
-  included, with `owner`, `owner_kind`, `yours` and `your_owner`, narrowed by the optional `console`, `project`,
-  `owner` and `yours` filters, all of which must match; `get_session` (whose optional `output_bytes`, 1 to 65536 and
-  8192 by default, sets the length of the terminal output tail) and `share_info` reach any session, whichever console
-  or project it is in, while the tools that act on a session (`send_message`, `rename_session` and so on) stay with the
-  session's owner. `share_info` to an interrupted session keeps the information in the store until the session is
-  resumed, and is refused for an archived one. See `docs/product/information-between-sessions.md`.
-- `get_account_quotas` takes an optional `refresh`: the accounts it lists are read again first where their last
-  attempt is at least 60 seconds old, without ever starting a quota window. See "Reading quotas from a session" in
+  included, with `owner`, `owner_kind`, `yours` and `your_owner`, narrowed by the optional `console`, `project`, `owner`
+  and `yours` filters, all of which must match. The optional `status` picks which sessions are listed: `live` (the
+  default) the ones with a process, `interrupted` the ones whose process ended without their being archived (the status
+  each shows is `interrupted`; a session being restarted for a change of sharing counts as live), and `any` both;
+  archived sessions are never listed, they are `list_archived`'s, and any other value is refused; `get_session` (whose
+  optional `output_bytes`, 1 to 65536 and 8192 by default, sets the length of the terminal output tail) and `share_info`
+  reach any session, whichever console or project it is in, while the tools that act on a session (`send_message`,
+  `rename_session` and so on) stay with the session's owner. `share_info` to an interrupted session keeps the
+  information in the store until the session is resumed, and is refused for an archived one. See
+  `docs/product/information-between-sessions.md`.
+- `get_account_quotas` takes an optional `agent` (`claude`, `codex` or `grok`), listing only that agent's accounts
+  (every agent's when it is left out), and an optional `refresh`: the accounts it lists are read again first where their
+  last attempt is at least 60 seconds old, without ever starting a quota window. See "Reading quotas from a session" in
   `docs/product/account-quotas.md`.
-- `list_pages`, a console session's only, lists the report pages it pushed, or with `page` answers one of them with
-  its HTML. See `docs/product/report-panel.md`.
+- `show_page`, `list_pages` and `delete_pages` are the report panel's tools, offered to a console session and to a
+  project session that faces the user (unbound, or a lead session); a bound project session has none, since it reports
+  to its owner. Pages are kept per session. `list_pages` lists the report pages the caller pushed, or with `page`
+  answers one of them with its HTML. `delete_pages` withdraws pages the caller pushed, for good: `pages` names their ids
+  or `all: true` takes every one, exactly one of the two. A named id that is not one of the caller's pages (another
+  session's included) is refused as an id that names no page, and then nothing is deleted. It answers `deleted`, the ids
+  removed (empty when `all` found none; checked and removed in one step, so a page two calls delete at once is reported
+  by only one), broadcasts `pages_deleted` for them, and deleting the newest page makes the one before it the newest,
+  the one `submit_page` accepts. See `docs/product/report-panel.md`.
 - Every session a tool describes (`list_sessions`, `list_projects`, `get_session` and the rest) carries the facts the
   write tools depend on: `account` (the account's id, `default` for the agent's default account, as
   `get_account_quotas` and `switch_session_account` name it) and `account_name`, never the account's directory;
@@ -2569,8 +2591,24 @@ console, changes a project's path, source, host, remote or `trust_consent`, or w
   note, not a final reply. `unavailable: true` (with `total` and `older` 0 and no entries) says the record could not
   be found or read; a session with no conversation answers `unavailable: false` and no entries. It reads what the
   `read_session_history` control request reads, and no tool calls.
-- `list_archived` takes a required `project`, by id in any console or by name (a name that names one project in the
-  caller's console, else in all consoles; more than one is refused), for every role.
+- `list_archived`, for every role, answers `{ sessions, total }`, the archived sessions of every console, console
+  sessions included, whichever session owns them, newest archived first, narrowed by the optional `console` (an id, or a
+  name that names one console), `project` (an id in any console, or a name that names one project in the caller's
+  console, else in all consoles; more than one is refused; with `console` given, the id or name must be one of that
+  console's projects), `owner` (a session id: the sessions that were bound to it when archived) and `kind` (`console` or
+  `project`) filters, all of which must match. The optional `limit` (1 to 200, 50 by default) caps how many sessions are
+  described, each in full; `total` counts all that match, so a `total` above the length of `sessions` means more exist,
+  and the way to reach them is narrower filters (`owner`, `project`), not a larger `limit`. A `console`, `project` or
+  `owner` that names nothing, a `kind` of any other value, a `limit` out of range, and `kind: console` together with a
+  `project` (a console session is in no project) are refused. `list_sessions` takes `console`, `project` and `owner` the
+  same way.
+- `reopen_session` takes `session` (one of the caller's, archived or interrupted), an optional `text` to deliver once it
+  runs, and an optional `model` and `effort` to reopen it with; they are given as the `model` and `effort` of
+  `new_session` are, and become the session's own overrides. They are checked against what the session's agent offers
+  under the session's own account, as `list_agent_models` lists it (`invalid_launch_setting` otherwise, with nothing
+  reopened or recorded), and put back if the relaunch fails; a value left out keeps what the session has, and a blank
+  one is the agent's own default. The session stays on its agent and account (`switch_session_account` moves it).
+  Archived owners that come back with it keep their settings. It answers `{ session }`.
 - `get_session_branches` takes an optional `session` (any session, defaulting to the caller) and answers
   `{ session, branches }`, each branch `{ branch, project, worktree, worktree_status, uncommitted_changes }`:
   `worktree_status` is `checked_out`, `gone`, `none` or `unknown` (`git` could not be run or the worktrees could not be

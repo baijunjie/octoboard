@@ -767,10 +767,12 @@ impl Session {
     }
 }
 
-/// One page a console session pushed to its report panel. It belongs to that console session, not
-/// to its console. Every page is kept, so the panel can be paged back through; `anchor_message_id`
-/// records the conversation position the page was pushed at and is stored only (see "Data model"
-/// in `docs/architecture.md`), and no agent exposes a message id to put in it yet.
+/// One page a session pushed to its report panel: a console session, or a project session that
+/// faces the user (`show_page`). It belongs to that session, not to its console or project:
+/// `console_session_id` is the session that pushed it, of either kind. Every page is kept, so the
+/// panel can be paged back through; `anchor_message_id` records the conversation position the page
+/// was pushed at and is stored only (see "Data model" in `docs/architecture.md`), and no agent
+/// exposes a message id to put in it yet.
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
     pub id: String,
@@ -1973,6 +1975,8 @@ pub enum RequestBody {
     ReleaseSession {
         session: String,
     },
+    /// The pages a session pushed. `console_session` is the session that pushed them, a console
+    /// session or a project session.
     ListPages {
         console_session: String,
     },
@@ -2676,7 +2680,7 @@ pub enum Event {
         consoles: Vec<crate::config_import::ImportedConsole>,
     },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
-    /// HTML document, and only the console session the user is looking at needs its pages, so the
+    /// HTML document, and only the session the user is looking at needs its pages, so the
     /// panel asks for them instead — and asks again after every `snapshot`, which is what keeps it
     /// correct across a `page_created` the client was too far behind to receive. A
     /// lagging client is sent a fresh snapshot in place of the events it missed, on the socket it
@@ -2686,10 +2690,16 @@ pub enum Event {
         console_session_id: String,
         pages: Vec<Page>,
     },
-    /// A page the console session just pushed. The panel showing that console session refreshes to
-    /// it.
+    /// A page a session just pushed. The panel showing that session refreshes to it.
     PageCreated {
         page: Page,
+    },
+    /// Pages a session withdrew with `delete_pages`, by id. `console_session_id` names the session
+    /// that pushed them (the field's name is the wire's, though a project session can push pages
+    /// too). The panel showing that session drops them.
+    PagesDeleted {
+        console_session_id: String,
+        pages: Vec<String>,
     },
     /// The reply to `probe_path_links`: one entry per asked path, in the order asked.
     PathLinks {

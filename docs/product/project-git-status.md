@@ -156,6 +156,29 @@ again until its next check, or until its refs change (see "Following changes to 
 - Finally the branch may be pulled; see "Automatically pulling repositories" and "Pulling one project by hand"
   below.
 
+### Reading the status from a session
+
+Every tool that gives a project with its settings — `get_project`, `list_projects` for the caller's own console,
+`add_project` and `update_project` (see "A project's settings" in `docs/product/agent-settings-tools.md`) — carries the
+project's **`git_status`**: the status the daemon holds for it, the one the badge shows. Reading it never starts a
+check, fetches nothing and runs no `git`, and no tool starts a check.
+
+`git_status` is `null` while the daemon holds no status for the project: nothing has checked it or re-read its refs
+since the daemon started, for instance because its console has not been the current one. Otherwise it is:
+
+| Field | Contents |
+|---|---|
+| `repository` | `false` when the directory is not a git repository; the other fields are then empty. |
+| `branch` | The current branch, or the short commit id while `detached`. |
+| `detached` | Whether the repository is on a detached commit. |
+| `upstream` | The branch's upstream, or `null`. |
+| `ahead`, `behind` | How many commits the branch is ahead of and behind its upstream. |
+| `activity` | `idle`, `checking`, `pulling` or `pushing`. |
+| `error` | The message of the last failed check, with any credential in a URL it names removed, as from the remote URL (see "A project's settings" in `docs/product/agent-settings-tools.md`); `null` when none. |
+| `checked_seconds_ago` | How many seconds ago the last check completed, counted on the wall clock, so time the machine spent asleep is part of it; `null` when none has completed since the daemon started, the branch and counts then being only what the repository's local refs gave. |
+
+The counts are as fresh as the last check, so they may be stale by `checked_seconds_ago`.
+
 ## Following changes to the repository's refs
 
 Between checks, the badge follows what happens in the repository itself: a commit made by an agent session or in a

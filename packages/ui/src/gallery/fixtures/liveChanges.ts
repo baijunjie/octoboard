@@ -1,4 +1,4 @@
-import type { Account, AccountQuota, Agent, AgentAvailability, ShellTerminal } from "../../protocol";
+import type { Account, AccountQuota, Agent, AgentAvailability, Event as DaemonEvent, Page, ShellTerminal } from "../../protocol";
 import { accountQuotaOf } from "../../quota/accountQuotaOf";
 import type { LiveChange, Step } from "../scenario";
 import { ALL_AGENTS } from "./builders";
@@ -59,4 +59,34 @@ export function terminalOpened(id: string, label: string, terminal: ShellTermina
 /** The shell terminal `terminal` closed by another window. */
 export function terminalClosed(id: string, label: string, terminal: string): LiveChange {
   return { id, label, steps: [(ui) => ui.daemonEvents({ type: "shell_terminal_deleted", shell_terminal: terminal })] };
+}
+
+// A session's report pages are not in the snapshot, so these act on the pages the store holds for it. The protocol
+// names the session `console_session_id` in both events, whichever kind of session pushed them.
+
+/** `page` pushed to its session, appended as the daemon's `page_created` does; does nothing (no event) while a page of
+ * that id is there. The next push after the page is deleted brings it back. */
+export function pagePushed(id: string, label: string, page: Page): LiveChange {
+  const step: Step = (ui) =>
+    ui.daemonEvents((state): DaemonEvent | null =>
+      state.pages.get(page.console_session_id)?.some(({ id: held }) => held === page.id) ? null : { type: "page_created", page });
+  return { id, label, steps: [step] };
+}
+
+/** The pages of `session` withdrawn with `delete_pages`, chosen from what it holds by then; none held sends nothing,
+ * as the daemon's `pages_deleted` never names no page. */
+const pagesDeleted = (session: string, chosen: (held: Page[]) => Page[]): Step => (ui) =>
+  ui.daemonEvents((state): DaemonEvent | null => {
+    const pages = chosen(state.pages.get(session) ?? []).map((page) => page.id);
+    return pages.length > 0 ? { type: "pages_deleted", console_session_id: session, pages } : null;
+  });
+
+/** The newest page of `session` withdrawn with `delete_pages`, whichever it is by then. */
+export function latestPageDeleted(id: string, label: string, session: string): LiveChange {
+  return { id, label, steps: [pagesDeleted(session, (held) => held.slice(-1))] };
+}
+
+/** Every page `session` holds withdrawn at once. */
+export function allPagesDeleted(id: string, label: string, session: string): LiveChange {
+  return { id, label, steps: [pagesDeleted(session, (held) => held)] };
 }

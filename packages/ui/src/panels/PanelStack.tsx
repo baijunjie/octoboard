@@ -23,6 +23,7 @@ import {
   shownKinds,
   stackedKinds,
   toggleMaximized,
+  unavailableKinds,
   type PanelKind,
   type PanelStack as Stack,
 } from "./stackState";
@@ -113,6 +114,7 @@ export function PanelStack({
   project,
   active,
   selectedSessionId,
+  reportSessionId,
   focusTerminal,
   peek,
   peekKind,
@@ -128,6 +130,8 @@ export function PanelStack({
   project: Project | undefined;
   active: boolean;
   selectedSessionId: string | undefined;
+  /** The session whose pages the Report panel shows (`PanelContentProps`). */
+  reportSessionId?: string;
   focusTerminal: () => void;
   /** The floating pane's hover reveal; `undefined` while the pane is docked. */
   peek: PanePeek | undefined;
@@ -151,15 +155,20 @@ export function PanelStack({
 }): React.ReactElement {
   const t = useT();
   const order = OWNER_KINDS[owner.kind];
-  const { stacks, setStack: setStackOf, persist } = usePanelStacks();
+  // A project's stack carries the Report panel of the selected session while it has pages.
+  const { stacks, setStack: setStackOf, persist } = usePanelStacks(owner.kind === "project" ? reportSessionId : undefined);
   // A panel floating over the terminal is kept while it fades away after closing (`AsidePane.tsx`
   // unmounts the stack once it has gone), unless a hover's card has taken the pane meanwhile.
   const floatingKind = floating ? shownKinds(floating.stack, order)[0] : undefined;
   const ownerId = ownerKey(owner);
   const [leaving, setLeaving] = useState<{ owner: string | undefined; kind: string }>();
   if (floatingKind !== undefined && (floatingKind !== leaving?.kind || ownerId !== leaving?.owner)) setLeaving({ owner: ownerId, kind: floatingKind });
+  // A session's kind with no session to show (the Report panel, once the last page is deleted) has no
+  // content left to show, floating in or fading away: its card goes at once, and hands its focus on
+  // (`HandOffOnUnmount` below).
+  const sessionGone = (kind: string) => unavailableKinds(owner.kind, reportSessionId).includes(kind);
   // Another owner's card is never shown for this one (Back or Forward while the pane fades away).
-  const keep = floating && floatingKind === undefined && leaving !== undefined && leaving.owner === ownerId && !peek?.active ? leaving.kind : undefined;
+  const keep = floating && floatingKind === undefined && leaving !== undefined && leaving.owner === ownerId && !peek?.active && !sessionGone(leaving.kind) ? leaving.kind : undefined;
   const base = floating ? (keep !== undefined ? { open: [keep], shares: {} } : floating.stack) : stacks[owner.kind];
   const setStack = (next: Stack, options?: { persist?: boolean }) => setStackOf(owner.kind, next, options);
   const open = floatOnly ? [] : shownKinds(base, order);
@@ -172,7 +181,7 @@ export function PanelStack({
   } else if (peek?.active && peekKind !== undefined && order.includes(peekKind) && floatKind !== peekKind) {
     setFloatKind(peekKind);
   }
-  const stack: Stack = open.length > 0 ? base : { open: floatKind ? [floatKind] : [], shares: {} };
+  const stack: Stack = open.length > 0 ? base : { open: floatKind && !sessionGone(floatKind) ? [floatKind] : [], shares: {} };
   const kinds = shownKinds(stack, order);
   const stacked = stackedKinds(stack, order);
   const maximized = maximizedKind(stack, order);
@@ -281,7 +290,7 @@ export function PanelStack({
                   onClose: () => close(kind as PanelKind),
                 }}
               >
-                <CardContent Content={Content} owner={owner} project={project} active={active} selectedSessionId={selectedSessionId} focusTerminal={focusTerminal} peek={peek} frameKeys={frameKeys} onViewFile={onViewFile} resizing={covering && areaEasing} />
+                <CardContent Content={Content} owner={owner} project={project} active={active} selectedSessionId={selectedSessionId} reportSessionId={reportSessionId} focusTerminal={focusTerminal} peek={peek} frameKeys={frameKeys} onViewFile={onViewFile} resizing={covering && areaEasing} />
               </PanelFrameProvider>
             </section>
           </React.Fragment>

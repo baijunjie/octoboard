@@ -8,13 +8,13 @@ archives of any console.
 | Tool | Arguments | What it does |
 |---|---|---|
 | `get_session` | `session`, `output_bytes?` | The record of any session, of any console — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, and the names of the branches it is responsible for — plus a tail of what it has printed (see "Session records" below). |
-| `list_sessions` | `console?`, `project?`, `owner?`, `yours?` | The running sessions other than the caller, in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
+| `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `status?` | The running sessions other than the caller — or with `status` the interrupted ones, or both — in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
 | `read_session_history` | `session`, `limit?`, `before?` | What any session's conversation held, a page at a time from the latest. See "Reading a session's history" below. |
 | `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project and worktree. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
 | `list_agent_models` | `agent`, `account?` | The models an agent offers and the reasoning-effort levels of each. See "Reading the models an agent offers" below. |
 | `list_consoles` | — | Every console, each as `console` (its id), `name` and `yours` (whether it is the caller's own console). The id, or a name that names one console, is what a `console` argument takes. |
 | `list_projects` | `console?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects. See "Listing a console's projects" below. |
-| `list_archived` | `project` | The archived sessions of any project of any console, whoever owns them, each with its owner. The project is named by its id, in any console, or by its name — looked for among the caller's own console's projects first, else among every console's; a name that names more than one project is refused. |
+| `list_archived` | `console?`, `project?`, `owner?`, `kind?`, `limit?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed. See "Listing archived sessions" below. |
 | `get_account_quotas` | `agent?`, `refresh?` | Each account's plan quota, optionally read again first. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
 
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
@@ -23,8 +23,9 @@ would collide with them. That holds for a bound session as much as for one that 
 is offered every read too, at the cost of a few more tool descriptions in its context. What stays narrower is a read of
 settings — `get_project` is a project session's read of its own project (see `docs/product/agent-settings-tools.md`),
 and `get_console` and `get_settings` are the console session's (see "The console session's tools" in
-`docs/product/hub-orchestration.md`) — and `list_pages`, a console session's read of the report panel pages it pushed
-itself (see "Reading back the pages pushed" in `docs/product/report-panel.md`). What a session may do to another is
+`docs/product/hub-orchestration.md`) — and `list_pages`, the read of the report panel pages the caller pushed itself,
+offered with the other report panel tools to a console session and to an unbound project session or a lead session
+(see "Reading back the pages pushed" in `docs/product/report-panel.md`). What a session may do to another is
 narrower too (see "Which sessions an owner drives" in `docs/product/hub-orchestration.md`). The tool descriptions, the
 console session's instructions and every project session's role description tell it that a session it does not own is
 somebody else's and is to be left alone, whatever it can read of it.
@@ -41,6 +42,29 @@ the console its project is in. Both answers carry `console`, the id of the conso
 - **Another console**: each project only as `project` (its id), `name`, `description` and `tags` — what
   `request_session` and `request_resume_session` need to target one of its projects — with no sessions and no
   settings.
+
+## Listing archived sessions
+
+`list_archived` lists archived sessions of every console, project sessions and console sessions alike, whichever
+session owns them; an interrupted session is not archived, and is listed by `list_sessions` with `status` (see
+"Narrowing the list of sessions" in `docs/product/information-between-sessions.md`). It answers with `sessions`, each a
+session record as in "Session records" below, and `total`. Its optional arguments narrow the list, and a session is
+listed only when it matches every one given:
+
+- `console`: only the sessions of that console, named by its id or by a name that names one console.
+- `project`: only the sessions of that project, named by its id, in any console, or by its name — looked for among the
+  caller's own console's projects first, else among every console's. Given with `console`, the project is looked for
+  among that console's projects only, by id or by name, and one that is not among them is refused.
+- `owner`: only the sessions that were bound to that session when they were archived, named by its id.
+- `kind`: `console` for console sessions only, `project` for project sessions only. `kind: console` together with a
+  `project` is refused, a console session being in no project.
+- `limit`: how many sessions to return, a whole number from 1 to 200, 50 when left out.
+
+The **most recently archived come first**, at most `limit` of them; `total` counts every session that matches, so a
+`total` above the number of sessions returned means there are more. The tool's description tells the agent to narrow
+the filters — `owner`, with its own id to list just its own sessions, or `project` — rather than raise `limit`. A
+`console`, `project` or `owner` that names nothing, a name that names more than one console or project, a `kind` of
+any other value and a `limit` out of range are refused, with the reason in prose.
 
 ## Reading a session's history
 
@@ -88,10 +112,10 @@ a call runs nothing while an answer is fresh. The answer is `agent`, `account` (
 - `unavailable` is `null`, or, when the agent cannot be asked, `code` and `message` saying why (as in "While the list
   is being fetched, and when there is none" there), with `models` empty.
 
-The description of every `model` and `effort` a tool takes — `new_session`, `request_session`,
-`request_resume_session`, `handoff_session`, and the `launch` settings of `add_project`, `update_project` and
-`update_console` — points to it: a value given there must be one it lists, under the rules in "The Advanced section"
-in `docs/product/model-and-reasoning-effort.md`.
+The description of every `model` and `effort` a tool takes — `new_session`, `request_session`, `request_resume_session`,
+`handoff_session`, `reopen_session`, and the `launch` settings of `add_project`, `update_project` and `update_console` —
+points to it: a value given there must be one it lists, under the rules in "The Advanced section" in
+`docs/product/model-and-reasoning-effort.md`.
 
 ## Session records
 

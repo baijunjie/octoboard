@@ -404,8 +404,10 @@ export interface Ui {
   /** Applies daemon events to the store, in order, as the connection does for those the daemon broadcasts, so a
    * collection changes under an open view the way another window or the machine changes it (an account added, a
    * terminal closed there). An event may be written as a function of the store's state by then, for a whole-list
-   * event that must keep the rest of the list. It returns once the changes have had time to animate. */
-  daemonEvents: (...events: (DaemonEvent | ((state: State) => DaemonEvent))[]) => Promise<void>;
+   * event that must keep the rest of the list; such a function answers `null` when the daemon would send nothing at
+   * that state (a deletion of pages that are not there), so no event the daemon never sends reaches the store. It
+   * returns once the changes have had time to animate. */
+  daemonEvents: (...events: (DaemonEvent | ((state: State) => DaemonEvent | null))[]) => Promise<void>;
 }
 
 /** The icon the badge's tooltip trigger draws for `status`, by the name lucide gives its class (`GitBadge.tsx`
@@ -672,7 +674,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (!daemon) throw new Error("This scenario has no daemon behind it to send events from");
       // Not imported above: the store loads after the gallery frame has registered its own listeners (`frame.tsx`).
       const { applyDaemonEvent } = await import("../store");
-      for (const event of events) applyDaemonEvent(daemon.store, typeof event === "function" ? event(daemon.store.getState()) : event);
+      for (const event of events) {
+        const sent = typeof event === "function" ? event(daemon.store.getState()) : event;
+        if (sent) applyDaemonEvent(daemon.store, sent);
+      }
       await wait(300);
     },
     async key(key) {

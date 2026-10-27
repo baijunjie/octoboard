@@ -190,14 +190,26 @@ pub(super) fn resolve_project(
     console_id: &str,
     wanted: &str,
 ) -> Result<Project> {
+    project_of_console(state, console_id, wanted, "this console")
+}
+
+/// The project of console `console_id` that `wanted` names, by id or by a name that names exactly
+/// one. `place` words the refusals: "in {place}" for an ambiguous name, "{place} has no project"
+/// for none.
+fn project_of_console(
+    state: &Arc<AppState>,
+    console_id: &str,
+    wanted: &str,
+    place: &str,
+) -> Result<Project> {
     let projects = console_projects(state, console_id)?;
     if let Some(project) = projects.iter().find(|project| project.id == wanted) {
         return Ok(project.clone());
     }
     let named = projects.iter().filter(|project| project.name == wanted);
-    match unique(named, wanted, "project", " in this console")? {
+    match unique(named, wanted, "project", &format!(" in {place}"))? {
         Some(project) => Ok(project.clone()),
-        None => bail!("this console has no project `{wanted}`"),
+        None => bail!("{place} has no project `{wanted}`"),
     }
 }
 
@@ -222,6 +234,26 @@ pub(super) fn find_project(
         Some(project) => Ok(project.clone()),
         None => bail!("there is no project `{wanted}`"),
     }
+}
+
+/// [`find_project`] for a read that also names a console: the project is looked for among that
+/// console's only, not the caller's first, so `{console: "Other", project: "app"}` means Other's
+/// `app`. Without a console it is [`find_project`].
+pub(super) fn find_project_in(
+    state: &Arc<AppState>,
+    caller: &Session,
+    console: Option<&Console>,
+    wanted: &str,
+) -> Result<Project> {
+    let Some(console) = console else {
+        return find_project(state, caller, wanted);
+    };
+    project_of_console(
+        state,
+        &console.id,
+        wanted,
+        &format!("console `{}`", console.id),
+    )
 }
 
 /// A console by id, or by a name that is unambiguous.

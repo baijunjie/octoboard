@@ -5,8 +5,11 @@ panels**. Each **panel** is a card of its own, of one **kind**, and which kinds 
 
 | Owner | Kinds |
 |---|---|
-| A project | **Files**, the **Files panel**: the project's files and its repository's changes (see `docs/product/project-pane.md`); **Terminal**, the **Terminal panel**: the project's shell terminals as tabs (see `docs/product/terminal-panel.md`) |
+| A project | **Report**, the **report panel**: the pages the selected project session pushed, only while it has some (see "A project session's Report panel" below and `docs/product/report-panel.md`); **Files**, the **Files panel**: the project's files and its repository's changes (see `docs/product/project-pane.md`); **Terminal**, the **Terminal panel**: the project's shell terminals as tabs (see `docs/product/terminal-panel.md`) |
 | A console session | **Report**, the **report panel**: the pages the console session pushed (see `docs/product/report-panel.md`) |
+
+A project's Files and Terminal panels are the project's own, the same whichever of its sessions is selected; its Report
+panel is the selected project session's own.
 
 **The right pane is on screen while at least one of its owner's panels is open**, docked beside the terminal in a
 window **782 px** wide or wider; with none open there is no right pane in the row, and its width goes to the terminal.
@@ -73,8 +76,8 @@ What follows is how panels open and close in a window 782 px wide or wider; belo
 floats over the terminal" below.
 
 - **Each kind is in its owner's stack at most once.**
-- **Panels are stacked in a fixed order of kinds**, whatever order they were opened in: in a project's stack the Files
-  panel is above the Terminal panel.
+- **Panels are stacked in a fixed order of kinds**, whatever order they were opened in, top to bottom: Report, Files,
+  Terminal.
 - **Close panel** takes a panel out of the stack. Its height goes to the panels that remain, in proportion to theirs.
 - **Closing the last panel hides the right pane**, at once; the terminal takes its width back.
 - **Browse files** opens the Files panel in the project's stack, and so puts the pane on screen (see "Opening a
@@ -87,15 +90,16 @@ resized (see "Output, scrollback and size" in `docs/product/session-terminal.md`
 
 ## The panel toggles in the top bar
 
-At the top bar's end there is **one toggle per kind of the current owner's panels**: the Terminal toggle and then
-the Files toggle while a project owns the right pane (the reverse of their stacking order), the Report toggle while a
+At the top bar's end there is **one toggle per kind of the current owner's panels**, in their stacking order: the
+Report toggle (only while the selected project session's Report panel is offered, see "A project session's Report
+panel" below), the Files toggle and the Terminal toggle while a project owns the right pane, the Report toggle while a
 console session does, and none while nothing owns it (see "The top bar" in `docs/product/window-layout.md`).
 
 | Toggle | Icon | Label while its panel is not on screen | Label while it is |
 |---|---|---|---|
+| Report | a document | Show report panel | Hide report panel |
 | Files | a closed folder | Show files panel | Hide files panel |
 | Terminal | a terminal window with a prompt | Show terminal panel | Hide terminal panel |
-| Report | a document | Show report panel | Hide report panel |
 
 - **The label says what pressing it will do**, and is also its tooltip.
 - **The icon stays the same whatever the state.** A toggle whose panel is on screen is drawn with the pressed fill, the
@@ -206,7 +210,7 @@ upper one first.
 ## Maximizing the Terminal panel
 
 Only the Terminal panel can be maximized, from **Maximize panel** in its header (see "A panel's header" above), while
-it is open in the pane's column, alone or beside the Files panel.
+it is open in the pane's column, alone or beside other panels.
 
 **Maximized, the Terminal card leaves the column and covers the terminal's area** — the agent terminal's, or what
 stands in its place, the archive view included — and nothing else:
@@ -216,15 +220,14 @@ stands in its place, the archive view included — and nothing else:
   through. The covered area cannot be used, with the pointer or the keyboard, while it is covered.
 - **The sidebar keeps its own state**, docked, hidden, floating in or as a drawer, and a floating sidebar or its drawer
   comes up above the maximized card as usual.
-- **An open Files panel stays docked in the column**, taking the column's full height, with no resize handle beside
-  it; the right pane's width handle stays with the column.
-- **With the Files panel closed, the column folds away**: the terminal's area, and the maximized card over it, reach
-  the window's end edge, and the pane's width handle goes with the column. Opening or closing the Files panel
-  meanwhile — its toggle, Browse files — brings the column back or folds it again, and leaves the Terminal panel
-  maximized.
-- **Floating Files in**: with the Files panel closed, resting the mouse on its toggle floats the Files card in over the
-  maximized Terminal panel, as in "Floating a panel in" above; pressing the toggle docks it in the column beside the
-  maximized card.
+- **The other open panels stay docked in the column** — Report, Files — sharing the column's full height; the right
+  pane's width handle stays with the column.
+- **With no other panel open, the column folds away**: the terminal's area, and the maximized card over it, reach the
+  window's end edge, and the pane's width handle goes with the column. Opening or closing another panel meanwhile — its
+  toggle, Browse files — brings the column back or folds it again, and leaves the Terminal panel maximized.
+- **Floating another panel in**: with the column folded away, resting the mouse on another panel's toggle floats its
+  card in over the maximized Terminal panel, as in "Floating a panel in" above; pressing the toggle docks it in the
+  column beside the maximized card.
 
 If keyboard focus was in the terminal's area when Maximize panel is pressed, it moves into the Terminal panel first,
 where `F6` would land in it (see "Keyboard focus" in `docs/product/terminal-panel.md`). While the card covers the
@@ -245,6 +248,29 @@ It stays maximized when the right pane passes to another project, showing that p
 is closed, showing its empty state (see "Starting a terminal" in `docs/product/terminal-panel.md`).
 
 Whether the Terminal panel is maximized is not remembered: a reload shows it in the column.
+
+## A project session's Report panel
+
+While a project owns the right pane and one of its project sessions is selected, the project's stack can carry that
+session's **Report panel**, showing the pages it pushed (see `docs/product/report-panel.md`); only an unbound project
+session or a lead session pushes pages. With no project session of that project selected, the stack has no Report
+panel.
+
+- **It is offered only while the session has pages**, or while listing them failed, so that its failure card can say
+  why and offer Try again (see "Paging through the history" in `docs/product/report-panel.md`). Its pages are listed
+  when the session is selected; until that listing answers, a session not known to have pages has neither the panel nor
+  the Report toggle. When the window reloads its state from the daemon, the last answer for the session stands until
+  the new listing answers, so the panel and its toggle do not go and come back.
+- While it is not offered, it has no toggle in the top bar and is not in the stack: the Files and Terminal toggles are
+  the only ones, and the pane is on screen only while one of those panels is open.
+- **A page pushed** to a session with none brings the panel and its toggle in, the panel open unless the user closed it
+  for that session (see "What is remembered" below).
+- **When the session's last page is deleted** (see "Withdrawing pages" in `docs/product/report-panel.md`), the panel
+  and its toggle go at once, docked or floating, and the pane goes too when that was its only open panel. A card the
+  Report toggle had floated in on hover goes with them. Keyboard focus held in the panel or on the toggle is handed to
+  the agent terminal, as when a panel holding focus closes (see "Panels and keyboard focus" below).
+- **Below 782 px**, a Report panel floating over the terminal that went because its pages were deleted does not float
+  back by itself when a page is pushed later: only its toggle comes back, and pressing it floats the panel again.
 
 ## Switching projects under an open panel
 
@@ -271,14 +297,20 @@ in the console sessions' stack, so the right pane is shown. A stored stack that 
 Which panel floats over the terminal below 782 px is not part of the stacks and is not remembered. A right pane the user
 had hidden with the earlier pane toggle of Octoboard starts with no panel open in either stack.
 
+**Whether a project session's Report panel is open is kept per session**, not in the projects' stack: it is open by
+default, and closing it is remembered for that session alone, so another session of the project still has its own
+open. The window keeps the closes of the 200 sessions closed most recently; a session dropped from that list has its
+Report panel open again. They are kept in the same browser storage as the stacks.
+
 ## Panels and keyboard focus
 
 Each panel is a **named region** — the Files panel named for the project's files, the Terminal panel for the project's
-terminals, the report panel "Report" — and each is a stop of its own in the `F6` cycle, in stacking order, except that a
-maximized Terminal panel comes first (see "Moving focus between regions with F6" in
+terminals, the report panel "Report" — and each is a stop of its own in the `F6` cycle, in stacking order (Report,
+Files, Terminal), except that a maximized Terminal panel comes first (see "Moving focus between regions with F6" in
 `docs/product/moving-focus-between-regions.md`). A panel only floating in is not a stop; a panel floating over the
 terminal below 782 px is.
 
 **Closing a panel that holds keyboard focus hands focus to the terminal** — or, where the terminal cannot take it,
 where it goes instead (see "With no session selected" in `docs/product/session-terminal.md`). So does the right pane
-going while its width handle holds focus.
+going while its width handle holds focus, a project session's Report panel going with its last page while it holds
+focus, and a panel toggle going from the top bar while it holds focus (see "A project session's Report panel" above).

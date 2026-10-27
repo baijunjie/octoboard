@@ -120,8 +120,8 @@ it("makes the toggles close a panel beside a maximized one, and the maximized on
 
 it("lists a maximized panel's F6 region first, where it lies, and each open panel as shown", () => {
   const project = toggleMaximized(openPanel(openPanel(empty, "files"), "terminal"), "terminal");
-  expect(Object.entries(shownPanelRegions(project, "project"))).toEqual([["panel-terminal", true], ["panel-files", true], ["panel-report", false]]);
-  expect(Object.entries(shownPanelRegions(restoreStack(project), "project"))).toEqual([["panel-files", true], ["panel-terminal", true], ["panel-report", false]]);
+  expect(Object.entries(shownPanelRegions(project, "project"))).toEqual([["panel-terminal", true], ["panel-report", false], ["panel-files", true]]);
+  expect(Object.entries(shownPanelRegions(restoreStack(project), "project"))).toEqual([["panel-report", false], ["panel-files", true], ["panel-terminal", true]]);
 });
 
 it("keeps the open kinds and shares of each owner across a reload but not the maximized panel", () => {

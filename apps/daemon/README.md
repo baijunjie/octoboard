@@ -187,7 +187,7 @@ binding, which the daemon checks on every call. The wire contract is in [`PROTOC
 | `reads.rs`, `models.rs`, `history.rs`, `quotas.rs`, `session_branches.rs` | The read-only tools every role has: `get_session`, `list_sessions`, `list_projects`, `list_consoles`, `list_archived`, `list_agent_models`, `read_session_history`, `get_account_quotas`, `get_session_branches` |
 | `handoff.rs`, `handover.rs`, `bindings.rs`, `account_switch.rs` | The owner tools: `handoff_session`, `handover_branches`, `transfer_session`, `release_session` and `bind_to_session`, `switch_session_account`; `handover.rs` also holds the branch checks (`branch_names`, `held_by`) that `new_session` and `request_session` use, and `bindings.rs` the owner-notice helpers the owner tools share (`running_or_leave`, `tell_now_or_leave`, `owner_notice`) |
 | `resume_request.rs` | `request_resume_session` |
-| `pages.rs`, `settings.rs` | A console session's report panel pages (`show_page`, `list_pages`), and the settings tools |
+| `pages.rs`, `settings.rs` | A session's report panel pages (`show_page`, `list_pages`, `delete_pages`), for a console session and a project session that faces the user, and the settings tools |
 | `stdio.rs` | `octoboardd mcp` itself: the stdio child forwarding calls to the daemon over loopback |
 
 ### `src/browse/`

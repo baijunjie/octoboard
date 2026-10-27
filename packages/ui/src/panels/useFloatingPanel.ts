@@ -42,12 +42,16 @@ export function useFloatingPanel({
   stacks,
   drawerOpen,
   focusTerminal,
+  unavailable = [],
 }: {
   floats: boolean;
   owner: OwnerKind | undefined;
   stacks: PanelStacks;
   drawerOpen: boolean;
   focusTerminal: () => void;
+  /** Kinds of `owner` with no panel just now (a project's Report panel while the selected session
+   * has no pages): one that was floating floats no more, and stays closed when its panel comes back. */
+  unavailable?: readonly string[];
 }): FloatingPanel {
   const [lastOpened, setLastOpened] = useState<Kinds>({});
   const seeded = (): Kinds =>
@@ -63,7 +67,11 @@ export function useFloatingPanel({
     if (drawerOpen && !seen.drawerOpen) setKinds({});
     else if (floats && !seen.floats) setKinds(drawerOpen ? {} : seeded());
   }
-  const kind = floats && owner && !drawerOpen ? kinds[owner] : undefined;
+  const floating = floats && owner && !drawerOpen ? kinds[owner] : undefined;
+  const kind = floating !== undefined && !unavailable.includes(floating) ? floating : undefined;
+  // A kind that went unavailable is no longer the one floating: it is not floated again by itself
+  // when it comes back, which would drop focus into a panel the user did not open.
+  if (owner && floating !== undefined && kind === undefined) setKinds((current) => ({ ...current, [owner]: undefined }));
 
   // Each `open` asks once, whether or not the kind it floats was already floating.
   const [focusRequest, setFocusRequest] = useState<{ kind: PanelKind }>();

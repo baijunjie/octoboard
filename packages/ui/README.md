@@ -151,7 +151,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   presses a control with the modifier down for that press alone, for what a press does when the page has not seen
   the modifier held.
 - Live changes are written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
-  `agentAvailability`, `terminalOpened`, `terminalClosed`), not raw `daemonEvents` steps; add a builder there for another
+  `agentAvailability`, `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted`, `allPagesDeleted`), not raw `daemonEvents` steps; add a builder there for another
   kind of collection.
 - Steps name a control in the language the window is in, so copy is never written out: controls through `ui.t`, a
   session row through `ui.session`, a change row through `ui.changeRow`. A name that is not copy (a branch, a file, a
@@ -279,8 +279,8 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/sidebar/` | The sidebar: one console's sessions and projects, the focus modes, rows and action menus, the project filter and new-session controls |
 | `src/archive/` | `ArchiveLayer` and `ArchiveView`: archived sessions listed over the terminal area, with deletion |
 | `src/terminal/` | The xterm.js terminal: `TerminalController`, `TerminalPane`, an archived session's history view, the project's shell terminals (`ShellTerminalPanel`) and terminal path links |
-| `src/report/` | A console session's report: `ReportPanel` and the sandboxed page frame |
-| `src/panels/` | The right pane, a stack of inset panel cards: `RightPane`, `PanelStack`, the registry of panel kinds (Files, Terminal, Report) and the persisted per-owner stack state |
+| `src/report/` | A session's report: `ReportPanel` and the sandboxed page frame, `listPages` (one page listing per session shared between the panel and the window's check) and `useProjectReportSession` (the project session whose Report panel a project's right pane carries) |
+| `src/panels/` | The right pane, a stack of inset panel cards: `RightPane`, `PanelStack`, the registry of panel kinds (stacked and toggled in the order Report, Files, Terminal) and the persisted per-owner stack state, with a project's Report open or closed per session |
 | `src/browser/` | The project browser, the Files panel's content: `ProjectBrowser` with its Files tree and search, and the Git mode's Changes view over uncommitted changes, branch comparison and commits; also the viewer over a file a terminal path link named |
 | `src/viewer/` | The read-only file viewer modal: `FileViewer` over the application-owned `ViewerSubject` model, with code, diff and Markdown surfaces; `renderer.tsx` is the only importer of `@pierre/diffs` |
 | `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, and `RailQuotaEntry`, the rail's quota entry and panel |

@@ -110,6 +110,9 @@ same set of fields:
 | `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
 | `git_workflow` | Its git workflow settings (see `docs/product/git-workflow-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `development`, `rebase_before_merge`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the four resolved values for it now (`rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is). |
 
+Each also carries `git_status`, the project's git state as the daemon last read it, read-only (see "Reading the status
+from a session" in `docs/product/project-git-status.md`).
+
 `list_projects` adds the sessions running in each project (see "Listing a console's projects" in
 `docs/product/what-every-session-reads.md`).
 

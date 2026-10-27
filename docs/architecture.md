@@ -324,9 +324,10 @@ are in `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind
   need no rewrite.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
-- `Page.console_session_id` is the console session that pushed the page, not its console: a console may hold several
-  console sessions, each with its own page history. Deleting a console session deletes its pages in the database, and
-  deleting a console therefore deletes all of them.
+- `Page.console_session_id` is the session that pushed the page — a console session, or an unbound or lead project
+  session — not its console or project: each session has its own page history, and the column keeps its name for either
+  kind. Deleting a session deletes its pages in the database, and deleting its project or console therefore deletes them
+  too.
 - `Page.anchor_message_id` records the conversation position a page was pushed at. It is stored and never read; a
   linkage that hid pages after the user rewinds the agent's conversation would read it, but no agent exposes a message
   id to put in it yet.

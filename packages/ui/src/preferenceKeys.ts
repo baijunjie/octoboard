@@ -12,6 +12,7 @@ export const PREFERENCE_KEYS = {
   sidebarWidth: "octoboard.sidebarWidth",
   asideWidth: "octoboard.reportWidth",
   panelStacks: "octoboard.panelStacks",
+  closedReportPanels: "octoboard.closedReportPanels",
   activeShellTerminals: "octoboard.activeShellTerminals",
   sidebarConsole: "octoboard.sidebarConsole",
   projectFocusIncludeConsoleSessions: "octoboard.projectFocusIncludeConsoleSessions",

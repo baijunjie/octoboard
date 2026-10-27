@@ -19,6 +19,7 @@ export function RightPane({
   layout,
   active,
   selectedSessionId,
+  reportSessionId,
   focusTerminal,
   frameKeys,
   peekKind,
@@ -35,6 +36,8 @@ export function RightPane({
   /** Whether the pane is on screen, docked or floating in. */
   active: boolean;
   selectedSessionId: string | undefined;
+  /** The session whose pages the Report panel shows (`PanelContentProps`). */
+  reportSessionId?: string;
   focusTerminal: () => void;
   frameKeys: PanelContentProps["frameKeys"];
   /** The kind whose toggle the pointer is on, shown while the pane floats in with no panel open. */
@@ -55,7 +58,7 @@ export function RightPane({
    * (`PanelStack`'s `floating`). */
   floating?: React.ComponentProps<typeof PanelStack>["floating"];
 }): React.ReactElement {
-  const shared = { owner, project, selectedSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, maximizeArea, areaEasing };
+  const shared = { owner, project, selectedSessionId, reportSessionId, focusTerminal, peekKind, frameKeys, onViewFile, onDismiss, maximizeArea, areaEasing };
   return (
     <>
       <AsidePane layout={layout}>
