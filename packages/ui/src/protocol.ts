@@ -973,6 +973,17 @@ export function scopeCause(raw: string | undefined): ScopeCause {
   return raw === "permission_denied" ? raw : sourceUnavailableCause(raw);
 }
 
+const PATH_LINK_REFUSED_CAUSES = ["ambiguous", "launchable", "not_private", "not_a_file_or_folder", "unreadable", "other"] as const;
+
+/** The `cause` of a `path_link_refused`: why a path inside a root is not opened from a link. */
+export type PathLinkRefusedCause = (typeof PATH_LINK_REFUSED_CAUSES)[number];
+
+/** `raw` as a `path_link_refused` cause: one this client does not know, or none, is `other` (a path that cannot be
+ * opened from a link, for no reason it can say). */
+export function pathLinkRefusedCause(raw: string | undefined): PathLinkRefusedCause {
+  return PATH_LINK_REFUSED_CAUSES.find((cause) => cause === raw) ?? "other";
+}
+
 const RELOCATION_CAUSES = ["permission_denied", "busy", "no_space", "config_unreadable", "sqlite_home", "symlink", "not_restored", "other"] as const;
 
 /** The `cause` of a `relocation_failed`: why a conversation move did not complete. */

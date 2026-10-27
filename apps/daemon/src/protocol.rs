@@ -3689,6 +3689,9 @@ pub mod error_code {
     pub const FILE_NOT_FOUND: &str = "file_not_found";
     pub const PERMISSION_DENIED: &str = "permission_denied";
     pub const OUTSIDE_SCOPE: &str = "outside_scope";
+    /// `open_path_link` found a path it will not open from a link, or could not look at; its `cause` says why, and
+    /// `detail` carries the system's text for an `unreadable` one.
+    pub const PATH_LINK_REFUSED: &str = "path_link_refused";
     pub const UNSUPPORTED_FILE_TYPE: &str = "unsupported_file_type";
     /// What was being read changed while it was read; reading again gets a consistent copy.
     pub const SOURCE_CHANGED: &str = "source_changed";

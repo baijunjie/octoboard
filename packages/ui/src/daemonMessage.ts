@@ -7,7 +7,7 @@ import { abbreviateHome } from "./pathDisplay";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, type MessageParams, type QuotaWindow, type SessionBranchState, type SharingEntryCause } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, pathLinkRefusedCause, type MessageParams, type QuotaWindow, type SessionBranchState, type SharingEntryCause } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -43,6 +43,13 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   file_not_found: ["path"],
   permission_denied: ["path"],
   outside_scope: ["path"],
+  "outside_scope.open": ["path"],
+  "path_link_refused.ambiguous": ["path"],
+  "path_link_refused.launchable": ["path"],
+  "path_link_refused.not_private": ["path"],
+  "path_link_refused.not_a_file_or_folder": ["path"],
+  "path_link_refused.unreadable": ["path"],
+  "path_link_refused.other": ["path"],
   unsupported_file_type: ["path"],
   // The UI's wording of `unsupported_file_type` with `file_type` `unmerged` (see `messageCode`); not a code
   // the daemon sends.
@@ -342,7 +349,7 @@ export const DETAIL_BLOCK_CODES = new Set([
   "project_branches_not_determined", "account_sharing_failed", "git_failed", "git_clone_failed", "git_remote_unreachable",
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout", "relocation_failed",
-  "directory_unreadable", "source_unavailable", "permission_denied",
+  "directory_unreadable", "source_unavailable", "permission_denied", "path_link_refused",
   "unreadable_request", "project_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable",
 ]);
 
@@ -407,12 +414,15 @@ export const UI_PARAMS: Record<string, MessageParams> = {
  * `daemon.unsupported_file_type.unmerged`, like `daemon.trust_reason.<code>`; `account_quota_exhausted`
  * with a `resets_at` time, worded as `daemon.account_quota_exhausted.resets`; `account_in_use` while the
  * account is being signed in, worded as `daemon.account_in_use.signingIn`, or `.both` with sessions too; a refused
- * avatar of an imported console, which names it, worded as `daemon.icon_too_large.import`). */
+ * avatar of an imported console, which names it, worded as `daemon.icon_too_large.import`; `path_link_refused` by its
+ * `cause`, worded as `daemon.path_link_refused.<cause>`, an unknown one as `other`; `outside_scope` of a refused link click, with `action` `open`, worded as `daemon.outside_scope.open`). */
 export function messageCode(code: string, params: MessageParams): string {
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
   if (code === "sharing_resume_failed" && params.still_running === "true") return "sharing_resume_failed.running";
   if (code === "relocation_failed" && (params.stage === "thread_record" || params.stage === "kept_staging")) return `${code}.${params.stage}`;
+  if (code === "outside_scope" && params.action === "open") return "outside_scope.open";
+  if (code === "path_link_refused") return `${code}.${pathLinkRefusedCause(params.cause)}`;
   if ((code === "icon_not_an_image" || code === "icon_too_large") && params.console_name) return `${code}.import`;
   if (code === "account_in_use" && params.signing_in === "true") return /^[1-9]\d*$/.test(params.sessions ?? "") ? "account_in_use.both" : "account_in_use.signingIn";
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;
@@ -578,7 +588,7 @@ export function daemonMessage(
   // A repair that names no entry keeps its reason only in the daemon's English message.
   if (code === "account_sharing_repair_failed" && fallback) return `${text}\n${fallback}`;
   // As plain text the diagnostic follows on a line of its own.
-  return (code === "project_branches_not_determined" || code === "account_sharing_failed") && params.detail ? `${text}\n${params.detail}` : text;
+  return (code === "project_branches_not_determined" || code === "account_sharing_failed" || code === "path_link_refused") && params.detail ? `${text}\n${params.detail}` : text;
 }
 
 /** Why the entries were left, one short line per cause ("You do not have permission to change skills/ and 1 more."),

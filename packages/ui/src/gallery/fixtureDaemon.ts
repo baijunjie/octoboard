@@ -555,6 +555,20 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
             return fail({ code: "file_not_found", params: { path: body.path, root }, message: `\`${body.path}\` does not exist` });
           }
+          // One that lies outside every root now is refused as the daemon refuses an open from a link, with the path as given.
+          if (typeof found === "object" && "outside" in found) {
+            return fail({ code: "outside_scope", params: { path: body.path, action: "open" }, message: `${body.path} leads outside the project, so it is not opened` });
+          }
+          // One found but not opened from a link is refused as the daemon refuses it, with the path as given and why.
+          if (typeof found === "object" && "refused" in found) {
+            // Only an `unreadable` cause carries the system's text, as the daemon sends `detail` for no other.
+            const detail = found.refused === "unreadable" ? found.detail : undefined;
+            return fail({
+              code: "path_link_refused",
+              params: { path: body.path, cause: found.refused, ...(detail !== undefined && { detail }) },
+              message: `${body.path} is not opened from a link: ${found.refused}`,
+            });
+          }
           return { type: "ack" };
         }
         case "open_project_directory": {
@@ -854,6 +868,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             if (found === undefined) return { path, kind: "none" };
             if (typeof found === "string") return { path, kind: found };
             if ("gone" in found) return { path, kind: found.kind };
+            if ("outside" in found) return { path, kind: found.kind, ...(found.view && { view: found.view }) };
+            if ("refused" in found) return { path, kind: found.kind, ...(found.view && { view: found.view }) };
             if ("kind" in found) return { path, kind: found.kind, view: found.view };
             return { path, kind: "file", view: found.view, ...(found.viewerOnly && { viewer_only: true }) };
           });

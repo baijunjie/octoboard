@@ -1207,6 +1207,62 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "docs" })).rejects.toMatchObject({ code: "file_not_found", params: { path: "docs", root: "project" } });
   });
 
+  it("answers the probe for a path the daemon will not open from a link, and refuses opening it with path_link_refused, the path as given, the cause and, for unreadable, the system's text", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      id: "path-link-refused",
+      group: "Terminal",
+      category: "exceptional",
+      title: "",
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: {
+        [`${project.path}/docs`]: { kind: "directory", refused: "ambiguous" },
+        [`${project.path}/bin/helper`]: { kind: "file", refused: "launchable", view: { path: "bin/helper" } },
+        "/private/tmp/sheet.png": { kind: "file", refused: "not_private" },
+        "/private/tmp/sheet2.png": { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" },
+        "/private/tmp/sheet3.png": { kind: "file", refused: "other" },
+        "/private/tmp/sheet4.png": { kind: "file", outside: true },
+      },
+    });
+    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["docs", "bin/helper", "/private/tmp/sheet.png"] })).resolves.toEqual({
+      type: "path_links",
+      links: [
+        { path: "docs", kind: "directory" },
+        { path: "bin/helper", kind: "file", view: { path: "bin/helper" } },
+        { path: "/private/tmp/sheet.png", kind: "file" },
+      ],
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "docs" })).rejects.toMatchObject({
+      code: "path_link_refused",
+      params: { path: "docs", cause: "ambiguous" },
+    });
+    // Only a refusal of cause unreadable carries the system's text.
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet.png" })).rejects.toMatchObject({
+      code: "path_link_refused",
+      params: { path: "/private/tmp/sheet.png", cause: "not_private" },
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet.png" })).rejects.not.toHaveProperty("params.detail");
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet2.png" })).rejects.toMatchObject({
+      code: "path_link_refused",
+      params: { path: "/private/tmp/sheet2.png", cause: "unreadable", detail: "Input/output error (os error 5)" },
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet3.png" })).rejects.toMatchObject({
+      code: "path_link_refused",
+      params: { path: "/private/tmp/sheet3.png", cause: "other" },
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet3.png" })).rejects.not.toHaveProperty("params.detail");
+    // A path that lies outside every root now is refused as outside_scope for an open, which words no remedy.
+    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["/private/tmp/sheet4.png"] })).resolves.toEqual({
+      type: "path_links",
+      links: [{ path: "/private/tmp/sheet4.png", kind: "file" }],
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet4.png" })).rejects.toMatchObject({
+      code: "outside_scope",
+      params: { path: "/private/tmp/sheet4.png", action: "open" },
+    });
+  });
+
   it("sends where a file the viewer shows (or a folder's README) is read from, and reads a worktree's files from the worktree", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");

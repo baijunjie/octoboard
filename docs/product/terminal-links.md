@@ -175,14 +175,23 @@ pointer has to move first.
   in the file viewer instead, when it has one the viewer can show; which file that is, and when and how the folder opens
   in the file manager instead, is in the same section. Anything else opens on the machine the daemon runs on — not on
   the machine a browser client happens to be open on: a file with its default application, a folder in the file manager.
-  A line given with the path plays no part there, so such a file opens as it would from the file manager. The path is
-  checked again by the rules above as it is opened on the host, and one that no longer passes them is not opened. One
-  written inside the project or a temporary directory where nothing is any more — deleted, moved or renamed since it
-  was checked, a file now where a folder on the way should be, or a symbolic link leading nowhere or round in a loop —
-  raises an error alert saying it does not exist any more, with the remedy of a path that is gone when it was in the
-  project (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). Any other that no longer passes
-  them is refused with an error alert saying it leads outside the project; the system failing to open it raises an
-  error alert too. A path link has no tooltip.
+  A line given with the path plays no part there, so such a file opens as it would from the file manager. A path link
+  has no tooltip. The path is checked again by the rules above as it is opened on the host, and one that no longer
+  passes them is not opened. Every error alert a click raises is titled that the path could not be opened; which of them
+  carry a remedy is in "Recovery and unexpected errors" in `docs/product/error-alerts.md`. The system failing to open
+  the path raises one. One written inside the project or a temporary directory where nothing is any more — deleted,
+  moved or renamed since it was checked, a file now where a folder on the way should be, or a symbolic link leading
+  nowhere or round in a loop — raises one saying it does not exist any more. Any other that no longer passes them is
+  refused with one whose sentence says why:
+  - it leads outside the project and the temporary directories — written outside them, or leading out of them through
+    a symbolic link;
+  - a relative path is found in more than one of the places it is looked for;
+  - it is something the system would run;
+  - inside a temporary directory, it can be changed by other users of the machine;
+  - it is not a file or folder;
+  - Octoboard is not allowed to read it, or a directory on the way to it;
+  - it could not be read for another reason, the system's own text then under **Error details**;
+  - for any other reason, or one the window does not know, only that it cannot be opened from a link.
 - **When paths are checked**: only paths on screen, or under the pointer, are checked; those that appear together are
   checked together, about 120 ms after they appear, at most 64 at a time. An answer is kept for about 30 seconds for a
   path found and about 10 seconds for one that was not, and a path still on screen is checked again once its answer is

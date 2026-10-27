@@ -46,6 +46,16 @@ it("opens a file past the read cap on the host, and reports any other failed rea
   expect(refused.toastError.mock.calls[0][3]).toBeUndefined();
 });
 
+it("reports a path outside every root (outside_scope) without the remedy of the browse views, whichever step of the click found it", async () => {
+  const outside = () => Promise.reject(new DaemonRequestError("outside", "outside_scope", { path: "/r/a.ts" }));
+  const toastError = vi.fn();
+  await openPathTarget({ target: { path: "/r/a.ts" }, project: "p", request: outside as never, viewFile: undefined, toastError });
+  expect(toastError.mock.calls[0][3]).toBe("none");
+  const read = click(target, outside);
+  await read.done;
+  expect(read.toastError.mock.calls[0][3]).toBe("none");
+});
+
 it("shows a file the system could launch in the viewer unread, and never opens it on the host", async () => {
   const launchable = click({ ...target, viewerOnly: true }, async () => readReply());
   await launchable.done;

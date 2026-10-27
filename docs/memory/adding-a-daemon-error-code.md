@@ -40,6 +40,12 @@ adds, in `packages/ui`:
   `reason`, `reason_code` or `title`: when the failure ends a launch, `report_failed_launch`
   (`apps/daemon/src/coordinator.rs`) writes those over the failure's own params. `reason` is also the daemon's English
   text, which the window scans for an operating-system error signature.
+- Where the code is in `DETAIL_BLOCK_CODES` (`packages/ui/src/daemonMessage.ts`), its `detail` shown as raw text of its
+  own: an error of it that carries `detail` is worded by `daemon.<messageCode>.summary` (`richMessageCode`), and with
+  that key missing the alert shows the daemon's own English message, which no type check or test catches. So where
+  `messageCode` words the code by a param such as `cause`, give a `.summary` key to every variant that could ever arrive
+  with `detail`, the one the normaliser maps an unknown `cause` to included (a newer daemon's cause with `detail` lands
+  there), not only the variants today's daemon sends `detail` with; never drop such a key as unused.
 - Where the remedy is done in Settings' Agent accounts section, a case in `recoveryAction`
   (`packages/ui/src/components/ErrorGuidance.tsx`). The alert then offers the button, and the recovery text says only
   what to do there, without naming the path to it. See `docs/product/error-alerts.md`, section "Recovery and unexpected
