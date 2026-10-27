@@ -82,8 +82,7 @@ answer either failure with a timer that takes focus back after a delay: it pulls
 
 The second-render focus is still too late for the modal's own react-aria dialog: `useDialog` checks from a passive
 mount effect, which React flushes before that render, whether focus is inside it, and when it is not, it takes focus
-off the dialog half a second later and gives it back only once no transition is running anywhere on the page — never,
-while a transition sits in a collapsed disclosure (`hidden="until-found"`), whose end Chrome does not report. So
+off the dialog half a second later and gives it back only once no transition is running anywhere on the page. So
 whenever the caller focuses the modal itself, pass `focusesItselfOnOpen` to `Dialog` / `DialogFrame`
 (`packages/ui/src/dialogs/Dialog.tsx`), with or without a `resetKey`, as `ErrorAlertHost` and an `unprompted`
 `ConfirmDialog` do; a caller with a `resetKey` then refocuses itself for each new subject. The flag keeps the frame's
