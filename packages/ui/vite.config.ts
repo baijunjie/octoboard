@@ -65,17 +65,17 @@ export default defineConfig(({ command }) => {
   // when the daemon itself serves it (src/daemon.ts). Without the variable there is no proxy, and the
   // UI is pointed at the daemon with `?port=` or `VITE_DAEMON_PORT` instead.
   //
-  // Both come from the root `.env` and `.env.local`, read here because vite never writes a non-`VITE_`
-  // value into `process.env` and loads this config before any `.env` of its own; `VITE_DAEMON_PORT`
+  // Both come from the root `.env.local`, read here because vite never writes a non-`VITE_` value
+  // into `process.env` and loads this config before any `.env` of its own; `VITE_DAEMON_PORT`
   // reaches `import.meta.env` through `process.env`. A `vite build` never loads them, so a build cannot
   // bake a dev port into the bundle — but `vitest` resolves this config with `command: "serve"` too, so
   // a test run does load them, and anything a test derives from the port varies with the developer's
-  // own `.env` (a separate process from the `vite build` the same script runs afterwards).
+  // own `.env.local` (a separate process from the `vite build` the same script runs afterwards).
   //
   // The variables stay out of `packages/ui/.env`: that directory is vite's own `envDir`, which a
   // `vite build` reads too, so a `VITE_DAEMON_PORT` there would go into a release bundle. Vite also
-  // expands `$VAR` in the files it loads itself, where the root files are read literally here.
-  if (command === "serve") loadEnv(".env", ".env.local");
+  // expands `$VAR` in the files it loads itself, where the root file is read literally here.
+  if (command === "serve") loadEnv(".env.local");
   const daemonPort = process.env.OCTOBOARD_DAEMON_PORT;
 
   return {

@@ -55,7 +55,8 @@ Per-package commands are in that package's doc.
 - [`eslint.config.mjs`](../eslint.config.mjs) — the repository-wide lint and formatting rules for JavaScript,
   TypeScript, TSX and Vue; [`rustfmt.toml`](../rustfmt.toml) is the Rust counterpart.
 - [`.env`](../.env), [`.env.local.example`](../.env.local.example), [`.env.secret.example`](../.env.secret.example) —
-  committed non-secret configuration and the templates for the gitignored machine-local and release-credential files.
+  the committed non-secret release and deployment configuration (no script reads it yet), and the templates for the
+  gitignored machine-local and release-credential files.
 - [`patches/`](../patches/) — the pnpm dependency patches registered by `patchedDependencies` in `pnpm-workspace.yaml`.
 - [`assets/branding/`](../assets/branding/) — brand source artwork that no app serves, including the logo the root
   README shows.

@@ -30,7 +30,7 @@ import {
   withoutUpdaterArtifacts,
 } from "./bundle.mjs";
 
-// Read only `.env.secret`: a `VITE_` entry in `.env` would reach the bundle `tauri build` makes.
+// Read only `.env.secret`: a `VITE_` entry in `.env.local` would reach the bundle `tauri build` makes.
 // The variables are then in the Tauri CLI's inherited environment.
 loadEnv(".env.secret");
 

@@ -38,7 +38,7 @@ Start `octoboardd` and read its port from the first line it prints on stdout (or
 - run `OCTOBOARD_DAEMON_PORT=<port> pnpm dev` and open the plain URL, which reaches the daemon through a same-origin
   `/ws` proxy (`vite.config.ts`).
 
-Both variables can also be set in the repo-root `.env` (commented out there) or a gitignored `.env.local`.
+Both variables can also be set in the repo-root `.env.local` (gitignored; template: `.env.local.example`).
 
 ### The UI state gallery
 
