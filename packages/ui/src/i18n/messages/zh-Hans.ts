@@ -78,6 +78,7 @@ export const zhHans: Translation<"other"> = {
   "error.recovery.connection": "请检查网络和守护进程连接；连接提示条提供 {retry} 时先重新连接，再重试操作。",
   "error.recovery.path": "请使用 {browse} 选择存在且可访问的文件夹或文件，或在对话框中修正路径，然后重试。",
   "error.recovery.hostPathGone": "它可能已被移动、重命名或删除。如果是移动或重命名，请在项目文件中找到它，再从那里重试。",
+  "error.recovery.readAccess": "请检查它的权限，需要时在系统隐私设置中允许 {appName} 访问，然后重试。",
   "error.recovery.sourceGone": "它可能已被移动、重命名或删除，也可能该处检出的分支中没有它。请将它恢复到该路径，然后重试。",
   "error.recovery.sourceLink": "该路径中有一段是符号链接，{appName} 在工作树中不会跟随它。请用实际的文件夹替换该链接，然后重试。",
   "error.recovery.sourceNotFolder": "该路径上的不是文件夹。请将文件夹放回该路径，然后重试。",

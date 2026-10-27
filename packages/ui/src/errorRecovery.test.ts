@@ -90,3 +90,18 @@ it("does not collapse distinct original exceptions behind the same failure summa
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
   }
 });
+
+it("gives a denied read its own remedy over the writing one its operating-system signature names", () => {
+  const error = new DaemonRequestError("denied", "permission_denied", { path: "/p", detail: "Permission denied (os error 13)" });
+  expect(classifyError(error)).toEqual({ kind: "actionable", recovery: "readAccess" });
+  expect(classifyError(error, "fileRead")).toEqual({ kind: "actionable", recovery: "fileRead" });
+});
+
+it.each([
+  ["permission_denied", { kind: "actionable", recovery: "access" }], ["busy", { kind: "actionable", recovery: "fileBusy" }],
+  ["other", { kind: "unexpected" }], ["a_future_cause", { kind: "unexpected" }], ["constructor", { kind: "unexpected" }],
+  [undefined, { kind: "unexpected" }],
+] as const)("words a conversation move that failed because of %s by its cause, an unknown one as other", (cause, expected) => {
+  const error = new DaemonRequestError("move failed", "relocation_failed", { path: "/p", stage: "copy", detail: "x", ...(cause && { cause }) });
+  expect(classifyError(error)).toEqual(expected);
+});

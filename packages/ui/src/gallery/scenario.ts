@@ -217,8 +217,12 @@ export interface Scenario {
    * `read_project_file` reads it (a worktree's files are `worktreeFiles`), and `viewerOnly` when the
    * system could launch it. A folder in the project is a bare `"directory"`, or `{ kind:
    * "directory", view }` when it has a README or index file, which `view` names; every other path
-   * is answered as `none`. */
-  pathLinks?: Record<string, Exclude<PathLinkKind, "none"> | { view: PathLinkView; viewerOnly?: true } | { kind: "directory"; view: PathLinkView }>;
+   * is answered as `none`. `{ kind, gone: true }` is a path the probe found but that is gone when
+   * `open_path_link` opens it, which the daemon refuses with `file_not_found`. */
+  pathLinks?: Record<
+    string,
+    Exclude<PathLinkKind, "none"> | { view: PathLinkView; viewerOnly?: true } | { kind: "directory"; view: PathLinkView } | { kind: Exclude<PathLinkKind, "none">; gone: true }
+  >;
   /** What `read_project_file` answers for a request that names a worktree, by the worktree's id and
    * then as `files` does by wire path; a worktree not listed has no file. */
   worktreeFiles?: Record<string, FixtureFiles>;

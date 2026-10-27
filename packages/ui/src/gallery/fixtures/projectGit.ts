@@ -981,7 +981,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A terminal started in a worktree whose project folder the app may not read",
-    description: "Show terminal panel is pressed on the side worktree: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying Octoboard is not allowed to read /Users/dev/code/search-api-experiments/apps/web. Its remedy is about access (check the folder's permissions, grant access in the system's privacy settings, or choose another folder), not about the folder being gone; the system's reason is behind Error details, closed.",
+    description: "Show terminal panel is pressed on the side worktree: the shell would start there, so the error alert opens, titled \"Could not create the terminal\" and saying Octoboard is not allowed to read /Users/dev/code/search-api-experiments/apps/web. Its remedy is about access (check the folder's permissions, and grant Octoboard access in the system's privacy settings if needed, then try again), not about the folder being gone or choosing another folder; the system's reason is behind Error details, closed.",
     state,
     preferences,
     git: sparse("permission_denied"),

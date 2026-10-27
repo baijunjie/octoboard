@@ -90,6 +90,7 @@ export const en = {
   "error.recovery.connection": "Check the network and daemon connection. Use {retry} on the connection banner when available, then retry the operation.",
   "error.recovery.path": "Select an existing, accessible folder or file using {browse}, or correct the path in the dialog, then retry.",
   "error.recovery.hostPathGone": "It may have been moved, renamed or deleted. If it was moved or renamed, find it in the project’s files and try again from there.",
+  "error.recovery.readAccess": "Check its permissions, and grant {appName} access in system privacy settings if needed, then try again.",
   "error.recovery.sourceGone": "It may have been moved, renamed or deleted, or be missing from the branch checked out there. Restore it at that path, then try again.",
   "error.recovery.sourceLink": "Part of that path is a symbolic link, which {appName} does not follow in a worktree. Replace the link with a real folder, then try again.",
   "error.recovery.sourceNotFolder": "Something other than a folder is at that path. Put the folder back there, then try again.",

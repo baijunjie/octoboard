@@ -28,7 +28,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use tokio::sync::Semaphore;
 
-use crate::hostfs::lexically_normalise;
+use crate::hostfs::{is_not_found, lexically_normalise};
 use crate::protocol::{error_code, CodedError, PathLink, PathLinkKind, PathLinkView};
 
 /// The most paths one `probe_path_links` request may ask about.
@@ -170,18 +170,38 @@ pub struct Resolved {
 
 /// What `raw` names, if it is reachable. An absolute path or one starting with `~/` is taken as
 /// written, any other is looked for under each of the project's roots. `project` finds those roots,
-/// and is only called when the path is not under a temp root.
+/// and is only called for a path not under a temp root, or one gone from under it.
 pub fn resolve(
     raw: &str,
     home: Option<&Path>,
     temp: &TempRoots,
     project: &dyn Fn() -> ProjectRoots,
 ) -> Option<Resolved> {
+    reach(raw, home, temp, project).ok()
+}
+
+/// Why [`reach`] found nothing.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Unreached {
+    /// Spelled inside a root, but nothing is there now: `in_project` when spelled inside a
+    /// project's root, even one that lies under a temp root.
+    Gone { in_project: bool },
+    /// Anything else not to show: outside every root, ambiguous, not a file or folder, or refused.
+    Refused,
+}
+
+/// [`resolve`], saying why it found nothing.
+pub fn reach(
+    raw: &str,
+    home: Option<&Path>,
+    temp: &TempRoots,
+    project: &dyn Fn() -> ProjectRoots,
+) -> Result<Resolved, Unreached> {
     if raw.is_empty() || raw.contains('\0') {
-        return None;
+        return Err(Unreached::Refused);
     }
     let absolute = if let Some(rest) = raw.strip_prefix("~/") {
-        Some(home?.join(rest))
+        Some(home.ok_or(Unreached::Refused)?.join(rest))
     } else if Path::new(raw).is_absolute() {
         Some(PathBuf::from(raw))
     } else {
@@ -192,13 +212,19 @@ pub fn resolve(
     let Some(absolute) = absolute.map(|path| lexically_normalise(&path)) else {
         let roots = project();
         let mut found: Vec<PathBuf> = Vec::new();
+        let (mut spelled, mut missing) = (0, 0);
         for root in &roots.canonical {
             let joined = lexically_normalise(&root.join(raw));
             if !roots.lexical.iter().any(|root| joined.starts_with(root)) {
                 continue;
             }
-            let Ok(canonical) = std::fs::canonicalize(joined) else {
-                continue;
+            spelled += 1;
+            let canonical = match std::fs::canonicalize(joined) {
+                Ok(canonical) => canonical,
+                Err(err) => {
+                    missing += usize::from(is_not_found(&err));
+                    continue;
+                }
             };
             if roots
                 .canonical
@@ -210,30 +236,58 @@ pub fn resolve(
             }
         }
         let [canonical] = found.as_slice() else {
-            return None;
+            return Err(if found.is_empty() && spelled > 0 && missing == spelled {
+                Unreached::Gone { in_project: true }
+            } else {
+                Unreached::Refused
+            });
         };
-        let index = roots.innermost(canonical)?;
-        let mut resolved = reachable(canonical.clone(), &roots.canonical[index], false, true)?;
+        let index = roots.innermost(canonical).ok_or(Unreached::Refused)?;
+        let mut resolved = reachable(canonical.clone(), &roots.canonical[index], false, true)
+            .ok_or(Unreached::Refused)?;
         resolved.project_root = Some(index);
-        return Some(resolved);
+        return Ok(resolved);
     };
     if temp.lexical.iter().any(|root| absolute.starts_with(root)) {
-        let canonical = std::fs::canonicalize(&absolute).ok()?;
+        // A gone path is the project's when it is spelled inside it too, as for a project kept
+        // under a temp root: the project's files are where it is looked for again.
+        let canonical = canonical_or_gone(&absolute, || {
+            project()
+                .lexical
+                .iter()
+                .any(|root| absolute.starts_with(root))
+        })?;
         let root = temp
             .canonical
             .iter()
-            .find(|root| canonical.starts_with(root))?;
-        return reachable(canonical, root, temp.check_owner, false);
+            .find(|root| canonical.starts_with(root))
+            .ok_or(Unreached::Refused)?;
+        return reachable(canonical, root, temp.check_owner, false).ok_or(Unreached::Refused);
     }
     let roots = project();
     if !roots.lexical.iter().any(|root| absolute.starts_with(root)) {
-        return None;
+        return Err(Unreached::Refused);
     }
-    let canonical = std::fs::canonicalize(&absolute).ok()?;
-    let index = roots.innermost(&canonical)?;
-    let mut resolved = reachable(canonical, &roots.canonical[index], false, true)?;
+    let canonical = canonical_or_gone(&absolute, || true)?;
+    let index = roots.innermost(&canonical).ok_or(Unreached::Refused)?;
+    let mut resolved =
+        reachable(canonical, &roots.canonical[index], false, true).ok_or(Unreached::Refused)?;
     resolved.project_root = Some(index);
-    Some(resolved)
+    Ok(resolved)
+}
+
+/// `path` with its links resolved, or why not: gone when nothing is there (see [`is_not_found`]),
+/// `in_project` asked only then.
+fn canonical_or_gone(path: &Path, in_project: impl FnOnce() -> bool) -> Result<PathBuf, Unreached> {
+    std::fs::canonicalize(path).map_err(|err| {
+        if is_not_found(&err) {
+            Unreached::Gone {
+                in_project: in_project(),
+            }
+        } else {
+            Unreached::Refused
+        }
+    })
 }
 
 /// `canonical`, found inside `root`, with what it is, unless it is not something to show: not a file
@@ -371,7 +425,7 @@ pub fn probe(
     known(state, project)?;
     let temp = temp_roots();
     let home = crate::paths::known_home_dir();
-    // Found at most once, and only for a path that is not under a temp root.
+    // Found at most once, and only for a path not under a temp root, or one gone from under it.
     let roots = OnceLock::new();
     let lookup = || {
         roots
@@ -480,14 +534,26 @@ fn open_with(
             project_roots(state, project, true)
         })
     };
-    let Some(resolved) = resolve(path, home.as_deref(), &temp_roots(), &lookup)
-        .filter(|resolved| !resolved.launchable)
-    else {
-        return Err(CodedError::raised(
-            error_code::OUTSIDE_SCOPE,
-            format!("{path} is not a file or folder that can be opened from here"),
-            &[("path", path)],
-        ));
+    let resolved = reach(path, home.as_deref(), &temp_roots(), &lookup);
+    let resolved = match resolved {
+        Ok(resolved) if !resolved.launchable => resolved,
+        Ok(_) | Err(Unreached::Refused) => {
+            return Err(CodedError::raised(
+                error_code::OUTSIDE_SCOPE,
+                format!("{path} is not a file or folder that can be opened from here"),
+                &[("path", path)],
+            ))
+        }
+        Err(Unreached::Gone { in_project }) => {
+            return Err(CodedError::raised(
+                error_code::FILE_NOT_FOUND,
+                format!("{path} does not exist"),
+                &[
+                    ("path", path),
+                    ("root", if in_project { "project" } else { "temporary" }),
+                ],
+            ))
+        }
     };
     opener(&resolved.path)
 }

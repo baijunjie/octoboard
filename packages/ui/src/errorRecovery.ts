@@ -1,4 +1,4 @@
-import { sourceUnavailableCause, type MessageParams, type SourceUnavailableCause } from "./protocol";
+import { relocationCause, sourceUnavailableCause, type MessageParams, type RelocationCause, type SourceUnavailableCause } from "./protocol";
 import { DaemonRequestError } from "./daemon-client";
 
 export type ErrorRecovery =
@@ -6,7 +6,7 @@ export type ErrorRecovery =
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
-  | "hostPathGone" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
@@ -39,7 +39,9 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   uniqueName: ["account_name_taken"],
   launchSetting: ["invalid_launch_setting"],
   accountDirectory: ["config_dir_taken"],
-  access: ["permission_denied", "directory_unreadable"],
+  access: ["directory_unreadable"],
+  // A read of the project's files the system denied, where there is no folder to choose instead and nothing is written.
+  readAccess: ["permission_denied"],
   connection: ["git_remote_unreachable", "connection_closed", "request_timed_out"],
   unlock: ["session_locked"],
   stopSessions: ["session_has_running_sessions", "console_has_running_sessions", "project_has_running_sessions", "session_not_deletable"],
@@ -122,11 +124,11 @@ function environmentRecovery(error: unknown, seen = new Set<object>()): ErrorRec
 
 export type ErrorClassification = { kind: "actionable"; recovery: ErrorRecovery } | { kind: "unexpected" };
 
-/** The remedy of a conversation move that failed for a cause the daemon names (`relocation_failed`'s `cause`); `other`
- * and an unknown one name none. */
-const RELOCATION_CAUSE_RECOVERY: Record<string, ErrorRecovery> = {
+/** The remedy of a conversation move that failed for a cause the daemon names, as `relocationCause` reads it; `other`
+ * names none. */
+const RELOCATION_CAUSE_RECOVERY: Record<RelocationCause, ErrorRecovery | undefined> = {
   permission_denied: "access", busy: "fileBusy", no_space: "diskSpace", config_unreadable: "codexConfig",
-  sqlite_home: "sqliteHome", symlink: "symlink", not_restored: "notRestored",
+  sqlite_home: "sqliteHome", symlink: "symlink", not_restored: "notRestored", other: undefined,
 };
 
 /** The remedy of a `source_unavailable` by its `cause`, as `sourceUnavailableCause` reads it. */
@@ -136,7 +138,7 @@ const SOURCE_CAUSE_RECOVERY: Record<SourceUnavailableCause, ErrorRecovery> = {
 
 /** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */
 function isNotRestored(error: unknown): boolean {
-  return error instanceof DaemonRequestError && error.code === "relocation_failed" && error.params.cause === "not_restored";
+  return error instanceof DaemonRequestError && error.code === "relocation_failed" && relocationCause(error.params.cause) === "not_restored";
 }
 
 /** The remedy that goes with a failure's own as well, said after it: what a recognised operating-system signature in
@@ -152,6 +154,9 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   // signature's access and disk-space remedies are about writing, which reading a file never needed.
   if (explicit === "issueLink" || explicit === "openExternal" || explicit === "fileRead") return { kind: "actionable", recovery: explicit };
   if (isNotRestored(error)) return { kind: "actionable", recovery: "notRestored" };
+  // A denied read keeps its own remedy over the access remedy its operating-system signature names, which is about
+  // writing and choosing another folder.
+  if (!explicit && error instanceof DaemonRequestError && DOMAIN_RECOVERY.get(error.code) === "readAccess") return { kind: "actionable", recovery: "readAccess" };
   const remedy = environmentRecovery(error) ?? explicit;
   if (remedy) return { kind: "actionable", recovery: remedy };
   if (error instanceof DaemonRequestError) {
@@ -159,7 +164,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     if (code === "source_unavailable") return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
     const domain = code && DOMAIN_RECOVERY.get(code);
     if (domain) return { kind: "actionable", recovery: domain };
-    const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[error.params.cause] : undefined;
+    const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[relocationCause(error.params.cause)] : undefined;
     if (relocation) return { kind: "actionable", recovery: relocation };
   }
   return { kind: "unexpected" };

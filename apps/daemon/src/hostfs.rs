@@ -50,6 +50,13 @@ pub fn resolve(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| lexically_normalise(path))
 }
 
+/// Whether `err` means nothing is at a path: none there, a link that leads nowhere or round in a
+/// loop, or a file where a folder on the way should be.
+pub fn is_not_found(err: &std::io::Error) -> bool {
+    err.kind() == std::io::ErrorKind::NotFound
+        || matches!(err.raw_os_error(), Some(libc::ENOTDIR | libc::ELOOP))
+}
+
 /// A path with its `.` components dropped, each `..` folded into the component before it, and no
 /// trailing separator. Lexical only: no symlink is resolved and nothing is read from disk, so the
 /// result is the path as the user chose it, written one way.

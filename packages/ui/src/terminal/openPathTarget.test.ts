@@ -99,3 +99,17 @@ it("opens a folder on the host without reading its entry file when asked to, but
   await openPathTarget({ target: { ...target, kind: "file" }, onHost: true, project: "p", request, viewFile, toastError: vi.fn() });
   expect(viewFile).toHaveBeenCalledOnce();
 });
+
+it("reports a path gone since it was probed, with the remedy of finding it in the project's files only for one in the project", async () => {
+  const gone = (root?: string) => () => Promise.reject(new DaemonRequestError("gone", "file_not_found", { path: "x", ...(root && { root }) }));
+  const onHost = (answer: () => Promise<unknown>) => vi.fn((body: { type: string }) => (body.type === "open_path_link" ? answer() : Promise.resolve({ type: "ack" }))) as never;
+  const temporary = vi.fn();
+  await openPathTarget({ target: { path: "/tmp/x.log", line: undefined }, project: "p", request: onHost(gone("temporary")), viewFile: vi.fn(), toastError: temporary });
+  expect(temporary.mock.calls[0][3]).toBe("none");
+  const folder = vi.fn();
+  await openPathTarget({ target: { path: "docs", kind: "directory", line: undefined }, project: "p", request: onHost(gone("project")), viewFile: vi.fn(), toastError: folder });
+  expect(folder.mock.calls[0][3]).toBe("hostPathGone");
+  const read = vi.fn();
+  await openPathTarget({ target, project: "p", request: vi.fn(gone()) as never, viewFile: vi.fn(), toastError: read });
+  expect(read.mock.calls[0][3]).toBe("hostPathGone");
+});

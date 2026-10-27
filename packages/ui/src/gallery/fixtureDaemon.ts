@@ -94,6 +94,11 @@ function normalizedPath(path: string): string {
   return `${expanded.startsWith("/") ? "/" : ""}${parts.join("/")}`;
 }
 
+/** The temporary folders a path link can lie in without being the project's: `open_path_link` says `root: "temporary"` of a
+ * path gone from one. */
+const TEMPORARY_ROOTS = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders"];
+const isInTemporaryRoot = (path: string) => TEMPORARY_ROOTS.some((root) => normalizedPath(path).startsWith(`${root}/`));
+
 /** The refusal to open a session, or hand one off, on an agent the user has not added. */
 const agentNotAdded = (agent: Agent) => ({
   code: "agent_not_added",
@@ -265,6 +270,16 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
   const restoredGit = new Map<string, ReturnType<typeof createGitReplies>>();
   const projectFiles = (project: string) => restoredFiles.get(project) ?? scenario.filesByProject?.[project] ?? scenario.files ?? SAMPLE_FILES;
   const git = scenario.git === undefined ? SAMPLE_GIT : scenario.git;
+  /** The absolute spelling of a path the terminal showed: as given when absolute or home-relative, else under the asking project's folder. */
+  const absoluteLinkPath = (project: string | undefined, path: string) => {
+    const root = project === undefined ? undefined : store.getState().projects.get(project)?.path;
+    return path.startsWith("/") || path.startsWith("~") || root === undefined ? path : `${root}/${path}`;
+  };
+  /** What the scenario's `pathLinks` holds for a path the terminal showed, resolved against the asking project's folder. */
+  const pathLinkFound = (project: string | undefined, path: string) => {
+    const absolute = absoluteLinkPath(project, path);
+    return Object.entries(scenario.pathLinks ?? {}).find(([given]) => normalizedPath(given) === normalizedPath(absolute))?.[1];
+  };
   const fail = ({ code, params, message }: FixtureError): never => {
     throw new DaemonRequestError(daemonMessage(currentLanguage(), code, params, message, store.getState()), code, params);
   };
@@ -532,8 +547,16 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if (scenario.projectPathActionError) return fail(scenario.projectPathActionError);
           return { type: "ack" };
         }
-        case "open_path_link":
+        case "open_path_link": {
+          // A path found when the output was drawn that is gone now is refused as the daemon refuses it, with the path as given.
+          const found = pathLinkFound(body.project, body.path);
+          if (typeof found === "object" && "gone" in found) {
+            // `root` says where the path was: a temporary folder has nowhere to be found again, the project has its files.
+            const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
+            return fail({ code: "file_not_found", params: { path: body.path, root }, message: `\`${body.path}\` does not exist` });
+          }
           return { type: "ack" };
+        }
         case "open_project_directory": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           if (scenario.projectDirectoryOpenError) return fail(scenario.projectDirectoryOpenError);
@@ -826,13 +849,11 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           return { type: "ack" };
         }
         case "probe_path_links": {
-          const root = body.project === undefined ? undefined : store.getState().projects.get(body.project)?.path;
-          const existing = new Map(Object.entries(scenario.pathLinks ?? {}).map(([path, found]) => [normalizedPath(path), found]));
           const links = body.paths.map((path): { path: string; kind: PathLinkKind; view?: PathLinkView; viewer_only?: boolean } => {
-            const absolute = path.startsWith("/") || path.startsWith("~") || root === undefined ? path : `${root}/${path}`;
-            const found = existing.get(normalizedPath(absolute));
+            const found = pathLinkFound(body.project, path);
             if (found === undefined) return { path, kind: "none" };
             if (typeof found === "string") return { path, kind: found };
+            if ("gone" in found) return { path, kind: found.kind };
             if ("kind" in found) return { path, kind: found.kind, view: found.view };
             return { path, kind: "file", view: found.view, ...(found.viewerOnly && { viewer_only: true }) };
           });

@@ -387,10 +387,17 @@ For example:
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
 - An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location. A file or
-  folder that File manager or Default application no longer finds, or a file a terminal's path link names that is
-  gone when the click reads it, instead says it may have been moved, renamed or deleted, and that one moved or renamed
-  can be found in the project's files and tried again from there (see "A row's actions" in
-  `docs/product/project-pane.md` and "Opened from the terminal" in `docs/product/file-viewer.md`).
+  folder that File manager or Default application no longer finds, or a file or folder a terminal's path link names in
+  the project that is gone when the click reads it or opens it on the host, instead says it may have been moved,
+  renamed or deleted, and that one moved or renamed can be found in the project's files and tried again from there (see
+  "A row's actions" in `docs/product/project-pane.md`, "Opened from the terminal" in `docs/product/file-viewer.md` and
+  "File paths" in `docs/product/terminal-links.md`). A path link's file or folder gone from a temporary directory
+  outside the project gets no remedy: the alert's sentence already says it does not exist any more.
+- A read of the project's files that the operating system denies — Octoboard is not allowed to read the path, as when a
+  shell terminal starts in a folder it may not read, when File manager or Default application is used on such a path, or
+  when a terminal's path link reads its file — asks the user to check the path's permissions, and grant Octoboard access
+  in the system's privacy settings if needed, then try again. It names no writable disk and no other folder to choose:
+  nothing is written there, and there is no folder to pick instead.
 - A folder a request is scoped to that cannot be read (`source_unavailable`) — the project's own directory, or its
   place in a worktree of its repository — is not something the user typed or picked, so its remedy asks for it to be
   put back rather than corrected, worded by the cause the daemon names. The alert's sentence says the folder cannot
@@ -413,12 +420,13 @@ Known domain failures, the causes the daemon names for some of them (such as why
 moved to another account, see "When a switch fails" in `docs/product/switching-session-accounts.md`; or why a folder a
 request is scoped to cannot be read), and recognized operating-system causes provide the remedy; a recognized
 operating-system cause takes precedence over the others, except for a switch's copy that failed and could not put back
-an older item: that is classified by the item put aside, and the operating-system cause's remedy is given as well; and
+an older item: that is classified by the item put aside, and the operating-system cause's remedy is given as well;
 except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "In the
-window" in `docs/product/configuration-export-and-import.md`), whatever operating-system cause it names. A failure whose
-named cause is not one the window knows stays unexpected, except a folder a request is scoped to that cannot be read,
-which gets the remedy for any other cause (see above). An unfamiliar failure does not get generic retry advice merely
-because it occurred during a familiar operation.
+window" in `docs/product/configuration-export-and-import.md`); and except for a denied read of the project's files,
+which keeps its own remedy (see above) — each whatever operating-system cause it names. A failure whose named cause is
+not one the window knows stays unexpected, except a folder a request is scoped to that cannot be read, which gets the
+remedy for any other cause (see above). An unfamiliar failure does not get generic retry advice merely because it
+occurred during a familiar operation.
 
 **An alert whose body is the daemon's message, where that message already says what to do**, adds no remedy line of
 its kind after it: the message's own step is the remedy — "Reopen it first." for an archived session in a handoff, the

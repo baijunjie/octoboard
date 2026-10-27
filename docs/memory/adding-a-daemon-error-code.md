@@ -16,7 +16,12 @@ adds, in `packages/ui`:
 - The code in a `GROUPS` entry of `packages/ui/src/errorRecovery.ts`. Reuse a group whose remedy fits, or add an
   `ErrorRecovery` with its `error.recovery.<name>` text in every catalog, and add the code to the classification cases
   in `packages/ui/src/errorRecovery.test.ts`. The group's remedy, the general advice for its kind of failure, goes in
-  that `error.recovery.<name>` text, never in `daemon.<code>`.
+  that `error.recovery.<name>` text, never in `daemon.<code>`. The group does not decide the remedy on its own:
+  `classifyError` takes the remedy an operating-system signature names (an `errno` param, or `(os error N)` in `detail`,
+  `reason` or the message, which a failure built from the system's error carries) before it looks at `GROUPS`, and that
+  remedy (`access`, `diskSpace`) is about writing. Where the group's remedy must hold whatever the system text says, as
+  `readAccess` does for `permission_denied`, give that group an early return in `classifyError` ahead of the signature,
+  and cover the code with a signature in its `detail` in the test.
 - Only where the code calls for a step of its own, one the group's remedy does not say ("Reopen it first."): the code
   in `RECOVERY_CODES` (`packages/ui/src/daemonMessage.ts`), with `daemon.<code>.summary` saying what happened,
   `daemon.<code>.recovery` that step, and `daemon.<code>` both sentences, for text-only consumers. An alert whose body

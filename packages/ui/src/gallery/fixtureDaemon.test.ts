@@ -1182,6 +1182,31 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).resolves.toEqual({ type: "ack" });
   });
 
+  it("opens what the probe found, but refuses one gone since with file_not_found, the path as given and the kind of root it was in", async () => {
+    const owner = consoleOf("c", "Main");
+    const project = projectOf("p", owner.id, "Website");
+    const daemon = createFixtureDaemon({
+      id: "path-link-gone",
+      group: "Terminal",
+      category: "exceptional",
+      title: "",
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      pathLinks: { "/private/tmp/sheet.png": { kind: "file", gone: true }, [`${project.path}/docs`]: { kind: "directory", gone: true } },
+    });
+    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["/private/tmp/sheet.png", "docs"] })).resolves.toEqual({
+      type: "path_links",
+      links: [
+        { path: "/private/tmp/sheet.png", kind: "file" },
+        { path: "docs", kind: "directory" },
+      ],
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet.png" })).rejects.toMatchObject({
+      code: "file_not_found",
+      params: { path: "/private/tmp/sheet.png", root: "temporary" },
+    });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "docs" })).rejects.toMatchObject({ code: "file_not_found", params: { path: "docs", root: "project" } });
+  });
+
   it("sends where a file the viewer shows (or a folder's README) is read from, and reads a worktree's files from the worktree", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");

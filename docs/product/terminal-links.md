@@ -176,8 +176,13 @@ pointer has to move first.
   in the file manager instead, is in the same section. Anything else opens on the machine the daemon runs on — not on
   the machine a browser client happens to be open on: a file with its default application, a folder in the file manager.
   A line given with the path plays no part there, so such a file opens as it would from the file manager. The path is
-  checked again by the rules above as it is opened on the host; one that no longer passes them — removed since, say — is
-  not opened, and an error alert says so, as it does when the system fails to open it. A path link has no tooltip.
+  checked again by the rules above as it is opened on the host, and one that no longer passes them is not opened. One
+  written inside the project or a temporary directory where nothing is any more — deleted, moved or renamed since it
+  was checked, a file now where a folder on the way should be, or a symbolic link leading nowhere or round in a loop —
+  raises an error alert saying it does not exist any more, with the remedy of a path that is gone when it was in the
+  project (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). Any other that no longer passes
+  them is refused with an error alert saying it leads outside the project; the system failing to open it raises an
+  error alert too. A path link has no tooltip.
 - **When paths are checked**: only paths on screen, or under the pointer, are checked; those that appear together are
   checked together, about 120 ms after they appear, at most 64 at a time. An answer is kept for about 30 seconds for a
   path found and about 10 seconds for one that was not, and a path still on screen is checked again once its answer is

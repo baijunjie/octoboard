@@ -457,21 +457,50 @@ mod with_state {
     }
 
     #[test]
-    fn opening_what_is_not_reachable_is_refused_as_outside_the_scope() {
+    fn opening_what_is_not_reachable_is_refused_as_outside_the_scope_and_what_is_gone_as_not_found()
+    {
         let fixture = Fixture::new();
         let directory = ScratchDir::new("path-links-open");
+        std::fs::create_dir(directory.join("src")).unwrap();
+        std::fs::write(directory.join("src/file.ts"), "x").unwrap();
         let project = fixture.project("open-project", &directory);
-        for path in ["/etc/hosts", "nothing.ts"] {
+        let gone_absolute = canonical(&directory).join("src/removed.ts");
+        let gone_absolute = gone_absolute.to_string_lossy().into_owned();
+        for (path, code) in [
+            ("/etc/hosts", error_code::OUTSIDE_SCOPE),
+            ("nothing.ts", error_code::FILE_NOT_FOUND),
+            ("src/gone/a.ts", error_code::FILE_NOT_FOUND),
+            (gone_absolute.as_str(), error_code::FILE_NOT_FOUND),
+            ("../elsewhere.ts", error_code::OUTSIDE_SCOPE),
+            ("src/file.ts/below.ts", error_code::FILE_NOT_FOUND),
+        ] {
             let error = open_with(&fixture.state, Some(&project), path, |_| {
                 panic!("{path} must not be opened")
             })
             .unwrap_err();
-            assert_eq!(
-                error.downcast_ref::<CodedError>().unwrap().code,
-                error_code::OUTSIDE_SCOPE,
-                "{path}"
-            );
+            let coded = error.downcast_ref::<CodedError>().unwrap();
+            assert_eq!(coded.code, code, "{path}");
+            if code == error_code::FILE_NOT_FOUND {
+                // Spelled inside the project, absolute or not, even though the scratch project sits
+                // under a temp root.
+                assert_eq!(coded.params["root"], "project", "{path}");
+            }
         }
+        // A gone file in a temp root outside the project is the temp root's.
+        let elsewhere = ScratchDir::new("path-links-open-temp");
+        let gone_temp = canonical(&elsewhere).join("removed.png");
+        let error = open_with(
+            &fixture.state,
+            Some(&project),
+            gone_temp.to_str().unwrap(),
+            |_| panic!("must not be opened"),
+        )
+        .unwrap_err();
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(
+            (coded.code, coded.params["root"].as_str()),
+            (error_code::FILE_NOT_FOUND, "temporary")
+        );
     }
 
     #[test]

@@ -716,9 +716,7 @@ fn open_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
 /// with no meaning of its own here is an internal error with the system's message.
 fn io_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
     let shown = path.to_wire();
-    let not_found = err.kind() == io::ErrorKind::NotFound
-        || matches!(err.raw_os_error(), Some(libc::ENOTDIR | libc::ELOOP));
-    if not_found {
+    if crate::hostfs::is_not_found(err) {
         return CodedError::raised(
             error_code::FILE_NOT_FOUND,
             format!("{shown} does not exist"),

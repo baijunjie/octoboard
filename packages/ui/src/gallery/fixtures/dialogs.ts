@@ -1,5 +1,5 @@
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
-import type { Agent, AgentAvailability, Settings } from "../../protocol";
+import type { Agent, AgentAvailability, RelocationCause, Settings } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
 import type { FixtureError } from "./projectFiles";
@@ -498,7 +498,7 @@ const quotaRefusal = {
 /** The daemon's `relocation_failed` for a switch into the account whose directory is `path` for every session of the
  * batch, stopped at `stage` for `cause`, with the system's own words `detail`. `kept_staging` also names where the
  * older item is kept, in the staging directory the daemon makes under the account's directory. */
-function relocationFailure(path: string, stage: "copy" | "thread_record" | "kept_staging", cause: string, detail: string) {
+function relocationFailure(path: string, stage: "copy" | "thread_record" | "kept_staging", cause: RelocationCause, detail: string) {
   return {
     code: "relocation_failed",
     params: { path, stage, cause, detail, ...(stage === "kept_staging" ? { kept_in: `${path}/.octoboard-switch/9b1d4e7a-5c3f-4a28-b6d0-1e8f2a7c3d59` } : {}) },
@@ -507,10 +507,10 @@ function relocationFailure(path: string, stage: "copy" | "thread_record" | "kept
 }
 const NO_SPACE = "No space left on device (os error 28)";
 /** The same, into the Claude Code Work account. */
-const claudeRelocationFailure = (stage: "copy" | "kept_staging", cause: string, detail: string) =>
+const claudeRelocationFailure = (stage: "copy" | "kept_staging", cause: RelocationCause, detail: string) =>
   relocationFailure("/Users/dev/.claude-work", stage, cause, detail);
 /** The same, into the Codex Work account, whose thread database the `thread_record` stage updates. */
-const codexRelocationFailure = (cause: string, detail: string) =>
+const codexRelocationFailure = (cause: RelocationCause, detail: string) =>
   relocationFailure("/Users/dev/.codex-work", "thread_record", cause, detail);
 
 // Three Codex sessions share a console, the second bound to the hub: a Codex account's thread database is what the

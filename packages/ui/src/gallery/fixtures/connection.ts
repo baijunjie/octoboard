@@ -288,6 +288,30 @@ export const connectionScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Draft.ts")],
   },
   {
+    id: "terminal-path-link-removed-folder",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A project folder without an entry file removed since the link was drawn",
+    description:
+      "Clicking docs/plans/summary-layout, a folder the daemon found when the output was drawn but which is gone now, and which had no README to open in the viewer, opened the error alert instead of the file manager, titled \"Could not open the path\" and saying the path does not exist any more. " +
+      "Its remedy says it may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", gone: true } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
+  },
+  {
+    id: "terminal-path-link-removed-outside",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A path outside the project removed since the link was drawn",
+    description:
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file the daemon found when the output was drawn but which is gone now, opened the error alert instead of launching anything, titled \"Could not open the path\" and saying the path does not exist any more. " +
+      "It has no remedy line: unlike a project file, there are no project files to find it in.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", gone: true } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+  },
+  {
     id: "terminal-reconnecting",
     group: TERMINAL,
     category: "exceptional",

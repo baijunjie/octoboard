@@ -973,6 +973,16 @@ export function scopeCause(raw: string | undefined): ScopeCause {
   return raw === "permission_denied" ? raw : sourceUnavailableCause(raw);
 }
 
+const RELOCATION_CAUSES = ["permission_denied", "busy", "no_space", "config_unreadable", "sqlite_home", "symlink", "not_restored", "other"] as const;
+
+/** The `cause` of a `relocation_failed`: why a conversation move did not complete. */
+export type RelocationCause = (typeof RELOCATION_CAUSES)[number];
+
+/** `raw` as a `relocation_failed` cause: one this client does not know, or none, is `other`. */
+export function relocationCause(raw: string | undefined): RelocationCause {
+  return RELOCATION_CAUSES.find((cause) => cause === raw) ?? "other";
+}
+
 /** One entry of `project_dir`, in byte order of the names' wire forms. */
 export interface BrowseEntry {
   name: string;
