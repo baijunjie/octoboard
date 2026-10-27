@@ -160,7 +160,7 @@ export function LaunchMatrix({
   // as a picker and at its top, so it stays with the picker when a note makes the cell taller.
   const cell = "flex min-w-0 flex-col gap-1.5";
   const settingName = "text-sm md:hidden";
-  const kindHeading = "text-sm font-medium text-foreground md:font-normal md:text-inherit";
+  const kindHeading = "text-sm font-medium md:font-normal";
   const rowHeader = "hidden text-sm md:col-start-1 md:flex md:h-9 md:items-center md:gap-1 md:self-start";
   // The mark on the Model setting's name, a button, stands beside the name rather than in it: the name is what
   // the pickers are labelled by, and is hidden from assistive technology, which the mark must not be.

@@ -51,6 +51,23 @@ const onlyClaude = new Map<Agent, AgentAvailability>(
   ]),
 );
 
+// A bound session and its owner whose titles run to paragraphs, as a pasted brief does: the unbind confirmation
+// names each of them once, and the chips have to wrap inside the dialog.
+const longLead = sessionOf(
+  "s-unbind-long-lead",
+  console_.id,
+  web.id,
+  "Rework the result ranking so that exact title matches outrank fuzzy body matches and then re-tune the recency decay and add the per-project boost described in the planning notes and update every search fixture and snapshot that the new ordering changes",
+  "idle",
+  { bound_to: hub.id, started_at: minutesAgo(50) },
+);
+const longHub = {
+  ...hub,
+  title:
+    "Release coordinator for the search overhaul that keeps the ranking and indexing and autocomplete work in step and hands the finished branches to review one at a time and reports anything that blocks the Friday cut",
+};
+const longTitleState = snapshotState({ consoles: [console_], projects: [web, api], sessions: [longHub, longLead], settings });
+
 const GROUP = "Sidebar sessions";
 
 const openMenu = (title: string) => (ui: Ui) => ui.press(ui.t("sidebar.session.actions", { title }));
@@ -188,9 +205,9 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Unbind a session from its live owner",
-    description: "A plain confirmation titled Unbind session, not a danger one, with Cancel then the primary Unbind. The body names the session and its owner, Hub, each as a chip, and says what Hub can no longer do with the session (send it messages, archive it, give it to another owner), that archiving Hub will not archive it, that it will answer only to you, and that only the session itself can bind it to an owner again.",
-    state,
-    steps: openUnbind(lead.title),
+    description: "A warning confirmation titled Unbind session, with the warning icon leading its header, then Cancel and the primary Unbind. Both titles here are paragraph-long, and each appears once, as a chip that wraps inside the dialog: one paragraph that runs on from the first sentence into the next (the session will no longer report to the owner; it will answer only to you; only the session itself can bind to an owner again, the app cannot do it for you), then a separate paragraph of consequences (the owner can no longer instruct it, archive it or give it to another owner, and archiving the owner will not archive it; the two can still share information). All body text is in the foreground colour, none of it muted.",
+    state: longTitleState,
+    steps: openUnbind(longLead.title),
   },
   {
     id: "dialog-unbind-session-changing",

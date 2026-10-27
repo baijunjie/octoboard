@@ -97,8 +97,9 @@ A released session is an **ordinary unbound project session**, the user's own:
   session's tools" in `docs/product/hub-orchestration.md`), and it can be bound again with `bind_to_session`;
 - what it had stays with it: a released lead session keeps the sessions bound to it and goes on driving them, and the
   branches the session is responsible for stay its own;
-- its former owner no longer drives it: archiving that owner no longer takes it along, and nothing archives it on a
-  `done` report.
+- its former owner no longer instructs or drives it: archiving that owner no longer takes it along, and nothing archives
+  it on a `done` report. Releasing cuts no communication: either of the two can still tell the other something with
+  `share_info`, which the receiver weighs rather than obeys (see `docs/product/information-between-sessions.md`).
 
 A session can be released whatever its state — running, interrupted or archived. The call is refused and changes
 nothing:
@@ -128,13 +129,15 @@ written; the note is kept with what it is owed (see "A change of owner told at t
 **The former owner is told only of the user's release**: an owner that releases a session itself is sent nothing, since
 it made the call. When the user releases a session, its former owner, if it has a process running, is told by a message
 written through the same delivery (queued while it cannot take one) which session the user released from it — by
-kind, id and title — that the session has no owner now and answers only to the user, so it can no longer drive it,
-send it messages or archive it, and the session does not report to it; that it should no longer count on the session;
-and that any work it handed the session is left with the user. A former owner with no process running is not told,
+kind, id and title — that the session has no owner now and answers only to the user, so it can no longer instruct,
+drive or archive it, and the session does not report to it; that it can still tell the session something with
+`share_info`, which the session weighs rather than obeys; that it should no longer count on the session; and that any
+work it handed the session is left with the user. A former owner with no process running is not told,
 then or later; a later attempt by it to drive the session is refused as for any session that is not its own.
 
 The call returns `session` and a `note` saying that the session has no owner now, is no longer the caller's, is the
-user's own session and no longer reports to the caller, and whether it was told, will be told as soon as it can take a
+user's own session, is no longer instructed or driven by the caller and no longer reports to it, though `share_info` can
+still tell it something, and whether it was told, will be told as soon as it can take a
 message, is not running and will be told when it next starts, or was not told because the message was written into its
 input but its agent did not send it to the conversation, the user having been told to check the session (see "A
 message written but not sent" in `docs/product/message-delivery.md`). Once the binding is cleared the release stands,
@@ -143,12 +146,15 @@ whatever became of the message.
 ## Unbinding a session from the window
 
 **Unbind** in a bound session's menu (see "Session rows" in `docs/product/sidebar-session-rows.md`) releases nothing
-by itself: it opens a confirmation, **Unbind session**. Its body names the session and its owner by their titles and
-says what the release means: the session will no longer report to that owner; the owner can no longer send it
-messages, archive it or give it to another owner, and archiving the owner will not archive it; it will answer only to
-the user; and Octoboard cannot bind it to an owner again — only the session itself can (with `bind_to_session`).
-**Cancel** closes the confirmation and releases nothing. **Unbind**, the primary button, releases the session as
-"Releasing a session from its owner" above describes, with no note, and closes the confirmation.
+by itself: it opens a confirmation, **Unbind session**, a warning modal: the warning icon leads its header (see
+"Destructive confirmations" in `docs/product/dialogs.md`), though the release is not destructive. Its body names the
+session and its owner by their titles, each once, in a first paragraph saying that the session will no longer report to
+that owner and will answer only to the user, and that from then on only the session itself can bind to an owner again
+(with `bind_to_session`) — Octoboard cannot do it for the user. A consequence line follows: the owner will no longer be
+able to instruct it, archive it or give it to another owner, archiving the owner will not archive it, and the two can
+still share information with each other. **Cancel** closes the confirmation and releases nothing. **Unbind**, the
+primary button, which has keyboard focus when the confirmation opens, releases the session as "Releasing a session
+from its owner" above describes, with no note, and closes the confirmation.
 
 The confirmation reads the session and its owner as they stand while it is open:
 

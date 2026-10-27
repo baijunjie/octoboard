@@ -516,6 +516,14 @@ are now wrong or it leaves out one thing, the meaning has changed.
   line keep their own. (the user's decision; `packages/ui/src/i18n/messages/en.ts`)
 - **en contractions**: the en catalog uses no contractions — could not, is not, does not — overriding the default
   register above; keep new strings consistent with it. (`packages/ui/src/i18n/messages/en.ts`)
+- **A name is mentioned once per screen**: within one dialog, panel or other single view, the name of a user's own
+  thing — a session's title, a project, an account, a branch, a path — appears once, normally as the chip in the
+  sentence that introduces it (a dialog's subject sentence; its title names nothing, per "A dialog's title" in
+  `docs/product/dialogs.md`). Everything after refers to it by pronoun or by role: it, the session, the owner (它、该会话、
+  所有者). A session title can run to a paragraph, so each repeat costs the reader a line. Repeat the name only when a
+  pronoun or role would be ambiguous — two things of the same kind on the screen that the sentence must tell apart — and
+  never just to restate what an earlier sentence already named. This narrows "Reference and scope" above for this
+  project. (the user's decision)
 - **Empty-state copy**: an empty state's title carries no punctuation at all, a comma inside it included, which is
   stricter than the "Empty-state titles" rule above; what the title cannot hold goes in the line under it, and a
   state said in one breath somewhere else — a notice over content shown anyway, a live region speaking for a panel

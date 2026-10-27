@@ -110,7 +110,7 @@ export function SwitchAccountDialog({
               <Description>{t("dialog.switchAccount.countConsole", { count: counts.console })}</Description>
             </Radio>
           </RadioGroup>
-          <p className="text-sm text-muted"><Message id="dialog.switchAccount.eligibility" params={{ agent }} /></p>
+          <p className="text-sm text-app-muted"><Message id="dialog.switchAccount.eligibility" params={{ agent }} /></p>
           {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
               nested in the one beneath it is bounced back to it. */}
           {confirmation}

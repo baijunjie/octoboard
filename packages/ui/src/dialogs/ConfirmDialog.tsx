@@ -38,7 +38,7 @@ export interface ConfirmDialogProps {
    * what the action covers; the caller holds its state and reads it in `onConfirm`. A function is
    * given whether `onConfirm` is running, for a control to freeze while it does. */
   extraControl?: React.ReactNode | ((busy: boolean) => React.ReactNode);
-  /** What the action takes along, as body text under the options and over the buttons, so that a line
+  /** What the action takes along or takes away, as body text under the options and over the buttons, so that a line
    * it gains when an option is ticked moves no checkbox. A confirmation with it, like a destructive
    * one, is a warning modal: the warning icon leads its header. */
   consequences?: React.ReactNode;
@@ -150,7 +150,7 @@ export function ConfirmDialog({
         // the two sentences together.
         <p className="text-sm">{subject}{subject === undefined ? message : ` ${message}`}</p>
       ) : (
-        <div className="flex flex-col gap-3 text-sm text-foreground">
+        <div className="flex flex-col gap-3 text-sm">
           {subject !== undefined && <p>{subject}</p>}
           {message}
         </div>

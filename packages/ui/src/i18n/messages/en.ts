@@ -456,7 +456,7 @@ export const en = {
   "daemon.session_not_running": "This session is not running.",
   "daemon.console_session_never_bound": "A console session is never bound, so it has no owner to be released from.",
   "daemon.session_not_bound": "This session is not bound to an owner, so there is nothing to release.",
-  "daemon.session_not_bound_to_owner": "This session is not bound to {owner}, so {owner} cannot release it.",
+  "daemon.session_not_bound_to_owner": "{owner} cannot release this session, which is not bound to it.",
   "daemon.session_binding_changed": "This session's owner changed while it was being released.",
   "daemon.session_not_deletable": "Only an archived session, or one that has never been used, can be deleted, and not while it is starting.",
   "daemon.session_has_running_sessions": {
@@ -1434,8 +1434,9 @@ export const en = {
     other: "{count} sessions under it are archived with it. Their processes end.",
   },
   "dialog.unbindSession.title": "Unbind session",
-  "dialog.unbindSession.message":
-    "{title} will no longer report to {owner}. {owner} can no longer send it messages, archive it or give it to another owner, and archiving {owner} will not archive it. It will answer only to you. {appName} cannot bind it to an owner again; only the session itself can.",
+  "dialog.unbindSession.subject": "{title} will no longer report to {owner}.",
+  "dialog.unbindSession.answersToYou": "It will answer only to you. From then on only the session itself can bind to an owner again; {appName} cannot do it for you.",
+  "dialog.unbindSession.consequence": "The owner will no longer be able to instruct it, archive it or give it to another owner, and archiving the owner will not archive it. The two can still share information with each other.",
   "dialog.unbindSession.error": "Could not unbind the session",
   "dialog.unbindSession.confirm": "Unbind",
   "dialog.switchAccount.title": "Switch account",

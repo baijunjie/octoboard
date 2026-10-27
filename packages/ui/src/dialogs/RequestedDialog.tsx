@@ -35,10 +35,11 @@ import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
 import { PROJECT_NAME_LIMIT } from "./textLength";
 
-/** What a confirmation says it is about to take along, as body text under its options: `title` when
- * there is one, over the list of sessions when there is one to show — each with its agent's icon and
- * title, plus a status glyph for live sessions; archived sessions are already identified by the
- * wording of the title — and `lines`: one more consequence for each option the user has ticked.
+/** What a confirmation says it is about to take along or take away, as body text under its options:
+ * `title` when there is one, over the list of sessions when there is one to show — each with its
+ * agent's icon and title, plus a status glyph for live sessions; archived sessions are already
+ * identified by the wording of the title — and `lines`: further consequences, such as one for each
+ * option the user has ticked.
  * Nothing at all when there is neither a title nor a line. */
 function ConfirmConsequences({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: ConsequenceLine[] }): React.ReactElement | null {
   const t = useT();
@@ -48,7 +49,7 @@ function ConfirmConsequences({ title, sessions, lines = [] }: { title?: string; 
   const linesRef = useListMotion<HTMLDivElement>();
   if (!title && lines.length === 0) return null;
   return (
-    <div className="flex min-w-0 flex-col gap-2 text-sm text-foreground">
+    <div className="flex min-w-0 flex-col gap-2 text-sm">
       {title && <p>{title}</p>}
       {sessions && (
         <ul ref={sessionsRef} className="relative flex min-w-0 flex-col gap-1">
@@ -171,7 +172,9 @@ function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string; onClos
   return (
     <ConfirmDialog
       title={t("dialog.unbindSession.title")}
-      message={<p><Message id="dialog.unbindSession.message" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, owner: ownerName }} /></p>}
+      subject={<Message id="dialog.unbindSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, owner: ownerName }} />}
+      message={t("dialog.unbindSession.answersToYou")}
+      consequences={<ConfirmConsequences lines={[{ key: "owner", text: t("dialog.unbindSession.consequence") }]} />}
       confirmLabel={t("dialog.unbindSession.confirm")}
       errorTitle={t("dialog.unbindSession.error")}
       onCancel={onClose}

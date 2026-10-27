@@ -556,11 +556,13 @@ const DELETE_PAGES: ToolDef = ToolDef {
 
 const SEND_MESSAGE: ToolDef = ToolDef {
     name: "send_message",
-    description: "Append an instruction to a running session of yours. Delivered straight \
-                  away when the session is idle or mid-turn; held until the user is done when \
-                  the session is waiting for them. The answer says if it was queued, or written \
-                  but left unsent by the session's agent. Refused for a session that is not \
-                  yours (`yours: false`): it is somebody else's, to be left alone.",
+    description: "Append an instruction to a running session of yours: it directs the session; \
+                  to tell a session something without instructing it, use `share_info`. \
+                  Delivered straight away when the session is idle or mid-turn; held until the \
+                  user is done when the session is waiting for them. The answer says if it was \
+                  queued, or written but left unsent by the session's agent. Refused for a \
+                  session that is not yours (`yours: false`): it is somebody else's, to be left \
+                  alone.",
     schema: || {
         object_schema(
             json!({
@@ -1332,15 +1334,16 @@ const RELEASE_SESSION: ToolDef = ToolDef {
     name: "release_session",
     description: "Release one of your sessions (`yours: true`) from its binding to you, when it \
                   is not yours to drive any more: it has no owner afterwards and is the user's \
-                  own, taking work only from the user in its terminal. Needs no approval. It \
-                  stops reporting to anyone, becomes an ordinary unbound session that can start \
-                  and drive sessions of its own, and is no longer archived with you or by its \
-                  own `done` report. A lead session keeps the sessions it started, and the \
-                  branches the session is responsible for stay with it. A session is told it \
-                  has no owner now, when it next starts if it is not running, which replaces \
-                  what it was told of its owner when it was started. An optional `note` is \
-                  passed on to it as your parting words, so say there what it should know to \
-                  carry on without you.",
+                  own, taking work only from the user in its terminal. You can no longer \
+                  instruct or drive it, but `share_info` still lets either of you tell the \
+                  other something. Needs no approval. It stops reporting to anyone, becomes an \
+                  ordinary unbound session that can start and drive sessions of its own, and is \
+                  no longer archived with you or by its own `done` report. A lead session keeps \
+                  the sessions it started, and the branches the session is responsible for stay \
+                  with it. A session is told it has no owner now, when it next starts if it is \
+                  not running, which replaces what it was told of its owner when it was \
+                  started. An optional `note` is passed on to it as your parting words, so say \
+                  there what it should know to carry on without you.",
     schema: || {
         object_schema(
             json!({
