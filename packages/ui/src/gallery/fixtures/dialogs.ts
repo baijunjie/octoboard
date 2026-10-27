@@ -871,12 +871,13 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Add project",
-    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open and the Git workflow group ends it, below Model and Reasoning effort: its four pickers, in the order Where sessions develop, Rebase before merging, Delivery and Revert gate, all read Same as app setting, each followed by a grey badge with the current application-wide value (In a worktree of its own, On, Ask each time, Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "Description follows Name, empty, with the placeholder No description and a note under it saying what it is for. Advanced is open, framed, with the tabs Launch settings and Git workflow in a row at its top and Git workflow selected: its four pickers, in the order Where sessions develop, Rebase before merging, Delivery and Revert gate, all read Same as global setting, each followed by a grey badge with the current global value (In a worktree of its own, On, Ask each time, Off), and the note on how the items follow the global setting ends the tab. The group has no heading of its own above the pickers, since the tab names it. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1400,
     steps: [
       consoleActions,
       (ui) => ui.press(ui.t("sidebar.console.addProject")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(ui.t("dialog.project.gitWorkflow.title")),
     ],
   },
   {
@@ -1376,7 +1377,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Stored project account and launch settings",
-    description: "Long selected account and retained model labels fade at the field edge and scroll on hover; the retained model, which the agent no longer lists, keeps a grey Not in the list badge after its name that stays clear of the fade. Open either picker to inspect the matching option labels.",
+    description: "Long selected account and retained model labels fade at the field edge and scroll on hover; the retained model, which the agent no longer lists, keeps a grey Not in the list badge after its name that stays clear of the fade. Advanced is open in a frame whose row of two tabs, Launch settings (selected) and Git workflow, sits above Model and Reasoning effort. Open either picker to inspect the matching option labels.",
     steps: [
       (ui) => projectActions(ui, configured.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1390,12 +1391,13 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project git workflow, some its own",
-    description: "Advanced is open and ends in the Git workflow group, which holds a picker for each setting in the order Where sessions develop, Rebase before merging, Delivery, Revert gate (last). Delivery reads Merge locally and Revert gate reads Off, the project's own values with no badge; Where sessions develop and Rebase before merging read Same as app setting, followed by a grey badge with the application-wide value (On a branch of its own and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "Advanced is open on its Git workflow tab (the tab beside Launch settings), which holds a picker for each setting in the order Where sessions develop, Rebase before merging, Delivery, Revert gate (last). Delivery reads Merge locally and Revert gate reads Off, the project's own values with no badge; Where sessions develop and Rebase before merging read Same as global setting, followed by a grey badge with the global value (On a branch of its own and Off). The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1200,
     steps: [
       (ui) => projectActions(ui, gitWorkflowProject.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(ui.t("dialog.project.gitWorkflow.title")),
     ],
   },
   {
@@ -1405,12 +1407,13 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project git workflow, developing on the current branch for the project",
-    description: "In the Git workflow group, Where sessions develop reads On the current branch, the project's own value, while the application-wide value is In a worktree of its own. Rebase before merging and Delivery are not shown, though the project's own values for them are kept and come back with another choice; Revert gate is still shown, reading Same as app setting with its grey badge. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
+    description: "On the Git workflow tab of Advanced, Where sessions develop reads On the current branch, the project's own value, while the global value is In a worktree of its own. Rebase before merging and Delivery are not shown, though the project's own values for them are kept and come back with another choice; Revert gate is still shown, reading Same as global setting with its grey badge. The window is tall enough for the whole dialog, which scrolls in a shorter one.",
     height: 1200,
     steps: [
       (ui) => projectActions(ui, inPlaceProject.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
       (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+      (ui) => ui.press(ui.t("dialog.project.gitWorkflow.title")),
     ],
   },
   {
@@ -1419,7 +1422,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Edit a project whose agent cannot list its models",
-    description: "In Advanced, the project's Model picker offers the stored model alone, which stays readable and is clipped at the field edge, and a warning mark named \"Could not load the models\" stands right after the \"Model\" label, with nothing drawn inside the field, so the Not in the list badge and the clear button are uncovered; the effort picker below is unchanged. The popover is in the next scenario.",
+    description: "In Advanced, on the Launch settings tab, the project's Model picker offers the stored model alone, which stays readable and is clipped at the field edge, and a warning mark named \"Could not load the models\" stands right after the \"Model\" label, with nothing drawn inside the field, so the Not in the list badge and the clear button are uncovered; the effort picker below is unchanged. The popover is in the next scenario.",
     agentModels: CLAUDE_NOT_FOUND,
     steps: [
       (ui) => projectActions(ui, configured.name),
@@ -1478,7 +1481,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Project settings that follow the console throughout",
-    description: "Default agent and its account, side by side, both read Same as console with a grey badge after it naming what it stands for (Claude Code; the console's long account name). The field is too narrow for either whole: the badge fades out with the label at the clipped edge rather than standing apart. Advanced does the same: Model and Reasoning effort read Same as console followed by a grey badge holding the console's long retained value, mixing scripts and keeping its own reading order.",
+    description: "Default agent and its account, side by side, both read Same as console with a grey badge after it naming what it stands for (Claude Code; the console's long account name). The field is too narrow for either whole: the badge fades out with the label at the clipped edge rather than standing apart. Advanced does the same on its Launch settings tab: Model and Reasoning effort read Same as console followed by a grey badge holding the console's long retained value, mixing scripts and keeping its own reading order.",
     steps: [
       (ui) => projectActions(ui, inheriting.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),
@@ -1743,7 +1746,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Parent directory source",
-    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open and, with Detect from files offering no model or effort, holds the Git workflow group alone, its four pickers reading Same as app setting, Revert gate last.",
+    description: "Default agent is a single field with a \"?\" at the end of its label and the visible line that an agent chosen here applies to every repository; the way Detect from files decides is in the tip. There are no Name and Description fields: both apply to a single project only. Advanced is open in a frame with the same tab row as a single project, but with one tab only, Git workflow (Detect from files offers no model or effort), selected. It holds four pickers in the order Where sessions develop, Rebase before merging, Delivery and Revert gate, all reading Same as global setting with a grey badge showing the global value, and the note on how the items follow the global setting. There is no separate Git workflow heading above the pickers, since the tab names it.",
     height: 1000,
     steps: [
       consoleActions,

@@ -1275,6 +1275,7 @@ export const en = {
   "dialog.chooseDirectory": "Choose a directory",
   "dialog.agentSettings.account": "{agent} account",
   "dialog.agentSettings.advanced": "Advanced",
+  "dialog.agentSettings.launchTab": "Launch settings",
   "dialog.agentSettings.model": "Model",
   "dialog.agentSettings.effort": "Reasoning effort",
   "dialog.agentSettings.placeholder": "The agent's own setting",
@@ -1356,8 +1357,8 @@ export const en = {
   "dialog.project.urlChecking": "Checking the repository…",
   "dialog.project.gitWorkflow.title": "Git workflow",
   "dialog.project.gitWorkflow.description":
-    "Each item follows the app setting unless you choose a value for this project. A change to the revert gate takes effect at once; any other change reaches only sessions begun after it.",
-  "dialog.project.gitWorkflow.sameAsGlobal": "Same as app setting",
+    "Each item follows the global setting unless you choose a value for this project. A change to the revert gate takes effect at once; any other change reaches only sessions begun after it.",
+  "dialog.project.gitWorkflow.sameAsGlobal": "Same as global setting",
   "dialog.consoleSession.title": "Open console session",
   "dialog.consoleSession.subject": "The session will be opened in the console {console}.",
   "dialog.consoleSession.launchInheritanceNote": "Unchanged values follow the console settings.",

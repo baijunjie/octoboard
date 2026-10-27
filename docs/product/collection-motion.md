@@ -9,7 +9,7 @@ rows of Settings' Git section that come and go with its Where sessions develop c
 listed in the account quota panel on the rail, and tab strips: the agent tabs in Settings' Agent accounts section, in
 the account quota panel and in the console dialog's Advanced section, and the Terminal panel's tabs. The quota meters
 within one account are not such a collection: they appear and disappear without motion as its readings change, and
-neither are the pickers of the project dialog's Git workflow group, which appear and disappear without motion as its
+neither are the pickers of the project dialog's Git workflow tab, which appear and disappear without motion as its
 Where sessions develop picker changes. Horizontal and wrapping collections move horizontally and vertically as needed,
 in either reading direction. A tab dropped at the end of a drag slides into its new place from where it was let go.
 

@@ -73,10 +73,11 @@ no grey rim. All other styles and component structure stay stock HeroUI 3, as sp
 content". The stock `Alert.Description` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own
 text on HeroUI's own fill, not recoloured.
 
-Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch and
-the agent tabs in the console dialog's Advanced section keep their labels fully opaque on hover and use the foreground
-colour instead of dimming. Preserve this shared visual treatment as an explicit product choice, while retaining the
-component's layout, selection and keyboard behaviour.
+Tabs in Settings, the project pane's Files / Changes switch, the session dialog's New / Resume conversation switch, the
+agent tabs in the console dialog's Advanced section and the Launch settings / Git workflow tabs in the project dialog's
+Advanced section keep their labels fully opaque on hover and use the foreground colour instead of dimming. Preserve this
+shared visual treatment as an explicit product choice, while retaining the component's layout, selection and keyboard
+behaviour.
 
 A status label such as "Not added", "Not installed" or "Logged in", and any other qualifier after a name (a session's
 account in its agent mark's tooltip where that names only the agent and its account, "Not in the list", a file's change
@@ -1493,7 +1494,7 @@ element, an error from `role="alert"`.
   when the disclosure opens again, and the text kept from before would be written in the very render that shows the
   body: text that appears with its region, which VoiceOver does not say. Mounted with each opening, the region writes
   after its delay with the trigger still focused. The instance is `AdvancedSection` in
-  `packages/ui/src/dialogs/LaunchSettingsFields.tsx`.
+  `packages/ui/src/dialogs/AdvancedSection.tsx`.
 - A dialog step whose title says what happened announces it by moving focus to the dialog, wherever focus was, so the
   dialog is read out by its new name; it adds no `StatusAnnouncer`, which would say the same thing again. The import's
   result step is the instance: its title becomes "Import finished" and the step focuses the dialog itself

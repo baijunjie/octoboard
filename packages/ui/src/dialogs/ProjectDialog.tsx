@@ -25,11 +25,12 @@ import { tagVocabulary } from "../projectFiltering";
 import type { Agent, Project, ProjectAccount, ProjectSource } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
 import { markDisabledPickable } from "./accountOptions";
+import { AdvancedSection, AdvancedTabs } from "./AdvancedSection";
 import { AgentAccountField } from "./AgentAccountField";
 import { Dialog, useDialogAction, useSubmitValidation } from "./Dialog";
 import { DirectoryPicker } from "./DirectoryPicker";
 import { GitWorkflowField } from "./GitWorkflowField";
-import { AdvancedSection, LaunchSettingsFields } from "./LaunchSettingsFields";
+import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import { OptionSelect, type Option } from "./OptionSelect";
 import { TagsInput } from "./TagsInput";
 import { TextAreaInput } from "./TextAreaInput";
@@ -119,7 +120,8 @@ export function ProjectDialog({
   // The project's own git workflow settings when the dialog opens, and the edits since; `null` follows the application-wide value.
   const [initialGitWorkflow] = useState(() => editing?.git_workflow ?? FOLLOWING_GIT_WORKFLOW);
   const [gitWorkflow, setGitWorkflow] = useState(initialGitWorkflow);
-  // The Advanced section's state while it holds the git workflow settings alone; with launch settings it keeps its own.
+  // Whether the Advanced section is open, kept here so it stays open as the section with launch settings and the
+  // one without them take each other's place.
   const [advancedExpanded, setAdvancedExpanded] = useState(false);
   const [description, setDescription] = useState(editing?.description ?? "");
   const [tags, setTags] = useState<string[]>(editing?.tags ?? []);
@@ -259,7 +261,11 @@ export function ProjectDialog({
     },
     ...agentIconPickerOptions(t, agentAvailability, addedAgents, defaultAgent === "" || defaultAgent === "detect" ? undefined : defaultAgent),
   ];
-  const gitWorkflowField = <GitWorkflowField value={gitWorkflow} onChange={setGitWorkflow} isDisabled={locked} />;
+  const gitWorkflowTab = {
+    id: "gitWorkflow",
+    label: t("dialog.project.gitWorkflow.title"),
+    content: <GitWorkflowField value={gitWorkflow} onChange={setGitWorkflow} isDisabled={locked} />,
+  };
 
   return (
     <>
@@ -405,13 +411,13 @@ export function ProjectDialog({
             isDisabled={locked}
             expanded={advancedExpanded}
             onExpandedChange={setAdvancedExpanded}
-          >
-            {gitWorkflowField}
-          </LaunchSettingsFields>
+            otherTab={gitWorkflowTab}
+          />
         ) : (
-          // "Detect from files" has no launch settings to offer, so the Advanced section holds the git workflow settings alone.
+          // "Detect from files" has no launch settings to offer, so the Advanced section holds the Git workflow
+          // tab alone.
           <AdvancedSection expanded={advancedExpanded} onExpandedChange={setAdvancedExpanded}>
-            {gitWorkflowField}
+            <AdvancedTabs tabs={[gitWorkflowTab]} />
           </AdvancedSection>
         )}
       </Dialog>

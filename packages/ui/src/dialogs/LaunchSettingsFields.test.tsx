@@ -189,7 +189,10 @@ it("hands focus to the console's Model trigger when the console matrix's mark th
 
 // WebKit blurs a control as it is disabled, before the render's effects run; jsdom never does, so the blur is
 // made by hand.
-it("hands focus on to the section's trigger when the mark that holds it goes in the render that locks the Model trigger", async () => {
+it.each([
+  ["the section's trigger", false],
+  ["the selected tab, in a section with tabs,", true],
+] as const)("hands focus on to %s when the mark that holds it goes in the render that locks the Model trigger", async (_, withTabs) => {
   let reload = false;
   const request = vi.fn(async (body: { type: string }) => {
     if (body.type !== "list_agent_models") return { type: "ack" };
@@ -203,7 +206,17 @@ it("hands focus on to the section's trigger when the mark that holds it goes in 
   const render = (account: string | null) => act(async () =>
     root.render(
       <DaemonProvider value={daemon}>
-        <LaunchSettingsFields agent="claude" account={account} model={null} effort={null} onModelChange={() => {}} onEffortChange={() => {}} expanded onExpandedChange={() => {}} />
+        <LaunchSettingsFields
+          agent="claude"
+          account={account}
+          model={null}
+          effort={null}
+          onModelChange={() => {}}
+          onEffortChange={() => {}}
+          expanded
+          onExpandedChange={() => {}}
+          otherTab={withTabs ? { id: "other", label: "Other", content: null } : undefined}
+        />
       </DaemonProvider>,
     ),
   );
@@ -234,7 +247,8 @@ it("hands focus on to the section's trigger when the mark that holds it goes in 
   expect(modelMark(container)).toBeNull();
   expect(trigger.disabled).toBe(true);
   const disclosure = [...container.querySelectorAll("button")].find((button) => button.textContent === "Advanced")!;
-  expect(document.activeElement).toBe(disclosure);
+  const launchTab = [...container.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent === "Launch settings");
+  expect(document.activeElement).toBe(withTabs ? launchTab : disclosure);
 });
 
 it("keeps the mark clear of the Model field's own press: pressing it neither opens the list nor clears the value", () => {

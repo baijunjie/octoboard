@@ -11,7 +11,7 @@ Three of the settings — where sessions develop, rebase before merging and deli
 project session is given in its role description (see "The development rule" below). The fourth, the revert gate,
 switches the revert gate on a project session's git (see `docs/product/revert-gate.md`), and is read every time the gate
 runs, so a change reaches running sessions at once. They are set in Settings' Git section and, per project, in the
-project dialog's Git workflow group, and through the daemon's requests and the console session's settings tools (see
+project dialog's Git workflow tab, and through the daemon's requests and the console session's settings tools (see
 "Reading and changing them" below).
 
 Where sessions develop decides whether there is a rule at all: while a project's effective value is on the current
@@ -133,22 +133,23 @@ merging and delivery in its Development group, which shows the rebase and delive
 on the current branch, and the revert gate in its Protection group, always shown (see "Git" in
 `docs/product/settings.md`).
 
-**In the project dialog.** A project's own values are set in a **Git workflow** group inside the project dialog's
-collapsed Advanced section, both when a project is associated and when it is edited (see "The project's account, model
-and reasoning effort" in `docs/product/projects.md` for where the section sits). The group lists the four items in the
-order Settings does — **Where sessions develop**, **Rebase before merging**, **Delivery**, **Revert gate** — each as a
-picker whose first choice, **Same as app setting**, carries the current application-wide value in a badge and follows
-it; the other choices are the item's own values — the three development choices, On and Off, or the three delivery
-choices. The group's text says that each item follows the application setting unless a value is chosen for the
-project, that a change to development, rebase or delivery reaches only sessions begun after it, and that a change to
-the revert gate takes effect at once. While the project's effective development — the value picked in the dialog, or
-the application-wide one while it is on Same as app setting — is on the current branch, the rebase and delivery pickers
-are not shown; what they hold is kept, and they come back with it when development is set to a branch or a worktree of
-its own. The revert gate picker is always shown. When a picker that goes had keyboard focus, focus moves to the Where
-sessions develop picker. The group is disabled while the rest of the form waits on the check of its location (see
-"Associating a project" in `docs/product/projects.md`).
+**In the project dialog.** A project's own values are set under the **Git workflow** tab of the project dialog's
+collapsed Advanced section, both when a project is associated and when it is edited (see "The Advanced section" in
+`docs/product/model-and-reasoning-effort.md` for the section's tabs, and "The project's account, model and reasoning
+effort" in `docs/product/projects.md` for where the section sits). The tab names the group; the group carries no heading
+of its own. It lists the four items in the order Settings does — **Where sessions develop**, **Rebase before merging**,
+**Delivery**, **Revert gate** — each as a picker whose first choice, **Same as global setting**, carries the current
+application-wide value in a badge and follows it; the other choices are the item's own values — the three development
+choices, On and Off, or the three delivery choices. The group's text says that each item follows the global setting
+unless a value is chosen for the project, that a change to development, rebase or delivery reaches only sessions begun
+after it, and that a change to the revert gate takes effect at once. While the project's effective development — the
+value picked in the dialog, or the application-wide one while it is on Same as global setting — is on the current
+branch, the rebase and delivery pickers are not shown; what they hold is kept, and they come back with it when
+development is set to a branch or a worktree of its own. The revert gate picker is always shown. When a picker that goes
+had keyboard focus, focus moves to the Where sessions develop picker. The group is disabled while the rest of the form
+waits on the check of its location (see "Associating a project" in `docs/product/projects.md`).
 
-Saving an edit changes only the items changed in the dialog, an item put back on Same as app setting following the
+Saving an edit changes only the items changed in the dialog, an item put back on Same as global setting following the
 application-wide value again; an item left alone keeps what the project holds, even where another window changed it
 meanwhile. What associating a project gives it is in "A project's own git workflow settings" above.
 
