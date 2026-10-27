@@ -137,6 +137,36 @@ or a request that fails, is a failed check.
 `--dry-run` prints the plan and the manifest without calling GitHub. The pure parts (which manifests a
 version goes to, names, addresses, the manifest) are `scripts/release-manifest.mjs`, tested by `pnpm test`.
 
+### Releasing by tag
+
+Pushing a tag `v<version>` runs `.github/workflows/release.yml`, which does the two steps above on a macOS runner after the
+full checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and `publish-release` path above stays
+available. The workflow:
+
+1. `validate` runs `.github/release-notes.sh`: the tag must equal `v<version>` from `tauri.conf.json` and be an annotated
+   tag with a non-empty message. The message, minus any signature, is the release notes, which the in-app update notice
+   shows too. It also checks that the tagged commit is on `main` and that the repository secrets below are set.
+2. `checks` runs `quality.yml`; then `release` builds, signs and notarizes with `pnpm --filter @octoboard/desktop release`
+   and publishes with `publish-release --notes-file`, using the workflow's own token for `gh`. The signing certificate and
+   its intermediate go into a keychain that exists for that run only.
+3. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
+   third tag pushed while one runs replaces the waiting one, which must then be re-run.
+
+Repository secrets: `APPLE_CERTIFICATE` (base64 of the Developer ID Application `.p12`, private key included),
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY` (the
+contents of the API key's `.p8`), `TAURI_SIGNING_PRIVATE_KEY` (the key's contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+(not set for a key without a password).
+
+To release: raise the version in `tauri.conf.json` (and in the package and crate manifests), push that commit to
+`main`, write the notes to a file, then `git tag -a v<version> --cleanup=whitespace -F <notes-file>` and
+`git push origin v<version>`. `--cleanup=whitespace` keeps the notes' Markdown heading lines, which the default
+`--cleanup=strip` drops; the file rather than the editor keeps git's `#` template lines out of them. Push tags one at a time: GitHub creates no push event
+when more than three tags are pushed at once.
+
+When a run fails after `gh release create` but before the manifests are uploaded, re-running it rebuilds with a different
+signature, and `publish-release` refuses it. Delete the release but keep the tag (`gh release delete v<version>`, without
+`--cleanup-tag`) and re-run the failed jobs. The script's own messages still describe the manual flow.
+
 ## External interfaces
 
 The shell defines fourteen Tauri IPC commands, permitted through `src-tauri/capabilities/default.json` and

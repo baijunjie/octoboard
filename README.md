@@ -81,8 +81,8 @@ pnpm exec eslint path/to/file.tsx --fix --fix-type layout
 cargo fmt -p octoboardd
 ```
 
-The Code quality workflow checks ESLint and Rust formatting on pushes to `main` and pull requests. Formatting
-does not replace type checking, tests or code review.
+The Code quality workflow runs the full set of checks before every release, and on request. Formatting does not
+replace type checking, tests or code review.
 
 The desktop shell is [Tauri 2](https://github.com/tauri-apps/tauri) around a
 [React](https://github.com/facebook/react) and [HeroUI](https://github.com/heroui-inc/heroui) interface. A

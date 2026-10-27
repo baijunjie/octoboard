@@ -1,18 +1,18 @@
 name: Code quality
 
+# The full set of checks `pnpm verify --full` runs, without its formatting rewrite. It runs before every release
+# (`release.yml` calls it) and on request, not on every push.
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  eslint:
-    runs-on: ubuntu-latest
+  checks:
+    # macOS, like the release build: the desktop crate's tests build against macOS frameworks.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -20,14 +20,12 @@ jobs:
         with:
           node-version: "24"
           cache: pnpm
+      # rustup is preinstalled; this installs the toolchain `rust-toolchain.toml` pins.
+      - run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-
-  rustfmt:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99.1
-        with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
+      - run: pnpm format:check
+      - run: pnpm typecheck
+      - run: pnpm --filter @octoboard/web check:locales
+      - run: node --test scripts/verify/*.test.mjs
+      - run: pnpm -r test
+      - run: pnpm test:rust

@@ -113,7 +113,7 @@ if (mode !== "unsigned" && !process.env.TAURI_SIGNING_PRIVATE_KEY) {
 
 // A release runs on both Mac architectures: one universal `.app`, so one update archive serves every Mac. Their Rust
 // targets are added here rather than in `rust-toolchain.toml`, which would make every build that uses the toolchain,
-// CI on Linux included, download them; adding a target that is already installed does nothing. It runs in the app
+// the checks included, download them; adding a target that is already installed does nothing. It runs in the app
 // directory so that rustup adds them to the toolchain `rust-toolchain.toml` pins, the one the build uses.
 const TARGET = ["--target", UNIVERSAL_TARGET];
 try {
