@@ -32,7 +32,7 @@ a second recipe for a role that already has a token, or overrides a HeroUI compo
 | Role | Source |
 | --- | --- |
 | Solid fill and the text on it (a primary button, a count badge, a selected segment, the resize line) | HeroUI `--{colour}` and `--{colour}-foreground` |
-| Soft fill (an Alert's background, a chip's and a badge's fill) | HeroUI `--{colour}-soft`; the neutral fill of a chip or badge is the one below, and an Alert's neutral fill is the secondary text colour at 16%, HeroUI's `--default-soft` all but vanishing on a white surface (1.09:1) |
+| Soft fill (an Alert's background, a chip's and a badge's fill) | HeroUI `--{colour}-soft`; the neutral fill of a chip or badge is the one below |
 | An icon or glyph of that meaning on a surface (a failure mark, a status dot, a lock, a Git badge, the session context badge's ring and its card's meter fill); a destructive menu item's icon takes its label's `--danger`, as HeroUI colours that label | HeroUI `--{colour}-soft-foreground`, the role HeroUI itself gives an Alert's and a Toast's indicator |
 | Text in that colour (a chip's and a badge's text, +N / −M line counts, the diff viewer's added and removed text) | The project's tint text token: HeroUI's soft foreground pulled toward the foreground just enough to keep 4.5:1 on every surface (neutral: HeroUI's `--default-foreground`, which has no token) |
 | A hairline edge (a bordered badge) | The project's tint edge token, mixed from HeroUI's solid colour |
@@ -90,7 +90,7 @@ tokens in `packages/ui/src/style.css`, per colour a fill, a text colour (neutral
 instead of a token) and an edge, which both components read, so a chip and a badge of the same colour never differ. A
 coloured fill is HeroUI's `--{colour}-soft`, its edge the solid `--{colour}` mixed down (HeroUI has no border token);
 the neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured ones, so it is close to
-HeroUI's `--default` over white and deepens on a grey surface (a hovered or selected row, an Alert) instead of vanishing
+HeroUI's `--default` over white and deepens on a grey surface (a hovered or selected row) instead of vanishing
 into it, 1.19:1 to 1.20:1 off a light surface and 1.14:1 to 1.31:1 off a dark one. Its edge is the secondary text colour
 at 28%. Only the bordered badge draws the edge; a chip never has one.
 
@@ -920,7 +920,8 @@ Where an error or a warning is shown follows from how it arises, not from the sc
    on the screen; in place of a whole page, pane or list, the empty-state failure ("A whole subject that failed").
 4. **An error or a warning that is not important** — it does not block what follows — is a mark at the point it
    concerns; one with no point it can be located at is an Alert in a shared place (the top of a dialog's body, the top
-   of a section).
+   of a section). A warning about the consequence of a choice the user is making is not one of these: it is an Alert
+   under that choice while the choice is selected.
 5. **A result view showing a failed result** (an import's result whose application settings could not be applied)
    shows that result as an Alert, as the view's own content.
 6. **A destructive confirmation** (removing, deleting, archiving) is a warning modal, as "Keyboard" sets out.
@@ -1038,16 +1039,13 @@ that opens with its 20px description draws its first line off the glyph's centre
 aligned, not a CSS exception. The title does not merely repeat the description. The Alert wrappers require it in their
 types, and a lint restriction keeps HeroUI's `Alert` from being used outside them.
 
-An Alert holds everything that belongs to it: its title, its description and the items it is about, such as the entries
-a failure lists. Nothing of the Alert sits outside it as loose text. Those items are children of `Alert.Content` after
-`Alert.Title` and `Alert.Description`, drawn in the description's own text style so the Alert keeps HeroUI's stock look;
-never inside `Alert.Description`, which is a single text run. This changes nothing about what goes behind **Details**:
-further explanation and raw text stay in its popover. An error-only screen's instructions are not part of the Alert and
-stand around it, as below.
+An Alert holds everything that belongs to it: its title, its description, its remedy and, behind **Details**, the items
+it is about, such as the entries a failure lists, with further explanation and raw text. Nothing of the Alert sits
+outside it as loose text, and nothing beyond its two sentences is drawn in its body. An error-only screen's instructions
+are not part of the Alert and stand around it, as below.
 
-The Alert is HeroUI's `Alert`, through one of two wrappers: `ErrorAlert` for danger, and for a warning that carries a
-remedy, **Details** or a recovery action; a warning-status `TintedAlert` otherwise. Either way it takes its status
-background fill and status-coloured shadow (see "Confirmed visual choices") as its only custom visual treatments;
+The Alert is HeroUI's `Alert`, through `ErrorAlert`, for danger and for a warning alike. It takes its status background
+fill and status-coloured shadow (see "Confirmed visual choices") as its only custom visual treatments;
 indicator, typography, spacing, radius and component structure stay stock HeroUI. A danger title uses `Alert.Title` with
 its original status colour; `Alert.Description` keeps its default colour. Do not apply `text-foreground` or another
 colour override to either part, override text sizes, or replace `Alert.Title` with a heading element. Neutral absence,
@@ -1086,6 +1084,18 @@ busy the layout around it is:
   uncommitted changes) — is an Alert even where it can be located, so that it is said outright rather than one press
   away: a failed lookup directly under the field it is about, a reason that lies outside a dialog's fields at the top
   of its body, a list part at the top of that list.
+- **A warning about the consequence of a choice the user is making** — a risk the user takes on by selecting an option
+  in a form, such as an export that will carry full paths of the user's machine — is a warning Alert directly under that
+  option, shown while the option is selected and gone once it is not, never a mark. A mark keeps what it says one hover
+  or press away, and a risk the user is opting into is said outright at the moment of choosing. Its title says what the
+  choice brings about, its description what that exposes, and its remedy the one thing to do about it. It reaches
+  assistive technology with the choice: while it is shown it is in the option's `aria-describedby` after the option's
+  own description, and as it appears on a selection its title and description are announced once (`ChoiceWarning`, an
+  `ErrorAlert` that announces), since focus stays on the option and the Alert is no tab stop. The option's own
+  description still follows its state (see `.claude/skills/knowledge-i18n-copy/SKILL.md`, "Descriptions under toggles")
+  and does not repeat the Alert. A warning about the state of something — a check that failed, what could not be read —
+  stays a mark, even beside a checkbox. In a destructive confirmation an option's consequence is instead a line of the
+  warning modal's consequences (see "Keyboard"); this Alert is for a form or a confirmation that is not destructive.
 - **Any other error or warning, and a note** — one that does not block what follows — never takes an Alert where it has
   a point. It is a mark at the point it concerns: `StatusMark`, its glyph right after the name, heading or line it
   qualifies — a row or an item, a name, one section's heading in a list, a page's heading or a pane's or view's title
@@ -1142,6 +1152,12 @@ in it succeeded. The row's accessible name adds the mark's name ("Git check fail
 in no name and no tooltip, only in the mark's popover. A press on the mark keeps to itself and does not reach the
 pressable row around it, and when the mark goes away while it or its popover holds focus, focus goes to the row (or
 focus mode's header). No sentence of error text is written into the row.
+
+A mark placed after a line of text is centred on that line by construction: the box holding it is one line of that
+text's own size and line height (`MarkLineBox`, `h-[1lh]` under the text's size class), the mark centred in it, so it
+follows the text's first line when the text wraps or changes size. Never align it by a fixed pixel height, a `min-h`, or
+the height of the box around the text, which need not be the height of its line (a checkbox's content box is taller than
+its label's line, its text at the top).
 
 **A mark is always a popover, and never also a tooltip.** What an error or a warning carries can hold a button (Try
 again) and raw text to select, which a tooltip cannot, and one mark wiring both surfaces would put two floating things
@@ -1275,12 +1291,11 @@ Inline references retain HeroUI's colours, soft fill and shape; the help hue is 
 fill and text come from the tint tokens shared with `StatusBadge` (see "Confirmed visual choices"); the neutral chip is
 the neutral fill rather than HeroUI's `--default-soft`. `CodeBlock` uses the shared Typography wrapper for multi-line
 diagnostics. Outside an Alert, both default to neutral and may choose a colour. The Alert wrappers supply
-`CodeToneContext`, passing each status straight through as the chip's colour: default stays neutral, and accent,
-success, warning and danger use their matching colours. A chip drawn off that fill — in the Alert's Details popover —
-leaves the tone and keeps its own colour. The nearest status context takes precedence over an explicit colour, including
-field errors and toast titles. Do not hand-colour individual literals within a status message. HeroUI's Alert parts
-remain the indicator, content, title and description primitives. Syntax-highlighted source and foreign renderer markup
-retain their own palettes.
+`CodeToneContext`, passing the Alert's status, warning or danger, straight through as the chip's colour. A chip drawn
+off that fill — in the Alert's Details popover — leaves the tone and keeps its own colour. The nearest status context
+takes precedence over an explicit colour, including field errors and toast titles. Do not hand-colour individual
+literals within a status message. HeroUI's Alert parts remain the indicator, content, title and description primitives.
+Syntax-highlighted source and foreign renderer markup retain their own palettes.
 
 ### External links
 

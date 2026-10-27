@@ -38,7 +38,7 @@ it("says the daemon's failure to start in the application's words and keeps its 
   // A plain browser has no quit flow, so the row is empty and the mark, right after the heading, is the page's only button.
   const buttons = [...container.querySelectorAll("button")];
   expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([t("startup.daemonFailed.markLabel")]);
-  expect(buttons[0].previousElementSibling).toBe(heading);
+  expect(buttons[0].parentElement!.previousElementSibling).toBe(heading);
   press(buttons[0]);
   expect(document.querySelector(`[role="dialog"][aria-label="${t("startup.daemonFailed.markLabel")}"] pre`)?.textContent).toBe(DIAGNOSTIC);
 });

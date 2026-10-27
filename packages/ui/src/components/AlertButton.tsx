@@ -1,9 +1,10 @@
 import React, { createContext, useContext } from "react";
 
 import { Button, type ButtonProps } from "./Button";
+import type { AlertStatus } from "./ErrorAlert";
 
 /** The status of the compact Alert a button stands in, which the button takes its colour from. */
-export const AlertStatusContext = createContext<"danger" | "warning">("danger");
+export const AlertStatusContext = createContext<AlertStatus>("danger");
 
 /** A button at the end of a compact Alert, in the Alert's status colour: the recovery action solid
  * (`kind="action"`), Details soft (`kind="details"`). A danger Alert uses HeroUI's `danger` and

@@ -1628,8 +1628,12 @@ export const en = {
   "dialog.trust.confirm": "Trust and continue",
   "dialog.trust.notNow": "Not now",
   "dialog.trust.parent": "Trust every project under {directory}",
-  "dialog.trust.parentNote":
-    "This records the folder instead of this project, and covers every project under it, at any depth, including ones added there later, for every agent.",
+  "dialog.trust.parentNote.off": "Once checked, the folder is trusted instead of this project alone.",
+  "dialog.trust.parentNote.on": "The folder will be trusted instead of this project alone.",
+  "dialog.trust.parentWarning.title": "Projects added there later will be trusted too.",
+  "dialog.trust.parentWarning.description":
+    "Trust covers projects at any depth under the folder, for every agent, and each one's own permission rules, hooks and instructions take effect.",
+  "dialog.trust.parentWarning.remedy": "Trust only a folder whose contents you control.",
   "dialog.trust.alreadyAnswered":
     "The trust confirmation was already answered, so this folder was not trusted. Use this dialog again for the next one.",
   "dialog.sessionRequest.title": "Start a session?",
@@ -1709,12 +1713,11 @@ export const en = {
   "configuration.export.scope.all": "Everything",
   "configuration.export.scope.all.description": "Every console with its projects, and the application settings, including this device's keyboard shortcuts.",
   "configuration.export.paths.include": "Include full project paths",
-  "configuration.export.paths.include.description":
-    "Without them, the file records only each project's directory name, and an import places each project in the default clone directory or clones it from its remote.",
-  "configuration.export.paths.mark": "Paths in the file",
+  "configuration.export.paths.include.description.off": "Once checked, the file records each project's full directory path, so an import can look for the project there first.",
+  "configuration.export.paths.include.description.on": "An import first looks for each project at its recorded full path.",
   "configuration.export.paths.title": "The file contains project paths.",
-  "configuration.export.paths.description":
-    "The file records each project's full directory path on the machine running {appName}, which may not be the device you are using now. These paths can reveal details such as your user name, so share the file only with people you trust.",
+  "configuration.export.paths.description": "These are paths on the machine running {appName}, which may not be the device you are using now, and they can reveal details such as your user name.",
+  "configuration.export.paths.remedy": "Share the file only with people you trust.",
   "configuration.export.submit": "Export",
   "configuration.export.saved": "Configuration saved as {name}.",
   "configuration.export.downloaded": "Configuration downloaded.",
@@ -1959,7 +1962,7 @@ export const en = {
     "An archived session is deleted automatically when its agent no longer keeps its conversation. Archived sessions are checked each time the app starts, then about once a day. Pinned and locked sessions are kept.",
   "settings.sidebarOrder.label": "Order the sidebar by status",
   "settings.sidebarOrder.description.off":
-    "Sessions are listed newest first and projects by name, pinned ones first, so one waiting for you or at work does not move up. Projects with no unarchived session end the list. Once this is on, sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones.",
+    "Once this is on, sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones. Projects with no unarchived session end the list.",
   "settings.sidebarOrder.description.on":
     "Sessions and projects move as their status changes, so the ones waiting for you come first after the pinned ones. Projects with no unarchived session end the list.",
   "settings.agentPermissions.lead": "Choose what sessions may do without asking you first, and how they ask you.",
@@ -1975,19 +1978,19 @@ export const en = {
     "A session can reopen or resume a session, or resume a conversation in a new session, without asking you first. A reopened or resumed session keeps its owner, and its archived owners are reopened with it. A new session started this way is owned by nobody but you.",
   "settings.autoApproveAccountSwitches.label": "Automatically approve account switches",
   "settings.autoApproveAccountSwitches.description.off":
-    "Once this is on, a session can switch the account of one of its own sessions without asking you first. Until then you are asked, and can change the account, model and reasoning effort before confirming.",
+    "Once this is on, a session can switch the account of one of its own sessions without asking you first.",
   "settings.autoApproveAccountSwitches.description.on":
-    "A session can switch the account of one of its own sessions without asking you first. Turn this off to be asked, and to change the account, model and reasoning effort before confirming.",
+    "A session can switch the account of one of its own sessions without asking you first.",
   "settings.autoApproveHandoffs.label": "Automatically approve handoffs",
   "settings.autoApproveHandoffs.description.off":
-    "Once this is on, a session can hand one of its own sessions off to a session of another agent without asking you first. Until then you are asked, and can change the agent, account, model and reasoning effort before confirming.",
+    "Once this is on, a session can hand one of its own sessions off to a session of another agent without asking you first.",
   "settings.autoApproveHandoffs.description.on":
-    "A session can hand one of its own sessions off to a session of another agent without asking you first. Turn this off to be asked, and to change the agent, account, model and reasoning effort before confirming.",
+    "A session can hand one of its own sessions off to a session of another agent without asking you first.",
   "settings.askQuestionsAsChoices.label": "Ask questions as choices",
   "settings.askQuestionsAsChoices.description.off":
-    "Once this is on, Octoboard asks sessions to put a question that needs your decision as options you can pick, rather than listing the options in their reply. Until then, sessions ask in their own way.",
+    "Once this is on, Octoboard asks sessions to put a question that needs your decision as options you can pick, rather than listing the options in their reply. A change reaches sessions started afterwards.",
   "settings.askQuestionsAsChoices.description.on":
-    "Octoboard asks sessions to put a question that needs your decision as options you can pick, rather than listing the options in their reply. Turn this off to let sessions ask in their own way. A change reaches sessions started afterwards.",
+    "Octoboard asks sessions to put a question that needs your decision as options you can pick, rather than listing the options in their reply. A change reaches sessions started afterwards.",
   "settings.autoSelect.label": "Automatically select an account",
   "settings.autoSelect.description.off":
     "Once this is on, a new session uses the account whose weekly limit resets soonest, so usage left before a reset is not wasted.",
@@ -2078,8 +2081,10 @@ export const en = {
   "settings.git.group.development": "Development",
   "settings.git.group.protection": "Protection",
   "settings.git.autoPull.label": "Automatically pull repositories",
-  "settings.git.autoPull.description":
-    "Pulls a project's branch when it is behind its upstream and can be fast-forwarded. It never pushes, and it leaves a branch that has commits of its own alone.",
+  "settings.git.autoPull.description.off":
+    "Once this is on, a project's branch is pulled when it is behind its upstream and can be fast-forwarded. Nothing is pushed, and a branch with commits of its own is left alone.",
+  "settings.git.autoPull.description.on":
+    "A project's branch is pulled when it is behind its upstream and can be fast-forwarded. Nothing is pushed, and a branch with commits of its own is left alone.",
   "settings.git.autoPull.help": "About automatic pulling",
   "settings.git.autoPull.remoteCheck":
     "The remote is checked every few minutes whichever way this is set, so the branch always shows how far ahead or behind it is.",

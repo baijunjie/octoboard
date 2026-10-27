@@ -3,6 +3,7 @@ import { act } from "react";
 import { setInteractionModality } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { consoleOf } from "../gallery/fixtures/builders";
 import { isolate } from "../i18n/isolate";
 import type { SavedConfigurationFile } from "../platform";
@@ -42,44 +43,61 @@ it("leaves full project paths out by default, with no warning about them, before
   const { sent } = mount();
   expect(pathsBox().checked).toBe(false);
   expect(pathsBox().labels?.[0]?.textContent).toBe("Include full project paths");
-  expect(text()).toContain("Without them, the file records only each project's directory name");
+  expect(text()).toContain("Once checked, the file records each project's full directory path");
   expect(text()).not.toContain("The file contains project paths");
+  expect(document.body.querySelector("[data-slot=alert-root]")).toBeNull();
   expect(sent()).toEqual([]);
 });
 
-const pathsMark = () => document.body.querySelector<HTMLElement>("button[data-status-mark][aria-label='Paths in the file']");
+const hint = () => document.getElementById(pathsBox().getAttribute("aria-describedby")!.split(" ")[0]!)!;
 
-it("marks that the file carries project paths, and whose, beside the option once they are asked for, outside its label", async () => {
+it("warns under the option, while it is checked, that the file carries project paths and whose", async () => {
   mount();
-  expect(pathsMark()).toBeNull();
   await act(async () => pathsBox().click());
-  const mark = pathsMark()!;
-  expect(mark).not.toBeNull();
-  // Not inside the checkbox's label: the checkbox is named by its label alone.
-  expect(mark.closest("label")).toBeNull();
-  expect(Array.from(pathsBox().labels ?? []).every((label) => !label.textContent?.includes("Paths in the file"))).toBe(true);
+  const alert = document.body.querySelector<HTMLElement>("[data-slot=alert-root]")!;
+  expect(alert).not.toBeNull();
+  expect(alert.textContent).toContain("The file contains project paths");
+  expect(alert.textContent).toContain("the machine running Octoboard, which may not be the device you are using now");
+  expect(alert.textContent).toContain("Share the file only with people you trust.");
+  // A warning about the choice, not about state: no mark beside the option, and the checkbox is named by its label
+  // alone.
+  expect(document.body.querySelector("button[data-status-mark]")).toBeNull();
   expect(pathsBox().labels?.[0]?.textContent).toBe("Include full project paths");
+  // Under the option: after its note.
+  expect(hint().compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await act(async () => pathsBox().click());
   expect(document.body.querySelector("[data-slot=alert-root]")).toBeNull();
-  await act(async () => mark.click());
-  const popover = document.body.querySelector("[data-status-mark-popover]")!;
-  expect(popover.textContent).toContain("The file contains project paths");
-  expect(popover.textContent).toContain("the machine running Octoboard, which may not be the device you are using now");
-  // The mark's press leaves the option as it was.
-  expect(pathsBox().checked).toBe(true);
 });
 
-it("puts the mark right after the checkbox and its note under them, the note describing the checkbox", async () => {
+it("reaches a screen-reader user: described by the checkbox while checked, and spoken once after the tick", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
   mount();
+  const box = pathsBox();
+  expect(box.getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
+  await act(async () => box.click());
+  expect(pathsBox()).toBe(box);
+  const alert = document.body.querySelector<HTMLElement>("[data-slot=alert-root]")!.parentElement!;
+  expect(box.getAttribute("aria-describedby")!.split(" ")).toEqual([hint().id, alert.id]);
+  // Held back while the checkbox's own new state is spoken.
+  expect(alert.querySelector("[role=alert]")).toBeNull();
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  const spoken = alert.querySelector("[role=alert]")!;
+  expect(spoken.textContent).toContain("The file contains project paths.");
+  expect(spoken.textContent).toContain("which may not be the device you are using now");
+  expect(spoken.textContent).not.toContain("Share the file only with people you trust.");
+  await act(async () => box.click());
+  expect(box.getAttribute("aria-describedby")!.split(" ")).toEqual([hint().id]);
+});
+
+it("describes the option by its state, the note outside the checkbox's label", async () => {
+  mount();
+  expect(hint().textContent).toContain("Once checked, the file records each project's full directory path");
+  expect(pathsBox().closest("label")!.contains(hint())).toBe(false);
   await act(async () => pathsBox().click());
-  const label = pathsBox().closest("label")!;
-  const mark = pathsMark()!;
-  const hint = document.getElementById(pathsBox().getAttribute("aria-describedby")!.split(" ")[0]!)!;
-  expect(hint.textContent).toContain("Without them, the file records only each project's directory name");
-  expect(label.contains(hint)).toBe(false);
-  // The checkbox ends at its label, so the mark follows it at once; the note comes after both.
-  expect(label.closest("[data-slot=checkbox]")?.nextElementSibling?.contains(mark)).toBe(true);
-  expect(mark.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(label.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(hint().textContent).toBe("An import first looks for each project at its recorded full path.");
 });
 
 it("asks for the paths only when the box is checked", async () => {

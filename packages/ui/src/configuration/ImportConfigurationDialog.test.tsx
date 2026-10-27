@@ -111,7 +111,7 @@ it("marks a console and a project whose account is not set up with a warning mar
   const heading = consoleCard("Work laptop").querySelector("h3")!;
   // No loose sentence beside the name; the mark follows the heading directly.
   expect(consoleCard("Work laptop").querySelector(":scope > div")!.textContent).not.toContain("is not set up");
-  expect(heading.nextElementSibling?.getAttribute("aria-label")).toBe(`Accounts not set up for ${isolate("Work laptop")}`);
+  expect(heading.nextElementSibling?.firstElementChild?.getAttribute("aria-label")).toBe(`Accounts not set up for ${isolate("Work laptop")}`);
   expect(await fallbackSentences(heading.parentElement!)).toContain("Claude Code account Work is not set up in Octoboard, so the default account is used.");
   expect(row("Search API").textContent).not.toContain("is not set up");
   expect(await fallbackSentences(row("Search API"))).toContain("Codex account Personal is not set up in Octoboard");

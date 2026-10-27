@@ -684,44 +684,20 @@ html {
   --app-muted: var(--muted);
 }
 
-/* An Alert draws two things itself (`TintedAlert`, `ErrorAlert`). Its background is HeroUI's soft fill for
-   its status; the neutral one is `--app-muted` at 16% (`--alert-fill-default`), HeroUI's `--default-soft`
-   all but vanishing on a white surface. Its shadow is HeroUI's `--surface-shadow` in light, three layers
-   (`0 2px 4px`, `0 1px 2px`, `0 0 1px`, at 4%, 6% and 6%, from HeroUI 3.2.6's `variables.css`), which in
-   grey reads as a rim on a tinted fill; it keeps those offsets, blurs and strengths and takes its colour
-   from the Alert's status instead (the neutral Alert from the secondary text colour, as its fill is),
-   defined once here as `--alert-shadow-{status}`. Dark keeps HeroUI's own, no shadow. */
+/* An Alert draws two things itself (`ErrorAlert`, which `FailureAlert` is built on). Its background is HeroUI's soft
+   fill for its status. Its shadow is HeroUI's `--surface-shadow` in light, three layers (`0 2px 4px`, `0 1px 2px`,
+   `0 0 1px`, at 4%, 6% and 6%, from HeroUI 3.2.6's `variables.css`), which in grey reads as a rim on a tinted fill;
+   it keeps those offsets, blurs and strengths and takes its colour from the Alert's status instead, defined once
+   here as `--alert-shadow-{status}`. Dark keeps HeroUI's own, no shadow. */
 :root {
-  --alert-fill-default: color-mix(in oklab, var(--app-muted) 16%, transparent);
-  --alert-shadow-default: 0 2px 4px 0 color-mix(in oklab, var(--app-muted) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--app-muted) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--app-muted) 6%, transparent);
-  --alert-shadow-accent: 0 2px 4px 0 color-mix(in oklab, var(--accent) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--accent) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--accent) 6%, transparent);
-  --alert-shadow-success: 0 2px 4px 0 color-mix(in oklab, var(--success) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--success) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--success) 6%, transparent);
   --alert-shadow-warning: 0 2px 4px 0 color-mix(in oklab, var(--warning) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--warning) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--warning) 6%, transparent);
   --alert-shadow-danger: 0 2px 4px 0 color-mix(in oklab, var(--danger) 4%, transparent), 0 1px 2px 0 color-mix(in oklab, var(--danger) 6%, transparent), 0 0 1px 0 color-mix(in oklab, var(--danger) 6%, transparent);
 }
 
 .dark,
 [data-theme="dark"] {
-  --alert-shadow-default: 0 0 0 0 transparent inset;
-  --alert-shadow-accent: 0 0 0 0 transparent inset;
-  --alert-shadow-success: 0 0 0 0 transparent inset;
   --alert-shadow-warning: 0 0 0 0 transparent inset;
   --alert-shadow-danger: 0 0 0 0 transparent inset;
-}
-
-.alert-fill-default {
-  background-color: var(--alert-fill-default);
-  --surface-shadow: var(--alert-shadow-default);
-}
-
-.alert-fill-accent {
-  background-color: var(--accent-soft);
-  --surface-shadow: var(--alert-shadow-accent);
-}
-
-.alert-fill-success {
-  background-color: var(--success-soft);
-  --surface-shadow: var(--alert-shadow-success);
 }
 
 .alert-fill-warning {
@@ -748,7 +724,7 @@ html {
 /* The one colour configuration of a tag: a `StatusBadge` and an `InlineReference` both draw their fill
    (`--tint-{colour}-bg`) and text (`--tint-{colour}-fg`) from it, and the badge's hairline (`--tint-{colour}-edge`) is
    the badge's alone. The neutral fill is the foreground at 8% in light and 10% in dark, translucent like the coloured
-   ones, so it deepens on a grey surface (a hovered or selected row, an Alert) instead of vanishing into it as an opaque
+   ones, so it deepens on a grey surface (a hovered or selected row) instead of vanishing into it as an opaque
    grey would; over white it is close to HeroUI's light `--default`; dark takes 10% rather than the 8% that would match
    its `--default` over a dialog, which would sit only 1.10:1 off `--background`. Its text is HeroUI's
    `--default-foreground` and its hairline `--app-muted` at 28%. The four HeroUI colours take their soft fill and their

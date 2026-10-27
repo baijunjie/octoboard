@@ -1,9 +1,10 @@
 import { ActionableError } from "../errorRecovery";
 import { Checkbox, Description, Label } from "@heroui/react";
 import { errorPresentation } from "../errorPresentation";
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { ChoiceWarning } from "../components/ChoiceWarning";
 import { InlineReference } from "../components/InlineReference";
 import { DaemonRequestError } from "../daemon-client";
 import { Message, useT } from "../i18n/react";
@@ -60,8 +61,9 @@ function TrustPromptMessage({
 
 /** The folder-wide choice: checked, the confirmation is answered and that folder is trusted instead
  * of this project alone, which reaches beyond the project asked about — every project under the
- * folder, including ones added there later, for every agent. Shown only when the daemon offers a
- * folder. `directory` is already written as Settings writes it. */
+ * folder, including ones added there later, for every agent. While it is checked a warning Alert
+ * under the option says so; the option's note follows its state and does not repeat the Alert. Shown
+ * only when the daemon offers a folder. `directory` is already written as Settings writes it. */
 function TrustDirCheckbox({
   directory,
   checked,
@@ -72,29 +74,42 @@ function TrustDirCheckbox({
   onChange: (checked: boolean) => void;
 }): React.ReactElement {
   const t = useT();
+  const warningId = useId();
   return (
-    <Checkbox variant="secondary" isSelected={checked} onChange={onChange}>
-      {/* The pressable part is one line of `text-sm`, so an `::after` lifts what the pointer hits to
-          the 24-pixel floor without changing what is drawn. */}
-      <Checkbox.Content className="relative after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-['']">
-        <Checkbox.Control>
-          <Checkbox.Indicator />
-        </Checkbox.Control>
-        <Label>
-          <Message
-            id="dialog.trust.parent"
-            params={{
-              directory: (
-                <InlineReference monospace wrap>{directory}</InlineReference>
-              ),
-            }}
-          />
-        </Label>
-      </Checkbox.Content>
-      {/* A direct child of `Checkbox`, beside `Checkbox.Content`: from there it indents under the
-          label and react-aria folds its id into the box's own `aria-describedby`. */}
-      <Description>{t("dialog.trust.parentNote")}</Description>
-    </Checkbox>
+    <>
+      <Checkbox variant="secondary" isSelected={checked} onChange={onChange} aria-describedby={checked ? warningId : undefined}>
+        {/* The pressable part is one line of `text-sm`, so an `::after` lifts what the pointer hits to
+            the 24-pixel floor without changing what is drawn. */}
+        <Checkbox.Content className="relative after:absolute after:-inset-y-0.5 after:inset-x-0 after:content-['']">
+          <Checkbox.Control>
+            <Checkbox.Indicator />
+          </Checkbox.Control>
+          <Label>
+            <Message
+              id="dialog.trust.parent"
+              params={{
+                directory: (
+                  <InlineReference monospace wrap>{directory}</InlineReference>
+                ),
+              }}
+            />
+          </Label>
+        </Checkbox.Content>
+        {/* A direct child of `Checkbox`, beside `Checkbox.Content`: from there it indents under the
+            label and react-aria folds its id into the box's own `aria-describedby`, after which the
+            Alert's id comes while it is shown. */}
+        <Description>{t(checked ? "dialog.trust.parentNote.on" : "dialog.trust.parentNote.off")}</Description>
+      </Checkbox>
+      {checked && (
+        <ChoiceWarning
+          id={warningId}
+          title={t("dialog.trust.parentWarning.title")}
+          remedy={t("dialog.trust.parentWarning.remedy")}
+        >
+          {t("dialog.trust.parentWarning.description")}
+        </ChoiceWarning>
+      )}
+    </>
   );
 }
 

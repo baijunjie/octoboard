@@ -42,17 +42,18 @@ system itself said is under **Error details**, never in the sentence.
 **Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
 there is only everything. Each choice says whether the application settings go with it: everything carries them, this
 device's keyboard shortcuts included, and a single console does not. Under that choice is a checkbox, **Include full
-project paths**, unchecked by default; its note says that without them the file records only each project's directory
-name, and that an import then places each project in the default clone directory or clones it from its remote (see
-"Project paths" below). Only while it is checked, and so before anything is saved, an amber warning mark named that
-paths are in the file follows the checkbox's label, on its line: its popover says that the file contains project paths,
-each project's full directory path on the machine running Octoboard, which may not be the device the user is on, that
-those paths can reveal details such as the user name, and that the file is to be shared only with people the user
-trusts. The dialog's **Export** button then asks the daemon for the document and opens the save dialog. In the desktop
-app a toast names the file it was saved as. A browser files a download itself, under its own name and wherever its
-settings say, and does not report one that was blocked or cancelled, so there the toast says only that the configuration
-was downloaded and names no file. Dismissing the desktop app's save dialog saves nothing and leaves the export dialog
-open; a file that could not be written is told as above.
+project paths**, unchecked by default (see "Project paths" below). Its note follows its state: while unchecked, that
+checking it has the file record each project's full directory path, so an import can look for the project there first;
+while checked, that an import first looks for each project at its recorded full path. Only while it is checked, and so
+before anything is saved, a warning alert stands directly under it (see "Warnings about a choice being made" in
+`docs/product/error-alerts.md`), titled that the file contains project paths: these are paths on the machine running
+Octoboard, which may not be the device the user is on, and they can reveal details such as the user name; the thing to
+do is to share the file only with people the user trusts. The dialog's **Export** button then asks the daemon for the
+document and opens the save dialog. In the desktop app a toast names the file it was saved as. A browser files a
+download itself, under its own name and wherever its settings say, and does not report one that was blocked or
+cancelled, so there the toast says only that the configuration was downloaded and names no file. Dismissing the
+desktop app's save dialog saves nothing and leaves the export dialog open; a file that could not be written is told as
+above.
 
 **Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that the file is one
 exported earlier, that its contents can be reviewed and where each project goes on the machine running Octoboard chosen

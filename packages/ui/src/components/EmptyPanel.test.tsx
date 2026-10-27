@@ -108,8 +108,8 @@ it("draws a heading mark right after the heading, on its line, and keeps it out 
   );
   const heading = container.querySelector("h1")!;
   const mark = container.querySelector<HTMLElement>("button[aria-label='Error details']")!;
-  expect(mark.previousElementSibling).toBe(heading);
-  expect(mark.parentElement).toBe(heading.parentElement);
+  expect(mark.parentElement!.previousElementSibling).toBe(heading);
+  expect(mark.parentElement!.parentElement).toBe(heading.parentElement);
   expect([...container.querySelectorAll("button")].map((button) => button.textContent || button.getAttribute("aria-label"))).toEqual(["Error details", "Quit"]);
 });
 

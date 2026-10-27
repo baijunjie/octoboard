@@ -5,6 +5,7 @@ import React, { useId, useState } from "react";
 import { Button } from "../components/Button";
 import { InlineReference } from "../components/InlineReference";
 import { TILDE_PARAMS } from "../components/literalParams";
+import { MarkLineBox } from "../components/MarkLineBox";
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusMark } from "../components/StatusMark";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
@@ -117,22 +118,24 @@ function ProjectRow({
     <li className="@container flex flex-col gap-2 groove-b px-4 py-3 last:border-b-0">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
         <div className="flex min-w-40 flex-1 flex-col gap-0.5">
-          <span className="flex items-center gap-1">
+          <span className="flex items-start gap-1">
             <span className="min-w-0 font-medium text-foreground [overflow-wrap:anywhere]" dir="auto">
               {project.name}
             </span>
             {!state && (
               // A project not found that also has account fallbacks is still one point: one mark, naming both.
-              <StatusMark
-                tone="warning"
-                label={t(project.account_fallbacks.length > 0 ? "configuration.import.project.state.noneAndFallbacksMark" : "configuration.import.project.state.noneMark", { project: isolate(project.name) })}
-              >
-                <p dir="auto"><Message id="configuration.import.project.state.none" /></p>
-                <p dir="auto">{t("configuration.import.project.state.noneRemedy")}</p>
-                <FallbackLines fallbacks={project.account_fallbacks} />
-              </StatusMark>
+              <MarkLineBox size="text-sm">
+                <StatusMark
+                  tone="warning"
+                  label={t(project.account_fallbacks.length > 0 ? "configuration.import.project.state.noneAndFallbacksMark" : "configuration.import.project.state.noneMark", { project: isolate(project.name) })}
+                >
+                  <p dir="auto"><Message id="configuration.import.project.state.none" /></p>
+                  <p dir="auto">{t("configuration.import.project.state.noneRemedy")}</p>
+                  <FallbackLines fallbacks={project.account_fallbacks} />
+                </StatusMark>
+              </MarkLineBox>
             )}
-            {state && <FallbackMark subject={project.name} fallbacks={project.account_fallbacks} />}
+            {state && <FallbackMark subject={project.name} fallbacks={project.account_fallbacks} size="text-sm" />}
           </span>
           {state && (
             <span className="flex items-center gap-1.5 text-sm text-app-muted">
@@ -208,11 +211,11 @@ function ConsoleGroup({
     <section aria-labelledby={headingId} className={CARD_CLASS}>
       <div className="flex flex-col gap-1.5 groove-b px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-2">
-          <div className="flex min-w-0 items-center gap-1">
+          <div className="flex min-w-0 items-start gap-1">
             <h3 id={headingId} className="min-w-0 text-base font-semibold text-foreground [overflow-wrap:anywhere]" dir="auto">
               {console.name}
             </h3>
-            <FallbackMark subject={console.name} fallbacks={console.account_fallbacks} />
+            <FallbackMark subject={console.name} fallbacks={console.account_fallbacks} size="text-base" />
           </div>
           <span className="text-sm text-app-muted">{t("configuration.import.console.projects", { count: console.projects.length })}</span>
         </div>

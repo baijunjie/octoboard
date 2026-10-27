@@ -39,7 +39,7 @@ const switches = [
   { Setting: AutoApproveResumeRequestsSetting, key: "auto_approve_resume_requests", onText: "without asking you first" },
   { Setting: AutoApproveAccountSwitchesSetting, key: "auto_approve_account_switches", onText: "without asking you first" },
   { Setting: AutoApproveHandoffsSetting, key: "auto_approve_handoffs", onText: "without asking you first" },
-  { Setting: AskQuestionsAsChoicesSetting, key: "ask_questions_as_choices", onText: "Turn this off to let sessions ask in their own way" },
+  { Setting: AskQuestionsAsChoicesSetting, key: "ask_questions_as_choices", onText: "Octoboard asks sessions to put a question" },
   { Setting: AutoApproveSessionRequestsSetting, key: "auto_approve_session_requests", onText: "without asking you first" },
   { Setting: AutoSelectAccountSetting, key: "auto_select_account", onText: "whose weekly limit resets soonest" },
   { Setting: SidebarOrderSetting, key: "sidebar_order_by_status", onText: "move as their status changes" },

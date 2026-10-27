@@ -10,12 +10,11 @@ import { ExternalLink } from "../components/ExternalLink";
 import { StatusMark } from "../components/StatusMark";
 import { InlineReference } from "../components/InlineReference";
 import { StatusBadge, type StatusBadgeColor } from "../components/StatusBadge";
-import { TintedAlert } from "../components/TintedAlert";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 
 /** One semantic meaning and how the application draws it. The role tokens follow docs/ui-accessibility.md's "One
  * definition per semantic colour"; the purple help colour has no HeroUI token, so its icon colour is its text tint
- * and it has no solid text colour or Alert status. */
+ * and it has no solid text colour; an Alert has only the warning and danger statuses. */
 interface Meaning {
   color: StatusBadgeColor;
   label: string;
@@ -23,8 +22,6 @@ interface Meaning {
   solid: { fill: string; text?: string };
   /** The soft fill, with a second name or description of it: the project tint it is read through, or what it is made of. */
   soft: { token: string; alias: string };
-  /** The fill the neutral Alert draws instead of the soft fill. */
-  alertFill?: string;
   /** The colour of text in the meaning outside a solid fill. */
   text: string;
   icon: string;
@@ -33,15 +30,13 @@ interface Meaning {
 }
 
 const MEANINGS: Meaning[] = [
-  { color: "default", label: "Neutral (default)", solid: { fill: "--default", text: "--default-foreground" }, soft: { token: "--tint-default-bg", alias: "translucent foreground" }, alertFill: "--alert-fill-default", text: "--default-foreground", icon: "--default-soft-foreground", badge: "Not detected", sample: "Claude Code" },
+  { color: "default", label: "Neutral (default)", solid: { fill: "--default", text: "--default-foreground" }, soft: { token: "--tint-default-bg", alias: "translucent foreground" }, text: "--default-foreground", icon: "--default-soft-foreground", badge: "Not detected", sample: "Claude Code" },
   { color: "accent", label: "Accent", solid: { fill: "--accent", text: "--accent-foreground" }, soft: { token: "--accent-soft", alias: "--tint-accent-bg" }, text: "--tint-accent-fg", icon: "--accent-soft-foreground", badge: "Renamed", sample: "Working" },
   { color: "success", label: "Success", solid: { fill: "--success", text: "--success-foreground" }, soft: { token: "--success-soft", alias: "--tint-success-bg" }, text: "--tint-success-fg", icon: "--success-soft-foreground", badge: "Logged in", sample: "Idle" },
   { color: "warning", label: "Warning", solid: { fill: "--warning", text: "--warning-foreground" }, soft: { token: "--warning-soft", alias: "--tint-warning-bg" }, text: "--tint-warning-fg", icon: "--warning-soft-foreground", badge: "Not logged in", sample: "Waiting for you" },
   { color: "danger", label: "Danger", solid: { fill: "--danger", text: "--danger-foreground" }, soft: { token: "--danger-soft", alias: "--tint-danger-bg" }, text: "--tint-danger-fg", icon: "--danger-soft-foreground", badge: "Deleted", sample: "Failed" },
   { color: "help", label: "Help (purple)", solid: { fill: "--help" }, soft: { token: "--tint-help-bg", alias: "mixed from --help" }, text: "--tint-help-fg", icon: "--tint-help-fg", badge: "Agent", sample: "Shared" },
 ];
-
-type AlertColor = "default" | "accent" | "success" | "warning" | "danger";
 
 const edge = (color: StatusBadgeColor): string => `--tint-${color}-edge`;
 const use = (token: string): string => `var(${token})`;
@@ -96,19 +91,9 @@ function Mark({ color }: { color: StatusBadgeColor }): React.ReactElement | null
 
 function SampleAlert({ meaning }: { meaning: Meaning }): React.ReactElement {
   const { color } = meaning;
-  if (color === "help") return <p className="text-xs text-app-muted">An Alert has no help status.</p>;
+  if (color !== "danger" && color !== "warning") return <p className="text-xs text-app-muted">An Alert has no {color === "default" ? "neutral" : color} status.</p>;
   const description = <>Could not read <InlineReference monospace wrap>AGENTS.md</InlineReference> in this project.</>;
-  if (color === "danger" || color === "warning") {
-    return <ErrorAlert status={color} title={color === "danger" ? "Could not save" : "Settings are out of date"}>{description}</ErrorAlert>;
-  }
-  const status: AlertColor = color;
-  return (
-    <TintedAlert
-      status={status}
-      title={status === "default" ? "Nothing to show yet" : status === "accent" ? "A new version is ready" : "Settings saved"}
-      description={description}
-    />
-  );
+  return <ErrorAlert status={color} title={color === "danger" ? "Could not save" : "Settings are out of date"}>{description}</ErrorAlert>;
 }
 
 /** The real components drawn in one meaning, on whatever surface they are placed. */
@@ -173,7 +158,6 @@ export function SemanticColoursGallery(): React.ReactElement {
                 <div key={meaning.color} className="flex flex-col gap-2">
                   <h3 className="text-sm font-medium">{meaning.label}</h3>
                   <Swatches meaning={meaning} />
-                  {meaning.alertFill && <p className="text-xs text-app-muted">The neutral Alert uses <code className="font-mono">{meaning.alertFill}</code>.</p>}
                 </div>
               ))}
             </div>

@@ -7,7 +7,8 @@ Where a failure, a warning or a note is shown follows from how it arises, not fr
 | A failure of the user's own action, once it has been sent: a submitted form, a Save or a confirm, a switch, a menu or row action, copying, opening, and daemon and connection failures reported in reply | The **error alert**, a dialog that requires acknowledgement (see "The error alert" below). A submit or a save that fails inside a dialog opens it over that dialog, which keeps what was entered |
 | An error located at one input field: the form's own validation (a field left empty, a malformed or too long value, a duplicate of a name the window knows); a lookup the form makes on its own that finds the field's value wrong (a path that does not exist or is not a directory, a conversation ID found nowhere); a value the field holds that cannot be used (an account turned off, used up or having its sharing changed) | Under its field, which is marked invalid (see "Errors under a field" below) |
 | An important failure of automatic behaviour — a load, a refresh, a lookup a form makes on its own that could not run — one that blocks what follows, or that a component cannot do its job without | On that screen: in place of a whole page, pane, panel or list that could not be loaded, an empty-state failure; among other content, a compact alert (see "Failures shown on the screen" below) |
-| A failure or a warning that does not block what follows, and a note | A mark at the point it concerns — a row, a table cell, a field, a checkbox, a setting, a list section's heading, a page's heading or a pane's or view's title, a line naming what it is about, a spot in a rendered document; one with no point to be located at is a compact alert in a shared place, the top of a dialog's body or of a section (see "Failures, warnings and notes marked at their point" below) |
+| A warning about the consequence of a choice the user is making: an option of a dialog that, selected, makes what the dialog does riskier | A warning alert directly under that option, only while it is selected, never a mark (see "Warnings about a choice being made" below). A warning about the state of what an option acts on is a mark beside it, as below |
+| A failure or a warning about the state of something that does not block what follows, and a note | A mark at the point it concerns — a row, a table cell, a field, a checkbox, a setting, a list section's heading, a page's heading or a pane's or view's title, a line naming what it is about, a spot in a rendered document; one with no point to be located at is a compact alert in a shared place, the top of a dialog's body or of a section (see "Failures, warnings and notes marked at their point" below) |
 | A result view showing a failed result | A compact alert in that view: a configuration import's application settings that could not be applied (see "In the window" in `docs/product/configuration-export-and-import.md`) |
 | A failure that ends what a dialog was opened for, while it is open | The dialog turns into a failure modal (see "The failure modal" below) |
 
@@ -219,10 +220,30 @@ The places with a compact alert:
   approval of an owner's handoff" in `docs/product/handing-off-sessions.md`).
 
 Any other failure, and every warning and note — one that leaves its component doing its job, such as a failure of one
-part of a pane that still shows the rest — is neither: it is a mark at the point it concerns, a row, a name, a
-control, a field, a checkbox, a setting, one section's heading, a page's heading or a pane's or view's title (the
-listing or the file it names, while its content is still shown), or a line naming what it is about (see "Failures,
-warnings and notes marked at their point" below).
+part of a pane that still shows the rest — is neither, except a warning about a choice being made (see "Warnings about a
+choice being made" below): it is a mark at the point it concerns, a row, a name, a control, a field, a checkbox, a
+setting, one section's heading, a page's heading or a pane's or view's title (the listing or the file it names, while
+its content is still shown), or a line naming what it is about (see "Failures, warnings and notes marked at their
+point" below).
+
+## Warnings about a choice being made
+
+An option in a dialog that, once selected, makes what the dialog does riskier has its consequence said by a **warning
+alert** directly under the option, shown only while the option is selected and gone as soon as it is cleared, so it is
+read before the dialog's action is taken. It is amber, with the warning glyph: a title stating the risk, under it one
+sentence saying why, then the one thing to do about it. It has no buttons and no **Details**. The option's own note
+says what selecting it does and follows its state, so it does not repeat the alert.
+
+While it is shown the alert is part of the option's description to assistive technology, read after the option's note.
+It is announced once as it appears — its title and its sentence, never what to do about it — held back until the
+option's new state has been spoken.
+
+The places with such a warning:
+
+- the export dialog's **Include full project paths** checkbox, saying that the file contains project paths (see "In
+  the window" in `docs/product/configuration-export-and-import.md`);
+- the trust dialog's choice to trust every project under a folder, saying that projects added there later will be
+  trusted too (see "The trust dialog" in `docs/product/folder-trust.md`).
 
 ## Failures, warnings and notes marked at their point
 
@@ -298,9 +319,6 @@ The places with a warning mark:
 - a console or project of a configuration import whose account references fall back to a default account, after its
   name, in the review and in the result, and a project of the review not found on the machine running Octoboard,
   after its name — one mark saying both when the project has fallbacks too (see "In the window" in
-  `docs/product/configuration-export-and-import.md`);
-- the export dialog's **Include full project paths** checkbox while it is ticked, after its label, saying that the
-  file will contain the projects' paths (see "In the window" in
   `docs/product/configuration-export-and-import.md`);
 - a project removal's option to move the folder to the Trash, after its label, when what goes with the folder could
   not be looked up (see "With a project's folder moved to the Trash" in

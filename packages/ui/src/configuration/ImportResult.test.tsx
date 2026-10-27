@@ -313,8 +313,8 @@ it("marks a console and a project whose account fell back with a warning mark af
   const marks = [...container.querySelectorAll("table button[data-status-mark]")].filter((button) => button.getAttribute("aria-label")!.startsWith("Accounts not set up for"));
   expect(marks.map((mark) => mark.getAttribute("aria-label"))).toEqual(["C", "P1", "P2", "Broken"].map((name) => `Accounts not set up for ${isolate(name)}`));
   // Each sits right after the name it qualifies.
-  expect(marks[0].previousElementSibling?.textContent).toBe("C");
-  expect(marks[2].previousElementSibling?.textContent).toBe("P2");
+  expect(marks[0].parentElement!.previousElementSibling?.textContent).toBe("C");
+  expect(marks[2].parentElement!.previousElementSibling?.textContent).toBe("P2");
   expect(container.querySelector("table")!.textContent).not.toContain("is not set up");
   press(marks[1]);
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("Codex account Personal is not set up in Octoboard, so the default account is used.");

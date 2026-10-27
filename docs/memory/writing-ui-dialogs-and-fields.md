@@ -22,10 +22,13 @@ failure). On its own `wrap` has no scroll region at all, so wherever the block's
 the Details popover included — a wrapped block takes `tall` too, or long text overflows the popover's surface. A
 change to how raw text looks goes into the component, not into one caller.
 
-## A confirmation's options sit apart from its consequences, which are one block under them
+## A destructive confirmation's options sit apart from its consequences, which are one block under them
 
-This is the user's design rule for every confirmation in `packages/ui` that offers options, such as taking more
-along with what is deleted:
+This is the user's design rule for every destructive confirmation in `packages/ui` (removing, deleting, archiving)
+that offers options, such as taking more along with what is deleted. A confirmation that is not destructive, such as
+the trust prompt, has no consequences block: the risk an option brings is a warning Alert under it while it is ticked
+(`ChoiceWarning`, see `docs/ui-accessibility.md`, "On the screen: an Alert when it matters, a mark at its point
+otherwise").
 
 - A checkbox never goes inside the consequences. It is a plain block of its own: its label says what ticking it
   deletes (and how many), its note is kept short so it does not repeat the consequence line below, and the items it
@@ -118,13 +121,15 @@ without one, give `Description` a stable `useId` and set the field's `aria-descr
 exists: react-aria's slot association does not recover when only the children change. Preserve the mounted control so
 the note appearing does not lose keyboard focus; verify the association through absent → present → absent notes.
 
-The one checkbox that cannot keep it there is one with a mark (`StatusMark`) after its label. The mark stays outside
-react-aria's `<label>` — inside it, it is interactive content in a label and its name joins the checkbox's — and it
-has to follow the label's text, which it cannot do beside a checkbox that holds its `Description`: that checkbox
-fills the row, so the mark lands at the row's far end. Make the checkbox `w-fit`, put the mark beside it in a row of
-their own, and move the note under that row as a `Description` with its own `useId`, set in the checkbox's
-`aria-describedby` and indented under the label by hand. A dialog option gets all of this from `ConfirmOption`'s
-`mark` (`packages/ui/src/dialogs/ConfirmOption.tsx`).
+The one checkbox that cannot keep it there is one with a mark (`StatusMark`) after its label — a warning about the
+state of what it acts on; the consequence of ticking it is no mark but a `ChoiceWarning` under the option. The mark
+stays outside react-aria's `<label>` — inside it, it is interactive content in a label and its name joins the
+checkbox's — and it has to follow the label's text, which it cannot do beside a checkbox that holds its `Description`:
+that checkbox fills the row, so the mark lands at the row's far end. Make the checkbox `w-fit`, put the mark beside it
+in an `items-start` row of their own, the mark in `MarkLineBox` (never a hand-picked `min-h`: the checkbox's content
+box is taller than its label's line, which sits at its top), and move the note under that row as a `Description` with
+its own `useId`, set in the checkbox's `aria-describedby` and indented under the label by hand. A dialog option gets
+all of this from `ConfirmOption`'s `mark` (`packages/ui/src/dialogs/ConfirmOption.tsx`).
 
 ## A modal whose content is one body is a `Dialog`; one made of panels keeps its own frame
 

@@ -4,6 +4,7 @@ import React, { useId } from "react";
 
 import { Button } from "./Button";
 import { DetailsButton } from "./DetailsButton";
+import { MarkLineBox } from "./MarkLineBox";
 import { TitledControl } from "./TitledControl";
 import { useAnnouncement } from "./useAnnouncement";
 
@@ -173,9 +174,9 @@ export function EmptyPanel({
           two apart — too little to read as a heading. */}
       <div key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-center gap-3">
         {headingMark ? (
-          <div className="flex min-w-0 max-w-full items-center justify-center gap-1.5">
+          <div className="flex min-w-0 max-w-full items-start justify-center gap-1.5">
             <Heading className="min-w-0 text-base font-semibold text-foreground">{message}</Heading>
-            {headingMark}
+            <MarkLineBox size="text-base">{headingMark}</MarkLineBox>
           </div>
         ) : (
           <Heading className="text-base font-semibold text-foreground">{message}</Heading>

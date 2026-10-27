@@ -2,16 +2,16 @@ import { CircleCheck } from "lucide-react";
 import React from "react";
 
 import { CodeBlock } from "../components/CodeBlock";
+import { ErrorAlert } from "../components/ErrorAlert";
 import { StatusMark } from "../components/StatusMark";
 import { InlineReference, type InlineReferenceSize } from "../components/InlineReference";
 import { StatusBadge, type StatusBadgeColor, type StatusBadgeSize, type StatusBadgeVariant } from "../components/StatusBadge";
-import { TintedAlert } from "../components/TintedAlert";
 import { CodeToneContext, type CodeColor } from "../components/codeTone";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 
 const COLORS: CodeColor[] = ["default", "accent", "help", "success", "warning", "danger"];
-const STATUSES = ["default", "accent", "success", "warning", "danger"] as const;
-const BADGE_COLORS: StatusBadgeColor[] = [...STATUSES];
+const ALERT_STATUSES = ["warning", "danger"] as const;
+const BADGE_COLORS: StatusBadgeColor[] = ["default", "accent", "success", "warning", "danger"];
 const BADGE_VARIANTS: StatusBadgeVariant[] = ["soft", "bordered"];
 const BADGE_SIZES: StatusBadgeSize[] = ["sm", "md", "lg"];
 
@@ -134,15 +134,12 @@ export function CodeGallery(): React.ReactElement {
           </section>
           <section className="flex flex-col gap-3" aria-labelledby="alert-tones-title">
             <h2 id="alert-tones-title" className="font-semibold">Alert tone overrides each requested chip color</h2>
-            {STATUSES.map((status) => (
+            {ALERT_STATUSES.map((status) => (
               <CodeToneContext.Provider key={status} value={status}>
                 <div className="flex flex-col gap-3" data-alert-tone-sample={status}>
-                  <TintedAlert
-                    status={status}
-                    data-alert-sample={status}
-                    title={status}
-                    description={COLORS.map((color, index) => <React.Fragment key={color}>{index > 0 && "; "}{color}: <InlineReference monospace wrap color={color}>CLAUDE.md</InlineReference></React.Fragment>)}
-                  />
+                  <ErrorAlert status={status} title={status}>
+                    {COLORS.map((color, index) => <React.Fragment key={color}>{index > 0 && "; "}{color}: <InlineReference monospace wrap color={color}>CLAUDE.md</InlineReference></React.Fragment>)}
+                  </ErrorAlert>
                   <CodeBlock>{"env -0 && printf '%s' 'OCTOBOARD-ENV-SNAPSHOT-END-12345678-1234-1234-1234-123456789abc'"}</CodeBlock>
                 </div>
               </CodeToneContext.Provider>
@@ -151,18 +148,12 @@ export function CodeGallery(): React.ReactElement {
           <section className="flex flex-col gap-3 rounded-lg bg-surface p-3" aria-labelledby="nested-tones-title">
             <h2 id="nested-tones-title" className="font-semibold">Nearest alert wins; outside chips keep their own tone</h2>
             <CodeToneContext.Provider value="warning">
-              <TintedAlert
-                status="warning"
-                data-nested-sample="outer"
-                title="Outer warning"
-                description={<>Outer warning: <InlineReference monospace wrap color="danger">AGENTS.md</InlineReference></>}
-              />
-              <TintedAlert
-                status="success"
-                data-nested-sample="inner"
-                title="Inner success"
-                description={<>Inner success: <InlineReference monospace wrap color="danger">.claude</InlineReference></>}
-              />
+              <ErrorAlert status="warning" title="Outer warning">
+                Outer warning: <InlineReference monospace wrap color="danger">AGENTS.md</InlineReference>
+              </ErrorAlert>
+              <ErrorAlert status="danger" title="Inner danger">
+                Inner danger: <InlineReference monospace wrap color="success">.claude</InlineReference>
+              </ErrorAlert>
               <p>Outer warning again: <InlineReference monospace wrap color="accent">.codex</InlineReference></p>
             </CodeToneContext.Provider>
             <p>After both alerts: <InlineReference monospace wrap color="help">~/Projects</InlineReference></p>

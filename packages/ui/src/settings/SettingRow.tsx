@@ -1,6 +1,8 @@
 import { Switch } from "@heroui/react";
 import React, { useEffect, useRef } from "react";
 
+import { MarkLineBox } from "../components/MarkLineBox";
+
 /** One setting: its name and, when it has one, a line saying what it does at the start, its control
  * at the end, with a thin divider under every row but the last (the copy of a row a list motion is
  * still removing does not count, so the divider goes as the row leaves). At phone widths the control moves
@@ -27,9 +29,9 @@ export function SettingRow({
     <div data-list-motion={motionKey} className="flex flex-col gap-3 groove-b py-4 [&:not(:has(~:not([data-list-motion-exit])))]:border-b-0">
       <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="min-w-0">
-          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <div className="flex items-start gap-2 text-sm font-medium text-foreground">
             <div className="min-w-0">{label}</div>
-            {help}
+            {help && <MarkLineBox size="text-sm">{help}</MarkLineBox>}
           </div>
           {description && <div className="text-sm text-app-muted">{description}</div>}
         </div>

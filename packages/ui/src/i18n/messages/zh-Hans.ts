@@ -1497,7 +1497,11 @@ export const zhHans: Translation<"other"> = {
   "dialog.trust.confirm": "信任并继续",
   "dialog.trust.notNow": "暂不",
   "dialog.trust.parent": "信任 {directory} 下的所有项目",
-  "dialog.trust.parentNote": "这会改为记录该文件夹，涵盖其下任意层级的每个项目（包括之后添加的项目），适用于所有智能体。",
+  "dialog.trust.parentNote.off": "勾选后，将改为信任该文件夹，而不只是此项目。",
+  "dialog.trust.parentNote.on": "将改为信任该文件夹，而不只是此项目。",
+  "dialog.trust.parentWarning.title": "之后添加到其中的项目也会被信任。",
+  "dialog.trust.parentWarning.description": "信任涵盖该文件夹下任意层级的项目，适用于所有智能体，这些项目自身的权限规则、钩子和指令都会生效。",
+  "dialog.trust.parentWarning.remedy": "只信任内容由你掌控的文件夹。",
   "dialog.trust.alreadyAnswered": "信任确认已被回应，因此没有信任该文件夹。请在下一次确认出现时再次使用此对话框。",
   "dialog.sessionRequest.title": "启动会话？",
   "dialog.sessionRequest.requester.project": "项目 {project} 中的会话 {session}",
@@ -1572,10 +1576,11 @@ export const zhHans: Translation<"other"> = {
   "configuration.export.scope.all": "全部",
   "configuration.export.scope.all.description": "所有控制台及其项目，以及应用设置，包括此设备的键盘快捷键。",
   "configuration.export.paths.include": "包含项目的完整路径",
-  "configuration.export.paths.include.description": "不包含时，文件只记录每个项目的目录名，导入时项目会放进默认克隆目录，或从远程仓库克隆。",
-  "configuration.export.paths.mark": "文件中的路径",
+  "configuration.export.paths.include.description.off": "勾选后，文件会记录每个项目的完整目录路径，导入时可以先按这个路径查找项目。",
+  "configuration.export.paths.include.description.on": "导入时会先按记录的完整路径查找每个项目。",
   "configuration.export.paths.title": "文件包含项目路径。",
-  "configuration.export.paths.description": "文件会记录每个项目的完整目录路径（即项目在 {appName} 所在机器上的位置，未必是你正在使用的这台设备），其中可能包含用户名等信息。请只分享给你信任的人。",
+  "configuration.export.paths.description": "这些路径位于 {appName} 所在的机器上（未必是你正在使用的这台设备），可能透露用户名等信息。",
+  "configuration.export.paths.remedy": "请只分享给你信任的人。",
   "configuration.export.submit": "导出",
   "configuration.export.saved": "配置已保存为 {name}。",
   "configuration.export.downloaded": "配置已下载。",
@@ -1805,7 +1810,7 @@ export const zhHans: Translation<"other"> = {
     "智能体不再保留已归档会话的对话时，将自动删除该会话。应用每次启动时检查一次，之后约每天检查一次。置顶和锁定的会话会保留。",
   "settings.sidebarOrder.label": "侧边栏按状态排序",
   "settings.sidebarOrder.description.off":
-    "会话按启动时间从新到旧排列，项目按名称排列，置顶的排在最前，等待你处理或正在工作的不会因此上移；没有未归档会话的项目排在最后。开启后，会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。",
+    "开启后，会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。没有未归档会话的项目排在最后。",
   "settings.sidebarOrder.description.on":
     "会话和项目会随状态变化移动位置，除置顶项外，等待你处理的排在最前。没有未归档会话的项目排在最后。",
   "settings.agentPermissions.lead": "选择会话可以不先征得你同意就执行哪些操作，以及它们如何向你提问。",
@@ -1821,19 +1826,19 @@ export const zhHans: Translation<"other"> = {
     "会话可以直接重新打开或恢复某个会话，或在新会话中恢复某段对话，无需先征得你的同意。被重新打开或恢复的会话保留原有的所有者，已归档的所有者也会一并重新打开；以这种方式新启动的会话除你之外没有其他所有者。",
   "settings.autoApproveAccountSwitches.label": "自动批准账户切换",
   "settings.autoApproveAccountSwitches.description.off":
-    "开启后，会话可以直接切换其名下某个会话的账户，无需先征得你的同意。在此之前，每次都会先询问你，你可以在确认前修改账户、模型和推理强度。",
+    "开启后，会话可以直接切换其名下某个会话的账户，无需先征得你的同意。",
   "settings.autoApproveAccountSwitches.description.on":
-    "会话可以直接切换其名下某个会话的账户，无需先征得你的同意。关闭后会先询问你，你可以在确认前修改账户、模型和推理强度。",
+    "会话可以直接切换其名下某个会话的账户，无需先征得你的同意。",
   "settings.autoApproveHandoffs.label": "自动批准移交",
   "settings.autoApproveHandoffs.description.off":
-    "开启后，会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。在此之前，每次都会先询问你，你可以在确认前修改智能体、账户、模型和推理强度。",
+    "开启后，会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。",
   "settings.autoApproveHandoffs.description.on":
-    "会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。关闭后会先询问你，你可以在确认前修改智能体、账户、模型和推理强度。",
+    "会话可以直接将其名下某个会话移交给另一个智能体的新会话，无需先征得你的同意。",
   "settings.askQuestionsAsChoices.label": "以选项形式提问",
   "settings.askQuestionsAsChoices.description.off":
-    "开启后，Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。在此之前，会话按各自的方式提问。",
+    "开启后，Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。更改对之后启动的会话生效。",
   "settings.askQuestionsAsChoices.description.on":
-    "Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。关闭后，会话按各自的方式提问。更改对之后启动的会话生效。",
+    "Octoboard 会要求会话在需要你做决定时用可点选的选项提问，而不是在回复里罗列选项。更改对之后启动的会话生效。",
   "settings.autoSelect.label": "自动选择账户",
   "settings.autoSelect.description.off":
     "开启后，新建会话会使用每周限制最快重置的账户，以免重置前剩余的用量被浪费。",
@@ -1923,7 +1928,8 @@ export const zhHans: Translation<"other"> = {
   "settings.git.group.development": "开发",
   "settings.git.group.protection": "保护",
   "settings.git.autoPull.label": "自动拉取仓库",
-  "settings.git.autoPull.description": "当项目分支落后于其上游且可以快进时，自动以快进方式拉取该分支。从不推送，也不会改动有本地提交的分支。",
+  "settings.git.autoPull.description.off": "开启后，当项目分支落后于其上游且可以快进时，会自动以快进方式拉取该分支。从不推送，也不会改动有本地提交的分支。",
+  "settings.git.autoPull.description.on": "当项目分支落后于其上游且可以快进时，会自动以快进方式拉取该分支。从不推送，也不会改动有本地提交的分支。",
   "settings.git.autoPull.help": "关于自动拉取",
   "settings.git.autoPull.remoteCheck": "无论此设置如何，都会每隔几分钟检查一次远程，因此分支始终会显示领先或落后的提交数。",
   "settings.gitWorkflow.development.label": "开发方式",
