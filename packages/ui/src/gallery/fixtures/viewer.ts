@@ -723,9 +723,9 @@ const comparisonWording = ({ Message, InlineReference }: LiveParts, t: Translate
     source: createElement(Message<"git.compare.source">, {
       id: "git.compare.source",
       params: {
-        from: createElement(InlineReference, { monospace: true, wrap: true, color: "accent" }, from),
+        from: createElement(InlineReference, { monospace: true, wrap: true, color: "default" }, from),
         fromCommit: createElement(InlineReference, { monospace: true, wrap: true, color: "default" }, fromCommit),
-        to: createElement(InlineReference, { monospace: true, wrap: true, color: "accent" }, to),
+        to: createElement(InlineReference, { monospace: true, wrap: true, color: "default" }, to),
         toCommit: createElement(InlineReference, { monospace: true, wrap: true, color: "default" }, toCommit),
       },
     }),
