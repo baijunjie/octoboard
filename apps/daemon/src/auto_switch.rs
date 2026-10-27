@@ -11,15 +11,19 @@
 //! claim, since the record may lag the report, and once more under the claim. A quota reading
 //! triggers nothing: it only chooses the target. A session is never moved because its account
 //! reads as used up, a working or an idle one included; each turn that hits the limit is its own
-//! one-shot trigger, so no wait is kept between switches.
+//! one-shot trigger, so no wait is kept between switches. A turn that fails while the session is
+//! still under a claim (the continued turn of a switch that has just relaunched it) is judged when
+//! the claim ends, waiting for it up to [`CLAIM_WAIT`]; the trigger is dropped if the session was
+//! moved to another account meanwhile.
 //!
 //! **Which sessions.** Those with a process at their prompt or in a turn (`working`, `idle`). A
 //! session waiting for the user, by a hook, a request or what the terminal shows (a trust prompt, a
 //! dialog of the agent), is left alone: moving it would end the prompt it waits at. The exception
 //! is a session whose only wait is its agent's usage-limit dialog (Grok's): ending that dialog is
-//! the point of the switch. A session under a launch, a resume or a switch is left alone too, and
-//! so is one a change of its account's sharing holds (the switch refuses both). A try refused only
-//! because the time was wrong is not an error and tells nobody.
+//! the point of the switch. A session still under a launch, a resume or a switch once the claim
+//! wait is over is left alone too, and so is one a change of its account's sharing holds (the
+//! switch refuses both). A try refused only because the time was wrong is not an error and tells
+//! nobody.
 //! A locked session is switched like any other: the lock keeps it from being archived or deleted,
 //! not from moving between accounts, which neither removes it nor changes what it holds.
 //!
@@ -41,7 +45,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 
@@ -59,6 +63,11 @@ use crate::term::{Launch, LaunchRequest};
 /// How long after moving a session off an account for its usage limit the session is not moved
 /// back onto that account.
 const LEFT_FOR_LIMIT_FOR: Duration = Duration::from_secs(30 * 60);
+
+/// How long a failed turn waits for another claim on its session to end before it is judged. A
+/// switch keeps its claim past the relaunch until the process has stayed up a few seconds, and the
+/// turn it continues may fail within that time.
+const CLAIM_WAIT: Duration = Duration::from_secs(15);
 
 /// The sessions [`after_failed_turn`] was asked to switch under test.
 #[cfg(test)]
@@ -105,7 +114,7 @@ async fn switch_after_failed_turn(
     match try_switch(state, id, snapshot, launch).await {
         Ok(()) => {}
         // Archived or deleted while it was being switched, or the daemon shutting down.
-        Err(err) if is_quiet(&err) => {}
+        Err(err) if is_quiet(&err) || state.is_shutting_down() => {}
         Err(err) => tracing::warn!(
             session = %id,
             err = %format!("{err:#}"),
@@ -119,10 +128,12 @@ async fn switch_after_failed_turn(
 /// when not. The turn's stop on the usage limit is waited for here, ahead of any claim: a failed
 /// turn that did not stop on it (an overload, a network error) must not leave the session shown as
 /// switching and refuse everything else meanwhile. Neither the wait nor the shell snapshot it may
-/// need is started unless some account could take the session. What was decided on the records
-/// read here is held to under the switch's claim as well: the account the limit was found on (the
-/// session is left alone if it changed during the wait), that it has a process, that it does not
-/// wait for the user, and that its last turn stopped on the usage limit.
+/// need is started unless some account could take the session. A claim held on the session is
+/// waited for first ([`wait_for_claim`]); a trigger from a turn on one account is dropped if the
+/// session was moved to another during that wait. What was decided on the records read here is
+/// held to under the switch's claim as well: the account the limit was found on (the session is
+/// left alone if it changed during the wait), that it has a process, that it does not wait for the
+/// user, and that its last turn stopped on the usage limit.
 async fn try_switch(
     state: &Arc<AppState>,
     id: &str,
@@ -132,9 +143,21 @@ async fn try_switch(
     if !state.store.auto_switch_on_usage_limit()? {
         return Ok(());
     }
+    // The account the turn that triggered this ran on, which the wait for a claim may change.
+    let Some(triggered_on) = state
+        .store
+        .get_session(id)?
+        .map(|session| session.account_id)
+    else {
+        return Ok(());
+    };
+    wait_for_claim(state, id).await;
     let Some(session) = switchable_session(state, id)? else {
         return Ok(());
     };
+    if session.account_id != triggered_on {
+        return Ok(());
+    }
     if pick_target(state, &session)?.is_none() {
         return Ok(());
     }
@@ -165,6 +188,17 @@ async fn try_switch(
         return Ok(());
     };
     switch_to(state, &waited, target, snapshot, launch).await
+}
+
+/// Waits up to [`CLAIM_WAIT`] for the claim on the session `id` to be released, so that a turn that
+/// failed under one (the continued turn of a switch that has just relaunched it) is judged once
+/// the session is free, and not dropped. A claim still held then leaves the session to be refused
+/// as busy.
+async fn wait_for_claim(state: &Arc<AppState>, id: &str) {
+    let deadline = Instant::now() + CLAIM_WAIT;
+    while state.is_launching(id) && Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 }
 
 /// The account `session` would be moved to, if any qualifies: the one a new session would be given,
@@ -240,6 +274,10 @@ async fn switch_to(
             if is_quiet(&err) {
                 return Err(err);
             }
+            // The restore would be refused, and the switch is neither told nor logged.
+            if state.is_shutting_down() {
+                return Ok(());
+            }
             tracing::warn!(
                 session = %id,
                 err = %format!("{err:#}"),
@@ -249,7 +287,6 @@ async fn switch_to(
             return restore(state, session, target.as_deref(), launch).await;
         }
     };
-    state.note_left_for_limit(id, session.account_id.as_deref());
     let moved = state.session_record(id)?;
     // The default account has no id, so its param is left out.
     let mut params = vec![
@@ -283,16 +320,17 @@ async fn switch_to(
 
 /// Brings `session` back up on the account it had after a switch to `target` failed past ending its
 /// process, and tells the owner and the user only if that fails too. Somebody having brought it
-/// back meanwhile, or the user having archived or deleted it, is nothing to tell.
+/// back meanwhile, the user having archived or deleted it, or the daemon shutting down, is nothing
+/// to tell.
 async fn restore(
     state: &Arc<AppState>,
     session: &Session,
     target: Option<&str>,
     launch: impl FnOnce(LaunchRequest) -> Result<Launch> + Send + 'static,
 ) -> Result<()> {
-    match coordinator::restore_after_failed_switch(state, session, launch).await {
+    match coordinator::restore_after_failed_switch(state, session, target, launch).await {
         Ok(()) => Ok(()),
-        Err(err) if is_quiet(&err) || is_already_up(&err) => Ok(()),
+        Err(err) if is_quiet(&err) || is_already_up(&err) || state.is_shutting_down() => Ok(()),
         Err(err) => {
             tell_switch_failed(state, session, target, &err).await;
             Err(err)
@@ -331,21 +369,27 @@ async fn tell_switch_failed(
         account_name(state, session, session.account_id.as_deref()),
         account_name(state, session, target),
     );
-    // The failure's own params first: ours of the same name replace them.
-    let mut params: Vec<(&str, &str)> = failure
-        .iter()
-        .map(|(name, value)| (name.as_str(), value.as_str()))
-        .collect();
-    params.extend([
+    let mut params: Vec<(&str, &str)> = vec![
         ("agent", session.agent.label()),
         ("from", from.as_str()),
         ("account", to.as_str()),
         ("reason", reason.as_str()),
         ("reason_code", reason_code.as_str()),
         ("session", session.id.as_str()),
-    ]);
+    ];
     params.extend(session.account_id.as_deref().map(|id| ("from_id", id)));
     params.extend(target.map(|id| ("account_id", id)));
+    // The failure's own params come after ours and only where ours have no param of the name, the
+    // ids of the default account included, which are left out.
+    let ours = ["from_id", "account_id"];
+    let others: Vec<_> = failure
+        .iter()
+        .filter(|(name, _)| {
+            !params.iter().any(|(own, _)| own == name) && !ours.contains(&name.as_str())
+        })
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    params.extend(others);
     state.broadcast(
         Notice::new(
             notice_code::ACCOUNT_SWITCH_AUTOMATICALLY_FAILED,
@@ -742,6 +786,48 @@ mod tests {
         found
     }
 
+    /// What the tracing of the test body wrote, for asserting that nothing was logged.
+    #[derive(Clone, Default)]
+    struct LogBuffer(Arc<Mutex<Vec<u8>>>);
+
+    impl std::io::Write for LogBuffer {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuffer {
+        type Writer = LogBuffer;
+
+        fn make_writer(&'a self) -> LogBuffer {
+            self.clone()
+        }
+    }
+
+    impl LogBuffer {
+        /// Captures what the current thread logs until the guard drops; a current-thread test
+        /// runtime runs the code under test on it.
+        fn capture() -> (Self, tracing::subscriber::DefaultGuard) {
+            let logs = Self::default();
+            let guard = tracing::subscriber::set_default(
+                tracing_subscriber::fmt()
+                    .with_writer(logs.clone())
+                    .with_ansi(false)
+                    .finish(),
+            );
+            (logs, guard)
+        }
+
+        fn text(&self) -> String {
+            String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
+        }
+    }
+
     /// What the owner has been written once a marker has reached it.
     async fn owner_heard(fixture: &Fixture) -> String {
         let (state, owner) = (fixture.state.clone(), (*fixture.owner).clone());
@@ -944,6 +1030,13 @@ mod tests {
 
         fixture.failed_turn().await;
         assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
+        assert_eq!(
+            fixture
+                .state
+                .recently_left_for_limit("w", LEFT_FOR_LIMIT_FOR),
+            [None],
+            "noted by the switch itself, before its claim was released"
+        );
 
         // The next turn hits the limit on `claude-a` as well, its conversation having come with
         // it. The default account still reads as having quota, but it was left a moment ago, so
@@ -1106,6 +1199,10 @@ mod tests {
         .await;
 
         outcome.expect("restored, so not an error");
+        assert!(fixture
+            .state
+            .recently_left_for_limit("w", LEFT_FOR_LIMIT_FOR)
+            .is_empty());
         let worker = fixture.worker();
         assert_eq!(worker.account_id, None, "on the account it had");
         assert_ne!(worker.status, SessionStatus::Interrupted);
@@ -1757,7 +1854,7 @@ mod tests {
         });
         let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
 
-        coordinator::restore_after_failed_switch(&fixture.state, &before, move |request| {
+        coordinator::restore_after_failed_switch(&fixture.state, &before, None, move |request| {
             stand_in_launch(&started, &launches, || {})(request)
         })
         .await
@@ -1776,7 +1873,7 @@ mod tests {
             ..fixture.worker()
         };
 
-        let err = coordinator::restore_after_failed_switch(&fixture.state, &before, |_| {
+        let err = coordinator::restore_after_failed_switch(&fixture.state, &before, None, |_| {
             anyhow::bail!("not reached")
         })
         .await
@@ -1798,13 +1895,93 @@ mod tests {
             })
             .await
         );
-        let err = coordinator::restore_after_failed_switch(&fixture.state, &before, |_| {
+        let err = coordinator::restore_after_failed_switch(&fixture.state, &before, None, |_| {
             anyhow::bail!("not reached")
         })
         .await
         .expect_err("archived");
         assert!(is_quiet(&err), "{err:#}");
         assert_eq!(fixture.worker().account_id, None);
+    }
+
+    /// A restore finds the session on neither the account it had nor the one the failed switch was
+    /// to move it to: somebody moved it meanwhile, and the restore leaves it as it is.
+    #[tokio::test]
+    async fn a_restore_does_not_undo_an_account_change_somebody_else_made() {
+        let fixture = Fixture::new("auto-switch-restore-moved", SessionStatus::Idle);
+        let before = fixture.worker();
+        let live = fixture.state.live_session("w").unwrap();
+        tokio::task::spawn_blocking(move || live.end())
+            .await
+            .unwrap();
+        assert!(
+            crate::test_support::within(crate::test_support::PATIENCE, {
+                let state = fixture.state.clone();
+                move || state.live_session("w").is_none()
+            })
+            .await
+        );
+        let moved_dir = fixture.dir.join("claude-b");
+        fixture
+            .state
+            .set_session_account("w", Some("claude-b"), moved_dir.to_str())
+            .unwrap();
+
+        coordinator::restore_after_failed_switch(&fixture.state, &before, Some("claude-a"), |_| {
+            anyhow::bail!("not reached")
+        })
+        .await
+        .expect("nothing to restore");
+
+        assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-b"));
+        assert!(fixture.state.live_session("w").is_none());
+    }
+
+    /// A turn that fails while a claim on its session is held (the continued turn of a switch that
+    /// has just relaunched it) is judged once the claim ends, and moves the session on.
+    #[tokio::test]
+    async fn a_turn_that_fails_under_a_claim_is_switched_once_it_ends() {
+        let fixture = Fixture::new("auto-switch-claimed", SessionStatus::Idle);
+        let claim = fixture.state.begin_switch("w").unwrap();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(600));
+            drop(claim);
+        });
+
+        fixture.failed_turn().await;
+
+        assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
+        assert_eq!(fixture.launched(), 1);
+    }
+
+    /// Failure params that share a name with ours are overridden, those of the default account's
+    /// ids included, which are left out.
+    #[tokio::test]
+    async fn the_params_of_a_failed_switch_override_those_of_its_failure() {
+        let fixture = Fixture::new("auto-switch-params", SessionStatus::Idle);
+        let mut events = fixture.state.subscribe();
+        let session = fixture.worker();
+        let err = CodedError::raised(
+            error_code::SWITCH_DID_NOT_COME_UP,
+            "down",
+            &[
+                ("session", "other"),
+                ("from_id", "theirs"),
+                ("account_id", "theirs"),
+                ("detail", "kept"),
+            ],
+        );
+
+        tell_switch_failed(&fixture.state, &session, None, &err).await;
+
+        let told = notices(
+            &mut events,
+            notice_code::ACCOUNT_SWITCH_AUTOMATICALLY_FAILED,
+        );
+        let params = &told[0].1;
+        assert_eq!(params.get("session").map(String::as_str), Some("w"));
+        assert_eq!(params.get("detail").map(String::as_str), Some("kept"));
+        assert!(!params.contains_key("from_id") && !params.contains_key("account_id"));
     }
 
     /// What is held of the accounts a session was switched off for a limit goes with the session
@@ -1833,6 +2010,7 @@ mod tests {
     #[tokio::test]
     async fn nothing_is_told_of_a_switch_cut_short_by_the_shutdown() {
         let fixture = Fixture::new("auto-switch-shutdown", SessionStatus::Idle);
+        let (logs, _guard) = LogBuffer::capture();
         let mut events = fixture.state.subscribe();
         let env = fixture.env();
         let state = fixture.state.clone();
@@ -1863,6 +2041,135 @@ mod tests {
             fixture.state.live_session("w").is_none(),
             "nothing was started again"
         );
+        let logged = logs.text();
+        assert!(!logged.contains("bringing it back up"), "{logged}");
+    }
+
+    /// The daemon shutting down during the restore's own relaunch ends that process too: the
+    /// session is down, and nobody is told or logged to, since it is resumed at the next start.
+    #[tokio::test]
+    async fn nothing_is_told_of_a_restore_cut_short_by_the_shutdown() {
+        let fixture = Fixture::new("auto-switch-shutdown-restore", SessionStatus::Idle);
+        let (logs, _guard) = LogBuffer::capture();
+        let mut events = fixture.state.subscribe();
+        let env = fixture.env();
+        let (state, calls) = (fixture.state.clone(), Arc::new(AtomicUsize::new(0)));
+        let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
+        // The switch's relaunch fails; the restore's starts a process as the daemon begins to shut
+        // down, which ends it.
+        let launch = move |request: LaunchRequest| -> Result<Launch> {
+            if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                anyhow::bail!("the agent cannot be started");
+            }
+            let stopping = state.clone();
+            std::thread::spawn(move || {
+                tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap()
+                    .block_on(stopping.stop_all_sessions());
+            })
+            .join()
+            .unwrap();
+            stand_in_launch(&started, &launches, || {})(request)
+        };
+
+        try_switch(&fixture.state, "w", move || Ok(env), launch)
+            .await
+            .expect("cut short, and nobody is told");
+
+        assert!(notices(
+            &mut events,
+            notice_code::ACCOUNT_SWITCH_AUTOMATICALLY_FAILED
+        )
+        .is_empty());
+        // Only the switch's own failure, which came before the shutdown, is logged.
+        let logged = logs.text();
+        assert_eq!(logged.matches("WARN").count(), 1, "{logged}");
+    }
+
+    /// A turn that failed on one account is not judged against the account somebody moved the
+    /// session to while it waited for a claim.
+    #[tokio::test]
+    async fn a_trigger_is_dropped_when_the_session_was_moved_during_the_claim_wait() {
+        let fixture = Fixture::new("auto-switch-moved-in-claim", SessionStatus::Idle);
+        let claim = fixture.state.begin_switch("w").unwrap();
+        let (state, dir) = (fixture.state.clone(), fixture.dir.join("claude-b"));
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(400));
+            state
+                .set_session_account("w", Some("claude-b"), dir.to_str())
+                .unwrap();
+            drop(claim);
+        });
+
+        fixture.failed_turn().await;
+
+        assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-b"));
+        assert_eq!(fixture.launched(), 0);
+    }
+
+    /// A second trigger that arrives while a real automatic switch still holds its claim waits for
+    /// it, and then does not pick the account the first one left.
+    #[tokio::test]
+    async fn a_second_trigger_under_a_switchs_claim_does_not_pick_the_account_just_left() {
+        let fixture = Fixture::new("auto-switch-second", SessionStatus::Idle);
+        fixture.hold(Some("claude-b"), 50.0);
+
+        let second = async {
+            // The turn it continues fails once the session is relaunched on its new account, while
+            // the claim is still held.
+            while !(fixture.state.is_launching("w")
+                && fixture.worker().account_id.as_deref() == Some("claude-a"))
+            {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            fixture.failed_turn().await;
+        };
+        tokio::join!(fixture.failed_turn(), second);
+
+        // The default account still reads as having quota, but the first switch left it.
+        assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-b"));
+        assert_eq!(fixture.launched(), 2);
+    }
+
+    /// The owner is not told that a session waits for the user while the dialog on its screen is
+    /// its agent's usage limit, which is no wait; any other dialog is.
+    #[tokio::test]
+    async fn the_owner_is_not_told_of_a_wait_by_a_usage_limit_dialog() {
+        const GROK_MODAL: &str = "You hit your weekly limit.\n1 (o) Upgrade tier\n2 (o) Buy more \
+                                  credits\n3 (o) Try Again\nEnter :submit / Shift+x :dismiss\n";
+        let fixture = Fixture::new("auto-switch-limit-dialog", SessionStatus::Idle);
+        fixture
+            .state
+            .store
+            .insert_session(&Session {
+                project_id: Some("p1".to_string()),
+                bound_to: Some("owner".to_string()),
+                ..crate::test_support::project_session("g", Agent::Grok, SessionStatus::Idle)
+            })
+            .unwrap();
+        let grok = crate::test_support::fake_live_session("g", Agent::Grok, 80, 24, "sleep 30");
+        fixture.state.register_live(grok.clone());
+        grok.on_output(GROK_MODAL.as_bytes());
+        let limit = grok.look_for_dialog().current;
+        assert!(limit.is_some_and(|dialog| dialog.is_usage_limit()));
+
+        crate::agent_dialogs::react_to_dialog(&fixture.state, "g", limit);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        assert!(
+            fixture.state.claim_waiting_notice("g"),
+            "no notice was taken for it"
+        );
+        let heard = owner_heard(&fixture).await;
+        assert!(!heard.contains("is waiting for the user"), "{heard}");
+
+        // Another dialog is a wait, and its owner is told.
+        fixture.show_dialog();
+        let resume = fixture.worker_process.look_for_dialog().current;
+        crate::agent_dialogs::react_to_dialog(&fixture.state, "w", resume);
+        let heard = output_containing(&fixture.owner, "is waiting for the user");
+        assert!(heard.contains("is waiting for the user"), "{heard}");
     }
 
     /// A name that cannot be read is replaced by the account's id, or by the standard name of the

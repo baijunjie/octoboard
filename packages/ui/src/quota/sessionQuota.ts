@@ -32,6 +32,12 @@ export function sessionQuotaBarOf(session: Session | undefined, source: SessionQ
   return quota && !quota.unavailable ? usageBarWindows(quota) : undefined;
 }
 
+/** The account a turned-off account's exception is for: the one `session` runs on while it is running, which the rail's
+ * panel and the menu bar's usage submenus list although it is turned off; `undefined` when the session is not running. */
+export function accountInUse(session: Session | undefined): { agent: Agent; account: string | null } | undefined {
+  return session && isLive(session.status) ? { agent: session.agent, account: session.account_id ?? null } : undefined;
+}
+
 /** The same account and window identification for quota indicators on the rail and native menus, naming
  * every window the indicator draws. With no `accountName` it is the agent's default account, under the
  * name the user gave it in `defaultNames`, if any. */

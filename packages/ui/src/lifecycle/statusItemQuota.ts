@@ -36,7 +36,8 @@ export interface StatusItemQuotaSource {
   addedAgents: Agent[] | null;
   /** The names the user gave the default accounts, by agent. */
   defaultAccountNames?: Settings["default_account_names"];
-  /** The agents whose default account is turned off, which the submenus leave out like an owned account that is off. */
+  /** The agents whose default account is turned off, which the submenus leave out like an owned account that is off
+   * (bar the account the selected running session is on, see `buildQuotaSubmenus`). */
   disabledDefaultAccounts?: Settings["disabled_default_accounts"];
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
@@ -62,15 +63,19 @@ function windowParts(t: Translate, source: StatusItemQuotaSource, naming: QuotaN
 function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, account: Account | null): StatusItemSubmenuItem[] {
   const name = account ? isolate(account.name) : defaultAccountName(t, source.defaultAccountNames, agent);
   const quota = accountQuotaOf(source.accountQuotas, agent, account?.id ?? null);
-  const title = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(quota.plan) }) : name;
-  if (!quota) return [{ kind: "header", title }, { kind: "note", text: t("quota.loading") }];
+  const planned = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(quota.plan) }) : name;
+  // A turned-off account is listed only while the selected session runs on it, and says so last, after its quota
+  // state, as the rail's row puts its badge after the rest.
+  const disabled = accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, account?.id ?? null);
+  const marked = (header: string) => disabled ? t("statusItem.quota.accountDisabled", { account: header, disabled: t("accountChoice.disabled.reason") }) : header;
+  if (!quota) return [{ kind: "header", title: marked(planned) }, { kind: "note", text: t("quota.loading") }];
   // An entry with no windows is unavailable whether or not it says why, which the menu does not, except for an
   // account that is not logged in: a state to be told in a word, not a failure.
-  if (quota.windows.length === 0) return [{ kind: "header", title }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
+  if (quota.windows.length === 0) return [{ kind: "header", title: marked(planned) }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
   const status = exhaustedQuotaWindow(quota, source.now) ? "used_up"
     : quota.unavailable || !usageBarWindows(quota) ? "unknown" : "available";
-  const statusTitle = t(status === "used_up" ? "statusItem.quota.accountUsedUp"
-    : status === "unknown" ? "statusItem.quota.accountUnknown" : "statusItem.quota.accountAvailable", { account: title });
+  const statusTitle = marked(t(status === "used_up" ? "statusItem.quota.accountUsedUp"
+    : status === "unknown" ? "statusItem.quota.accountUnknown" : "statusItem.quota.accountAvailable", { account: planned }));
   const age = formatRelativeTime(source.language, quota.fetched_at, source.now);
   // The header says when the windows were read, at its right, even when the latest read failed; a native menu has
   // no popover for the reason, so the out-of-date note only says that the last read failed.
@@ -108,22 +113,28 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
 
 /** One submenu per added agent that is available, in the order they were added — "Claude quota ▸" —
  * listing its default account, then the accounts the user owns, each set off by a separator, leaving out an
- * account that is turned off. Nothing for an agent that is not added, not available or not yet determined, or
+ * account that is turned off, except the one `inUse` names (the account the selected running session is on), which
+ * is listed and marked "Disabled". Nothing for an agent that is not added, not available or not yet determined, or
  * whose accounts are all turned off: unlike the rail's panel, which lists an undetermined agent, a submenu
  * without readings to fill it would be empty. */
-export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console): StatusItemSubmenu[] {
+export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console, inUse?: { agent: Agent; account: string | null }): StatusItemSubmenu[] {
   const owned = new Map(accountsByAgent(source.accounts).map(({ agent, accounts }) => [agent, accounts]));
   return listedAgents(source.addedAgents).flatMap((agent): StatusItemSubmenu[] => {
     if (source.agentAvailability.get(agent)?.availability !== "available") return [];
-    const accounts = [null, ...(owned.get(agent) ?? [])].filter((account) => !accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, account?.id ?? null));
+    const accounts = [null, ...(owned.get(agent) ?? [])].filter((account) => {
+      const id = account?.id ?? null;
+      return !accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, id) || (inUse?.agent === agent && inUse.account === id);
+    });
     if (accounts.length === 0) return [];
     const items = accounts.flatMap((account, index): StatusItemSubmenuItem[] => [
       ...(index > 0 ? [{ kind: "separator" as const }] : []),
       ...accountLines(t, source, agent, account),
     ]);
     const accountId = currentConsole ? consoleAccount(currentConsole, agent, source.accounts) : undefined;
-    // A turned-off account has no lines in the submenu, so its bar and name would head a list that does not hold it.
-    const reading = accountId !== undefined && !accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, accountId) ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
+    // A turned-off account has no lines in the submenu unless it is the one in use, so otherwise its bar and name would
+    // head a list that does not hold it.
+    const listed = accountId !== undefined && accounts.some((account) => (account?.id ?? null) === accountId);
+    const reading = listed ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
     const bar = reading && !reading.unavailable ? usageBarWindows(reading) : undefined;
     const accountName = source.accounts.find((account) => account.id === accountId)?.name;
     return [{

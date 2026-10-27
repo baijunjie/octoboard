@@ -107,9 +107,11 @@ From top to bottom:
    names never translated — each opening to that agent's accounts and showing what Settings and the rail's panel
    show, including window order (see "Quota windows" and "How an account's quota is shown" in
    `docs/product/account-quotas.md`). An account that is turned off (see "Turning an account off" in
-   `docs/product/agent-accounts.md`) is not listed, and the menu follows the switch as it flips. An agent
-   that is not added, not available, whose availability is not yet determined, or whose accounts are all turned off
-   has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
+   `docs/product/agent-accounts.md`) is not listed, and the menu follows the switch as it flips. The exception is the
+   account the selected session is running on, as that section has it: it stays listed in its place, its header line
+   ending in **Disabled** after its quota status ("Work · Max · Available · Disabled"), or after its name and plan when
+   it has no status to show. An agent that is not added, not available, whose availability is not yet determined, or
+   whose accounts are all turned off, bar that one, has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
    - each account is a header line, at the small size of a section header, regular weight, in the secondary text
      colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The
@@ -159,7 +161,9 @@ From top to bottom:
    It uses that agent's account configured for the **current console**, independently of the selected session that
    supplies the menu bar icon's capsule. A missing, deleted or wrong-agent account reference falls back to the
    agent's default account. With no current console there are no opener bars, and neither are there while that
-   account is turned off (see "Turning an account off" in `docs/product/agent-accounts.md`). When the account has both
+   account is turned off (see "Turning an account off" in `docs/product/agent-accounts.md`), unless the submenu lists
+   it as the account the selected session is running on: the opener then shows its bars and names it as for any other
+   account. When the account has both
    a five-hour and an account-wide weekly window, the five-hour bar has a thinner weekly bar beneath it: **4 pt** over
    **3 pt**, **2 pt** apart, within a picture **56 × 9 pt**. Otherwise there is one **4 pt** bar, vertically centred in
    that picture, with window priority five-hour, then account-wide weekly, then the credit pool; model-specific weekly

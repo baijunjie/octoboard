@@ -129,7 +129,7 @@ it.each([
 
 it.each([
   ["a full disk", "No space left on device (os error 28)", "diskSpaceNoRetry"],
-  ["a denied access", "Permission denied (os error 13)", "access"],
+  ["a denied access", "Permission denied (os error 13)", "accessNoRetry"],
 ])("gives a failed automatic switch whose cause is %s a remedy without the operation to retry", (_name, detail, recovery) => {
   const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { agent: "Claude Code", from: "A", account: "B", reason: detail, reason_code: "internal_error", detail });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });

@@ -40,8 +40,20 @@ failure gives.
 An account whose directory does not exist is not run at all: it is reported as not logged in (see "Quota states"
 below), and reading its quota never creates the directory, so one the user deleted stays deleted. The default account
 names no directory of its own; for the default Codex account the same state comes from Codex's own refusal of a home
-that does not exist. An account whose directory exists but that the agent reports as not signed in is reported as not
-logged in too. Neither is a failed reading.
+that does not exist. An account whose directory exists is reported as not logged in only when the agent itself says
+it holds no credential of any kind there:
+
+- **Claude Code**: no sign-in token, no API key and no subscription, while on Anthropic's own API;
+- **Codex**: the quota request is refused for want of a sign-in, and Codex reports no account while it requires an
+  OpenAI sign-in — which includes a home whose only key is `OPENAI_API_KEY` or `CODEX_API_KEY` in the environment;
+- **Grok Build**: the quota request is refused for want of authentication and no sign-in method is set as the
+  default, or it is refused because the stored credentials are invalid or have expired.
+
+An account that runs on credentials with no plan quota behind them — an API key, Claude Code on Bedrock, Vertex or
+Foundry, Codex on a custom or open-source model provider, Grok Build on an xAI API key — is signed in, and reads as
+having no quota to report (see "Why a quota is unavailable" below), not as not logged in. A Codex or Grok Build refusal
+for want of a sign-in that comes without the state telling the two apart is a failed reading. Neither not logged in
+nor no quota to report is a failed reading.
 
 Readings live in the daemon's memory only. They are never stored, are not part of the application settings a console
 session can read, and are never exported with the configuration (see "What is not configuration and never travels"
@@ -203,7 +215,7 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 | Read | The plan, the windows and how long ago they were read. |
 | Never read successfully, and the last reading failed | No windows, and a red failure mark named "Usage unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and on the account settings dialog's first line, after the account's name and its badges; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md` for how the popover opens). |
 | Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. In Settings the account settings dialog shows them so; the table's Usage cell draws them as its bar, followed by the out-of-date mark. |
-| Not logged in: its directory does not exist, or the agent says it is not signed in there | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings the table's Usage cell holds a dash and the account's **Not logged in** badge says why (see "The accounts table" in `docs/product/agent-accounts.md`); its account settings dialog says, in place of the windows, that it is not logged in yet and to log in to use it. |
+| Not logged in: its directory does not exist, or the agent says it holds no credential there (see "How a quota is read" above) | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings the table's Usage cell holds a dash and the account's **Not logged in** badge says why (see "The accounts table" in `docs/product/agent-accounts.md`); its account settings dialog says, in place of the windows, that it is not logged in yet and to log in to use it. |
 
 ## Why a quota is unavailable
 
@@ -215,9 +227,10 @@ The reason is one of these, in the UI's language:
 - the CLI could not be run, stopped without replying, wrote too much output, or refused the request — for one that
   stopped without replying, with its exit status and the last line of the part of its error output that is kept (its
   first 4 KiB, so for a longer error output a line from that part, possibly cut short), and for a refusal, the error
-  it gave;
+  it gave, or, for a refusal for want of a sign-in, that it did not say whether it is signed in;
 - the CLI replied, but not with a quota that could be read;
-- the CLI replied that the account has no quota to report, as for an account without a subscription. This one is not
+- the CLI replied that the account has no quota to report, as for an account without a subscription or one signed in
+  with an API key or a provider other than the agent's own plan (see "How a quota is read" above). This one is not
   tried less often the way a failed reading is (see "When quotas are read" above), but windows read before stay, out
   of date, as they do after a failed reading.
 

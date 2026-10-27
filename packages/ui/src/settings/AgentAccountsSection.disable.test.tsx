@@ -84,7 +84,7 @@ describe("turning an account off", () => {
     const { dialog } = await mountDetails("Codex");
     expect(dialog.textContent).toContain("Disable account");
     expect(disableSwitch(dialog).checked).toBe(false);
-    expect(dialog.textContent).toContain("Once this is on, this account no longer appears in account choices or usage displays, and new sessions will not use it. Running sessions keep running.");
+    expect(dialog.textContent).toContain("Once this is on, this account no longer appears in account choices or usage displays, except while a running session still uses it. New sessions will not use it, and running sessions keep running.");
     expect([...dialog.querySelectorAll('input[role="switch"]')].at(-1)).toBe(disableSwitch(dialog));
     await act(async () => disableSwitch(dialog).click());
     expect(request).toHaveBeenLastCalledWith({ type: "set_account_disabled", agent: "codex", account: "codex-work", disabled: true });

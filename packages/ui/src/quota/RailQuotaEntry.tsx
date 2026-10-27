@@ -15,7 +15,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../components/scrollFade";
 import { useListMotion } from "../components/useListMotion";
 import { Message, useT } from "../i18n/react";
-import { isLive, type Account, type Agent, type QuotaWindow } from "../protocol";
+import type { Account, Agent, QuotaWindow } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
 import { useDaemon, useDaemonStore } from "../store";
@@ -24,7 +24,7 @@ import { AccountNameLine, AccountQuotaSummary } from "./AccountQuotaSummary";
 import { MODAL_OPEN } from "../layout/useRegionCycle";
 import { useAccountQuota } from "./useAccountQuota";
 import { exhaustedQuotaWindow, remainingPercentAt, type QuotaBar } from "./quotaFormat";
-import { accountQuotaLabel, sessionQuotaBarOf } from "./sessionQuota";
+import { accountInUse, accountQuotaLabel, sessionQuotaBarOf } from "./sessionQuota";
 
 /** The popover of a `StatusMark` in the panel, which is portalled out of it but belongs to it. */
 const NESTED_POPOVER = "[data-status-mark-popover]";
@@ -136,7 +136,7 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const bar = useMemo(() => sessionQuotaBarOf(session, { accounts, disabledDefaultAccounts: disabledDefaults, agentAvailability, accountQuotas }), [session, accounts, disabledDefaults, agentAvailability, accountQuotas]);
   // The panel stands the session's account out only if its row is listed. The bar already leaves out a turned-off account
   // unless the session runs on it, which is the panel's exception too; but an agent that is not added has a bar and no tab.
-  const inUse = session && isLive(session.status) ? { agent: session.agent, account: session.account_id ?? null } : undefined;
+  const inUse = accountInUse(session);
   const shownListed = session !== undefined && bar !== undefined && pickableAgents(agentAvailability, addedAgents).includes(session.agent);
   const account = accounts.find((account) => account.id === session?.account_id);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
