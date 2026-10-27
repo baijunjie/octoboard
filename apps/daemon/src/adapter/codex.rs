@@ -131,7 +131,9 @@ impl AgentAdapter for CodexAdapter {
 
     /// Codex's title is a list of items joined by ` | `: a spinner, a status such as `[ ! ] Action
     /// Required`, the conversation's title once it has one, and the project last. An unnamed
-    /// conversation is left with the project alone, which says nothing.
+    /// conversation is left with the project alone, which says nothing. Codex cuts a project name
+    /// longer than 24 graphemes to its first 21 and `...`, as it does a console's directory,
+    /// named by the console's id.
     ///
     /// The terminal title reaches here without the spinner it starts with, which leaves the
     /// separator after it at the front.
@@ -148,7 +150,7 @@ impl AgentAdapter for CodexAdapter {
             .collect();
         if items
             .last()
-            .is_some_and(|last| project_names.iter().any(|name| name == last))
+            .is_some_and(|last| project_names.iter().any(|name| is_project_item(last, name)))
         {
             items.pop();
         }
@@ -476,6 +478,16 @@ fn codex_home(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
     super::default_account_dir(Agent::Codex, spec.shell_env)
 }
 
+/// Whether a title item is the project `name`, whole or cut short with `...`. Any shorter prefix is
+/// taken, rather than exactly the first 21 graphemes Codex keeps, which would take grapheme
+/// segmentation to count.
+fn is_project_item(item: &str, name: &str) -> bool {
+    item == name
+        || item.strip_suffix("...").is_some_and(|head| {
+            !head.is_empty() && name.len() > head.len() && name.starts_with(head)
+        })
+}
+
 /// A TOML basic string. JSON string escaping is a subset of TOML's, so serde_json produces a valid
 /// one and spares us a second escaping implementation.
 fn toml_string(value: &str) -> String {
@@ -515,6 +527,30 @@ mod tests {
             task("[ x ] Fix it | proj").as_deref(),
             Some("[ x ] Fix it"),
             "only the known status items are dropped"
+        );
+    }
+
+    #[test]
+    fn a_project_name_codex_cut_short_is_still_the_project() {
+        let names = ["f1120ca1-f304-4489-aa46-2ac04c2297d1".to_owned()];
+        let task = |raw| CodexAdapter.task_title(raw, &names);
+        assert_eq!(task("f1120ca1-f304-4489-aa..."), None);
+        assert_eq!(task("⠙ | f1120ca1-f304-4489-aa..."), None);
+        assert_eq!(
+            task("Uninstall codexbar | f1120ca1-f304-4489-aa...").as_deref(),
+            Some("Uninstall codexbar")
+        );
+        assert_eq!(
+            task("Fix it | f1120ca1-xxxx...").as_deref(),
+            Some("Fix it | f1120ca1-xxxx..."),
+            "a cut name must begin the project's"
+        );
+        assert_eq!(task("Fix it | ...").as_deref(), Some("Fix it | ..."));
+        let short = ["proj".to_owned()];
+        assert_eq!(
+            CodexAdapter.task_title("x | proj...", &short).as_deref(),
+            Some("x | proj..."),
+            "a name Codex keeps whole is never cut"
         );
     }
 
