@@ -49,7 +49,7 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 
 - Scenarios are listed by functional area, Normal previews first and Exceptional second. Theme, language, window
   width and height, and whether the shortcut modifier is held are controls above the window, all kept in the URL. The
-  window is an iframe, so its width decides the `docked` breakpoint for real.
+  window is an iframe, so its width decides the `docked` and `phone` breakpoints for real.
 - A scenario's page sets `data-gallery-ready` on `<html>` once its steps have run, its own toasts have been raised and
   finite animations ended; automation waits on it before capturing. A failure of the gallery's own machinery (a step
   that threw, a fixture that cannot be answered as the real daemon would, an exit transition that never ends) is painted
@@ -82,9 +82,9 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   file name. Keep failed subjects out of normal navigation.
 - `state` is built with `snapshotState` from `builders.ts`, so a protocol change breaks it at typecheck. State that
   lives in a component rather than the store (a dialog, the archive view, the selected session) is reached with the
-  shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; `ui.confirm()`
+  shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; a control inside an `[inert]` subtree, like the rail below `phone`, cannot be pressed; `ui.confirm()`
   presses a dialog's confirming button, `ui.contextMenu` opens a row's right-click menu, `ui.touchPress` and `ui.tapTopBarStatus` press with a finger,
-  for the popover a touch opens in place of a tooltip; `ui.hoverStatusMark` rests the mouse on a status mark and waits for its non-modal popover, where `ui.touchPressStatusMark` opens the press form with focus inside; `ui.openGitFailure` does the same for a git badge's failure mark, in a given sidebar row or in focus mode's header; a raw-text disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`).
+  for the popover a touch opens in place of a tooltip; `ui.swipe` swipes a finger across the window (the touch events `useSwipe` reads) to open or close a phone-width drawer or floating panel; `ui.hoverStatusMark` rests the mouse on a status mark and waits for its non-modal popover, where `ui.touchPressStatusMark` opens the press form with focus inside; `ui.openGitFailure` does the same for a git badge's failure mark, in a given sidebar row or in focus mode's header; a raw-text disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`).
 - Other fields of the scenario type (`scenario.ts`) include `preferences` (what the app persists), `toasts` (a toast's `message` may be a function of `t`, worded in the viewing language; kind `"session_notice"` is routed as the daemon's own notice is),
   `sessionOpenError`, `terminal: "refuse"`, `clipboard: "unavailable"` (a plain browser over insecure http),
   `shellTerminal` (how the Terminal panel's shell terminals behave: `"shell"` at its prompt by default, or `"refuse"`; an exited shell
@@ -273,7 +273,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | Path | Role |
 |---|---|
 | `src/components/` | Shared building blocks: window chrome (`TitleBar`, `Rail`, `ContentPanel`, `Toasts`), panel headers and resize handles, menus (`ActionMenu`) and `Hint`, the one component behind every tooltip and floating popover, status and error presentations (`StatusMark`, `MarkLineBox`, `ErrorAlert`, `ChoiceWarning`, `FailureAlert`, `PaneFailure`, `DaemonErrorMessage`, `DiagnosticBlock`), scroll-fade and list-motion helpers, focus-handoff hooks, `useBottomStrip` (the bottom strips' shared behavior), `AttendedStatusAnnouncer` (announcing a status that can arrive while the user is out of the window) and `ExternalLink`. Alerts go through `ErrorAlert` (and `FailureAlert` and `ChoiceWarning`, built on it); `ErrorAlert` and `AlertFrame` are the only importers of HeroUI's `Alert` parts (enforced by `eslint.config.mjs`) |
-| `src/layout/` | Pane layout: the `docked` breakpoint, pane widths, the sidebar drawer and the aside's frame (`AsidePane`), whose content the aside shows (`asideOwner.ts`), pane toggles and F6 region cycling |
+| `src/layout/` | Pane layout: the `docked` and `phone` breakpoints, pane widths, the sidebar drawer and the aside's frame (`AsidePane`), whose content the aside shows (`asideOwner.ts`), pane toggles, F6 region cycling, and the touch swipe that opens and closes the drawer and the floating panels below `phone` (`useSwipe`, `paneSwipe`) |
 | `src/shortcuts/` | The central registry of keyboard shortcuts: command definitions, the portable `Binding`, validation, the persisted per-client overrides and the key recorder `recordKeys`; the Settings section is `src/settings/ShortcutsSection.tsx` |
 | `src/navigation/` | Back and Forward through the locations the content area has shown |
 | `src/lifecycle/` | Hooks tying the UI to the platform: the exit flow (`useAppExit`), notifications, the native menu and menu bar icon, native window theme, run in background, the git status schedule and reporting the interface language to the daemon |

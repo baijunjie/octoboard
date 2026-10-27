@@ -44,17 +44,18 @@ export interface AsideLayout {
  * all round as there is no width grip, and above the scrim that dismisses it (`z-35`, the scrim's
  * `z-30`). It leaves a strip of the scrim beside it to dismiss it by, a rail's width, or 24px in a
  * viewport 360px wide or less (a small phone, or the website's preview frame on one) where the
- * panel needs the room more, and passes presses in its gaps through to the scrim. It fades up into
- * place and back down out of it (`useFadeUp`, replayed when another panel takes its place, at once
- * under reduced motion), staying inert while it goes, with no hover's card taking its place until it
+ * panel needs the room more, and passes presses in its gaps through to the scrim. It fades into
+ * place and back out of it, sliding in from the end edge and back to it (`useFadeUp`, replayed when
+ * another panel takes its place, at once under reduced motion), staying inert while it goes, with no hover's card taking its place until it
  * has gone; the terminal under it keeps its size, and `data-floating-panel` marks it for the
  * terminal's focus hand-off. With no panel open it is nothing, except while `peek` is active (the
  * pointer is on a panel kind's toggle): then it is a fixed overlay at `--aside-width` (capped at
  * 92vw), so only its cards are on the terminal, whose pointer events the gap does not take. The
  * cards look the same docked and floating (`PANEL_CARD_CLASS`, the sidebar's floating card). It
- * floats in and out as the sidebar's floating card does: fading in as each card rises by 4% of its
- * height, and the other way out, in `PANE_INSET_MS` with the sidebar's easing and reduced-motion
- * handling (`usePaneDockMotion` holds both), and is not rendered once it has gone.
+ * floats in and out as the sidebar's floating card does: fading in as each card slides in from the
+ * end edge, and the other way out (only the desktop hover's peek rises by 4% of the card's height),
+ * in `PANE_INSET_MS` with the sidebar's easing and reduced-motion handling (`usePaneDockMotion`
+ * holds both), and is not rendered once it has gone.
  *
  * `children` can be a function of the hover's `peek` the pane is following, which is none while a
  * floating panel fades away, so the stack keeps the leaving card rather than the hovered one.
@@ -73,8 +74,8 @@ function motionOf(shown: boolean, preparing: boolean): "shown" | "away" | "prepa
 
 export function AsidePane({ layout, children }: { layout: AsideLayout; children?: React.ReactNode | ((peek: PanePeek | undefined) => React.ReactNode) }): React.ReactElement | null {
   const { width, minWidth = 320, peek: hoverPeek, folded = false, overlay = false, floatingKind } = layout;
-  // A panel floating over the terminal fades up as it comes, again for another panel in its place,
-  // and back down as it goes; it is that, not a hover's card, until it has gone.
+  // A panel floating over the terminal fades in as it comes, again for another panel in its place,
+  // and back out as it goes; it is that, not a hover's card, until it has gone.
   const open = overlay && floatingKind !== undefined;
   const fade = useFadeUp(open, floatingKind);
   const floating = overlay && fade.rendered;
@@ -91,8 +92,9 @@ export function AsidePane({ layout, children }: { layout: AsideLayout; children?
       data-floating-panel={open ? "" : undefined}
       // A panel on its way out takes no presses and no focus.
       inert={floating && !open}
-      // The pane fades; each card in it rises by 4% of its own height (`style.css`), so the card's
-      // frame, background and shadow move with its content and the percentage is the card's.
+      // The pane fades; each card in it moves (below `phone` sliding from the end edge, else rising by
+      // 4% of its own height, `style.css`), so the card's frame, background and shadow move with its
+      // content and the percentage is the card's.
       data-card-motion={peek ? motionOf(dock.insetShown, dock.preparingInset) : floating ? motionOf(fade.shown, fade.preparing) : undefined}
       data-escape-scope
       style={{ "--aside-width": `${width}px`, "--aside-min-width": `${minWidth}px` } as React.CSSProperties}

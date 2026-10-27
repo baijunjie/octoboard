@@ -214,7 +214,8 @@ export const sessionHistoryScenarios: Scenario[] = [
       "Rework the pricing page so that it loads in under a second on a cold cache, then audit every other marketing page for the same image and cache header problems",
     ),
     sessionHistory: { [archived.id]: MESSAGES, "s-owner": OWNER_MESSAGES },
-    steps: openHistory,
+    // The sidebar is a drawer at this width, and closed.
+    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), ...openHistory],
   },
   {
     ...base,

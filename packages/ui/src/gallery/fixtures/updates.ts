@@ -112,7 +112,8 @@ export const updateScenarios: Scenario[] = [
     width: 420,
     state: quiet,
     updater: { check: newer, checked: true },
-    steps: [openSession, (ui) => ui.press(ui.t("updates.notice.notes"))],
+    // The sidebar is a drawer at this width, and closed.
+    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), openSession, (ui) => ui.press(ui.t("updates.notice.notes"))],
   },
   {
     id: "updates-settings-idle",

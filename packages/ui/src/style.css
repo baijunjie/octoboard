@@ -93,22 +93,31 @@
 @plugin "../typography.mjs";
 
 @theme {
-  /* The one named breakpoint this app has: the width at which the left rail, the sidebar, the
-     terminal and the report panel all fit side by side without any of them going under its own
-     floor (48 + 280 + 520 + 320, see `--rail-width` below, `TERMINAL_FLOOR` in
+  /* The first of the app's two named breakpoints (`phone` follows): the width at which the left
+     rail, the sidebar, the terminal and the report panel all fit side by side without any of them
+     going under its own floor (48 + 280 + 520 + 320, see `--rail-width` below, `TERMINAL_FLOOR` in
      `layout/paneWidth.ts` and `ReportPanel.tsx`). Below it `usePaneToggles` turns the sidebar and
      the report panel into overlays instead of row siblings. The macOS window's own minimum
      (`apps/desktop/src-tauri/src/lib.rs`) keeps the desktop app from ever going under it, so the
      `docked:` variant is also what "the layout as it always was" means there.
 
-     The `px` unit is load-bearing and must stay. `dockedBreakpointPx()` in
-     `layout/breakpoint.ts` reads this token back with `parseFloat` and `dockedQuery()`
+     The `px` unit is load-bearing and must stay. `breakpointPx()` in
+     `layout/breakpoint.ts` reads this token back with `parseFloat` and `minWidthQuery()`
      interpolates the number as `(min-width: …px)`, so `73rem` would silently become
      `(min-width: 73px)` — permanently non-narrow, with nothing reporting it. It also decides
      where Tailwind emits the `docked` media block: a px breakpoint cannot be sorted against the
      rem-valued built-in ones, so it is emitted ahead of all of them, and changing the unit here
      reorders every `docked:` utility in the package against its `sm:` / `md:` / `lg:` siblings. */
   --breakpoint-docked: 1168px;
+
+  /* The width below which the right pane stops docking and a window is a phone's: the rail, the
+     terminal's narrow floor and the Terminal panel's narrow aside floor side by side (48 + 398 +
+     336, see `--rail-width` below, `NARROW_TERMINAL_FLOOR` and
+     `NARROW_TERMINAL_PANEL_ASIDE_MIN` in `layout/paneWidth.ts`; `layout/paneWidth.test.tsx` checks
+     the sum). Below it a panel floats over the terminal (`useAsideFloats` reads this token), and the rail
+     leaves the layout to come in with the sidebar's drawer, so the content panel spans the
+     window (`max-phone:`). The `px` unit is load-bearing for the same reasons as above. */
+  --breakpoint-phone: 782px;
 }
 
 /* Line heights for the sizes whose stock ratio comes to a hair under a whole pixel: `text-xs` is
@@ -311,6 +320,11 @@ html {
      `0.5rem` would be read as 0.5px. It reads it once, so declare it here only, never under a media
      query or a theme. */
   --peek-gap: 8px;
+
+  /* How far a panel is shifted towards its edge while it is away, below the `phone` breakpoint, where
+     it slides in from that edge instead of rising (`PHONE_SLIDE_AWAY` in `layout/paneOverlay.tsx`;
+     the right pane's floating card below). */
+  --phone-slide: 40px;
 
   /* Where the content area starts: right below the top bar. Anything that overlays the content
      area, or runs along an edge that starts there, starts at this offset rather than at the window
@@ -516,7 +530,9 @@ html {
      (`--window-background` below); in a browser it is `--chrome`. Glyphs on it use the theme's
      `--foreground`, secondary text on it `--chrome-muted`, and `--chrome-hover` / `--chrome-active`
      / `--chrome-current` are the tints a control, a pressed control and the current console's tile
-     take on it: translucent, so they read on the material and on `--chrome`. The current tile is
+     take on it: translucent, so they read on the material and on `--chrome`. Below 782 px (the
+     `phone` breakpoint) the rail is inside the sidebar drawer's card and sits on `--panel-sidebar`
+     instead, where the current tile is 1.60:1 in light and 2.05:1 in dark. The current tile is
      the one that has to be found at a glance, so it is the strongest: 1.59:1 on the light material
      (#e2e4e5), 1.57:1 on its darker variant (#d0d2d3) and 1.59:1 on `--chrome`, 1.84:1 on the dark
      material (#484a4b) and 1.96:1 on dark `--chrome`, where `--chrome-hover` and `--chrome-active`
@@ -1072,6 +1088,19 @@ html.pane-resizing * {
 
 [data-card-motion="preparing"] [data-panel-card] {
   transition: none;
+}
+
+/* Below the `phone` breakpoint the card slides in from the end edge instead of rising, and out to it. */
+@media (width < theme(--breakpoint-phone)) {
+  [data-card-motion="away"] [data-panel-card],
+  [data-card-motion="preparing"] [data-panel-card] {
+    translate: var(--phone-slide) 0;
+  }
+
+  :dir(rtl) [data-card-motion="away"] [data-panel-card],
+  :dir(rtl) [data-card-motion="preparing"] [data-panel-card] {
+    translate: calc(-1 * var(--phone-slide)) 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

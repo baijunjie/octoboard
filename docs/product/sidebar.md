@@ -1,8 +1,8 @@
 # Sidebar
 
-The sidebar is the left-hand pane of the window's content panel (its width, hiding it and the drawer it becomes in a
-narrow window are in `docs/product/window-layout.md`). It shows **one console at a time**, the one picked on the rail
-(see `docs/product/console-switcher.md`): a header naming that console at its top, then its console sessions, then its
+The sidebar is the left-hand pane of the window's content panel (its width and hiding it are in
+`docs/product/window-layout.md`, the drawer it becomes in a narrow window in `docs/product/sidebar-drawer.md`). It
+shows **one console at a time**, the one picked on the rail (see `docs/product/console-switcher.md`): a header naming that console at its top, then its console sessions, then its
 projects with their sessions. A **focus mode** gives the whole sidebar over to one project or one console session (see
 `docs/product/focus-mode.md`), and a project's, a console session's or a console's full archive opens in the **archive
 view**, over the terminal (see `docs/product/archive-view.md`).

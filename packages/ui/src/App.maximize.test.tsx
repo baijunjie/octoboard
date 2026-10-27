@@ -57,6 +57,7 @@ function mountApp() {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
   onTestFinished(() => {
     act(() => {
       stacks.setStack("project", defaultStack("project"));
@@ -65,6 +66,7 @@ function mountApp() {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
     try {
       localStorage.clear();
     } catch {

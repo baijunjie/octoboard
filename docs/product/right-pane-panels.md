@@ -140,13 +140,13 @@ otherwise does nothing. How the floating card enters and leaves, what keeps it u
   was.
 - **Close panel** in a floating card sends it away, opening nothing. A floating card has no Maximize panel.
 - Floating a panel in closes the sidebar's drawer (see "Below 1168 px: the sidebar becomes a drawer" in
-  `docs/product/window-layout.md`).
+  `docs/product/sidebar-drawer.md`).
 
 ## Below 782 px: one panel floats over the terminal
 
 A window narrower than **782 px** — the rail's 48 px, the terminal's 398 px floor and the right pane's 336 px minimum
-with the Terminal panel side by side — cannot dock the right pane (see "Below 1168 px: the sidebar becomes a drawer"
-in `docs/product/window-layout.md`). There the right pane's open panel **floats over the terminal**, the agent
+with the Terminal panel side by side — cannot dock the right pane (see "Pane widths below 1168 px" in
+`docs/product/window-layout.md`). There the right pane's open panel **floats over the terminal**, the agent
 terminal taking the content panel's whole width under it. The threshold is the same whichever panels are open.
 
 - **One panel at a time.** Opening a panel — its toggle, Browse files (see "Opening a project's files" in
@@ -157,19 +157,21 @@ terminal taking the content panel's whole width under it. The threshold is the s
 - **How it is drawn**: the panel's own card at the right pane's chosen width, capped to what the content panel leaves
   beside a **dimmed strip** of the terminal, with an **8 px** gap all round the card, from the top bar, the window's
   end edge, its bottom (or the connection banner) and the strip. It has no width handle and no Maximize panel. The
-  strip is on the side away from the window's end and is as wide as the rail, **48 px**, or **24 px** when the
-  window — for the website's embedded preview, the preview frame — is 360 px wide or less.
-- **How it comes and goes**: the card comes and goes as a pane floating in on hover does, fading in while rising
-  into place by 4% of its own height and fading out while sinking back, over 240 ms (see "A hidden pane floats in on
-  hover" in `docs/product/window-layout.md`). Opening another panel in its place plays the entrance again for the
-  new panel. The dimmed strip fades in and out with the card over the same 240 ms. While they fade out, neither the
-  card nor the strip takes presses, and the card takes no keyboard focus. Where the system asks for reduced motion
+  strip is on the side away from the window's end, reaching the window's start edge, the rail not being in the row
+  there (see "Below 782 px: the rail comes in with the drawer" in `docs/product/sidebar-drawer.md`); it is **48 px**
+  wide, or **24 px** when the window — for the website's embedded preview, the preview frame — is 360 px wide or less.
+- **How it comes and goes**: the card fades in while sliding in from the window's end edge by **40 px**, and fades
+  out while sliding back towards it, over 240 ms with the easing of a pane floating in on hover (see "A hidden pane
+  floats in on hover" in `docs/product/window-layout.md`); under a right-to-left language the end edge is the window's
+  left. Opening another panel in its place plays the entrance again for the new panel. The dimmed strip fades in and
+  out with the card over the same 240 ms. While they fade out, neither the card nor the strip takes presses, and the
+  card takes no keyboard focus. Where the system asks for reduced motion
   both appear and go at once.
 - **Opening or closing it never resizes the terminal**, and the terminal has no minimum width here, so the row never
   scrolls sideways.
 - **It closes** on Close panel in its header, on its toggle, on a press on the dimmed strip or in the card's 8 px
-  gap, and on `Escape`, which does not reach the running agent. In a field holding text `Escape` only clears the
-  field first, and inside a shell terminal of the Terminal panel it goes to the shell and leaves the panel open.
+  gap, on a touch swipe (see `docs/product/touch-swipes.md`), and on `Escape`, which does not reach the running
+  agent. In a field holding text `Escape` only clears the field first, and inside a shell terminal of the Terminal panel it goes to the shell and leaves the panel open.
 - **While it is shown the agent terminal under it cannot be used**, with the pointer or the keyboard, and is not an
   `F6` stop (see "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`). Opening a
   panel moves keyboard focus into it, where `F6` would land in it — opened by a tap, where no on-screen keyboard is
@@ -185,9 +187,12 @@ terminal taking the content panel's whole width under it. The threshold is the s
 - **The stacks are left as they are.** Nothing done below 782 px opens, closes, resizes or restores a panel in the
   remembered stacks (see "What is remembered" below). Widening the window to 782 px or more shows the stack exactly
   as it was, a maximized Terminal panel included. Narrowing the window below 782 px, a load included, floats the
-  panel last opened in this window while it is still open in the stack, otherwise the first open panel in stacking
-  order, and nothing when none is open; with the drawer open it floats nothing. Each kind of owner keeps its own
-  floating panel, as it keeps its own stack.
+  panel last on screen while it is still open in the stack, otherwise the first open panel in stacking order, and
+  nothing when none is open; with the drawer open it floats nothing. Each kind of owner keeps its own floating panel,
+  as it keeps its own stack.
+- **The panel last on screen** is kept per kind of owner, in this window only: the panel last opened, docked or
+  floating, or the panel last floating over the terminal when it was closed or opening the drawer closed it. Besides
+  narrowing the window, a touch swipe brings it back (see `docs/product/touch-swipes.md`).
 
 ## Resizing panels
 

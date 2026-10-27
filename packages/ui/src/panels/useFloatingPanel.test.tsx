@@ -68,6 +68,14 @@ it("closes the panels of every owner kind when the drawer opens, and floats none
   expect(test.panel().kind).toBeUndefined();
 });
 
+it("remembers the panel that was on screen when the drawer opens, one seeded as the window narrowed included", () => {
+  const test = mount({ floats: true });
+  expect(test.panel().lastOpened("project")).toBeUndefined();
+  test.render({ floats: true, drawerOpen: true });
+  expect(test.panel().kind).toBeUndefined();
+  expect(test.panel().lastOpened("project")).toBe("files");
+});
+
 it("sends focus into the panel on every open, the same kind floating already included, and nowhere on a later change", () => {
   const test = mount({ floats: true });
   act(() => document.getElementById("outside")!.focus());

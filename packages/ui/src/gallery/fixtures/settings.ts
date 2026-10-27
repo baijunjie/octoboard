@@ -272,6 +272,9 @@ function loginFromInline(): Step[] {
   ];
 }
 
+/** Opens the sidebar's drawer, which brings the rail in below 782px, where Settings is. */
+const openDrawer: Step = (ui) => ui.press(ui.t("titleBar.sidebar.show"));
+
 const openAccounts: Step[] = [
   (ui) => ui.press(ui.t("rail.settings")),
   (ui) => ui.press(ui.t("settings.section.accounts")),
@@ -722,7 +725,8 @@ export const settingsScenarios: Scenario[] = [
     description: "Below 640px the details stack: a model's name as long as one can be wraps beside its reset time on the same line, with its bar under it. The default account's settings dialog is shown, with its Session, Weekly · all models and long-named weekly lines, and the Disable account row.",
     width: 560,
     state: narrowQuotaState,
-    steps: accountDetails(defaultAccount),
+    // The rail comes in with the sidebar's drawer at this width.
+    steps: [openDrawer, ...accountDetails(defaultAccount)],
   },
   {
     id: "settings-accounts-tab-row-tooltip",
@@ -828,7 +832,7 @@ export const settingsScenarios: Scenario[] = [
     description: "Below about 640px the Permission approval row above the table stays within the section, and the table is wider than the section, so it scrolls sideways: its columns keep their widths, the later columns are cut at the edge and the ⋮ column stays pinned at the end, with a hairline at its start while there is more beside it. The tab strip, the two switches above it and the tab buttons fit the width. The scroller is a focusable region while it overflows.",
     width: 560,
     state: narrowQuotaState,
-    steps: openAccounts,
+    steps: [openDrawer, ...openAccounts],
   },
   {
     id: "settings-accounts-many-narrow",
@@ -839,6 +843,7 @@ export const settingsScenarios: Scenario[] = [
     width: 560,
     state: manyAccountsState,
     steps: [
+      openDrawer,
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.accounts")),
       (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_UNDER_STRIP),

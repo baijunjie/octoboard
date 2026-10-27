@@ -32,10 +32,11 @@ The rail's account quota panel is not a region and does not change the cycle: bo
 has floated it in. A panel opened by a tap or the keyboard is modal, as a menu is, so the keys wait until it closes (see
 "Opening the panel" in `docs/product/account-quota-panel.md`).
 
-**A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed, a
-pane that is only floating in, the right pane's panels when nothing owns the pane or none of its panels is open, a panel
-with nothing to take focus (a Files panel while it is still loading, see "Loading the project pane" in
-`docs/product/project-pane.md`), the terminal and the archive view while a maximized Terminal panel covers them (see
+**A region not on screen is skipped**: a docked sidebar the user has hidden, the sidebar's drawer while it is closed,
+the rail below 782 px while that drawer is closed, the rail then coming in only with it (see "Below 782 px: the rail
+comes in with the drawer" in `docs/product/sidebar-drawer.md`), a pane that is only floating in, the right pane's
+panels when nothing owns the pane or none of its panels is open, a panel with nothing to take focus (a Files panel
+while it is still loading, see "Loading the project pane" in `docs/product/project-pane.md`), the terminal and the archive view while a maximized Terminal panel covers them (see
 "Maximizing the Terminal panel" in `docs/product/right-pane-panels.md`) or a panel floats over them below 782 px (see
 "Below 782 px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal when no
 session is selected — unless its area is then offering a creation action, which makes it a stop (see "A console with

@@ -4,9 +4,10 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { App } from "./App";
 import { PanelHeader } from "./components/PanelHeader";
-import { mountForTooltip } from "./components/tooltipTestSupport";
+import { mountForTooltip, openTooltip } from "./components/tooltipTestSupport";
 import { ALL_AGENTS, consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
 import { isolate } from "./i18n/isolate";
+import { touchEvent } from "./layout/touchTestSupport";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
@@ -78,7 +79,7 @@ function stubWidth(width: number, touch = false) {
     });
 }
 
-function mountApp(width: number, touch = false, agents = false) {
+function mountApp(width: number, touch = false, agents = false, waiting = false) {
   let stacks!: ReturnType<typeof usePanelStacks>;
   function StackReset() {
     stacks = usePanelStacks();
@@ -89,6 +90,7 @@ function mountApp(width: number, touch = false, agents = false) {
   document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: touch ? "touch" : "mouse", bubbles: true }));
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
   onTestFinished(() => {
     act(() => {
       stacks.setStack("project", defaultStack("project"));
@@ -97,6 +99,7 @@ function mountApp(width: number, touch = false, agents = false) {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
     try {
       localStorage.clear();
     } catch {
@@ -105,7 +108,7 @@ function mountApp(width: number, touch = false, agents = false) {
   });
   const console_ = consoleOf("c-float", "Main");
   const project = projectOf("p-site", console_.id, "Website");
-  const sessions = [sessionOf("s-site", console_.id, project.id, "Fix header", "idle"), sessionOf("s-console", console_.id, undefined, "Plan release", "idle"), sessionOf("s-old", console_.id, project.id, "Old work", "archived")];
+  const sessions = [sessionOf("s-site", console_.id, project.id, "Fix header", "idle"), sessionOf("s-console", console_.id, undefined, "Plan release", waiting ? "waiting_user" : "idle"), sessionOf("s-old", console_.id, project.id, "Old work", "archived")];
   const daemon: Daemon = {
     store: createStateStore({
       ...snapshotState({ consoles: [console_], projects: [project], sessions }),
@@ -381,4 +384,254 @@ it("records no drawer control for a dialog from a pointer that went down only to
   await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
   await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
   expect(document.activeElement).not.toBe(sessionRow);
+});
+
+const rail = () => document.querySelector<HTMLElement>("[data-region=rail]")!;
+
+it("keeps the rail out of reach on a phone until the drawer opens, and takes it away with the drawer", async () => {
+  mountApp(390);
+  await selectProjectSession();
+  expect(rail().hasAttribute("inert")).toBe(true);
+  const visited = new Set<string | null | undefined>();
+  for (let step = 0; step < 6; step++) {
+    await f6();
+    visited.add(regionOfFocus());
+  }
+  expect(visited.has("rail")).toBe(false);
+
+  await pressElement(toggle("Show sessions"));
+  expect(rail().hasAttribute("inert")).toBe(false);
+  await f6();
+  await f6();
+  const reached = new Set<string | null | undefined>();
+  for (let step = 0; step < 6; step++) {
+    await f6();
+    reached.add(regionOfFocus());
+  }
+  expect(reached.has("rail")).toBe(true);
+
+  await pressElement(toggle("Hide sessions"));
+  expect(rail().hasAttribute("inert")).toBe(true);
+});
+
+it("hands focus on when Escape closes the drawer from a rail control on a phone", async () => {
+  mountApp(390);
+  await pressElement(toggle("Show sessions"));
+  const settings = byLabel("Settings", rail())!;
+  await act(async () => settings.focus());
+  await escapeFrom(settings);
+  expect(toggle("Show sessions")).not.toBeNull();
+  expect(rail().hasAttribute("inert")).toBe(true);
+  expect(rail().contains(document.activeElement)).toBe(false);
+});
+
+it("leaves the rail in the row from the phone breakpoint up", async () => {
+  const { resize } = mountApp(390);
+  expect(rail().hasAttribute("inert")).toBe(true);
+  await resize(800);
+  expect(rail().hasAttribute("inert")).toBe(false);
+  await resize(390);
+  expect(rail().hasAttribute("inert")).toBe(true);
+});
+
+it("lets the scrims reach the window's edge on a phone, the rail being away or part of the drawer's card", async () => {
+  mountApp(390);
+  await selectProjectSession();
+  await pressElement(toggle("Show files panel"));
+  const scrim = document.querySelector<HTMLElement>("button.fixed.z-30:not([inert])")!;
+  expect(scrim.getAttribute("aria-label")).toBe("Close panel");
+  expect(scrim.classList.contains("start-0")).toBe(true);
+  await pressElement(toggle("Hide files panel"));
+  await pressElement(toggle("Show sessions"));
+  expect(document.querySelector("button.fixed.z-30:not([inert])")!.className).toContain("start-(--rail-width) max-phone:start-0");
+});
+
+/** A finger swiping by `dx` px sideways from the middle of the agent terminal. */
+async function swipe(dx: number) {
+  const send = (type: string, x: number) =>
+    act(async () => {
+      const touch = { identifier: 1, clientX: x, clientY: 300 };
+      document.body.dispatchEvent(touchEvent(type, type === "touchend" ? [] : [touch], [touch]));
+    });
+  await send("touchstart", 200);
+  await send("touchmove", 200 + dx / 2);
+  await send("touchmove", 200 + dx);
+  await send("touchend", 200 + dx);
+}
+
+it("opens the drawer on a swipe towards the end and closes it on one towards the start, on a phone", async () => {
+  mountApp(390, true);
+  await swipe(120);
+  expect(toggle("Hide sessions")).not.toBeNull();
+  await swipe(120);
+  expect(toggle("Hide sessions")).not.toBeNull();
+  await swipe(-120);
+  expect(toggle("Show sessions")).not.toBeNull();
+});
+
+it("brings the panel the owner had open last in on a swipe towards the start, else its first, then cycles through its panels, wrapping", async () => {
+  mountApp(390, true);
+  await selectProjectSession();
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-terminal"]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-terminal"]);
+  await swipe(120);
+  expect(cards()).toEqual([]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-terminal"]);
+});
+
+it("closes the floating panel before opening the drawer, so the two are never on screen together", async () => {
+  mountApp(390, true);
+  await selectProjectSession();
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  await swipe(120);
+  expect(cards()).toEqual([]);
+  expect(toggle("Show sessions")).not.toBeNull();
+  await swipe(120);
+  expect(toggle("Hide sessions")).not.toBeNull();
+  expect(cards()).toEqual([]);
+});
+
+it("opens no panel on a swipe towards the start when the pane has no owner", async () => {
+  mountApp(390, true);
+  await swipe(-120);
+  expect(cards()).toEqual([]);
+  expect(toggle("Show sessions")).not.toBeNull();
+});
+
+it("ignores swipes from the phone breakpoint up", async () => {
+  const { resize } = mountApp(800, true);
+  await swipe(120);
+  expect(toggle("Show sessions")).not.toBeNull();
+  await resize(390);
+  await swipe(120);
+  expect(toggle("Hide sessions")).not.toBeNull();
+});
+
+/** Focus put on `element` the way a key leaves it, which is what opens its tooltip. */
+async function focusByKey(element: HTMLElement) {
+  await act(async () => {
+    element.blur();
+    element.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    element.focus();
+  });
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+}
+
+it("shows the scrim for what a swipe opens, leaving focus on the top bar's toggle", async () => {
+  mountApp(390);
+  await selectProjectSession();
+  const sidebarToggle = toggle("Show sessions")!;
+  await focusByKey(sidebarToggle);
+  await swipe(120);
+  expect(scrims()).toEqual(["Close sessions"]);
+  expect(document.activeElement).toBe(sidebarToggle);
+});
+
+it("lands focus in the panel a swipe opens from a top bar control with its tooltip shown", async () => {
+  mountApp(390);
+  await selectProjectSession();
+  await focusByKey(toggle("Back")!);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  expect(document.activeElement).not.toBe(document.body);
+  expect(document.activeElement?.closest("[data-floating-panel]")).not.toBeNull();
+});
+
+it("closes the drawer on a swipe towards the start from a top bar control, dismissing nothing else", async () => {
+  mountApp(390);
+  await selectProjectSession();
+  await pressElement(toggle("Show sessions"));
+  const hideToggle = toggle("Hide sessions")!;
+  await focusByKey(hideToggle);
+  await swipe(-120);
+  expect(toggle("Show sessions")).not.toBeNull();
+  expect(cards()).toEqual([]);
+  expect(document.activeElement).toBe(hideToggle);
+});
+
+it.each(["Settings", "New console"])("hands focus on when a swipe closes the drawer from the rail's %s with its tooltip shown", async (label) => {
+  mountApp(390);
+  await pressElement(toggle("Show sessions"));
+  const control = byLabel(label, rail())!;
+  await focusByKey(control);
+  expect(openTooltip()).not.toBeNull();
+  await swipe(-120);
+  expect(toggle("Show sessions")).not.toBeNull();
+  expect(document.activeElement).not.toBe(document.body);
+  expect(rail().contains(document.activeElement)).toBe(false);
+});
+
+it("hands focus on when a swipe closes the drawer from a row of the sidebar with a tooltip shown", async () => {
+  mountApp(390);
+  await pressElement(toggle("Show sessions"));
+  await focusByKey(row("Plan release")!);
+  await swipe(-120);
+  expect(toggle("Show sessions")).not.toBeNull();
+  expect(document.activeElement).not.toBe(document.body);
+  expect(document.querySelector("[data-region=sidebar]")!.contains(document.activeElement)).toBe(false);
+});
+
+it("leaves focus in the terminal's text field alone when a swipe opens or closes a pane", async () => {
+  mountApp(390, true);
+  await selectProjectSession();
+  const input = document.body.appendChild(document.createElement("textarea"));
+  onTestFinished(() => void input.remove());
+  await act(async () => input.focus());
+  await swipe(120);
+  expect(toggle("Hide sessions")).not.toBeNull();
+  expect(document.activeElement).toBe(input);
+  await swipe(-120);
+  expect(toggle("Show sessions")).not.toBeNull();
+  expect(document.activeElement).toBe(input);
+});
+
+it("closes the drawer when the rail's waiting count picks the next session in it", async () => {
+  mountApp(390, true, false, true);
+  await pressElement(toggle("Show sessions"));
+  await pressElement(byLabel("1 session is waiting for you. Go to the next one.", rail()));
+  expect(toggle("Show sessions")).not.toBeNull();
+  expect(scrims()).toEqual([]);
+});
+
+it("hands focus back to the rail's Settings as Settings opened from it in the drawer closes", async () => {
+  mountApp(390, true);
+  await pressElement(toggle("Show sessions"));
+  const settings = byLabel("Settings", rail())!;
+  // A tap presses the control without focusing it.
+  await act(async () => {
+    settings.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+    settings.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "touch" }));
+    settings.click();
+  });
+  expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  expect(document.querySelector("[role=dialog]")).toBeNull();
+  expect(document.activeElement).toBe(settings);
+  expect(toggle("Hide sessions")).not.toBeNull();
+});
+
+it("hands focus back to the rail's Settings as Settings opened from it by a key in the drawer closes", async () => {
+  mountApp(390);
+  await pressElement(toggle("Show sessions"));
+  const settings = byLabel("Settings", rail())!;
+  await focusByKey(settings);
+  await act(async () => {
+    settings.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    settings.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+  });
+  expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  await act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+  expect(document.querySelector("[role=dialog]")).toBeNull();
+  expect(document.activeElement).toBe(settings);
+  expect(toggle("Hide sessions")).not.toBeNull();
 });

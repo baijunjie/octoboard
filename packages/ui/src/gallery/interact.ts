@@ -109,8 +109,10 @@ function matches(matcher: Matcher, name: string): boolean {
   return typeof matcher === "string" ? name === matcher : matcher(name);
 }
 
-/** Whether a control can be pressed. */
-const isEnabled = (element: Element): boolean => !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true";
+/** Whether a control can be pressed: not disabled, and not inside an inert subtree (the rail that has left a
+ * phone-width window, say), which no pointer reaches either. */
+const isEnabled = (element: Element): boolean =>
+  !element.hasAttribute("disabled") && element.getAttribute("aria-disabled") !== "true" && !element.closest("[inert]");
 
 /** What HeroUI marks a tooltip's trigger with. */
 const TOOLTIP_TRIGGER = "[data-slot=tooltip-trigger]";
@@ -168,6 +170,14 @@ export interface Ui {
    * returns once that popover is up, and fails if none opens, which also catches a control with no touch
    * popover. */
   touchPress: (matcher: Matcher) => Promise<void>;
+  /** Swipes a finger sideways across the middle of the window, `toward` the edge at the start or the end of the
+   * line (the left or the right edge in left-to-right text, the other way round in right-to-left, as the document's
+   * `dir` says): the touch
+   * events the window's swipe gesture reads, sent to the element under the finger's start, which is the terminal,
+   * the drawer's scrim or the panel's card, as it would be for a finger there. Only what the app does with a
+   * swipe at a phone's width (opening or closing the sidebar's drawer or a floating panel) follows, and the step
+   * returns once the slide has settled. */
+  swipe: (toward: "start" | "end") => Promise<void>;
   /** Taps the status glyph at the end of the top bar's breadcrumb with a finger and leaves the popover it
    * opens up, as `touchPress` does. The glyph is the one named `role="img"` in the bar, as
    * `hoverTopBarStatus` finds it; fails while no session is selected or the tap opens no popover. */
@@ -1075,6 +1085,33 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async pressMenuItem(matcher) {
       await clickWhenFound(() => findAll(matcher).find((element) => element.matches('[role="menuitem"]')), `No menu item matching ${String(matcher)}`);
+    },
+    async swipe(toward) {
+      const view = doc.defaultView!;
+      const rightwards = (toward === "end") !== (doc.documentElement.dir === "rtl");
+      const sign = rightwards ? 1 : -1;
+      // From a point on the side the finger moves away from, so the whole travel stays on screen.
+      const startX = view.innerWidth * (rightwards ? 0.25 : 0.75);
+      const y = view.innerHeight / 2;
+      const target = doc.elementFromPoint(startX, y) ?? doc.body;
+      const send = (type: string, x: number) => {
+        const finger = { identifier: 1, clientX: x, clientY: y };
+        // A plain event with the two lists the gesture reads: Safari and Firefox on a desktop have no `Touch`.
+        const event = new Event(type, { bubbles: true, cancelable: true });
+        Object.defineProperties(event, {
+          touches: { value: type === "touchend" ? [] : [finger] },
+          changedTouches: { value: [finger] },
+        });
+        target.dispatchEvent(event);
+      };
+      send("touchstart", startX);
+      await wait(30);
+      send("touchmove", startX + sign * 40);
+      await wait(30);
+      send("touchmove", startX + sign * 120);
+      send("touchend", startX + sign * 120);
+      // The panel's slide and fade take 240ms, and a floating panel's focus follows.
+      await wait(450);
     },
     async touchPress(matcher) {
       await touchAndWait(() => find(matcher), `Nothing to press matching ${String(matcher)}`, `A touch press of ${String(matcher)} opened no popover`);

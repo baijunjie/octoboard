@@ -31,23 +31,34 @@ const DRAWER_FRAME =
   "max-docked:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-docked:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-docked:[--pane-header-height:var(--pane-header-height-floating)] max-docked:rounded-xl max-docked:overflow-hidden max-docked:pointer-events-auto max-docked:panel-edge max-docked:shadow-(--panel-card-shadow)";
 
 /** The sidebar is on the reading direction's start side, so under right-to-left it is on the right.
- * It is anchored past the rail (`--rail-width` in `style.css`). The overlay is a card inset by
- * `--peek-gap` from the top bar, the bottom chrome and the rail. A card's headers take
+ * It is anchored past the rail (`--rail-width` in `style.css`) while the rail is in the row. The
+ * overlay is a card inset by `--peek-gap` from the top bar, the bottom chrome and the rail. Below the
+ * `phone` breakpoint the rail is not in the row but part of the card: the card starts `--peek-gap`
+ * from the window's edge and the sidebar (`Sidebar.tsx`) pads its start by the rail's width, where
+ * the rail (`Rail.tsx`) lies over it. A card's headers take
  * `--pane-header-height-floating` (`style.css`) so that their bottom line lines up with the docked
  * headers' in the same row; `FLOATING_INSET` sets it for everything inside. */
-const ANCHOR = "start-(--rail-width) max-docked:start-[calc(var(--rail-width)+var(--peek-gap))]";
+const ANCHOR = "start-(--rail-width) max-docked:phone:start-[calc(var(--rail-width)+var(--peek-gap))] max-phone:start-(--peek-gap)";
+/** Below the `phone` breakpoint a panel that is away is shifted `--phone-slide` (`style.css`) towards
+ * the edge it lives on, the start edge for the sidebar's drawer and its rail, in place of the vertical
+ * drift of the wider layouts, so that it slides in from that edge as it fades in and back out to it.
+ * Mirrored under right-to-left. Exported for the rail, which comes and goes with the drawer. */
+export const PHONE_SLIDE_AWAY = "max-phone:translate-y-0 max-phone:-translate-x-(--phone-slide) max-phone:rtl:translate-x-(--phone-slide)";
+
 /** The drawer below the breakpoint, open or away: it fades in as it rises into its place by 4% of
  * its own height and fades out as it sinks back, over 240ms with the floating card's easing, its
  * edge and shadow (`DRAWER_FRAME`) with it; `visibility` stays on until the exit has finished and
- * then keeps the away drawer out of reach. */
+ * then keeps the away drawer out of reach. Below the `phone` breakpoint it slides instead, in from
+ * the start edge by `--phone-slide` and back out to it (`PHONE_SLIDE_AWAY`). */
 const DRAWER_OPEN = "max-docked:translate-y-0 max-docked:opacity-100";
-const DRAWER_AWAY = "max-docked:translate-y-[4%] max-docked:opacity-0 max-docked:invisible";
+const DRAWER_AWAY = `max-docked:translate-y-[4%] max-docked:opacity-0 max-docked:invisible ${PHONE_SLIDE_AWAY}`;
 const FLOATING_FRAME = `docked:start-[calc(var(--rail-width)+var(--peek-gap))] ${FLOATING_INSET}`;
 
 /**
  * The geometry of the sidebar's overlay forms (`Sidebar.tsx`): fixed between `style.css`'s
  * `--top-chrome-height` and `--bottom-chrome-height`, with a card inset from the surrounding
- * chrome and the rail. Drawers and desktop floating cards alike fade up into place and back down.
+ * chrome and the rail. Drawers and desktop floating cards alike fade up into place and back down;
+ * below the `phone` breakpoint the drawer slides in from the start edge instead.
  * `open` is whether the drawer is open below the breakpoint. Callers add their own
  * width/flex classes on top of this string; the motion, what "closed" means and the card's edge
  * (the `panel-edge` hairline together with the `--panel-card-shadow` elevation) are this
@@ -93,13 +104,15 @@ export function drawerClass(mode: PaneMode, open: boolean, peeking = false): str
  * own on the translucent macOS window, so stacking the pane beneath it would show it through. The
  * wrapper takes no pointer events, the pane (`drawerClass`) does, and the pane stays `fixed`
  * itself: a clip does not make its element a containing block. With the pane docked at the desktop
- * breakpoint (`floating` false), the wrapper is `display: contents` and so is not there. It is always
+ * breakpoint (`floating` false), the wrapper is `display: contents` and so is not there; so it is
+ * below the `phone` breakpoint, where the card starts at the window's edge and the rail is part of
+ * it, with nothing to keep it off. It is always
  * rendered, so docking the pane does not remount what is in it.
  */
 export function RailClip({ floating, children }: { floating: boolean; children: React.ReactNode }): React.ReactElement {
   return (
     <div
-      className={`contents max-docked:pointer-events-none max-docked:fixed max-docked:inset-y-0 max-docked:start-(--rail-width) max-docked:z-40 max-docked:block max-docked:w-0 max-docked:[clip-path:inset(-100vh_-100vw_-100vh_0)] max-docked:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)] ${
+      className={`contents max-docked:phone:pointer-events-none max-docked:phone:fixed max-docked:phone:inset-y-0 max-docked:phone:start-(--rail-width) max-docked:phone:z-40 max-docked:phone:block max-docked:phone:w-0 max-docked:phone:[clip-path:inset(-100vh_-100vw_-100vh_0)] max-docked:phone:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)] ${
         floating
           ? "docked:pointer-events-none docked:fixed docked:inset-y-0 docked:start-(--rail-width) docked:z-40 docked:block docked:w-0 docked:[clip-path:inset(-100vh_-100vw_-100vh_0)] docked:rtl:[clip-path:inset(-100vh_0_-100vh_-100vw)]"
           : ""

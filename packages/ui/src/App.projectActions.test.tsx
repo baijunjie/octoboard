@@ -45,11 +45,13 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: !narrow && media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
   onTestFinished(() => {
     while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   const console_ = consoleOf("c-actions", "Main");
   const projects = [projectOf("p-actions", console_.id, "Website"), projectOf("p-other", console_.id, "API")];
