@@ -164,9 +164,7 @@ pub enum HostKind {
 pub enum ProjectSource {
     Local,
     Parent,
-    /// Clones any git remote, not only GitHub. `github` is what this value was called before and is
-    /// still read, in a request and in a stored project; it is never written.
-    #[serde(alias = "github")]
+    /// Clones any git remote, not only GitHub.
     Git,
 }
 
@@ -3998,19 +3996,16 @@ mod tests {
         assert!(serde_json::from_str::<Request>(unshown).is_err());
     }
 
-    /// `github` is the old name of the `git` source; a request still naming it must be accepted,
-    /// and the source is emitted as `git`.
+    /// A `git` request may leave out `path`, and the source is emitted as `git`.
     #[test]
-    fn the_github_source_is_read_as_git_and_written_as_git() {
-        for name in ["git", "github"] {
-            let json = format!(r#"{{"type":"add_project","console_id":"c","source":"{name}"}}"#);
-            match serde_json::from_str::<Request>(&json).unwrap().body {
-                RequestBody::AddProject { source, path, .. } => {
-                    assert_eq!(source, ProjectSource::Git);
-                    assert!(path.is_none());
-                }
-                _ => panic!("not add_project"),
+    fn a_git_request_may_omit_its_path_and_the_source_is_written_as_git() {
+        let json = r#"{"type":"add_project","console_id":"c","source":"git"}"#;
+        match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::AddProject { source, path, .. } => {
+                assert_eq!(source, ProjectSource::Git);
+                assert!(path.is_none());
             }
+            _ => panic!("not add_project"),
         }
         assert_eq!(
             serde_json::to_value(ProjectSource::Git).unwrap(),

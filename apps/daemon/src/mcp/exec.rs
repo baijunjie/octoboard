@@ -164,9 +164,7 @@ async fn add_project(
     let source = match required_str(arguments, "source")? {
         "local" => ProjectSource::Local,
         "parent" => ProjectSource::Parent,
-        // `github` is the old name of `git`, still accepted so a console session that learned it
-        // keeps working.
-        "git" | "github" => ProjectSource::Git,
+        "git" => ProjectSource::Git,
         other => bail!("`{other}` is not one of `local`, `parent` or `git`"),
     };
     let remote_url = optional_string(arguments, "remote_url");

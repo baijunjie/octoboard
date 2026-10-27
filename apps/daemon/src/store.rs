@@ -860,17 +860,15 @@ impl Store {
     /// directory discovers repositories in bulk and is expected to be re-run as new ones appear,
     /// so the duplicates it would otherwise create are filtered on this.
     pub fn project_exists_at(&self, console_id: &str, path: &str) -> Result<bool> {
-        // Compared written one way: a row stored before project paths were normalised, such as
-        // `/work/project/`, is the same project as a new `/work/project`.
+        // Stored paths are lexically normalised, so `path` is compared written the same way.
         let wanted = crate::hostfs::lexically_normalise(Path::new(path));
         let conn = self.lock();
-        let mut stmt = conn.prepare("SELECT path FROM projects WHERE console_id = ?1")?;
-        let stored = stmt
-            .query_map(params![console_id], |row| row.get::<_, String>(0))?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        Ok(stored
-            .iter()
-            .any(|stored| crate::hostfs::lexically_normalise(Path::new(stored)) == wanted))
+        let exists = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM projects WHERE console_id = ?1 AND path = ?2)",
+            params![console_id, wanted.to_string_lossy()],
+            |row| row.get(0),
+        )?;
+        Ok(exists)
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
@@ -1323,7 +1321,7 @@ impl Store {
     }
 
     /// The directory a clone lands in when none is named: the stored one, else `~/Projects`
-    /// expanded.
+    /// expanded. Lexically normalised either way, as a project path under it is stored as it is.
     pub fn default_clone_dir(&self) -> Result<String> {
         let stored: Option<String> = self.lock().query_row(
             "SELECT default_clone_dir FROM settings WHERE id = ?1",
@@ -1331,7 +1329,7 @@ impl Store {
             |row| row.get(0),
         )?;
         Ok(stored.unwrap_or_else(|| {
-            crate::hostfs::expand(BUILT_IN_CLONE_DIR)
+            crate::hostfs::lexically_normalise(&crate::hostfs::expand(BUILT_IN_CLONE_DIR))
                 .to_string_lossy()
                 .into_owned()
         }))
@@ -3767,17 +3765,18 @@ mod tests {
         assert!(!consented(&store));
     }
 
-    /// A project stored before paths were normalised is the same project as the normalised one.
+    /// A project is found by its path written any lexically equivalent way, and only in its own
+    /// console.
     #[test]
-    fn a_project_stored_with_a_trailing_slash_is_found_by_its_normalised_path() {
+    fn a_project_is_found_by_any_spelling_of_its_path() {
         let path = temp_db("project-exists");
         let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
-        let mut old = project(false);
-        old.path = "/work/project/".to_string();
-        store.insert_project(&old).expect("project");
+        let mut stored = project(false);
+        stored.path = "/work/project".to_string();
+        store.insert_project(&stored).expect("project");
 
         assert!(store
             .project_exists_at("console-1", "/work/project")
@@ -4519,7 +4518,7 @@ mod tests {
     fn the_default_clone_dir_falls_back_to_the_built_in_one() {
         let path = temp_db("clone-dir");
         let store = Store::open(&path).expect("store");
-        let built_in = crate::hostfs::expand("~/Projects")
+        let built_in = crate::hostfs::lexically_normalise(&crate::hostfs::expand("~/Projects"))
             .to_string_lossy()
             .into_owned();
         assert_eq!(store.default_clone_dir().unwrap(), built_in);
@@ -4550,16 +4549,6 @@ mod tests {
         );
         assert!(store.set_interface_language("de").unwrap());
         assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
-    }
-
-    /// A project stored with the source's old name still reads, and is written back as `git`.
-    #[test]
-    fn a_stored_github_source_reads_as_git() {
-        assert_eq!(
-            enum_from_text::<ProjectSource>("github").unwrap(),
-            ProjectSource::Git
-        );
-        assert_eq!(enum_to_text(&ProjectSource::Git), "git");
     }
 
     /// A project session record for the binding tests: unbound unless `bound_to` says otherwise.
