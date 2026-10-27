@@ -329,12 +329,13 @@ pub fn probe_remote_agent(
 }
 
 /// The repository name from a clone URL, for both `https://host/owner/repo(.git)` and
-/// `git@host:owner/repo(.git)`.
+/// `git@host:owner/repo(.git)`. `None` for a name that is no directory of its own (empty, `.`,
+/// `..`), which a clone beneath a parent would otherwise land in or above.
 pub(crate) fn repo_name(remote_url: &str) -> Option<String> {
     let trimmed = remote_url.trim().trim_end_matches('/');
     let last = trimmed.rsplit(['/', ':']).next()?;
     let name = last.strip_suffix(".git").unwrap_or(last);
-    if name.is_empty() {
+    if matches!(name, "" | "." | "..") {
         None
     } else {
         Some(name.to_string())
@@ -410,7 +411,7 @@ mod tests {
     }
 
     #[test]
-    fn repo_name_handles_both_url_shapes() {
+    fn repo_name_reads_both_url_shapes_and_refuses_dot_names() {
         assert_eq!(
             repo_name("https://github.com/owner/repo.git").as_deref(),
             Some("repo")
@@ -424,5 +425,7 @@ mod tests {
             Some("repo")
         );
         assert_eq!(repo_name("").as_deref(), None);
+        assert_eq!(repo_name("https://host/owner/..git").as_deref(), None);
+        assert_eq!(repo_name("https://host/owner/...git").as_deref(), None);
     }
 }
