@@ -16,11 +16,14 @@ import React from "react";
  * pane widths, the drawers and the floating cards' gap count on, so it carries no border: one
  * would push the content 1px in from those lines. A `bare` panel is for the screens that have no
  * rail (starting up, failed to start): it spans the window under the top bar and holds a column.
+ * `startsAtEdge` is for a rail that leaves the row below the `phone` breakpoint (`Rail`'s
+ * `onDemand`): the panel then starts at the window's edge, where the corner would have nothing to
+ * soften, as its end edge has none.
  */
-export function ContentPanel({ children, bare = false }: { children: React.ReactNode; bare?: boolean }): React.ReactElement {
+export function ContentPanel({ children, bare = false, startsAtEdge = false }: { children: React.ReactNode; bare?: boolean; startsAtEdge?: boolean }): React.ReactElement {
   return (
     <div
-      className={`flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel ${bare ? "flex-col" : "rounded-ss-xl shadow-(--panel-shadow)"}`}
+      className={`flex min-h-0 min-w-0 flex-1 overflow-hidden bg-panel ${bare ? "flex-col" : `rounded-ss-xl shadow-(--panel-shadow)${startsAtEdge ? " max-phone:rounded-ss-none" : ""}`}`}
     >
       {children}
     </div>

@@ -37,6 +37,8 @@ function avatarOf(statuses: SessionStatus[], hoverOpensSidebar = false): HTMLBut
           onOpenSettings={() => {}}
           onOpenSettingsAt={() => {}}
           focusTerminal={() => {}}
+          onDemand={false}
+          away={false}
         />
       </DaemonProvider>
     </PlatformProvider>,

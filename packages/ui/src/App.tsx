@@ -41,13 +41,16 @@ import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { useConfirmIncompleteLaunch } from "./dialogs/useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
-import { useT } from "./i18n/react";
+import { textDirection } from "./i18n/languages";
+import { useCurrentLanguage, useT } from "./i18n/react";
 import { useOctoboardTheme } from "./theme";
 import type { AsideLayout } from "./layout/AsidePane";
 import { liveOwner, ownerAfterMove, ownerForSession, ownerKey, sameOwner, type AsideOwner } from "./layout/asideOwner";
 import { useIsNarrow } from "./layout/breakpoint";
 import { NARROW_TERMINAL_PANEL_ASIDE_MIN, useAsideFloats, usePaneWidth } from "./layout/paneWidth";
 import { columnSpan, isDockEasing, type DockPhase } from "./layout/paneDockMotion";
+import { resolveSwipe, type SwipeToward } from "./layout/paneSwipe";
+import { useSwipe } from "./layout/useSwipe";
 import { type HeldChoices, useConsoleSwitchFollowUp } from "./layout/useConsoleSwitchFollowUp";
 import { usePaneToggles } from "./layout/usePaneToggles";
 import { useRegionCycle } from "./layout/useRegionCycle";
@@ -96,6 +99,9 @@ import { WelcomeScreen, type WelcomeScreenHandle } from "./WelcomeScreen";
 
 /** Shared and never changed, so that no sessions is the same value every time. */
 const NO_SESSIONS: Session[] = [];
+
+/** What the open drawer is made of: the sidebar and, below the `phone` breakpoint, the rail inside its card. */
+const DRAWER_CONTROLS = "[data-pane=sidebar], [data-region=rail]";
 
 /** How long the result of a batch of account switches stays in the status region. */
 const SWITCH_ANNOUNCEMENT_MS = 10_000;
@@ -227,6 +233,7 @@ export function App(): React.ReactElement {
   const reportSessionId = asideOwner?.kind === "report" ? asideOwner.consoleSession : projectReportSession;
   // A session's kind has no toggle and no panel while its session has no pages to show.
   const unavailableKinds = unavailableKindsOf(ownerKind, reportSessionId);
+  const availableKinds = ownerKind ? OWNER_KINDS[ownerKind].filter((kind) => !unavailableKinds.includes(kind)) : [];
   // Too narrow a window to dock the pane (a phone): one panel at a time floats over the agent
   // terminal, which keeps the whole width (`useAsideFloats`, `panels/useFloatingPanel.ts`). The
   // drawer's open state is kept here, as the floating panel has to know it before the pane toggles
@@ -338,12 +345,22 @@ export function App(): React.ReactElement {
   // Only the store and whether the notice is shown: the whole state changes with every tick of a download.
   const updateStore = useUpdateStore();
   const updateNoticeShown = useUpdateSelector((state) => updateNoticeKind(state) !== undefined) ?? false;
-  // A region off screen is skipped by F6: a hidden docked pane, a closed drawer, and a floating pane
-  // too, which is only a hover away rather than shown. The top bar and the rail are always there.
+  // Below the `phone` breakpoint the rail leaves the row and comes in with the sidebar's drawer; the
+  // welcome screen has no drawer, and the rail stays as the way to New console and Settings.
+  const railOnDemand = !noConsoles;
+  const railAway = railOnDemand && asideFloats && !panes.sidebarOpen;
+  // The drawer closing takes the rail with it: focus left in it would fall to `<body>`. A layout
+  // effect, so it runs before the browser's own focus fix-up for what just became `inert`, which a
+  // swipe's close (from a native listener) would otherwise reach first.
+  useLayoutEffect(() => {
+    if (railAway && document.activeElement?.closest("[data-region=rail]")) focusTerminal();
+  }, [railAway]);
+  // A region off screen is skipped by F6: a hidden docked pane, a closed drawer or rail, and a
+  // floating pane too, which is only a hover away rather than shown. The top bar is always there.
   const regionCycle = useRegionCycle({
     shown: {
       topbar: true,
-      rail: true,
+      rail: !railAway,
       welcome: noConsoles,
       sidebar: !noConsoles && panes.sidebarShown,
       archive: archiveOpen && !covered && !floatingShown,
@@ -465,11 +482,20 @@ export function App(): React.ReactElement {
   const { confirmLaunch, confirmation: launchConfirmation } = useConfirmIncompleteLaunch();
 
   const otherModalOpen = dialogRequest !== undefined || questionPending || exitConfirmOpen || launchConfirmation !== undefined;
+  // Settings opened from a control of the open drawer (the rail's, on a phone) hands focus back to it
+  // as it closes, as any dialog opened there does (`focusDrawerTrigger`).
+  const settingsFromDrawer = useRef(false);
   const { settingsOpen, settingsNavigation, openSettings, openSettingsAt, closeSettings } = useSettingsDialog({
     ready: hosts !== undefined,
     otherModalOpen,
-    focusTerminal,
+    focusTerminal: () => {
+      if (!(settingsFromDrawer.current && panes.sidebarOpen)) focusTerminal();
+    },
   });
+  // After the dialog's own close effect (declared above) has read it, whether or not that one asked.
+  useEffect(() => {
+    if (!settingsOpen) settingsFromDrawer.current = false;
+  }, [settingsOpen]);
 
   // A dormant session can be resumed through several controls, so overlapping requests for the
   // same session share one in-flight guard.
@@ -554,7 +580,7 @@ export function App(): React.ReactElement {
     const onPointerUp = (event: PointerEvent) => {
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest("[role=menu], [role=listbox]")) return;
-      drawerPress.current = target?.closest("[data-pane=sidebar]") ? target.closest<HTMLElement>(FOCUSABLE) : null;
+      drawerPress.current = target?.closest(DRAWER_CONTROLS) ? target.closest<HTMLElement>(FOCUSABLE) : null;
     };
     document.addEventListener("pointerup", onPointerUp, true);
     return () => {
@@ -563,17 +589,28 @@ export function App(): React.ReactElement {
     };
   }, [panes.sidebarOpen]);
 
+  /** Opened from the open drawer, a dialog hands focus back to what opened it there as it closes:
+   * focused before the dialog mounts, that is what the dialog restores focus to. Whether it did. */
+  const focusDrawerTrigger = (): boolean => {
+    const trigger = drawerPress.current;
+    drawerPress.current = null;
+    if (!(panes.sidebarOpen && trigger?.isConnected) || document.activeElement?.closest(DRAWER_CONTROLS)) return false;
+    trigger.focus({ preventScroll: true });
+    return true;
+  };
+  const openSettingsFromDrawer = () => {
+    // Focus already in the drawer (Settings opened by a key) is where the dialog hands it back to.
+    settingsFromDrawer.current = focusDrawerTrigger() || (panes.sidebarOpen && !!document.activeElement?.closest(DRAWER_CONTROLS));
+    openSettings();
+  };
+
   const openDialog = (dialog: DialogRequest) => {
     // Nothing to offer without an agent that is added and installed; the controls are disabled already.
     const { agentAvailability, settings } = store.getState();
     if ((dialog.kind === "new-session" || dialog.kind === "new-console-session") && noAgentState(agentAvailability, settings.added_agents)) return;
     if (dialog.kind === "hand-off" && !pickableAgents(agentAvailability, settings.added_agents).some((agent) => agent !== dialog.session.agent)) return;
     if (dialog.kind === "new-console") consolesBeforeNew.current = new Set(consoles.keys());
-    // Opened from the open drawer, it hands focus back to what opened it there as it closes: focused
-    // before the dialog mounts, that is what the dialog restores focus to.
-    const trigger = drawerPress.current;
-    drawerPress.current = null;
-    if (panes.sidebarOpen && trigger?.isConnected && !document.activeElement?.closest("[data-pane=sidebar]")) trigger.focus({ preventScroll: true });
+    focusDrawerTrigger();
     setDialogRequest(dialog);
   };
   useEffect(() => {
@@ -890,7 +927,10 @@ export function App(): React.ReactElement {
   const waitingCount = useWaitingCount();
   const selectNextWaiting = () => {
     const next = nextWaitingSession(waitingSessionsInTreeOrder(consoleList, projectList, allSessions(), ordersByStatus(store.getState().settings)), selectedSessionId);
-    if (next) selectSession(next);
+    if (!next) return;
+    selectSession(next);
+    // Picked from the rail inside the open drawer, it closes it as a pick in the sidebar does.
+    if (asideFloats && panes.sidebarOpen) panes.closeSidebar();
   };
 
   // Handed to the sidebar's and the rail's rows, the archive view's rows and the top bar. The React
@@ -925,6 +965,25 @@ export function App(): React.ReactElement {
   const stableNextWaiting = useStableHandler(selectNextWaiting);
   const stableToggleSidebar = useStableHandler(panes.toggleSidebar);
   const stableTogglePanel = useStableHandler(togglePanel);
+  // Swipes open and close the drawer and the floating panel through the paths the toggles use.
+  const rtl = textDirection(useCurrentLanguage()) === "rtl";
+  const swipePanes = useStableHandler((toward: SwipeToward) => {
+    const action = resolveSwipe(toward, {
+      hasDrawer: !noConsoles,
+      drawerOpen: panes.sidebarOpen,
+      panelKinds: availableKinds,
+      panel: floating.kind,
+      lastPanel: ownerKind ? floating.lastOpened(ownerKind) : undefined,
+    });
+    if (!action) return;
+    // Focus stays where it is, so a tooltip open on a focused top bar control (a hardware keyboard)
+    // stays showing until focus moves.
+    if (action.type === "open-drawer") panes.toggleSidebar();
+    else if (action.type === "close-drawer") panes.closeSidebar();
+    else if (action.type === "close-panel") floating.close();
+    else togglePanel(action.kind);
+  });
+  useSwipe(asideFloats, rtl, swipePanes);
   const stableHoverPanelToggle = useStableHandler(hoverPanelToggle);
   const stableFocus = useStableHandler(sidebarView.setFocus);
   const stableOpenProjectDirectory = useStableHandler(openProjectDirectory);
@@ -980,7 +1039,7 @@ export function App(): React.ReactElement {
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
         asideSpan={asideDocked ? asideWidth.width : 0}
-        panelToggles={ownerKind ? OWNER_KINDS[ownerKind].filter((kind) => !unavailableKinds.includes(kind)).map((kind) => {
+        panelToggles={ownerKind ? availableKinds.map((kind) => {
           const entry = PANEL_ENTRIES[kind];
           const open = openPanels.includes(kind);
           return {
@@ -1011,6 +1070,8 @@ export function App(): React.ReactElement {
       />
       <div className="flex min-h-0 flex-1">
         <Rail
+          onDemand={railOnDemand}
+          away={railAway}
           selectedSessionId={selectedSessionId}
           consoles={consoleList}
           currentConsoleId={sidebarView.currentConsole?.id}
@@ -1019,15 +1080,15 @@ export function App(): React.ReactElement {
           onConsoleLeave={panes.sidebarPeek.leaveConsole}
           hoverOpensSidebar={panes.sidebarPeek.peekable}
           onOpenDialog={stableOpenDialog}
-          onSelectSession={stableSelectSession}
+          onSelectSession={stableSelectFromSidebar}
           onOpenArchive={stableOpenArchive}
           waitingCount={waitingCount}
           onNextWaiting={stableNextWaiting}
-          onOpenSettings={openSettings}
+          onOpenSettings={openSettingsFromDrawer}
           onOpenSettingsAt={stableOpenSettingsAt}
           focusTerminal={focusTerminal}
         />
-        <ContentPanel>
+        <ContentPanel startsAtEdge={railOnDemand}>
           {/* The same as `noConsoles`, read off the console itself so that it narrows. */}
           {shownConsole === undefined ? (
             <WelcomeScreen ref={welcomeRef} onOpenDialog={openDialog} />
@@ -1043,7 +1104,7 @@ export function App(): React.ReactElement {
               <Scrim open={panes.sidebarOpen} label={t("app.closeSessions")} onClose={panes.closeSidebar} />
               {/* A panel floating over the agent terminal is dismissed by a press beside it, as the
                   drawer is; the top bar, with the panel's own toggle, stays out of it. */}
-              <Scrim open={floatingShown} label={t("panel.close")} onClose={floating.close} />
+              <Scrim open={floatingShown} label={t("panel.close")} onClose={floating.close} clearOfRail={false} />
               <Sidebar
                 projects={projectList}
                 selectedSessionId={selectedSessionId}

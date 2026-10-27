@@ -35,9 +35,11 @@ function mountWith(incomplete: boolean) {
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
   const console_ = consoleOf("c-main", "Main", { claude_account_id: "a-half" });
   const state = snapshotState({
     consoles: [console_],

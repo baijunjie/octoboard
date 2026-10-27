@@ -6,6 +6,7 @@ import { Button } from "./Button";
 import { isolate } from "../i18n/isolate";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import { PHONE_SLIDE_AWAY } from "../layout/paneOverlay";
 import type { Console } from "../protocol";
 import { activityLabelKey } from "../sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
@@ -22,6 +23,20 @@ import { TitledControl } from "./TitledControl";
 import { FadedScroller } from "./scrollFade";
 
 const NEW_CONSOLE_ID = "rail-new-console";
+
+/** Below the `phone` breakpoint a rail that is `onDemand` leaves the row and lies over the open
+ * drawer's card (`drawerClass` in `layout/paneOverlay.tsx`, whose `max-phone:` padding leaves the
+ * rail's width free for it): the same inset from the window's edge, the top bar and the bottom
+ * chrome as the card, so the two are one card. The rail paints nothing of its own but the groove
+ * on its end edge, which is the seam between it and the sidebar; the card's surface, edge, shadow and
+ * corners are all the card's. It comes in and goes out with the card, the same 240ms, easing and
+ * slide in from the start edge (`PHONE_SLIDE_AWAY`), `visibility` staying on until the exit has
+ * finished and then keeping the away rail out of reach. `z-41` keeps it above the card (`z-40`),
+ * which comes later in the document and would otherwise paint over it. */
+const ON_DEMAND_FRAME =
+  "max-phone:fixed max-phone:start-(--peek-gap) max-phone:top-[calc(var(--top-chrome-height)+var(--peek-gap))] max-phone:bottom-[calc(var(--bottom-chrome-height)+var(--peek-gap))] max-phone:z-41 max-phone:groove-e max-phone:transition-[translate,opacity,visibility] max-phone:duration-240 max-phone:ease-[cubic-bezier(0.2,0,0,1)] max-phone:motion-reduce:transition-none";
+const ON_DEMAND_OPEN = "max-phone:opacity-100";
+const ON_DEMAND_AWAY = `max-phone:opacity-0 max-phone:invisible ${PHONE_SLIDE_AWAY}`;
 
 /** Puts focus on the rail's New console button, by identity: the console tiles come before it. */
 export function focusNewConsole(): void {
@@ -151,6 +166,14 @@ interface RailProps extends ConsoleMenuHandlers {
   onOpenSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;
   /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
+  /** Below the `phone` breakpoint the rail is not in the row but comes in with the sidebar's
+   * drawer. False where there is no drawer (no console): the rail is then the only way to New
+   * console and Settings, so it stays in the row. */
+  onDemand: boolean;
+  /** The rail is out of the window for now (`onDemand`, below the `phone` breakpoint, the drawer
+   * closed): out of reach too, not focusable, skipped by the region cycle and hidden from assistive
+   * technology. */
+  away: boolean;
 }
 
 /**
@@ -158,7 +181,8 @@ interface RailProps extends ConsoleMenuHandlers {
  * switcher (one avatar per console, in their order, then New console), at the bottom, pushed down,
  * the waiting count, the notifications bell (browser only, while the permission is undecided), the
  * account quota entry and Settings. It sits at the reading direction's start, like the sidebar, and
- * holds only glyphs and avatars.
+ * holds only glyphs and avatars. Below the `phone` breakpoint an `onDemand` rail leaves the row and
+ * comes in with the sidebar's drawer (`ON_DEMAND_FRAME`).
  */
 export function Rail({
   consoles,
@@ -176,6 +200,8 @@ export function Rail({
   onOpenSettings,
   onOpenSettingsAt,
   focusTerminal,
+  onDemand,
+  away,
 }: RailProps): React.ReactElement {
   const t = useT();
   const rtl = textDirection(useCurrentLanguage()) === "rtl";
@@ -188,7 +214,10 @@ export function Rail({
       data-escape-scope
       data-region="rail"
       aria-label={t("rail.label")}
-      className="flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none"
+      // `inert` rather than `aria-hidden` and `tabindex`: it takes the whole subtree out of the focus
+      // order and the accessibility tree at once, which `invisible` does only once the exit is over.
+      inert={away}
+      className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none${onDemand ? ` ${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
     >
       <div ref={consolesRef} className="relative flex min-h-0 flex-col items-center gap-1">
         {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for

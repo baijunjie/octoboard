@@ -17,6 +17,8 @@ export interface FloatingPanel {
   close: () => void;
   /** Records a panel opened in the docked pane, the one to float first when the window narrows. */
   noteOpened: (owner: OwnerKind, kind: PanelKind) => void;
+  /** The panel `owner` had open last, docked or floating, if it ever had one. */
+  lastOpened: (owner: OwnerKind) => PanelKind | undefined;
 }
 
 /**
@@ -24,7 +26,8 @@ export interface FloatingPanel {
  * (`floats`, from `useAsideFloats`), per owner kind. It is kept apart from the stacks (`stacks`), so
  * nothing done while the window is narrow rewrites the docked layout the user keeps for a wider
  * one: the stacks only seed it, as the window narrows, with the panel the user opened last in the
- * docked pane (`noteOpened`) if it is still open, else the stack's top one.
+ * docked pane (`noteOpened`, or floated since: `open`) if it is still open, else the stack's top one.
+ * `lastOpened` also tells a swipe which panel to bring back (`paneSwipe.ts`).
  *
  * The sidebar's drawer and a floating panel are never on screen together: opening the drawer closes
  * the panel of every owner kind, the window narrowing while the drawer is open floats none, and no
@@ -64,8 +67,12 @@ export function useFloatingPanel({
   const [seen, setSeen] = useState({ floats, drawerOpen });
   if (seen.floats !== floats || seen.drawerOpen !== drawerOpen) {
     setSeen({ floats, drawerOpen });
-    if (drawerOpen && !seen.drawerOpen) setKinds({});
-    else if (floats && !seen.floats) setKinds(drawerOpen ? {} : seeded());
+    if (drawerOpen && !seen.drawerOpen) {
+      // The panel that was on screen is the one to bring back, as when `close` takes it away.
+      const onScreen = floats && owner ? kinds[owner] : undefined;
+      if (owner && onScreen !== undefined) setLastOpened((current) => ({ ...current, [owner]: onScreen }));
+      setKinds({});
+    } else if (floats && !seen.floats) setKinds(drawerOpen ? {} : seeded());
   }
   const floating = floats && owner && !drawerOpen ? kinds[owner] : undefined;
   const kind = floating !== undefined && !unavailable.includes(floating) ? floating : undefined;
@@ -115,12 +122,16 @@ export function useFloatingPanel({
   return {
     kind,
     open: (ownerKind, next) => {
+      setLastOpened((current) => ({ ...current, [ownerKind]: next }));
       setKinds((current) => ({ ...current, [ownerKind]: next }));
       setFocusRequest({ kind: next });
     },
     close: () => {
+      // A panel seeded as the window narrowed was never opened, but it was the one on screen.
+      if (owner && kind !== undefined) setLastOpened((current) => ({ ...current, [owner]: kind }));
       if (owner) setKinds((current) => ({ ...current, [owner]: undefined }));
     },
     noteOpened: (ownerKind, opened) => setLastOpened((current) => ({ ...current, [ownerKind]: opened })),
+    lastOpened: (ownerKind) => lastOpened[ownerKind],
   };
 }

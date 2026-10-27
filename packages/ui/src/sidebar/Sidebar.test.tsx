@@ -298,6 +298,8 @@ function mountPeeking() {
         onOpenSettings={vi.fn()}
         onOpenSettingsAt={vi.fn()}
         focusTerminal={vi.fn()}
+        onDemand={false}
+        away={false}
       />
     </>
   );

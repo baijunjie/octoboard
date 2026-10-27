@@ -379,7 +379,8 @@ export function Sidebar({
           // included; at or above it the `docked:` variants in `drawerClass` put it back exactly
           // where it always was, a plain row sibling, regardless of `open`. With the docked sidebar
           // hidden, that column is clipped away; only a hover on a console's avatar (`dock.inset`)
-          // makes it the fixed card. Drawers share that card's inset from the chrome.
+          // makes it the fixed card. Drawers share that card's inset from the chrome. Below the `phone`
+          // breakpoint the card also holds the rail, which lies over its padded start.
           // Starting below `--top-chrome-height` leaves the top bar, and
           // with it the sidebar toggle, visible while the drawer is open; ending above
           // `--bottom-chrome-height` does the same for the connection banner and the update notice.
@@ -408,7 +409,9 @@ export function Sidebar({
           id={PANE_ID.sidebar}
           data-pane="sidebar"
           data-region="sidebar"
-          className={`flex w-70 max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
+          // The width cap keeps a strip at the end to tap to dismiss. Below `phone` the card carries the
+          // rail inside its width, so the cap holds the rail and the sidebar together.
+          className={`flex w-70 max-phone:w-[calc(var(--spacing)*70+var(--rail-width))] max-phone:ps-(--rail-width) max-docked:max-w-[calc(100vw-var(--rail-width)-2*var(--peek-gap))] flex-col overflow-hidden sidebar-fills bg-panel-sidebar shrink-0 docked:w-(--sidebar-width) ${drawerClassName}${dock.phase === "closed" && !dock.inset ? " docked:invisible" : ""}`}
           onPointerEnter={peek?.keep}
           onPointerLeave={peek?.leave}
           onPointerDownCapture={peek ? onPeekPress : undefined}

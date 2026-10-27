@@ -114,7 +114,7 @@ export const reportScenarios: Scenario[] = [
     title: "Report over the terminal on a phone",
     width: 390,
     state: twoSessions,
-    description: "Below 782px the Report card floats over the console session's terminal instead of docking beside it, with a dimmed strip of the terminal beside it that closes it when pressed. The card keeps its header, the page arrows and count and Close panel; opening it with a mouse or the keyboard moves focus into the card, onto the page arrows' first enabled button (Previous page, on the last page shown). The width is fixed because the layout exists only in this range.",
+    description: "Below 782px the Report card floats over the console session's terminal instead of docking beside it, with a dimmed strip of the terminal beside it, reaching the window's start edge since no rail stands there, that closes it when pressed. The card keeps its header, the page arrows and count and Close panel; opening it with a mouse or the keyboard moves focus into the card, onto the page arrows' first enabled button (Previous page, on the last page shown). The width is fixed because the layout exists only in this range.",
     steps: [
       (ui) => ui.press(ui.t("titleBar.sidebar.show")),
       (ui) => ui.press(ui.session("Hub 2")),

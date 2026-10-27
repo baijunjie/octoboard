@@ -338,6 +338,10 @@ shown, Reconnect, a creation action) hands focus on as focus meant for the agent
 up over the agent area takes it rather than the inert terminal. A region whose focus goes through a method of its own
 rather than its first control (the terminal's) is only a stop when that method actually leaves focus inside it, which is
 how the cycle tells the two apart.
+Below the `phone` breakpoint the rail is out of the row and comes in only inside the sidebar's drawer card: while the
+drawer is closed the rail is `inert` and not a stop, and focus inside it when the drawer closes is handed on before the
+browser can drop it to `<body>` (a layout effect, since a swipe closes the drawer from a touch listener React does not
+flush before paint).
 
 A shell terminal in the Terminal panel keeps Tab the same way, so the same holds for it: the Terminal panel is its own
 region, and F6 lands on the shown terminal's input, on its cover's Reconnect while that is offered, or on New terminal
@@ -395,6 +399,15 @@ The rail's quota panel adds that its button has no tooltip: hovering it opens th
 tooltip would, so the button carries only its accessible name (the selected session's remaining quota, every window it
 draws included). A modal opened by something other than a press on the entry (Settings from the native menu)
 closes the panel in either form, rather than leaving it up under the modal.
+
+### A touch gesture is never the only way
+
+The phone-width swipes (`packages/ui/src/layout/useSwipe.ts`) only add a path: every pane a swipe opens, closes or
+switches is also reached with the top bar's toggles, by pointer and keyboard alike. A swipe goes through the same open
+and close paths as those toggles, so it moves focus as they do: a panel it opens takes focus on its tab, a pane it
+closes hands focus on as any close does, and opening the drawer leaves focus where it was. It stands aside for what owns
+a horizontal drag of its own — a scroller that can still scroll the way the finger moves, a separator or a slider — and
+for an open dialog, menu or popup.
 
 ## Input placeholders
 
@@ -502,7 +515,8 @@ its going button.
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
 control the press ended on (a menu's trigger, for a dialog opened from its menu) and focuses it as the dialog opens, so
-the restore lands back on it.
+the restore lands back on it. Below the `phone` breakpoint the rail is part of the drawer's card, so a dialog opened
+from the rail there (Settings included, by press or by key) is the same case and returns to the rail's control.
 
 A dialog's submit or confirm button that becomes disabled while it holds focus (a quota reading landing under an
 open dialog) hands focus to Cancel, also when WebKit has already blurred the button to `<body>`; a dialog that opens
@@ -1830,6 +1844,11 @@ popover-level overlays, so a new overlay needs no guard of its own. The few stoc
 select's chevron turning as its list opens, a combo box trigger's hover and press fade, and a checkbox's checkmark
 drawing itself in) are guarded there too, and `packages/ui/src/style.test.ts` fails on any other an imported HeroUI
 sheet brings.
+
+Below the `phone` breakpoint a pane slides in from the side it lives on as it fades — the sidebar's drawer, with its
+rail, from the start edge, a floating right-pane card from the end edge — mirrored under a right-to-left language.
+Under `prefers-reduced-motion: reduce` neither slides: the drawer's and the rail's transitions are off and the card's
+own reduced-motion rule applies, so each simply appears and goes.
 
 ### Dynamic collections
 

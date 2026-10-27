@@ -106,7 +106,8 @@ program's next copy replaces it.
   replay window is lost on every reconnect.
 - Whatever changes the terminal pane's size resizes the agent's terminal: resizing the window, resizing the sidebar or
   the right pane, hiding or showing the sidebar, and the right pane coming or going as its panels open and close all do;
-  a pane floating in or the sidebar's drawer opening over the terminal does not (see `docs/product/window-layout.md`).
+  a pane floating in or the sidebar's drawer opening over the terminal does not (see `docs/product/window-layout.md` and
+  `docs/product/sidebar-drawer.md`).
   The screen follows at once (except while a docked column eases, below), but the agent is told the new size only once
   it has held still for about 120 ms, and only when it differs from the size the agent already has, so a drag sends the
   agent one size change rather than one for every step of the drag. The window has a minimum size, sized so that the

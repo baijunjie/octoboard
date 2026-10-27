@@ -113,7 +113,8 @@ export const shortcutsScenarios: Scenario[] = [
     desktopApp: true,
     state,
     preferences: customisedPreferences(customisedAtTop),
-    steps: [...openSection, recordFor("nextConsoleSession"), chord({ code: "KeyJ" })],
+    // The rail comes in with the sidebar's drawer at this width.
+    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), ...openSection, recordFor("nextConsoleSession"), chord({ code: "KeyJ" })],
   },
   {
     id: "settings-shortcuts-conflict",

@@ -45,6 +45,15 @@ export const emptyScenarios: Scenario[] = [
     state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
   },
   {
+    id: "empty-no-consoles-phone",
+    group: GROUP,
+    category: "normal",
+    title: "Fresh install in a phone-width window",
+    width: 390,
+    description: "With no console there is no sidebar drawer to bring the rail in, so below 782px it stays in the row beside the content as the way to New console and Settings, and the content panel keeps its rounded top corner at the rail.",
+    state: { ...snapshotState({}), agentAvailability: DETECTED_AGENTS },
+  },
+  {
     id: "empty-no-consoles-no-agent",
     group: GROUP,
     category: "normal",

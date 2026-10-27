@@ -10,13 +10,17 @@ Under a right-to-left language — Arabic, see "What follows the language" in `d
 window is mirrored. Every left and right named in `docs/product/window-layout.md` swaps, and so do the sides the other
 product docs name for parts of the window:
 
-- The rail is down the window's right edge, the sidebar on the right inside the content panel, beside the rail, and the
-  right pane on the left; the content panel's rounded corner is its top right. The top bar's Back, Forward and sidebar
-  toggle are at its right end, in mirrored order, the panel toggles at its left end, and the breadcrumb runs leftward
+- The rail is down the window's right edge — below 782 px, where it comes in with the sidebar's drawer, along the
+  drawer card's right side (see "Below 782 px: the rail comes in with the drawer" in `docs/product/sidebar-drawer.md`) —
+  the sidebar on the right inside the content panel, beside the rail, and the right pane on the left; the content
+  panel's rounded corner is its top right. The top bar's Back, Forward and sidebar toggle are at its right end, in mirrored order, the panel toggles at its left end, and the breadcrumb runs leftward
   from them, starting over the terminal's area while the sidebar is shown and ending where the right pane does, on the
   window's left, while the right pane is docked, following each pane's inner edge while that pane is resized or eases,
   as in "The top bar" in `docs/product/window-layout.md`.
-- The sidebar's drawer and the floating cards keep their vertical fade and drift in either reading direction.
+- From 782 px up the sidebar's drawer and the floating cards keep their vertical fade and drift in either reading
+  direction. Below 782 px the drawer slides in from the window's right edge and a panel floating over the terminal from
+  its left edge, and the touch swipes that open and close them are mirrored with them (see
+  `docs/product/touch-swipes.md`).
 - Each resize handle stays on its pane's inner edge, the sidebar's left edge and the right pane's right one. Dragging
   toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
 - Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left. So is the file viewer's

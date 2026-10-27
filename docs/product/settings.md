@@ -23,7 +23,7 @@ change all but the last two (see "Application settings: `get_settings` and `upda
 ## In a narrow window
 
 Below 1168 px — the width under which the sidebar becomes a drawer (see "Below 1168 px: the sidebar becomes a drawer"
-in `docs/product/window-layout.md`), so only a client with no window minimum of its own, such as a
+in `docs/product/sidebar-drawer.md`), so only a client with no window minimum of its own, such as a
 plain browser, gets here — the dialog fills the window inside a 16 px margin on every side, and the list of sections
 becomes a row of tabs along its top, above the selected section. When the tabs do not fit the row's width, the row
 scrolls sideways, fading at the end with more beyond it (see "The surfaces that fade" in
@@ -82,7 +82,8 @@ login dialog keeps its lifecycle (see `docs/product/logging-accounts-in.md`).
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal, unless a dialog is open beneath it: focus then stays in that
 dialog, on the control that opened Settings — the console dialog's Manage accounts button, say — or on the dialog
-itself when that control is gone.
+itself when that control is gone. Opened from the rail while the sidebar's drawer is open, it gives focus back to the
+rail instead (see "Below 1168 px: the sidebar becomes a drawer" in `docs/product/sidebar-drawer.md`).
 
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
 

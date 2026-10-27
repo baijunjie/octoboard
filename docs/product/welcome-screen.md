@@ -52,7 +52,9 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
   being selected.
 - **On the rail, no waiting count** — no session is waiting. The rail is otherwise unchanged: the console list, empty
   here, then New console, and at the bottom the notifications bell and Settings (see "The rail" in
-  `docs/product/window-layout.md`).
+  `docs/product/window-layout.md`). It stays in the row at every width, below 782 px too, where with a console it
+  comes in only with the sidebar's drawer (see "Below 782 px: the rail comes in with the drawer" in
+  `docs/product/sidebar-drawer.md`).
 
 ## The panes' saved preferences are left alone
 

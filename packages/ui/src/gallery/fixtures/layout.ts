@@ -177,6 +177,21 @@ export const layoutScenarios: Scenario[] = [
     ],
   },
   {
+    id: "layout-phone-rail-away",
+    group: GROUP,
+    category: "normal",
+    title: "No rail in a phone-width window",
+    width: 390,
+    state: railState,
+    preferences: { sidebarConsole: main.id },
+    description: "Below 782px the rail is not in the row: the content panel spans the window's full width under the top bar, and its top corner at the start edge is square, where wider windows round it beside the rail. The sidebar toggle brings the rail in with the drawer (see Mobile sidebar card), and so does a swipe towards the end of the line on a touch screen (a touch-emulating window will do), the card sliding in from the start edge; a swipe towards the start opens the right pane's panels one at a time, in the order of the top bar's toggles (here the project session's Files, then Terminal; Report comes first for a session that has pages), each sliding in from the end edge and the last returning to the first, and one towards the end closes the open panel. The width is fixed because the layout exists only in this range.",
+    steps: [
+      (ui) => ui.swipe("end"),
+      // Picking a session closes the drawer, and the rail goes with it.
+      (ui) => ui.press(ui.session("Fix the summary layout")),
+    ],
+  },
+  {
     id: "layout-sidebar-drawer",
     group: GROUP,
     category: "normal",
@@ -184,9 +199,10 @@ export const layoutScenarios: Scenario[] = [
     width: 390,
     state: railState,
     preferences: { sidebarConsole: main.id },
-    description: "The mobile sidebar floats over a dimmed terminal with an 8px gap below the top bar, past the rail and above the bottom edge, its rounded corners, hairline edge and drop shadow matching the hidden desktop sidebar's preview. Close and reopen it with the toggle to inspect the fade and rise, the dimmed backdrop fading with it: the card and shadow stay clear of the avatars throughout. The backdrop and Escape also close it; Arabic mirrors the card and rail.",
+    description: "The mobile sidebar is one card floating over the dimmed terminal, inset 8px from the window's edges and below the top bar, with the rounded corners, hairline edge and drop shadow of the hidden desktop sidebar's preview. The rail, which is not in the row at this width, is inside it at the start side, transparent over the card, with a single vertical line between it and the sidebar's content; the backdrop covers the whole window around the card. Close and reopen it with the toggle to inspect the card sliding in from the start edge with a fade, the backdrop fading with it; a swipe does the same on a touch screen (a touch-emulating window will do): sideways towards the end of the line opens it, towards the start closes it. The backdrop and Escape also close it; Arabic mirrors the card, which slides in from the right.",
     steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
+      // The same swipe a finger makes, which the toggle's press would also have done.
+      (ui) => ui.swipe("end"),
     ],
   },
   {
@@ -223,7 +239,7 @@ export const layoutScenarios: Scenario[] = [
     width: 390,
     state: railState,
     preferences: { sidebarConsole: main.id },
-    description: "Below 782px the right pane no longer docks beside the terminal: the Files card floats over it, the only panel shown, with a dimmed 48px strip of the terminal beside it (mirrored under right-to-left) that closes it when pressed. The terminal under the card keeps the whole width and cannot be focused. The card fades in as it rises by 4% of its own height, the dimmed strip fading with it. The top bar's Files toggle is pressed; Close panel, the strip and Escape all close the card, and opening the sessions drawer closes it, as opening the card closes the drawer. The width is fixed because the layout exists only in this range.",
+    description: "Below 782px the right pane no longer docks beside the terminal: the Files card floats over it, the only panel shown, with a dimmed 48px strip of the terminal beside it, reaching the window's start edge (mirrored under right-to-left) since no rail stands there, that closes it when pressed. The terminal under the card keeps the whole width and cannot be focused. The card fades in as it slides in from the window's end edge (the start edge under right-to-left), the dimmed strip fading with it; on a touch screen a swipe towards the end of the line closes it, and one towards the start switches to the next panel. The top bar's Files toggle is pressed; Close panel, the strip and Escape all close the card, and opening the sessions drawer closes it, as opening the card closes the drawer. The width is fixed because the layout exists only in this range.",
     steps: [
       (ui) => ui.press(ui.t("titleBar.sidebar.show")),
       // Picking a session closes the drawer, which has cleared any floating panel: the toggle opens it.

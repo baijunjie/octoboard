@@ -22,7 +22,10 @@ an iframe. So every code path that hides a region able to hold focus — a toggl
 — first hands focus to the terminal if the region contains `document.activeElement`. The sidebar does this through
 `releaseFocus` in `packages/ui/src/layout/usePaneToggles.ts`, and a right-pane card through the `HandOffOnUnmount`
 that `packages/ui/src/panels/PanelStack.tsx` renders with it; hide a new pane or card the same way rather than beside
-them.
+them. Making a region `inert` drops focus the same way. Run the "is focus inside it" check in the close path itself
+or in a `useLayoutEffect`, never in a passive `useEffect`: when the state change comes from a native listener of a
+continuous event (the phone-width swipe's `touchmove`), React runs passive effects after paint, so the browser has
+already moved focus to `<body>`, and the check finds nothing inside the region to hand on.
 
 Reordering does it too: React reorders keyed children by moving their DOM nodes, and moving the node that holds focus
 blurs it to `<body>`, so a keyboard user on a row loses their place whenever a live status update re-sorts the list.
@@ -115,7 +118,9 @@ portalled to `<body>` sits outside every scope and is unaffected, which is the o
 filter and the dialogs' fields never needed this. Check it where it shows: the listener is installed only while an
 overlay is up, so the symptom appears only with the sidebar's drawer open below the layout breakpoint, or with a
 pane floated in on hover — the hidden docked sidebar, or the right pane while it has no panel open. A gallery
-scenario at a normal width, with the sidebar docked and nothing floating, never reaches it.
+scenario at a normal width, with the sidebar docked and nothing floating, never reaches it. For the same reason, a
+dispatched Escape is never a neutral way to close a tooltip, whether in a scenario step or a test: while an overlay
+is up, this listener takes the key first and dismisses the overlay too.
 
 The second is react-aria's: while a tooltip **that has a trigger element** is open, `useTooltipTrigger` holds a
 capture-phase listener on `document` that calls `stopPropagation()` on every Escape, whatever else was waiting for the

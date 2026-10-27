@@ -21,13 +21,14 @@ offering the one thing there is to do, and the top bar carries no sidebar toggle
 `docs/product/welcome-screen.md`). Everything this doc says of the three panes is what the window looks like once a
 console exists.
 
-How the panes are arranged depends on one width, **1168 px**. At that width and above they sit side by side in a
-row, the layout the macOS window is always in; a sidebar the user has hidden there can still float in over the
-terminal for a moment. Below it the sidebar becomes an overlay drawer over the terminal, while the right pane stays
-docked beside the terminal, its width clamped, down to **782 px**; below that one panel at a time floats over the
-terminal instead. Only a client with no window minimum of its own, such as the UI opened in a plain browser, can get
-below 1168 px. With none of its panels open, the right pane can float a panel in over the terminal at 782 px and
-wider.
+How the panes are arranged depends on one width, **1168 px**. At that width and above they sit side by side in a row,
+the layout the macOS window is always in; a sidebar the user has hidden there can still float in over the terminal for a
+moment. Below it the sidebar becomes an overlay drawer over the terminal, while the right pane stays docked beside the
+terminal, its width clamped, down to **782 px**; below that one panel at a time floats over the terminal instead, the
+rail leaves the row to come in with the sidebar's drawer (see `docs/product/sidebar-drawer.md`), and a finger swiping
+sideways opens and closes the drawer and the panels (see `docs/product/touch-swipes.md`). Only a client with no window
+minimum of its own, such as the UI opened in a plain browser, can get below 1168 px. With none of its panels open, the
+right pane can float a panel in over the terminal at 782 px and wider.
 
 The right pane's cards and floating behavior are the same whoever owns it.
 
@@ -47,26 +48,31 @@ of the breadcrumb.
   the window's light or dark appearance (see "What follows the choice" in `docs/product/appearance.md`).
 - **In a browser** the chrome is an opaque colour of its own, which follows the appearance too.
 
+Below 782 px the rail, when it comes in as part of the sidebar's drawer, lies on the drawer's surface instead (see
+"Below 782 px: the rail comes in with the drawer" in `docs/product/sidebar-drawer.md`).
+
 The **content panel** is always opaque, whatever is behind the window. Its top left corner (top right under a
-right-to-left language), where the top bar meets the rail, is rounded. No line runs along its edges: it is set apart
-from the chrome by the contrast between its surfaces and the chrome and by a soft shadow along its edges, and it reaches
-the window's other side and its bottom (or the connection banner) with no gap. Inside it no line runs down the inner
-edge of the docked sidebar either: at 1168 px and wider the terminal's area casts the same soft shadow as the panel's
-edges over the docked sidebar, so the terminal reads as the layer above it. Where the sidebar is closed the terminal's
-area reaches the content panel's edge and casts no shadow on that side. It casts none on the right pane's side
-either: the right pane has no surface of its own, only its panel cards, which lie on the terminal's area across a gap
-of its background (see "The panel cards" in `docs/product/right-pane-panels.md`). The terminal's area is the colour of
-the terminal's own background. The sidebar and the right pane's cards share the same background — a touch greyer than
-the terminal in the light appearance, a touch lighter in the dark one — whether docked, floating or shown as a drawer.
-A report page keeps its own light surface inside its panel (see "A report page stays on a light surface in both
-appearances" in `docs/product/appearance.md`).
+right-to-left language), where the top bar meets the rail, is rounded; below 782 px, where the rail is not in the row
+while there is a console, the content panel starts at the window's edge and that corner is square. No line runs along
+its edges: it is set apart from the chrome by the contrast between its surfaces and the chrome and by a soft shadow
+along its edges, and it reaches the window's other side and its bottom (or the connection banner) with no gap. Inside it
+no line runs down the inner edge of the docked sidebar either: at 1168 px and wider the terminal's area casts the same
+soft shadow as the panel's edges over the docked sidebar, so the terminal reads as the layer above it. Where the sidebar
+is closed the terminal's area reaches the content panel's edge and casts no shadow on that side. It casts none on the
+right pane's side either: the right pane has no surface of its own, only its panel cards, which lie on the terminal's
+area across a gap of its background (see "The panel cards" in `docs/product/right-pane-panels.md`). The terminal's area
+is the colour of the terminal's own background. The sidebar and the right pane's cards share the same background — a
+touch greyer than the terminal in the light appearance, a touch lighter in the dark one — whether docked, floating or
+shown as a drawer. A report page keeps its own light surface inside its panel (see "A report page stays on a light
+surface in both appearances" in `docs/product/appearance.md`).
 
 **Every docked sidebar header inside the content panel is 48 px high** — the sidebar's console header and a focus
 mode's header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`) — and so is the archive view's header
 (see "The archive view" in `docs/product/archive-view.md`), so the lines under them run on as one line across the panel.
 The top bar's 40 px is a tier of its own and no part of this. A floating sidebar, the sidebar's drawer and every card
-of the right pane are cards inset 8 px from the top bar (see "A hidden pane floats in on hover" and "Below 1168 px: the
-sidebar becomes a drawer" below, and "The panel cards" in `docs/product/right-pane-panels.md`), and their headers are
+of the right pane are cards inset 8 px from the top bar (see "A hidden pane floats in on hover" below, "Below 1168 px:
+the sidebar becomes a drawer" in `docs/product/sidebar-drawer.md` and "The panel cards" in
+`docs/product/right-pane-panels.md`), and their headers are
 **40 px** — shorter by that 8 px inset, the card's edge taking no space — so the line under a card's header stays
 level with the line under the headers docked beside it; the text in a card's header therefore sits 4 px lower than
 theirs.
@@ -83,7 +89,8 @@ outline of an empty column in the file viewer and the lines a rendered document 
 
 **Panel cards take a light card shadow; whatever else floats over the content is raised by a large shadow; what
 lies in the layout takes the soft one.** The panel cards — the floating sidebar and the sidebar's drawer (see "A
-hidden pane floats in on hover" and "Below 1168 px: the sidebar becomes a drawer" below), and the right pane's cards,
+hidden pane floats in on hover" below and "Below 1168 px: the sidebar becomes a drawer" in
+`docs/product/sidebar-drawer.md`), and the right pane's cards,
 docked and floating alike (see "The panel cards" in `docs/product/right-pane-panels.md`) — have the hairline edge and a
 light card shadow, short and faint. Whatever else floats over the content, such as the notice floating over the
 terminal (see "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md`), casts a large
@@ -232,14 +239,14 @@ sidebar to show (see `docs/product/welcome-screen.md`), the panel toggles while 
 the right pane shows" below). A toggle with nothing to control is left out rather than shown disabled. The right pane
 has no toggle of its own: it is on screen while one of its panels is open (see `docs/product/right-pane-panels.md`).
 
-The sidebar toggle is at the top bar's start. What it does depends on the window's width: see "Hiding the sidebar"
-and "Below 1168 px: the sidebar becomes a drawer" below. Its label says what pressing it will do — "Show sessions"
-while the sidebar is hidden, "Hide sessions" while it is shown — and its icon shows the sidebar's current state: a
-window with that side's pane drawn solid while the sidebar is shown, and drawn dashed while it is hidden. It also
-tells assistive technology whether the sidebar is expanded: expanded while it is shown, which below 1168 px means its
-drawer is open. A hidden sidebar that is only floating in counts as hidden for both. Shown and hidden follow the
-docked state at once, including while the column is still easing open or closed (see "Hiding the sidebar" below): the
-toggle already reads "Hide sessions" as the column opens and "Show sessions" as it closes.
+The sidebar toggle is at the top bar's start. What it does depends on the window's width: see "Hiding the sidebar" below
+and "Below 1168 px: the sidebar becomes a drawer" in `docs/product/sidebar-drawer.md`. Its label says what pressing it
+will do — "Show sessions" while the sidebar is hidden, "Hide sessions" while it is shown — and its icon shows the
+sidebar's current state: a window with that side's pane drawn solid while the sidebar is shown, and drawn dashed while
+it is hidden. It also tells assistive technology whether the sidebar is expanded: expanded while it is shown, which
+below 1168 px means its drawer is open. A hidden sidebar that is only floating in counts as hidden for both. Shown and
+hidden follow the docked state at once, including while the column is still easing open or closed (see "Hiding the
+sidebar" below): the toggle already reads "Hide sessions" as the column opens and "Show sessions" as it closes.
 
 The panel toggles are at the top bar's end; their labels, icons and states are in "The panel toggles in the top bar"
 in `docs/product/right-pane-panels.md`.
@@ -268,8 +275,11 @@ The rail runs from under the top bar to the window's bottom (or the connection b
     accounts and their quotas (see `docs/product/account-quota-panel.md`);
   - **Settings**, which opens the settings dialog.
 
-The rail is the same at every width; below 1168 px it stays beside the sidebar's drawer, which opens past it, and
-below 782 px beside a panel floating over the terminal. Neither dims it, and it stays usable while either is open.
+From 782 px up the rail is the same at every width; below 1168 px it stays beside the sidebar's drawer, which opens
+past it, does not dim it, and leaves it usable while it is open. **Below 782 px, while there is a console, the rail is
+not in the row**: it comes in only as part of the open drawer's card, and is out of reach while the drawer is closed
+(see "Below 782 px: the rail comes in with the drawer" in `docs/product/sidebar-drawer.md`). With no console it stays
+in the row at every width.
 
 ### Pressing the chrome's controls
 
@@ -376,7 +386,7 @@ connection banner, while it is shown:
 Both work the same way:
 
 - **Dragging** the handle sets the pane's width within its current limits; below 1168 px the right pane's minimum
-  follows the panels in its column (see "Below 1168 px: the sidebar becomes a drawer" below).
+  follows the panels in its column (see "Pane widths below 1168 px" below).
 - **Double-clicking** it returns the pane to its default width.
 - The handle is also reachable with Tab and is then operated from the keyboard: the arrow pointing away from the pane
   widens it and the other narrows it (Right widens the sidebar and Left the right pane; the other way round under a
@@ -409,8 +419,8 @@ or to the top bar when no session is selected.
 
 At 1168 px and wider, hiding or showing the docked sidebar eases its column over **200 ms**. Where the system asks
 for reduced motion, the column opens or closes at once. Pressing the toggle again while the column is still moving
-reverses the ease. Below 1168 px the sidebar is a drawer and fades up into place instead (see "Below 1168 px: the
-sidebar becomes a drawer" below).
+reverses the ease. Below 1168 px the sidebar is a drawer and fades into place instead (see "Below 1168 px: the
+sidebar becomes a drawer" in `docs/product/sidebar-drawer.md`).
 
 During the ease the sidebar stays a full-height column, from below the top bar to above the connection banner when
 that banner is shown, and does not become the rounded card in "A hidden pane floats in on hover" below. Its contents
@@ -437,7 +447,8 @@ hairline edge and the light card shadow (see "The window chrome and the content 
 as its panel's own card, which looks the same (see "The panel cards" in `docs/product/right-pane-panels.md`). The
 hairline is 0.5 px on a display of 2× pixel density or more and 1 px below that, and it takes no space, so the card is
 exactly its box. Below 1168 px the sidebar's drawer shares this card appearance (see "Below 1168 px: the sidebar becomes
-a drawer" below). The docked sidebar opens and closes as a full-height column (see "Hiding the sidebar" above).
+a drawer" in `docs/product/sidebar-drawer.md`). The docked sidebar opens and closes as a full-height column (see
+"Hiding the sidebar" above).
 
 - **What brings up the sidebar**: the mouse reaching the sidebar's toggle, at once, or resting for **130 ms** on a
   console's avatar on the rail, the current console's or another's. The wait is the avatars' alone, so that a pointer
@@ -502,48 +513,10 @@ a drawer" below). The docked sidebar opens and closes as a full-height column (s
   right pane below 782 px, where a pressed panel toggle floats its panel over the terminal instead (see "Below 782
   px: one panel floats over the terminal" in `docs/product/right-pane-panels.md`).
 
-## Below 1168 px: the sidebar becomes a drawer
+## Pane widths below 1168 px
 
-Below 1168 px wide, the top bar and the rail stay as they are, and the sidebar leaves the row: the terminal and, while
-one of its panels is open, the right pane share the content panel. The sidebar becomes an **overlay drawer** over
-them, **closed by default**:
-
-- The drawer has the same rounded corners, hairline edge and light card shadow as the floating panes. It keeps an **8 px
-  gap** from the top bar, from the window's bottom (or the connection banner when it is shown) and from the rail, and is
-  never drawn over the rail. Its headers are 40 px high (see "The window chrome and the content panel" above).
-- It opens by fading in while rising into place by **4% of its own height**, and closes by fading out while sinking
-  back, over **240 ms** with the same `cubic-bezier(0.2, 0, 0, 1)` easing as a floating pane (see "A hidden pane
-  floats in on hover" above); its edge and shadow fade with it, and it does not slide sideways. Where the system asks
-  for reduced motion it opens and closes at once.
-  While it is closed, its exit included, it is out of reach: nothing in it takes a press, keyboard focus or the
-  attention of assistive technology.
-- The drawer is 280 px wide, also capped to the space after the rail minus two 8 px gaps, so it does not touch the
-  opposite edge of the content panel on a narrow screen. The dimmed area behind the open drawer covers the content
-  panel, including the gaps, leaving the top bar, the rail and the banner's Retry usable. It fades in and out with
-  the drawer over the same 240 ms, at once where the system asks for reduced motion, and takes no presses while it
-  fades out.
-- It is opened and closed with the same toggle that hides and shows the sidebar at 1168 px and wider, at the top
-  bar's start (see "The sidebar toggle and the panel toggles" above).
-- It closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`; Browse files and a right
-  pane floating in close it too (see "What the right pane shows" above), and so does a panel opened below 782 px.
-  Opening the drawer closes a panel floating over the terminal (see "Below 782 px: one panel floats over the
-  terminal" in `docs/product/right-pane-panels.md`).
-  While it is open `Escape` closes it and **does not reach the running agent**; in a field in the drawer that holds
-  text it only clears the field, and the next one closes the drawer.
-- **Selecting a session in the drawer closes it below 782 px**, so the session's terminal shows; from 782 px up to
-  1168 px the drawer stays open beside the terminal.
-- A dialog opened from a control pressed in the open drawer, or from a menu opened there, gives keyboard focus back
-  to that control in the drawer as it closes, rather than to the terminal behind the drawer.
-- Widening the window to 1168 px or more closes it, and so does the last console going, which leaves no sidebar (see
-  `docs/product/welcome-screen.md`).
-- Closing the drawer while it holds keyboard focus moves focus to the terminal, and so does widening the window past
-  1168 px while it is open when the sidebar is hidden in the wider layout.
-
-Whether the docked sidebar is hidden plays no part below 1168 px: there, the drawer decides whether it is on screen,
-and widening the window again brings back the docked sidebar as the user last left it.
-
-Because the drawer overlays the terminal rather than pushing it aside, **opening or closing it never resizes the
-terminal**, so the running agent is never sent a terminal-size change by the drawer.
+Below 1168 px the sidebar is not in the row but a drawer over it (see "Below 1168 px: the sidebar becomes a drawer" in
+`docs/product/sidebar-drawer.md`).
 
 **The right pane stays docked below 1168 px, down to 782 px**, at the width the user chose, clamped so that the
 terminal keeps its **398 px** floor, about 40 columns. The right pane's minimum is **336 px while the Terminal panel
@@ -553,7 +526,9 @@ the larger of those minimums side by side (48 + 398 + 336 px).
 
 **Below 782 px the right pane does not dock**: one panel at a time floats over the terminal, which takes the content
 panel's whole width with no minimum, so the row never scrolls sideways (see "Below 782 px: one panel floats over the
-terminal" in `docs/product/right-pane-panels.md`).
+terminal" in `docs/product/right-pane-panels.md`). While there is a console the rail is not in the row there either,
+so the content panel spans the window's whole width (see "Below 782 px: the rail comes in with the drawer" in
+`docs/product/sidebar-drawer.md`).
 
 ## Right-click menus
 

@@ -31,9 +31,11 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
     vi.unstubAllGlobals();
     document.documentElement.style.removeProperty("--rail-width");
     document.documentElement.style.removeProperty("--breakpoint-docked");
+    document.documentElement.style.removeProperty("--breakpoint-phone");
   });
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
   const console_ = consoleOf("c-main", "Main");
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_] })),

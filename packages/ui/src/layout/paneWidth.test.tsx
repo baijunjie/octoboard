@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished } from "vitest";
 
 import { PaneResizeHandle } from "../components/PaneResizeHandle";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
-import { usePaneWidth, type DockedPanes, type PaneWidth } from "./paneWidth";
+import { NARROW_TERMINAL_FLOOR, NARROW_TERMINAL_PANEL_ASIDE_MIN, usePaneWidth, type DockedPanes, type PaneWidth } from "./paneWidth";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -96,4 +98,13 @@ it("restores the saved width after the viewport widens and leaves floating bound
   test.render(320, false, { sidebar: false, aside: true });
   expect(test.aside().width).toBe(600);
   expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("600");
+});
+
+// The `phone` breakpoint is the narrowest window that docks the aside beside the terminal: the rail plus
+// the terminal's narrow floor plus the narrow aside's floor. `style.css` holds the one literal; this holds it
+// to that sum.
+it("sets the phone breakpoint in style.css to the rail and the narrow floors of the terminal and the aside", () => {
+  const style = readFileSync(join(import.meta.dirname, "../style.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const token = (name: string) => Number(new RegExp(`--${name}:\\s*([\\d.]+)px`).exec(style)?.[1]);
+  expect(token("breakpoint-phone")).toBe(token("rail-width") + NARROW_TERMINAL_FLOOR + NARROW_TERMINAL_PANEL_ASIDE_MIN);
 });

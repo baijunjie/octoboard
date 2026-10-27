@@ -186,6 +186,21 @@ afterwards: a Safari that was already running when the setting changed keeps dra
 no defect. Read the old value before writing it and put it back afterwards, it being the user's own machine-wide
 setting.
 
+## Settle a touch gesture through the browser's own touch input, not jsdom or dispatched events
+
+A jsdom test and a gallery step dispatch touch or pointer events straight at an element (`ui.swipe` in
+`packages/ui/src/gallery/interact.ts` sends plain `Event`s). Neither goes through the browser's gesture handling,
+which is where a gesture breaks. Pointer events are the case in point. Once Chromium starts treating a sideways touch
+as a pan, it sends `pointercancel` after the first `pointermove`, even on a page with nothing to scroll sideways, so a
+pointer-event swipe never reaches its threshold while the tests pass. `touchmove` keeps coming, so detect a finger
+gesture from touch events. Do not reach for `touch-action` to keep pointer events alive: it would also take away
+vertical scrolling.
+
+To verify a gesture, drive the gallery page in Playwright's Chromium with a context created with
+`isMobile: true, hasTouch: true`. Send the touch over CDP: `Input.dispatchTouchEvent` with `touchStart`, several
+`touchMove`s and `touchEnd`. Playwright's own `touchscreen` only taps. CDP exists only in Chromium, so this exercises
+Chromium's pipeline, not WebKit's.
+
 ## Bisect every terminal symptom against the daemon before blaming the agent
 
 When the app shows a terminal symptom — a keystroke doing nothing, input dying after a session switch, a pane looking

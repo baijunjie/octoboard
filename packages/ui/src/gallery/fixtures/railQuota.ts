@@ -311,10 +311,10 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel in a narrow window",
-    description: "In a window this narrow the panel is held to the width left beside the rail instead of its own, and the account names and meters fit it.",
+    description: "In a window this narrow the rail comes in with the sidebar's drawer, at the start of its card, and the panel is held to the width left beside it instead of its own, over the drawer's card and backdrop, and the account names and meters fit it.",
     width: 390,
     state: readState,
-    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {
     id: "rail-quota-none",
