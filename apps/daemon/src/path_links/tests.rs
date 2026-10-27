@@ -102,6 +102,102 @@ fn a_path_outside_every_root_is_refused_even_through_a_link() {
     assert_eq!(at("link.txt"), None);
 }
 
+fn refusal(raw: &str, temp: &TempRoots, roots: &ProjectRoots) -> Refusal {
+    match reach(raw, None, temp, &|| roots.clone()) {
+        Err(Unreached::Refused(refusal)) => refusal,
+        other => panic!("{raw}: expected a refusal, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_refusal_says_why_the_path_is_not_shown() {
+    let project = ScratchDir::new("path-links-refusal");
+    let elsewhere = ScratchDir::new("path-links-refusal-elsewhere");
+    let second = ScratchDir::new("path-links-refusal-second");
+    std::fs::write(elsewhere.join("secret.txt"), "x").unwrap();
+    std::os::unix::fs::symlink(elsewhere.join("secret.txt"), project.join("link.txt")).unwrap();
+    std::fs::write(project.join("both.ts"), "x").unwrap();
+    std::fs::write(second.join("both.ts"), "x").unwrap();
+    std::fs::write(project.join("tool"), "x").unwrap();
+    std::fs::set_permissions(project.join("tool"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let fifo = std::ffi::CString::new(project.join("pipe").as_os_str().as_bytes()).unwrap();
+    // SAFETY: `fifo` is a valid NUL-terminated path.
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+    let roots = project_roots(&[&project, &second]);
+    let at = |raw: &str| refusal(raw, &no_temp(), &roots);
+    assert_eq!(at("link.txt"), Refusal::Outside);
+    assert_eq!(at("../elsewhere.ts"), Refusal::Outside);
+    assert_eq!(at("/etc/hosts"), Refusal::Outside);
+    assert_eq!(at("both.ts"), Refusal::Ambiguous);
+    // Launchable files are reachable in a project, so only a temp root refuses them.
+    let temp = temp_of(&project);
+    let absolute = canonical(&project);
+    assert_eq!(
+        refusal(absolute.join("tool").to_str().unwrap(), &temp, &roots),
+        Refusal::Launchable
+    );
+    assert_eq!(
+        refusal(absolute.join("pipe").to_str().unwrap(), &no_temp(), &roots),
+        Refusal::NotAFileOrFolder
+    );
+}
+
+#[test]
+fn a_temp_path_others_can_change_is_refused_as_not_private() {
+    let temp = ScratchDir::new("path-links-not-private");
+    std::fs::write(temp.join("writable.txt"), "x").unwrap();
+    std::fs::set_permissions(
+        temp.join("writable.txt"),
+        std::fs::Permissions::from_mode(0o666),
+    )
+    .unwrap();
+    let path = canonical(&temp).join("writable.txt");
+    assert_eq!(
+        refusal(
+            path.to_str().unwrap(),
+            &temp_of(&temp),
+            &ProjectRoots::default()
+        ),
+        Refusal::NotPrivate
+    );
+}
+
+#[test]
+fn a_denied_read_is_refused_with_the_systems_text() {
+    // SAFETY: a plain query of this process's effective user.
+    if unsafe { libc::geteuid() } == 0 {
+        // Permissions do not stop the superuser, so there is nothing to refuse.
+        return;
+    }
+    let project = ScratchDir::new("path-links-denied");
+    std::fs::create_dir(project.join("locked")).unwrap();
+    std::fs::write(project.join("locked/a.txt"), "x").unwrap();
+    let chmod = |mode| {
+        std::fs::set_permissions(
+            project.join("locked"),
+            std::fs::Permissions::from_mode(mode),
+        )
+        .unwrap()
+    };
+    chmod(0o000);
+    let roots = project_roots(&[&project]);
+    let absolute = canonical(&project).join("locked/a.txt");
+    // Looked at without panicking, so the mode is restored (and the scratch directory deletable) whatever it finds.
+    let found = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        [
+            refusal("locked/a.txt", &no_temp(), &roots),
+            refusal(absolute.to_str().unwrap(), &no_temp(), &roots),
+        ]
+    }));
+    chmod(0o755);
+    for refusal in found.expect("looking at the path panicked") {
+        let Refusal::Denied(detail) = &refusal else {
+            panic!("{refusal:?}");
+        };
+        assert!(!detail.is_empty());
+    }
+}
+
 #[test]
 fn a_file_in_a_worktree_below_the_project_is_found_in_the_innermost_root() {
     let outer = ScratchDir::new("path-links-nested");
@@ -643,9 +739,74 @@ mod with_state {
         })
         .unwrap_err();
         assert!(!opened.get());
-        assert_eq!(
-            error.downcast_ref::<CodedError>().unwrap().code,
-            error_code::OUTSIDE_SCOPE
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+        assert_eq!(coded.params["cause"], "launchable");
+        assert_eq!(coded.params["path"], "run.command");
+    }
+
+    #[test]
+    fn opening_a_path_in_two_roots_is_refused_as_ambiguous() {
+        let fixture = Fixture::new();
+        let repository = repo_with("path-links-ambiguous", &[(b"a.ts", b"x")]);
+        let linked = ScratchDir::new("path-links-ambiguous-linked").join("tree");
+        git(
+            &repository,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "ambiguous",
+                linked.to_str().unwrap(),
+            ],
         );
+        let project = fixture.project("ambiguous-project", &repository);
+        let error = open_with(&fixture.state, Some(&project), "a.ts", |_| {
+            panic!("must not be opened")
+        })
+        .unwrap_err();
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+        assert_eq!(coded.params["cause"], "ambiguous");
+    }
+
+    #[test]
+    fn the_refusals_are_raised_under_their_codes() {
+        let denied = Refusal::Denied("Permission denied (os error 13)".into()).into_error("a/b");
+        let coded = denied.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PERMISSION_DENIED);
+        assert_eq!(coded.params["path"], "a/b");
+        assert_eq!(coded.params["detail"], "Permission denied (os error 13)");
+        let outside = Refusal::Outside.into_error("a/b");
+        let coded = outside.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.params["action"], "open");
+        for (refusal, code, cause) in [
+            (Refusal::Outside, error_code::OUTSIDE_SCOPE, None),
+            (
+                Refusal::NotPrivate,
+                error_code::PATH_LINK_REFUSED,
+                Some("not_private"),
+            ),
+            (
+                Refusal::NotAFileOrFolder,
+                error_code::PATH_LINK_REFUSED,
+                Some("not_a_file_or_folder"),
+            ),
+            (Refusal::Other, error_code::PATH_LINK_REFUSED, Some("other")),
+            (
+                Refusal::Unreadable("Input/output error (os error 5)".into()),
+                error_code::PATH_LINK_REFUSED,
+                Some("unreadable"),
+            ),
+        ] {
+            let detail = matches!(refusal, Refusal::Unreadable(_))
+                .then_some("Input/output error (os error 5)");
+            let error = refusal.into_error("a/b");
+            let coded = error.downcast_ref::<CodedError>().unwrap();
+            assert_eq!(coded.code, code);
+            assert_eq!(coded.params.get("cause").map(String::as_str), cause);
+            assert_eq!(coded.params.get("detail").map(String::as_str), detail);
+        }
     }
 }

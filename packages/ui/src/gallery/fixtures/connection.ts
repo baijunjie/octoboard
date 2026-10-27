@@ -312,6 +312,78 @@ export const connectionScenarios: Scenario[] = [
     steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {
+    id: "terminal-path-link-refused-ambiguous",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A folder now in more than one worktree",
+    description:
+      "Clicking docs/plans/summary-layout, a folder with no README to open in the viewer, which the daemon found in one place when the output was drawn but which another worktree of the project holds too now, opened the error alert instead of the file manager, titled \"Could not open the path\" and saying the path is in the project's folder in more than one worktree, so it is not opened. " +
+      "Its remedy says to find the one meant in the project's files and open it from there.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", refused: "ambiguous" } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
+  },
+  {
+    id: "terminal-path-link-refused-launchable",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A file that became a program, refused on the host",
+    description:
+      "Clicking bin/helper, which was not a program when the output was drawn but is one now: the viewer found nothing it could show in it, so the click went on to the host, and the error alert opened instead of launching it, titled \"Could not open the path\" and saying it is something the system would run, so it is not opened from a link. " +
+      "Its remedy says that to run it, the user opens it from the file manager themself.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/bin/helper": { kind: "file", refused: "launchable", view: { path: "bin/helper" } } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("bin/helper")],
+  },
+  {
+    id: "terminal-path-link-refused-not-private",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A temporary file that others can change",
+    description:
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file that was not changeable by other users of the computer when the output was drawn but is now, opened the error alert instead of opening it with its default application, titled \"Could not open the path\" and saying it can be changed by other users of this machine, so it is not opened from a link. " +
+      "Its remedy says that if the user trusts it, they open it from the file manager themself.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "not_private" } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+  },
+  {
+    id: "terminal-path-link-refused-not-openable",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A temporary path that is neither a file nor a folder",
+    description:
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, which was a file when the output was drawn but now names something that is neither a file nor a folder (a socket, say), opened the error alert instead of opening anything, titled \"Could not open the path\" and saying it is not a file or folder, so it cannot be opened. " +
+      "It has no remedy line: the sentence says it all.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "not_a_file_or_folder" } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+  },
+  {
+    id: "terminal-path-link-refused-unreadable",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A temporary path that could not be read",
+    description:
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, which was a file when the output was drawn but which the system fails to look at now, opened the error alert instead of opening anything, titled \"Could not open the path\" and saying it could not be read, so it is not opened. " +
+      "It has no remedy line. The system's own text, Input/output error (os error 5), is only in the Error details disclosure, closed here.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+  },
+  {
+    id: "terminal-path-link-refused-outside",
+    group: TERMINAL,
+    category: "exceptional",
+    title: "A temporary path redirected outside the project and the system’s temporary folders",
+    description:
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file that was inside the temporary folders when the output was drawn but now leads outside them and the project, opened the error alert instead of opening anything, titled \"Could not open the path\" and saying it leads outside the project and the system’s temporary folders, so it is not opened from a link. " +
+      "It has no remedy line.",
+    ...PATH_LINK_SCENARIO,
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", outside: true } },
+    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+  },
+  {
     id: "terminal-reconnecting",
     group: TERMINAL,
     category: "exceptional",

@@ -186,8 +186,75 @@ pub enum Unreached {
     /// Spelled inside a root, but nothing is there now: `in_project` when spelled inside a
     /// project's root, even one that lies under a temp root.
     Gone { in_project: bool },
-    /// Anything else not to show: outside every root, ambiguous, not a file or folder, or refused.
-    Refused,
+    /// Anything else not to show, and why.
+    Refused(Refusal),
+}
+
+/// Why a path that is not gone is not to be shown.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Refusal {
+    /// Outside every root: spelled outside them, or resolving outside them (a link leading out).
+    Outside,
+    /// A relative path found in more than one of the project's roots.
+    Ambiguous,
+    /// Something the system would run, which a link never opens.
+    Launchable,
+    /// In a temp root, but not solely the daemon user's, or writable by group or others.
+    NotPrivate,
+    /// Exists, but is neither a file nor a folder (a socket, a device).
+    NotAFileOrFolder,
+    /// The system denied reading the path or a directory on the way to it; holds its text.
+    Denied(String),
+    /// Any other I/O failure looking at the path; holds the system's text.
+    Unreadable(String),
+    /// A path that cannot be looked up at all (empty, containing NUL, or `~/` with no known home).
+    Other,
+}
+
+impl Refusal {
+    /// What an I/O failure on the way to a path means.
+    fn of_io(err: &std::io::Error) -> Self {
+        if err.kind() == std::io::ErrorKind::PermissionDenied {
+            Self::Denied(err.to_string())
+        } else {
+            Self::Unreadable(err.to_string())
+        }
+    }
+
+    /// The error a refused request for `path` is answered with.
+    fn into_error(self, path: &str) -> anyhow::Error {
+        let (cause, detail) = match self {
+            Self::Denied(detail) => {
+                return CodedError::raised(
+                    error_code::PERMISSION_DENIED,
+                    format!("{path} could not be read: {detail}"),
+                    &[("path", path), ("detail", &detail)],
+                )
+            }
+            Self::Outside => {
+                return CodedError::raised(
+                    error_code::OUTSIDE_SCOPE,
+                    format!("{path} leads outside the project and the temp roots"),
+                    &[("path", path), ("action", "open")],
+                )
+            }
+            Self::Ambiguous => ("ambiguous", None),
+            Self::Launchable => ("launchable", None),
+            Self::NotPrivate => ("not_private", None),
+            Self::NotAFileOrFolder => ("not_a_file_or_folder", None),
+            Self::Unreadable(detail) => ("unreadable", Some(detail)),
+            Self::Other => ("other", None),
+        };
+        let mut params = vec![("path", path), ("cause", cause)];
+        if let Some(detail) = &detail {
+            params.push(("detail", detail));
+        }
+        CodedError::raised(
+            error_code::PATH_LINK_REFUSED,
+            format!("{path} is not opened from a link: {cause}"),
+            &params,
+        )
+    }
 }
 
 /// [`resolve`], saying why it found nothing.
@@ -198,10 +265,10 @@ pub fn reach(
     project: &dyn Fn() -> ProjectRoots,
 ) -> Result<Resolved, Unreached> {
     if raw.is_empty() || raw.contains('\0') {
-        return Err(Unreached::Refused);
+        return Err(Unreached::Refused(Refusal::Other));
     }
     let absolute = if let Some(rest) = raw.strip_prefix("~/") {
-        Some(home.ok_or(Unreached::Refused)?.join(rest))
+        Some(home.ok_or(Unreached::Refused(Refusal::Other))?.join(rest))
     } else if Path::new(raw).is_absolute() {
         Some(PathBuf::from(raw))
     } else {
@@ -213,6 +280,7 @@ pub fn reach(
         let roots = project();
         let mut found: Vec<PathBuf> = Vec::new();
         let (mut spelled, mut missing) = (0, 0);
+        let mut failure: Option<Refusal> = None;
         for root in &roots.canonical {
             let joined = lexically_normalise(&root.join(raw));
             if !roots.lexical.iter().any(|root| joined.starts_with(root)) {
@@ -222,7 +290,15 @@ pub fn reach(
             let canonical = match std::fs::canonicalize(joined) {
                 Ok(canonical) => canonical,
                 Err(err) => {
-                    missing += usize::from(is_not_found(&err));
+                    if is_not_found(&err) {
+                        missing += 1;
+                    } else {
+                        let refusal = Refusal::of_io(&err);
+                        // A denied read is the more telling of two failures.
+                        if failure.is_none() || matches!(refusal, Refusal::Denied(_)) {
+                            failure = Some(refusal);
+                        }
+                    }
                     continue;
                 }
             };
@@ -236,15 +312,20 @@ pub fn reach(
             }
         }
         let [canonical] = found.as_slice() else {
-            return Err(if found.is_empty() && spelled > 0 && missing == spelled {
+            return Err(if found.len() > 1 {
+                Unreached::Refused(Refusal::Ambiguous)
+            } else if spelled > 0 && missing == spelled {
                 Unreached::Gone { in_project: true }
             } else {
-                Unreached::Refused
+                // Nothing found: a failure looking, else every spelling led outside the roots.
+                Unreached::Refused(failure.unwrap_or(Refusal::Outside))
             });
         };
-        let index = roots.innermost(canonical).ok_or(Unreached::Refused)?;
+        let index = roots
+            .innermost(canonical)
+            .ok_or(Unreached::Refused(Refusal::Outside))?;
         let mut resolved = reachable(canonical.clone(), &roots.canonical[index], false, true)
-            .ok_or(Unreached::Refused)?;
+            .map_err(Unreached::Refused)?;
         resolved.project_root = Some(index);
         return Ok(resolved);
     };
@@ -261,17 +342,19 @@ pub fn reach(
             .canonical
             .iter()
             .find(|root| canonical.starts_with(root))
-            .ok_or(Unreached::Refused)?;
-        return reachable(canonical, root, temp.check_owner, false).ok_or(Unreached::Refused);
+            .ok_or(Unreached::Refused(Refusal::Outside))?;
+        return reachable(canonical, root, temp.check_owner, false).map_err(Unreached::Refused);
     }
     let roots = project();
     if !roots.lexical.iter().any(|root| absolute.starts_with(root)) {
-        return Err(Unreached::Refused);
+        return Err(Unreached::Refused(Refusal::Outside));
     }
     let canonical = canonical_or_gone(&absolute, || true)?;
-    let index = roots.innermost(&canonical).ok_or(Unreached::Refused)?;
+    let index = roots
+        .innermost(&canonical)
+        .ok_or(Unreached::Refused(Refusal::Outside))?;
     let mut resolved =
-        reachable(canonical, &roots.canonical[index], false, true).ok_or(Unreached::Refused)?;
+        reachable(canonical, &roots.canonical[index], false, true).map_err(Unreached::Refused)?;
     resolved.project_root = Some(index);
     Ok(resolved)
 }
@@ -285,7 +368,7 @@ fn canonical_or_gone(path: &Path, in_project: impl FnOnce() -> bool) -> Result<P
                 in_project: in_project(),
             }
         } else {
-            Unreached::Refused
+            Unreached::Refused(Refusal::of_io(&err))
         }
     })
 }
@@ -298,22 +381,23 @@ fn reachable(
     root: &Path,
     check_owner: bool,
     in_project: bool,
-) -> Option<Resolved> {
-    let metadata = std::fs::metadata(&canonical).ok()?;
+) -> Result<Resolved, Refusal> {
+    let metadata = std::fs::metadata(&canonical).map_err(|err| Refusal::of_io(&err))?;
     let kind = if metadata.is_dir() {
         PathLinkKind::Directory
     } else if metadata.is_file() {
         PathLinkKind::File
     } else {
-        return None;
+        return Err(Refusal::NotAFileOrFolder);
     };
     let launchable = launchable(&canonical, root, &metadata);
-    if (launchable && !(in_project && kind == PathLinkKind::File))
-        || (check_owner && !closed_to_others(&canonical, root))
-    {
-        return None;
+    if launchable && !(in_project && kind == PathLinkKind::File) {
+        return Err(Refusal::Launchable);
     }
-    Some(Resolved {
+    if check_owner && !closed_to_others(&canonical, root) {
+        return Err(Refusal::NotPrivate);
+    }
+    Ok(Resolved {
         path: canonical,
         kind,
         launchable,
@@ -537,13 +621,8 @@ fn open_with(
     let resolved = reach(path, home.as_deref(), &temp_roots(), &lookup);
     let resolved = match resolved {
         Ok(resolved) if !resolved.launchable => resolved,
-        Ok(_) | Err(Unreached::Refused) => {
-            return Err(CodedError::raised(
-                error_code::OUTSIDE_SCOPE,
-                format!("{path} is not a file or folder that can be opened from here"),
-                &[("path", path)],
-            ))
-        }
+        Ok(_) => return Err(Refusal::Launchable.into_error(path)),
+        Err(Unreached::Refused(refusal)) => return Err(refusal.into_error(path)),
         Err(Unreached::Gone { in_project }) => {
             return Err(CodedError::raised(
                 error_code::FILE_NOT_FOUND,

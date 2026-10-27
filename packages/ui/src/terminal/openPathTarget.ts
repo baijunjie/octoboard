@@ -1,7 +1,7 @@
 import { DaemonRequestError } from "../daemon-client";
 import type { Event, RequestBody } from "../protocol";
 import type { ViewedFile } from "../browser/TerminalFileViewer";
-import { hostPathRecovery, type ErrorRecovery } from "../errorRecovery";
+import { pathLinkRecovery, type ErrorRecovery } from "../errorRecovery";
 import { t } from "../i18n/language";
 import { bodyFromFileContent } from "../viewer/content";
 import type { PathLinkTarget } from "./pathLinks";
@@ -35,13 +35,7 @@ export async function openPathTarget({
   viewFile: ((file: ViewedFile) => void) | undefined;
   toastError: (error: Error | string, session?: string, title?: string, recovery?: ErrorRecovery) => void;
 }): Promise<void> {
-  // A gone file or folder is found again in the project's files; a temporary one has nowhere to be found, and its
-  // sentence already says it is gone.
-  const recoveryOf = (error: unknown) => {
-    const recovery = hostPathRecovery(error);
-    return recovery && error instanceof DaemonRequestError && error.params.root === "temporary" ? "none" : recovery;
-  };
-  const report = (error: unknown) => toastError(error instanceof Error ? error : String(error), undefined, t("terminal.openPathFailedTitle"), recoveryOf(error));
+  const report = (error: unknown) => toastError(error instanceof Error ? error : String(error), undefined, t("terminal.openPathFailedTitle"), pathLinkRecovery(error));
   const openOnHost = () =>
     request({ type: "open_path_link", project, path: target.path }).then(() => undefined, report);
   const { view } = target;

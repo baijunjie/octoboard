@@ -6,7 +6,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/ImportReview";
 import type { AvailableUpdate, MacosPermissionsStatus, UpdateChannel, UpdateProgress } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
-import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
+import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -218,10 +218,23 @@ export interface Scenario {
    * system could launch it. A folder in the project is a bare `"directory"`, or `{ kind:
    * "directory", view }` when it has a README or index file, which `view` names; every other path
    * is answered as `none`. `{ kind, gone: true }` is a path the probe found but that is gone when
-   * `open_path_link` opens it, which the daemon refuses with `file_not_found`. */
+   * `open_path_link` opens it, which the daemon refuses with `file_not_found`. `{ kind, refused: cause }` is one the
+   * probe found but `open_path_link` will not open, which the daemon refuses with `path_link_refused` and that
+   * `cause`. `{ kind, outside: true }` is one the probe found but that lies outside every root when `open_path_link`
+   * opens it (a link that was redirected since), which the daemon refuses with `outside_scope` and `action: "open"`. A
+   * click reaches `open_path_link` only for a path with no `view` (a folder with no entry file, a path in a temp
+   * root), a folder opened on the host, or a file the viewer cannot show, so a refused file in the project carries
+   * the `view` of a binary one. Cause `unreadable` carries the system's text as `detail`, which the daemon sends only
+   * for it. */
   pathLinks?: Record<
     string,
-    Exclude<PathLinkKind, "none"> | { view: PathLinkView; viewerOnly?: true } | { kind: "directory"; view: PathLinkView } | { kind: Exclude<PathLinkKind, "none">; gone: true }
+    | Exclude<PathLinkKind, "none">
+    | { view: PathLinkView; viewerOnly?: true }
+    | { kind: "directory"; view: PathLinkView }
+    | { kind: Exclude<PathLinkKind, "none">; gone: true }
+    | { kind: Exclude<PathLinkKind, "none">; outside: true; view?: PathLinkView }
+    | { kind: Exclude<PathLinkKind, "none">; refused: Exclude<PathLinkRefusedCause, "unreadable">; view?: PathLinkView }
+    | { kind: Exclude<PathLinkKind, "none">; refused: "unreadable"; detail: string; view?: PathLinkView }
   >;
   /** What `read_project_file` answers for a request that names a worktree, by the worktree's id and
    * then as `files` does by wire path; a worktree not listed has no file. */

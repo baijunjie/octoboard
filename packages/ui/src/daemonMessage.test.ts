@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 
 import { appConfig } from "./appConfig";
 import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
-import { daemonMessage } from "./daemonMessage";
+import { daemonMessage, richMessageCode } from "./daemonMessage";
 import { CATALOGS } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
@@ -363,4 +363,37 @@ it("words a session that did not stop as possibly still running, and a resume th
   expect(daemonMessage("en", "sharing_resume_failed", { ...params, still_running: "false" }, "x", records)).toContain("left interrupted");
   expect(daemonMessage("en", "sharing_resume_failed", params, "x", records)).toContain("left interrupted");
   expect(daemonMessage("zh-Hans", "sharing_resume_failed", { ...params, still_running: "true" }, "x", records)).toContain("可能仍在运行，未重新启动");
+});
+
+it.each([
+  ["ambiguous", "is in the project’s folder in more than one worktree", "在多个工作树的项目文件夹中都存在"],
+  ["launchable", "is something the system would run", "是系统会运行的内容"],
+  ["not_private", "can be changed by other users of this machine", "可被此设备上的其他用户修改"],
+  ["not_a_file_or_folder", "is not a file or folder", "不是文件或文件夹"],
+  ["unreadable", "could not be read, so it is not opened", "无法读取"],
+  ["other", "cannot be opened from a link", "无法通过链接打开"],
+  ["a_future_cause", "cannot be opened from a link", "无法通过链接打开"],
+])("words a path link refused for the cause %s in every language, an unknown one as other", (cause, english, chinese) => {
+  const params = { path: "a.ts", cause };
+  expect(daemonMessage("en", "path_link_refused", params, "x", records)).toContain(english);
+  expect(daemonMessage("zh-Hans", "path_link_refused", params, "x", records)).toContain(chinese);
+});
+
+it("keeps the system's text of an unreadable path link as plain text, on a line of its own", () => {
+  const params = { path: "a.ts", cause: "unreadable", detail: "Input/output error (os error 5)" };
+  expect(daemonMessage("en", "path_link_refused", params, "x", records)).toMatch(/could not be read, so it is not opened\.\nInput\/output error \(os error 5\)$/);
+  expect(daemonMessage("en", "path_link_refused", { path: "a.ts", cause: "other" }, "x", records)).not.toContain("\n");
+});
+
+it("words an outside_scope from a link click as not opened from a link, and any other as not shown", () => {
+  expect(daemonMessage("en", "outside_scope", { path: "/x", action: "open" }, "x", records)).toContain("not opened from a link");
+  expect(daemonMessage("zh-Hans", "outside_scope", { path: "/x", action: "open" }, "x", records)).toContain("不通过链接打开");
+  expect(daemonMessage("en", "outside_scope", { path: "/x" }, "x", records)).toContain("is not shown");
+});
+
+it("words every path link refusal that carries the system's text, an unknown cause included, in each catalog", () => {
+  for (const cause of ["unreadable", "other", "a_future_cause"]) {
+    const key = `daemon.${richMessageCode("path_link_refused", { path: "a", cause, detail: "x" })}`;
+    for (const catalog of Object.values(CATALOGS)) expect(key in catalog, `${key}`).toBe(true);
+  }
 });

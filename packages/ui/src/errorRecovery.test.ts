@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import { DaemonRequestError } from "./daemon-client";
 import { errorAlerts } from "./errorAlerts";
 import { errorPresentation } from "./errorPresentation";
-import { ActionableError, classifyError } from "./errorRecovery";
+import { ActionableError, classifyError, pathLinkRecovery } from "./errorRecovery";
 
 it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
@@ -104,4 +104,24 @@ it.each([
 ] as const)("words a conversation move that failed because of %s by its cause, an unknown one as other", (cause, expected) => {
   const error = new DaemonRequestError("move failed", "relocation_failed", { path: "/p", stage: "copy", detail: "x", ...(cause && { cause }) });
   expect(classifyError(error)).toEqual(expected);
+});
+
+it.each([
+  ["ambiguous", "pathLinkAmbiguous"], ["launchable", "pathLinkLaunchable"], ["not_private", "pathLinkNotPrivate"],
+  ["not_a_file_or_folder", "none"], ["unreadable", "none"], ["other", "none"], ["a_future_cause", "none"], ["constructor", "none"], [undefined, "none"],
+] as const)("gives a path link refused for the cause %s its own remedy, an unknown one as other", (cause, recovery) => {
+  const error = new DaemonRequestError("refused", "path_link_refused", { path: "a.ts", ...(cause && { cause }) });
+  expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+});
+
+it.each([
+  [new DaemonRequestError("gone", "file_not_found", { path: "a", root: "project" }), "hostPathGone"],
+  [new DaemonRequestError("gone", "path_not_found", { path: "a" }), "hostPathGone"],
+  [new DaemonRequestError("gone", "file_not_found", { path: "a", root: "temporary" }), "none"],
+  [new DaemonRequestError("outside", "outside_scope", { path: "a" }), "none"],
+  [new DaemonRequestError("outside", "outside_scope", { path: "a", action: "open" }), "none"],
+  [new DaemonRequestError("denied", "permission_denied", { path: "a" }), undefined],
+  [new Error("x"), undefined],
+])("decides the remedy of a failed path link click for %s", (error, recovery) => {
+  expect(pathLinkRecovery(error)).toBe(recovery);
 });

@@ -393,11 +393,25 @@ For example:
   "A row's actions" in `docs/product/project-pane.md`, "Opened from the terminal" in `docs/product/file-viewer.md` and
   "File paths" in `docs/product/terminal-links.md`). A path link's file or folder gone from a temporary directory
   outside the project gets no remedy: the alert's sentence already says it does not exist any more.
+- A terminal's path link that a click refuses to open on the host, for a reason other than its being gone (see "File
+  paths" in `docs/product/terminal-links.md`), gets a remedy by that reason:
+  - **a relative path found in more than one of the places it is looked for**: find the one meant in the project's
+    files and open it from there;
+  - **something the system would run**: if it is meant to run, open it oneself from the file manager;
+  - **inside a temporary directory, changeable by other users of the machine**: if it is trusted, open it oneself from
+    the file manager;
+  - **a read the operating system denies**: the remedy of a denied read (below);
+  - **leading outside the project and the temporary directories, not a file or folder, could not be read for another
+    reason, or any other reason or one the window does not know**: no remedy; the alert's sentence says it all, with
+    the system's own text of a read that failed under Error details.
+- A file a terminal's path link names that leads outside the project's directory when the click reads it for the file
+  viewer (see "Opened from the terminal" in `docs/product/file-viewer.md`) gets no remedy: the alert's sentence says it
+  leads outside the project.
 - A read of the project's files that the operating system denies — Octoboard is not allowed to read the path, as when a
   shell terminal starts in a folder it may not read, when File manager or Default application is used on such a path, or
-  when a terminal's path link reads its file — asks the user to check the path's permissions, and grant Octoboard access
-  in the system's privacy settings if needed, then try again. It names no writable disk and no other folder to choose:
-  nothing is written there, and there is no folder to pick instead.
+  when a terminal's path link reads its file or is opened on the host — asks the user to check the path's permissions,
+  and grant Octoboard access in the system's privacy settings if needed, then try again. It names no writable disk and
+  no other folder to choose: nothing is written there, and there is no folder to pick instead.
 - A folder a request is scoped to that cannot be read (`source_unavailable`) — the project's own directory, or its
   place in a worktree of its repository — is not something the user typed or picked, so its remedy asks for it to be
   put back rather than corrected, worded by the cause the daemon names. The alert's sentence says the folder cannot

@@ -1,4 +1,4 @@
-import { relocationCause, sourceUnavailableCause, type MessageParams, type RelocationCause, type SourceUnavailableCause } from "./protocol";
+import { pathLinkRefusedCause, relocationCause, sourceUnavailableCause, type MessageParams, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause } from "./protocol";
 import { DaemonRequestError } from "./daemon-client";
 
 export type ErrorRecovery =
@@ -8,6 +8,7 @@ export type ErrorRecovery =
   | "refresh" | "scope" | "limit" | "openExternal" | "issueLink"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "grokSandbox"
+  | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
   | "none";
@@ -87,10 +88,12 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],
   limit: ["limit_exceeded"],
   openExternal: ["terminal_unavailable", "directory_unavailable", "path_open_failed"],
-  // Expected failures whose sentence already says what follows and what to do, with no remedy of their kind to add;
+  // Expected failures whose sentence already says what follows and what to do, with no remedy of their kind to add.
   // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
-  // release_session without an owner, and offers Unbind only on a bound project session.
-  none: ["sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
+  // release_session without an owner, and offers Unbind only on a bound project session. `path_link_refused` is a path
+  // link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is none for the
+  // causes whose sentence says it all.
+  none: ["path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
 };
 const DOMAIN_RECOVERY = new Map(Object.entries(GROUPS).flatMap(([recovery, codes]) => codes.map((code) => [code, recovery as ErrorRecovery] as const)));
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
@@ -136,6 +139,11 @@ const SOURCE_CAUSE_RECOVERY: Record<SourceUnavailableCause, ErrorRecovery> = {
   missing: "sourceGone", link: "sourceLink", not_a_directory: "sourceNotFolder", other: "sourceUnreadable",
 };
 
+/** The remedy of a `path_link_refused` by its `cause`, as `pathLinkRefusedCause` reads it. */
+const PATH_LINK_REFUSED_RECOVERY: Record<PathLinkRefusedCause, ErrorRecovery> = {
+  ambiguous: "pathLinkAmbiguous", launchable: "pathLinkLaunchable", not_private: "pathLinkNotPrivate", not_a_file_or_folder: "none", unreadable: "none", other: "none",
+};
+
 /** A move whose older item could not be put back (`relocation_failed`'s `cause` `not_restored`). */
 function isNotRestored(error: unknown): boolean {
   return error instanceof DaemonRequestError && error.code === "relocation_failed" && relocationCause(error.params.cause) === "not_restored";
@@ -162,6 +170,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
   if (error instanceof DaemonRequestError) {
     const code = error.code === "launch_failed" ? error.params.reason_code : error.code;
     if (code === "source_unavailable") return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
+    if (code === "path_link_refused") return { kind: "actionable", recovery: PATH_LINK_REFUSED_RECOVERY[pathLinkRefusedCause(error.params.cause)] };
     const domain = code && DOMAIN_RECOVERY.get(code);
     if (domain) return { kind: "actionable", recovery: domain };
     const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[relocationCause(error.params.cause)] : undefined;
@@ -189,4 +198,16 @@ const GONE = new Set(["file_not_found", "path_not_found"]);
  * which keeps its own. */
 export function hostPathRecovery(error: unknown): ErrorRecovery | undefined {
   return error instanceof DaemonRequestError && GONE.has(error.code) ? "hostPathGone" : undefined;
+}
+
+/** The remedy for a failed click on a path link, at either step of it (reading the file for the viewer, or opening the
+ * path on the host): a project file or folder gone since the link was drawn is found again in the project's files, a
+ * gone temporary one has nowhere to be found, and a path that leads outside what the step may read (`outside_scope`) is
+ * no use to the browse views' `scope` remedy, so the sentence alone says what is wrong. Undefined for any other
+ * failure, which keeps its own. */
+export function pathLinkRecovery(error: unknown): ErrorRecovery | undefined {
+  if (!(error instanceof DaemonRequestError)) return undefined;
+  if (error.code === "outside_scope") return "none";
+  const recovery = hostPathRecovery(error);
+  return recovery && error.params.root === "temporary" ? "none" : recovery;
 }
