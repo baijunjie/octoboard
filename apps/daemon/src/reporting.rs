@@ -1326,6 +1326,8 @@ mod tests {
 
         worker.terminate();
         recorded_ended(&state, "worker").await;
+        // The notice is written off the watcher after the record, so a marker could overtake it.
+        hub_heard_of(&hub, "ended on its own").await;
 
         let heard = hub_heard(&state, &hub).await;
         assert!(heard.contains("ended on its own"), "{heard}");
@@ -1458,7 +1460,8 @@ mod tests {
         worker.terminate();
         recorded_ended(&state, "worker").await;
 
-        let heard = hub_heard(&state, &hub).await;
+        // The notice is written off the watcher after the record, so a marker could overtake it.
+        let heard = hub_heard_of(&hub, "ended on its own").await;
         assert!(heard.contains("ended on its own"), "{heard}");
         assert!(!worker.end(), "the process was gone before the stop");
         assert!(!worker.was_ended_on_purpose());
