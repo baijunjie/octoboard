@@ -83,9 +83,9 @@ For a git association:
   `docs/product/launching-agents.md`).
 - A clone can take minutes; other state updates keep flowing while it runs.
 
-The form's collapsed **Advanced** section (see "The project's account, model and reasoning effort" below) also holds the
-new project's own git workflow settings, each following the application-wide value unless a value is picked for it
-(see "Reading and changing them" in `docs/product/git-workflow-settings.md`).
+The form's collapsed **Advanced** section (see "The project's account, model and reasoning effort" below) also holds,
+under its **Git workflow** tab, the new project's own git workflow settings, each following the application-wide value
+unless a value is picked for it (see "Reading and changing them" in `docs/product/git-workflow-settings.md`).
 
 A directory that is already associated with the same console is skipped rather than associated twice. Associating a
 parent directory again after new repositories have appeared beneath it therefore adds only the new ones. If every
@@ -186,24 +186,25 @@ names and effort levels are each agent's own, and a session reads only the set o
 
 The project dialog, both when associating and when editing a project, joins the account picker to the **Default agent**
 field as a single field, the way the session dialog joins its Agent field to one, and holds the same collapsed
-**Advanced** section, with the project's Git workflow group below the model and effort (see "Reading and changing them"
-in `docs/product/git-workflow-settings.md`). All of it but the Git workflow group belongs to the agent the Default agent
-field currently settles on — the agent picked, or the agent "Same as console" names while the field is on it — so
-switching that field shows another agent's set, and what was set for an agent no longer shown is kept and still saved.
-The account picker lists, in this order, the inherited entry, "Same as console", with a badge naming the account the
-console resolves to for that agent (the agent's default account when the console pins none); the agent's default
-account, named as it is everywhere else; and then that agent's own accounts. It is offered only when that agent has an
-account of its own. A project whose named account is no longer stored shows the inherited entry, and keeps what it has
-stored until another entry is picked. A turned-off account — the default account or one of the agent's own (see "Turning
-an account off" in `docs/product/agent-accounts.md`) — is left out of the picker, except the one the project named when
-the dialog opened and the one picked in it now: as in the console dialog, since a project's account is a lasting
-preference, that one stays listed and pickable, with a short note "Disabled" under its name and, as its description for
-assistive technology, that sessions cannot open on it until it is turned back on. "Same as console" carries no such
-mark, its badge naming the console's account as usual. A project that names a turned-off account keeps it; the sessions
-that would run on it are refused until then.
+**Advanced** section, its **Launch settings** tab holding the model and effort and its **Git workflow** tab the
+project's own git workflow settings (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md` and
+"Reading and changing them" in `docs/product/git-workflow-settings.md`). All of it but the Git workflow tab belongs to
+the agent the Default agent field currently settles on — the agent picked, or the agent "Same as console" names while
+the field is on it — so switching that field shows another agent's set, and what was set for an agent no longer shown is
+kept and still saved. The account picker lists, in this order, the inherited entry, "Same as console", with a badge
+naming the account the console resolves to for that agent (the agent's default account when the console pins none); the
+agent's default account, named as it is everywhere else; and then that agent's own accounts. It is offered only when
+that agent has an account of its own. A project whose named account is no longer stored shows the inherited entry, and
+keeps what it has stored until another entry is picked. A turned-off account — the default account or one of the agent's
+own (see "Turning an account off" in `docs/product/agent-accounts.md`) — is left out of the picker, except the one the
+project named when the dialog opened and the one picked in it now: as in the console dialog, since a project's account
+is a lasting preference, that one stays listed and pickable, with a short note "Disabled" under its name and, as its
+description for assistive technology, that sessions cannot open on it until it is turned back on. "Same as console"
+carries no such mark, its badge naming the console's account as usual. A project that names a turned-off account keeps
+it; the sessions that would run on it are refused until then.
 
 While a new project on a **parent directory** is set to "Detect from files" the account picker is not shown and the
-Advanced section holds the Git workflow group alone, since no agent is settled — each repository found is detected on
+Advanced section holds the Git workflow tab alone, since no agent is settled — each repository found is detected on
 its own — and any account, model or effort set before the source changed is not stored. The Advanced section stays open
 or closed as it was when the Default agent field or the source changes.
 

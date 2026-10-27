@@ -13,8 +13,10 @@ import { OptionSelect, type Option } from "./OptionSelect";
 const FOLLOW = "follow";
 type Follow = typeof FOLLOW;
 
-/** A project's own git workflow settings (see `Project.git_workflow`): each of the four items is "Same as app setting",
- * with the application-wide value in a badge, or a value of its own. `value` holds `null` for an item that follows. */
+/** A project's own git workflow settings (see `Project.git_workflow`): each of the four items is "Same as global
+ * setting", with the application-wide value in a badge, or a value of its own. `value` holds `null` for an item that
+ * follows. The group stands under a tab of its own, which names it on the screen, so its own name is kept off the
+ * screen (it still names the group). */
 export function GitWorkflowField({
   value,
   onChange,
@@ -71,7 +73,7 @@ export function GitWorkflowField({
   ];
 
   return (
-    <LabelledGroup label={t("dialog.project.gitWorkflow.title")} description={t("dialog.project.gitWorkflow.description")} isDisabled={isDisabled}>
+    <LabelledGroup label={t("dialog.project.gitWorkflow.title")} description={t("dialog.project.gitWorkflow.description")} isDisabled={isDisabled} hideLabel>
       <div ref={rows} className="contents" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
         <GroupRows stacked>
           <GroupRow label={developmentLabel}>

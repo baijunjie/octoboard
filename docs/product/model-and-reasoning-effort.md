@@ -41,17 +41,23 @@ collapsed when the dialog opens. The handoff dialog holds one too, which works a
 session that takes over (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 
 In the project dialog and the session dialog it holds a **Model** picker and a **Reasoning effort** picker for the agent
-the dialog's agent field currently settles on; the project dialog's also holds the project's Git workflow group below
-them, alone while no agent is settled (see "The project's account, model and reasoning effort" in
-`docs/product/projects.md`). In the session dialog, a note explains that unchanged values follow the project settings,
-or the console settings for a console session; the handoff dialog carries the same inheritance note for its receiving
-session. The session dialog's **Resume conversation** tab never lets the agent be picked: it shows the section only once
-the conversation is found in an agent's own records, for the agent and account that hold it (see
-`docs/product/resuming-a-conversation-by-its-session-id.md`). In the session dialog, untouched fields show the values
-the session would inherit — for a project session each from its project, else its console's project session pair; for a
-console session the console's console session pair — and keep following them; changing a field applies only to that
-session, including its later resumes. Switching agents shows the other agent's values and retains edits separately, but
-only the selected agent's edits apply to the opened session. Changing accounts keeps those edits.
+the dialog's agent field currently settles on. In the project dialog the section holds a row of tabs, as wide as their
+content and starting at the row's start, which sits with the shown tab's content inside a bordered frame: **Launch
+settings**, holding the Model and Reasoning effort pickers, and **Git workflow**, holding the project's own git workflow
+settings (see "Reading and changing them" in `docs/product/git-workflow-settings.md`). Launch settings is the tab shown
+when the dialog opens. While no agent is settled the frame holds the Git workflow tab alone, shown (see "The project's
+account, model and reasoning effort" in `docs/product/projects.md`). The tab shown stays shown while the section is
+folded and opened again and while the agent field moves from one agent to another; each time the field moves between
+settling on an agent and settling on none, the first tab is shown again. In the session dialog, a note explains that
+unchanged values follow the project settings, or the console settings for a console session; the handoff dialog carries
+the same inheritance note for its receiving session. The session dialog's **Resume conversation** tab never lets the
+agent be picked: it shows the section only once the conversation is found in an agent's own records, for the agent and
+account that hold it (see `docs/product/resuming-a-conversation-by-its-session-id.md`). In the session dialog, untouched
+fields show the values the session would inherit — for a project session each from its project, else its console's
+project session pair; for a console session the console's console session pair — and keep following them; changing a
+field applies only to that session, including its later resumes. Switching agents shows the other agent's values and
+retains edits separately, but only the selected agent's edits apply to the opened session. Changing accounts keeps those
+edits.
 
 In the console dialog it holds a row of tabs, one per agent that can be picked, in the order of the added agents (see
 "Which agents the agent pickers list" in `docs/product/consoles.md`), each with the agent's icon and name, as wide as

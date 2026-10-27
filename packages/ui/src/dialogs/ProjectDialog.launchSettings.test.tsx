@@ -285,7 +285,7 @@ it("offers no account and no launch settings while the source is a parent direct
   await choose("Personal");
   await chooseSource("A parent directory");
   expect(accountPicker()).toBeUndefined();
-  // Advanced holds the git workflow settings alone.
+  // Advanced holds the Git workflow tab alone.
   await click(buttonText("Advanced"));
   expect(pickerNamed("Model")).toBeUndefined();
   expect(pickerNamed("Where sessions develop")).toBeDefined();

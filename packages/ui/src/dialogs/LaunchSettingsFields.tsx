@@ -1,10 +1,9 @@
-import { Description, Disclosure } from "@heroui/react";
+import { Description } from "@heroui/react";
 import React, { useRef, useState } from "react";
 
 import type { LaunchPair } from "../agents";
 import { effortLevels, launchSettingOptions } from "../agentLaunchSettings";
 import { FailureBody } from "../components/errorParts";
-import { StatusAnnouncer } from "../components/StatusAnnouncer";
 import { StatusMark } from "../components/StatusMark";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { daemonMessage } from "../daemonMessage";
@@ -14,6 +13,7 @@ import type { Translate } from "../i18n/catalog";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, AgentModel } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
+import { AdvancedSection, type AdvancedTab, AdvancedTabs } from "./AdvancedSection";
 import { OptionSelect } from "./OptionSelect";
 import { useAgentModels } from "./useAgentModels";
 
@@ -195,62 +195,17 @@ function LaunchPickers({
   );
 }
 
-/** The collapsed Advanced section of a dialog, folded away by default as what is inside is rarely
- * set. The trigger spans the row so the whole row expands the section; HeroUI pushes its indicator
- * to the far end with an auto margin, which `ms-0` cancels so the chevron follows the label. The
- * label is set like the labels of the fields around it (`Label`'s size, weight and colour). */
-export function AdvancedSection({
-  expanded,
-  onExpandedChange,
-  status,
-  children,
-}: {
-  expanded: boolean;
-  onExpandedChange: (expanded: boolean) => void;
-  /** The model field's note, said from a status region: it changes with no action of the user's,
-   * and its picker is locked while it says "loading", so it cannot be reached to be read. */
-  status?: string;
-  children: React.ReactNode;
-}): React.ReactElement {
-  const t = useT();
-  return (
-    <Disclosure isExpanded={expanded} onExpandedChange={onExpandedChange}>
-      <Disclosure.Heading>
-        <Disclosure.Trigger className="flex w-full items-center gap-1 text-sm font-medium text-foreground">
-          {t("dialog.agentSettings.advanced")}
-          <Disclosure.Indicator className="ms-0" />
-        </Disclosure.Trigger>
-      </Disclosure.Heading>
-      {/* Outside the folded body, and only while the section is open. The body stays mounted while
-          folded, so a region inside it would be past its first write delay by the time the section
-          opens again, and the note kept from before would be written in the very render that shows
-          the body: text that appears with its region, which VoiceOver does not say. Mounted with
-          each opening, the region writes the note after its delay, with the trigger still focused. */}
-      {expanded && <StatusAnnouncer text={status} />}
-      {/* HeroUI pads the body by 8px on every side and the content clips what overflows it, so that
-          padding is the room the fields' focus rings need. Taking all of it out as a margin would
-          reach past the dialog body, whose own slack is 4px, so the content takes 4px of it back
-          and the body's inner element the other 4px, which lands the pickers in line with the
-          fields above with 2px of ring to spare inside the clip. The padding left above the
-          first note and below the last field is HeroUI's own, the same on both sides. */}
-      <Disclosure.Content className="-mx-1">
-        <Disclosure.Body className="-mx-1 flex flex-col gap-4">
-          {children}
-        </Disclosure.Body>
-      </Disclosure.Content>
-    </Disclosure>
-  );
-}
-
 /** The Advanced section of a dialog about one agent's sessions: the model and reasoning effort that
  * `agent`'s sessions are launched with, each empty while unset. `note` explains how the settings are
  * inherited where needed. `account` is the account id the agent's sessions run under (`null` for its
  * default account), as the list of models belongs to the account. That list is asked of the daemon while
  * the section is open, and again when `agent` or `account` changes, so nothing is asked of a
  * dialog whose Advanced section is never opened (see `useLaunchModels`). `isDisabled` locks the two
- * pickers, not `children`; the trigger stays operable, as folding the section away changes nothing
- * and disabling a focused trigger would blur it. `children` are further rarely set fields of the
- * same dialog, placed below the two pickers. */
+ * pickers; the trigger stays operable, as folding the section away changes nothing and disabling a
+ * focused trigger would blur it. `otherTab` is a further group of rarely set fields of the same
+ * dialog, a kind of setting of its own: with it the section holds an `AdvancedTabs` of two tabs, the
+ * pickers under the first (with `note`) and the group under the second, so the group does not read
+ * as one more field beside Model and Reasoning effort. */
 export function LaunchSettingsFields({
   agent,
   account,
@@ -263,7 +218,7 @@ export function LaunchSettingsFields({
   isDisabled,
   expanded: controlledExpanded,
   onExpandedChange,
-  children,
+  otherTab,
 }: {
   agent: Agent;
   account: string | null;
@@ -278,8 +233,10 @@ export function LaunchSettingsFields({
    * `AdvancedSection`; without it the section keeps its own state. */
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;
-  children?: React.ReactNode;
+  /** The second tab, whose fields `isDisabled` leaves alone. */
+  otherTab?: AdvancedTab;
 }): React.ReactElement {
+  const t = useT();
   const [ownExpanded, setOwnExpanded] = useState(false);
   const expanded = controlledExpanded ?? ownExpanded;
   const setExpanded = onExpandedChange ?? setOwnExpanded;
@@ -287,16 +244,19 @@ export function LaunchSettingsFields({
   const pickers = useRef<HTMLDivElement>(null);
   // A reload (the account the form refers to going away elsewhere) takes the Model field's mark away and locks
   // its picker in the same render, so focus that was on the mark has no enabled picker to go to: it goes to the
-  // Model picker if that is operable, and else to the section's trigger, which stays operable.
+  // Model picker if that is operable, and else to the selected tab, where the section has tabs, or the section's
+  // trigger, both of which stay operable.
   const focusHandoff = useFocusHandoff(() => {
     const modelTrigger = pickers.current?.querySelector<HTMLElement>("[data-slot=select-trigger]");
+    const section = pickers.current?.closest("[data-slot=disclosure]");
     const target = modelTrigger && !modelTrigger.matches(":disabled")
       ? modelTrigger
-      : pickers.current?.closest("[data-slot=disclosure]")?.querySelector<HTMLElement>("[data-slot=disclosure-trigger]");
+      : (section?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ??
+        section?.querySelector<HTMLElement>("[data-slot=disclosure-trigger]"));
     target?.focus();
   });
-  return (
-    <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
+  const launchFields = (
+    <>
       {note && <Description>{note}</Description>}
       <div ref={pickers} {...focusHandoff} className="flex flex-col gap-4">
         <LaunchPickers
@@ -309,7 +269,18 @@ export function LaunchSettingsFields({
           isDisabled={isDisabled}
         />
       </div>
-      {children}
+    </>
+  );
+  return (
+    <AdvancedSection expanded={expanded} onExpandedChange={setExpanded} status={launch.modelText}>
+      {otherTab ? (
+        <AdvancedTabs
+          tabs={[
+            { id: "launch", label: t("dialog.agentSettings.launchTab"), content: launchFields },
+            otherTab,
+          ]}
+        />
+      ) : launchFields}
     </AdvancedSection>
   );
 }

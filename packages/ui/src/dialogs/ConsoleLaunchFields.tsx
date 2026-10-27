@@ -22,7 +22,8 @@ import { useListMotion } from "../components/useListMotion";
 import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
 import { useDaemonStore } from "../store";
-import { AdvancedSection, EffortPicker, type LaunchModels, ModelPicker, ModelsFailureMark, useLaunchModels } from "./LaunchSettingsFields";
+import { AdvancedSection } from "./AdvancedSection";
+import { EffortPicker, type LaunchModels, ModelPicker, ModelsFailureMark, useLaunchModels } from "./LaunchSettingsFields";
 
 type LaunchField =
   | (typeof AGENT_CONSOLE_MODEL_FIELD)[Agent]
