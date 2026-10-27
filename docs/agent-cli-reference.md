@@ -754,11 +754,13 @@ name):
 - Codex — items joined by ` | `, the project last: `proj` at startup, `⠧ ⠧ | proj` and `⠙ | proj` while working, `[ ! ]
   Action Required | proj` at an approval, `Explain pseudo terminal | proj` once the thread is named, and an empty title
   at exit. The project item is the working directory's name (whether it is the git repository root's name inside a
-  worktree is unverified). A thread is named in `<CODEX_HOME>/session_index.jsonl`, append-only lines
-  `{"id","thread_name","updated_at"}` with the thread id as `id`, the last line of an id winning, written by `/rename`
-  too. Codex's own naming fails while an MCP server is supplied through `-c` (openai/codex#53087), so an Octoboard
-  session stays unnamed there. What the user typed is in the rollout as an `event_msg` of type `user_message`
-  (`payload.message`) up to 0.142.5, and as one of type `item_completed` whose `item` is a `UserMessage`
+  worktree is unverified), and a name longer than 24 graphemes is cut to its first 21 and an ASCII `...`
+  (`truncate_terminal_title_part` in `codex-rs/tui/src/chatwidget/status_surfaces.rs`), so a console's directory, named
+  by its 36-character id, shows as `f1120ca1-f304-4489-aa...`. A thread is named in `<CODEX_HOME>/session_index.jsonl`,
+  append-only lines `{"id","thread_name","updated_at"}` with the thread id as `id`, the last line of an id winning,
+  written by `/rename` too. Codex's own naming fails while an MCP server is supplied through `-c` (openai/codex#53087),
+  so an Octoboard session stays unnamed there. What the user typed is in the rollout as an `event_msg` of type
+  `user_message` (`payload.message`) up to 0.142.5, and as one of type `item_completed` whose `item` is a `UserMessage`
   (`item.content[].text`) in 0.163.0; its user-role `response_item` messages include the injected environment context
   and `AGENTS.md` instructions.
 - Claude Code — a status glyph, a space and the title: `✳ Claude Code` (a placeholder until the conversation has a
