@@ -11,6 +11,7 @@ import { AskQuestionsAsChoicesSetting } from "./AskQuestionsAsChoicesSetting";
 import { AutoApproveHandoffsSetting } from "./AutoApproveHandoffsSetting";
 import { AutoApproveSessionRequestsSetting } from "./AutoApproveSessionRequestsSetting";
 import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
+import { AutoSwitchOnUsageLimitSetting } from "./AutoSwitchOnUsageLimitSetting";
 import { SidebarOrderSetting } from "./SidebarOrderSetting";
 import { StartQuotaWindowsSetting } from "./StartQuotaWindowsSetting";
 
@@ -42,6 +43,7 @@ const switches = [
   { Setting: AskQuestionsAsChoicesSetting, key: "ask_questions_as_choices", onText: "Octoboard asks sessions to put a question" },
   { Setting: AutoApproveSessionRequestsSetting, key: "auto_approve_session_requests", onText: "without asking you first" },
   { Setting: AutoSelectAccountSetting, key: "auto_select_account", onText: "whose weekly limit resets soonest" },
+  { Setting: AutoSwitchOnUsageLimitSetting, key: "auto_switch_on_usage_limit", onText: "switched to another account with usage left" },
   { Setting: SidebarOrderSetting, key: "sidebar_order_by_status", onText: "move as their status changes" },
   { Setting: StartQuotaWindowsSetting, key: "auto_start_quota_windows", onText: "starts counting once it resets" },
 ];

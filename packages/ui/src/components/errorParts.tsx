@@ -1,7 +1,8 @@
 import React from "react";
 
 import { DaemonRequestError } from "../daemon-client";
-import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure, isUncataloguedFailure, type ErrorPresentation } from "../errorPresentation";
+import { hasCodeParams, hasShellTimeoutDetails, isStructuredFailure, type ErrorPresentation } from "../errorPresentation";
+import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { errorText } from "../errorText";
 import { isolate } from "../i18n/isolate";
 import type { MessageParams } from "../protocol";

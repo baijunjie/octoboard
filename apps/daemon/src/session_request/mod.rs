@@ -740,6 +740,8 @@ async fn wait_for_answer(
     // meanwhile.
     if let Err(err) = state.raise_request_hand(&caller.id) {
         tracing::debug!(session = %caller.id, %err, "raising the session request's hand failed");
+    } else {
+        crate::reporting::spawn_tell_owner_it_waits(state, &caller.id);
     }
     // The request was answerable from `hold` on, so it may have ended before the hand went up, and
     // then nothing else would lower it. Costs nothing while the request still waits.

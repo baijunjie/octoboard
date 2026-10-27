@@ -43,19 +43,24 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   account cannot be used for now, naming the quota it has reached and when it resets, and the dialog cannot be submitted
   until another agent or account is chosen or the account is no longer used up. An account whose sharing of the default
   configuration is being changed, which the daemon refuses a session on meanwhile (see "When a change is carried out" in
-  `docs/product/sharing-the-default-configuration.md`), is listed but cannot be picked while the change runs, keeping its
-  usage bar and its description but with no note under its name, as the change ends on its own; the field passes over
-  it as it passes over a used-up account; and when the chosen account is one all the same, the field says under its
+  `docs/product/sharing-the-default-configuration.md`), is listed but cannot be picked while the change runs, keeping
+  its usage bar and its description but with no note under its name, as the change ends on its own; the field passes
+  over it as it passes over a used-up account; and when the chosen account is one all the same, the field says under its
   pickers that its sharing is being changed, to choose another account or wait, and the dialog cannot be submitted until
-  then. A turned-off account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the
-  field passes over it as it passes over a used-up account. Only when the account the field ends on is turned off all the same — every
+  then. An account that is not logged in (see "An account that is not logged in" in `docs/product/account-quotas.md`) is
+  listed but cannot be picked either, and since that lasts until the user logs in, a short note under its name reads
+  "Not logged in", with the full reason as its description for assistive technology; the field passes over it as it
+  passes over a used-up account, and when the chosen account is one all the same, the field says under its pickers that
+  the account is not logged in, so a session cannot use it, and to choose another account or log in to it. A turned-off
+  account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the field passes over it
+  as it passes over a used-up account. Only when the account the field ends on is turned off all the same — every
   account of the agent is unavailable, the account was turned off while the dialog is open, or the **Resume
   conversation** tab settles on it — is it listed, and then it cannot be picked: its usage bar stays and a short note
   under its name reads "Disabled", with the full reason as its description for assistive technology; the field says
   under its pickers that the account is turned off, to choose another account or turn it back on in Settings, and the
   dialog cannot be submitted until then. An account that is turned off is described as turned off, whatever its quota or
-  its sharing. An account whose last change of sharing is incomplete can be picked, and submitting on it asks the user
-  first (see "Starting a session on an account whose last change is incomplete" in
+  its sharing, or whether it is logged in. An account whose last change of sharing is incomplete can be picked, and
+  submitting on it asks the user first (see "Starting a session on an account whose last change is incomplete" in
   `docs/product/sharing-the-default-configuration.md`). Switching agents retains each agent's account choice separately.
   If a remembered account is removed while the dialog is open, that agent stays selected and its account falls back to
   the account the field would open on for that agent (see "Which account a session uses" below); with its last named
@@ -190,6 +195,20 @@ request is refused that way before the user is asked, and again on approval shou
 then (see `docs/product/session-requests.md`). Only a session being opened is checked: a session already on the account
 keeps running, and resuming, reopening or restarting it is never refused for this.
 
+**The daemon refuses to open a session on an account that is not logged in** (see "An account that is not logged in"
+in `docs/product/account-quotas.md`). Whatever opens it — the same openings as for a used-up account below — a new
+session whose account, once resolved, is found not logged in by the reading the daemon holds at that moment is refused
+with `account_not_signed_in`, and nothing is recorded; the user's own request is refused too. It is checked after the
+quota. The refusal carries `agent` and `account` (the account's name). In the window it is shown in an error alert, in
+the UI's language, saying the account is not logged in, so a session cannot be opened on it; the next step is to
+choose another account, or to log in to this one, and the alert has a **Manage accounts…** button (see "Recovery and
+unexpected errors" in `docs/product/error-alerts.md`). An agent's tool call is refused with a reason in English naming
+the account and the agent and saying to choose another account or log in to it in Settings → Agent accounts. A session
+request is refused that way before the user is asked, and again on approval should the account be found not logged in
+by then; an owner's handoff the user is asked to approve is refused for it only on approval, as for a used-up account.
+Only a session being opened is checked: a session already on the account keeps running, and resuming, reopening or
+restarting it is never refused for this.
+
 **The daemon refuses to open a session on a used-up account.** Whatever opens it — the dialog, a session opened with
 defaults, `open_session`, a console or project session's `new_session` (with `resume_agent_session_id` too), a handoff's
 receiving session, or an approved session request — a new session whose account, once resolved (see "Which account a
@@ -215,6 +234,9 @@ asked to approve is refused for it only on approval, since its form lets the use
 user's approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). Only a session being opened is
 checked: a session already on the account keeps running, and resuming, reopening or restarting it is never refused for
 this.
+
+**Nothing is opened while the daemon shuts down.** Once it has begun to, every opening above, and every resume, is
+refused with `daemon_shutting_down` (see "Quitting" in `docs/product/application-lifecycle.md`).
 
 With every agent determined unavailable, a console session's `new_session` tool is refused as well, with a reason it can
 report that says the same (see "The console session's tools" in `docs/product/hub-orchestration.md`). Nothing is refused
@@ -267,25 +289,28 @@ still opened but not selected.
 When no agent is both added and installed, no **+** shows its quick form, and every one of them is disabled (see "When
 no agent can open a session" above).
 
-When the account the dialog would open on is used up, turned off, or having its sharing of the default configuration
-changed, the session opened with defaults takes another account of the same agent, as the dialog does (see **Agent**
-above). When no account of the agent is left that is none of these, and the one it would open on is turned off, nothing
-is sent and an error alert says the account is turned off, as the daemon's `account_disabled` refusal does (see "When
-the agent or the account cannot open a session" above); when the one it would open on is having its sharing changed
-instead, nothing is sent and an error alert says the account's sharing is being changed, as the daemon's
+When the account the dialog would open on is used up, not logged in, turned off, or having its sharing of the default
+configuration changed, the session opened with defaults takes another account of the same agent, as the dialog does (see
+**Agent** above). When no account of the agent is left that is none of these, and the one it would open on is turned
+off, nothing is sent and an error alert says the account is turned off, as the daemon's `account_disabled` refusal does
+(see "When the agent or the account cannot open a session" above); when the one it would open on is not logged in,
+nothing is sent and an error alert says so, as the daemon's `account_not_signed_in` refusal does; when it is having its
+sharing changed instead, nothing is sent and an error alert says the account's sharing is being changed, as the daemon's
 `account_sharing_in_progress` refusal does. When the account it opens on has an incomplete last change of sharing, the
 user is asked first, and cancelling opens nothing (see "Starting a session on an account whose last change is
 incomplete" in `docs/product/sharing-the-default-configuration.md`). When no account of that agent can open a session,
-each being used up or turned off, there is nothing to open with defaults:
+each being used up, not logged in or turned off, there is nothing to open with defaults:
 
 - the **+** in its quick form looks disabled but stays focusable and under the pointer; its accessible name stays its
   action, while its tooltip, and its description for assistive technology, say in short that the default agent's
   accounts are unavailable, without naming the agent;
 - pressing it — or pressing a **+** with the modifier before the hold was noticed — opens nothing and shows an error
-  alert: when the account it would open on is turned off, the alert for a turned-off account above; otherwise one that
+  alert: when the account it would open on is turned off, the alert for a turned-off account above; when it is not
+  logged in, the alert for an account that is not logged in above; otherwise one that
   names the button's action and says it is unavailable because none of the default agent's accounts can open a session
-  right now, each having reached its usage limit or being turned off, with the advice to choose another agent in the new
-  session dialog, or to try again once a usage limit resets or an account is turned back on;
+  right now, each having reached its usage limit, not being logged in or being disabled, with the advice to choose
+  another agent in the new session dialog, or to try again once a usage limit resets, or once an account is logged in
+  to or turned back on;
 - in the **+** menu of projects in a console session's focus mode, held in its quick form, each such project is
   disabled, with a short note under its name saying the default agent's accounts are unavailable; it stays reachable
   with the arrow keys, and its accessible name ends with that note.
@@ -364,12 +389,12 @@ Who makes the pick:
 
 When the switch is on but no account ranks, the account is the one it would be while the switch is off. The new-session
 dialog, the handoff dialog and a session opened with defaults open on the account the project or console resolves to,
-then another account of that agent when that one is used up or turned off. For `new_session` and `request_session` the
-fallback is in "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`: in the
-caller's own console, the caller's own account only when the session is of the caller's own agent and that account can
-still open a session, otherwise the project's for the agent, else the console's; in another console, the project's, else
-the console's, and never the caller's. `handoff_session` falls back as `new_session` does in the caller's own console, a
-session the caller owns always being in it.
+then another account of that agent when that one is used up, not logged in or turned off. For `new_session` and
+`request_session` the fallback is in "The agent and account of a session a session starts" in
+`docs/product/hub-orchestration.md`: in the caller's own console, the caller's own account only when the session is of
+the caller's own agent and that account can still open a session, otherwise the project's for the agent, else the
+console's; in another console, the project's, else the console's, and never the caller's. `handoff_session` falls back
+as `new_session` does in the caller's own console, a session the caller owns always being in it.
 
 The dialog and the daemon rank the same way:
 
@@ -377,7 +402,9 @@ The dialog and the daemon rank the same way:
   (see "A used-up account" in `docs/product/account-quotas.md`): a five-hour, account-wide weekly, or credit-pool window
   at 100% or more, whose reset is still ahead or absent, drops the whole account. A model-specific weekly limit never
   does that, and it does not drive this pick either. Nor is an account a candidate while it is turned off (see "Turning
-  an account off" in `docs/product/agent-accounts.md`), whatever its quota.
+  an account off" in `docs/product/agent-accounts.md`), whatever its quota, while it is not logged in (see "An account
+  that is not logged in" in `docs/product/account-quotas.md`), or while a change of its sharing of the default
+  configuration runs.
 - The default account is a candidate ahead of that agent's stored accounts, in the order they are kept.
 - The window that ranks is an account-wide weekly window, or a credit pool whose period is about a week (6 to 8 days,
   the ends included), the window "Quota windows" in `docs/product/account-quotas.md` calls **Weekly**. A five-hour

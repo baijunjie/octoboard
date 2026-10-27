@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useState } from "react";
 
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import type { TerminalFileViewer as TerminalFileViewerType } from "./TerminalFileViewer";

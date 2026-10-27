@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { expect, it } from "vitest";
 
-import { errorPresentation, hasCodeParams, isStructuredFailure, noticeErrorPresentation, noticeKind } from "./errorPresentation";
+import { errorPresentation, hasCodeParams, isStructuredFailure, noticeErrorPresentation, noticeKind, unwordedReason } from "./errorPresentation";
 
 const timeout = { shell: "/bin/zsh", command: "env -0", timeout: "10s" };
 
@@ -50,4 +50,10 @@ it.each([
   ["a failure missing the params its message shows", "path_not_found", {}, false],
 ])("tells whether %s is worded in a structured way", (_case, code, params, structured) => {
   expect(isStructuredFailure({ code, params })).toBe(structured);
+});
+
+it("shows a failed automatic switch as an error alert, with its uncatalogued reason set apart", () => {
+  expect(noticeKind("account_switch_automatically_failed", {})).toBe("error");
+  expect(unwordedReason("account_switch_automatically_failed", { reason_code: "future_code", reason: "raw" })).toBe("raw");
+  expect(unwordedReason("account_switch_automatically_failed", { reason_code: "binary_not_found", binary: "x" })).toBeUndefined();
 });

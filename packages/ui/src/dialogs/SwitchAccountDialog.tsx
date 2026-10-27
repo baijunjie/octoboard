@@ -1,7 +1,7 @@
 import { Description, Label, Radio, RadioGroup } from "@heroui/react";
 import React, { useState } from "react";
 
-import { accountDisabled } from "../accountChoices";
+import { accountDisabled, quotaSignedOut } from "../accountChoices";
 import { canSwitchTo } from "../accountSwitchBatch";
 import { AGENT_LABEL } from "../agents";
 import { InlineReference } from "../components/InlineReference";
@@ -45,12 +45,13 @@ export function SwitchAccountDialog({
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const now = useNow();
-  // The account being switched to may have been turned off, or have no quota left, since the dialog opened: the
+  // The account being switched to may have been turned off, found not logged in, or have no quota left, since the dialog opened: the
   // daemon would refuse the switch either way, so Confirm says why in the error alert dialog and leaves the dialog
   // open.
   const disabled = accountDisabled(accounts, disabledDefaults, session.agent, account);
   const quota = accountQuotaOf(quotas, session.agent, account);
   const exhaustedBy = exhaustedQuotaWindow(quota, now);
+  const signedOut = quotaSignedOut(quota);
   const [scope, setScope] = useState<Scope>("session");
   // A session an account switch already holds is left out: it is on its way, and cannot be claimed twice.
   const eligible = (candidate: Session) => candidate.console_id === session.console_id
@@ -78,12 +79,19 @@ export function SwitchAccountDialog({
       onConfirm={() => {
         const refusal = disabled
           ? {
-            message: t("accountChoice.disabled.description", { name: isolate(accountName) }),
-            content: <Message id="accountChoice.disabled.description" params={{ name: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
+            message: t("accountChoice.disabled.refusal", { name: isolate(accountName) }),
+            content: <Message id="accountChoice.disabled.refusal" params={{ name: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
+            recovery: "accountDisabled" as const,
           }
-          : quota && exhaustedBy && { message: quotaUsedUpSentence(t, quota, accountName, exhaustedBy, now), content: quotaUsedUpMessage(t, quota, accountName, exhaustedBy, now) };
+          : signedOut
+            ? {
+              message: t("accountChoice.signedOut.refusal", { name: isolate(accountName) }),
+              content: <Message id="accountChoice.signedOut.refusal" params={{ name: <InlineReference dir="auto" wrap>{accountName}</InlineReference> }} />,
+              recovery: "accountNotSignedIn" as const,
+            }
+            : quota && exhaustedBy && { message: quotaUsedUpSentence(t, quota, accountName, exhaustedBy, now), content: quotaUsedUpMessage(t, quota, accountName, exhaustedBy, now), recovery: "none" as const };
         if (refusal) {
-          errorAlerts.report({ ...refusal, title: <Message id="dialog.switchAccount.failedTitle" />, recovery: "none", details: null });
+          errorAlerts.report({ ...refusal, title: <Message id="dialog.switchAccount.failedTitle" />, details: null });
           return Promise.resolve();
         }
         return confirmLaunch(account, () => {

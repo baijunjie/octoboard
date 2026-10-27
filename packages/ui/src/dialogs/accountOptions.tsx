@@ -1,17 +1,20 @@
-import { accountDisabledPickable, accountDisabledUnavailable, type ChoiceEntry } from "../accountChoices";
+import { accountDisabledPickable, accountDisabledUnavailable, accountSignedOutUnavailable, type ChoiceEntry } from "../accountChoices";
 import type { Translate } from "../i18n/catalog";
 import { accountUsage } from "../quota/accountUsage";
 import type { Option } from "./OptionSelect";
 
-/** An account's entry in a picker: its name behind a compact usage bar. One whose quota is used up, or whose
- * sharing change runs, is shown but cannot be chosen; the first says why in short under its name (see `accountUsage`). */
+/** An account's entry in a picker: its name behind a compact usage bar. One that is turned off, is not logged in,
+ * has its quota used up, or has a sharing change running is shown but cannot be chosen. The first two say why in short
+ * under its name and in full as its description (`accountDisabledUnavailable`, `accountSignedOutUnavailable`), in place
+ * of what remains of its quota; a used-up one says so through its usage (see `accountUsage`); a sharing change, which
+ * ends on its own, says nothing. */
 export function accountOption(t: Translate, entry: ChoiceEntry, now: number, isDisabled: boolean): Option<string> {
   const usage = accountUsage(t, entry.agent, entry.quota, entry.exhaustedBy, now);
   return {
     value: entry.key,
     label: entry.name,
-    ...(entry.disabled ? { icon: usage.icon, ...accountDisabledUnavailable(t) } : usage),
-    isDisabled: isDisabled || entry.exhaustedBy !== undefined || entry.changingSharing || entry.disabled,
+    ...(entry.disabled ? { icon: usage.icon, ...accountDisabledUnavailable(t) } : entry.signedOut ? { icon: usage.icon, ...accountSignedOutUnavailable(t) } : usage),
+    isDisabled: isDisabled || entry.exhaustedBy !== undefined || entry.changingSharing || entry.signedOut || entry.disabled,
   };
 }
 

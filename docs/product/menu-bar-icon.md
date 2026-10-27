@@ -107,8 +107,7 @@ From top to bottom:
    names never translated — each opening to that agent's accounts and showing what Settings and the rail's panel
    show, including window order (see "Quota windows" and "How an account's quota is shown" in
    `docs/product/account-quotas.md`). An account that is turned off (see "Turning an account off" in
-   `docs/product/agent-accounts.md`) is not listed, and the menu follows the switch as it flips; the submenu's own
-   bars still show the current console's account, as the icon does, even while that account is turned off. An agent
+   `docs/product/agent-accounts.md`) is not listed, and the menu follows the switch as it flips. An agent
    that is not added, not available, whose availability is not yet determined, or whose accounts are all turned off
    has none. The submenus are set off from the sessions and from Open Octoboard by separators. Inside a submenu,
    nothing can be chosen:
@@ -159,11 +158,12 @@ From top to bottom:
    Each submenu's opening line can show **remaining-quota bars** at its right, before the submenu arrow.
    It uses that agent's account configured for the **current console**, independently of the selected session that
    supplies the menu bar icon's capsule. A missing, deleted or wrong-agent account reference falls back to the
-   agent's default account. With no current console there are no opener bars. When the account has both a five-hour
-   and an account-wide weekly window, the five-hour bar has a thinner weekly bar beneath it: **4 pt** over **3 pt**,
-   **2 pt** apart, within a picture **56 × 9 pt**. Otherwise there is one **4 pt** bar, vertically centred in that
-   picture, with window priority five-hour, then account-wide weekly, then the credit pool; model-specific weekly limits
-   are excluded.
+   agent's default account. With no current console there are no opener bars, and neither are there while that
+   account is turned off (see "Turning an account off" in `docs/product/agent-accounts.md`). When the account has both
+   a five-hour and an account-wide weekly window, the five-hour bar has a thinner weekly bar beneath it: **4 pt** over
+   **3 pt**, **2 pt** apart, within a picture **56 × 9 pt**. Otherwise there is one **4 pt** bar, vertically centred in
+   that picture, with window priority five-hour, then account-wide weekly, then the credit pool; model-specific weekly
+   limits are excluded.
    An unread account, a reading without an eligible window or a failed latest reading has no opener bars,
    including when the submenu retains stale windows. Switching consoles or editing their account choices updates
    the bars. The bars are placed for a menu at most **640 pt** wide: a menu whose lines ask for more is laid out as

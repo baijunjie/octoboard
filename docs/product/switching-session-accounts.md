@@ -5,10 +5,13 @@ in `docs/product/sidebar-session-rows.md`); a console session is switched from i
 agent's accounts. The submenu is offered only when the agent has another account that is turned on, and the user is
 asked to confirm. An owner moves a session of its own with the `switch_session_account` tool, once the user approves it
 unless they have chosen to have switches approved without asking (see "Switching from an owner's tool" below). Both run
-the same switch, described from "What a switch does" on. A switch is made only when the user or an owner asks for one:
-Octoboard never switches a session on its own, not even off an account whose quota is used up. A session cannot be
-switched onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`), nor onto a turned-off one
-(see "Turning an account off" in `docs/product/agent-accounts.md`).
+the same switch, described from "What a switch does" on. Octoboard makes that switch by itself in one case only: while
+the user has **Automatically switch accounts at the usage limit** on, a session whose turn stops on its account's usage
+limit is switched to another account (see `docs/product/automatic-account-switch.md`); otherwise a switch is made only
+when the user or an owner asks for one, and never because an account reads as used up. A session cannot be switched
+onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`), onto one that is not logged in
+(see "An account that is not logged in" there), nor onto a turned-off one (see "Turning an account off" in
+`docs/product/agent-accounts.md`).
 
 ## Confirming a switch
 
@@ -25,13 +28,16 @@ account and sessions already being switched (see "While a session is switching" 
 how many sessions it would switch, kept up to date while the confirmation is open, and Confirm is disabled while the
 chosen option has none. Neither choice changes the console's or projects' account defaults for future sessions.
 
-The submenu disables a used-up account and leaves out a turned-off one (see "Session rows" in
-`docs/product/sidebar-session-rows.md`), so the target account can only become unusable after the confirmation has
-opened. Confirm stays available all the same, and pressing it then switches nothing: an error alert titled that the
-account could not be switched opens over the confirmation, which stays open. It says that the account is turned off,
-so a session cannot use it, and to choose another account or turn it back on in Settings; or, for a used-up account
-(see "A used-up account" in `docs/product/account-quotas.md`), that the account cannot be used for now, naming the
-quota it has reached and when it resets. It is a known refusal, with no request to report an issue.
+The submenu disables a used-up account and one that is not logged in, and leaves out a turned-off one (see "Session
+rows" in `docs/product/sidebar-session-rows.md`), so the target account can only become unusable after the
+confirmation has opened. Confirm stays available all the same, and pressing it then switches nothing: an error alert
+titled that the account could not be switched opens over the confirmation, which stays open. For a turned-off account
+it says that the account is disabled, so a session cannot use it, and to choose another account or turn it back on;
+for one found not logged in, that the account is not logged in, so a session cannot use it, and to choose another
+account or log in to it; either has a **Manage accounts…** button (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`). For a used-up account (see "A used-up account" in `docs/product/account-quotas.md`) it
+says that the account cannot be used for now, naming the quota it has reached and when it resets, and is a plain alert.
+Each is a known refusal, with no request to report an issue.
 
 When the target account's last change of sharing is incomplete, Confirm first asks the user whether to start on it,
 and nothing is switched when that is cancelled (see "Starting a session on an account whose last change is incomplete"
@@ -149,8 +155,8 @@ changed:
 
 - a session that stopped being the caller's after the call was checked and before the switch took hold of it, handed
   to another owner meanwhile;
-- everything a switch refuses (see "When a switch fails" below), such as a target account whose quota is used up,
-  which is not refused before the user is asked since the user can choose another account.
+- everything a switch refuses (see "When a switch fails" below), such as a target account whose quota is used up or
+  that is not logged in, which is not refused before the user is asked since the user can choose another account.
 
 What fails after that is answered as in "When a switch fails" below, as a tool error.
 
@@ -173,12 +179,13 @@ stopped on a usage limit included, nor the exceptions (see "Continuing after a s
 
 - **Switch to** — the accounts of the session's own agent, by the rules of the row's Switch account submenu (see
   "Session rows" in `docs/product/sidebar-session-rows.md`): the default account first, the account the session is on
-  marked as current and not offered, an account whose quota is used up listed with its usage but not offered, an
-  account the user turned off left out, unless it is the one chosen, when it is listed with its reason and not offered
-  (the call is refused before the dialog when the account it asks for is turned off then, so this is an account turned
-  off while the dialog is open), and an account whose sharing change runs — or every other account while the session's
-  own account's sharing changes or a switch holds the session — listed with its usage, with no reason under its name,
-  and not offered. It starts on the account the call asked for.
+  marked as current and not offered, an account whose quota is used up listed with its usage but not offered, an account
+  that is not logged in listed with "Not logged in" under its name and not offered, an account the user turned off left
+  out, unless it is the one chosen, when it is listed with its reason and not offered (the call is refused before the
+  dialog when the account it asks for is turned off then, so this is an account turned off while the dialog is open),
+  and an account whose sharing change runs — or every other account while the session's own account's sharing changes or
+  a switch holds the session — listed with its usage, with no reason under its name, and not offered; a used-up account
+  or one not logged in keeps its reason over these brief holds. It starts on the account the call asked for.
 - The collapsed **Advanced** section — the session's model and reasoning effort, starting on what the session would be
   launched with (see "The Advanced section" in `docs/product/model-and-reasoning-effort.md`), the models listed being
   those of the account chosen. Its note says that a value the user changes stays the session's own from then on. Only
@@ -192,6 +199,8 @@ wrong with the account chosen is said under the **Switch to** picker, which is m
 - the account chosen is the one the session is on already;
 - the account chosen is turned off — that the account is turned off, so a session cannot use it, and to choose
   another account or turn it back on in Settings;
+- the account chosen is not logged in — that the account is not logged in, so a session cannot use it, and to choose
+  another account or log in to it;
 - the account chosen is used up — that the account cannot be used for now, naming the quota it has reached and when
   it resets;
 - the account chosen has a sharing change running.
@@ -322,8 +331,9 @@ without repeating work already complete — **only where the switch itself ended
 
 It is not sent when the user had cancelled the turn, when the turn had finished, when the session's process had already
 ended before the switch (whatever its turn looked like), or when the session had no conversation. This holds for every
-switch, from the user's **Switch account** submenu (each session of a confirmed set decided on its own) or from an
-owner's `switch_session_account`.
+switch, from the user's **Switch account** submenu (each session of a confirmed set decided on its own), from an
+owner's `switch_session_account` or Octoboard's own at the usage limit (see "When the switch succeeds" in
+`docs/product/automatic-account-switch.md`).
 
 **The decision is read from the agent's own record of the conversation**, in the account the session came from, once
 its process has gone; the agents' hooks do not tell a cancel apart. Anything the rules below do not recognise, and a
@@ -355,23 +365,26 @@ moment, when it is archived, when it is on that account already, when the target
 (`account_disabled`, carrying what "When the agent or the account cannot open a session" in
 `docs/product/opening-sessions.md` describes for it), when the target account is used up by the reading the daemon holds
 at that moment (`account_quota_exhausted`, carrying what "When the agent or the account cannot open a session" in
-`docs/product/opening-sessions.md` describes for it), when the target is a Grok Build directory that is not an
-initialized Grok home, when the user's shell environment could not be captured — which is read whenever either side of
-the switch is the default account, since that is what resolves its directory, and for any Codex switch, since that
-environment says where the target keeps its database (see "The launch environment" in
-`docs/product/launching-agents.md`) — when the conversation record is not where it should be, and while a change of the
-sharing of the default configuration runs for the session's account or for the target (`account_sharing_in_progress`;
-see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`); the session's process is
-then left running. The one further refusal comes after the process has been asked to end: a process that has not gone
-within 30 seconds stops the switch, with nothing copied and nothing recorded, and that process may still be running.
-Once the process has been ended, a change of the target's sharing that started meanwhile, a copy that does not complete
-(a Codex account's database that cannot be updated included), a relaunch the launch rules refuse and a relaunch whose
-process ends at once are each reported as a failed switch, not as a success: the session is left *interrupted* on its
-old account, resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that
+`docs/product/opening-sessions.md` describes for it), when the reading the daemon holds found the target account not
+logged in (`account_not_signed_in`, likewise), when the target is a Grok Build directory that is not an initialized Grok
+home, when the user's shell environment could not be captured — which is read whenever either side of the switch is the
+default account, since that is what resolves its directory, and for any Codex switch, since that environment says where
+the target keeps its database (see "The launch environment" in `docs/product/launching-agents.md`) — when the
+conversation record is not where it should be, and while a change of the sharing of the default configuration runs for
+the session's account or for the target (`account_sharing_in_progress`; see "When a change is carried out" in
+`docs/product/sharing-the-default-configuration.md`), and once the daemon has begun to shut down
+(`daemon_shutting_down`; see "Quitting" in `docs/product/application-lifecycle.md`); the session's process is then left
+running. The one further refusal comes after the process has been asked to end: a process that has not gone within 30
+seconds stops the switch, with nothing copied and nothing recorded, and that process may still be running. Once the
+process has been ended, a change of the target's sharing that started meanwhile, a copy that does not complete (a Codex
+account's database that cannot be updated included), a relaunch the launch rules refuse and a relaunch whose process
+ends at once are each reported as a failed switch, not as a success: the session is left *interrupted* on its old
+account, resumable as before, and already reads so everywhere by the time the failure is shown. Octoboard tells that
 last case from a success by the process ending within a few seconds of the relaunch, never by reading what the agent
-printed. An account that is not signed in is therefore not a failed switch: every agent, Grok Build included, comes up
-on its own sign-in rather than exiting, so the switch succeeds and the session's terminal shows that agent's sign-in,
-which may start its sign-in flow.
+printed. An account that is not signed in but has no reading saying so — not read yet, or its last reading failed for
+another reason — is therefore not a failed switch: every agent, Grok Build included, comes up on its own sign-in rather
+than exiting, so the switch succeeds and the session's terminal shows that agent's sign-in, which may start its sign-in
+flow.
 
 **A conversation that could not be moved says why**, as one of these causes, each of which the window answers with
 a remedy for it (see "The alert for failed switches" above):

@@ -9,7 +9,7 @@ import { useQuickCreateModifier } from "../useQuickCreateModifier";
  * form: the modifier is held and there is an agent to create with. `blocked` is whether there is no
  * agent that is added and installed, in which case the control is disabled: the session dialog is
  * not opened without one to offer. `unavailable` is whether none of the agent's accounts can open a
- * session (each is used up or turned off) where `target` (what the control would open, if it is
+ * session (each is used up, not logged in or turned off) where `target` (what the control would open, if it is
  * there) would create: its quick form has nothing to run on and is unavailable, while the dialog
  * still opens. The time the quotas are judged at is read as the store is, not ticked: the modifier
  * is held only for a moment.

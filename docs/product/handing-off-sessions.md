@@ -12,7 +12,9 @@ session's **Hand off** menu item (see "Handing off from the window" below). An o
 with the `handoff_session` tool, once the user approves it unless they have chosen to have handoffs approved without
 asking (see "Handing off from an owner's tool" below). All of them run the same handoff,
 described in the rest of this document. A handoff is made only when the user or an owner asks for one: Octoboard never
-hands a session off on its own, not even off an account whose quota is used up.
+hands a session off on its own, not even off an account whose quota is used up. What it can do on its own, where the
+user has turned it on, is switch a session to another account of the same agent (see
+`docs/product/automatic-account-switch.md`).
 
 ## What can be handed off
 
@@ -31,13 +33,15 @@ be handed off, and the work it left running in the background ends with its proc
 - the receiving agent is not available (`agent_not_available`), is not added (`agent_not_added`; see "When the agent or
   the account cannot open a session" in `docs/product/opening-sessions.md` for when that applies), the account named is
   not one of that agent's (`unknown_account`), the receiving session's account, once resolved, is turned off
-  (`account_disabled`) or used up (`account_quota_exhausted`; see "When the agent or the account cannot open a session"
-  in `docs/product/opening-sessions.md` for both), or the model or reasoning effort is not one the agent offers
-  (`invalid_launch_setting`);
+  (`account_disabled`), used up (`account_quota_exhausted`) or not logged in (`account_not_signed_in`; see "When the
+  agent or the account cannot open a session" in `docs/product/opening-sessions.md` for all three), or the model or
+  reasoning effort is not one the agent offers (`invalid_launch_setting`);
 - a change of the sharing of the default configuration runs for the session's account or for the receiving session's
   (`account_sharing_in_progress`; see "When a change is carried out" in
   `docs/product/sharing-the-default-configuration.md`);
-- for a session bound to an owner, opening a session bound to that owner would be refused.
+- for a session bound to an owner, opening a session bound to that owner would be refused;
+- the daemon has begun to shut down (`daemon_shutting_down`; see "Quitting" in
+  `docs/product/application-lifecycle.md`).
 
 The model and reasoning effort follow the rules for opening a session (see "Which model and reasoning effort a session
 uses" in `docs/product/opening-sessions.md`): left out, they come from the project or console as for any new session of
@@ -101,7 +105,8 @@ Then come the fields:
   the session dialog's field: listed with a usage bar but not pickable, passed over when the field opens, and, when the
   chosen account is used up all the same, the field says why under it, marked invalid, and **Hand off** cannot be
   pressed. An account whose sharing of the default configuration is being changed is treated the same way while the
-  change runs, and a turned-off account is left out unless the field ends on it, as in the session dialog.
+  change runs, and so is an account that is not logged in; a turned-off account is left out unless the field ends on
+  it, as in the session dialog.
 - The collapsed **Advanced** section — the receiving session's model and reasoning effort, showing what a new session of
   the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
   `docs/product/model-and-reasoning-effort.md`). Only values the user changed are sent with the request; the rest are
@@ -165,15 +170,16 @@ Refused before the user is asked, with the reason in prose (as a tool error) and
   session's own;
 - what opening the receiving session would refuse (see "What can be handed off" above) — an agent that is not available
   or not added, a model or reasoning effort the agent does not offer, a change of sharing running for the receiving
-  account, for a bound session an owner that could not take it — except an account whose quota is used up, which the
-  user can replace in the form.
+  account, for a bound session an owner that could not take it — except an account whose quota is used up or that is
+  not logged in, which the user can replace in the form.
 
 Refused when the handoff is made — on approval, or at once when the handoff is made without asking — with nothing
 changed:
 
 - a session that stopped being the caller's after the call was checked and before the handoff took hold of it, handed
   to another owner meanwhile;
-- everything a handoff refuses (see "What can be handed off" above), an account whose quota is used up included.
+- everything a handoff refuses (see "What can be handed off" above), an account whose quota is used up or that is
+  not logged in included.
 
 What fails after that is answered as in "When a handoff fails" below.
 
@@ -196,7 +202,8 @@ the title nor the note it passed. A form follows:
 - **Hand off to** — the agent picker joined to an account picker of the handoff dialog (see "Handing off from the
   window" above), the session's own agent never offered, starting on the agent and the account the call asked for.
   Another agent the user switches to, without picking one of its accounts, opens on the account the handoff dialog
-  would open on. An account whose quota is used up, or whose sharing change runs, is treated as there: the field says
+  would open on. An account whose quota is used up, that is not logged in, or whose sharing change runs, is treated as
+  there: the field says
   why under it, marked invalid, and Confirm cannot be pressed. So is an account turned off while the request waits
   (a call naming one is refused before the user is asked): the field says that it is turned off, and Confirm cannot be
   pressed.

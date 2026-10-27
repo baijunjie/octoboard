@@ -39,7 +39,7 @@ function DisableAccountRow({ agent, account, name }: { agent: Agent; account: st
   const t = useT();
   const disabled = useDaemonStore((s) => accountDisabled(s.settings.accounts, s.settings.disabled_default_accounts, agent, account));
   return (
-    <SettingRow label={t("settings.accounts.disableAccount")} description={t(disabled ? "settings.accounts.disableDescriptionOn" : "settings.accounts.disableDescriptionOff")}>
+    <SettingRow label={t("settings.accounts.disableAccount")} description={t(disabled ? "settings.accounts.disableHiddenDescriptionOn" : "settings.accounts.disableHiddenDescriptionOff")}>
       <AccountDisableSwitch agent={agent} account={account} name={name} label="settings.accounts.disableAccountLabel" />
     </SettingRow>
   );

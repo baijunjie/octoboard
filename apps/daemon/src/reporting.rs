@@ -23,7 +23,7 @@ use crate::branch_origin::cleanup;
 use crate::outbox::Drain;
 use crate::protocol::{error_code, CodedError, Session, SessionStatus};
 use crate::state::{AppState, TurnClose};
-use crate::{coordinator, hooks, term};
+use crate::{coordinator, hooks, mcp, sharing, term};
 
 /// How every notice Octoboard writes into a session begins, worded after it at several places. A
 /// macro so that a constant can be built on it with `concat!`.
@@ -385,6 +385,11 @@ pub fn close_turn_and_report(
     turn: hooks::TurnEnd,
 ) -> TurnClose {
     let close = state.close_turn(session_id, turn.backstop);
+    // The turn stopped on an error, which may be the plan's usage limit; whether it was, and
+    // whether to do anything about it, is the switch's to judge.
+    if turn.failed && matches!(close, TurnClose::OwesReport | TurnClose::Reported) {
+        crate::auto_switch::after_failed_turn(state, session_id);
+    }
     if close == TurnClose::OwesReport {
         let state = state.clone();
         let session_id = session_id.to_string();
@@ -438,6 +443,101 @@ fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnE
     };
     if let Err(err) = deliver_report(state, session_id, report) {
         tracing::debug!(session = %session_id, %err, "delivering a synthesised report failed");
+    }
+}
+
+/// Tells the owner of `session` that its process ended without anyone asking it to, so that the
+/// work it was doing is not waited for. Nothing is written when it has no owner or the owner has
+/// no process to be told in.
+///
+/// **Blocks** on writing into the owner.
+pub fn tell_owner_it_ended(state: &Arc<AppState>, session: &Session) {
+    tell_owner(state, session, |owner| {
+        format!(
+            "{NOTICE_PREFIX}: {session} ended on its own: its process exited although nobody had \
+             archived it, interrupted it or moved it to another account, whether it crashed or the \
+             user closed it in its terminal. It is recorded as interrupted, and the work it was \
+             doing stopped with it. Look at it with `{get_session}`, and relaunch it with \
+             `{reopen_session}` if the work should go on.",
+            session = sharing::named_session(session),
+            get_session = mcp::qualified_tool_name(owner.agent, "get_session"),
+            reopen_session = mcp::qualified_tool_name(owner.agent, "reopen_session"),
+        )
+    });
+}
+
+/// [`tell_owner_it_waits`] on a blocking thread, for a caller on the runtime that has just seen
+/// the session wait for the user by a route other than a hook: a prompt on its terminal, a
+/// dialog of its agent, or a request of its own.
+pub fn spawn_tell_owner_it_waits(state: &Arc<AppState>, id: &str) {
+    let (state, id) = (state.clone(), id.to_string());
+    tokio::task::spawn_blocking(move || tell_owner_it_waits(&state, &id));
+}
+
+/// Tells the owner of `session` that Octoboard's own switch of it to another account failed after
+/// its process was ended, and that bringing it back up on the account it had failed too, so that it
+/// is interrupted and the work it was doing stopped. Nothing is written when it has no owner or the
+/// owner has no process to be told in.
+///
+/// **Blocks** on writing into the owner.
+pub fn tell_owner_the_switch_failed(state: &Arc<AppState>, session: &Session, reason: &str) {
+    tell_owner(state, session, |owner| {
+        format!(
+            "{NOTICE_PREFIX}: {session} reached the usage limit of its account, and Octoboard \
+             could neither switch it to another account nor bring it back up on the one it had \
+             ({reason}). It is interrupted, and the work it was doing stopped with it. Look at it \
+             with `{get_session}`, and relaunch it with `{reopen_session}` if the work should go \
+             on.",
+            session = sharing::named_session(session),
+            get_session = mcp::qualified_tool_name(owner.agent, "get_session"),
+            reopen_session = mcp::qualified_tool_name(owner.agent, "reopen_session"),
+        )
+    });
+}
+
+/// Tells the owner of the session `id` that it waits for the user, which no report says: the
+/// fallback report at the end of a turn is held back while the session waits, and a report it sent
+/// earlier in the turn does not say it then stopped for a person. Once a turn (see
+/// [`AppState::claim_waiting_notice`]). Nothing when the session is not shown as waiting by now,
+/// by whatever route.
+///
+/// **Blocks** on writing into the owner.
+pub fn tell_owner_it_waits(state: &Arc<AppState>, id: &str) {
+    let session = match state.store.get_session(id) {
+        Ok(Some(session))
+            if session.bound_to.is_some()
+                && state.shown_status(&session) == SessionStatus::WaitingUser =>
+        {
+            session
+        }
+        _ => return,
+    };
+    if !state.claim_waiting_notice(id) {
+        return;
+    }
+    tell_owner(state, &session, |_| {
+        format!(
+            "{NOTICE_PREFIX}: {session} is waiting for the user: it is at a permission prompt or \
+             has asked the user something, and only they can clear it. Do not chase it or send it \
+             anything to get it going: a message to it is held until they are done. Carry on with \
+             the rest of your work.",
+            session = sharing::named_session(&session),
+        )
+    });
+}
+
+/// Writes the notice `text` builds, for the owner it is given, into the owner of `session`. A
+/// failure is logged and goes no further: an owner that cannot take it now is not owed it later.
+fn tell_owner(state: &Arc<AppState>, session: &Session, text: impl FnOnce(&Session) -> String) {
+    let Some(owner_id) = &session.bound_to else {
+        return;
+    };
+    let owner = match state.store.get_session(owner_id) {
+        Ok(Some(owner)) => owner,
+        _ => return,
+    };
+    if let Err(err) = write_message(state, &owner.id, &text(&owner), WhenBlocked::Queue) {
+        tracing::debug!(session = %session.id, owner = %owner.id, %err, "telling the owner failed");
     }
 }
 
@@ -1180,6 +1280,342 @@ mod tests {
         };
         assert!(output.contains("Report from session idle-lead"), "{output}");
         assert!(!output.contains("waiting-lead"), "{output}");
+    }
+
+    /// A stand-in process for the session `worker` of `team_state`, registered and watched for its
+    /// exit as a launched one is.
+    fn watched_worker(state: &Arc<AppState>) -> crate::test_support::StandIn {
+        let live = crate::test_support::idle_stand_in("worker");
+        state.register_live(live.clone());
+        state.watch_exit(live.clone());
+        live
+    }
+
+    /// Waits until the exit watcher has recorded the end of the session `id`.
+    async fn recorded_ended(state: &Arc<AppState>, id: &str) {
+        let (state, id) = (state.clone(), id.to_string());
+        let ended = crate::test_support::within(crate::test_support::PATIENCE, move || {
+            state
+                .store
+                .get_session(&id)
+                .unwrap()
+                .is_some_and(|session| session.ended_at.is_some())
+        })
+        .await;
+        assert!(ended, "the exit was recorded");
+    }
+
+    /// What the hub has been written once a marker has reached it, so an absence asserted in it is
+    /// one of a reader that has caught up.
+    async fn hub_heard(state: &Arc<AppState>, hub: &crate::test_support::StandIn) -> String {
+        let (state, hub) = (state.clone(), (**hub).clone());
+        tokio::task::spawn_blocking(move || crate::test_support::heard_after_marker(&state, &hub))
+            .await
+            .unwrap()
+    }
+
+    /// A process that ends by itself, with nobody having archived the session, is told to its
+    /// owner as an end nobody asked for, naming the session and the tools to look at it and
+    /// relaunch it by.
+    #[tokio::test]
+    async fn an_owner_is_told_when_its_session_ends_on_its_own() {
+        let (state, _dir, hub) = team_state(
+            "reporting-unexpected-exit",
+            &[("worker", "hub", false, SessionStatus::Working)],
+        );
+        let worker = watched_worker(&state);
+
+        worker.terminate();
+        recorded_ended(&state, "worker").await;
+
+        let heard = hub_heard(&state, &hub).await;
+        assert!(heard.contains("ended on its own"), "{heard}");
+        assert!(heard.contains("`worker`"), "{heard}");
+        assert!(
+            heard.contains("`mcp__octoboard__reopen_session`"),
+            "{heard}"
+        );
+        assert_eq!(heard.matches("ended on its own").count(), 1, "{heard}");
+        assert_eq!(
+            state.session_record("worker").unwrap().status,
+            SessionStatus::Interrupted
+        );
+    }
+
+    /// An end somebody asked for is not told: an archive, a daemon going down (which has marked
+    /// the session interrupted already) and an operation that stops the process itself, as an
+    /// account switch does. A session that reports to nobody has no one to tell.
+    #[tokio::test]
+    async fn an_owner_is_not_told_of_an_end_somebody_asked_for() {
+        let (state, _dir, hub) = team_state(
+            "reporting-deliberate-exit",
+            &[
+                ("worker", "hub", false, SessionStatus::Working),
+                ("claimed", "hub", false, SessionStatus::Working),
+                ("going-down", "hub", false, SessionStatus::Working),
+            ],
+        );
+        let alone = Session {
+            id: "alone".to_string(),
+            bound_to: None,
+            status: SessionStatus::Working,
+            ..project_session("alone")
+        };
+        state.store.insert_session(&alone).unwrap();
+        let mut ending = Vec::new();
+        for id in ["worker", "claimed", "going-down", "alone"] {
+            let live = crate::test_support::idle_stand_in(id);
+            state.register_live(live.clone());
+            state.watch_exit(live.clone());
+            ending.push(live);
+        }
+        let mut archived = state.session_record("worker").unwrap();
+        archived.status = SessionStatus::Archived;
+        state.store.update_session(&archived).unwrap();
+        let _claim = state.begin_account_switch("claimed", false).unwrap();
+        let mut interrupted = state.session_record("going-down").unwrap();
+        interrupted.status = SessionStatus::Interrupted;
+        state.store.update_session(&interrupted).unwrap();
+
+        for live in &ending {
+            // What an account switch's stop does; archive and shutdown mark the record first.
+            live.end();
+        }
+        for id in ["worker", "claimed", "going-down", "alone"] {
+            recorded_ended(&state, id).await;
+        }
+        // The notice, if there were one, is written off the watcher right after the record.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("ended on its own"), "{heard}");
+    }
+
+    /// A turn that ended in an error asks the automatic switch to look at its session, while the
+    /// setting is on and the end belongs to the turn that is open; an ordinary end, a stale one
+    /// and a setting that is off ask nothing.
+    #[tokio::test]
+    async fn a_failed_turn_asks_the_automatic_switch_to_look_at_its_session() {
+        let (state, _dir, _hub) = team_state(
+            "reporting-failed-turn-switch",
+            &[
+                ("failed", "hub", false, SessionStatus::Working),
+                ("ordinary", "hub", false, SessionStatus::Working),
+                ("stale", "hub", false, SessionStatus::Working),
+                ("off", "hub", false, SessionStatus::Working),
+            ],
+        );
+        let asked = |id: &str| {
+            crate::auto_switch::ASKED
+                .lock()
+                .unwrap()
+                .contains(&id.to_string())
+        };
+        let turn = |failed| hooks::TurnEnd {
+            last_assistant_message: None,
+            failed,
+            backstop: false,
+        };
+        state.store.set_auto_switch_on_usage_limit(true).unwrap();
+        for id in ["failed", "ordinary", "stale"] {
+            state.turn_started(id, Some("work"));
+        }
+
+        close_turn_and_report(&state, "ordinary", turn(false));
+        close_turn_and_report(&state, "failed", turn(true));
+        // A clock-attributed end that cannot belong to the turn open now.
+        close_turn_and_report(
+            &state,
+            "stale",
+            hooks::TurnEnd {
+                failed: true,
+                backstop: true,
+                ..turn(true)
+            },
+        );
+        state.store.set_auto_switch_on_usage_limit(false).unwrap();
+        state.turn_started("off", Some("work"));
+        close_turn_and_report(&state, "off", turn(true));
+
+        assert!(asked("failed"));
+        assert!(!asked("ordinary"));
+        assert!(!asked("stale"));
+        assert!(!asked("off"));
+    }
+
+    /// A claim on the session says nothing of how its process ended: one that exits by itself
+    /// while an operation holds the claim, including one that stops no process (a handover of
+    /// branches, a binding change), is told to the owner as an end nobody asked for, and so is a
+    /// process the account switch found already gone when it stopped it.
+    #[tokio::test]
+    async fn an_owner_is_told_of_a_process_that_ended_by_itself_under_a_claim() {
+        let (state, _dir, hub) = team_state(
+            "reporting-exit-under-claim",
+            &[("worker", "hub", false, SessionStatus::Working)],
+        );
+        let worker = watched_worker(&state);
+        let _claim = state.begin_switch("worker").unwrap();
+
+        worker.terminate();
+        recorded_ended(&state, "worker").await;
+
+        let heard = hub_heard(&state, &hub).await;
+        assert!(heard.contains("ended on its own"), "{heard}");
+        assert!(!worker.end(), "the process was gone before the stop");
+        assert!(!worker.was_ended_on_purpose());
+    }
+
+    /// An owner is told once a turn that its session waits for the user, and told it is not to
+    /// chase it; the next turn tells it again.
+    #[tokio::test]
+    async fn an_owner_is_told_once_a_turn_that_its_session_waits_for_the_user() {
+        let (state, _dir, hub) = team_state(
+            "reporting-waiting",
+            &[("worker", "hub", false, SessionStatus::WaitingUser)],
+        );
+
+        tell_owner_it_waits(&state, "worker");
+        tell_owner_it_waits(&state, "worker");
+        let heard = hub_heard(&state, &hub).await;
+        assert!(heard.contains("is waiting for the user"), "{heard}");
+        assert!(heard.contains("Do not chase it"), "{heard}");
+        assert_eq!(
+            heard.matches("is waiting for the user").count(),
+            1,
+            "{heard}"
+        );
+
+        state.turn_started("worker", Some("go on"));
+        tell_owner_it_waits(&state, "worker");
+        let heard = hub_heard(&state, &hub).await;
+        assert_eq!(
+            heard.matches("is waiting for the user").count(),
+            2,
+            "{heard}"
+        );
+    }
+
+    /// A session that reported earlier in its turn and then stops at a permission prompt is told
+    /// to its owner as waiting: its report did not say so. A wait before the first turn, a trust
+    /// prompt say, does not use up the notice of the turn that follows.
+    #[tokio::test]
+    async fn a_wait_after_a_report_or_before_the_first_turn_is_told() {
+        let (state, _dir, hub) = team_state(
+            "reporting-waiting-after-report",
+            &[("worker", "hub", false, SessionStatus::WaitingUser)],
+        );
+
+        tell_owner_it_waits(&state, "worker");
+        state.turn_started("worker", Some("go on"));
+        state.mark_reported("worker");
+        tell_owner_it_waits(&state, "worker");
+
+        let heard = hub_heard(&state, &hub).await;
+        assert_eq!(
+            heard.matches("is waiting for the user").count(),
+            2,
+            "{heard}"
+        );
+    }
+
+    /// A wait the terminal shows (a dialog of the agent), with the record still at its prompt, is
+    /// told to the owner as well, and the notice is not repeated for the same turn.
+    #[tokio::test]
+    async fn an_owner_is_told_of_a_wait_only_the_screen_shows() {
+        let (state, _dir, hub) = team_state(
+            "reporting-waiting-screen",
+            &[("worker", "hub", false, SessionStatus::Idle)],
+        );
+        let worker = crate::test_support::running(&state, "worker");
+
+        tell_owner_it_waits(&state, "worker");
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("is waiting for the user"), "{heard}");
+
+        worker.on_output(
+            "\n  Resume this conversation?\n  This conversation has been inactive for 1h and is \
+             42k tokens long.\n  \u{276f} Resume\n    Start a new conversation\n\n  Enter to \
+             confirm \u{b7} Esc to dismiss\n"
+                .as_bytes(),
+        );
+        assert!(worker.look_for_dialog().current.is_some());
+        tell_owner_it_waits(&state, "worker");
+        tell_owner_it_waits(&state, "worker");
+        let heard = hub_heard(&state, &hub).await;
+        assert_eq!(
+            heard.matches("is waiting for the user").count(),
+            1,
+            "{heard}"
+        );
+    }
+
+    /// The routes by which a session comes to wait for the user without a hook saying so each tell
+    /// its owner: a dialog the agent puts on the screen, and Codex's "Action Required" title.
+    #[tokio::test]
+    async fn an_owner_is_told_when_a_dialog_or_an_action_title_makes_its_session_wait() {
+        let (state, _dir, hub) = team_state("reporting-waiting-routes", &[]);
+        for (id, agent) in [("dialog", Agent::Claude), ("title", Agent::Codex)] {
+            state
+                .store
+                .insert_session(&Session {
+                    id: id.to_string(),
+                    agent,
+                    bound_to: Some("hub".to_string()),
+                    status: SessionStatus::Idle,
+                    ..project_session(id)
+                })
+                .unwrap();
+        }
+        let dialog = crate::test_support::running(&state, "dialog");
+        let title =
+            crate::test_support::fake_live_session("title", Agent::Codex, 80, 24, "sleep 30");
+        state.register_live(title.clone());
+        crate::session::spawn_reader_thread(title.clone(), 8 * 1024);
+
+        crate::agent_dialogs::watch(&state, &dialog);
+        dialog.on_output(
+            "\n  Resume this conversation?\n  This conversation has been inactive for 1h and is \
+             42k tokens long.\n  \u{276f} Resume\n    Start a new conversation\n\n  Enter to \
+             confirm \u{b7} Esc to dismiss\n"
+                .as_bytes(),
+        );
+        let heard = hub_heard_of(&hub, "`dialog`").await;
+        assert!(heard.contains("`dialog`"), "{heard}");
+
+        title.on_output(b"\x1b]0;[ ! ] Action Required | repo\x07");
+        let heard = hub_heard_of(&hub, "`title`").await;
+        assert!(heard.contains("`title`"), "{heard}");
+    }
+
+    /// What the hub hears until `needle` is in it.
+    async fn hub_heard_of(hub: &crate::test_support::StandIn, needle: &'static str) -> String {
+        let hub = (**hub).clone();
+        tokio::task::spawn_blocking(move || crate::test_support::output_containing(&hub, needle))
+            .await
+            .unwrap()
+    }
+
+    /// Nothing is said of a wait when the session has no owner or no process to wait in.
+    #[tokio::test]
+    async fn an_owner_is_not_told_of_a_wait_that_is_not_one() {
+        let (state, _dir, hub) = team_state(
+            "reporting-waiting-not-told",
+            &[("down", "hub", false, SessionStatus::Interrupted)],
+        );
+        let alone = Session {
+            id: "alone".to_string(),
+            bound_to: None,
+            status: SessionStatus::WaitingUser,
+            ..project_session("alone")
+        };
+        state.store.insert_session(&alone).unwrap();
+
+        for id in ["alone", "down"] {
+            tell_owner_it_waits(&state, id);
+        }
+
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("is waiting for the user"), "{heard}");
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

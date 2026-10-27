@@ -7,7 +7,7 @@ import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import { currentLanguage, t } from "../i18n/language";
 import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
-import { exhaustedQuotaWindow } from "../quota/quotaFormat";
+import { exhaustedQuotaWindow, isNotLoggedIn } from "../quota/quotaFormat";
 import { applyDaemonEvent, createStateStore, errorToast, type Daemon, type ToastRequest } from "../store";
 import type { Scenario } from "./scenario";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -333,6 +333,21 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
       message: `${name} is disabled for ${AGENT_LABEL[agent]}. Choose another account, or turn it back on in Settings → Agent accounts.`,
     });
   };
+  /** Refuses a session on, a handoff to, or a switch to an account whose last reading in the store says it is not logged
+   * in (`quota_not_signed_in`, or `quota_config_dir_missing` for a directory that does not exist yet), as the daemon does
+   * with the reading it holds, after the quota check. A reading that failed for another reason, and an account not read
+   * yet, never refuse. The name is the account's, as for `refuseIfDisabled`. */
+  const refuseIfNotSignedIn = (agent: Agent, account: Account | undefined) => {
+    const current = store.getState();
+    const reading = accountQuotaOf(current.accountQuotas, agent, account?.id ?? null);
+    if (typeof reading !== "object" || !isNotLoggedIn(reading.unavailable)) return;
+    const name = account?.name ?? current.settings.default_account_names?.[agent] ?? DEFAULT_ACCOUNT_NAME;
+    return fail({
+      code: "account_not_signed_in",
+      params: { agent: AGENT_LABEL[agent], account: name },
+      message: `${name} (${AGENT_LABEL[agent]}) is not logged in. Choose another account, or log in to it in Settings → Agent accounts.`,
+    });
+  };
   /** Refuses what the daemon turns away while a change of the sharing of `accountId` runs: a session opened on it, one
    * of its sessions resumed, a switch onto or away from it, a handoff from it. The default account (`null`) has no sharing. */
   const refuseIfSharingChanges = (accountId: string | null | undefined) => {
@@ -460,6 +475,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           refuseIfSharingChanges(account?.id);
           refuseIfDisabled(session.agent, account);
           refuseIfQuotaExhausted(session.agent, account);
+          refuseIfNotSignedIn(session.agent, account);
           // The daemon broadcasts the session as switching while the switch holds its claim, and the
           // session as it is once the switch ends. What the window adds for its own batch is not the daemon's to send.
           const { switching_account: _, ...resting } = session;
@@ -495,6 +511,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const account = launchAccount(owner, project, body.agent, body.account);
           refuseIfDisabled(body.agent, account);
           refuseIfQuotaExhausted(body.agent, account);
+          refuseIfNotSignedIn(body.agent, account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
           // The receiving session takes the original's place; the original is archived and what it
@@ -622,6 +639,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           refuseIfSharingChanges(account?.id);
           refuseIfDisabled(agent, account);
           refuseIfQuotaExhausted(agent, account);
+          refuseIfNotSignedIn(agent, account);
           const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
           if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);
           const session: Session = {
@@ -657,7 +675,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
               cloneDir = normalizedPath(given);
             }
           }
-          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.ask_questions_as_choices !== undefined && { ask_questions_as_choices: body.ask_questions_as_choices }), ...(body.interface_language !== undefined && { interface_language: body.interface_language }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.git_workflow !== undefined && { git_workflow: { ...current.settings.git_workflow, ...body.git_workflow } }), default_clone_dir: cloneDir } });
+          store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.ask_questions_as_choices !== undefined && { ask_questions_as_choices: body.ask_questions_as_choices }), ...(body.interface_language !== undefined && { interface_language: body.interface_language }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.auto_switch_on_usage_limit !== undefined && { auto_switch_on_usage_limit: body.auto_switch_on_usage_limit }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.git_workflow !== undefined && { git_workflow: { ...current.settings.git_workflow, ...body.git_workflow } }), default_clone_dir: cloneDir } });
           return { type: "ack" };
         }
         case "set_codex_approval_reviewer": {

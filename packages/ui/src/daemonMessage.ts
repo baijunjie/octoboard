@@ -7,7 +7,7 @@ import { abbreviateHome } from "./pathDisplay";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, pathLinkRefusedCause, type MessageParams, type QuotaWindow, type SessionBranchState, type SharingEntryCause } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, NESTED_FAILURE_CODES, pathLinkRefusedCause, type MessageParams, type QuotaWindow, type SessionBranchState, type SharingEntryCause } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -95,6 +95,7 @@ export const RECORD_ID_PARAMS: Record<string, readonly string[]> = {
   not_a_git_repository: ["project"], conversation_in_session: ["session"],
   conversation_held_in_project: ["session", "project"], conversation_held_in_console: ["session", "console"],
   session_did_not_stop: ["session"], sharing_session_did_not_stop: ["session"], switch_did_not_come_up: ["session"],
+  account_switched_automatically: ["session"],
   session_not_bound_to_owner: ["owner"], session_owner_changing: ["owner"],
 };
 
@@ -125,8 +126,11 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   project_branches_not_determined: ["name"],
   switch_did_not_come_up: ["session"],
   account_disabled: ["account"],
+  account_not_signed_in: ["account"],
   account_quota_exhausted: ["account"],
   "account_quota_exhausted.resets": ["account"],
+  account_switched_automatically: ["from", "account", "session"],
+  account_switch_automatically_failed: ["from", "account"],
   account_sharing_failed: ["name"],
   account_still_sharing: ["name"],
   account_in_use: ["name"],
@@ -453,13 +457,16 @@ export function hasRefusedQuotaWindow(params: MessageParams): boolean {
   return refusedQuotaWindow(params) !== undefined;
 }
 
-/** The codes whose account name param may be the default account's, which the daemon names by its fixed
- * English `DEFAULT_ACCOUNT_NAME`, and the param that holds it. */
-const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, string> = {
-  account_name_taken: "name",
-  config_dir_taken: "name",
-  account_quota_exhausted: "account",
-  account_disabled: "account",
+/** The codes whose account name params may be the default account's, which the daemon names by its fixed
+ * English `DEFAULT_ACCOUNT_NAME`, and the params that hold one. */
+const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, readonly string[]> = {
+  account_name_taken: ["name"],
+  config_dir_taken: ["name"],
+  account_quota_exhausted: ["account"],
+  account_disabled: ["account"],
+  account_not_signed_in: ["account"],
+  account_switched_automatically: ["from", "account"],
+  account_switch_automatically_failed: ["from", "account"],
 };
 
 /** The name of the record a param `name` holds the id of, or `undefined` once the record is gone or has no name to
@@ -485,10 +492,11 @@ function paramText(records: RecordNames, name: string, value: string, code: stri
  * (`UI_PARAMS`), each shown as plain text (see `paramText`). A numeric `count` param is a number,
  * which selects the message's plural form. A `reason_code` param is worded from the catalog's
  * `daemon.trust_reason.<code>` and replaces `reason`, which stays the daemon's English account for a
- * reason code the catalog lacks. A `launch_failed` notice's `reason_code` is the code of the error
- * the launch failed with, so its `reason` is worded from that code's own `daemon.<code>` message, with
- * the failure's params that arrive beside it and that code's `UI_PARAMS`. With `mark`, a param the
- * message sets apart (`CODE_PARAMS` or `NAME_PARAMS`) is what `mark` makes of its displayed value instead. */
+ * reason code the catalog lacks. A `launch_failed` or `account_switch_automatically_failed` notice's
+ * `reason_code` is the code of the error it failed with, so its `reason` is worded from that code's own
+ * `daemon.<code>` message, with the failure's params that arrive beside it and that code's `UI_PARAMS`. With
+ * `mark`, a param the message sets apart (`CODE_PARAMS` or `NAME_PARAMS`) is what `mark` makes of its displayed
+ * value instead. */
 export function daemonParams<V = never>(
   language: Language,
   code: string,
@@ -496,12 +504,11 @@ export function daemonParams<V = never>(
   records: RecordNames,
   mark?: (value: string, monospace: boolean) => V,
 ): Record<string, string | number | V> {
-  // A failed launch carries its failure's params, which take the UI's own for the failure's code.
-  const all = code === "launch_failed" && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
+  // A failed launch or move carries its failure's params, which take the UI's own for the failure's code.
+  const all = NESTED_FAILURE_CODES.has(code) && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
   // The default account is shown by its name in the current language, as the accounts section does.
-  const accountParam = DEFAULT_ACCOUNT_NAME_PARAMS[code];
-  if (accountParam && all[accountParam] === DEFAULT_ACCOUNT_NAME) {
-    all[accountParam] = format(language, "settings.accounts.defaultName", {});
+  for (const accountParam of DEFAULT_ACCOUNT_NAME_PARAMS[code] ?? []) {
+    if (all[accountParam] === DEFAULT_ACCOUNT_NAME) all[accountParam] = format(language, "settings.accounts.defaultName", {});
   }
   const shown: Record<string, string | number> = Object.fromEntries(
     Object.entries(all).map(([name, value]) => [name, paramText(records, name, value, code, language)]),
@@ -539,7 +546,7 @@ export function daemonParams<V = never>(
   const reasonKey = `daemon.trust_reason.${all.reason_code}`;
   if (isMessageKey(reasonKey)) shown.reason = format(language, reasonKey, shown);
   const failureKey = `daemon.${messageCode(all.reason_code ?? "", all)}`;
-  if (code === "launch_failed" && all.reason_code !== "launch_failed" && isMessageKey(failureKey)) shown.reason = daemonMessage(language, all.reason_code, all, String(shown.reason ?? shown.detail ?? ""), records);
+  if (NESTED_FAILURE_CODES.has(code) && all.reason_code !== code && isMessageKey(failureKey)) shown.reason = daemonMessage(language, all.reason_code, all, String(shown.reason ?? shown.detail ?? ""), records);
   if (!mark) return shown;
   const marked: Record<string, string | number | V> = { ...shown };
   for (const name of CODE_PARAMS[messageCode(code, all)] ?? []) if (name in all) marked[name] = mark(all[name], true);

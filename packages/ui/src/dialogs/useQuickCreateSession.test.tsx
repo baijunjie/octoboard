@@ -98,7 +98,7 @@ it("refuses with every account of the agent used up, naming the action that was 
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
   const [error] = vi.mocked(daemon.toastError).mock.calls[0];
-  expect((error as Error).message).toBe("\u2068New session with defaults\u2069 is unavailable because none of the default agent's accounts can open a session right now: each has reached its usage limit or is turned off.");
+  expect((error as Error).message).toBe("\u2068New session with defaults\u2069 is unavailable because none of the default agent's accounts can open a session right now: each has reached its usage limit, is not logged in or is disabled.");
   expect((error as { recovery?: string }).recovery).toBe("quotaUsedUpAgent");
   expect(error).toMatchObject({ code: "quick_create_quota_refused", params: { action: "New session with defaults" } });
 });
@@ -110,6 +110,17 @@ it("refuses with the daemon's own disabled-account refusal when the account it w
   expect(daemon.toastError).toHaveBeenCalledTimes(1);
   const [error] = vi.mocked(daemon.toastError).mock.calls[0];
   expect(error).toMatchObject({ code: "account_disabled", params: { agent: "Claude Code" } });
+});
+
+it("refuses with the daemon's own not-logged-in refusal when the account it would open on is not logged in, and sends nothing", async () => {
+  const signedOut = { agent: parent.default_agent, account: null, fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } };
+  const { daemon, run } = mount({ accountQuotas: [signedOut] });
+  await run({ kind: "new-console-session", console: parent });
+  expect(daemon.request).not.toHaveBeenCalled();
+  expect(daemon.toastError).toHaveBeenCalledTimes(1);
+  const [error] = vi.mocked(daemon.toastError).mock.calls[0];
+  expect(error).toMatchObject({ code: "account_not_signed_in", params: { agent: "Claude Code" } });
+  expect((error as Error).message).toContain("is not logged in, so a session cannot be opened on it.");
 });
 
 it("refuses an owner that is no longer live, as the dialog does, and sends nothing", async () => {

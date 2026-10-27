@@ -105,13 +105,14 @@ export function NoUsageReading({ quota }: { quota?: QuotaReading }): React.React
   );
 }
 
-/** The line naming an account: its `name`, its plan badge when the agent names one, with `usedUp` the name in the muted
+/** The line naming an account: its `name`, its plan badge when the agent names one, with `disabled` a "Disabled" badge
+ * (the wording the account choices mark a turned-off account with), with `usedUp` the name in the muted
  * colour and a "Limit reached" badge, the mark of a reading with nothing to show, and at its end when the reading was
  * taken and whether it is out of date. `showUsedUp`, `showFailure` and `showUpdated` are off for a surface that places
  * the badge, the failure mark or the reading's age elsewhere (the table's usage cell holds the first two). The name
  * and plan keep to one line, a name too long for it fading before the plan; what follows them wraps rather than
  * squeezing the name, the reading's age first moving to a line of its own. */
-export function AccountNameLine({ name, quota, usedUp = false, showUpdated = true, showFailure = true, showUsedUp = true }: { name: React.ReactNode; quota: QuotaReading; usedUp?: boolean; showUpdated?: boolean; showFailure?: boolean; showUsedUp?: boolean }): React.ReactElement {
+export function AccountNameLine({ name, quota, usedUp = false, disabled = false, showUpdated = true, showFailure = true, showUsedUp = true }: { name: React.ReactNode; quota: QuotaReading; usedUp?: boolean; disabled?: boolean; showUpdated?: boolean; showFailure?: boolean; showUsedUp?: boolean }): React.ReactElement {
   const t = useT();
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium">
@@ -119,6 +120,7 @@ export function AccountNameLine({ name, quota, usedUp = false, showUpdated = tru
         <div className={`min-w-0 ${usedUp ? "text-app-muted" : ""}`}>{name}</div>
         <QuotaPlan quota={quota} />
       </div>
+      {disabled && <StatusBadge variant="soft">{t("accountChoice.disabled.reason")}</StatusBadge>}
       {usedUp && showUsedUp && <StatusBadge variant="soft">{t("quota.usedUp")}</StatusBadge>}
       {showFailure && <QuotaFailureMark quota={quota} />}
       {showUpdated && <QuotaUpdated quota={quota} />}

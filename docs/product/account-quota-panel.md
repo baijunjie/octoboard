@@ -7,10 +7,11 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
 
 ## What the panel shows
 
-- **One tab per agent that is added and installed**, in the order of the added agents (see "Added agents" in
-  `docs/product/agent-accounts.md`), each showing the agent's icon and name, as wide as its content, the tabs starting
-  at the strip's start. An agent that is not added, or that has been determined unavailable, has no tab; an added agent
-  whose availability is not yet determined has one. Each opening starts on the tab of the selected session's agent while
+- **One tab per agent that is added and installed and has an account to list** (below), in the order of the added
+  agents (see "Added agents" in `docs/product/agent-accounts.md`), each showing the agent's icon and name, as wide as
+  its content, the tabs starting at the strip's start. An agent that is not added, or that has been determined
+  unavailable, has no tab; an added agent whose availability is not yet determined has one; an agent whose accounts are
+  all turned off has none. Each opening starts on the tab of the selected session's agent while
   the button shows that session's indicator (see "The selected session's quota indicator" in
   `docs/product/account-quotas.md`) and the agent has a tab, otherwise on the first agent's tab; a tab chosen in the
   panel lasts only until it closes. When it opens on the selected session's agent this way, that tab's list is also
@@ -18,12 +19,19 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   view, clear of the list's top fade, as far as the list can scroll; the row is not marked in any other way. Otherwise a
   list opens at its top.
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
-  default account" in `docs/product/agent-accounts.md`), then the accounts the user owns. Each shows its name, its plan
+  default account" in `docs/product/agent-accounts.md`), then the accounts the user owns, leaving out every account
+  the user turned off (see "Turning an account off" in `docs/product/agent-accounts.md`). The one exception is the
+  account the selected session is running on — starting, working, waiting for the user or awaiting instructions: while
+  it does, that account is listed even when it is turned off, with a neutral **Disabled** badge after its plan badge,
+  and its agent keeps its tab for it. When the session stops running there, the row goes, and the tab with it when it
+  was the agent's only row; keyboard focus on that tab, or inside the panel, moves to the tab now selected, or, with no
+  tab left, to the panel's first button. Each shows its name, its plan
   badge and its quota beneath, in the states of "Quota states" in `docs/product/account-quotas.md`, as "How an account's
   quota is shown" in `docs/product/account-quotas.md` describes; a used-up account recedes, with a **Limit reached**
   badge after its plan badge (see "A used-up account" in `docs/product/account-quotas.md`). The name and its plan badge
   keep to one line, and a name too long for its space fades before the plan badge, as in "Names too long for their
-  space" in `docs/product/labels-and-tooltips.md`; what follows them on the name line — the Limit reached badge, a
+  space" in `docs/product/labels-and-tooltips.md`; what follows them on the name line — the Disabled and Limit reached
+  badges, a
   failure mark, how long ago the reading was taken — moves to the next line when it does not fit beside them. The panel
   shows no directories and offers nothing to edit.
 - The list of accounts is at most 384 px high, or 60% of the window's height where that is less, and the panel is as
@@ -38,9 +46,12 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   "Opening and closing Settings" in `docs/product/settings.md`). When every agent has been determined unavailable, it
   carries the gauge icon, is titled "No agent available", with a line saying an agent's usage is shown once its command
   is found on the user's `PATH`, and offers nothing to press.
+- **With agents added and installed but no tab left**, every account of each being turned off, the empty state carries
+  the gauge icon, is titled "No enabled account", with a line saying that disabled accounts are not shown there, and
+  offers a **Manage accounts…** button, which closes the panel and opens Settings on its Agent accounts section.
 - At the panel's foot, **Manage accounts…** closes the panel and opens Settings on its Agent accounts section (see
-  "Opening and closing Settings" in `docs/product/settings.md`). It is left out while the panel shows "No agent added",
-  whose Add agent… button already leads there.
+  "Opening and closing Settings" in `docs/product/settings.md`). It is left out while the panel shows "No agent added"
+  or "No enabled account", whose button already leads there.
 
 ## Opening the panel
 
@@ -54,12 +65,12 @@ at their point" in `docs/product/error-alerts.md`):
 - **A mouse click on the button opens nothing and pins nothing**: where there is a mouse there is the hover. A click on
   the button of a panel the mouse floated in leaves it as it is.
 - **A tap** (touch or pen), **assistive technology** and **Enter or Space** open it with keyboard focus moved into the
-  panel, onto the selected agent's tab, or, with no tab, onto the panel's first button (Add agent…, or Manage
+  panel, onto the selected agent's tab, or, with no tab, onto the panel's first button (Add agent… or Manage
   accounts…). A panel opened this way is modal, as a menu is: the window's shortcuts and F6 wait until it closes, and a
   tap on a floating panel turns it into this form.
 
 **While the mouse is on the button** and the button shows the selected session's account (see "The selected session's
-quota indicator" in `docs/product/account-quotas.md`), the open panel makes that account stand out: every other
+quota indicator" in `docs/product/account-quotas.md`) and that account's agent has a tab, the open panel makes that account stand out: every other
 account's row, on every agent's tab, is dimmed by a veil of the panel's own colour, the same veil the sidebar lays over
 inactive projects. The dimming lasts from then until the mouse enters the panel or the panel closes. Keyboard focus on
 the button does not bring it. It is a passing cue, separate from a used-up account's look (see "A used-up account" in

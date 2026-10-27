@@ -498,6 +498,40 @@ fn status_of(state: &AppState, id: &str) -> SessionStatus {
     state.session_record(id).unwrap().status
 }
 
+/// A session whose request waits for the user is waiting for the user, and its owner is told so.
+#[tokio::test]
+async fn an_owner_is_told_that_its_session_waits_on_a_request() {
+    let (state, _dir) = fixture("owner-told");
+    state
+        .store
+        .insert_session(&Session {
+            role: Role::Console,
+            project_id: None,
+            ..project_session("hub")
+        })
+        .unwrap();
+    state
+        .store
+        .insert_session(&Session {
+            bound_to: Some("hub".to_string()),
+            ..project_session("worker")
+        })
+        .unwrap();
+    let hub = running(&state, "hub");
+    let _worker = running(&state, "worker");
+    let launcher = Launcher::new(&state);
+    let (call, request_id) = ask_here(&state, "worker", ANSWER_TIME_LIMIT).await;
+
+    let heard =
+        tokio::task::spawn_blocking(move || output_containing(&hub, "is waiting for the user"))
+            .await
+            .unwrap();
+    assert!(heard.contains("is waiting for the user"), "{heard}");
+
+    answer_by(&launcher, &request_id, false).await.unwrap();
+    let _ = outcome_of(call).await;
+}
+
 /// The hook events Claude Code 2.1.295 sent while a call waited for the user (the order and
 /// payloads of the hook log that showed the bug): it moves the call to the background, ends
 /// its turn with the call still running, and reports itself idle. None of them lowers the

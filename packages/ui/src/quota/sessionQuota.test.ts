@@ -36,3 +36,21 @@ it("draws nothing once the session's account was removed or its directory change
 it("draws nothing for a reading that is out of date", () => {
   expect(sessionQuotaBarOf(session(), source({ accountQuotas: [reading(null, { unavailable: { code: "quota_failed", message: "" } as never })] }))).toBeUndefined();
 });
+
+it("draws a turned-off account's bar only while the session is running on it", () => {
+  const off: Account = { ...work, disabled: true };
+  const owned = { account_id: "a-work", config_dir: work.config_dir };
+  expect(sessionQuotaBarOf(session({ ...owned, status: "idle" }), source({ accounts: [off] }))).toMatchObject({ main: window });
+  expect(sessionQuotaBarOf(session({ ...owned, status: "working" }), source({ accounts: [off] }))).toMatchObject({ main: window });
+  expect(sessionQuotaBarOf(session({ ...owned, status: "interrupted" }), source({ accounts: [off] }))).toBeUndefined();
+  expect(sessionQuotaBarOf(session({ ...owned, status: "archived" }), source({ accounts: [off] }))).toBeUndefined();
+  // The same session on an account that is on keeps its bar whatever its status.
+  expect(sessionQuotaBarOf(session({ ...owned, status: "interrupted" }), source())).toMatchObject({ main: window });
+});
+
+it("follows the agent's turned-off default account the same way", () => {
+  const disabled = source({ disabledDefaultAccounts: ["claude"] });
+  expect(sessionQuotaBarOf(session({ status: "idle" }), disabled)).toMatchObject({ main: window });
+  expect(sessionQuotaBarOf(session({ status: "interrupted" }), disabled)).toBeUndefined();
+  expect(sessionQuotaBarOf(session({ status: "interrupted" }), source({ disabledDefaultAccounts: ["codex"] }))).toMatchObject({ main: window });
+});

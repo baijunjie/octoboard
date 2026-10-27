@@ -1,4 +1,4 @@
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { Checkbox, Description, Label } from "@heroui/react";
 import { errorPresentation } from "../errorPresentation";
 import React, { useId, useState } from "react";

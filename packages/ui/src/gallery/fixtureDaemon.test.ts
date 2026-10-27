@@ -13,7 +13,7 @@ import { terminalFixtureUrl } from "./fakeTerminal";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore";
 import type { FixtureFile } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
-import { quotaOf, quotaWindow } from "./fixtures/quotas";
+import { quotaFailure, quotaOf, quotaWindow } from "./fixtures/quotas";
 import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
@@ -548,6 +548,12 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings?.auto_select_account).toBe(true);
+    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_switch_on_usage_limit");
+    await daemon.request({ type: "update_settings", auto_switch_on_usage_limit: true });
+    expect(daemon.store.getState().settings.auto_switch_on_usage_limit).toBe(true);
+    await daemon.request({ type: "update_settings", auto_select_account: false });
+    expect(daemon.store.getState().settings.auto_switch_on_usage_limit).toBe(true);
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_switch_on_usage_limit).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("sidebar_order_by_status");
     await daemon.request({ type: "update_settings", sidebar_order_by_status: false });
     expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
@@ -1652,6 +1658,47 @@ describe("the fixture daemon's disabled accounts", () => {
     await fixture.request({ type: "set_account_disabled", agent: "claude", account: null, disabled: false });
     expect(fixture.store.getState().settings.disabled_default_accounts).toEqual(["codex"]);
     await expect(fixture.request({ type: "set_account_disabled", agent: "claude", account: "a-codex", disabled: true })).rejects.toMatchObject({ code: "unknown_account" });
+  });
+});
+
+describe("the fixture daemon's accounts that are not logged in", () => {
+  const accounts = [
+    { id: "a-out", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
+    { id: "a-new", agent: "claude" as const, name: "Client", config_dir: "/Users/dev/.claude-client" },
+    { id: "a-slow", agent: "claude" as const, name: "Personal", config_dir: "/Users/dev/.claude-personal" },
+    { id: "a-team", agent: "codex" as const, name: "Team", config_dir: "/Users/dev/.codex-team" },
+  ];
+  const daemon = () => createFixtureDaemon({
+    id: "account-not-signed-in", group: "Settings", category: "normal", title: "",
+    state: snapshotState({
+      consoles: [consoleOf("c", "Main")],
+      projects: [projectOf("p", "c", "Website")],
+      sessions: [sessionOf("s", "c", "p", "Default", "idle")],
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+      accountQuotas: [
+        quotaOf("codex", "a-team", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "not signed in") }),
+        quotaOf("claude", "a-out", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "not signed in") }),
+        quotaOf("claude", "a-new", null, [], { unavailable: quotaFailure("quota_config_dir_missing", { agent: "Claude Code" }, "no directory") }),
+        quotaOf("claude", "a-slow", null, [], { unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "timed out") }),
+      ],
+    }),
+  });
+
+  it("refuses a session on and a switch to an account whose last reading says it is not logged in, naming the account", async () => {
+    for (const account of ["a-out", "a-new"]) {
+      const name = account === "a-out" ? "Work" : "Client";
+      await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account })).rejects.toMatchObject({ code: "account_not_signed_in", params: { agent: "Claude Code", account: name } });
+      await expect(daemon().request({ type: "switch_session_account", session: "s", account })).rejects.toMatchObject({ code: "account_not_signed_in", params: { account: name } });
+    }
+  });
+
+  it("refuses a handoff to such an account of another agent", async () => {
+    await expect(daemon().request({ type: "hand_off_session", session: "s", agent: "codex", account: "a-team" })).rejects.toMatchObject({ code: "account_not_signed_in", params: { agent: "Codex", account: "Team" } });
+  });
+
+  it("lets a reading that failed for another reason through", async () => {
+    await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-slow" })).resolves.toMatchObject({ type: "session_opened" });
+    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-slow" })).resolves.toEqual({ type: "ack" });
   });
 });
 

@@ -304,13 +304,13 @@ restart, is not. When the mark goes while it or its popover holds focus, focus m
 
 Whether a disabled control says why depends on how long it stays disabled. One disabled by a state that can last (a
 session in the middle of a turn, a locked session, no other agent to hand off to, a platform without clipboard reading,
-nothing to copy while the program in a terminal takes the mouse) carries a reason: the user is left looking at it and
-needs to know what would make it available. (Without mouse reporting a plain drag selects text, so Copy has nothing
-useful to add.) One disabled only for the moment an operation takes (a session still starting, an account switch or a
-sharing change under way, a shell that is closing, a login under way) carries none: it comes back on its own before a
-reason would be read. Nor does one whose cause the screen already shows where it happens (a terminal that cannot take
-input, covered by its reconnecting spinner or its disconnected notice). A form still states a brief hold when it
-affects the value already chosen, as that field's error or as an alert.
+an account that is disabled or not logged in, nothing to copy while the program in a terminal takes the mouse) carries a
+reason: the user is left looking at it and needs to know what would make it available. (Without mouse reporting a plain
+drag selects text, so Copy has nothing useful to add.) One disabled only for the moment an operation takes (a session
+still starting, an account switch or a sharing change under way, a shell that is closing, a login under way) carries
+none: it comes back on its own before a reason would be read. Nor does one whose cause the screen already shows where it
+happens (a terminal that cannot take input, covered by its reconnecting spinner or its disconnected notice). A form
+still states a brief hold when it affects the value already chosen, as that field's error or as an alert.
 
 A disabled select option or menu item, with a reason or without, stays in the arrow-key walk (`disabledBehavior:
 "selection"` on the select, and on the menu and any single-selection section inside it), so a keyboard user reaches it
@@ -993,13 +993,15 @@ refusal through `StatusAnnouncer` instead, again on a repeated refusal in the sa
 
 #### The error alert dialog
 
-Every asynchronous refusal or failure reported in reply to an operation the user started opens the dedicated error
-alert dialog and remains there until the user presses its acknowledgement button. Errors never use toasts, timeouts,
-an outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog` with its `Icon` set to
-`status="danger"` and a danger acknowledgement button, retaining the library's default visual treatment. The alert
-takes focus and announces its title and explanation through `role="alertdialog"`, without a second live announcement
-inside it. Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it. An error above
-a form leaves that form available after acknowledgement, with its values and retry action intact.
+Every asynchronous refusal or failure reported in reply to an operation the user started opens the dedicated error alert
+dialog and remains there until the user presses its acknowledgement button. Errors never use toasts, timeouts, an
+outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog` with its `Icon` set to
+`status="danger"` and a danger acknowledgement button, retaining the library's default visual treatment. The alert takes
+focus and announces its title and explanation through `role="alertdialog"`, without a second live announcement inside
+it; focus lands on the alert itself, not on its first control, also when it opens over a dialog that a press without a
+pointer opened (an assistive technology's press), where Enter on a first control such as Manage accounts… would act.
+Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it. An error above a form leaves
+that form available after acknowledgement, with its values and retry action intact.
 
 Distinguish failures the user can resolve from unexpected failures. A recoverable failure explains the specific
 remedy, such as freeing disk space, unlocking a session or correcting a folder's access. An unexpected failure

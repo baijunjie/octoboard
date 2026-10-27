@@ -3,9 +3,9 @@
 Settings' **Agent accounts** section (see "Agent accounts" in `docs/product/settings.md`): the agents the user has
 added, and every account of each, grouped by agent. The section opens with a paragraph saying what an account is — a
 named config directory of an agent, where it keeps its login and conversation history — and that an agent has to be on
-the user's `PATH` for its accounts to be usable. Below that paragraph sit **Automatically select an account** and,
-directly under it, **Start usage windows automatically** (see those sections in `docs/product/settings.md`), switches
-for the whole application, not controls on one agent's tab. They stay there while agents are listed, while the
+the user's `PATH` for its accounts to be usable. Below that paragraph sit **Automatically select an account**, then
+**Automatically switch accounts at the usage limit**, then **Start usage windows automatically** (see those sections in
+`docs/product/settings.md`), switches for the whole application, not controls on one agent's tab. They stay there while agents are listed, while the
 added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends in
 the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how
 consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles.md`; signing an
@@ -127,8 +127,8 @@ keep their setting, and its sessions go on running.
 
 When the user has removed every agent, the strip is replaced by an empty state titled "No agent added", with a line
 saying to add an agent installed on this machine to manage its accounts here, and an **Add agent** button. There is no
-Add account button. The two switches, **Automatically select an account** and **Start usage windows automatically**,
-stay above it.
+Add account button. The three switches, **Automatically select an account**, **Automatically switch accounts at the
+usage limit** and **Start usage windows automatically**, stay above it.
 
 ## The default account
 
@@ -226,10 +226,11 @@ closes by itself when the account is removed.
 Every account, the default account included, has a **Disable** switch, off to begin with, in the table's Disable column
 and, as the **Disable account** row, last in its account settings dialog. Turning the switch on turns the account off.
 Its accessible name is "Disable" (or "Disable account") and the account. The column heading's "?" help tip says,
-whatever the switches' positions, what being off means: the account is not shown in the account choices and new sessions
-will not use it, while running sessions are unaffected. The **Disable account** row's line follows its switch: while it
-is off, that once it is on the account is left out of account choices and new sessions won't use it; while it is on,
-that the account is turned off, with the same consequences; both add that running sessions are unaffected. The account
+whatever the switches' positions, what being off means: the account no longer appears in account choices or usage
+displays and new sessions will not use it, while running sessions keep running. The **Disable account** row's line
+follows its switch: while it is off, that once it is on the account no longer appears in account choices or usage
+displays and new sessions won't use it; while it is on, that the account is disabled, with the same consequences; both
+add that running sessions keep running. The account
 stays out of use for new work until the user turns the switch off again: nothing turns an account back on by itself,
 after a time or otherwise.
 
@@ -258,10 +259,20 @@ While an account is turned off:
     account it is keeps it; only opening a session on it is refused.
 - **No usage window is started on it automatically** (see "When an account is kicked" in
   `docs/product/starting-usage-windows.md`).
+- **Its usage is shown nowhere outside this section**: the rail's account quota panel does not list it, and an agent
+  whose accounts are all turned off has no tab there (see "What the panel shows" in
+  `docs/product/account-quota-panel.md`); the menu bar icon's quota submenus do not list it, and their opening line
+  draws no bars for it (see "The icon's menu" in `docs/product/menu-bar-icon.md`); the rail button's indicator and the
+  menu bar icon draw none for it (see "The selected session's quota indicator" in `docs/product/account-quotas.md`);
+  and `get_account_quotas` does not list it, the caller's own account included (see "Reading quotas from a session"
+  in `docs/product/account-quotas.md`). The one exception is the selected session's own account while that session is
+  running on it — starting, working, waiting for the user or awaiting instructions, not interrupted or archived: the
+  rail's indicator and the menu bar icon still show its quota, and the quota panel still lists it, marked
+  **Disabled**.
 
 The sessions already running on it are not affected, and resuming, restarting or reopening a session on it is never
-refused for this. Its quota goes on being read, and the rail's account quota panel and the menu bar icon's quota
-submenus list it as usual. Its row in the accounts table looks like any other, but for its switch.
+refused for this. Its quota goes on being read in the background. Its row in the accounts table looks like any other,
+but for its switch.
 
 **The switch** saves at once, on its own, and shows the daemon's recorded choice, which every window shares, moving
 when it changes. A refusal is shown in an error alert, the switch keeping its position; a press while the previous one

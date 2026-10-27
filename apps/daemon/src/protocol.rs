@@ -905,6 +905,11 @@ pub struct Settings {
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
     /// When nothing ranks, the account is chosen as it is while this is off.
     pub auto_select_account: bool,
+    /// Whether Octoboard itself moves a session to another account when its turn stopped on the
+    /// account's usage limit (see `crate::auto_switch`). Off unless the user turned it on. Only
+    /// that: it does not choose a new session's account (`auto_select_account`) or answer an
+    /// agent's request for a switch (`auto_approve_account_switches`).
+    pub auto_switch_on_usage_limit: bool,
     /// Whether the client's sidebar orders sessions and projects by status. On unless the user
     /// turned it off; the daemon only stores it, the ordering is the client's.
     pub sidebar_order_by_status: bool,
@@ -952,6 +957,7 @@ impl Default for Settings {
             ask_questions_as_choices: true,
             interface_language: None,
             auto_select_account: false,
+            auto_switch_on_usage_limit: false,
             sidebar_order_by_status: true,
             auto_start_quota_windows: false,
             default_clone_dir: String::new(),
@@ -2046,6 +2052,8 @@ pub enum RequestBody {
         interface_language: Option<String>,
         #[serde(default)]
         auto_select_account: Option<bool>,
+        #[serde(default)]
+        auto_switch_on_usage_limit: Option<bool>,
         #[serde(default)]
         sidebar_order_by_status: Option<bool>,
         #[serde(default)]
@@ -3586,6 +3594,11 @@ pub mod error_code {
     /// A session cannot be opened on, handed off to, or switched to an account the user turned off
     /// (`set_account_disabled`). `params` names the `agent` and the `account` (by name).
     pub const ACCOUNT_DISABLED: &str = "account_disabled";
+    /// A session cannot be opened on, handed off to, or switched to an account the last quota
+    /// reading found not signed in (`quota_not_signed_in`, `quota_config_dir_missing`). A reading
+    /// that failed for another reason, a network error say, does not refuse. `params` names the
+    /// `agent` and the `account` (by name).
+    pub const ACCOUNT_NOT_SIGNED_IN: &str = "account_not_signed_in";
     /// A session's resolved agent is not on `Settings.added_agents`, so a new session or a handoff
     /// to it is refused; never raised while that list is undecided. `params` names `agent`.
     pub const AGENT_NOT_ADDED: &str = "agent_not_added";
@@ -3700,6 +3713,9 @@ pub mod error_code {
     /// A switch relaunched the session and its process ended at once, so it is back on the
     /// account it had. `params` names the `session`.
     pub const SWITCH_DID_NOT_COME_UP: &str = "switch_did_not_come_up";
+    /// The daemon has begun to shut down, so no session is launched, resumed, switched or handed
+    /// off, and no claim on one is granted.
+    pub const DAEMON_SHUTTING_DOWN: &str = "daemon_shutting_down";
     /// A requested account name collides with an existing one of the same agent, trimmed and
     /// compared ignoring letter case — the default account's name takes part. `params` names
     /// `agent` and the `name` of the account it collides with.
@@ -3885,6 +3901,18 @@ pub mod notice_code {
     /// message went in; it is back at the front of the queue and is written again once the dialog
     /// has been answered. `params` names the `agent`.
     pub const MESSAGE_DISCARDED_BY_DIALOG: &str = "message_discarded_by_dialog";
+    /// Octoboard switched the session to another account of its agent by itself, because its turn
+    /// stopped on the usage limit of the account it ran on. `params` names the `agent`, the account
+    /// it was `from`, the `account` it is on now and the `session`.
+    pub const ACCOUNT_SWITCHED_AUTOMATICALLY: &str = "account_switched_automatically";
+    /// Octoboard tried to switch the session to another account by itself, the switch failed after
+    /// the session's process was ended, and bringing it back up on the account it had failed too,
+    /// so it is left interrupted there. `params` are those of `account_switched_automatically`
+    /// (`agent`, `from`, `account`, `from_id?`, `account_id?`, naming the account it was on and the
+    /// one it was to be switched to), with why it could not be brought back up beside them as a
+    /// `launch_failed` carries its own failure: `reason`, `reason_code` and the failure's own
+    /// params.
+    pub const ACCOUNT_SWITCH_AUTOMATICALLY_FAILED: &str = "account_switch_automatically_failed";
     /// A message written into the session went to a view of its agent's background agents (a
     /// subagent, or a new background session) rather than the conversation, and is not written
     /// again. `params` names the `agent`.

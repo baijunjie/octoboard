@@ -58,6 +58,32 @@ Grok Build reports no turn end at all for some turns, and the backstop Octoboard
 there fires about a minute after the turn ends, so a synthesised report for one of those turns
 arrives that much later. Sessions outside the orchestration are never reported on.
 
+## Notices to an owner
+
+Besides reports, Octoboard itself writes a few notices into an owner about a session bound to it, where no report would
+say what happened. Each is written through the delivery every message takes, queued while the owner cannot take one
+(see "Messages held until a session can take them" in `docs/product/message-delivery.md`); an owner with no process
+running is not told, then or later.
+
+- **A session ended on its own.** When the process of a bound session ends without anyone having asked for it — it
+  crashed, or the user closed it in its terminal — its owner is told that the session ended on its own although nobody
+  archived it, interrupted it or moved it to another account, that it is recorded as interrupted and the work it was
+  doing stopped with it, and to look at it with `get_session` and relaunch it with `reopen_session` if the work should
+  go on. An end somebody asked for is not told: an archive, the daemon shutting down, or an operation that stops the
+  process itself, such as an account switch or a change of sharing. A process that ends by itself while such an
+  operation holds the session is told all the same, unless that operation started it and reports its outcome (see
+  "When the switch fails" in `docs/product/automatic-account-switch.md`).
+- **A session is waiting for the user.** When a bound session comes to wait for the user — at a permission prompt, a
+  question, a trust confirmation, a dialog of its agent, Codex's action title or a request of its own, by whichever
+  route it is seen — its owner is told that the session is waiting for the user and only they can clear it, not to
+  chase it or send it anything to get it going, a message to it being held until they are done, and to carry on with
+  the rest of its work. It is told once per turn, however often the session goes in and out of waiting in that turn,
+  whether or not the session has reported in it, and once for a wait before the session's first turn; the next turn
+  tells it again. Nothing is said when the session is no longer shown as waiting by the time the notice would be
+  written. No report is synthesised for a turn while the session waits, so this notice is how the owner learns of it.
+- **Octoboard switched a session's account by itself**, or tried to and could not bring it back up: see "When the
+  switch succeeds" and "When the switch fails" in `docs/product/automatic-account-switch.md`.
+
 ## Automatic archiving
 
 Locks follow "Locking a session" in `docs/product/sessions.md`. If the reporting session or any session under it

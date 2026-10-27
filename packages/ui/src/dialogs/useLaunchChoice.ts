@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { accountOpenedOn, avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
+import { accountOpenedOn, avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent, selectableAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { isolate } from "../i18n/isolate";
@@ -10,11 +10,12 @@ import { quotaUsedUpMessage } from "../quota/quotaCopy";
 import { useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { accountOption } from "./accountOptions";
+import { accountRefusalMessage } from "./accountRefusalMessage";
 
 type Overrides = { model?: string | null; effort?: string | null };
 
-/** Every agent's group of accounts as the pickers offer them, with the used-up quota, the running sharing change and the
- * disabled state of each account marked. */
+/** Every agent's group of accounts as the pickers offer them, with the used-up quota, the running sharing change, the
+ * not-logged-in state and the disabled state of each account marked. */
 export function useChoiceGroups(): ChoiceGroup[] {
   const t = useT();
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
@@ -37,8 +38,8 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * in place of the pickers' (ignored while that pair may not be picked). `overrides` holds only what the
  * user changed, for the request.
  *
- * An account that is turned off is not listed; one whose quota is used up or whose sharing change runs is listed disabled
- * with why. The choice opens on another account of the agent when the one it would inherit is unavailable, and
+ * An account that is turned off is not listed; one whose quota is used up, whose sharing change runs or that is not logged in
+ * is listed disabled with why. The choice opens on another account of the agent when the one it would inherit is unavailable, and
  * `unavailable`, when even the account the choice ends on is (every account of the agent is, or it is the
  * agent's only one), says why it cannot be used, for the dialog to refuse its submit with.
  *
@@ -106,6 +107,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   const exhaustedBy = choiceExhaustion(choice, groups);
   const chosenEntry = findEntry(groups, choiceKey(choice));
   const changingSharing = choiceChangingSharing(choice, groups);
+  const signedOut = choiceSignedOut(choice, groups);
   const disabled = choiceDisabled(choice, groups);
 
   const changeLaunchSetting = (field: "model" | "effort") => (value: string | null) =>
@@ -117,15 +119,17 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
     blocked,
     /** The preset's agent or account can no longer be picked, and the user has not picked since. */
     presetGone,
-    /** Why the chosen account cannot run a session, when it is disabled, its quota is used up or its sharing change
-     * runs: the error text of the account field. */
+    /** Why the chosen account cannot run a session, when it is disabled, not logged in, its quota is used up or its
+     * sharing change runs: the error text of the account field. */
     unavailable: disabled && chosenEntry
-      ? t("accountChoice.disabled.description", { name: isolate(chosenEntry.name) })
-      : exhaustedBy && chosenEntry?.quota
-        ? quotaUsedUpMessage(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
-        : changingSharing && chosenEntry
-          ? t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) })
-          : undefined,
+      ? accountRefusalMessage("accountChoice.disabled.description", chosenEntry.name)
+      : signedOut && chosenEntry
+        ? accountRefusalMessage("accountChoice.signedOut.description", chosenEntry.name)
+        : exhaustedBy && chosenEntry?.quota
+          ? quotaUsedUpMessage(t, chosenEntry.quota, chosenEntry.name, exhaustedBy, now)
+          : changingSharing && chosenEntry
+            ? t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) })
+            : undefined,
     overrides,
     agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude),
     setPickedAgent,

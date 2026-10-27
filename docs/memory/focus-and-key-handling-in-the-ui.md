@@ -49,6 +49,37 @@ than a check of your own: the browser blurs a control as it is disabled, before 
 hand-rolled "forget the element on blur" has already forgotten it by then. Its caller has to stay mounted and render
 nothing for that check to run in, rather than unmount with the element.
 
+## A modal that focuses itself as it opens over another dialog does it one render after mounting, not at mount or from a timer
+
+Applies to `packages/ui`, to code that moves focus into a modal by hand as the modal mounts (`dialogAround(ref)?.focus()`
+and the like) where the modal can open over another dialog — an alert or a question raised while one is open. Focus it
+from a layout effect of the render after the mount: a mount `useLayoutEffect` sets a state value, and a second
+`useLayoutEffect` keyed on that state does the focusing, as `ErrorAlertHost` in `packages/ui/src/dialogs/ErrorAlerts.tsx`
+does. The trouble is a dialog underneath with no focused element of its own yet — one opened by a press without a
+pointer (assistive technology, a script), whose opening focus react-aria defers to a frame. Both obvious timings lose to
+it:
+
+- a layout or passive effect at mount focuses the modal before react-aria has turned its containment on (that happens
+  in the render a mount effect of its own forces), so the dialog underneath reads the focus as escaping and moves it to
+  the modal's first control, where Enter then presses it;
+- a `setTimeout(..., 0)` races that deferred frame: the browser may render first, the dialog underneath takes focus
+  and becomes react-aria's active scope, and its containment pulls focus back off the modal once the timer focuses it.
+
+The state-driven second layout effect runs after the containment render, in the same task, before any frame. Do not
+answer either failure with a timer that takes focus back after a delay: it pulls back a user who has already tabbed on.
+
+The modal's own frame must not focus it at mount either: `DialogFrame` in `packages/ui/src/dialogs/Dialog.tsx` runs
+`useRefocusIfLost` from a passive mount effect, and when the modal replaces another one (focus on `<body>`) that is the
+first failure above. Pass `focusesItselfOnOpen` to `DialogFrame`, as `ErrorAlertHost` does.
+
+A mouse never shows it, and a jsdom test reaches it only with `setInteractionModality("virtual")` (reset when the test
+finishes), `requestAnimationFrame` stubbed as a 0 ms timer (so a frame runs ahead of any timer set after it) with
+`cancelAnimationFrame` stubbed as `clearTimeout`, a `Dialog` mounted first, the modal raised in an `act` of its own,
+and a drain of several awaited `setTimeout(0)` rounds rather than a fixed wait. Cover the replacing cases too — a
+queued modal shown once the first is acknowledged, and one put in front of it. Copy the "over a dialog opened without
+a pointer" cases in `packages/ui/src/dialogs/ErrorAlerts.test.tsx`. A test without the stub passes against the timer
+version.
+
 ## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`
 
 Applies to `packages/ui`, to any rule of the shape "hide this, close this, hand focus on once focus leaves it". A

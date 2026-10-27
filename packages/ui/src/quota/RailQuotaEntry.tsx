@@ -2,7 +2,9 @@ import { Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { accountDisabled } from "../accountChoices";
 import { Button } from "../components/Button";
+import { useFocusHandoff } from "../components/useFocusHandoff";
 import { accountsByAgent, defaultAccountName, noAgentState, pickableAgents } from "../agents";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { AgentTabList } from "../components/AgentTabList";
@@ -13,7 +15,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../components/scrollFade";
 import { useListMotion } from "../components/useListMotion";
 import { Message, useT } from "../i18n/react";
-import type { Account, Agent, QuotaWindow } from "../protocol";
+import { isLive, type Account, type Agent, type QuotaWindow } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
 import { useDaemon, useDaemonStore } from "../store";
@@ -99,9 +101,22 @@ function QuotaCapsule({ window, height, now }: { window: QuotaWindow; height: nu
   );
 }
 
+/** One row of an agent's panel: an account of the agent (`null`, the default account) and whether the user turned it off. */
+interface QuotaRow {
+  account: Account | null;
+  disabled: boolean;
+}
+
+/** The rows the panel lists for `agent`, the default account first: not an account the user turned off, unless it is
+ * `inUse`, the account the selected running session is still on (`null` for the default account, `undefined` for none). */
+function listedRows(owned: Account[], disabledDefaults: readonly Agent[] | undefined, agent: Agent, inUse: string | null | undefined): QuotaRow[] {
+  return [null, ...owned].map((account) => ({ account, disabled: accountDisabled(owned, disabledDefaults, agent, account?.id ?? null) }))
+    .filter(({ account, disabled }) => !disabled || (account?.id ?? null) === inUse);
+}
+
 /** The rail's quota button and the floating panel it anchors, which lists the accounts of each agent that is added and
- * installed, in the order they were added, with their plan and quota (see "Opening the panel" in
- * `docs/product/account-quota-panel.md`). The panel is a `Hint` of kind `popover`, the same behaviour as a status
+ * installed, in the order they were added, bar the ones the user turned off, with their plan and quota (see "Opening the
+ * panel" in `docs/product/account-quota-panel.md`). The panel is a `Hint` of kind `popover`, the same behaviour as a status
  * mark's popover: resting the mouse on the button opens it without moving focus; a mouse click opens nothing; a tap, a
  * pen, assistive technology and the keyboard open it with focus in it. Each opening asks the daemon to refresh the
  * quotas that are due. */
@@ -115,8 +130,14 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accountQuotas = useDaemonStore((s) => s.accountQuotas);
+  const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
+  const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   // Memoized rather than computed in a store selector, since its result is a new object on each call.
-  const bar = useMemo(() => sessionQuotaBarOf(session, { accounts, agentAvailability, accountQuotas }), [session, accounts, agentAvailability, accountQuotas]);
+  const bar = useMemo(() => sessionQuotaBarOf(session, { accounts, disabledDefaultAccounts: disabledDefaults, agentAvailability, accountQuotas }), [session, accounts, disabledDefaults, agentAvailability, accountQuotas]);
+  // The panel stands the session's account out only if its row is listed. The bar already leaves out a turned-off account
+  // unless the session runs on it, which is the panel's exception too; but an agent that is not added has a bar and no tab.
+  const inUse = session && isLive(session.status) ? { agent: session.agent, account: session.account_id ?? null } : undefined;
+  const shownListed = session !== undefined && bar !== undefined && pickableAgents(agentAvailability, addedAgents).includes(session.agent);
   const account = accounts.find((account) => account.id === session?.account_id);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const now = useResetClock(bar);
@@ -175,13 +196,15 @@ export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
             shownAgent={session && bar ? session.agent : undefined}
             // The account the panel scrolls to on that tab: the selected session's, the default account when the session names none.
             shownAccount={session?.account_id ?? null}
+            // The one account a turned-off account's exception is for: the selected session's, while it still runs on it.
+            inUse={inUse}
             // A press opens a panel that floats outside the rail's tab order, so focus is brought to its
             // first control; one a mouse rests on leaves focus where it was.
             focusSelectedTab={form === "press"}
             // The account the button shows stands out and the others dim from when the mouse is on the button
             // until it enters the panel or the panel closes; only a mouse does it, so keyboard focus on the
             // button (which does not open the panel) leaves them alone.
-            emphasiseShown={onButton && session !== undefined && bar !== undefined}
+            emphasiseShown={onButton && shownListed}
             onMouseEnter={() => setOnButton(false)}
             onOpenAccounts={() => {
               close();
@@ -216,10 +239,11 @@ function CloseWhenCovered({ close, own }: { close: () => void; own: string }): n
   return null;
 }
 
-/** The panel's contents: one tab per agent that is added and installed, in the order they were added, each listing the agent's accounts, and the
- * way into Settings' accounts section. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
+/** The panel's contents: one tab per agent that is added and installed and has an account to list, in the order they were
+ * added, each listing the agent's accounts that are not turned off (bar the selected running session's own, `inUse`), and
+ * the way into Settings' accounts section. The panel mounts afresh on each opening, so the tab starts on `shownAgent`
  * (the first tab if it is not listed or none is given) and the user's own choice lasts only until it closes. */
-function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, emphasiseShown, onMouseEnter, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; shownAccount: string | null; focusSelectedTab: boolean; emphasiseShown: boolean; onMouseEnter: () => void; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
+function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasiseShown, onMouseEnter, onOpenAccounts, onAddAgent }: { shownAgent?: Agent; shownAccount: string | null; inUse?: { agent: Agent; account: string | null }; focusSelectedTab: boolean; emphasiseShown: boolean; onMouseEnter: () => void; onOpenAccounts: () => void; onAddAgent: () => void }): React.ReactElement {
   const t = useT();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
@@ -228,7 +252,11 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, emphasiseShown
   // The tab elements exist only after the tabs have built their collection, so focus is given as
   // the selected one mounts, once.
   const focused = useRef(false);
-  const listed = accountsByAgent(accounts, pickableAgents(availability, addedAgents));
+  const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
+  // An agent whose accounts are all turned off has no tab, as it has no submenu in the menu bar, unless the selected running session is on one.
+  const listed = accountsByAgent(accounts, pickableAgents(availability, addedAgents))
+    .map(({ agent, accounts: owned }) => ({ agent, rows: listedRows(owned, disabledDefaults, agent, inUse?.agent === agent ? inUse.account : undefined) }))
+    .filter(({ rows }) => rows.length > 0);
   const selected = listed.find(({ agent }) => agent === chosen)?.agent ?? listed[0]?.agent;
   const focusOnce = (tab: HTMLElement | null) => {
     if (!tab || focused.current) return;
@@ -236,18 +264,25 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, emphasiseShown
     tab.focus();
   };
   const root = useRef<HTMLDivElement>(null);
-  // With no tab to take it, a keyboard pin's focus goes to the first button of the panel: Add agent, or the
-  // link to Settings' accounts.
+  // With no tab to take it, a keyboard pin's focus goes to the first button of the panel: the empty state's Add agent
+  // or Manage accounts…, or else the link to Settings' accounts.
   useEffect(() => {
     if (focusSelectedTab && selected === undefined) root.current?.querySelector("button")?.focus();
   }, []);
+  // A tab that exists only for the selected running session's turned-off account goes when the session stops, taking
+  // focus with it: the hand-off puts it on the tab now selected, or on the panel's first button when there is none.
+  const handoff = useFocusHandoff(() => {
+    (root.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? root.current?.querySelector<HTMLElement>("button"))?.focus();
+  });
   const noAgents = noAgentState(availability, addedAgents);
   return (
-    <div ref={root} className="flex flex-col" onPointerEnter={(event) => event.pointerType === "mouse" && onMouseEnter()}>
+    <div ref={root} className="flex flex-col" onFocus={handoff.onFocus} onBlur={handoff.onBlur} onPointerEnter={(event) => event.pointerType === "mouse" && onMouseEnter()}>
       {selected === undefined ? (
         <div className="p-4">
           {noAgents === "add" ? (
             <EmptyPanel icon={Bot} message={t("rail.quota.none")} description={t("rail.quota.noneHint")} action={{ label: t("agents.addAction"), onPress: onAddAgent }} />
+          ) : noAgents === undefined ? (
+            <EmptyPanel icon={Gauge} message={t("rail.quota.noEnabled")} description={t("rail.quota.noEnabledHint")} action={{ label: t("rail.quota.manage"), onPress: onOpenAccounts }} />
           ) : (
             <EmptyPanel icon={Gauge} message={t("rail.quota.noneInstalled")} description={<Message id="rail.quota.noneInstalledHint" params={PATH_VAR_PARAMS} />} />
           )}
@@ -268,14 +303,14 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, emphasiseShown
               ends, so the first and last rows sit as far from the tab strip and the foot as rows do
               from each other's dividers. */}
           <div className="grid grid-cols-1">
-            {listed.map(({ agent, accounts: owned }) => (
-              <AgentPanel key={agent} agent={agent} owned={owned} currentAccount={agent === shownAgent ? shownAccount : undefined} dimOthers={emphasiseShown} />
+            {listed.map(({ agent, rows }) => (
+              <AgentPanel key={agent} agent={agent} rows={rows} currentAccount={agent === shownAgent ? shownAccount : undefined} dimOthers={emphasiseShown} />
             ))}
           </div>
         </Tabs>
       )}
-      {/* The empty state that asks to add an agent has that button already; this link would say the same. */}
-      {!(selected === undefined && noAgents === "add") && (
+      {/* The empty states that ask to add an agent or to manage the accounts have that button already; this link would say the same. */}
+      {!(selected === undefined && (noAgents === "add" || noAgents === undefined)) && (
         <div className="groove-t flex justify-end p-2">
           <Button size="sm" variant="ghost" className="text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground" preventFocusOnPress onPress={onOpenAccounts}>
             <KeyRound aria-hidden="true" className="size-4 shrink-0" />
@@ -295,14 +330,14 @@ function QuotaPanel({ shownAgent, shownAccount, focusSelectedTab, emphasiseShown
  * The region is held by the component that renders the panel, not by one inside it. react-aria makes a
  * panel with nothing tabbable inside it a tab stop of its own, and checks that when the panel renders
  * or something is added inside it, never when an attribute such as `tabindex` changes: the region's
- * `tabindex` arriving with the overflow report goes unnoticed unless the panel renders with it. Left a stop in front of the region, the panel takes Tab from the tab strip and then,
- * rendering on that focus, finds the region and gives up its `tabindex`, which drops focus to the body
- * in WebKit.
+ * `tabindex` arriving with the overflow report goes unnoticed unless the panel renders with it. Left a
+ * stop in front of the region, the panel takes Tab from the tab strip and then, rendering on that focus,
+ * finds the region and gives up its `tabindex`, which drops focus to the body in WebKit.
  *
  * Only the region is held here, and the list is the panel's content (`AgentAccountList`): `Tabs`
  * renders its children a second time in the hidden copy it builds its collection from, where the panel
  * renders nothing but this component renders in full, so the list's hooks would run there too. */
-function AgentPanel({ agent, owned, currentAccount, dimOthers }: { agent: Agent; owned: Account[]; currentAccount?: string | null; dimOthers: boolean }): React.ReactElement {
+function AgentPanel({ agent, rows, currentAccount, dimOthers }: { agent: Agent; rows: QuotaRow[]; currentAccount?: string | null; dimOthers: boolean }): React.ReactElement {
   const t = useT();
   const region = useFadeRegion({ label: t("rail.quota.accounts") });
   return (
@@ -316,7 +351,7 @@ function AgentPanel({ agent, owned, currentAccount, dimOthers }: { agent: Agent;
       // and not the library's exit placement out of the flow, which would drop the cell's height.
       className="col-start-1 row-start-1 m-0 self-start p-0 data-[exiting=true]:static data-[inert=true]:invisible"
     >
-      <AgentAccountList agent={agent} owned={owned} currentAccount={currentAccount} dimOthers={dimOthers} region={region} />
+      <AgentAccountList agent={agent} rows={rows} currentAccount={currentAccount} dimOthers={dimOthers} region={region} />
     </Tabs.Panel>
   );
 }
@@ -326,9 +361,9 @@ function AgentPanel({ agent, owned, currentAccount, dimOthers }: { agent: Agent;
  * With a `currentAccount` (`null` for the default account) the list opens scrolled so that account's row
  * is in view, as the selected session's account is the one the user came to read. The row is not marked
  * in any other way, except that with `dimOthers` (from the mouse on the rail button until it enters the panel
- * or the panel closes) every row but that one, on every agent's panel, is dimmed. Accounts added or removed
- * while the panel is open move with the shared list motion. */
-function AgentAccountList({ agent, owned, currentAccount, dimOthers, region }: { agent: Agent; owned: Account[]; currentAccount?: string | null; dimOthers: boolean; region: FadeRegion }): React.ReactElement {
+ * or the panel closes) every row but that one, on every agent's panel, is dimmed. The `rows` are what the panel lists
+ * (`listedRows`); accounts added or removed while it is open move with the shared list motion. */
+function AgentAccountList({ agent, rows, currentAccount, dimOthers, region }: { agent: Agent; rows: QuotaRow[]; currentAccount?: string | null; dimOthers: boolean; region: FadeRegion }): React.ReactElement {
   const t = useT();
   const defaultName = defaultAccountName(t, useDaemonStore((s) => s.settings.default_account_names), agent);
   const scroller = useRef<HTMLDivElement>(null);
@@ -344,15 +379,15 @@ function AgentAccountList({ agent, owned, currentAccount, dimOthers, region }: {
     <div className={region.focused ? "ring-2 ring-inset ring-focus" : ""}>
       <FadedScroller ref={scroller} region={region} className="max-h-[min(24rem,60vh)]">
         <div ref={listRef} className="relative flex flex-col px-4">
-          <QuotaAccount agent={agent} account={null} name={defaultName} rowRef={currentAccount === null ? currentRow : undefined} dimmed={dimOthers && currentAccount !== null} />
-          {owned.map((account) => (
+          {rows.map(({ account, disabled }) => (
             <QuotaAccount
-              key={account.id}
+              key={account?.id ?? "default"}
               agent={agent}
-              account={account.id}
-              name={<FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow>}
-              rowRef={currentAccount === account.id ? currentRow : undefined}
-              dimmed={dimOthers && currentAccount !== account.id}
+              account={account?.id ?? null}
+              name={account ? <FadeOverflow dir="auto" titleWhenClipped={account.name}>{account.name}</FadeOverflow> : defaultName}
+              rowRef={currentAccount === (account?.id ?? null) ? currentRow : undefined}
+              dimmed={dimOthers && currentAccount !== (account?.id ?? null)}
+              disabled={disabled}
             />
           ))}
         </div>
@@ -366,15 +401,16 @@ function AgentAccountList({ agent, owned, currentAccount, dimOthers, region }: {
  * `dimmed` is the other, passing cue: a veil of the panel's own colour laid over the row, not `opacity`: under a
  * translucent ancestor WebKit paints descendants that fade or sit on a GPU layer as blank tiles. The veil is
  * visual only and lets pointer events through. It takes the dimmed text below WCAG AA on purpose, by the user's
- * decision: a de-emphasis cue, lifted when the mouse enters the panel or the panel closes. */
-function QuotaAccount({ agent, account, name, rowRef, dimmed }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement>; dimmed: boolean }): React.ReactElement {
+ * decision: a de-emphasis cue, lifted when the mouse enters the panel or the panel closes. A turned-off account, which
+ * only the selected running session's exception lists, carries a neutral "Disabled" badge. */
+function QuotaAccount({ agent, account, name, rowRef, dimmed, disabled }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement>; dimmed: boolean; disabled: boolean }): React.ReactElement {
   const quota = useAccountQuota(agent, account);
   const now = useNow();
   const usedUp = exhaustedQuotaWindow(quota, now) !== undefined;
   // The last row has no divider; a departing row's visual after it is not a row.
   return (
     <div ref={rowRef} data-list-motion={account ?? `default:${agent}`} data-dimmed={dimmed || undefined} className={`${INACTIVE_VEIL_CLASS} flex flex-col gap-2 groove-b py-3 data-dimmed:after:bg-overlay/55 [&:not(:has(~[data-list-motion]))]:border-b-0`}>
-      <AccountNameLine name={name} quota={quota} usedUp={usedUp} />
+      <AccountNameLine name={name} quota={quota} usedUp={usedUp} disabled={disabled} />
       <AccountQuotaSummary quota={quota} single usedUp={usedUp} />
     </div>
   );

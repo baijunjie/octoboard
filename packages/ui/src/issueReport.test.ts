@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 
 import { appConfig } from "./appConfig";
 import { DaemonRequestError } from "./daemon-client";
-import { ActionableError } from "./errorRecovery";
+import { ActionableError } from "./actionableError";
 import { issueReportUrl, osFromUserAgent, recordNames, sanitizeReportText, type IssueFacts } from "./issueReport";
 
 const context = { names: ["Secret Project", "Q", "zz", "my-branch", "Q7", "dev"], homeDir: "/Users/alice" };

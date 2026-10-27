@@ -413,13 +413,17 @@ fn relationships(agent: Agent, owns: bool) -> String {
     lines.push(format!(
         "- Every session reads the same things, whichever its kind, and any of them may read any \
          session, project or console: `{get_session}` a session's status and a tail of its \
-         output (8 KiB, or up to 64 KiB with `output_bytes`), `{read_session_history}` what \
+         output (8 KiB, or up to 64 KiB with `output_bytes`), and with no `session` your own \
+         record, which is how you learn your own Octoboard id (`session`); \
+         `{read_session_history}` what \
          its conversation held (the messages of the user and Octoboard and the agent's final \
          replies, not its tool calls) a page at a time from the latest, `{list_consoles}` the \
          consoles, `{list_projects}` the projects of a console (yours unless you name another, \
-         of which it gives only what `{request_session}` needs to target a project), and \
-         `{list_archived}` the archived sessions, newest first (narrow them with `project` or \
-         `owner`, and `limit` sets how many). \
+         of which it gives only what `{request_session}` needs to target a project; \
+         `project` narrows it to one, and `refresh` checks git status first), and \
+         `{list_archived}` the archived sessions, newest first (narrow them with `project`, \
+         `owner` or `yours`, `limit` sets how many, and `before` takes the previous \
+         answer's `next` to read the next page). \
          A session that is not yours (`yours: false`) is to be left alone, whatever you can read \
          of it.",
         get_session = tool("get_session"),
@@ -461,6 +465,8 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
     let report = qualified_tool_name(agent, "report");
     let share_info = qualified_tool_name(agent, "share_info");
     let get_project = qualified_tool_name(agent, "get_project");
+    let get_session = qualified_tool_name(agent, "get_session");
+    let get_account_quotas = qualified_tool_name(agent, "get_account_quotas");
     let (dispatcher, owner_noun) = match owner {
         Owner::Console => ("A console session".to_string(), "console session"),
         Owner::Project { session_id } => (
@@ -483,7 +489,17 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
            this terminal — not through the {owner_noun} and not through `{report}`. Ask, then \
            wait.\n\
          - Report once per round of work rather than per step.\n\
-         - `{get_project}` reads this project's settings in Octoboard, read-only.\n\
+         - `{get_project}` reads this project's settings in Octoboard, read-only; `refresh` \
+           checks its git status first.\n\
+         - Your account's plan quota can run out while you work. `{get_session}` with no \
+           `session` names the account you run on (`account`); look it up in \
+           `{get_account_quotas}` (an account the user turned off is not listed there, and \
+           yours may be one), and when that shows it running low, say so in your `{report}` as \
+           `needs_decision`, naming the account and what is left, rather than carrying on until \
+           it stops; your owner decides whether to move you to another account or hand you off. \
+           If the user turned on automatic switching, Octoboard also moves you to another \
+           account by itself when a turn of yours stops on your account's usage limit: it tells \
+           you when it does, and you carry on there.\n\
          - Your owner is the {owner_noun} that dispatched you, and you take work only from it, \
            or from the user typing in this terminal. Your owner can hand you over to another \
            session: Octoboard then tells you so in a message, and from then on the new owner is \
@@ -541,7 +557,8 @@ fn unbound_project_session_description(agent: Agent) -> String {
          - A session waiting for the user is not yours to chase: it is at a permission prompt or \
            has asked the user something, and only they can clear it. A message you send it is held \
            until they are done.\n\
-         - `{get_project}` reads this project's settings in Octoboard, read-only.\n\
+         - `{get_project}` reads this project's settings in Octoboard, read-only; `refresh` \
+           checks its git status first.\n\
          - `{show_page}` pushes an HTML page to a report panel the user sees beside you, for \
            anything better shown than typed: a table, a comparison, a form. It is a static \
            document with native forms: scripts do not run, and a submitted form comes back to you \
@@ -608,6 +625,27 @@ mod tests {
                 assert!(!project_session.contains("mcp__"));
                 assert!(!unbound_session.contains("mcp__"));
             }
+        }
+    }
+
+    /// A project session is told how to learn its own id, and a bound one what to do when its
+    /// account's quota runs low.
+    #[test]
+    fn a_project_session_learns_its_own_id_and_a_bound_one_reports_a_low_quota() {
+        for agent in Agent::ALL {
+            let bound = role_description(
+                Role::Project,
+                Some(&Owner::Console),
+                agent,
+                &RoleOptions::default(),
+            );
+            let unbound = role_description(Role::Project, None, agent, &RoleOptions::default());
+            for text in [&bound, &unbound] {
+                assert!(text.contains("learn your own Octoboard id"), "{text}");
+            }
+            assert!(bound.contains("running low, say so"), "{bound}");
+            assert!(bound.contains("`needs_decision`"), "{bound}");
+            assert!(!unbound.contains("running low, say so"), "{unbound}");
         }
     }
 

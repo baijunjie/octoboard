@@ -122,7 +122,8 @@ export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, 
       ...accountLines(t, source, agent, account),
     ]);
     const accountId = currentConsole ? consoleAccount(currentConsole, agent, source.accounts) : undefined;
-    const reading = accountId !== undefined ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
+    // A turned-off account has no lines in the submenu, so its bar and name would head a list that does not hold it.
+    const reading = accountId !== undefined && !accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, accountId) ? accountQuotaOf(source.accountQuotas, agent, accountId) : undefined;
     const bar = reading && !reading.unavailable ? usageBarWindows(reading) : undefined;
     const accountName = source.accounts.find((account) => account.id === accountId)?.name;
     return [{

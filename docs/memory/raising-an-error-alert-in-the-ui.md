@@ -25,7 +25,7 @@ that did not load, a refused precondition, a clipboard that refused, a daemon th
 what it is given (`classifyError` in `packages/ui/src/errorRecovery.ts`), and a string, a plain `Error`, or a
 `DaemonRequestError` whose code is in no `GROUPS` entry classifies as unexpected: the alert says the failure may be a
 bug and asks the user to file an Issue, however ordinary the cause. So raise such a failure as
-`new ActionableError(message, recovery, { cause, detail })`, from the same file, or pass the `recovery` explicitly
+`new ActionableError(message, recovery, { cause, detail })`, from `packages/ui/src/actionableError.ts`, or pass the `recovery` explicitly
 (`reportError`'s third argument, `toastError`'s fourth, `errorAlerts.report`'s `recovery`). Use the recovery whose
 remedy fits, or `"none"` where the alert's body already says what to do.
 

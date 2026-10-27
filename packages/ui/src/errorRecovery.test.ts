@@ -4,7 +4,8 @@ import { expect, it } from "vitest";
 import { DaemonRequestError } from "./daemon-client";
 import { errorAlerts } from "./errorAlerts";
 import { errorPresentation } from "./errorPresentation";
-import { ActionableError, classifyError, pathLinkRecovery } from "./errorRecovery";
+import { classifyError, pathLinkRecovery } from "./errorRecovery";
+import { ActionableError } from "./actionableError";
 
 it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
@@ -17,7 +18,7 @@ it.each([
   ["agent_already_added", "addedAgents"], ["agent_order_invalid", "addedAgents"], ["agent_not_added", "agentNotAdded"],
   ["grok_sandbox_unsupported", "grokSandbox"],
   ["default_account_not_shareable", "accountNotShareable"], ["account_sharing_failed", "accountSharing"], ["account_still_sharing", "accountBusy"],
-  ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"], ["account_disabled", "accountDisabled"],
+  ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"], ["account_disabled", "accountDisabled"], ["account_not_signed_in", "accountNotSignedIn"], ["daemon_shutting_down", "none"],
   ["git_failed", "gitFailure"], ["git_clone_failed", "gitFailure"],
   ["sharing_resume_failed", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
@@ -124,4 +125,12 @@ it.each([
   [new Error("x"), undefined],
 ])("decides the remedy of a failed path link click for %s", (error, recovery) => {
   expect(pathLinkRecovery(error)).toBe(recovery);
+});
+
+it.each([
+  ["a full disk", "No space left on device (os error 28)", "diskSpaceNoRetry"],
+  ["a denied access", "Permission denied (os error 13)", "access"],
+])("gives a failed automatic switch whose cause is %s a remedy without the operation to retry", (_name, detail, recovery) => {
+  const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { agent: "Claude Code", from: "A", account: "B", reason: detail, reason_code: "internal_error", detail });
+  expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
 });

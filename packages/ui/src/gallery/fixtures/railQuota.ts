@@ -1,7 +1,7 @@
 import type { Account, Agent, AgentAvailability, AccountQuota, Settings } from "../../protocol";
 import { describing } from "../interact";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, SAMPLE, minutesAgo, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, minutesAgo, sessionOf, snapshotState } from "./builders";
 import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
@@ -19,14 +19,14 @@ const LONG_NAME = "Acme Corporation internal platform research and billing";
 function railQuotaState(
   accounts: Account[],
   accountQuotas: AccountQuota[],
-  { installed = ["claude", "codex"], added = ALL_AGENTS, defaultNames }: { installed?: Agent[]; added?: Agent[]; defaultNames?: Settings["default_account_names"] } = {},
+  { installed = ["claude", "codex"], added = ALL_AGENTS, defaultNames, turnedOffDefaults }: { installed?: Agent[]; added?: Agent[]; defaultNames?: Settings["default_account_names"]; turnedOffDefaults?: Agent[] } = {},
 ) {
   return {
     ...snapshotState({
       consoles: [console_],
       projects: [web, api],
       sessions,
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, default_account_names: defaultNames },
+      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, default_account_names: defaultNames, disabled_default_accounts: turnedOffDefaults },
       accountQuotas,
     }),
     agentAvailability: new Map<Agent, AgentAvailability>(
@@ -155,6 +155,83 @@ const usedUpState = railQuotaState(
   ],
 );
 
+/** `accounts` with those named by `ids` turned off. */
+function turnedOff(accounts: Account[], ...ids: string[]): Account[] {
+  return accounts.map((account) => (ids.includes(account.id) ? { ...account, disabled: true } : account));
+}
+
+/** Every agent installed and read. Claude Code: its default account and Work turned off, Side project on. Codex: its
+ * default account and Personal, its only accounts, turned off. Grok Build's default account on. */
+const turnedOffHiddenState = railQuotaState(
+  turnedOff([sideProject, { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" }, { id: "a-codex", agent: "codex", name: "Personal", config_dir: "/Users/dev/.codex-personal" }], "a-work", "a-codex"),
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
+    quotaOf("claude", "a-side", "pro", [quotaWindow("session", 30, 150), quotaWindow("weekly", 22, 4 * 24 * 60)]),
+    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
+    quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
+    quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 23, 4 * 24 * 60 + 11 * 60)]),
+  ],
+  { installed: ALL_AGENTS, turnedOffDefaults: ["claude", "codex"] },
+);
+
+/** Hub runs on Claude Code's Work, which is turned off, as is Side project; the default account and Client are on. */
+const turnedOffRunningOwnedState = railQuotaState(
+  turnedOff(
+    [
+      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+      sideProject,
+      { id: "a-client", agent: "claude", name: "Client", config_dir: "/Users/dev/.claude-client" },
+    ],
+    "a-work",
+    "a-side",
+  ),
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
+    quotaOf("claude", "a-side", "pro", [quotaWindow("session", 30, 150), quotaWindow("weekly", 22, 4 * 24 * 60)]),
+    quotaOf("claude", "a-client", "pro", [quotaWindow("session", 8, 240), quotaWindow("weekly", 14, 5 * 24 * 60)]),
+    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
+  ],
+);
+
+/** Codex with every account turned off (the default one, Personal and Automation), Hub running on its default
+ * account; Claude Code's default account and Work are on. */
+const turnedOffAgentRunningState = railQuotaState(
+  turnedOff(
+    [
+      { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
+      ...codexAccounts,
+    ],
+    "a-codex",
+    "a-codex-auto",
+  ),
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
+    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
+    quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
+    quotaOf("codex", "a-codex-auto", null, [quotaWindow("session", 3, 295), quotaWindow("weekly", 9, 6 * 24 * 60)]),
+  ],
+  { turnedOffDefaults: ["codex"] },
+);
+
+/** Every account of both installed agents turned off, with readings that stay: Claude Code's default account and Work,
+ * Codex's default account and Personal. */
+const noneOnState = railQuotaState(
+  turnedOff([...claudeAccounts.slice(0, 1), codexAccounts[0]], "a-work", "a-codex"),
+  [
+    quotaOf("claude", null, "max", [quotaWindow("session", 18, 117), quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60)]),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)]),
+    quotaOf("codex", null, "plus", [quotaWindow("session", 64, 140), quotaWindow("weekly", 31, 5 * 24 * 60 + 2 * 60)]),
+    quotaOf("codex", "a-codex", "pro", [quotaWindow("session", 12, 285), quotaWindow("weekly", 40, 24 * 60 + 90)]),
+  ],
+  { turnedOffDefaults: ["claude", "codex"] },
+);
+
+/** A session of the web project that has been archived, on Work (turned off in `turnedOffRunningOwnedState`). */
+const archivedOnWork = sessionOf("s-web-old", console_.id, web.id, "Old checkout flow", "archived", { account_id: "a-work" });
+
 /** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one. */
 const usedUpMixState = railQuotaState(USED_UP_MIX.accounts, USED_UP_MIX.quotas);
 
@@ -260,6 +337,63 @@ export const railQuotaScenarios: Scenario[] = [
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {
+    id: "rail-quota-turned-off-hidden",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel, turned-off accounts left out",
+    description: "Claude Code's tab lists Side project alone: its default account and Work are turned off and have no row, though both have readings. The tabs are Claude Code and Grok Build; Codex has none, since both its accounts are turned off. Manage accounts… is the way to the turned-off ones.",
+    state: turnedOffHiddenState,
+    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+  },
+  {
+    id: "rail-quota-turned-off-running-owned",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel, the selected session runs on a turned-off account",
+    description: "Hub runs on Work, which is turned off, and keeps running: the usage button carries Hub's compact indicator, and the panel on Claude Code's tab still lists Work, with a neutral \"Disabled\" badge after its name, with the default account and Client, which are on. While the pointer is on the button the other two rows are dimmed and Work stands out. Side project, also turned off, has no row.",
+    state: {
+      ...turnedOffRunningOwnedState,
+      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-work" } : session])),
+    },
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+    ],
+  },
+  {
+    id: "rail-quota-turned-off-stopped",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage, the selected session's turned-off account while the session is stopped",
+    description: "The selected session, an archived one that ran on Work, is stopped, and Work is turned off: the usage button has no mini bar, as the account's exception ends with the session. The panel lists Claude Code's default account and Client alone, with no row for Work or Side project, and no row stands out while the pointer is on the button.",
+    state: {
+      ...turnedOffRunningOwnedState,
+      sessions: new Map([...sessions, archivedOnWork].map((session) => [session.id, session])),
+    },
+    steps: [
+      // The archive menu is where a project's archived session is reached; its row opens the session's history.
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })),
+      (ui) => ui.press(ui.t("sidebar.project.archive")),
+      (ui) => ui.press((name) => name.startsWith(archivedOnWork.title)),
+      (ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota")),
+    ],
+  },
+  {
+    id: "rail-quota-turned-off-agent-running",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel, the selected session runs on the default account of an agent with every account turned off",
+    description: "Hub runs on Codex's default account, and all of Codex's accounts are turned off. Codex keeps its tab, open beside Claude Code's, and lists the default account alone, with the neutral \"Disabled\" badge after its name: Personal and Automation have no row.",
+    state: {
+      ...turnedOffAgentRunningState,
+      sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "codex" } : session])),
+    },
+    steps: [
+      (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.hoverPanel(describing("usage button with a session's bar", (name) => name.startsWith(ui.t("rail.quota"))), ui.t("rail.quota")),
+    ],
+  },
+  {
     id: "rail-quota-pinned-codex",
     group: GROUP,
     category: "normal",
@@ -344,6 +478,15 @@ export const railQuotaScenarios: Scenario[] = [
     title: "Rail usage panel with agents installed but none added",
     description: "Every agent is installed but none is added, so the panel shows the empty state (a bot glyph, \"No agent added\", \"Add an agent to see its usage here.\" and an Add agent… button) rather than the PATH hint. The panel has no footer: its Manage accounts link would only repeat the button.",
     state: railQuotaState([], [], { installed: ALL_AGENTS, added: [] }),
+    steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
+  },
+  {
+    id: "rail-quota-none-on",
+    group: GROUP,
+    category: "normal",
+    title: "Rail usage panel with every account turned off",
+    description: "Every account of both agents is turned off, so the panel shows the empty state (a gauge glyph, \"No enabled account\" and \"Disabled accounts are not shown here.\") with Manage accounts… as the empty state's own button, and no tabs and no footer link.",
+    state: noneOnState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
   {

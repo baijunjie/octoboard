@@ -116,6 +116,22 @@ it("opens on another account of the agent when the inherited one is disabled, an
   expect(defaultOpenSessionRequest(t, onDefault, undefined, { kind: "unbound" }, state(off, ["claude"]), 1, "light")).toEqual({ disabled: { agent: "claude", account: null, name: "Personal" } });
 });
 
+it("opens on another account of the agent when the inherited one is not logged in, and names it when none is left", () => {
+  const onClaude = consoleOf("c-1", "Main", { default_agent: "claude", claude_account_id: "w" });
+  const signedOut = (account: string | null, code = "quota_not_signed_in"): AccountQuota => ({
+    agent: "claude", account, fetched_at: 0, plan: null, windows: [], unavailable: { code, params: {}, message: "x" },
+  });
+  const open = (accountQuotas: AccountQuota[]) => defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, { settings: { accounts, added_agents: null }, agentAvailability: available(), accountQuotas }, 1, "light");
+  expect(open([signedOut("w")])).toMatchObject({ request: { agent: "claude", account: null } });
+  expect(open([signedOut("w"), signedOut(null, "quota_config_dir_missing")])).toEqual({ signedOut: { agent: "claude", name: "Work" } });
+  // A reading that failed for a passing reason keeps the inherited account.
+  expect(open([signedOut("w", "quota_command_failed")])).toMatchObject({ request: { agent: "claude", account: "w" } });
+  const target = { kind: "new-console-session" as const, console: onClaude };
+  const unavailable = (accountQuotas: AccountQuota[]) => quickCreateUnavailable(target, { settings: { accounts, added_agents: null }, agentAvailability: available(), accountQuotas }, 1);
+  expect(unavailable([signedOut("w"), signedOut(null)])).toBe(true);
+  expect(unavailable([signedOut("w")])).toBe(false);
+});
+
 it("counts an agent whose every account is used up or turned off as having nothing for a quick create, a mix of the two included", () => {
   const onClaude = consoleOf("c-1", "Main", { default_agent: "claude" });
   const target = { kind: "new-console-session" as const, console: onClaude };

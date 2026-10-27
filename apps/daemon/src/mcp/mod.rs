@@ -178,8 +178,19 @@ macro_rules! session_record_fields {
          whether the session is pinned (`set_session_pinned`), and `locked` whether the user \
          locked it, which archiving refuses. `branches` names the git branches the session is \
          responsible for; `handover_branches`, and the `branches` of `new_session` and \
-         `request_session`, need the caller to be responsible for each, and \
-         `get_session_branches` gives each one's worktree. "
+         `request_session`, need the caller to be responsible for each, and `get_session_branches` \
+         gives each one's worktree. `display_title` is the name the user's session list shows (the \
+         agent's current task before `title`), `agent_session_id` the agent's own id of the \
+         conversation (null until reported), which `request_resume_session` takes as its \
+         `conversation`, and only when the user asked for that conversation, `origin` is `console` \
+         for a session started with `new_session`, `user` for the user's own and for one opened \
+         through `request_session` or `request_resume_session`, and a handoff's replacement copies \
+         the original's, and `has_conversation` says a turn was taken, not that the agent still \
+         holds the record: a `reopen_session` that finds it gone is refused. `model` and `effort`, \
+         when present, are the session's own choices, `null` leaving them to the agent's default; \
+         absent, it follows its project's (else console's) setting. `lead` marks a lead session, \
+         and `owned_sessions` counts the sessions bound to it in any status, archived ones \
+         included, which is what decides whom it can be transferred to. "
     };
 }
 
@@ -309,13 +320,13 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "get_console",
         description: concat!(
-            "This console's own settings: `name`, `default_agent` (the agent of console \
-             sessions), `project_session_agent` (the agent a project session without its own \
-             default uses; `null` follows `default_agent`), `accounts`, `launch` (the model and \
-             effort of console sessions like this one), `project_session_launch` (the model and \
-             effort a project session takes when neither it nor its project names one), whether \
-             it has an avatar (`has_icon`), and its working directory (`workdir`, read-only). \
-             Only the console this session belongs to can be read. ",
+            "This console's own settings: its id (`console`), `name`, `default_agent` (the agent \
+             of console sessions), `project_session_agent` (the agent a project session without \
+             its own default uses; `null` follows `default_agent`), `accounts`, `launch` (the \
+             model and effort of console sessions like this one), `project_session_launch` (the \
+             model and effort a project session takes when neither it nor its project names one), \
+             whether it has an avatar (`has_icon`), and its working directory (`workdir`, \
+             read-only). Only the console this session belongs to can be read. ",
             started_by_a_session!()
         ),
         schema: || object_schema(json!({}), &[]),
@@ -427,9 +438,11 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       yours for its whole life: it reports to this console session, its owner, and \
                       you instruct it with `send_message`, archive it once it is done and reopen \
                       it with `reopen_session` when it has another task. Needs no approval. \
-                      Returns the new session's id. The brief is rendered into the session's \
-                      opening prompt; `title` names the session in the user's language. It runs \
-                      on the project's default agent. While \
+                      Returns the new session's id, its agent, the account it opened on \
+                      (`account`, `account_name`) and the `model` and `effort` it was launched \
+                      with (`null` is the agent's own default). The brief is rendered into the \
+                      session's opening prompt; `title` names the session in the user's language. \
+                      It runs on the project's default agent. While \
                       `auto_select_account` is on, a left-out account is the one of the session's \
                       agent whose weekly quota resets soonest and that can still open a session. \
                       When none does, your own account is used only when the session's agent is \
@@ -601,18 +614,34 @@ const INTERRUPT_SESSION: ToolDef = ToolDef {
 
 const ARCHIVE_SESSION: ToolDef = ToolDef {
     name: "archive_session",
-    description: "End a session's process and archive it. Use it to wrap a session up \
-                  explicitly; a session that finishes cleanly with nothing left open is \
-                  archived without being asked. Refused for a session that is not yours \
-                  (`yours: false`): it is somebody else's, to be left alone, and for a session \
-                  that is `locked` (see `get_session`). The git branches the \
-                  sessions archived created, and the linked worktrees that have them checked \
-                  out, are removed once their processes have ended, wherever git can do it without \
-                  force; `branches_left` in the answer names any that stay, and why.",
+    description: "End a session's process and archive it. Use it to wrap a session up explicitly; \
+                  a session that finishes cleanly with nothing left open is archived without being \
+                  asked. Refused for a session that is not yours (`yours: false`): it is somebody \
+                  else's, to be left alone, and for a session that is `locked` (see \
+                  `get_session`). The git branches the sessions archived created, and the linked \
+                  worktrees that have them checked out, are removed once their processes have \
+                  ended, wherever git can do it without force; `branches_left` in the answer names \
+                  any that stay, and why. With `keep` nothing is removed and nothing is waited \
+                  for: they stay bound to their sessions and come back with them when those are \
+                  reopened (a session under a lead session is reopened by its lead), the answer \
+                  carries `branches_kept: true`, and its `note` names the branches of the sessions \
+                  archived with it, a lead session's own (`get_session_branches` lists the \
+                  branches of the session itself). To move them to a session of yours \
+                  now, use `handover_branches` with `from` the session you archived; the branches \
+                  of the sessions archived with it are not yours to name as `from`, so \
+                  `reopen_session` the session you archived with a `text` asking it to \
+                  `handover_branches` them from each of those to itself, then hand them on with \
+                  `from` set to it once it is idle.",
     schema: || {
         object_schema(
             json!({
                 "session": { "type": "string", "description": "The session's id." },
+                "keep": {
+                    "type": "boolean",
+                    "description": "Leave the session's git branches and worktrees as they are \
+                                    instead of removing them. Defaults to false. Use it when \
+                                    the work on them is not done with or someone may want it.",
+                },
             }),
             &["session"],
         )
@@ -678,9 +707,11 @@ const REOPEN_SESSION: ToolDef = ToolDef {
                   conversation, and optionally hand it the next instruction or reopen it with \
                   another model or reasoning effort (it stays on its agent and its account; to \
                   move it to another account, use `switch_session_account`). A `model` or \
-                  `effort` the agent does not offer is refused, with nothing reopened. Refused \
-                  for a session that is not yours (`yours: false`): it is somebody else's, to \
-                  be left alone.",
+                  `effort` the agent does not offer is refused, with nothing reopened. Returns \
+                  the session's id, its account (`account`, `account_name`) and the `model` \
+                  and `effort` it was launched with (`null` is the agent's own default). \
+                  Refused for a session that is not yours (`yours: false`): it is somebody \
+                  else's, to be left alone.",
     schema: || {
         object_schema(
             json!({
@@ -780,11 +811,12 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                   time, comes back as an error and changes nothing. Refused, changing nothing, \
                   while the session is in the middle of a turn, and for the agent the session \
                   already runs on (switching it to another account of that agent keeps the \
-                  conversation). An account whose quota is used up is refused only once the user \
-                  has approved (they can pick another in the form), or at once when handoffs are \
-                  approved without asking. Returns the new session's id, its agent, account and, \
-                  where set, model and effort, the branches that moved and the sessions it now \
-                  owns. Pass `account` only when the user asked for a particular one.",
+                  conversation). An account whose quota is used up, or that is not logged in, is \
+                  refused only once the user has approved (they can pick another in the form), or \
+                  at once when handoffs are approved without asking. Returns the new session's id, \
+                  its agent, account and, where set, model and effort, the branches that moved and \
+                  the sessions it now owns. Pass `account` only when the user asked for a \
+                  particular one.",
     schema: || {
         object_schema(
             json!({
@@ -806,7 +838,8 @@ const HANDOFF_SESSION: ToolDef = ToolDef {
                                     soonest and that can still open a session. When none does, \
                                     or while it is off, it is your own account when `agent` is \
                                     your own agent and that account can still open a session (it \
-                                    is not disabled and its quota is not used up); \
+                                    is not disabled, is logged in and its quota is not used \
+                                    up); \
                                     otherwise the account the session's project (else its \
                                     console) sets for `agent`.",
                 },
@@ -862,10 +895,11 @@ const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
                   time, comes back as an error and changes nothing. Refused at once, before the \
                   user is asked and changing nothing, for an account of another agent, an account \
                   the user turned off, the account the session is on already, and an archived \
-                  session; other refusals (an account whose quota is used up, say) can come after \
-                  the user has chosen. Returns the session with the account it is now on and its \
-                  model and reasoning effort where it has its own. `account` in `get_session` \
-                  shows the account a session is on, to match against `get_account_quotas`.",
+                  session; other refusals (an account whose quota is used up or that is not logged \
+                  in, say) can come after the user has chosen. Returns the session with the \
+                  account it is now on and its model and reasoning effort where it has its own. \
+                  `account` in `get_session` shows the account a session is on, to match against \
+                  `get_account_quotas`.",
     schema: || {
         object_schema(
             json!({
@@ -959,7 +993,8 @@ const GET_SESSION: ToolDef = ToolDef {
     description: concat!(
         "The session's status, plus a tail of what it has printed (the last 8 KiB, or \
          `output_bytes` of it; a session that has ended keeps its last output; `null` if \
-         none was kept). Any session can \
+         none was kept). With `session` left out it reads this session itself, which is how a \
+         session learns its own Octoboard id (`session`) and record. Any session can \
          be read, in any project or console, but one with `yours: false` is not \
          yours to act on, whether nobody owns it (`owner: null` on a project session) or \
          it reports to a different session: leave it alone. A session that is waiting \
@@ -978,7 +1013,10 @@ const GET_SESSION: ToolDef = ToolDef {
     schema: || {
         object_schema(
             json!({
-                "session": { "type": "string", "description": "The session's id." },
+                "session": {
+                    "type": "string",
+                    "description": "The session's id. Defaults to this session.",
+                },
                 "output_bytes": {
                     "type": "integer",
                     "minimum": 1,
@@ -988,7 +1026,7 @@ const GET_SESSION: ToolDef = ToolDef {
                                     a value above 65536 or below 1 is refused, not clamped.",
                 },
             }),
-            &["session"],
+            &[],
         )
     },
 };
@@ -1002,28 +1040,27 @@ const LIST_PROJECTS: ToolDef = ToolDef {
          name, host, directory, source, remote URL \
          (credentials removed), pin, the tags and the description (what the project \
          is for) the user gave each, the settings (`default_agent`, `accounts`, \
-         `launch`: each agent's model and reasoning effort), the `worktrees` settings \
-         (the project's own `override`, `null` following the application-wide value, and the `effective` \
-         values), whether the user has `trust_consent`ed to Octoboard pressing the \
+         `launch`: each agent's model and reasoning effort), the `git_workflow` settings \
+         (the project's own `override`, `null` following the application-wide value, and the \
+         `effective` values), whether the user has `trust_consent`ed to Octoboard pressing the \
          agent's folder-trust confirmation (read-only), its `git_status`, and the sessions \
-         currently running in each — \
-         every session of the console, whichever session owns it. Each carries `owner`, the \
-         session it reports to, `owner_kind` (a `console` or a `project` session) \
-         and `yours`; a project session with `owner: null` is unbound, which the user \
-         opened themselves and kept outside the orchestration. A session with \
-         `yours: false` is not this caller's to drive — it is unbound, or reports \
-         to a different session — leave it alone. An idle session with a \
-         non-empty `background_tasks` takes messages like any idle session but still \
-         has work running in the background. \
-         A non-null `writes_held` says why messages for a running session are \
-         queued rather than written into it, whatever its `status` reads; \
-         `queued_messages` counts them, and the information kept for an interrupted \
-         session to take when it is resumed. With `console` naming another console \
-         (`list_consoles` \
-         lists them), only \
-         what is needed to target a project of it with `request_session` or \
-         `request_resume_session` is returned: each project's id (`project`), name, \
-         description and tags, and none of its sessions or settings. ",
+         currently running in each — every session of the console, whichever session owns it. Each \
+         carries `owner`, the session it reports to, `owner_kind` (a `console` or a `project` \
+         session) and `yours`; a project session with `owner: null` is unbound, which the user \
+         opened themselves and kept outside the orchestration. A session with `yours: false` is \
+         not this caller's to drive — it is unbound, or reports to a different session — leave it \
+         alone. An idle session with a non-empty `background_tasks` takes messages like any idle \
+         session but still has work running in the background. A non-null `writes_held` says why \
+         messages for a running session are queued rather than written into it, whatever its \
+         `status` reads; `queued_messages` counts them, and the information kept for an \
+         interrupted session to take when it is resumed. With `console` naming another console \
+         (`list_consoles` lists them), only what is needed to target a project of it with \
+         `request_session` or `request_resume_session` is returned: each project's id (`project`), \
+         name, description and tags, and none of its sessions or settings. `project` narrows the \
+         list to one project. With `refresh` the git status of the projects listed is checked \
+         against their remotes first, as the application's own refresh does, so you need not run \
+         git for it; the answer then carries `git_refresh`, whose `finished` is false, with the \
+         `unfinished` projects, when a check had not finished after 30 seconds. ",
         git_status_field!(),
         " ",
         session_record_fields!(),
@@ -1039,6 +1076,23 @@ const LIST_PROJECTS: ToolDef = ToolDef {
                                     to this session's own console, and giving that one lists \
                                     the whole entry of each project. Reads reach any console; \
                                     what a call changes stays in your own.",
+                },
+                "project": {
+                    "type": "string",
+                    "description": "Only this project of the console: its id, or its name when \
+                                    that is unambiguous.",
+                },
+                "refresh": {
+                    "type": "boolean",
+                    "description": "Check the git status of the projects listed against their \
+                                    remotes before answering. The call then waits, for 30 \
+                                    seconds at most; a project checked within the last minute \
+                                    or being checked already is not started again. Like the \
+                                    application's own check, it fast-forwards a branch that is \
+                                    behind its upstream and has not diverged while \
+                                    `auto_pull_repositories` is on. Not for another console's \
+                                    projects, which carry no git status. Defaults to false; \
+                                    ask only when a status is too old to decide on.",
                 },
             }),
             &[],
@@ -1061,15 +1115,16 @@ const LIST_ARCHIVED: ToolDef = ToolDef {
     name: "list_archived",
     description: concat!(
         "List archived sessions, in any console, whichever session owns them: those of one \
-         project, or with `project` left out those of every project and the console \
-         sessions too. `console`, `project`, `owner` and `kind` narrow the list, and a \
-         session must match every one given; give `owner` or `project` when you can, since an \
-         unfiltered list is long. The newest archived come first, at most `limit` of them; \
-         `total` is how many match, so a `total` above the sessions listed means there are \
-         more: narrow the filters rather than raising `limit`. Each carries its `owner`, \
-         `owner_kind` and `yours`, so an earlier one of yours can be reopened instead of \
-         starting over (use `owner` with your own id to list just those). A session with \
-         `yours: false` is somebody else's: leave it alone. ",
+         project, or with `project` left out those of every project and the console sessions too. \
+         `console`, `project`, `owner`, `yours` and `kind` narrow the list, and a session must \
+         match every one given; give `yours`, `owner` or `project` when you can, since an \
+         unfiltered list is long. The newest archived come first, at most `limit` of them; `total` \
+         is how many match, and `older` how many of them come after the page: when there are some, \
+         `next` is a cursor, to pass as `before` to read the next page (it is null on the last). \
+         Each carries its `owner`, `owner_kind` and `yours`, so an earlier one of yours can be \
+         reopened instead of starting over (`yours: true` lists just those; `owner` with another \
+         session's id lists that one's). A session with `yours: false` is somebody else's: leave \
+         it alone. ",
         session_record_fields!(),
         session_context_field!()
     ),
@@ -1092,6 +1147,11 @@ const LIST_ARCHIVED: ToolDef = ToolDef {
                     "description": "Only sessions that were reporting to this session when \
                                     archived, by id.",
                 },
+                "yours": {
+                    "type": "boolean",
+                    "description": "`true`: only the sessions that were reporting to you when \
+                                    archived. `false`: only the ones that were not.",
+                },
                 "kind": {
                     "type": "string",
                     "enum": ["console", "project"],
@@ -1102,6 +1162,15 @@ const LIST_ARCHIVED: ToolDef = ToolDef {
                     "minimum": 1,
                     "maximum": 200,
                     "description": "How many sessions to return, 50 when left out.",
+                },
+                "before": {
+                    "type": "string",
+                    "description": "Return only the sessions that come after a position in the \
+                                    list, the older ones: the `next` the previous page answered \
+                                    with, passed back unchanged. It is a position, not a session, \
+                                    so it stays good if that session has been reopened or deleted \
+                                    since. Anything else is refused. Left out, the newest are \
+                                    returned.",
                 },
             }),
             &[],
@@ -1282,18 +1351,40 @@ const SHARE_INFO: ToolDef = ToolDef {
 const GET_PROJECT: ToolDef = ToolDef {
     name: "get_project",
     description: concat!(
-        "This project's settings in Octoboard, read-only: name, directory, source, remote URL \
-         (credentials removed), pin, tags, description, `default_agent`, `accounts` and `launch` \
+        "This project's settings in Octoboard, read-only: its id (`project`), name, `host`, \
+         directory, source, remote URL (credentials removed), pin, tags, description, \
+         `trust_consent` (whether the user allowed Octoboard to press the agent's folder-trust \
+         confirmation), `default_agent`, `accounts` and `launch` \
          (the model and effort sessions of each agent start with; a value left unset falls back \
          to the console's `project_session_launch`), and `git_workflow` (the project's own \
          `override` of the git workflow settings, `null` following the application-wide value, \
          and the `effective` resolved values; `rebase_before_merge` and `delivery` apply only \
          while `development` is not `in_place`), and `git_status`. ",
         git_status_field!(),
-        " Only this session's own project can be read. ",
+        " With `refresh` the status is checked against the remote first, as the application's \
+         own refresh does, so you need not run git for it; `git_refresh` in the answer then says \
+         whether the check `finished` within 30 seconds. Only this session's own project can be \
+         read. ",
         started_by_a_session!()
     ),
-    schema: || object_schema(json!({}), &[]),
+    schema: || {
+        object_schema(
+            json!({
+                "refresh": {
+                    "type": "boolean",
+                    "description": "Check this project's git status against its remote before \
+                                    answering. The call then waits, for 30 seconds at most; a \
+                                    project checked within the last minute or being checked \
+                                    already is not started again. Like the application's own \
+                                    check, it fast-forwards a branch that is behind its upstream \
+                                    and has not diverged while `auto_pull_repositories` is on. \
+                                    Defaults to false; ask only when the status is too old to \
+                                    decide on.",
+                },
+            }),
+            &[],
+        )
+    },
 };
 
 /// How an owner — a console session, or a project session that can own sessions — passes one of
@@ -1422,7 +1513,7 @@ const REQUEST_SESSION: ToolDef = ToolDef {
                   when that account can still open a session; any other session takes the account \
                   its project, else its console, sets. Otherwise a session in your own console of \
                   your own agent runs on your own account, unless that account can no longer \
-                  open a session (it is disabled or its quota is used up), and any other takes \
+                  open a session (it is disabled, not logged in or used up), and any other takes \
                   the account its project, else its console, sets. Pass an account only when the \
                   user asked for one.",
     schema: request_session_schema,
@@ -1463,25 +1554,31 @@ const REQUEST_RESUME_SESSION: ToolDef = ToolDef {
 const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
     name: "get_account_quotas",
     description: "How much plan quota each account has left, read-only: every account of every \
-                  agent, the agent's default account (`account: \"default\"`) and the stored \
-                  ones, with its `account_name`, `plan`, and its quota `windows` (`kind` \
-                  `session` is the five-hour window (Claude Code's session limit, Codex's 5h \
-                  limit), `weekly` the weekly one across all models, \
-                  `weekly_model` a weekly window of the model named by `label`, `credit_period` \
-                  a pool of credits over a billing period). All values are percentages of a \
-                  window: `used_percent` and `remaining_percent`, with `resets_at` \
-                  (milliseconds since the epoch) and `window_minutes`; no absolute token or \
-                  dollar amount is available. `exhausted` says the account is used up and cannot \
-                  open a session until it resets, and `exhausted_until` is when (milliseconds \
-                  since the epoch; null when it is not exhausted or the reset time is unknown). \
-                  Only agents a session could be opened on are listed: one that is not installed \
-                  or not added lists no accounts. These are the readings Octoboard last took, \
-                  refreshed about every five minutes, and this call takes a new one only when \
-                  `refresh` is true: `fetched_at` says how old a reading is, `unavailable` \
-                  gives the reason a reading is missing or could not be refreshed (an account not \
-                  read yet has `fetched_at: null`, as has one of an agent not detected yet). Use \
-                  it to check an account before relying on it, or to pick the account for \
-                  `switch_session_account` or `handoff_session`.",
+                  agent that the user has not turned off, the agent's default account (`account: \
+                  \"default\"`) and the stored ones, with its `account_name`, `plan`, and its \
+                  quota `windows` (`kind` `session` is the five-hour window (Claude Code's session \
+                  limit, Codex's 5h limit), `weekly` the weekly one across all models, \
+                  `weekly_model` a weekly window of the model named by `label`, `credit_period` a \
+                  pool of credits over a billing period). All values are percentages of a window: \
+                  `used_percent` and `remaining_percent`, with `resets_at` (milliseconds since the \
+                  epoch) and `window_minutes`; no absolute token or dollar amount is available. \
+                  `exhausted` says the account is used up and cannot open a session until it \
+                  resets, and `exhausted_until` is when (milliseconds since the epoch; null when \
+                  it is not exhausted or the reset time is unknown). `can_open` says a session \
+                  could be opened on the account now; when it is false `cannot_open_reason` says \
+                  why (used up, not logged in, or a change of its sharing settings is running). \
+                  `auto_select_account` is whether a session opened without naming an account is \
+                  put on one Octoboard chooses (the account of the agent whose weekly quota resets \
+                  soonest and still has some left, among those with `can_open`). Only agents a \
+                  session could be opened on are listed: one that is not installed or not added \
+                  lists no accounts. These are the readings Octoboard last took, refreshed about \
+                  every five minutes, and this call takes a new one only when `refresh` is true, \
+                  and then for the accounts it lists and those of an agent that is installed but \
+                  not added, which Octoboard reads as well: `fetched_at` says how old a reading \
+                  is, `unavailable` gives the reason a reading is missing or could not be \
+                  refreshed (an account not read yet has `fetched_at: null`, as has one of an \
+                  agent not detected yet). Use it to check an account before relying on it, or to \
+                  pick the account for `switch_session_account` or `handoff_session`.",
     schema: || {
         object_schema(
             json!({
@@ -1549,7 +1646,11 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       account only when the user asked for it, or when it is the way to reach \
                       another agent. Name another agent only when the user asked for it or when \
                       you judge it fits the work better and an account of it can open a session. \
-                      Returns the new session's id. The brief is rendered into the session's \
+                      Returns the new session's id, its agent, the account it opened on \
+                      (`account`, `account_name`) and the `model` and `effort` it was launched \
+                      with (`null` is the agent's own default), and with `branches` the ones \
+                      that moved and a `note` on how the handover went. \
+                      The brief is rendered into the session's \
                       opening prompt; `title` names the session in the user's language. A \
                       session started this way cannot start sessions of its own, \
                       and only this project is available; a session elsewhere, or one that should \
@@ -1623,13 +1724,13 @@ fn request_session_schema() -> Value {
         "The account the session runs on: an account's id or name, or `default` for the agent's \
          default account. It must belong to the session's agent. While `auto_select_account` is \
          on, a left-out account is the one of the session's agent whose weekly quota resets \
-         soonest, among accounts that can still open a session (not disabled, quota not used \
-         up). Your own account, for a session in your own console of your own agent that can \
-         still open a session, or the account its project (else its console) sets, is used \
-         only when none does. Otherwise a session in your own console of your own agent runs \
-         on your own account, unless that account can no longer open a session (it is disabled \
-         or its quota is used up), and any other takes the account its project (else its \
-         console) sets for the agent. Pass one only when the user asked for it."
+         soonest, among accounts that can still open a session (not disabled, logged in, quota not \
+         used up). Your own account, for a session in your own console of your own agent that can \
+         still open a session, or the account its project (else its console) sets, is used only \
+         when none does. Otherwise a session in your own console of your own agent runs on your \
+         own account, unless that account can no longer open a session (it is disabled, not logged \
+         in or used up), and any other takes the account its project (else its console) sets for \
+         the agent. Pass one only when the user asked for it."
     );
     schema["properties"]["branches"] = json!({
         "type": "array",
@@ -1741,12 +1842,12 @@ fn new_session_schema(with_project: bool) -> Value {
                  the agent's default account. It must belong to the session's agent. While \
                  `auto_select_account` is on, a left-out account is the one of the session's \
                  agent whose weekly quota resets soonest, among accounts that can still open a \
-                 session (not disabled, quota not used up). Your own account, for a session of \
-                 your own agent that can still open a session, or the account its project (else \
-                 its console) sets, is used only when none does. Otherwise a session of your \
-                 own agent runs on your own account, unless that account can no longer open a \
-                 session (it is disabled or its quota is used up), and any other takes the \
-                 account its project (else its console) sets for the agent. Pass one only when \
+                 session (not disabled, logged in, quota not used up). Your own account, for a \
+                 session of your own agent that can still open a session, or the account its \
+                 project (else its console) sets, is used only when none does. Otherwise a session \
+                 of your own agent runs on your own account, unless that account can no longer \
+                 open a session (it is disabled, not logged in or used up), and any other takes \
+                 the account its project (else its console) sets for the agent. Pass one only when \
                  the user asked for it{}.",
                 if with_project { " (see `get_settings`)" } else { "" },
                 if with_project { "" } else { ", or when it is the way to reach another agent" }
@@ -1763,7 +1864,8 @@ fn new_session_schema(with_project: bool) -> Value {
             "type": "string",
             "description": "Overrides the reasoning effort for this one session; blank is the \
                             agent's own default. `list_agent_models` lists the levels each model \
-                            offers.",
+                            offers. Left out, a project session takes its project's, else the \
+                            console's project session effort.",
         },
     });
     if !with_project {
@@ -2215,6 +2317,65 @@ mod tests {
             qualified_tool_name(Agent::Grok, "report"),
             "octoboard__report"
         );
+    }
+
+    /// The additions that close the gaps of the reads and writes: each is in the schema its tool
+    /// announces, and the descriptions name the fields the results really carry.
+    #[test]
+    fn the_schemas_and_descriptions_name_what_the_tools_take_and_return() {
+        let tool = |name| tool_by_name(Role::Console, false, name).unwrap();
+        let schema = |name| (tool(name).schema)();
+        // A session reads itself by leaving `session` out.
+        assert_eq!(schema("get_session")["required"], json!([]));
+        assert!(
+            tool("get_session")
+                .description
+                .contains("your own Octoboard id")
+                || tool("get_session")
+                    .description
+                    .contains("its own Octoboard id")
+        );
+        for (name, key) in [
+            ("list_archived", "before"),
+            ("list_archived", "yours"),
+            ("list_projects", "project"),
+            ("list_projects", "refresh"),
+            ("archive_session", "keep"),
+        ] {
+            assert!(schema(name)["properties"][key].is_object(), "{name}.{key}");
+            assert!(
+                tool(name).description.contains(&format!("`{key}`")),
+                "{name}.{key}"
+            );
+        }
+        let project = tool_by_name(Role::Project, true, "get_project").unwrap();
+        assert!((project.schema)()["properties"]["refresh"].is_object());
+        // The project entry is described by what it carries.
+        assert!(!tool("list_projects").description.contains("`worktrees`"));
+        assert!(tool("list_projects").description.contains("`git_workflow`"));
+        for field in ["`project`", "`host`", "`trust_consent`"] {
+            assert!(project.description.contains(field), "get_project: {field}");
+        }
+        assert!(tool("get_console").description.contains("`console`"));
+        for field in ["`account_name`", "`account`"] {
+            assert!(
+                tool("new_session").description.contains(field),
+                "new_session: {field}"
+            );
+        }
+        assert!(tool("reopen_session").description.contains("`effort`"));
+        for field in [
+            "`lead`",
+            "`owned_sessions`",
+            "`agent_session_id`",
+            "`display_title`",
+            "`origin`",
+        ] {
+            assert!(
+                tool("get_session").description.contains(field),
+                "get_session: {field}"
+            );
+        }
     }
 
     #[test]

@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
 use crate::protocol::{Console, Project, Role, Session, SessionStatus};
@@ -15,10 +15,12 @@ use crate::state::AppState;
 
 use super::args::{
     console_projects, find_console, find_project_in, optional_bool, optional_count,
-    optional_string, required_str,
+    optional_string, own_console,
 };
-use super::exec::{branch_names_of, describe_session, resolve_session};
-use super::settings::describe_project;
+use super::exec::{
+    branch_names_of, describe_session, owned_count_of, owned_counts_of, resolve_session,
+};
+use super::settings::{describe_project, refresh_git_status};
 
 /// How much of a session's output `get_session` hands back when the caller names no length. Enough
 /// to see what it is doing and how it got there, short of handing the caller a transcript to wade
@@ -56,29 +58,50 @@ pub(super) fn list_consoles(state: &Arc<AppState>, caller: &Session) -> Result<V
 /// The caller's own console's projects with their running sessions, or, for another console named
 /// by `console`, only what is needed to target one of its projects: each project's id, name,
 /// description and tags. Reads reach any console; what a call changes stays in the caller's own.
+///
+/// `project` narrows either to the one project it names (an id, or a name that is unambiguous in
+/// that console). `refresh` checks the git status of the projects listed first, and is refused for
+/// another console, whose entries carry none.
 pub(super) async fn list_projects(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    if let Some(wanted) = optional_string(arguments, "console") {
-        let console = find_console(state, &wanted)?;
-        if console.id != caller.console_id {
-            let projects: Vec<Value> = console_projects(state, &console.id)?
-                .iter()
-                .map(|project| {
-                    json!({
-                        "project": project.id,
-                        "name": project.name,
-                        "description": project.description,
-                        "tags": project.tags,
-                    })
-                })
-                .collect();
-            return Ok(json!({ "console": console.id, "projects": projects }));
-        }
+    let console = match optional_string(arguments, "console") {
+        Some(wanted) => find_console(state, &wanted)?,
+        None => own_console(state, caller)?,
+    };
+    let mut projects = console_projects(state, &console.id)?;
+    if let Some(wanted) = optional_string(arguments, "project") {
+        let project = find_project_in(state, caller, Some(&console), &wanted)?;
+        projects.retain(|listed| listed.id == project.id);
     }
-    let projects = console_projects(state, &caller.console_id)?;
+    let refresh = optional_bool(arguments, "refresh")?.unwrap_or(false);
+    if console.id != caller.console_id {
+        if refresh {
+            bail!(
+                "`refresh` checks git status, which the projects of another console are listed \
+                 without; it applies to your own console's projects only"
+            );
+        }
+        let projects: Vec<Value> = projects
+            .iter()
+            .map(|project| {
+                json!({
+                    "project": project.id,
+                    "name": project.name,
+                    "description": project.description,
+                    "tags": project.tags,
+                })
+            })
+            .collect();
+        return Ok(json!({ "console": console.id, "projects": projects }));
+    }
+    let refreshed = if refresh {
+        Some(refresh_git_status(state, projects.clone()).await)
+    } else {
+        None
+    };
     let sessions: Vec<Session> = state
         .store
         .list_sessions()?
@@ -91,20 +114,25 @@ pub(super) async fn list_projects(
         })
         .collect();
     let branches = branch_names_of(state, sessions.clone()).await?;
+    let owned = owned_counts_of(state)?;
     let entries = projects
         .iter()
         .map(|project| {
             let live = sessions
                 .iter()
                 .filter(|session| session.project_id.as_deref() == Some(&project.id))
-                .map(|session| describe_session(state, session, caller, &branches))
+                .map(|session| describe_session(state, session, caller, &branches, &owned))
                 .collect::<Result<Vec<Value>>>()?;
             let mut entry = describe_project(state, project)?;
             entry["sessions"] = json!(live);
             Ok(entry)
         })
         .collect::<Result<Vec<Value>>>()?;
-    Ok(json!({ "console": caller.console_id, "projects": entries }))
+    let mut answer = json!({ "console": caller.console_id, "projects": entries });
+    if let Some(refreshed) = refreshed {
+        answer["git_refresh"] = refreshed;
+    }
+    Ok(answer)
 }
 
 pub(super) async fn get_session(
@@ -112,14 +140,19 @@ pub(super) async fn get_session(
     caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
-    let target = resolve_session(state, required_str(arguments, "session")?)?;
+    // Left out, the caller itself: the way a session learns its own Octoboard id and record.
+    let target = match optional_string(arguments, "session") {
+        Some(wanted) if wanted != caller.id => resolve_session(state, &wanted)?,
+        _ => state.session_record(&caller.id)?,
+    };
     // Refused outside the bounds rather than clamped, so a caller that asked for more than it can
     // have is not left believing it read it all.
     let tail = optional_count(arguments, "output_bytes", 1, MAX_OUTPUT_TAIL)?
         .unwrap_or(DEFAULT_OUTPUT_TAIL);
     let output = recent_output(state, &target.id, tail).await;
     let branches = branch_names_of(state, vec![target.clone()]).await?;
-    let mut description = describe_session(state, &target, caller, &branches)?;
+    let owned = owned_count_of(state, &target)?;
+    let mut description = describe_session(state, &target, caller, &branches, &owned)?;
     description["recent_output"] = json!(output);
     if state.shown_status(&target) == SessionStatus::WaitingUser {
         description["note"] = json!(
@@ -204,12 +237,14 @@ impl SessionFilters {
 /// The archived sessions of any console, for any role: reads are not limited to the caller's
 /// console, as the writes on them are.
 ///
-/// `console`, `project`, `owner` and `kind` narrow the list; each given one must hold, so they
-/// combine as AND. A `console`, `project` or `owner` that names nothing is refused rather than
-/// read as a filter that matches nothing, as is a `kind` of console sessions beside a `project`,
-/// which holds only project sessions. The newest archived come first and at most `limit` are
-/// described; `total` counts all that match, so a `total` above the sessions listed means more
-/// exist.
+/// `console`, `project`, `owner`, `yours` and `kind` narrow the list; each given one must hold, so
+/// they combine as AND. A `console`, `project` or `owner` that names nothing is refused rather
+/// than read as a filter that matches nothing, as is a `kind` of console sessions beside a
+/// `project`, which holds only project sessions. The newest archived come first and at most
+/// `limit` are described; `total` counts all that match, and `older` those that match and come
+/// after the page, which `before` reaches: the `next` the previous page answered with, a position
+/// in the order ([`archive_cursor`]) rather than a session, so it holds whatever has become of the
+/// session it was taken from.
 pub(super) async fn list_archived(
     state: &Arc<AppState>,
     caller: &Session,
@@ -225,8 +260,19 @@ pub(super) async fn list_archived(
     if filters.project.is_some() && kind == Some(Role::Console) {
         bail!("`kind: console` and `project` cannot both hold: a console session is in no project");
     }
+    let yours = optional_bool(arguments, "yours")?;
     let limit = optional_count(arguments, "limit", 1, MAX_ARCHIVED_LIMIT)?
         .unwrap_or(DEFAULT_ARCHIVED_LIMIT);
+    let before = optional_string(arguments, "before")
+        .map(|wanted| {
+            parse_archive_cursor(&wanted).ok_or_else(|| {
+                anyhow!(
+                    "`before` is not a cursor: pass the `next` of the previous answer unchanged, \
+                     or leave `before` out to start from the newest"
+                )
+            })
+        })
+        .transpose()?;
     let mut archived: Vec<Session> = state
         .store
         .list_sessions()?
@@ -234,18 +280,66 @@ pub(super) async fn list_archived(
         .filter(|session| session.status == SessionStatus::Archived)
         .filter(|session| filters.matches(session))
         .filter(|session| kind.is_none_or(|kind| session.role == kind))
+        .filter(|session| {
+            yours.is_none_or(|yours| (session.bound_to.as_deref() == Some(&caller.id)) == yours)
+        })
         .collect();
-    // Newest archived first; `ended_at` is when it was archived. The id breaks a tie so the order
-    // does not move between calls.
-    archived.sort_by(|a, b| b.ended_at.cmp(&a.ended_at).then_with(|| a.id.cmp(&b.id)));
+    archived.sort_by(archived_order);
     let total = archived.len();
+    // The cursor is a position in the order, not a session, so sessions archived, reopened or
+    // deleted between two calls move nothing that was already read.
+    if let Some((ended_at, id)) = &before {
+        archived.retain(|session| {
+            archived_position(session.ended_at, &session.id, *ended_at, id).is_gt()
+        });
+    }
+    let older = archived.len().saturating_sub(limit);
     archived.truncate(limit);
+    let next = (older > 0)
+        .then(|| archived.last().map(archive_cursor))
+        .flatten();
     let branches = branch_names_of(state, archived.clone()).await?;
+    let owned = owned_counts_of(state)?;
     let sessions = archived
         .iter()
-        .map(|session| describe_session(state, session, caller, &branches))
+        .map(|session| describe_session(state, session, caller, &branches, &owned))
         .collect::<Result<Vec<Value>>>()?;
-    Ok(json!({ "sessions": sessions, "total": total }))
+    Ok(json!({ "sessions": sessions, "total": total, "older": older, "next": next }))
+}
+
+/// The order of the archive: newest archived first (`ended_at` is when it was archived). The id
+/// breaks a tie so the order does not move between calls.
+fn archived_order(a: &Session, b: &Session) -> std::cmp::Ordering {
+    archived_position(a.ended_at, &a.id, b.ended_at, &b.id)
+}
+
+/// [`archived_order`] on the two keys it goes by.
+fn archived_position(
+    a_ended_at: Option<i64>,
+    a_id: &str,
+    b_ended_at: Option<i64>,
+    b_id: &str,
+) -> std::cmp::Ordering {
+    b_ended_at.cmp(&a_ended_at).then_with(|| a_id.cmp(b_id))
+}
+
+/// The position of `session` in the archive's order as a token: its `ended_at` (`-` for none), a
+/// colon, and its id. Callers pass it back as `before` without reading into it.
+fn archive_cursor(session: &Session) -> String {
+    let ended_at = session
+        .ended_at
+        .map_or_else(|| "-".to_string(), |at| at.to_string());
+    format!("{ended_at}:{}", session.id)
+}
+
+/// The `ended_at` and id [`archive_cursor`] made `token` of, `None` for a token it did not make.
+fn parse_archive_cursor(token: &str) -> Option<(Option<i64>, String)> {
+    let (ended_at, id) = token.split_once(':')?;
+    let ended_at = match ended_at {
+        "-" => None,
+        digits => Some(digits.parse().ok()?),
+    };
+    (!id.is_empty()).then(|| (ended_at, id.to_string()))
 }
 
 /// Every running session but the caller (one a sharing change is restarting included), in every
@@ -290,10 +384,11 @@ pub(crate) async fn list_sessions(
         })
         .collect();
     let branches = branch_names_of(state, running.clone()).await?;
+    let owned = owned_counts_of(state)?;
     let sessions = running
         .iter()
         .map(|session| {
-            let mut description = describe_session(state, session, caller, &branches)?;
+            let mut description = describe_session(state, session, caller, &branches, &owned)?;
             description["your_owner"] = json!(caller.bound_to.as_deref() == Some(&session.id));
             Ok(description)
         })

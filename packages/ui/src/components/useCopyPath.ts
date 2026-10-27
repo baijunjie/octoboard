@@ -1,5 +1,5 @@
 import { useT } from "../i18n/react";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { usePlatform } from "../platform/react";
 import { useDaemon } from "../store";
 import { displayWirePath } from "../wirePath";

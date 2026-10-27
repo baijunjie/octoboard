@@ -203,6 +203,14 @@ which the close gestures have no part in.
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`). Every shell terminal ends too (see "Closing a shell terminal" in
   `docs/product/shell-terminals.md`).
+- **Once the daemon has begun to shut down, nothing new starts.** From then on — a confirmed quit or restart, or a
+  termination signal (see "The daemon on its own" below) — no session is launched, resumed, reopened, switched to
+  another account or handed off, and nothing else that needs a session to itself (a handover of its branches, a change
+  of its owner) is begun: each is refused with `daemon_shutting_down`. A launch that was already past that check when
+  the shutdown began is ended as soon as its process comes up, leaving the session *interrupted* like the rest. Where a
+  window still shows such a refusal, it is an error alert saying that the daemon is shutting down, so nothing can be
+  started now, with no remedy and no **Report issue**. An automatic account switch, or its restore of the session, that
+  the shutdown cuts short tells nobody (see "When the switch fails" in `docs/product/automatic-account-switch.md`).
 - With no session *starting*, *working*, *waiting for the user* or *working in background* — none at all, or only ones
   *awaiting instructions* — and no busy shell terminal, quitting is immediate and asks nothing, and a window closed into
   the background is not brought back for it.

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import type { Translate } from "../i18n/catalog";
 import { osc52ClipboardText, programCopyHandler } from "./osc52";
 

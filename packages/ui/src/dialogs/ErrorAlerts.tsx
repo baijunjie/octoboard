@@ -99,7 +99,22 @@ function ErrorAlertHost(): React.ReactElement | null {
   const [error] = useSyncExternalStore(errorAlerts.subscribe, errorAlerts.getSnapshot);
   const acknowledge = useRef<HTMLButtonElement>(null);
   const issue = useIssueReport(error?.classification.kind === "unexpected" ? alertFailures(error, "report") : undefined);
-  useLayoutEffect(() => { dialogAround(acknowledge)?.focus(); }, [error?.id]);
+  // Focus the alert in the render after the one that mounted it, before the task that raised it ends, and nowhere
+  // else: its `Dialog` never puts focus on it by itself, not even when the alert it replaces leaves focus on `<body>`.
+  // react-aria turns a new modal's focus containment on from a layout effect at mount, which forces a render; the state
+  // set here from a layout effect of the same commit is set after it and lands in that render or a later one, and a
+  // layout effect of that render runs after the containment's own, which sit below it. Focus must land after that:
+  // a dialog under the alert that has no focused element of its own yet (one opened by a press without a pointer,
+  // whose own opening focus react-aria's `focusSafely` defers to the next frame or past the open transition) treats
+  // focus on the not-yet-containing alert as escaping its containment and queues `focusSafely` on the alert's first
+  // control, where Enter would then press it (for Manage accounts…, opening Settings). It must also land before the
+  // next frame, because that dialog's deferred opening focus fires then unless focus has moved: once it lands on the
+  // dialog, the alert is outside the containment it joins and focus is taken back from it.
+  const [mountedId, setMountedId] = useState<number>();
+  useLayoutEffect(() => { setMountedId(error?.id); }, [error?.id]);
+  useLayoutEffect(() => {
+    if (mountedId !== undefined) dialogAround(acknowledge)?.focus();
+  }, [mountedId]);
   if (!error) return null;
   const unexpected = error.classification.kind === "unexpected";
   // A button for the remedy when it is the one remedy of every failure the alert is about.
@@ -112,7 +127,7 @@ function ErrorAlertHost(): React.ReactElement | null {
       headerLeading={<AlertDialog.Icon status="danger" />}
       title={alertTitle(t, error)}
       onClose={() => {}}
-      resetKey={error.message}
+      focusesItselfOnOpen
       footer={<>
         {unexpected && issue.link}
         {action && (

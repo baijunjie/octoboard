@@ -1,8 +1,8 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { appConfig } from "./appConfig";
 import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
-import { daemonMessage, richMessageCode } from "./daemonMessage";
+import { daemonMessage, daemonParams, richMessageCode } from "./daemonMessage";
 import { CATALOGS } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
@@ -159,6 +159,85 @@ it("words a refusal of a disabled account in the UI's language", () => {
   );
   expect(daemonMessage("zh-Hans", "account_disabled", params, "x", records)).toContain("已停用");
 });
+
+it("words a refusal of an account that is not logged in in the UI's language, the default account under its localized name", () => {
+  const params = { agent: "Codex", account: DEFAULT_ACCOUNT_NAME };
+  expect(daemonMessage("en", "account_not_signed_in", params, "x", records)).toBe(
+    `${isolate("Default")} (${isolate("Codex")}) is not logged in, so a session cannot be opened on it.`,
+  );
+  const chinese = daemonMessage("zh-Hans", "account_not_signed_in", params, "x", records);
+  expect(chinese).toContain("未登录");
+  expect(chinese).not.toContain("Default");
+});
+
+it("words an automatic account switch with the default account named in the UI's language", () => {
+  const params = { agent: "Claude Code", from: DEFAULT_ACCOUNT_NAME, account: "Work", session: "s1" };
+  expect(daemonMessage("en", "account_switched_automatically", params, "x", records)).toBe(
+    `${isolate(DEFAULT_ACCOUNT_NAME)} (${isolate("Claude Code")}) reached its usage limit, so ${appConfig.name} switched ${isolate("Hub")} to ${isolate("Work")}.`,
+  );
+  const chinese = daemonMessage("zh-Hans", "account_switched_automatically", params, "x", records);
+  expect(chinese).toContain("已达使用限制");
+  expect(chinese).not.toContain(isolate(DEFAULT_ACCOUNT_NAME));
+});
+
+it("words an automatic account switch onto the default account in the UI's language", () => {
+  const params = { agent: "Claude Code", from: "Work", account: DEFAULT_ACCOUNT_NAME, session: "s1" };
+  expect(daemonMessage("en", "account_switched_automatically", params, "x", records)).toBe(
+    `${isolate("Work")} (${isolate("Claude Code")}) reached its usage limit, so ${appConfig.name} switched ${isolate("Hub")} to ${isolate("Default")}.`,
+  );
+  const chinese = daemonMessage("zh-Hans", "account_switched_automatically", params, "x", records);
+  expect(chinese).toContain("已达使用限制");
+  expect(chinese).not.toContain("Default");
+});
+
+describe("an automatic account switch that failed after the session's process ended", () => {
+  const params = {
+    agent: "Claude Code",
+    from: DEFAULT_ACCOUNT_NAME,
+    account: "Work",
+    account_id: "claude-a",
+    name: "Work",
+    reason: "the English account",
+    reason_code: "account_sharing_in_progress",
+  };
+
+  it("words the sentence in both languages, the default account under its localized name", () => {
+    expect(daemonMessage("en", "account_switch_automatically_failed", params, "x", records)).toBe(
+      `${isolate("Default")} (${isolate("Claude Code")}) reached its usage limit, and ${appConfig.name} could neither switch this session to ${isolate("Work")} nor bring it back up on the account it had, so it is interrupted.`,
+    );
+    const chinese = daemonMessage("zh-Hans", "account_switch_automatically_failed", params, "x", records);
+    expect(chinese).toContain("已达使用限制，");
+    expect(chinese).toContain("既未能将此会话切换到");
+    expect(chinese).toContain("也未能让它在原账户上重新运行，因此会话已中断。");
+    expect(chinese).not.toContain("Default");
+  });
+
+  it("shows a move onto the default account under its localized name", () => {
+    const toDefault = { ...params, from: "Work", account: DEFAULT_ACCOUNT_NAME };
+    expect(daemonMessage("en", "account_switch_automatically_failed", toDefault, "x", records)).toContain(`switch this session to ${isolate("Default")}`);
+    const chinese = daemonMessage("zh-Hans", "account_switch_automatically_failed", toDefault, "x", records);
+    expect(chinese).toContain("切换到 ");
+    expect(chinese).toContain("默认");
+    expect(chinese).not.toContain("Default");
+  });
+
+  it("words the nested failure's reason from its own code and params", () => {
+    expect(daemonParams("en", "account_switch_automatically_failed", params, records).reason).toBe(
+      `Sharing for account ${isolate("Work")} is being changed.`,
+    );
+  });
+});
+
+it.each(["account_switched_automatically", "account_switch_automatically_failed"])(
+  "sets the account names of %s apart as names, the default one under its localized name",
+  (code) => {
+    const params = { agent: "Claude Code", from: DEFAULT_ACCOUNT_NAME, account: "Work", reason: "why", reason_code: "newer" };
+    const marked = daemonParams("zh-Hans", code, params, records, (value, monospace) => `[${monospace ? "code" : "name"}:${value}]`);
+    expect(marked.account).toBe("[name:Work]");
+    expect(marked.from).toMatch(/^\[name:/);
+    expect(String(marked.from)).not.toContain("Default");
+  },
+);
 
 it("words an exhausted account's quota, with the time left when the reset is known and the window in the UI's language", () => {
   const params = { agent: "Codex", account: "Work", window: "5-hour", window_kind: "session" };

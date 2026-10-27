@@ -10,8 +10,9 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`, and the reads
 
 - **A console session** reads and changes its own console, that console's projects and the application-wide settings.
   It changes nothing of another console.
-- **A project session**, bound or not, reads its own project's settings with `get_project`, which takes no argument and
-  answers for no other project. It changes no setting.
+- **A project session**, bound or not, reads its own project's settings with `get_project`, which takes no `project`
+  and answers for no other project; its only argument is an optional `refresh`, which checks the project's git status
+  first (see "Reading the status from a session" in `docs/product/project-git-status.md`). It changes no setting.
 - **Every session**, of either kind, reads the settings of every project of its own console with `list_projects`; of
   another console's projects it reads only each one's id, name, description and tags (see "Listing a console's
   projects" in `docs/product/what-every-session-reads.md`).
@@ -43,6 +44,9 @@ to any session:
   otherwise approve its own requests;
 - reading or changing whether usage windows are started automatically (see "Start usage windows automatically" in
   `docs/product/settings.md`), since that spends the user's quota;
+- reading or changing whether sessions are switched to another account at the usage limit (see "Automatically switch
+  accounts at the usage limit" in `docs/product/settings.md`), since that ends sessions' processes and spends another
+  account's quota without asking;
 - reading or changing whether sessions are asked to put their questions as choices (see "Ask questions as choices" in
   `docs/product/settings.md`), since that shapes what sessions are told, and a session could otherwise switch off the
   rule it is given;
@@ -199,8 +203,8 @@ built-in default. `git_workflow` is an object of any of the four git workflow se
 `update_project`'s takes (`rebase_before_merge` and `delivery` apply only while `development` is not `in_place`, and
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
 unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
-`auto_approve_handoffs`, `auto_start_quota_windows`, `ask_questions_as_choices` or `interface_language` argument is
-ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual.
+`auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices` or
+`interface_language` argument is ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual.
 Turning `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch
 on in Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on
 deletes nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does.

@@ -72,14 +72,17 @@ A session row's action menu offers:
   up (see "A used-up account" in `docs/product/account-quotas.md`), as judged when the menu opens, is disabled, with the
   short reason under its name on two lines, saying it is used up and when it resets; it stays reachable with the arrow
   keys, its accessible name is just the account's name, and the full reason is its description. An account other than
+  the session's own that is not logged in (see "An account that is not logged in" in `docs/product/account-quotas.md`),
+  as judged when the menu opens, is disabled the same way, with "Not logged in" under its name. An account other than
   the session's own that is turned off (see "Turning an account off" in `docs/product/agent-accounts.md`), as judged
   when the menu opens, is not listed; the session's own account is listed, checked, even when it is turned off. An
   account other than the session's own whose sharing of the default configuration is being changed, as judged when the
   menu opens, is disabled whatever its quota, with no reason given; so is every other account while the session's own
   account is having its sharing changed, as the session cannot be switched away from it either (see "When a change is
   carried out" in `docs/product/sharing-the-default-configuration.md`), and while the session is shown as switching its
-  account. These entries keep their usage bar and its description. A removed account named by its
-  directory shows a key icon in the bar's place, lined up with the bars, and is never marked used up.
+  account. These entries keep their usage bar and its description, and a used-up account or one not logged in keeps its
+  reason over these brief holds. A removed account named by its directory shows a key icon in the bar's place, lined up
+  with the bars, and is never marked used up.
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
   console session's row; an archived session has no such entry. Disabled while the session is locked, while it is

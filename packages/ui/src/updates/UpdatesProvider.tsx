@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { DiagnosticBlock } from "../components/DiagnosticBlock";
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import { errorAlerts } from "../errorAlerts";
 import { t } from "../i18n/language";
 import { usePlatform } from "../platform/react";

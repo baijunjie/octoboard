@@ -676,8 +676,18 @@ fn apply_hook(state: &Arc<AppState>, session_id: &str, body: &[u8]) {
                             .then(|| state.session_record(session_id).ok())
                             .flatten()
                             .map(|session| state.agent_status(&session));
-                        if let Err(err) = state.apply_hook_status(session_id, status) {
-                            tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
+                        match state.apply_hook_status(session_id, status) {
+                            // Delivery writes into the owner's PTY, which blocks.
+                            Ok(true) if status == SessionStatus::WaitingUser => {
+                                let (state, id) = (state.clone(), session_id.to_string());
+                                tokio::task::spawn_blocking(move || {
+                                    crate::reporting::tell_owner_it_waits(&state, &id)
+                                });
+                            }
+                            Ok(_) => {}
+                            Err(err) => {
+                                tracing::debug!(session = %session_id, %event, %err, "applying the hook status failed");
+                            }
                         }
                         arm_record_watches(
                             state, session_id, agent, &event, previous, status, &payload,
@@ -1782,6 +1792,54 @@ mod tests {
         )
         .unwrap();
         assert_eq!(delivery, crate::reporting::Delivery::Written);
+    }
+
+    /// A session bound to an owner that raises the agent's hand at a permission prompt tells the
+    /// owner, once for the turn however often the hand goes up and down; an interrupt that puts it
+    /// back at its prompt says nothing, and a session that reaches its prompt unasked tells
+    /// nothing either.
+    #[tokio::test]
+    async fn an_owner_is_told_when_a_hook_puts_its_session_in_waiting_for_the_user() {
+        let (state, _dir, owner, path) =
+            claude_session_with_transcript("server-owner-waits", SessionStatus::Idle);
+        crate::session::spawn_reader_thread((*owner).clone(), 8 * 1024);
+        let worker = crate::test_support::bare_session("w", crate::protocol::Role::Project);
+        state
+            .store
+            .insert_session(&crate::protocol::Session {
+                bound_to: Some("s".to_string()),
+                status: SessionStatus::Idle,
+                ..worker
+            })
+            .unwrap();
+        let heard = || String::from_utf8_lossy(&owner.recent_output(8 * 1024)).into_owned();
+        let told = |count: usize| {
+            let owner = (*owner).clone();
+            crate::test_support::within(PATIENCE, move || {
+                String::from_utf8_lossy(&owner.recent_output(8 * 1024))
+                    .matches("is waiting for the user")
+                    .count()
+                    == count
+            })
+        };
+
+        apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path));
+        apply_hook(&state, "w", &claude_hook("Stop", &path));
+        apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path));
+        apply_hook(&state, "w", &claude_hook("PermissionRequest", &path));
+        assert!(told(1).await, "{}", heard());
+        apply_hook(&state, "w", &claude_hook("PostToolUse", &path));
+        apply_hook(&state, "w", &claude_hook("PermissionRequest", &path));
+        apply_hook(&state, "w", &claude_hook("PostToolUse", &path));
+        apply_hook(&state, "w", &claude_hook("Stop", &path));
+        assert!(told(1).await, "{}", heard());
+        // The owner is written to off the hook's path, so give a second notice time to arrive.
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        assert_eq!(heard().matches("is waiting for the user").count(), 1);
+
+        apply_hook(&state, "w", &claude_hook("UserPromptSubmit", &path));
+        apply_hook(&state, "w", &claude_hook("PermissionRequest", &path));
+        assert!(told(2).await, "{}", heard());
     }
 
     /// A Claude Code turn the user interrupts fires no hook; its prompt arms the transcript watch

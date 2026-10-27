@@ -174,7 +174,8 @@ An unknown answer is treated as resumable.
 A session can be moved to another account of its own agent, ending and relaunching its process with its conversation
 carried along. The user does it from the session's **Switch account** submenu, and an owner with the
 `switch_session_account` tool for a session of its own; how, and what is carried, is in
-`docs/product/switching-session-accounts.md`.
+`docs/product/switching-session-accounts.md`. Octoboard does it by itself, where the user has turned that on, when a
+session's turn stops on its account's usage limit (see `docs/product/automatic-account-switch.md`).
 
 ### Handing a session off to another agent
 

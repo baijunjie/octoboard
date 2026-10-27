@@ -1,4 +1,4 @@
-import { ActionableError } from "../errorRecovery";
+import { ActionableError } from "../actionableError";
 import type { Translate } from "../i18n/catalog";
 import type { ClipboardCapability } from "../platform";
 

@@ -11,6 +11,7 @@ export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: 
   switch (recovery) {
     case "account":
     case "accountDisabled":
+    case "accountNotSignedIn":
     case "addedAgents": return { label: t("sidebar.session.manageAccounts") };
     case "agentNotAdded": return { label: t("agents.addAction"), addAgent: true };
     default: return undefined;

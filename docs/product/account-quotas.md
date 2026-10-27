@@ -180,8 +180,8 @@ of date — shows an empty track. The tracks of a picker's or menu's bars have a
 have none), and the thin weekly bar is three quarters as tall as the main one, as everywhere a two-layer bar is drawn.
 The same bar fills the Usage cell of Settings' accounts table, wider, where out-of-date windows are drawn rather than
 the empty track (see "How an account's quota is shown" above). The bar is not read by assistive technology; the
-account's option states what remains of those windows in words instead, or, for a used-up account, why it cannot be
-chosen (see "A used-up account" below).
+account's option states what remains of those windows in words instead, or, for a used-up account or one that is not
+logged in, why it cannot be chosen (see "A used-up account" and "An account that is not logged in" below).
 
 A session row's **Switch account** submenu shows its accounts the same way: the same bar before each account's name,
 and the same words for assistive technology as the item's description, while its name stays the account's name (see
@@ -240,8 +240,9 @@ same way:
 A used-up account cannot have a session opened on it, by anyone, the user included (see "When the agent or the account
 cannot open a session" in `docs/product/opening-sessions.md`), and a session cannot be switched onto it (see "When a
 switch fails" in `docs/product/switching-session-accounts.md`). A session already running on it keeps running, and
-resuming, restarting or reopening a session is never refused for this; Octoboard never moves a session off it on its
-own.
+resuming, restarting or reopening a session is never refused for this. Octoboard never moves a session off it because
+it reads as used up; only a turn that stops on the usage limit can, while the user has turned automatic switching on
+(see `docs/product/automatic-account-switch.md`).
 
 The window does not offer what the daemon would refuse:
 
@@ -285,6 +286,36 @@ icon's menu" in `docs/product/menu-bar-icon.md`); no other usage bar turns grey.
 
 The panel and the table judge on the clock as an open dialog does, so the account returns to its usual look within 30
 seconds of its reset time passing, without waiting for a newer reading.
+
+## An account that is not logged in
+
+An account is **not logged in** while the last reading held for it, under the directory it points at now, found the
+agent not signed in there or its directory missing (the reading's `unavailable` code is `quota_not_signed_in` or
+`quota_config_dir_missing`; see "Quota states" above). It is judged on the reading already held, as a used-up account
+is. A reading that failed for any other reason — a timeout, a CLI that could not be run — says nothing about the
+sign-in, and neither does an account not read yet: such an account can still be chosen and opened on.
+
+An account that is not logged in is treated as clearly unusable:
+
+- **The daemon refuses to open a session on it, hand a session off to it or switch a session onto it**, by anyone, the
+  user included, with `account_not_signed_in` (see "When the agent or the account cannot open a session" in
+  `docs/product/opening-sessions.md`). A session already on it keeps running, and resuming, restarting or reopening a
+  session is never refused for this.
+- **Automatic account selection passes over it** (see "Which account a session uses" in
+  `docs/product/opening-sessions.md`), and so does a session started by another session where it would otherwise run on
+  its caller's own account (see "The agent and account of a session a session starts" in
+  `docs/product/hub-orchestration.md`), and so does the automatic account switch (see "Which account it is switched to"
+  in `docs/product/automatic-account-switch.md`).
+- **The window lists it but does not let it be chosen**: in the account pickers of the session dialog, the handoff
+  dialog and the forms in which the user approves a session's request, and in a session row's **Switch account**
+  submenu, it is listed,
+  disabled, with "Not logged in" under its name and, for assistive technology, the full reason as its description —
+  that it is unavailable until it is logged in. A choice that ends on it is marked invalid with the reason that the
+  account is not logged in, so a session cannot use it, and to choose another account or log in to it. An account
+  that is turned off is described as turned off instead. The console and project dialogs' account pickers do not mark
+  it, since a console's or project's account is a lasting preference.
+- **Opening a session with defaults passes over it**, as it passes over a used-up account (see "Opening a session with
+  defaults" in `docs/product/opening-sessions.md`).
 
 ## What reading a quota leaves behind
 
@@ -335,10 +366,12 @@ tooltip (see "Tooltips on icon-only controls" in `docs/product/labels-and-toolti
 
 The indicator is absent when no session is selected, its agent is unavailable or its availability is not yet determined,
 the account has no reading or no eligible window, or the latest reading failed. A failed reading hides it even when
-Settings and the quota panel retain the last good windows as out of date. Without an indicator the button's accessible
-name is plain "Account usage". Whether the session's agent is added plays no part: a session whose agent has been
-removed from the added agents (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`) keeps its
-indicator.
+Settings and the quota panel retain the last good windows as out of date. It is absent, too, for an account the user
+turned off, unless the selected session is running on it — starting, working, waiting for the user or awaiting
+instructions (see "Turning an account off" in `docs/product/agent-accounts.md`). Without an indicator the button's
+accessible name is plain "Account usage". Whether the session's agent is added plays no part: a session whose agent has
+been removed from the added agents (see "Reordering and removing an agent" in `docs/product/agent-accounts.md`) keeps
+its indicator.
 
 An account removed from Settings or belonging to another agent cannot supply the indicator. Sessions retain their
 launch configuration directory: if it differs from the named account's current directory, or a session refers to
@@ -354,21 +387,36 @@ read" above.
 
 Every session, of any kind, has the `get_account_quotas` tool, so an agent can check what an account has left before it
 picks one for `switch_session_account` or `handoff_session`. It takes an optional `agent` to list only that agent's
-accounts and an optional `refresh` (below), and answers with every account of every agent a session could be opened on,
-the default account first (`account` is `default`), whether or not a reading is held for it. An agent that is not
-installed or not on the added list lists no accounts; one not detected yet lists its accounts as not read yet. Each
-entry gives the account's `account_name`, `plan`, `fetched_at` (milliseconds since the epoch, `null` for an account not
-read yet), `exhausted` (whether the account is used up, by the rule in "A used-up account" above) and `exhausted_until`
-(when the window that keeps it used up resets, in milliseconds since the epoch; `null` when it is not used up or the
-agent gives no reset time), `unavailable` (the reason a reading is missing or could not be refreshed, else `null`) and
-its `windows`, each with `kind` (`session` for the five-hour window, whichever agent's it is; `weekly` for the
-account-wide weekly window; `weekly_model` for a model's own weekly window, the model named by `label`; `credit_period`
-for a credit pool), `label`, `used_percent`, `remaining_percent` (100 less the used share, never below 0), `resets_at`
-and `window_minutes`. Values are percentages only; no absolute token or money amount is given.
+accounts and an optional `refresh` (below), and answers with every account of every agent a session could be opened on
+that the user has not turned off, the default account first (`account` is `default`), whether or not a reading is held
+for it. An account the user turned off is not listed, with no exception for the caller's own account (see "Turning an
+account off" in `docs/product/agent-accounts.md`); a session finds the account it runs on with `get_session`, which
+left without a `session` reads the caller itself (see "Session records" in `docs/product/what-every-session-reads.md`).
+An agent that is not installed or not on the added list lists no accounts; one not detected yet lists its accounts as
+not read yet. Each entry gives the account's `account_name`, `plan`, `fetched_at` (milliseconds since the epoch, `null`
+for an account not read yet), `exhausted` (whether the account is used up, by the rule in "A used-up account" above)
+and `exhausted_until` (when the window that keeps it used up resets, in milliseconds since the epoch; `null` when it is
+not used up or the agent gives no reset time), `unavailable` (the reason a reading is missing or could not be
+refreshed, else `null`), `can_open` and `cannot_open_reason` (below), and its `windows`, each with `kind` (`session` for
+the five-hour window, whichever agent's it is; `weekly` for the account-wide weekly window; `weekly_model` for a model's
+own weekly window, the model named by `label`; `credit_period` for a credit pool), `label`, `used_percent`,
+`remaining_percent` (100 less the used share, never below 0), `resets_at` and `window_minutes`. Values are percentages
+only; no absolute token or money amount is given.
+
+- **`can_open`** says whether a session could be opened on the account now. When it is `false`, `cannot_open_reason`
+  says why in prose: the account is used up (see "A used-up account" above), it is not logged in (see "An account that
+  is not logged in" above), or a change of its sharing of the default configuration is running — the reasons, besides
+  being turned off, that automatic account selection passes an account over for. It is `null` when `can_open` is
+  `true`.
+- **`auto_select_account`**, at the top of the answer beside `accounts`, is the setting of that name (see
+  "Automatically select an account" in `docs/product/settings.md`), read-only, so that a session, which may not be able
+  to read the settings, knows whether an account it leaves out is chosen for it.
 
 By default it answers from the readings already held and takes no new one, so an entry is as old as its `fetched_at`
 and a call spends nothing. With `refresh` set to `true` it first reads again the accounts it lists — every agent's, or
-only `agent`'s when that is given — and answers once those readings have finished, which can take several seconds:
+only `agent`'s when that is given — together with those of an agent that is installed but not added, which Octoboard
+reads too, never an account the user turned off, and answers once those readings have finished, which can take several
+seconds:
 
 - An account is read only when its last attempt, whatever took it — the background poller, a window's request, a kick's
   follow-up reading or an earlier `refresh` — is at least **60 seconds** old. That limit holds whichever session asks
@@ -383,3 +431,12 @@ only `agent`'s when that is given — and answers once those readings have finis
 
 Each reading runs the agent's CLI, which is why a session's request is limited per account rather than left to the
 caller: the tool's description tells the agent to ask only when a reading is too old to decide on.
+
+**A bound session is told to report a low quota.** The role description of a session bound to an owner tells it that
+its account's quota can run out while it works: to find the account it runs on with `get_session` (no `session`), look
+it up in `get_account_quotas` — where an account the user turned off, possibly its own, is not listed — and, when that
+shows it running low, say so in a `report` with the status `needs_decision`, naming the account and what is left,
+rather than carry on until it stops, its owner deciding whether to switch it to another account or hand it off. It is
+also told that, where the user has turned automatic switching on, Octoboard switches it by itself when a turn stops on
+its account's usage limit, tells it so, and that it then carries on there (see
+`docs/product/automatic-account-switch.md`).

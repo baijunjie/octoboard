@@ -135,6 +135,28 @@ describe("the Switch account entry", () => {
     expect(item("Unbind").disabled).toBe(true);
   });
 
+  it("disables an account that is not logged in, saying why, and keeps the reason while an account switch holds the session", () => {
+    const signedOut = {
+      agent: "claude" as const, account: "v", fetched_at: 0, plan: null, windows: [],
+      unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "Claude Code is not signed in" },
+    };
+    const items = (session: Session) => (sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude"), account("v", "claude")], undefined, { quota: { quotas: [signedOut], now: 0 } })
+      .find((candidate) => typeof candidate === "object" && "items" in candidate) as ActionMenuSubmenu).items as { disabled?: boolean; reason?: { state: string }; description?: string; selected: boolean }[];
+    const [, , v] = items(project());
+    expect(v.disabled).toBe(true);
+    expect(v.reason).toEqual({ state: "Not logged in" });
+    expect(v.description).toBe("Unavailable until it is logged in");
+
+    const [dflt, current, held] = items(project({ account_id: "w", config_dir: "/home/w", switching_account: true }));
+    expect(current.selected).toBe(true);
+    expect(current.reason).toBeUndefined();
+    expect(dflt.disabled).toBe(true);
+    expect(dflt.reason).toBeUndefined();
+    expect(held.disabled).toBe(true);
+    expect(held.reason).toEqual({ state: "Not logged in" });
+    expect(held.description).toBe("Unavailable until it is logged in");
+  });
+
   it("states what remains of an account's quota as its description, and has no reason for it", () => {
     const quota = {
       agent: "claude" as const, account: "w", fetched_at: 0, plan: null, unavailable: null,

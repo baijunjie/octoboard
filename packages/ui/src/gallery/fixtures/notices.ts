@@ -1,8 +1,8 @@
-import type { Account, AccountQuota, AccountSharing, Settings } from "../../protocol";
+import { DEFAULT_ACCOUNT_NAME, type Account, type AccountQuota, type AccountSharing, type Settings } from "../../protocol";
 import type { SessionRequest } from "../../store";
 import type { Scenario } from "../scenario";
 import { ALL_AGENTS, SAMPLE, consoleOf, failureTitle, projectOf, sessionOf, snapshotState } from "./builders";
-import { quotaOf, quotaWindow } from "./quotas";
+import { quotaFailure, quotaOf, quotaWindow } from "./quotas";
 import { SHELL_TIMEOUT } from "./shellTimeout";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
@@ -368,6 +368,18 @@ export const noticeScenarios: Scenario[] = [
     })),
   },
   {
+    id: "toast-account-switched-automatically",
+    group: TRUST,
+    category: "normal",
+    title: "Session switched to another account automatically",
+    description: "Two notice toasts, not alerts, stacked (hover the stack to spread it) and tied to the Claude Code session. Each says the account the session ran on reached its usage limit, so the app switched the session, named by its title as a chip, to another account, naming the agent in parentheses after the account it left; both account names are chips. One switches from account Work to Personal; the other leaves the agent's default account, whose chip reads \"Default\" here and 默认 in Simplified Chinese, so check it with the language control too.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [
+      { kind: "session_notice", code: "account_switched_automatically", params: { agent: "Claude Code", from: "Work", account: "Personal", session: "s-web-1" }, message: "", session: "s-web-1" },
+      { kind: "session_notice", code: "account_switched_automatically", params: { agent: "Claude Code", from: DEFAULT_ACCOUNT_NAME, account: "Work", session: "s-web-1" }, message: "", session: "s-web-1" },
+    ],
+  },
+  {
     id: "session-request-reopen-incomplete",
     group: TRUST,
     category: "exceptional",
@@ -411,6 +423,14 @@ export const noticeScenarios: Scenario[] = [
     state: moveState(switchRequestTo("a-work")),
   },
   {
+    id: "session-request-switch-signed-out",
+    group: TRUST,
+    category: "exceptional",
+    title: "Request to switch to an account that is not logged in",
+    description: "The account asked for, Work, was found not logged in by its last reading. The picker stands on Work and the Switch to field is marked invalid, with its own error under the picker saying Account Work, the name a chip, is not logged in, so a session cannot use it, and to choose another account or log in to it. Confirm is disabled until another account is chosen.",
+    state: moveState(switchRequestTo("a-work"), { quotas: moveQuotas.map((quota) => quota.account === "a-work" ? quotaOf("claude", "a-work", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "Claude Code is not signed in: Error: not logged in") }) : quota) }),
+  },
+  {
     id: "session-request-switch-sharing-change",
     group: TRUST,
     category: "exceptional",
@@ -423,7 +443,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to switch to an account that is turned off",
-    description: "The account asked for, Personal, was turned off in Settings while the request waited (a request for an account that is already off is refused before it is asked). The picker stands on Personal and the Switch to field is marked invalid, with its own error under the picker saying a session cannot use Personal and to choose another account or turn it back on in Settings; its entry in the open list reads Unavailable while this account is disabled. Confirm is disabled until another account is chosen.",
+    description: "The account asked for, Personal, was turned off in Settings while the request waited (a request for an account that is already off is refused before it is asked). The picker stands on Personal and the Switch to field is marked invalid, with its own error under the picker saying a session cannot use Personal, the name a chip, and to choose another account or turn it back on in Settings; its entry in the open list is unselectable, with the short reason \"Disabled\" under its name. Confirm is disabled until another account is chosen.",
     state: moveState(switchRequestTo("a-personal"), { accounts: moveAccounts.map((account) => account.id === "a-personal" ? { ...account, disabled: true } : account) }),
   },
   {
@@ -599,7 +619,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Message discarded by a dialog or diverted by a view",
-    description: "Two notice toasts, not alerts, stacked and tied to the Claude Code session; each names the agent. One says a dialog came up while the message was written and discarded it, and that the message is written again once the dialog has been answered. The other says the message went into a view of its background agents rather than the conversation, and asks the person to check the session; it does not say the message will be written again.",
+    description: "Two notice toasts, not alerts, stacked (hover the stack to spread it) and tied to the Claude Code session; each names the agent. One says a dialog came up while the message was written and discarded it, and that the message is written again once the dialog has been answered. The other says the message went into a view of its background agents rather than the conversation, and asks the person to check the session; it does not say the message will be written again.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [
       { kind: "session_notice", code: "message_discarded_by_dialog", params: { agent: "Claude Code" }, message: "", session: "s-web-1" },
@@ -741,6 +761,105 @@ export const noticeScenarios: Scenario[] = [
       },
       message: "",
     }],
+  },
+  {
+    id: "error-account-switch-automatically-failed",
+    group: TRUST,
+    category: "exceptional",
+    title: "Automatic account switch failed, session left interrupted",
+    description: "An error alert titled \"Could not switch account\", with the session line above the message. The sentence says the session on Work reached its usage limit, and the app could neither switch it to Personal nor bring it back up on the account it had, so it is interrupted. Beneath it, on a line of its own, comes why it could not be brought back up, in the application's own words: sharing for Work being changed, with Work a chip, and nothing after it. No advice to resume it, none to wait and try again, no Error details disclosure and no Report issue: only the acknowledgement button.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "session_notice",
+      code: "account_switch_automatically_failed",
+      params: {
+        agent: "Claude Code",
+        from: "Work",
+        from_id: "a-work",
+        account: "Personal",
+        account_id: "a-personal",
+        name: "Work",
+        reason: "Sharing for account Work is being changed.",
+        reason_code: "account_sharing_in_progress",
+      },
+      message: "",
+      session: "s-web-1",
+    }],
+  },
+  {
+    id: "error-account-switch-automatically-failed-kept-aside",
+    group: TRUST,
+    category: "exceptional",
+    title: "Automatic account switch failed, an older item kept aside on a full disk",
+    description: "The same error alert, \"Could not switch account\", for a session on Work that could not be switched to Personal nor brought back up on Work, because the conversation could not be copied into Work's folder and an older item there could not be put back. After the sentence and the reason line, which says where the older item is kept and until when (the folders are chips), comes the short advice to copy that item out of the folder before then, with the timing not repeated, then, as a paragraph of its own, the remedy for a full disk, which does not say to retry. Each appears once. No Report issue.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "session_notice",
+      code: "account_switch_automatically_failed",
+      params: {
+        agent: "Claude Code",
+        from: "Work",
+        from_id: "a-work",
+        account: "Personal",
+        account_id: "a-personal",
+        reason: "The conversation could not be copied into /Users/dev/.claude-work: No space left on device (os error 28)",
+        reason_code: "relocation_failed",
+        path: "/Users/dev/.claude-work",
+        stage: "kept_staging",
+        cause: "not_restored",
+        kept_in: "/Users/dev/.claude-work/.octoboard-switch/9b1d4e7a-5c3f-4a28-b6d0-1e8f2a7c3d59",
+        detail: "No space left on device (os error 28)",
+      },
+      message: "",
+      session: "s-web-1",
+    }],
+  },
+  {
+    id: "error-account-switch-automatically-failed-disk-full",
+    group: TRUST,
+    category: "exceptional",
+    title: "Automatic account switch failed on a full disk reported as an internal error",
+    description: "The same error alert, \"Could not switch account\", for a session on the default account (its chip reads \"Default\" here and 默认 in Simplified Chinese, so check it with the language control too) that could not be brought back up, by a failure the daemon classed as internal but whose text says the disk is full: the line beneath the sentence is \"The disk is full.\", followed by the remedy for a full disk, which does not say to retry. There is no Report issue guidance or button, and the daemon's raw text is only in the Error details disclosure, open here.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "session_notice",
+      code: "account_switch_automatically_failed",
+      params: {
+        agent: "Claude Code",
+        from: DEFAULT_ACCOUNT_NAME,
+        account: "Work",
+        account_id: "a-work",
+        reason: "No space left on device (os error 28)",
+        reason_code: "internal_error",
+      },
+      message: "",
+      session: "s-web-1",
+    }],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "error-account-switch-automatically-failed-uncatalogued",
+    group: TRUST,
+    category: "exceptional",
+    title: "Automatic account switch failed for a reason the app has no words for",
+    description: "The same error alert, \"Could not switch account\", for a session on Work that could not be brought back up, but the failure carries a reason code this build has no wording for: the line beneath the sentence is the generic \"Something unexpected went wrong.\" with the Report issue guidance and button, and the daemon's English text (also in Simplified Chinese) is only in the Error details disclosure, open here.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "session_notice",
+      code: "account_switch_automatically_failed",
+      params: {
+        agent: "Claude Code",
+        from: "Work",
+        from_id: "a-work",
+        account: "Personal",
+        account_id: "a-personal",
+        reason: "The configuration directory could not be prepared.",
+        reason_code: "a_code_from_a_newer_daemon",
+      },
+      message: "",
+      session: "s-web-1",
+    }],
+    steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "toast-shell-timeout",

@@ -441,6 +441,25 @@ it.each([
   expect(dialogText()).toContain("is disabled, so a session cannot use it");
   // The error of the account field, which is marked invalid.
   expect(document.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toContain("is disabled, so a session cannot use it");
+  // The account's own error says it all: no second alert for the hold on the session sits outside the field.
+  expect([...document.querySelectorAll('[role="alert"]')].filter((alert) => !alert.closest('[data-slot="field-error"]'))).toEqual([]);
+  expect(findButton("Switch account")?.disabled).toBe(true);
+});
+
+// An account found not logged in is listed but cannot be chosen, and the dialog says why.
+it("a switch to an account that is not logged in cannot be confirmed", () => {
+  mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [owned] }),
+    ...names,
+    settings: { ...snapshotState({}).settings!, accounts: claudeAccounts },
+    accountQuotas: [{ agent: "claude", account: "a-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }],
+    sessionRequests: [switching],
+  }, ack);
+  expect(dialogText()).toContain("is not logged in, so a session cannot use it");
+  // The error of the account field, which is marked invalid.
+  expect(document.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toContain("is not logged in, so a session cannot use it");
+  // The account's own error says it all: no second alert for the hold on the session sits outside the field.
+  expect([...document.querySelectorAll('[role="alert"]')].filter((alert) => !alert.closest('[data-slot="field-error"]'))).toEqual([]);
   expect(findButton("Switch account")?.disabled).toBe(true);
 });
 
@@ -467,6 +486,18 @@ it("a switch leaves out a turned-off account that is neither the session's nor t
   const options = [...document.body.querySelectorAll<HTMLElement>("[role=option]")].map((option) => option.textContent ?? "");
   expect(options.some((text) => text.includes("Two"))).toBe(true);
   expect(options.some((text) => text.includes("Three"))).toBe(false);
+});
+
+it("a switch lists an account that is not logged in with why, in short under its name and in full as its description", async () => {
+  mountWith({ ...switching, account: null }, owned, claudeAccounts, {
+    accountQuotas: [{ agent: "claude", account: "a-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }],
+  });
+  const trigger = document.body.querySelector<HTMLElement>('[role=alertdialog] [data-slot="select-trigger"]');
+  await act(async () => trigger?.click());
+  const two = [...document.body.querySelectorAll<HTMLElement>("[role=option]")].find((option) => option.textContent?.includes("Two"));
+  expect(two?.getAttribute("aria-disabled")).toBe("true");
+  expect(two?.querySelector('[aria-hidden="true"].text-xs')?.textContent).toBe("Not logged in");
+  expect(two?.querySelector(".sr-only")?.textContent).toBe("Unavailable until it is logged in");
 });
 
 it("a switch marks an unfinished sharing change of the account its form is on, inside the account field, and follows the form", async () => {

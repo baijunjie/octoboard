@@ -19,6 +19,7 @@ import { ringForAutomaticFocus } from "../touchInput";
 import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
 import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
+import { AutoSwitchOnUsageLimitSetting } from "./AutoSwitchOnUsageLimitSetting";
 import { accountLoginOf, loginIsActive } from "./AccountLogin";
 import { type ReturnLoginFocus } from "./AccountLoginButton";
 import { AccountLoginDialog } from "./AccountLoginDialog";
@@ -61,16 +62,17 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
 
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open). A tab holds
  * the agent's Permission approval row (not for Grok), which applies to all its accounts, and a table with the agent's
- * default account first, each a row (name and plan, status, usage, the Disable switch) with an actions menu whose
- * first entry opens the account's details in a modal. The section also has the means to add, edit and remove the
- * accounts the user owns, to rename the default account, and to add, remove and reorder the agents (see
- * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The two switches, one
- * that picks an account by the weekly quota resetting soonest and one that starts a usage window that has not begun
- * counting, sit above that list, once: both apply to every agent, including when none is added. While the daemon has
- * not decided the list every agent is shown, and the agents cannot be removed or reordered yet. The default account
- * is not a record: it is the state of pinning nothing, so it is shown from the agent's availability and can be
- * renamed but not edited or removed. Opening the section asks the daemon to refresh the quotas that are due, those
- * of every agent and not only of the tab in view. */
+ * default account first, each a row (name and plan, status, usage, the Disable switch) with an actions menu whose first
+ * entry opens the account's details in a modal. The section also has the means to add, edit and remove the accounts the
+ * user owns, to rename the default account, and to add, remove and reorder the agents (see
+ * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The three switches, one that
+ * picks a new session's account by the weekly quota resetting soonest, one that switches a session stopped at its
+ * account's usage limit to another account, and one that starts a usage window that has not begun counting, sit above
+ * that list, once: all apply to every agent, including when none is added. While the daemon has not decided the list
+ * every agent is shown, and the agents cannot be removed or reordered yet. The default account is not a record: it is
+ * the state of pinning nothing, so it is shown from the agent's availability and can be renamed but not edited or
+ * removed. Opening the section asks the daemon to refresh the quotas that are due, those of every agent and not only of
+ * the tab in view. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request, store } = useDaemon();
@@ -178,6 +180,7 @@ export function AgentAccountsSection(): React.ReactElement {
         <Message id="settings.accounts.description" params={PATH_VAR_PARAMS} />
       </p>
       <AutoSelectAccountSetting />
+      <AutoSwitchOnUsageLimitSetting />
       <StartQuotaWindowsSetting />
       {selected === undefined ? (
         <EmptyPanel

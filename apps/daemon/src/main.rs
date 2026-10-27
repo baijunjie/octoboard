@@ -12,6 +12,7 @@ mod agent_dialogs;
 mod agent_models;
 mod agent_records;
 mod archive_cleanup;
+mod auto_switch;
 mod availability;
 mod branch_origin;
 mod browse;

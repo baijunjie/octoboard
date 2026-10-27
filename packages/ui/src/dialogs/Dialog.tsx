@@ -188,6 +188,7 @@ function DialogFrame({
   failing,
   resetKey,
   dismissable = true,
+  focusesItselfOnOpen,
 }: {
   /** Text, or an element for a title that needs markup of its own (a file name kept left to right). */
   title: string | React.ReactElement;
@@ -211,6 +212,9 @@ function DialogFrame({
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
    * was lost with the old content, it is put back on the dialog. */
   resetKey?: string;
+  /** The caller puts focus in the dialog itself, so the frame never puts focus found on `<body>` back on the dialog,
+   * at mount or when `resetKey` changes: a caller that passes this passes no `resetKey`. */
+  focusesItselfOnOpen?: boolean;
 } & (
   | {
     /** `null` for a dialog without a footer. */
@@ -248,7 +252,7 @@ function DialogFrame({
   const submitRef = useRef<HTMLButtonElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   useFocusLeavingWhenDisabled(submitRef, submitDisabled === true, cancelRef);
-  useRefocusIfLost(() => dialogAround(markerRef), [resetKey]);
+  useRefocusIfLost(() => (focusesItselfOnOpen ? null : dialogAround(markerRef)), [resetKey]);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
   useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable ? onClose : () => {});

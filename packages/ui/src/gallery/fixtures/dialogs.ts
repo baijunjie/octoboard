@@ -647,7 +647,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "Console account switch, the conversation could not be copied",
-    description: "Three Claude Code failures, each for a cause the daemon names, so no paragraph about a bug and no Report issue. Each row words where the copy stopped (the conversation could not be copied, twice; and, for the third, that an older item could not be put back and is kept in a named folder). After the rows come the remedies, each once and always in this order: copy the older item out of the named folder before it is cleared (that failure was a full disk too); replace or remove the symbolic link named in the details; and free disk space, once for the two disk-full failures. Error details is closed but present, holding the system's own text per session; the footer holds OK alone.",
+    description: "Three Claude Code failures, each for a cause the daemon names, so no paragraph about a bug and no Report issue. Each row words where the copy stopped (the conversation could not be copied, twice; and, for the third, that an older item could not be put back and is kept in a named folder). After the rows come the remedies, each once and always in this order: copy the older item out of the named folder before it is cleared and try the switch again (that failure was a full disk too); replace or remove the symbolic link named in the details; and free disk space, once for the two disk-full failures. Error details is closed but present, holding the system's own text per session; the footer holds OK alone.",
     state: switchAccountState,
     sessionAccountSwitches: {
       "s-switch-bound": claudeRelocationFailure("copy", "no_space", NO_SPACE),

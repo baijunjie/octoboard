@@ -2031,6 +2031,41 @@ fn only_groks_entry_changes_in_the_users_store() {
     assert!(merge_entry("[folders\n", "/work/project", entry).is_err());
 }
 
+/// A session held up by the folder-trust confirmation is waiting for the user, and its owner is
+/// told so, whether the confirmation was sighted or an automatic answer to it failed.
+#[tokio::test]
+async fn an_owner_is_told_that_its_session_waits_on_a_trust_confirmation() {
+    for answer_fails in [false, true] {
+        let (state, dir) = state_with_project("owner-told");
+        let hub = Session {
+            project_id: None,
+            ..session("hub", Agent::Claude, Role::Console, None)
+        };
+        state.store.insert_session(&hub).unwrap();
+        let hub = crate::test_support::running(&state, "hub");
+        let mut record = session("s", Agent::Claude, Role::Project, Some("project-1"));
+        record.bound_to = Some("hub".to_string());
+        let (live, _) = start(&state, &dir, record, "sleep 30");
+
+        if answer_fails {
+            // No trust screen is up to answer, which leaves the person to.
+            assert!(answer_off_the_runtime(&state, live.clone()).await.is_err());
+        } else {
+            on_sighting(&state, &live).await.unwrap();
+        }
+
+        let heard = tokio::task::spawn_blocking(move || {
+            crate::test_support::output_containing(&hub, "is waiting for the user")
+        })
+        .await
+        .unwrap();
+        assert!(
+            heard.contains("is waiting for the user"),
+            "answer_fails {answer_fails}: {heard}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn trust_waiting_preserves_the_agent_status_and_ends_only_when_the_screen_is_gone() {
     for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {

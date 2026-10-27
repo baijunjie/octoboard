@@ -67,6 +67,10 @@ pub struct DocumentSettings {
     /// Absent in a document exported before the setting existed: importing it leaves the setting
     /// as it is.
     #[serde(default)]
+    pub auto_switch_on_usage_limit: Option<bool>,
+    /// Absent in a document exported before the setting existed: importing it leaves the setting
+    /// as it is.
+    #[serde(default)]
     pub sidebar_order_by_status: Option<bool>,
     /// Absent in a document exported before the setting existed: importing it leaves the setting
     /// as it is.
@@ -226,6 +230,7 @@ pub fn build(
             auto_pull_repositories: store.auto_pull_repositories()?,
             auto_delete_unresumable_archives: Some(store.auto_delete_unresumable_archives()?),
             auto_select_account: Some(store.auto_select_account()?),
+            auto_switch_on_usage_limit: Some(store.auto_switch_on_usage_limit()?),
             sidebar_order_by_status: Some(store.sidebar_order_by_status()?),
             auto_start_quota_windows: Some(store.auto_start_quota_windows()?),
             auto_approve_session_requests: Some(store.auto_approve_session_requests()?),
@@ -553,6 +558,7 @@ mod tests {
                 auto_pull_repositories: true,
                 auto_delete_unresumable_archives: Some(false),
                 auto_select_account: Some(false),
+                auto_switch_on_usage_limit: Some(false),
                 sidebar_order_by_status: Some(true),
                 auto_start_quota_windows: Some(false),
                 auto_approve_session_requests: Some(false),

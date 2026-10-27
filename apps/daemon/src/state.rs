@@ -9,6 +9,7 @@
 //! user, and the shell terminals (`crate::shell_terminal`).
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
@@ -161,6 +162,9 @@ pub struct AppState {
     /// correlating turn ids. Entries are added on a turn start and removed when the session's
     /// process goes away.
     turns: Mutex<HashMap<String, TurnState>>,
+    /// The accounts Octoboard moved each session off because a turn stopped on their usage limit,
+    /// and when (`crate::auto_switch`), so that it does not move the session straight back to one.
+    left_for_limit: Mutex<HashMap<String, Vec<AccountLeft>>>,
     /// The generation each session's record watch (`crate::record_watch`, run for Claude Code by
     /// `crate::transcript` and for Codex by `crate::rollout`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
@@ -278,6 +282,10 @@ pub struct AppState {
     /// through a cascade or while a project directory is being moved to the Trash.
     session_removals: Mutex<usize>,
     shutdown: tokio::sync::Notify,
+    /// Set once [`Self::stop_all_sessions`] has begun: no claim is granted and no process stays
+    /// registered from then on, so a launch that was under way cannot start an agent after the
+    /// stop.
+    shutting_down: AtomicBool,
     /// The sessions an `interrupt_session` is sending keys into now (`crate::interrupt`), so two
     /// at once cannot send a second interrupt key. Held in memory only.
     interrupts: Mutex<HashSet<String>>,
@@ -382,6 +390,9 @@ struct TurnState {
     open: bool,
     /// The session called `report` during this turn, so its stop needs no synthesised report.
     reported: bool,
+    /// Its owner has been told during this turn that the session waits for the user (see
+    /// [`AppState::claim_waiting_notice`]).
+    waiting_told: bool,
     /// When this turn last showed any sign of life. A clock-attributed turn end (Grok's
     /// `idle_prompt`) can only belong to a turn that has been quiet at least as long as that
     /// signal's own delay; without this, one left over from a finished turn would close the turn
@@ -584,6 +595,7 @@ impl AppState {
             live: RwLock::new(LiveSessions::default()),
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
+            left_for_limit: Mutex::new(HashMap::new()),
             request_hands: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
             default_efforts: Mutex::new(HashMap::new()),
@@ -633,6 +645,7 @@ impl AppState {
             session_publication: Mutex::new(()),
             session_removals: Mutex::new(0),
             shutdown: tokio::sync::Notify::new(),
+            shutting_down: AtomicBool::new(false),
             interrupts: Mutex::new(HashSet::new()),
         }
     }
@@ -728,6 +741,7 @@ impl AppState {
     /// [`Self::lock_account_sharing`]): judged under the same lock as the claim, so a change
     /// either sees the claim or the launch sees the change.
     pub fn begin_launch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
+        self.refuse_while_shutting_down()?;
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) {
             return Err(CodedError::raised(
@@ -755,6 +769,7 @@ impl AppState {
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
+            watches_launch: false,
         })
     }
 
@@ -766,6 +781,7 @@ impl AppState {
     /// another holder are all refused for that whole window. Fails only when a launch or another
     /// holder has it.
     pub fn begin_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
+        self.refuse_while_shutting_down()?;
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if !live.launching.insert(id.to_string()) {
             return Err(CodedError::raised(
@@ -780,13 +796,22 @@ impl AppState {
         Ok(LaunchClaim {
             state: self.clone(),
             id: id.to_string(),
+            watches_launch: false,
         })
     }
 
     /// [`Self::begin_switch`] for an account switch: the session is also shown as switching its
-    /// account to every client until the claim is released.
-    pub fn begin_account_switch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
-        let claim = self.begin_switch(id)?;
+    /// account to every client until the claim is released. `watches_launch` is for Octoboard's own
+    /// switch and the restore after it, which watch the process they launch come up and report the
+    /// outcome themselves (see [`LaunchClaim::watches_launch`]); a switch someone asked for leaves
+    /// the process to the exit watcher, which tells the owner of an end nobody asked for.
+    pub fn begin_account_switch(
+        self: &Arc<Self>,
+        id: &str,
+        watches_launch: bool,
+    ) -> Result<LaunchClaim> {
+        let mut claim = self.begin_switch(id)?;
+        claim.watches_launch = watches_launch;
         self.live
             .write()
             .expect("live sessions lock poisoned")
@@ -1007,11 +1032,31 @@ impl AppState {
         Ok(false)
     }
 
+    fn refuse_while_shutting_down(&self) -> Result<()> {
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err(CodedError::raised(
+                error_code::DAEMON_SHUTTING_DOWN,
+                "the daemon is shutting down, so nothing is started",
+                &[],
+            ));
+        }
+        Ok(())
+    }
+
     pub fn register_live(self: &Arc<Self>, session: Arc<LiveSession>) {
         session.enter_crash_cleanup();
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.sessions.insert(session.id.clone(), session.clone());
         drop(live);
+        // A launch that was past its claim when the daemon began to shut down: the stop of the
+        // sessions has listed the running ones already, so this one is ended here. The exit
+        // watcher records it interrupted, as for the rest.
+        if self.shutting_down.load(Ordering::Acquire) {
+            let late = session.clone();
+            std::thread::spawn(move || {
+                late.end();
+            });
+        }
         session.observe_titles(self);
     }
 
@@ -1110,10 +1155,20 @@ impl AppState {
     /// its running process is held up by something only the user can answer that no hook reports,
     /// or starting while a change of its account's sharing has it ended and is to resume it.
     pub(crate) fn shown_status(&self, session: &Session) -> SessionStatus {
+        self.status_when(session, LiveSession::waits_for_user)
+    }
+
+    /// [`Self::shown_status`] as an automatic account switch judges it: a session whose only wait
+    /// is a usage-limit dialog is not waiting, since ending that dialog is what the switch is for.
+    pub(crate) fn status_for_switch(&self, session: &Session) -> SessionStatus {
+        self.status_when(session, LiveSession::waits_for_user_beyond_usage_limit)
+    }
+
+    fn status_when(&self, session: &Session, waits: fn(&LiveSession) -> bool) -> SessionStatus {
         let waiting = !session.status.is_dormant()
             && self
                 .live_session(&session.id)
-                .is_some_and(|live| live.waits_for_user());
+                .is_some_and(|live| waits(&live));
         if waiting {
             SessionStatus::WaitingUser
         } else if session.status == SessionStatus::Interrupted && self.is_restarting(&session.id) {
@@ -1465,6 +1520,7 @@ impl AppState {
     /// telling every client.
     fn forget_deleted(&self, id: &str) {
         self.forget_saved_output(id);
+        self.forget_left_for_limit(id);
         crate::shared_config::forget_session(self, id);
         self.forget_handoff_package(id);
         self.forget_request_hand(id);
@@ -1477,8 +1533,8 @@ impl AppState {
     /// hand up: then the status is only remembered, as what the agent's events say, and the record
     /// keeps `WaitingUser`. Dormant statuses are never reached this way — a session becomes
     /// archived by the user's request and interrupted by its process going away, both of which are
-    /// decided here rather than by the agent.
-    pub fn apply_hook_status(&self, id: &str, status: SessionStatus) -> Result<()> {
+    /// decided here rather than by the agent. Says whether the record's status changed.
+    pub fn apply_hook_status(&self, id: &str, status: SessionStatus) -> Result<bool> {
         // Held across the write, so a request opening at the same moment cannot have its hand
         // lowered by a status read before it.
         let mut hands = self
@@ -1493,10 +1549,11 @@ impl AppState {
         };
         let mut session = self.session_record(id)?;
         if session.status.is_dormant() || session.status == status {
-            return Ok(());
+            return Ok(false);
         }
         session.status = status;
-        self.save_session(&session)
+        self.save_session(&session)?;
+        Ok(true)
     }
 
     /// Raises the hand of a session whose request for a session has started waiting, remembering
@@ -1679,6 +1736,7 @@ impl AppState {
         // does, carrying the same turn id; only a turn that opens here starts the count afresh.
         if !turn.open {
             turn.written_mid_turn = 0;
+            turn.waiting_told = false;
         }
         turn.open = true;
         turn.ended_off_title = false;
@@ -1792,6 +1850,62 @@ impl AppState {
             .expect("turn lock poisoned")
             .get(id)
             .map_or(0, |turn| turn.written_mid_turn)
+    }
+
+    /// Whether the owner of the session is to be told now that it waits for the user: once a turn,
+    /// whether the session has reported in it or not (a report says what it did, not that it then
+    /// stopped for a person), and once for a wait before the first turn, which the turn's start
+    /// clears. Taken by whoever asks first.
+    pub fn claim_waiting_notice(&self, id: &str) -> bool {
+        let mut turns = self.turns.lock().expect("turn lock poisoned");
+        let turn = turns.entry(id.to_string()).or_default();
+        if turn.waiting_told {
+            return false;
+        }
+        turn.waiting_told = true;
+        true
+    }
+
+    /// Records that Octoboard moved the session off `account` (`None` the default account)
+    /// because a turn stopped on its usage limit.
+    pub fn note_left_for_limit(&self, id: &str, account: Option<&str>) {
+        self.left_for_limit
+            .lock()
+            .expect("left-for-limit lock poisoned")
+            .entry(id.to_string())
+            .or_default()
+            .push((account.map(str::to_string), now_millis()));
+    }
+
+    /// Drops what is held of the accounts the session was moved off for a limit, for a session
+    /// archived or deleted.
+    pub fn forget_left_for_limit(&self, id: &str) {
+        self.left_for_limit
+            .lock()
+            .expect("left-for-limit lock poisoned")
+            .remove(id);
+    }
+
+    /// The accounts the session was moved off for a usage limit less than `within` ago, on the wall
+    /// clock, which a machine that sleeps does not stop.
+    pub fn recently_left_for_limit(&self, id: &str, within: Duration) -> Vec<Option<String>> {
+        let mut left = self
+            .left_for_limit
+            .lock()
+            .expect("left-for-limit lock poisoned");
+        let now = now_millis();
+        let Some(accounts) = left.get_mut(id) else {
+            return Vec::new();
+        };
+        accounts.retain(|(_, at)| now - *at < within.as_millis() as i64);
+        let recent = accounts
+            .iter()
+            .map(|(account, _)| account.clone())
+            .collect();
+        if accounts.is_empty() {
+            left.remove(id);
+        }
+        recent
     }
 
     /// The session reported during its current turn, so its stop needs nothing synthesised.
@@ -2380,6 +2494,15 @@ impl AppState {
         self.save_session(&session)
     }
 
+    /// Gives the exit watcher back the end of the session's process, which a launch under a claim
+    /// that watches it (`LaunchClaim::watches_launch`) held: for a launch that failed after the
+    /// process was registered, which nothing will see come up.
+    pub fn release_launch_watch(&self, id: &str) {
+        if let Some(live) = self.live_session(id) {
+            live.release_watch();
+        }
+    }
+
     pub fn set_agent_session_id(&self, id: &str, agent_session_id: &str) -> Result<()> {
         let mut session = self.session_record(id)?;
         if session.agent_session_id.as_deref() == Some(agent_session_id) {
@@ -2391,7 +2514,15 @@ impl AppState {
 
     /// Watches one session's process and records where it ended up. A session whose status was
     /// already set to archived was ended on purpose; anything else that stops is interrupted, which
-    /// is the status a click resumes from.
+    /// is the status a click resumes from. An owner is told of an end nobody asked for: one with
+    /// the session neither archived, nor already interrupted by the daemon going down, nor ended
+    /// by an operation that stopped the process itself (`LiveSession::end`: an account switch, a
+    /// handoff or a change of sharing), nor one that Octoboard's own account switch or its
+    /// restoring launched and is still watching come up (`LiveSession::watch_under_claim`), which
+    /// reports the outcome itself; a switch someone asked for does not watch, so it is told. A
+    /// claim held on the session says nothing else of it: a process that exits by itself under one
+    /// is told, and so is one a claim that stops nothing (a handover of branches, a binding
+    /// change) left running.
     pub fn watch_exit(self: &Arc<Self>, live: Arc<LiveSession>) {
         let state = self.clone();
         tokio::spawn(async move {
@@ -2411,12 +2542,27 @@ impl AppState {
             state.unregister_live(&live);
             match state.store.get_session(&live.id) {
                 Ok(Some(mut session)) => {
+                    let unasked = !matches!(
+                        session.status,
+                        SessionStatus::Archived | SessionStatus::Interrupted
+                    ) && !live.was_ended_on_purpose()
+                        && !live.is_watched_under_claim();
                     if session.status != SessionStatus::Archived {
                         session.status = SessionStatus::Interrupted;
                     }
                     session.ended_at = Some(now_millis());
-                    if let Err(err) = state.save_session(&session) {
-                        tracing::warn!(session = %live.id, %err, "recording the session's exit failed");
+                    match state.save_session(&session) {
+                        Ok(()) if unasked && session.bound_to.is_some() => {
+                            // Delivery writes into the owner's PTY, which blocks.
+                            let state = state.clone();
+                            tokio::task::spawn_blocking(move || {
+                                crate::reporting::tell_owner_it_ended(&state, &session)
+                            });
+                        }
+                        Ok(()) => {}
+                        Err(err) => {
+                            tracing::warn!(session = %live.id, %err, "recording the session's exit failed");
+                        }
                     }
                 }
                 // Deleted while its process was still exiting, which is allowed.
@@ -2433,6 +2579,7 @@ impl AppState {
     /// Ends every running session, leaving each one interrupted and resumable. Used by the exit
     /// flow and by a signal: the daemon owns the agent processes, so none of them may outlive it.
     pub async fn stop_all_sessions(self: &Arc<Self>) {
+        self.shutting_down.store(true, Ordering::Release);
         let sessions = self.live_sessions();
         for live in &sessions {
             match self.session_record(&live.id) {
@@ -2806,6 +2953,10 @@ impl AppState {
     }
 }
 
+/// An account a session was moved off for a usage limit (`None` the default account), and when in
+/// milliseconds since the epoch.
+type AccountLeft = (Option<String>, i64);
+
 #[derive(Default)]
 struct LiveSessions {
     sessions: HashMap<String, Arc<LiveSession>>,
@@ -2886,6 +3037,7 @@ impl AccountSharingLock {
                     LaunchClaim {
                         state: self.state.clone(),
                         id,
+                        watches_launch: false,
                     },
                 );
             }
@@ -2998,6 +3150,16 @@ impl Drop for SessionRemovalClaim {
 pub struct LaunchClaim {
     state: Arc<AppState>,
     id: String,
+    watches_launch: bool,
+}
+
+impl LaunchClaim {
+    /// Whether the holder watches the process it launches under the claim come up and reports the
+    /// outcome itself, so the exit watcher does not tell the owner that it ended on its own
+    /// (`LiveSession::watch_under_claim`).
+    pub fn watches_launch(&self) -> bool {
+        self.watches_launch
+    }
 }
 
 impl Drop for LaunchClaim {
@@ -4376,5 +4538,58 @@ mod tests {
         });
         assert!(state.git_statuses().is_empty());
         assert!(state.git_check_completed_at("ghost").is_none());
+    }
+
+    /// A session moved off an account for its limit is remembered for a while, per account, and
+    /// then forgotten.
+    #[test]
+    fn an_account_left_for_a_limit_is_remembered_for_a_while() {
+        let (state, _dir) = app_state("state-left-for-limit");
+        state.note_left_for_limit("s", None);
+        state.note_left_for_limit("s", Some("claude-a"));
+        state.note_left_for_limit("other", Some("claude-b"));
+
+        let mut left = state.recently_left_for_limit("s", Duration::from_secs(60));
+        left.sort();
+        assert_eq!(left, [None, Some("claude-a".to_string())]);
+        assert!(state
+            .recently_left_for_limit("s", Duration::ZERO)
+            .is_empty());
+        assert!(state
+            .recently_left_for_limit("s", Duration::from_secs(60))
+            .is_empty());
+        assert_eq!(
+            state.recently_left_for_limit("other", Duration::from_secs(60)),
+            [Some("claude-b".to_string())]
+        );
+    }
+
+    /// Once the daemon has begun to stop its sessions, no claim is granted, and a process that
+    /// was already past its claim is ended as soon as it is registered, so a launch under way
+    /// cannot start an agent that outlives the stop.
+    #[tokio::test]
+    async fn no_agent_starts_or_stays_after_the_sessions_were_stopped() {
+        let (state, _dir) = app_state("state-stopped-for-good");
+        let early = crate::test_support::idle_stand_in("early");
+        state.register_live(early.clone());
+
+        state.stop_all_sessions().await;
+
+        for refused in [state.begin_launch("s").err(), state.begin_switch("s").err()] {
+            let err = refused.expect("refused");
+            let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+            assert_eq!(coded.code, error_code::DAEMON_SHUTTING_DOWN);
+        }
+        let late = crate::test_support::idle_stand_in("late");
+        let late_check = late.clone();
+        state.register_live(late.clone());
+        let ended =
+            crate::test_support::within(crate::test_support::PATIENCE, move || late.poll_exit())
+                .await;
+        assert!(ended, "the late process was ended");
+        assert!(
+            late_check.was_ended_on_purpose(),
+            "by `end`, so its owner is not told"
+        );
     }
 }

@@ -50,10 +50,25 @@ const FIRST_WINDOW: u64 = 256 * 1024;
 /// directory for Grok Build. Read after its process has ended. `false` for a record that cannot be
 /// read.
 pub fn should_continue(agent: Agent, record: &Path) -> bool {
+    verdict(agent, record, false)
+}
+
+/// Whether the last turn of the conversation `record` (as for [`should_continue`]) stopped because
+/// the plan's usage limit was reached: the one case of [`should_continue`] that is not a turn cut
+/// off mid-way, which a running session's record shows all the time. What Octoboard's own account
+/// switch is triggered by (`crate::auto_switch`). `false` for a record that cannot be read.
+pub fn stopped_on_usage_limit(agent: Agent, record: &Path) -> bool {
+    verdict(agent, record, true)
+}
+
+/// [`should_continue`], or with `usage_limit_only` the part of it that a usage limit stopped.
+fn verdict(agent: Agent, record: &Path, usage_limit_only: bool) -> bool {
     let decided = match agent {
-        Agent::Claude => claude_tail(record).map(|entries| claude_should_continue(&entries)),
-        Agent::Codex => codex_should_continue(record),
-        Agent::Grok => grok_should_continue(record),
+        Agent::Claude => {
+            claude_tail(record).map(|entries| claude_should_continue(&entries, usage_limit_only))
+        }
+        Agent::Codex => codex_should_continue(record, usage_limit_only),
+        Agent::Grok => grok_should_continue(record, usage_limit_only),
     };
     decided.unwrap_or_else(|err| {
         tracing::warn!(record = %record.display(), %err, "reading the conversation record failed");
@@ -112,7 +127,7 @@ fn is_turn_entry(entry: &Value) -> bool {
 }
 
 /// The decision on the transcript's tail: `entries` from the last turn entry on, oldest first.
-fn claude_should_continue(entries: &[Value]) -> bool {
+fn claude_should_continue(entries: &[Value], usage_limit_only: bool) -> bool {
     let Some((last, after)) = entries.split_first() else {
         return false;
     };
@@ -130,6 +145,9 @@ fn claude_should_continue(entries: &[Value]) -> bool {
                     && last["apiError"] == "usage_limit_reached"
                     && !after.iter().any(cancels_auto_continue);
             }
+            if usage_limit_only {
+                return false;
+            }
             match last["message"]["stop_reason"].as_str() {
                 // Waiting on a tool call that never got its result.
                 Some("tool_use") => true,
@@ -141,7 +159,7 @@ fn claude_should_continue(entries: &[Value]) -> bool {
             }
         }
         Some("user") => {
-            if blocks.iter().any(is_interrupt_marker) {
+            if usage_limit_only || blocks.iter().any(is_interrupt_marker) {
                 return false;
             }
             let results: Vec<&Value> = blocks
@@ -168,7 +186,7 @@ fn claude_should_continue(entries: &[Value]) -> bool {
 /// `task_complete` (with an `error` when it failed), and writes nothing when its process is ended
 /// mid-turn. A turn with no ending is continued only when it holds the user's message: a manual
 /// `/compact` ended mid-way leaves a turn with none.
-fn codex_should_continue(record: &Path) -> std::io::Result<bool> {
+fn codex_should_continue(record: &Path, usage_limit_only: bool) -> std::io::Result<bool> {
     // What the last turn has shown so far: `None` before any turn.
     let mut last: Option<CodexTurn> = None;
     line_file::read_to(record, u64::MAX, |line| {
@@ -201,7 +219,7 @@ fn codex_should_continue(record: &Path) -> std::io::Result<bool> {
         }
     })?;
     Ok(match last {
-        Some(CodexTurn::Running { prompted }) => prompted,
+        Some(CodexTurn::Running { prompted }) => prompted && !usage_limit_only,
         Some(CodexTurn::Ended { carry_on }) => carry_on,
         None => false,
     })
@@ -220,7 +238,7 @@ enum CodexTurn {
 /// output is not continued. Once there is output, a Ctrl+C or a refused permission is
 /// `stop_reason: "cancelled"`. A usage limit is an `error` whose text carries the HTTP status 402,
 /// the only thing that tells it from other request errors; a 429 is `rate_limit`, not continued.
-fn grok_should_continue(record: &Path) -> std::io::Result<bool> {
+fn grok_should_continue(record: &Path, usage_limit_only: bool) -> std::io::Result<bool> {
     // What the last prompt's turn has shown so far: `None` before any prompt.
     let mut last: Option<GrokTurn> = None;
     line_file::read_to(&record.join("updates.jsonl"), u64::MAX, |line| {
@@ -248,7 +266,7 @@ fn grok_should_continue(record: &Path) -> std::io::Result<bool> {
         }
     })?;
     Ok(match last {
-        Some(GrokTurn::Working) => true,
+        Some(GrokTurn::Working) => !usage_limit_only,
         Some(GrokTurn::Ended { carry_on }) => carry_on,
         Some(GrokTurn::Prompted) | None => false,
     })
@@ -702,5 +720,75 @@ mod tests {
             grok("task_completed"),
             grok("agent_message_chunk")
         ]));
+    }
+
+    /// A turn cut off mid-way is something to continue but not a stop on the usage limit, which a
+    /// running session's record shows all the time; only the limit is the trigger of the
+    /// automatic switch.
+    #[test]
+    fn only_a_usage_limit_is_a_stop_on_the_limit() {
+        let dir = ScratchDir::new("switch-continue-limit");
+        let write = |name: &str, lines: &[Value]| {
+            let path = dir.join(name);
+            let text: String = lines.iter().map(|line| format!("{line}\n")).collect();
+            std::fs::write(&path, text).unwrap();
+            path
+        };
+        let both = |agent, record: &Path, cut_off: bool| {
+            assert!(should_continue(agent, record));
+            assert_eq!(stopped_on_usage_limit(agent, record), !cut_off);
+        };
+
+        both(
+            Agent::Claude,
+            &write("claude-cut.jsonl", &[prompt("run it"), tool_use()]),
+            true,
+        );
+        both(
+            Agent::Claude,
+            &write("claude-limit.jsonl", &[prompt("hello"), usage_limit()]),
+            false,
+        );
+
+        let codex = |events: &[Value]| {
+            let lines: Vec<Value> = events
+                .iter()
+                .map(|event| json!({"type": "event_msg", "payload": event}))
+                .collect();
+            write("rollout.jsonl", &lines)
+        };
+        both(
+            Agent::Codex,
+            &codex(&[task_started(), user_message()]),
+            true,
+        );
+        let usage = json!({"codex_error_info": "usage_limit_exceeded"});
+        both(
+            Agent::Codex,
+            &codex(&[task_started(), user_message(), task_complete(Some(usage))]),
+            false,
+        );
+
+        let grok_record = |updates: &[Value]| {
+            let lines: Vec<Value> = updates
+                .iter()
+                .map(|update| json!({"params": {"update": update}}))
+                .collect();
+            write("updates.jsonl", &lines);
+            dir.to_path_buf()
+        };
+        both(
+            Agent::Grok,
+            &grok_record(&[grok("user_message_chunk"), grok("tool_call")]),
+            true,
+        );
+        both(
+            Agent::Grok,
+            &grok_record(&[
+                grok("user_message_chunk"),
+                turn_completed("error", Some("API error (status 402 Payment Required)")),
+            ]),
+            false,
+        );
     }
 }
