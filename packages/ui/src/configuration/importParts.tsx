@@ -2,6 +2,7 @@ import React from "react";
 
 import { AGENT_LABEL } from "../agents";
 import { InlineReference } from "../components/InlineReference";
+import { MarkLineBox } from "../components/MarkLineBox";
 import { StatusMark } from "../components/StatusMark";
 import { StatusBadge, type StatusBadgeColor } from "../components/StatusBadge";
 import type { PlainMessageKey } from "../i18n/catalog";
@@ -68,13 +69,15 @@ export function FallbackLines({ fallbacks }: { fallbacks: AccountFallback[] }): 
 
 /** The warning mark after the name of a console or a project whose account references name no account of
  * this machine: its popover says, per reference, that the agent's default account is used instead. Nothing
- * when there are none. */
-export function FallbackMark({ subject, fallbacks }: { subject: string; fallbacks: AccountFallback[] }): React.ReactElement | null {
+ * when there are none. `size` is the name's text size class. */
+export function FallbackMark({ subject, fallbacks, size }: { subject: string; fallbacks: AccountFallback[]; size: string }): React.ReactElement | null {
   const t = useT();
   if (fallbacks.length === 0) return null;
   return (
-    <StatusMark tone="warning" label={t("configuration.import.fallbacks.label", { subject: isolate(subject) })}>
-      <FallbackLines fallbacks={fallbacks} />
-    </StatusMark>
+    <MarkLineBox size={size}>
+      <StatusMark tone="warning" label={t("configuration.import.fallbacks.label", { subject: isolate(subject) })}>
+        <FallbackLines fallbacks={fallbacks} />
+      </StatusMark>
+    </MarkLineBox>
   );
 }

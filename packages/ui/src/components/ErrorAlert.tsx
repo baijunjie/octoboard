@@ -2,9 +2,11 @@ import { Alert } from "@heroui/react";
 import React from "react";
 
 import { AlertStatusContext } from "./AlertButton";
-import { AlertFrame } from "./AlertFrame";
+import { AlertFrame, type AlertStatus } from "./AlertFrame";
 import { DetailsButton } from "./DetailsButton";
 import { useAnnouncement } from "./useAnnouncement";
+
+export type { AlertStatus };
 
 /**
  * Durable failure or warning content shown among other content: one that blocks (a lookup a form makes), one about a
@@ -19,17 +21,19 @@ import { useAnnouncement } from "./useAnnouncement";
  * cause's own fix, further guidance), then the raw text not written for the reader (the system's own message, a
  * diagnostic block, raw entries); with no `details` there is no Details button. The buttons wrap beneath the text when
  * the Alert is too narrow to hold both.
- * `status` is `warning` for a warning, or a failure that leaves the subject usable.
+ * `status` is `warning` for a warning, or a failure that leaves the subject usable. It also carries a warning about
+ * the consequence of a choice the user is making, through `ChoiceWarning`.
  *
  * `announce` makes the title and the description (the first sentence, not the `remedy`), and nothing else, an alert,
  * so the failure is spoken once as it appears; it is read as the Alert mounts. A caller passes it for a failure that
  * arrives after its view has painted (`useHasPainted`), and not for one that is there as the view opens. The buttons
  * and the details are never part of the announcement. `announceKey` is the failure's attempt: a new one remounts the
  * announcing part, so a failure that repeats with the same words is spoken again, while the actions around it stay
- * mounted and keep focus. `announceDelayMs` holds the announcement back for a failure that mounts together with a
- * focus move (a dialog opening onto its field, focus handed to Try again): VoiceOver drops what is announced within
- * about 300 ms of one, so the announcing part is replaced by an alert after the delay (`AFTER_FOCUS_MOVE_DELAY_MS`),
- * and until then the text is only shown. Like `announce`, it is read as the Alert mounts.
+ * mounted and keep focus. `announceDelayMs` holds the announcement back for a failure that mounts together with a focus
+ * move (a dialog opening onto its field, focus handed to Try again) or as a control's own state change is spoken (a
+ * checkbox ticked): VoiceOver drops what is announced within about 300 ms of one, so the announcing part is replaced by
+ * an alert after the delay (`AFTER_FOCUS_MOVE_DELAY_MS`), and until then the text is only shown. Like `announce`, it is
+ * read as the Alert mounts.
  */
 export function ErrorAlert({
   id,
@@ -50,7 +54,7 @@ export function ErrorAlert({
   announce?: boolean;
   announceKey?: number;
   announceDelayMs?: number;
-  status?: "danger" | "warning";
+  status?: AlertStatus;
   /** The one main thing to do, shown under the description and not announced. */
   remedy?: React.ReactNode;
   details?: React.ReactNode;

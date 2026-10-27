@@ -39,7 +39,7 @@ export function GitSection(): React.ReactElement {
         <SwitchSettingRow
           label={t("settings.git.autoPull.label")}
           help={<HelpTip label={t("settings.git.autoPull.help")}>{t("settings.git.autoPull.remoteCheck")}</HelpTip>}
-          description={t("settings.git.autoPull.description")}
+          description={t(autoPull ? "settings.git.autoPull.description.on" : "settings.git.autoPull.description.off")}
           isSelected={autoPull}
           onChange={setAutoPull}
         />

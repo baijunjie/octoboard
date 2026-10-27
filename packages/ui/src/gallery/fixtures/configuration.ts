@@ -191,6 +191,30 @@ const SINGLE: Omit<Inspection, "type"> = {
   ],
 };
 
+/** A console and projects whose names are long enough to wrap in the dialog, each with a mark after the name: the
+ * console's own account falls back, one project is found and its account falls back, the other is not found. */
+const LONG_NAMES: Omit<Inspection, "type"> = {
+  consoles: [
+    {
+      name: "Northwest regional distribution centres, quarterly planning and reporting workspace for the whole logistics group",
+      account_fallbacks: [{ agent: "claude", name: "Work" }],
+      projects: [
+        project({
+          name: "Warehouse slotting optimisation service with the seasonal demand forecasting and replenishment rules",
+          path: "/Users/ana/code/slotting",
+          offers: { exported_path: "/Users/ana/code/slotting", default_clone_dir: null, clone: null },
+          default: "exported_path",
+          account_fallbacks: [{ agent: "codex", name: "Personal" }],
+        }),
+        project({
+          name: "Carrier contract archive and rate comparison tooling for the freight procurement team",
+          path: "/Users/ana/work/carrier-contracts",
+        }),
+      ],
+    },
+  ],
+};
+
 /** A document exported without full project paths, which records only each directory's name: one
  * project found under the default clone directory, one to be cloned, and one nothing places. */
 const NO_PATHS: Omit<Inspection, "type"> = {
@@ -445,7 +469,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, from Settings with a console in the sidebar",
-    description: "Choose the console the sidebar shows or everything; Include full project paths starts unchecked and no notice stands beneath it. Export closes the dialog and raises a toast naming the saved file.",
+    description: "Choose the console the sidebar shows or everything. Include full project paths starts unchecked: its description says what checking it does (\"Once checked, the file records each project's full directory path, so an import can look for the project there first.\") and no alert stands beneath it. Export closes the dialog and raises a toast naming the saved file.",
     state,
     steps: exportFromSettings,
   },
@@ -454,12 +478,11 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Export, with full project paths included",
-    description: "Checking Include full project paths puts a warning triangle beside the checkbox, after its label and outside it (the checkbox's name stays \"Include full project paths\"), named \"Paths in the file\", and its popover, opened here, leads with the sentence \"The file contains project paths.\" and says the file records each project's full directory path on the machine running Octoboard, which can reveal details such as a user name, so the file is to be shared only with people the user trusts. Nothing is written loose beside the option.",
+    description: "With Include full project paths checked, its description changes to \"An import first looks for each project at its recorded full path.\" and a warning alert stands directly under the option, titled \"The file contains project paths.\": the description says the paths are on the machine running Octoboard, which may not be the device in use, and may reveal details such as a user name; a separate line beneath says \"Share the file only with people you trust.\" No mark sits beside the checkbox.",
     state,
     steps: [
       ...exportFromSettings,
       (ui) => ui.press(ui.t("configuration.export.paths.include")),
-      (ui) => ui.hoverStatusMark(ui.t("configuration.export.paths.mark")),
     ],
   },
   {
@@ -639,6 +662,19 @@ export const configurationScenarios: Scenario[] = [
     description: "A single console's document has one card and no application-settings card. \"Default clone directory (0)\" is disabled because no project offers it, and the clone note follows the card. The project nothing places, Releases, has no state line, only a warning triangle after its name.",
     state,
     configuration: { file: FILE, inspection: SINGLE, imported: CLEAN_RESULT },
+    steps: [
+      ...importFromSettings,
+      chooseFile,
+    ],
+  },
+  {
+    id: "configuration-import-review-long-names",
+    group: GROUP,
+    category: "normal",
+    title: "Import, review with names that wrap",
+    description: "The console name in its heading and both project names are too long for one line and wrap. Each warning triangle (the console's and the found project's account fallbacks, and the not-found project's \"not found\") stays one line high and centres on the first line of its name, not on the whole wrapped name.",
+    state,
+    configuration: { file: FILE, inspection: LONG_NAMES },
     steps: [
       ...importFromSettings,
       chooseFile,

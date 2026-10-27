@@ -14,6 +14,7 @@ vi.mock("./CloneDirSetting", () => ({ CloneDirSetting: () => <p>Clone directory<
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 const toastError = vi.fn();
+let autoPull = false;
 let gitWorkflow: GitWorkflowSettings = DEFAULT_GIT_WORKFLOW;
 
 const listeners = new Set<() => void>();
@@ -29,7 +30,7 @@ const store = (next: GitWorkflowSettings) => {
 vi.mock("../store", () => ({
   useDaemon: () => ({ request, toastError }),
   useDaemonStore: (selector: (state: { settings: { git_workflow: GitWorkflowSettings; auto_pull_repositories: boolean } }) => unknown) =>
-    useSyncExternalStore(subscribe, () => selector({ settings: { git_workflow: gitWorkflow, auto_pull_repositories: false } })),
+    useSyncExternalStore(subscribe, () => selector({ settings: { git_workflow: gitWorkflow, auto_pull_repositories: autoPull } })),
 }));
 
 beforeEach(() => {
@@ -37,6 +38,7 @@ beforeEach(() => {
   toastError.mockClear();
   request.mockImplementation(() => Promise.resolve({}) as Promise<never>);
   gitWorkflow = DEFAULT_GIT_WORKFLOW;
+  autoPull = false;
 });
 
 function mount() {
@@ -163,4 +165,14 @@ it("splits the rows into Repository, Development and Protection under h3 heading
   expect(groups[0].has).toEqual(["Clone directory"]);
   expect(groups[1].has).toEqual(["Where sessions develop", "Rebase before merging", "Delivery"]);
   expect(groups[2].has).toEqual(["Revert gate"]);
+});
+
+it.each([
+  { name: "what turning it on does while it is off", on: false, shown: "Once this is on, a project's branch is pulled" },
+  { name: "what is happening now while it is on", on: true, shown: "A project's branch is pulled" },
+])("describes automatic pulling by $name", ({ on, shown }) => {
+  autoPull = on;
+  const container = mount();
+  expect(container.textContent).toContain(shown);
+  expect(container.textContent?.includes("Once this is on, a project's branch is pulled")).toBe(!on);
 });

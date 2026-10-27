@@ -1548,6 +1548,13 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
   image failure or replacement sequence, nor `SpotNotice`. Its native live politeness, atomicity and relevance were not
   captured; it is not a complete native-attribute record for matching other callers.
 - Import result dialog rename: not yet listened to (OPEN-1).
+- A choice-consequence warning (`ErrorAlert` with `announce` and `announceDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`,
+  mounted under a checkbox as it is ticked inside a dialog, focus kept on the checkbox, and added to the checkbox's
+  `aria-describedby`): the export dialog's full-paths option and the trust prompt's folder option. No case matches it;
+  not yet listened to. WARN-5 heard the trust prompt's folder option before its note was split by state and before this
+  warning existed, so it does not cover the ticked state. The trust prompt is an alert dialog, which WebKit exposes as an
+  assertive live region (WARN-1, WARN-5), so the Alert mounting inside it may be spoken once by the dialog at once and
+  again by its own delayed alert; listen for a double reading there.
 - A `StatusAnnouncer` region whose text is present from the first render at the default delay: heard with focus kept in
   the main window (SA-H), with a menu taking focus (SA-I) and, as a region mounted with each opening of a disclosure,
   inside a dialog with the trigger focused (SA-M); not with a focus move into the pane or under a modal.

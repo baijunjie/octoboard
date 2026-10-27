@@ -163,7 +163,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "normal",
     title: "Queued trust prompts for all agents",
-    description: "Claude Code and Codex offer their projects' parent folders, while the Grok Build project is the home directory itself, whose parent is too broad to offer. The caution is plain body text, with no Alert and no \"Caution:\" prefix: a single sentence for that agent, whose configuration-file token and the project path are neutral chips. Each agent has its own caution, and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while the hands stay raised until trust is answered in the terminal.",
+    description: "Claude Code and Codex offer their projects' parent folders as an unchecked \"Trust every project under ~/code\" option, whose description reads \"Once checked, the folder is trusted instead of this project alone.\" and with no alert under it, while the Grok Build project is the home directory itself, whose parent is too broad to offer, so its dialog has no such option. The caution is plain body text, with no Alert and no \"Caution:\" prefix: a single sentence for that agent, whose configuration-file token and the project path are neutral chips. Each agent has its own caution, and Codex names its repository-root trust. All three asking sessions raise their hands. Not now advances through the queued prompts while the hands stay raised until trust is answered in the terminal.",
     state: snapshotState({
       consoles: [console_],
       projects: [web, api, grokProject],
@@ -174,6 +174,20 @@ export const noticeScenarios: Scenario[] = [
         { session: grokSession.id, agent: "grok", project: grokProject.id, path: grokProject.path, trustDir: null },
       ],
     }),
+  },
+  {
+    id: "trust-prompt-parent-checked",
+    group: TRUST,
+    category: "normal",
+    title: "Trust prompt with the whole parent folder chosen",
+    description: "\"Trust every project under ~/code\" is checked. Its description now reads \"The folder will be trusted instead of this project alone.\" and a warning alert stands directly under the option, titled \"Projects added there later will be trusted too.\": the description says trust covers projects at any depth under the folder, for every agent, and that their own permission rules, hooks and instructions take effect; a separate line beneath says \"Trust only a folder whose contents you control.\" The caution above the option is unchanged.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web],
+      sessions: trustSessions.filter((session) => session.project_id === web.id || session.role === "console"),
+      trustPrompts: [{ session: "s-web-1", agent: "claude", project: web.id, path: web.path, trustDir: "/Users/dev/code" }],
+    }),
+    steps: [(ui) => ui.press(ui.t("dialog.trust.parent", { directory: "~/code" }))],
   },
   {
     id: "trust-prompt-dismissed",

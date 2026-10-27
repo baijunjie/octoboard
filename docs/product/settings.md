@@ -139,12 +139,10 @@ choice is kept are in `docs/product/markdown-documents.md`.
 A switch, **on to begin with** — installations from before the switch existed included: whether the sidebar ranks
 sessions and projects by their status, so that the ones waiting for the user come first after the pinned ones. While
 the switch is on the row's description says what is happening now: sessions and projects move as their status changes,
-and projects with no unarchived session end the list. While it is off the description says how the sidebar is ordered
-instead — sessions newest first and projects by name, pinned ones first, so nothing moves up for waiting or working,
-and projects with no unarchived session still end the list — and what turning it on will do. The daemon stores it as
-`sidebar_order_by_status` and keeps it, so every window shows the same. A console session may read and change it, and a
-full configuration export carries it (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
+and projects with no unarchived session end the list. While it is off the description says what turning it on will
+do, and that projects with no unarchived session end the list. The daemon stores it as `sidebar_order_by_status` and
+keeps it, so every window shows the same. A console session may read and change it, and a full configuration export
+carries it (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
 `docs/product/configuration-export-and-import.md`). The order under either state, and what else follows it, are in
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`.
 
@@ -201,13 +199,13 @@ browser opens on the nearest existing ancestor when the directory does not exist
 
 ### Automatically pull repositories
 
-A switch, off to begin with: whether a project's branch is pulled
-(fast-forwarded) on its own when it is behind its upstream, rather than only reported as behind. The row's line of
-text says that it pulls a branch that is behind its upstream and can be fast-forwarded, never pushes, and leaves a
-branch with commits of its own alone; a "?" at the end of its name says that the remote is checked every few minutes
-whichever way the switch is set, so the branch always shows how far ahead or behind it is. What it does, what it
-never does and where the value is kept are in "Automatically pulling repositories" in
-`docs/product/project-git-status.md`.
+A switch, off to begin with: whether a project's branch is pulled (fast-forwarded) on its own when it is behind its
+upstream, rather than only reported as behind. The row's line of text follows the switch — while it is off, what
+turning it on will do; while it is on, what is happening now — and either way says that a branch is pulled when it is
+behind its upstream and can be fast-forwarded, that nothing is pushed, and that a branch with commits of its own is
+left alone; a "?" at the end of its name says that the remote is checked every few minutes whichever way the switch is
+set, so the branch always shows how far ahead or behind it is. What it does, what it never does and where the value is
+kept are in "Automatically pulling repositories" in `docs/product/project-git-status.md`.
 
 ### Development
 
@@ -319,20 +317,16 @@ archived owners reopened with it; and a new session started this way is owned by
 A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
 `switch_session_account` call, which switches the account of one of its own sessions, is made without asking the user
 (see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md`). While the switch is
-off the row's description says that, once it is on, a session can do so without asking first, and that until then the
-user is asked and can change the account, model and reasoning effort before confirming; while it is on, it says that a
-session does so without asking, and that turning it off has the user asked again, with those choices. The Switch
-account the user makes from the window is not affected.
+off the row's description says that, once it is on, a session can do so without asking first; while it is on, it says
+that a session can do so without asking first. The Switch account the user makes from the window is not affected.
 
 ### Automatically approve handoffs
 
 A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
 `handoff_session` call, which hands one of its own sessions off to a session of another agent, is made without asking
 the user (see "The user's approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). While the switch
-is off the row's description says that, once it is on, a session can do so without asking first, and that until then
-the user is asked and can change the agent, account, model and reasoning effort before confirming; while it is on, it
-says that a session does so without asking, and that turning it off has the user asked again, with those choices. The
-Hand off the user makes from the window is not affected.
+is off the row's description says that, once it is on, a session can do so without asking first; while it is on, it
+says that a session can do so without asking first. The Hand off the user makes from the window is not affected.
 
 ### Ask questions as choices
 
@@ -340,10 +334,9 @@ A switch, **on to begin with** — installations from before the switch existed 
 Octoboard gives a session ask it to put a question that needs the user's decision as options the user picks from,
 through the agent's own tool for asking, rather than listing the options in its reply (what a session is told is in
 "The guidance on asking the user" in `docs/product/launching-agents.md`). While the switch is on the row's description
-says so, that turning it off lets sessions ask in their own way, and that a change reaches sessions started afterwards;
-while it is off, it says that once it is on sessions are asked to do so, and that until then they ask in their own way.
-The daemon stores it as `ask_questions_as_choices`. A session already running keeps what it was told when it launched;
-when a change reaches a console session is in "The console session's instruction file" in
+says so, and while it is off, that once it is on sessions are asked to do so; either way it says that a change reaches
+sessions started afterwards. The daemon stores it as `ask_questions_as_choices`. A session already running keeps what
+it was told when it launched; when a change reaches a console session is in "The console session's instruction file" in
 `docs/product/launching-agents.md`. An agent can neither read nor change the switch through the settings tools (see
 "Who reads and changes what" in `docs/product/agent-settings-tools.md`).
 

@@ -225,9 +225,9 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
                     className="block py-0.5 text-start font-semibold text-foreground [overflow-wrap:anywhere] @xl:table-cell @xl:px-2 @xl:pt-4 @xl:pb-2 @xl:align-top"
                     dir="auto"
                   >
-                    <span className="inline-flex max-w-full items-center gap-1">
+                    <span className="inline-flex max-w-full items-start gap-1">
                       <span className="min-w-0">{group.console}</span>
-                      <FallbackMark subject={group.console} fallbacks={group.fallbacks} />
+                      <FallbackMark subject={group.console} fallbacks={group.fallbacks} size="text-sm" />
                     </span>
                   </th>
                   {group.own && (
@@ -242,9 +242,9 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
                 {group.projects.map((line, p) => (
                   <tr key={p} role="row" className="group/row block groove-b py-2 ps-4 last:border-b-0 @xl:table-row @xl:py-0 @xl:ps-0">
                     <Cell label={t(COLUMNS[0].key)} indent>
-                      <span className="inline-flex max-w-full items-center gap-1">
+                      <span className="inline-flex max-w-full items-start gap-1">
                         <span className="min-w-0">{line.project}</span>
-                        <FallbackMark subject={line.project} fallbacks={line.fallbacks} />
+                        <FallbackMark subject={line.project} fallbacks={line.fallbacks} size="text-sm" />
                       </span>
                     </Cell>
                     <Cell label={t(COLUMNS[1].key)}>{outcomeCell(line, line.project)}</Cell>

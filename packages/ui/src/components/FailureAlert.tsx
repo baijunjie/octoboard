@@ -6,7 +6,7 @@ import { useT } from "../i18n/react";
 import { AlertButton } from "./AlertButton";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { errorDetails, errorRemedy } from "./errorParts";
-import { ErrorAlert } from "./ErrorAlert";
+import { ErrorAlert, type AlertStatus } from "./ErrorAlert";
 
 /** The Alert of a failure that is the state of what the screen shows: `title` says what failed, the
  * failure's sentence is the description with the one main thing to do under it, Try again, and the rest
@@ -39,7 +39,7 @@ export function FailureAlert({
   announce: boolean;
   attempt?: number;
   announceDelayMs?: number;
-  status?: "danger" | "warning";
+  status?: AlertStatus;
   className?: string;
 }): React.ReactElement {
   const t = useT();

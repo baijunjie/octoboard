@@ -465,7 +465,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "General, sidebar status ordering switched off",
-    description: "The \"Order the sidebar by status\" switch below Markdown style is off, and its description now says sessions are listed newest first and projects by name, pinned ones first, before ending with \"Once this is on\". Switch it on and off to read both descriptions; the sidebar re-orders at once (see Console sessions, ordering by status switched off).",
+    description: "The \"Order the sidebar by status\" switch below Markdown style is off, and its description now starts with \"Once this is on\" and says only what the switch does when on (sessions and projects move as their status changes, the ones waiting for you first after the pinned ones), without describing the order it keeps now. Switch it on and off to read both descriptions; the sidebar re-orders at once (see Console sessions, ordering by status switched off).",
     state: { ...browserState, settings: { ...browserState.settings!, sidebar_order_by_status: false } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -539,7 +539,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Agent behavior",
-    description: "The lead line sits under the section heading, above a rule that opens the five rows: the session-request, resume-request, account-switch and handoff switches, all off, then Ask questions as choices, on, which is its default. Each of the four approval descriptions starts with \"Once this is on\"; the resume one names reopening, resuming and resuming a conversation in a new session, and the last two say that until then you are asked and can change the account (and for a handoff the agent), model and reasoning effort before confirming. The last row's description states what being on does, including that running sessions keep what they were started with. Switch a row to read its other description; none moves another.",
+    description: "The lead line sits under the section heading, above a rule that opens the five rows: the session-request, resume-request, account-switch and handoff switches, all off, then Ask questions as choices, on, which is its default. Each of the four approval descriptions starts with \"Once this is on\" and says only what being on allows; the resume one names reopening, resuming and resuming a conversation in a new session, and none says what happens until then. The last row's description states what being on does, ending with the sentence that a change reaches sessions started afterwards. Switch a row to read its other description; none moves another.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -551,7 +551,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Agent behavior, approvals automatic, questions in text",
-    description: "The four approval switches are on, each description now stating the behaviour instead of starting with \"Once this is on\", while Ask questions as choices is off, its description starting with \"Once this is on\".",
+    description: "The four approval switches are on, each description now stating the behaviour instead of starting with \"Once this is on\", each saying only what being on allows, with no advice to turn it off, while Ask questions as choices is off, its description starting with \"Once this is on\" and ending with the sentence that a change reaches sessions started afterwards.",
     state: {
       ...browserState,
       settings: { ...browserState.settings!, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false },
@@ -566,7 +566,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: git",
-    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Permissions, Notifications, Keyboard shortcuts, Configuration, About. Git has three headed groups holding six rows. Repository: Default clone directory (its explanation describes when the chosen directory is used, and the path appears in the input), then Automatically pull repositories, which shows its first two sentences under the label and a small muted \"?\" holding the sentence about the remote being checked. Development: Where sessions develop reads In a worktree of its own, with the explanation for that choice; Rebase before merging is on, with the explanation that says what being on does; Delivery, last, reads Ask each time in a select at the end of its row. Protection: Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\".",
+    description: "The section list reads General, Git, Agent accounts, Agent behavior, Trusted folders, Permissions, Notifications, Keyboard shortcuts, Configuration, About. Git has three headed groups holding six rows. Repository: Default clone directory (its explanation describes when the chosen directory is used, and the path appears in the input), then Automatically pull repositories, off, whose description starts with \"Once this is on\" and says a project's branch is pulled when it is behind its upstream and can be fast-forwarded, with a small muted \"?\" after the label holding the sentence about the remote being checked. Development: Where sessions develop reads In a worktree of its own, with the explanation for that choice; Rebase before merging is on, with the explanation that says what being on does; Delivery, last, reads Ask each time in a select at the end of its row. Protection: Revert gate is off, with a small muted \"?\" at the end of its label and an explanation starting \"Once this is on, in a project session\".",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -578,8 +578,8 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: git, development on a branch and the other items changed from the defaults",
-    description: "Where sessions develop reads On a branch of its own, with the explanation that the branch shares the project directory, so it suits one session at a time. Rebase before merging is off, its explanation saying what turning it on would do; Delivery reads Open a pull request, the longest of its three labels, which fits the select without being cut. Revert gate, in its own group, is on, its explanation starting \"In a project session\" and saying a change takes effect at once, running sessions included.",
-    state: { ...browserState, settings: { ...browserState.settings!, git_workflow: { development: "branch", rebase_before_merge: false, delivery: "pull_request", revert_gate: true } } },
+    description: "Automatically pull repositories is on, its description now stating the behaviour (\"A project's branch is pulled when...\") instead of starting with \"Once this is on\". Where sessions develop reads On a branch of its own, with the explanation that the branch shares the project directory, so it suits one session at a time. Rebase before merging is off, its explanation saying what turning it on would do; Delivery reads Open a pull request, the longest of its three labels, which fits the select without being cut. Revert gate, in its own group, is on, its explanation starting \"In a project session\" and saying a change takes effect at once, running sessions included.",
+    state: { ...browserState, settings: { ...browserState.settings!, auto_pull_repositories: true, git_workflow: { development: "branch", rebase_before_merge: false, delivery: "pull_request", revert_gate: true } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.git")),

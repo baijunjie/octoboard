@@ -20,9 +20,9 @@ function mount(element: React.ReactElement) {
 
 it("puts the help at the end of the label's line, before the description", () => {
   const container = mount(<SettingRow label="Appearance" help={<button>About appearance</button>} description="Muted line" />);
-  const line = container.querySelector("button")!.parentElement!;
+  const line = container.querySelector("button")!.parentElement!.parentElement!;
   expect(line.textContent).toBe("AppearanceAbout appearance");
-  expect(line.lastElementChild).toBe(container.querySelector("button"));
+  expect(line.lastElementChild!.firstElementChild).toBe(container.querySelector("button"));
   expect(line.nextElementSibling?.textContent).toBe("Muted line");
 });
 

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { DaemonRequestError } from "../daemon-client";
 import { type TrustPrompt } from "../store";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
@@ -109,4 +110,50 @@ it("says the caution as plain body text, in order, with no alert frame", () => {
   expect(paragraphs).not.toContain("The project's own configuration takes effect.");
   expect(document.body.querySelector("[data-slot=alert-root]")).toBeNull();
   expect(document.body.textContent).not.toContain("Caution:");
+});
+
+// Trusting a folder is a risk the user opts into by ticking the box, so the warning sits under the
+// option while it is ticked, and the option's note follows its state rather than repeating it.
+it("warns under the folder option only while it is ticked", async () => {
+  mount([prompt]);
+  const alert = () => document.body.querySelector<HTMLElement>("[data-slot=alert-root]");
+  const note = () => document.getElementById(checkbox()!.getAttribute("aria-describedby")!.split(" ")[0]!)!;
+  expect(alert()).toBeNull();
+  expect(note().textContent).toBe("Once checked, the folder is trusted instead of this project alone.");
+  const box = checkbox();
+  await tick();
+  expect(checkbox()).toBe(box);
+  expect(alert()?.textContent).toContain("Projects added there later will be trusted too.");
+  expect(alert()?.textContent).toContain("Trust covers projects at any depth under the folder");
+  expect(alert()?.textContent).toContain("Trust only a folder whose contents you control.");
+  expect(note().textContent).toBe("The folder will be trusted instead of this project alone.");
+  expect(note().compareDocumentPosition(alert()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await tick();
+  expect(alert()).toBeNull();
+});
+
+// The Alert is no ancestor or sibling a screen reader meets by itself, so the checkbox is described by it while it
+// shows, and it is spoken once after the tick, held back while the checkbox's own new state is spoken.
+it("describes the folder option by its warning while ticked and speaks it once after the tick", async () => {
+  vi.useFakeTimers();
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
+  mount([prompt]);
+  const box = checkbox()!;
+  expect(box.getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
+  await tick();
+  expect(checkbox()).toBe(box);
+  const alert = document.body.querySelector<HTMLElement>("[data-slot=alert-root]")!.parentElement!;
+  const ids = box.getAttribute("aria-describedby")!.split(" ");
+  expect(ids).toHaveLength(2);
+  expect(ids).toContain(alert.id);
+  expect(alert.querySelector("[role=alert]")).toBeNull();
+  await act(async () => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+  const spoken = alert.querySelector("[role=alert]")!;
+  expect(spoken.textContent).toContain("Projects added there later will be trusted too.");
+  expect(spoken.textContent).toContain("at any depth");
+  expect(spoken.textContent).not.toContain("Trust only a folder");
+  await tick();
+  expect(box.getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
 });

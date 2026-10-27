@@ -86,9 +86,13 @@ shown" in `docs/product/settings.md`, so the folder reads the same as the row it
 **The folder-wide choice** is a checkbox under the message, shown only when the daemon offers a folder for this
 project (see "Trusted folders" below for which folder that is); a project with none to offer gets no checkbox. It
 starts unticked. Its label names that folder, as the choice to trust every project under it, and a note below the
-label says that this records the folder instead of this project and covers every project under it, at any depth,
-including ones added there later, for every agent. The label is where the folder's path is read: it wraps rather than
-being cut, and no tooltip carries it.
+label follows its state: while unticked, that ticking it trusts the folder instead of this project alone; while ticked,
+that the folder will be trusted instead of this project alone. The label is where the folder's path is read: it wraps
+rather than being cut, and no tooltip carries it. Only while it is ticked, a warning alert stands directly under it (see
+"Warnings about a choice being made" in `docs/product/error-alerts.md`), titled that projects added under the folder
+later will be trusted too: the trust covers projects at any depth under the folder, for every agent, and each one's own
+permission rules, hooks and instructions take effect; the thing to do is to trust only a folder whose contents the user
+controls.
 
 Its buttons:
 

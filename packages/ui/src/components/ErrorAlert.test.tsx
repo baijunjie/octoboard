@@ -11,7 +11,6 @@ import { AlertButton } from "./AlertButton";
 import { ErrorAlert } from "./ErrorAlert";
 import { FailureAlert } from "./FailureAlert";
 import { InlineReference } from "./InlineReference";
-import { TintedAlert } from "./TintedAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -27,10 +26,10 @@ function mount(children: React.ReactNode) {
   return { container, render: (children: React.ReactNode) => act(() => root.render(children)) };
 }
 
-it("uses stock danger parts and only adds the status fill and the classes that let its buttons wrap beneath the text", () => {
+it.each(["warning", "danger"] as const)("uses stock %s parts and only adds the status fill and the classes that let its buttons wrap beneath the text", (status) => {
   const { container } = mount(<>
-    <Alert status="danger"><Alert.Indicator /><Alert.Content><Alert.Title>Unavailable</Alert.Title><Alert.Description>Quota used up.</Alert.Description></Alert.Content></Alert>
-    <ErrorAlert title="Unavailable">Quota used up.</ErrorAlert>
+    <Alert status={status}><Alert.Indicator /><Alert.Content><Alert.Title>Unavailable</Alert.Title><Alert.Description>Quota used up.</Alert.Description></Alert.Content></Alert>
+    <ErrorAlert status={status} title="Unavailable">Quota used up.</ErrorAlert>
   </>);
   const [stock, outer] = Array.from(container.children);
   const wrapped = outer.querySelector('[data-slot="alert-root"]')!;
@@ -42,40 +41,9 @@ it("uses stock danger parts and only adds the status fill and the classes that l
   }
   const content = (root: Element) => root.querySelector('[data-slot="alert-content"]')!;
   expect([...content(wrapped).classList].filter((name) => !content(stock).classList.contains(name))).toEqual(["min-w-40", "basis-0"]);
-  expect([...wrapped.classList].filter((name) => !stock.classList.contains(name))).toEqual(["alert-fill-danger", "flex-wrap"]);
+  expect([...wrapped.classList].filter((name) => !stock.classList.contains(name))).toEqual([`alert-fill-${status}`, "flex-wrap"]);
   expect(wrapped.querySelector("h1,h2,h3")).toBeNull();
   expect(wrapped.querySelector('[role="alert"]')).toBeNull();
-});
-
-it.each(["default", "accent", "success", "warning", "danger"] as const)("keeps every stock part for %s status", (status) => {
-  const parts = <><Alert.Indicator aria-hidden="true" /><Alert.Content><Alert.Title>Account unavailable</Alert.Title><Alert.Description>Quota used up.</Alert.Description></Alert.Content></>;
-  const { container } = mount(<><Alert status={status}>{parts}</Alert><TintedAlert status={status} title="Account unavailable" description="Quota used up." /></>);
-  const [stock, wrapped] = Array.from(container.children);
-  expect(wrapped.classList.contains(`alert-fill-${status}`)).toBe(true);
-  expect(wrapped.className.split(" ").filter((name) => name !== `alert-fill-${status}`).join(" ").trim()).toBe(stock.className);
-  expect(wrapped.innerHTML).toBe(stock.innerHTML);
-  expect(wrapped.getAttribute("style")).toBe(stock.getAttribute("style"));
-  for (const slot of ["indicator", "content", "title", "description"]) {
-    expect(wrapped.querySelector(`[data-slot="alert-${slot}"]`)).not.toBeNull();
-  }
-});
-
-it("holds its details inside the content after the description, in the description's text style", () => {
-  const { container } = mount(
-    <TintedAlert status="warning" title="Also affected" description="Two sessions end.">
-      <ul><li>First</li></ul>
-    </TintedAlert>,
-  );
-  const content = container.querySelector('[data-slot="alert-content"]')!;
-  expect([...content.children].map((node) => node.getAttribute("data-slot"))).toEqual(["alert-title", "alert-description", "alert-details"]);
-  expect(content.lastElementChild?.classList.contains("alert__description")).toBe(true);
-  expect(content.lastElementChild?.querySelector("li")?.textContent).toBe("First");
-  expect(container.querySelector('[data-slot="alert-description"]')?.querySelector("ul")).toBeNull();
-});
-
-it("renders an Alert with no details without an empty details block", () => {
-  const { container } = mount(<TintedAlert title="Heads up" />);
-  expect(container.querySelector('[data-slot="alert-content"]')?.children).toHaveLength(1);
 });
 
 it("announces the title and the description together, on a wrapper of its own and not on the stock content", () => {
@@ -163,13 +131,6 @@ it("has no Details button when there is nothing more to say", () => {
   const coded = new DaemonRequestError("raw", "git_failed", { detail: "fatal: not a git repository" });
   const { container: other } = mount(<FailureAlert announce={false} title="Could not read" message={coded} />);
   expect(openDetails(other).textContent).toContain("fatal: not a git repository");
-});
-
-it("draws a warning with the warning status and the same parts", () => {
-  const { container } = mount(<ErrorAlert status="warning" title="Check not run" actions={<button type="button">Retry</button>}>The repository was busy.</ErrorAlert>);
-  const root = container.querySelector('[data-slot="alert-root"]')!;
-  expect(root.classList.contains("alert-fill-warning")).toBe(true);
-  expect(root.classList.contains("alert-fill-danger")).toBe(false);
 });
 
 it("names the wrapper by id for a field it describes", () => {

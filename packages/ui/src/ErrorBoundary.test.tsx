@@ -97,7 +97,7 @@ it("says the crash in the application's words on the page and keeps the error's 
   expect(container.textContent).not.toContain("boom");
   const buttons = [...container.querySelectorAll("button")];
   expect(buttons.map((button) => button.textContent || button.getAttribute("aria-label"))).toEqual([t("error.crashed.markLabel"), "Try again"]);
-  expect(buttons[0].previousElementSibling).toBe(container.querySelector("h1"));
+  expect(buttons[0].parentElement?.previousElementSibling).toBe(container.querySelector("h1"));
   expect((await stack(container)).textContent).toContain("boom");
 });
 

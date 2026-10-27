@@ -5,6 +5,7 @@ import { ButtonContext } from "react-aria-components";
 import { CodeToneContext } from "../components/codeTone";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
+import { MarkLineBox } from "../components/MarkLineBox";
 import { MotionListBox } from "../components/MotionListBox";
 import { ReasonText, type Reason } from "../components/ReasonText";
 import { StatusBadge } from "../components/StatusBadge";
@@ -200,11 +201,13 @@ export function OptionSelect<T extends string>({
       {...({ disabledBehavior: "selection" } as React.ComponentProps<typeof Select>)}
     >
       {!inline && !joined && !hideLabel && (labelMark ? (
-        <div className="flex items-center gap-1">
+        <div className="flex items-start gap-1">
           <Label>{label}</Label>
           {handOffToTrigger(labelMarkId)}
           {/* The select's `ButtonContext` is for its trigger; reset around the mark as for `mark` below. */}
-          <ButtonContext.Provider value={{}}>{labelMark(labelMarkId)}</ButtonContext.Provider>
+          <MarkLineBox size="text-sm">
+            <ButtonContext.Provider value={{}}>{labelMark(labelMarkId)}</ButtonContext.Provider>
+          </MarkLineBox>
         </div>
       ) : <Label>{label}</Label>)}
       {/* The trigger and the mark share a box, as the mark is laid over the trigger's trailing room. */}

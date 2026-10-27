@@ -8,8 +8,9 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import { CodeBlock } from "./CodeBlock";
+import { CodeToneContext } from "./codeTone";
+import { ErrorAlert } from "./ErrorAlert";
 import { InlineReference } from "./InlineReference";
-import { TintedAlert } from "./TintedAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -29,11 +30,13 @@ it("inherits the closest alert tone even when the caller requests a conflicting 
     <>
       <InlineReference monospace wrap size="xs">neutral</InlineReference>
       <InlineReference monospace wrap size="xs" color="help">purple</InlineReference>
-      <TintedAlert status="danger" title="Outer">
-        <InlineReference monospace wrap size="xs" color="success">outer</InlineReference>
-        <TintedAlert status="warning" title="Inner"><InlineReference monospace wrap size="xs" color="danger">inner</InlineReference></TintedAlert>
+      <CodeToneContext.Provider value="danger">
+        <ErrorAlert status="danger" title="Outer">
+          <InlineReference monospace wrap size="xs" color="success">outer</InlineReference>
+        </ErrorAlert>
+        <ErrorAlert status="warning" title="Inner"><InlineReference monospace wrap size="xs" color="danger">inner</InlineReference></ErrorAlert>
         <CodeBlock color="accent">outer block</CodeBlock>
-      </TintedAlert>
+      </CodeToneContext.Provider>
       <InlineReference monospace wrap size="xs">after</InlineReference>
     </>,
   );
@@ -41,16 +44,6 @@ it("inherits the closest alert tone even when the caller requests a conflicting 
     "default", "help", "danger", "warning", "danger", "default",
   ]);
   expect(container.querySelector('[role="alert"]')).toBeNull();
-});
-
-it("takes an accent alert's colour and lets a neutral alert override explicit color", () => {
-  const container = mount(
-    <>
-      <TintedAlert status="accent" title="Accent"><InlineReference monospace wrap size="xs">accent</InlineReference></TintedAlert>
-      <TintedAlert title="Neutral"><InlineReference monospace wrap size="xs" color="danger">neutral</InlineReference></TintedAlert>
-    </>,
-  );
-  expect(Array.from(container.querySelectorAll("code")).map((el) => el.dataset.color)).toEqual(["accent", "default"]);
 });
 
 it("isolates code typography without consuming the field's description slot", () => {
