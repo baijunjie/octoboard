@@ -205,7 +205,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Unbind a session from its live owner",
-    description: "A warning confirmation titled Unbind session, with the warning icon leading its header, then Cancel and the primary Unbind. Both titles here are paragraph-long, and each appears once, as a chip that wraps inside the dialog: one paragraph that runs on from the first sentence into the next (the session will no longer report to the owner; it will answer only to you; only the session itself can bind to an owner again, the app cannot do it for you), then a separate paragraph of consequences (the owner can no longer instruct it, archive it or give it to another owner, and archiving the owner will not archive it; the two can still share information). All body text is in the foreground colour, none of it muted.",
+    description: "A warning confirmation titled Unbind session, with the warning icon leading its header, then Cancel and the primary Unbind. Both titles here are paragraph-long, and each appears once, as a chip that wraps inside the dialog: one paragraph that runs on from the first sentence into the next (the session will no longer report to the owner; it will answer only to you; only the session itself can bind to an owner again, the app cannot do it for you), then a separate paragraph of consequences (the owner can no longer instruct it, archive it or give it to another owner, and archiving the owner will not archive it; the two can still send each other messages). All body text is in the foreground colour, none of it muted.",
     state: longTitleState,
     steps: openUnbind(longLead.title),
   },

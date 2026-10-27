@@ -46,6 +46,9 @@ export const en = {
   "common.remove": "Remove",
   "common.removeTag": "Remove tag",
   "common.save": "Save",
+  // Between two whole sentences the UI shows one after the other in one paragraph: a space in most languages,
+  // empty for those that put no space after the sentence's own full stop (zh, ja).
+  "common.sentenceSeparator": " ",
 
   // Shared across the session dialog, the welcome screen and the console dialog's agent rows —
   // anywhere availability (`AgentAvailability`) is shown or acted on.
@@ -1436,7 +1439,7 @@ export const en = {
   "dialog.unbindSession.title": "Unbind session",
   "dialog.unbindSession.subject": "{title} will no longer report to {owner}.",
   "dialog.unbindSession.answersToYou": "It will answer only to you. From then on only the session itself can bind to an owner again; {appName} cannot do it for you.",
-  "dialog.unbindSession.consequence": "The owner will no longer be able to instruct it, archive it or give it to another owner, and archiving the owner will not archive it. The two can still share information with each other.",
+  "dialog.unbindSession.consequence": "The owner will no longer be able to instruct it, archive it or give it to another owner, and archiving the owner will not archive it. The two can still send each other messages.",
   "dialog.unbindSession.error": "Could not unbind the session",
   "dialog.unbindSession.confirm": "Unbind",
   "dialog.switchAccount.title": "Switch account",
@@ -2243,6 +2246,7 @@ export const en = {
   "settings.accounts.sharing.inUseSigningIn": "Sharing cannot be changed while this account is being signed in.",
   "settings.accounts.sharing.progressOn": "Turning sharing on",
   "settings.accounts.sharing.progressOff": "Turning sharing off",
+  "settings.accounts.sharing.progressWithWait": "{progress}. {wait}",
   "settings.accounts.sharing.progressCount": "{done} of {total}",
   "settings.accounts.sharing.waiting": "Waiting to start…",
   "settings.accounts.sharing.phaseWaiting": "Waiting for another account’s sharing change to finish…",

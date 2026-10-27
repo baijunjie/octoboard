@@ -77,6 +77,15 @@ it("puts no space between the question and the branches in a language with none 
   expect(dialogText()).toContain("新会话将向你汇报。分支 fix/refunds、feat/pay 将移交给新会话。");
 });
 
+it("joins the question and the branches without a whitespace-only text node", () => {
+  mountPendingQuestionDialog({ sessionRequests: [{ ...request, branches: ["fix/refunds"] }] }, ack);
+  const walker = document.createTreeWalker(document.body.querySelector("[role=alertdialog]")!, NodeFilter.SHOW_TEXT);
+  const blank: string[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) if ((node as Text).data !== "" && (node as Text).data.trim() === "") blank.push((node as Text).data);
+  expect(blank).toEqual([]);
+  expect(dialogText()).toContain("The new session would report to you. The branch fix/refunds");
+});
+
 it("says nothing of branches when none is handed over", () => {
   mountPendingQuestionDialog({ sessionRequests: [request] }, ack);
   expect(dialogText()).not.toContain("handed over");

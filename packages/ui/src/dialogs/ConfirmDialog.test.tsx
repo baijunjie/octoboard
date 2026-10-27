@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
+import { currentLanguage, setLanguage } from "../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -23,7 +24,7 @@ function fakeDaemon(): Daemon {
 }
 
 /** Renders a confirmation and takes it down when the test finishes. */
-function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean; subject?: React.ReactNode }): void {
+function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean; subject?: React.ReactNode; message?: string }): void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -109,4 +110,12 @@ it("keeps the space between the subject and the message in the message's own tex
 it("starts the message without a space when there is no subject", () => {
   mount({});
   expect(document.body.querySelector("[role=alertdialog] p")!.textContent).toBe("Archive it?");
+});
+
+it("joins a string message to the subject with no space in Chinese", () => {
+  const before = currentLanguage();
+  setLanguage("zh-Hans");
+  onTestFinished(() => setLanguage(before));
+  mount({ subject: "它将被归档。", message: "它将只听从你。" });
+  expect(document.body.querySelector("[role=alertdialog] p")!.textContent).toBe("它将被归档。它将只听从你。");
 });

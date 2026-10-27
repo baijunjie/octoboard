@@ -146,9 +146,9 @@ export function ConfirmDialog({
   return (
     <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <AlertDialog.Icon status="warning" /> : undefined} onClose={busy ? () => {} : onCancel} footer={footer} failure={failure} resetKey={resetKey} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
       {typeof message === "string" ? (
-        // The space joins the message's own text node: VoiceOver drops a text node that is only whitespace, and would run
-        // the two sentences together.
-        <p className="text-sm">{subject}{subject === undefined ? message : ` ${message}`}</p>
+        // The separator (a space in English, nothing in Chinese) joins the message's own text node: VoiceOver drops a text
+        // node that is only whitespace, and would run the two sentences together.
+        <p className="text-sm">{subject}{subject === undefined ? message : `${t("common.sentenceSeparator")}${message}`}</p>
       ) : (
         <div className="flex flex-col gap-3 text-sm">
           {subject !== undefined && <p>{subject}</p>}
