@@ -2320,7 +2320,12 @@ export const en = {
   "settings.notifications.allowed": "Allowed.",
   "settings.notifications.blocked": "Blocked. Allow them in this site's settings in your browser.",
   "settings.notifications.undecided": "Not enabled yet.",
-  "settings.notifications.system": "{appName} sends them directly. Turn them off in the system's notification settings.",
+  "settings.notifications.managedBySystem": "{appName} has no switch of its own for these notifications. {macOS} manages them, so turn them off, or change how they appear, in {systemSettings}.",
+  "settings.notifications.openSettings": "Open System Settings",
+  "settings.notifications.openFailed": "{systemSettings} did not open. Open it yourself and choose {notifications}.",
+  "settings.notifications.openFailedTitle": "Could not open {systemSettings}",
+  // The name of the Notifications pane in System Settings, as macOS 13 and later shows it.
+  "settings.notifications.systemPane": "Notifications",
   "settings.notifications.enable": "Enable",
   "settings.permissions.unavailable": "Permissions can only be managed in the {macOS} app.",
   "settings.permissions.unreadable.title": "Could not read the permissions",

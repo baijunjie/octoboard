@@ -32,6 +32,7 @@ mod background;
 mod configuration_file;
 mod exit;
 mod menu;
+mod notification_settings;
 #[cfg(target_os = "macos")]
 mod page_isolation;
 mod permissions;
@@ -96,6 +97,7 @@ pub fn run() {
             permissions::macos_permissions_status,
             permissions::macos_request_permission,
             permissions::macos_open_privacy_settings,
+            notification_settings::macos_open_notification_settings,
             configuration_file::save_configuration_file,
             configuration_file::open_configuration_file,
             updater::check_for_update,

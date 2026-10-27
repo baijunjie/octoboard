@@ -1507,10 +1507,38 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: notifications",
+    description: "The browser platform: the row shows the browser's own notification permission and, where it can still be asked for, an Enable button.",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.notifications")),
+    ],
+  },
+  {
+    id: "settings-notifications-system",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: notifications, managed by macOS (desktop app)",
+    description: "The row has no switch: its description says the app has none and macOS manages these notifications, with the app name, macOS and System Settings each a chip, and a secondary Open System Settings button sits at the row's end. Look at how the longer copy wraps beside the button and how the two align.",
+    state: browserState,
+    systemNotifications: true,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.notifications")),
+    ],
+  },
+  {
+    id: "settings-notifications-system-open-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Settings: System Settings did not open (desktop app)",
+    description: "After Open System Settings is pressed and the system does not open the pane, an error alert titled \"Could not open System Settings\" says it did not open and to open it yourself and choose Notifications. The title is plain text; System Settings and Notifications in the body are each a chip. OK is its only button: no recovery action and no Error details.",
+    state: browserState,
+    systemNotifications: { openError: "the system did not open x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=dev.octoboard.desktop" },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.notifications")),
+      (ui) => ui.press(ui.t("settings.notifications.openSettings")),
     ],
   },
   {

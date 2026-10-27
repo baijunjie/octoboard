@@ -210,6 +210,12 @@ function tauriNotifications(): NotificationCapability {
       const { sendNotification } = await import("@tauri-apps/plugin-notification");
       sendNotification(notification);
     },
+    ...(onMac() && {
+      async openSystemSettings() {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("macos_open_notification_settings");
+      },
+    }),
   };
 }
 

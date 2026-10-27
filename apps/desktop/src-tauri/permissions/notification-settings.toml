@@ -1,0 +1,8 @@
+# A custom permission for the app's own command that opens its Notifications pane in System
+# Settings; see `exit-lifecycle.toml` for why an app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-notification-settings"
+description = "Allows the frontend to open the app's own pane in the Notifications settings of macOS System Settings."
+commands.allow = ["macos_open_notification_settings"]

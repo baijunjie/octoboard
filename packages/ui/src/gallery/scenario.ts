@@ -343,6 +343,10 @@ export interface Scenario {
   /** The platform offers the desktop app's run-in-background capability, so the Settings switch for
    * it is shown; the browser platform has none. */
   backgroundRun?: boolean;
+  /** The platform has the macOS app's notifications: the system manages them, so the app keeps no
+   * switch of its own and the Settings row links to System Settings instead. Nothing is shown or
+   * opened; `{ openError }` is the reason the system gives for not opening the pane. */
+  systemNotifications?: boolean | { openError: string };
   /** Stub external links without opening a host browser; an error models a refused desktop opener. */
   externalLinks?: "available" | { error: string };
   configuration?: ConfigurationFixture;
