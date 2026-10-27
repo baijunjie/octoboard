@@ -219,7 +219,7 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — bounding the window's
   outstanding browse requests under the daemon's budget.
 - [Styling the UI](memory/styling-the-ui.md) — keeping HeroUI's look and the Tailwind, class-name, spacing and divider
-  rules that bite.
+  rules that bite, and stopping transitions inside a collapsed disclosure.
 - [UI text and reading direction](memory/ui-text-and-reading-direction.md) — routing user-read strings through the
   catalog and laying out by reading direction.
 - [Verifying behaviour in the desktop app](memory/verifying-the-desktop-ui.md) — how narrow to keep a verification, and

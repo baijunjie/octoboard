@@ -85,6 +85,31 @@ surface colour over it instead: an `after:` pseudo-element with `after:pointer-e
 after:inset-0` and a translucent fill such as `bg-surface/55` on a `relative` container, as the sidebar's inactive
 projects in `packages/ui/src/sidebar/Sidebar.tsx` do.
 
+## Nothing may start a transition inside a collapsed disclosure: Chrome never ends it, and focus waits on it
+
+Applies to `packages/ui`, to any element with a CSS transition that sits in the body of a react-aria / HeroUI
+`Disclosure` (the dialogs' Advanced section, an error-details disclosure). react-aria holds several focus moves until
+no transition is running anywhere on the page, counting them from `transitionrun` against `transitionend` /
+`transitioncancel` (`runAfterTransition`): `focusSafely` under virtual interaction modality (a screen reader, a
+scripted press) and `useDialog`'s half-second take-back among them. A collapsed body carries `hidden="until-found"`,
+content Chrome skips, and Chrome sends neither end event for a transition started there until the content is revealed
+(`getAnimations()` calls it finished all the same). One such transition stalls those focus moves for as long as the
+section stays folded; a mouse never shows it.
+
+A transitioned property changing while folded is enough: state that changes under a collapsed section, or a library
+writing inline styles at mount — the shared-element transition behind HeroUI's `Tabs.Indicator` slides a newly
+mounted indicator from where the previous one was, which React StrictMode's double mount (dev and the gallery) does on
+every open. So give such an element `transition-property: none` under `[hidden="until-found"]`, in a rule on its own
+class that beats the library's transition, as `packages/ui/src/style.css` does for `.tabs__indicator`; revealing the
+content then changes no value and starts nothing. A transition already running when the section collapses is not a
+concern: react-aria sets `hidden` only after the panel's own collapse animation.
+
+When a deferred focus move never lands under virtual modality, find the stuck transition in a browser by logging
+`transitionrun` / `transitionend` / `transitioncancel` document-wide against the gallery. jsdom runs no transitions,
+ignores rules inside `@layer` and does not expand the `transition` shorthand in computed style, so a test asserts the
+computed `transition-property` with the section collapsed and expanded, as
+`packages/ui/src/dialogs/AdvancedSection.test.tsx` does.
+
 ## A line height given as a ratio must not come a hair under a whole pixel
 
 When a line height is set as a ratio of the font size — a theme `--text-*--line-height` token, a `leading-[…]` or
