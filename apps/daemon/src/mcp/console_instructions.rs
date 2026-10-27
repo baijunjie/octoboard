@@ -416,7 +416,6 @@ mod tests {
             id: "console-1".to_string(),
             name: "Console".to_string(),
             workdir: workdir.to_string_lossy().into_owned(),
-            console_session_agent: agent,
             default_agent: agent,
             project_session_agent: None,
             claude_project_session_model: None,

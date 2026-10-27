@@ -29,8 +29,7 @@ list (see "What the welcome screen shows" in `docs/product/welcome-screen.md`) l
 
 **How the list starts.** The list is decided once, as soon as Octoboard has determined which agents are installed: it
 is filled with every agent that is installed plus every agent the user owns an account of, in the order Claude Code,
-Codex, Grok Build. This holds for a fresh installation, which owns no accounts and so starts with the installed agents,
-and for an installation from before the list existed, so no account it had disappears from view. From then on only the
+Codex, Grok Build. A fresh installation owns no accounts, and so starts with the installed agents. From then on only the
 user changes it; a list the user has emptied stays empty.
 
 **While the list is undecided** — before Octoboard has determined which agents are installed, and for the whole run when

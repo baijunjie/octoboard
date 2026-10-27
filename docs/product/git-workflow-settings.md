@@ -28,7 +28,7 @@ gate does not depend on where sessions develop: it runs whenever the project's e
 | Delivery | `delivery` | `ask`, `merge`, `pull_request` | `ask` | How finished work leaves its branch: the user is asked each time, the branch is merged into its target branch locally, or it is pushed and a pull request opened. |
 | Revert gate | `revert_gate` | `true` / `false` | off | Whether git run inside a project session is refused a branch update or a push that quietly undoes changes already on a guarded branch (see `docs/product/revert-gate.md`). |
 
-The defaults hold for a fresh installation and for one from before the settings existed. Any other `development` or
+The defaults hold for a fresh installation. Any other `development` or
 `delivery` value is refused.
 
 The application-wide values are kept by the daemon and sent to every window with the other application settings, so
@@ -48,8 +48,7 @@ item is not affected by it.
 
 A project starts out following all four application-wide values unless it is given its own when it is added: the user's
 form and the console session's `add_project` can both set any of the four items for the new project, and an item left
-out follows the application-wide value. When a parent directory adds several projects, each takes the same values. Every
-project from before the settings existed follows all four. A project created by an import takes its own values from the
+out follows the application-wide value. When a parent directory adds several projects, each takes the same values. A project created by an import takes its own values from the
 configuration document (see "What each project carries" in `docs/product/configuration-export-and-import.md`).
 
 ## The development rule

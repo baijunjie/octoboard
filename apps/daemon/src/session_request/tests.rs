@@ -57,7 +57,6 @@ fn console(id: &str, dir: &ScratchDir) -> Console {
         id: id.to_string(),
         name: format!("Console {id}"),
         workdir: dir.join(id).to_string_lossy().into_owned(),
-        console_session_agent: Agent::Claude,
         default_agent: Agent::Claude,
         project_session_agent: None,
         claude_project_session_model: None,

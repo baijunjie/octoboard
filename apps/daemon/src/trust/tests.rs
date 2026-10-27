@@ -426,7 +426,6 @@ fn console() -> Console {
         id: "console-1".to_string(),
         name: "Console".to_string(),
         workdir: "/tmp/console-1".to_string(),
-        console_session_agent: Agent::Claude,
         default_agent: Agent::Claude,
         project_session_agent: None,
         claude_project_session_model: None,

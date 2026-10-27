@@ -92,8 +92,7 @@ The context size refreshes approximately once a second while the agent process i
 writes its records; it is not estimated while a reply streams. A final refresh follows the process stopping. The last
 known context size remains available after archiving and restarting Octoboard. An archived session gets its final
 context size from its records once, when they are still available; missing or unreadable records leave no chip rather
-than a zero, and never erase a context size already known. Cumulative token totals saved by earlier versions are
-discarded on upgrading, since they measured something else, and the records are read again in their place.
+than a zero, and never erase a context size already known.
 
 Switching accounts while keeping the same native conversation keeps its context size; moving to a different native
 conversation clears it until the new one shows its own.

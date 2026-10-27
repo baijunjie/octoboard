@@ -32,8 +32,7 @@ asking for the opposite one. The window's switch offers only the first: while th
 position from before the change, so turning it asks for the recorded value again. The exception is turning sharing on
 that failed because the default directory has moved (`default_moved`), which a retry cannot mend: the switch then
 offers the opposite (see "Sharing the default configuration" in `docs/product/agent-accounts.md`). Asking for the
-value recorded on an account whose last change is complete does nothing. An account that an earlier version of
-Octoboard marked as having a change pending, to be carried out later, reads as incomplete.
+value recorded on an account whose last change is complete does nothing.
 
 Each link leads to the default entry's fully resolved target, not to the entry itself: when the default directory's
 own `settings.json` is a link to a dotfiles copy, say, the account's link leads to the dotfiles copy, so a save made

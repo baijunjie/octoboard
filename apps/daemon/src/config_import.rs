@@ -1702,7 +1702,6 @@ mod tests {
             id: "console-1".to_string(),
             name: "Hub".to_string(),
             workdir: "/consoles/console-1".to_string(),
-            console_session_agent: Agent::Claude,
             default_agent: Agent::Claude,
             project_session_agent: Some(Agent::Grok),
             claude_project_session_model: Some("opus".to_string()),

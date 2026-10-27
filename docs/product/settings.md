@@ -137,7 +137,7 @@ choice is kept are in `docs/product/markdown-documents.md`.
 
 ### Order the sidebar by status
 
-A switch, **on to begin with** — installations from before the switch existed included: whether the sidebar ranks
+A switch, **on to begin with**: whether the sidebar ranks
 sessions and projects by their status, so that the ones waiting for the user come first after the pinned ones. While
 the switch is on the row's description says what is happening now: sessions and projects move as their status changes,
 and projects with no unarchived session end the list. While it is off the description says what turning it on will
@@ -149,7 +149,7 @@ carries it (see "Application settings: `get_settings` and `update_settings`" in 
 
 ### Automatically delete archived sessions whose conversation is gone
 
-A switch, **on to begin with** — installations from before the switch existed included: whether Octoboard deletes on
+A switch, **on to begin with**: whether Octoboard deletes on
 its own the archived sessions whose conversation their agent no longer keeps. While the switch is off the row's
 description says what turning it on will do, and while it is on it says what is happening now: such an archived
 session is deleted automatically, Octoboard checks each time it starts and then about once a day, and pinned and locked
@@ -259,7 +259,7 @@ Where those switches sit, and what the rest of the section shows and offers, are
 
 ### Automatically select an account
 
-A switch, **off to begin with** — installations from before the switch existed included: whether a new session whose
+A switch, **off to begin with**: whether a new session whose
 account was not named uses the account of its agent whose weekly quota resets soonest. While the switch is off the row's
 description says what turning it on will do, and while it is on it says what is happening now: a new session uses the
 account whose weekly limit resets soonest, so usage left before a reset is not wasted. The daemon stores it as
@@ -273,7 +273,7 @@ It governs only how a new session picks its account: it does not move a session 
 
 ### Automatically switch accounts at the usage limit
 
-A switch, **off to begin with** — installations from before the switch existed included: whether Octoboard switches a
+A switch, **off to begin with**: whether Octoboard switches a
 session to another account of its agent by itself when the session's turn stops on its account's usage limit, so that
 it carries on there. While the switch is off the row's description says that, once it is on, a session that stops at
 its account's usage limit is switched to another account with usage left and carries on; while it is on, it says that
@@ -288,7 +288,7 @@ which account, and who is told, are in `docs/product/automatic-account-switch.md
 
 ### Start usage windows automatically
 
-A switch, **off to begin with** — installations from before the switch existed included: whether Octoboard starts a
+A switch, **off to begin with**: whether Octoboard starts a
 usage window that has reset but not begun counting by sending one small request on its account. While the switch is off
 the row's description says that once it is on, a usage window starts counting once it resets, and while it is on that a
 usage window starts counting once it resets; either way it adds that this counts a little toward the account's usage
@@ -315,7 +315,7 @@ changes, and why agents cannot change any of them are in "Approving requests aut
 
 ### Automatically approve session requests
 
-A switch, **off to begin with** — installations from before the switch existed included: whether a session's
+A switch, **off to begin with**: whether a session's
 `request_session` call, its request for a session that is nobody's, is approved without asking the user. While the
 switch is off the row's description says what turning it on will do, and while it is on it says what is happening now:
 a session can start a session that reports to the user without asking first, and nobody but the user owns the new
@@ -323,7 +323,7 @@ session.
 
 ### Automatically approve resume requests
 
-A switch, **off to begin with** — installations from before the switch existed included: whether a session's
+A switch, **off to begin with**: whether a session's
 `request_resume_session` call, its request to resume a conversation, is approved without asking the user (see
 `docs/product/requests-to-resume-a-conversation.md`). While the switch is off the row's description says what turning
 it on will do, and while it is on it says what is happening now: a session can reopen or resume a session, or resume a
@@ -332,7 +332,7 @@ archived owners reopened with it; and a new session started this way is owned by
 
 ### Automatically approve account switches
 
-A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
+A switch, **off to begin with**: whether an owner's
 `switch_session_account` call, which switches the account of one of its own sessions, is made without asking the user
 (see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md`). While the switch is
 off the row's description says that, once it is on, a session can do so without asking first; while it is on, it says
@@ -341,7 +341,7 @@ neither is Octoboard's own switch at the usage limit (see "Automatically switch 
 
 ### Automatically approve handoffs
 
-A switch, **off to begin with** — installations from before the switch existed included: whether an owner's
+A switch, **off to begin with**: whether an owner's
 `handoff_session` call, which hands one of its own sessions off to a session of another agent, is made without asking
 the user (see "The user's approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). While the switch
 is off the row's description says that, once it is on, a session can do so without asking first; while it is on, it
@@ -349,7 +349,7 @@ says that a session can do so without asking first. The Hand off the user makes 
 
 ### Ask questions as choices
 
-A switch, **on to begin with** — installations from before the switch existed included: whether the instructions
+A switch, **on to begin with**: whether the instructions
 Octoboard gives a session ask it to put a question that needs the user's decision as options the user picks from,
 through the agent's own tool for asking, rather than listing the options in its reply (what a session is told is in
 "The guidance on asking the user" in `docs/product/launching-agents.md`). While the switch is on the row's description

@@ -372,7 +372,6 @@ mod tests {
             id: id.to_string(),
             name: name.to_string(),
             workdir: format!("/consoles/{id}"),
-            console_session_agent: Agent::Codex,
             default_agent: Agent::Codex,
             project_session_agent: None,
             claude_project_session_model: None,

@@ -47,8 +47,7 @@ the resumed process (see "When a change is carried out" in `docs/product/sharing
 any other refuses it. A receiver reading as *waiting for the user* only because a
 session request of its own is waiting takes the message straight away, since what has to be answered there is a dialog
 (see "Waiting for the answer" in `docs/product/session-requests.md`). The two tools are on by default and have no
-setting. A session launched before they existed keeps the role description it was first given, and on resume sees the
-tools without being told about them or about its owner.
+setting.
 
 ## Narrowing the list of sessions
 

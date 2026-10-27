@@ -83,9 +83,8 @@ pub enum Origin {
 /// order around the colour wheel and then the muted ones, assigned on creation and changed
 /// afterwards only by the user (see `Session.colour`). The daemon only ever hands the label
 /// around; what each one looks like in the light and the dark appearance is the UI's own
-/// (`packages/ui/src/sessionColours.ts`), not here. The labels of the earlier palettes are
-/// rewritten when the store opens (`Store::open`); from this one on a label is never renamed or
-/// removed, so a database written under it stays readable.
+/// (`packages/ui/src/sessionColours.ts`), not here. A stored label must stay readable, so one is
+/// renamed or removed only together with a schema version step (`SCHEMA_VERSION` in `store.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConsoleSessionColour {
@@ -184,12 +183,6 @@ pub struct Console {
     pub id: String,
     pub name: String,
     pub workdir: String,
-    /// Legacy copy of `default_agent`, kept equal on every save and reconciled on open for older
-    /// databases. Session agent selection reads `default_agent` and `project_session_agent`
-    /// instead; nothing reads this field.
-    /// Daemon-only: not part of the record clients are sent.
-    #[serde(skip)]
-    pub console_session_agent: Agent,
     /// The agent a console session of this console is of.
     pub default_agent: Agent,
     /// The agent a project session falls back to when its project names none; `None` follows
