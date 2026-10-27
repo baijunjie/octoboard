@@ -1321,7 +1321,7 @@ impl Store {
     }
 
     /// The directory a clone lands in when none is named: the stored one, else `~/Projects`
-    /// expanded. Lexically normalised either way, as a project path under it is stored as it is.
+    /// expanded, which is as absolute and lexically normalised as the home it expands from.
     pub fn default_clone_dir(&self) -> Result<String> {
         let stored: Option<String> = self.lock().query_row(
             "SELECT default_clone_dir FROM settings WHERE id = ?1",
@@ -1329,7 +1329,7 @@ impl Store {
             |row| row.get(0),
         )?;
         Ok(stored.unwrap_or_else(|| {
-            crate::hostfs::lexically_normalise(&crate::hostfs::expand(BUILT_IN_CLONE_DIR))
+            crate::hostfs::expand(BUILT_IN_CLONE_DIR)
                 .to_string_lossy()
                 .into_owned()
         }))
@@ -4518,7 +4518,7 @@ mod tests {
     fn the_default_clone_dir_falls_back_to_the_built_in_one() {
         let path = temp_db("clone-dir");
         let store = Store::open(&path).expect("store");
-        let built_in = crate::hostfs::lexically_normalise(&crate::hostfs::expand("~/Projects"))
+        let built_in = crate::hostfs::expand("~/Projects")
             .to_string_lossy()
             .into_owned();
         assert_eq!(store.default_clone_dir().unwrap(), built_in);

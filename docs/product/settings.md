@@ -107,8 +107,8 @@ A path inside the home directory of the host the daemon runs on — the daemon's
 be different machines — is shown with that home directory written as `~`: `~/Projects/app`, and `~` for the home
 directory itself. A path that only shares its first characters with the home directory (`/Users/devx` against
 `/Users/dev`) is shown in full. Whenever a path is shown shortened — written with `~`, cut, or both — its tooltip is
-the full path. When the daemon cannot determine its home directory (`HOME` unset, relative or the filesystem root),
-every path is shown in full.
+the full path. When the daemon cannot determine its home directory, every path is shown in full: the home it
+settles on (`HOME` when absolute, else the user's entry in the system user database) is the filesystem root.
 
 ## General
 
