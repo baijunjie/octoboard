@@ -4,11 +4,14 @@ import { CircleCheck } from "lucide-react";
 import { AttendedStatusAnnouncer } from "../components/AttendedStatusAnnouncer";
 import { Button } from "../components/Button";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { InlineReference } from "../components/InlineReference";
 import { StatusBadge } from "../components/StatusBadge";
+import { ActionableError } from "../errorRecovery";
 import { Message, useT } from "../i18n/react";
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { MacosPermissionKind } from "../platform";
 import { usePlatform } from "../platform/react";
+import { reportError } from "../reportError";
 import { SettingRow } from "./SettingRow";
 import { useMacosPermissions } from "./useMacosPermissions";
 import { useSectionRefocus } from "./useSectionRefocus";
@@ -17,6 +20,7 @@ const PERMISSIONS = [
   {
     kind: "screenRecording",
     label: "settings.permissions.screenRecording.label",
+    systemPane: "settings.permissions.screenRecording.systemPane",
     description: "settings.permissions.screenRecording.description",
     // Worded per permission: macOS really does refuse to prompt a second time for Screen
     // Recording, while Accessibility has no in-place grant to refuse in the first place, so there
@@ -32,6 +36,7 @@ const PERMISSIONS = [
   {
     kind: "accessibility",
     label: "settings.permissions.accessibility.label",
+    systemPane: "settings.permissions.accessibility.systemPane",
     description: "settings.permissions.accessibility.description",
     refused: "settings.permissions.accessibility.refused",
     announced: {
@@ -43,6 +48,7 @@ const PERMISSIONS = [
 ] as const satisfies readonly {
   kind: MacosPermissionKind;
   label: PlainMessageKey;
+  systemPane: PlainMessageKey;
   description: PlainMessageKey;
   refused: PlainMessageKey;
   announced: {
@@ -77,6 +83,28 @@ export function PermissionsSection(): React.ReactElement {
   // forever. `pending` is not among them — a pending button stays mounted, which is why it is
   // marked pending rather than disabled.
   useSectionRefocus([status?.screenRecording, status?.accessibility, refused.screenRecording, refused.accessibility]);
+
+  const openPane = async (kind: MacosPermissionKind, systemPane: PlainMessageKey) => {
+    try {
+      await openSystemSettings(kind);
+    } catch (cause) {
+      const privacy = t("settings.permissions.privacyPane");
+      const pane = t(systemPane);
+      reportError(
+        new ActionableError(t("settings.permissions.openFailed", { privacy, pane }), "none", { cause }),
+        undefined,
+        undefined,
+        <Message
+          id="settings.permissions.openFailed"
+          params={{
+            privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
+            pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
+          }}
+        />,
+        t("settings.permissions.openFailedTitle"),
+      );
+    }
+  };
 
   // Where each permission stands, for its row and for the section's status region.
   const rows = status
@@ -129,7 +157,7 @@ export function PermissionsSection(): React.ReactElement {
             otherwise run straight into a description in the same muted text, here several lines of it.
             The wrapper draws that rule. */}
         <div className="groove-t">
-          {rows.map(({ kind, label, description, granted, stateKey, restart }) => (
+          {rows.map(({ kind, label, systemPane, description, granted, stateKey, restart }) => (
             <SettingRow
               key={kind}
               label={t(label)}
@@ -153,7 +181,7 @@ export function PermissionsSection(): React.ReactElement {
                   {t("settings.permissions.grantedBadge")}
                 </StatusBadge>
               ) : (refused[kind] ? (
-                <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => void openSystemSettings(kind)}>
+                <Button size="sm" variant="secondary" preventFocusOnPress onPress={() => void openPane(kind, systemPane)}>
                   {t("settings.permissions.openSettings")}
                 </Button>
               ) : (

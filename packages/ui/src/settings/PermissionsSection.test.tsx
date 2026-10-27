@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { windowAttention } from "../components/windowTestSupport";
+import { errorAlerts } from "../errorAlerts";
 import type { MacosPermissionsCapability, MacosPermissionsStatus, PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import { PermissionsSection } from "./PermissionsSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+afterEach(() => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); }));
 
 /** Granted, but only since this process started, so a restart is still owed. */
 const GRANTED_SINCE_LAUNCH = { screenRecording: true, accessibility: true, screenRecordingAtLaunch: false } satisfies MacosPermissionsStatus;
@@ -22,24 +25,26 @@ const BOTH_MISSING = { screenRecording: false, accessibility: false, screenRecor
  * for every read after that — the grant changes outside the app, so a case can hand over the
  * sequence the user's trip to System Settings produces. `request` resolves `granted`, `unreadable`
  * makes the read reject, which stands for a shell that cannot be asked, and `absent` leaves out
- * `macosPermissions`, as in a browser.
+ * `macosPermissions`, as in a browser. `openFailure` makes `openSystemSettings` reject with it.
  */
 async function mount({
   statuses = [undefined],
   granted = false,
   absent = false,
   unreadable = false,
+  openFailure,
 }: {
   statuses?: (MacosPermissionsStatus | undefined)[];
   granted?: boolean;
   absent?: boolean;
   unreadable?: boolean;
+  openFailure?: string;
 }) {
   let read = 0;
   const capability = {
     status: vi.fn(() => (unreadable ? Promise.reject(new Error("no such command")) : Promise.resolve(statuses[Math.min(read++, statuses.length - 1)]))),
     request: vi.fn(() => Promise.resolve(granted)),
-    openSystemSettings: vi.fn(() => Promise.resolve()),
+    openSystemSettings: vi.fn(() => (openFailure === undefined ? Promise.resolve() : Promise.reject(openFailure))),
   } satisfies MacosPermissionsCapability;
   const platform: PlatformAdapter = { kind: "tauri", macosPermissions: absent ? undefined : capability };
   const container = document.body.appendChild(document.createElement("div"));
@@ -111,6 +116,37 @@ it("switches the row to System Settings once a request comes back refused", asyn
     container.querySelector("button")!.click();
   });
   expect(capability.openSystemSettings).toHaveBeenCalledWith("screenRecording");
+});
+
+// A refused permission is the state that offers the button; pressing Grant gets there.
+for (const [kind, status, pane] of [
+  ["screenRecording", SCREEN_RECORDING_MISSING, "Screen & System Audio Recording"],
+  ["accessibility", BOTH_MISSING, "Accessibility"],
+] as const) {
+  it(`raises an error alert when ${kind}'s System Settings pane did not open`, async () => {
+    const cause = "the system did not open the pane";
+    const { capability, container } = await mount({ statuses: [status], openFailure: cause });
+    const rowButton = () => [...container.querySelectorAll("button")][kind === "screenRecording" ? 0 : 1];
+    await act(async () => rowButton().click());
+    await act(async () => rowButton().click());
+    expect(capability.openSystemSettings).toHaveBeenCalledWith(kind);
+    const [raised] = errorAlerts.getSnapshot();
+    expect(raised.title).toBe("Could not open System Settings");
+    expect(raised.message).toContain(`choose Privacy & Security, then choose ${pane}.`);
+    expect(raised.error).toMatchObject({ recovery: "none", cause });
+  });
+}
+
+it.each([
+  ["opened", undefined],
+  ["did not open", "no"],
+])("reads the grants again when the pane %s", async (_, openFailure) => {
+  const { capability, container } = await mount({ statuses: [SCREEN_RECORDING_MISSING], openFailure });
+  await act(async () => container.querySelector("button")!.click());
+  const reads = capability.status.mock.calls.length;
+  await act(async () => container.querySelector("button")!.click());
+  if (!openFailure) expect(errorAlerts.getSnapshot()).toEqual([]);
+  expect(capability.status.mock.calls.length).toBe(reads + 1);
 });
 
 // The only way Accessibility is ever granted, and the way Screen Recording is granted whenever the

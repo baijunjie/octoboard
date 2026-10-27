@@ -175,10 +175,11 @@ pub fn macos_request_permission(_kind: PermissionKind) -> bool {
 /// permission is ever granted at all.
 ///
 /// Goes through `NSWorkspace`, not `tauri-plugin-shell`: that plugin's `open` only accepts
-/// `http:`, `https:`, `mailto:` and `tel:` addresses and would reject this scheme.
+/// `http:`, `https:`, `mailto:` and `tel:` addresses and would reject this scheme. Fails with a
+/// message when the address cannot be built or the system declines to open it.
 #[cfg(target_os = "macos")]
 #[tauri::command]
-pub fn macos_open_privacy_settings(kind: PermissionKind) {
+pub fn macos_open_privacy_settings(kind: PermissionKind) -> Result<(), String> {
     use objc2_app_kit::NSWorkspace;
     use objc2_foundation::{NSString, NSURL};
 
@@ -190,11 +191,18 @@ pub fn macos_open_privacy_settings(kind: PermissionKind) {
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
         }
     };
-    if let Some(url) = NSURL::URLWithString(&NSString::from_str(url)) {
-        NSWorkspace::sharedWorkspace().openURL(&url);
+    let Some(parsed) = NSURL::URLWithString(&NSString::from_str(url)) else {
+        return Err(format!("not a valid address: {url}"));
+    };
+    if NSWorkspace::sharedWorkspace().openURL(&parsed) {
+        Ok(())
+    } else {
+        Err(format!("the system did not open {url}"))
     }
 }
 
 #[cfg(not(target_os = "macos"))]
 #[tauri::command]
-pub fn macos_open_privacy_settings(_kind: PermissionKind) {}
+pub fn macos_open_privacy_settings(_kind: PermissionKind) -> Result<(), String> {
+    Ok(())
+}

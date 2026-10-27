@@ -23,6 +23,7 @@ type PerKind = Partial<Record<MacosPermissionKind, boolean>>;
  *   that macOS answers silently puts the guidance back with it.
  * - `pending`: a `request` is in flight. Only Screen Recording's is ever observably pending —
  *   Accessibility's returns at once, while its dialog is still coming up.
+ * - `openSystemSettings`: rejects when the pane did not open, after the read, for the caller to show.
  */
 export function useMacosPermissions(): {
   status: MacosPermissionsStatus | undefined;
@@ -91,11 +92,9 @@ export function useMacosPermissions(): {
     async (kind: MacosPermissionKind) => {
       try {
         await macosPermissions?.openSystemSettings(kind);
-      } catch {
-        // Only an IPC failure reaches here. The shell does not report back on the pane itself, so a
-        // pane that failed to open is indistinguishable from one that did.
+      } finally {
+        await refresh();
       }
-      await refresh();
     },
     [macosPermissions, refresh],
   );
