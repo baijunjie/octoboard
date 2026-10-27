@@ -57,6 +57,13 @@ interface TerminalPaneProps {
   /** Shows a project file a path in the output named, in the file viewer, at its line if the path
    * gave one. Without it such a path opens in the default application. */
   onViewFile?: (file: ViewedFile) => void;
+  /** Shows a session as selecting it in the sidebar would: the history of an archived session links
+   * to its owner with it. */
+  onSelectSession?: (session: Session) => void;
+  /** Where focus goes when a control that held it inside the pane goes away (the history's owner
+   * link, Reconnect, a creation action), in place of the pane's own terminal, which a panel
+   * covering the agent area can leave out of reach. */
+  restoreFocus?: () => void;
   ref?: React.Ref<TerminalPaneHandle>;
 }
 
@@ -90,6 +97,8 @@ export function TerminalPane({
   onAddAgent,
   resizing = false,
   onViewFile,
+  onSelectSession,
+  restoreFocus,
   ref,
 }: TerminalPaneProps): React.ReactElement {
   const t = useT();
@@ -130,7 +139,8 @@ export function TerminalPane({
   const hasSessionRef = useLatest(session !== undefined);
   // An archived session's terminal is covered by its history and inert, so focus asked for the
   // terminal goes to the history's scrolling region instead, or while there is none (loading, no
-  // messages, a failed read) to its first control, the history itself, then the bar's Reopen.
+  // messages, a failed read) to its first control below the header (the header's owner link is not
+  // where the terminal's focus belongs), the history itself, then the bar's Reopen.
   const isArchived = session?.status === "archived";
   const archivedRef = useLatest(isArchived);
   const historyRef = useRef<HTMLDivElement>(null);
@@ -140,7 +150,7 @@ export function TerminalPane({
       const history = historyRef.current;
       (
         history?.querySelector<HTMLElement>("[role=region][tabindex]") ??
-        history?.querySelector<HTMLElement>("input, button") ??
+        history?.querySelector<HTMLElement>(":is(input, button):not(header *)") ??
         history?.querySelector<HTMLElement>("section[tabindex]") ??
         barRef.current?.querySelector<HTMLElement>("button")
       )?.focus();
@@ -169,7 +179,7 @@ export function TerminalPane({
       if (document.activeElement === document.body) focusTerminal();
     }
   }, [switching, focusTerminal]);
-  const held = useFocusHandoff(focusTerminal);
+  const held = useFocusHandoff(restoreFocus ?? focusTerminal);
 
   useImperativeHandle(
     ref,
@@ -533,7 +543,7 @@ export function TerminalPane({
         // Under the cover, which a resume raises over it; inert meanwhile, so what is hidden is
         // out of reach too.
         <div ref={historyRef} {...held} inert={resuming} className="contents">
-          <SessionHistoryView key={session.id} session={session} />
+          <SessionHistoryView key={session.id} session={session} onSelectSession={onSelectSession} />
         </div>
       )}
       {cover && (

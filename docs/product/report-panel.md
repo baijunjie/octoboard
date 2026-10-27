@@ -68,7 +68,8 @@ from its markup, with anything typed into its form and not submitted gone.
   been typed into its form is gone.
 - A console session that has never pushed a page shows, under the panel's header, an empty panel filling the card,
   saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the console session's
-  pages are first being listed, the card shows its header alone.
+  pages are first being listed, the card shows its header alone; keyboard focus on a header control stays there when
+  the listing arrives.
 - The pages are listed when the console session's panel is shown, and again whenever the window reloads its state
   from the daemon (a reconnect, or catching up after falling behind). **A listing that fails** is shown in the panel,
   with the reason and **Try again**, which lists them again, and opens no error alert. With no pages to show, an

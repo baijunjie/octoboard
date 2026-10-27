@@ -8,8 +8,8 @@ const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Website");
 
 /** The archived session with the context its agent last reported, which the history header shows as the context badge beside its heading. */
-function archivedWith(context?: SessionContext): Session {
-  return sessionOf("s-history", console_.id, project.id, "Speed up the pricing page", "archived", { started_at: minutesAgo(60 * 24), ended_at: minutesAgo(60 * 19), ...(context && { context }) });
+function archivedWith(context?: SessionContext, extra: Partial<Session> = {}): Session {
+  return sessionOf("s-history", console_.id, project.id, "Speed up the pricing page", "archived", { started_at: minutesAgo(60 * 24), ended_at: minutesAgo(60 * 19), ...(context && { context }), ...extra });
 }
 const archived = archivedWith();
 function stateWith(context?: SessionContext) {
@@ -17,6 +17,25 @@ function stateWith(context?: SessionContext) {
     consoles: [console_],
     projects: [project],
     sessions: [sessionOf("s-console", console_.id, undefined, "Hub", "idle"), archivedWith(context)],
+  });
+}
+
+/** An archived console session that owns the archived session, with a history of its own, so that
+ * pressing the owner link in the header lands on a history that is visibly another one. */
+function archivedOwnerOf(title: string): Session {
+  return sessionOf("s-owner", console_.id, undefined, title, "archived", { started_at: minutesAgo(60 * 30), ended_at: minutesAgo(60 * 18) });
+}
+const OWNER_MESSAGES: HistoryMessage[] = [
+  { speaker: "user", turn: 1, at: minutesAgo(60 * 29), text: "Hand the pricing page performance work to a project session and report back when it is done." },
+  { speaker: "agent", turn: 1, at: minutesAgo(60 * 29 - 2), text: "I started a session in the Website project for it and will wait for its report." },
+];
+/** The archived session bound to the archived owner titled `ownerTitle`. */
+function boundStateWith(ownerTitle: string) {
+  const owner = archivedOwnerOf(ownerTitle);
+  return snapshotState({
+    consoles: [console_],
+    projects: [project],
+    sessions: [sessionOf("s-console", console_.id, undefined, "Hub", "idle"), owner, archivedWith(warningContext, { bound_to: owner.id })],
   });
 }
 
@@ -172,6 +191,29 @@ export const sessionHistoryScenarios: Scenario[] = [
       "The pane shows user messages and agent replies together in place of a terminal. Octoboard briefs, notices and reports are hidden, while the agent's replies to them remain. User messages have a neutral bubble and agent replies have a softly accent-tinted bubble; both keep the standard short shadow and the same body font. Reply headings stay at the body size in semibold; lists, inline code and tables keep the conversation scale, while fenced code keeps its monospace font and code palette. Scroll for the code blocks and table. The GitHub document preference does not change the reply styling. User messages are labelled You, with a Chinese message at the end. The long message wraps and the long path breaks inside the column. The header holds the context badge, 130K with a warning ring for 65% used, followed by the labelled archive and creation times on two lines; no reply switch is present. Hover the badge for the Context window card. The floating bar says the session is archived and offers Reopen; the last message scrolls clear of it.",
     preferences: { ...preferences, markdownStyle: "github" },
     sessionHistory: { [archived.id]: MESSAGES },
+    steps: openHistory,
+  },
+  {
+    ...base,
+    id: "history-owner",
+    title: "Archived session history of a session with an owner",
+    description:
+      "Beneath the Session history heading and its context badge a muted line reads \"Reports to\" followed by the owner's title as a link-styled button, aligned with the heading, the archive and creation times staying on the trailing side. Press the owner: the pane switches to the owner's own history, where no such line is shown.",
+    state: boundStateWith("Pricing page rework"),
+    sessionHistory: { [archived.id]: MESSAGES, "s-owner": OWNER_MESSAGES },
+    steps: openHistory,
+  },
+  {
+    ...base,
+    id: "history-owner-long",
+    title: "Archived session history with a long owner title",
+    description:
+      "The window is narrowed to 480 px, where the owner title, far longer than the line, fades out at its end after \"Reports to\" with its start still readable, instead of pushing the dates away; the dates keep their own lines on the trailing side. Hover the owner: the full title shows as a tooltip, and the text scrolls as a marquee.",
+    width: 480,
+    state: boundStateWith(
+      "Rework the pricing page so that it loads in under a second on a cold cache, then audit every other marketing page for the same image and cache header problems",
+    ),
+    sessionHistory: { [archived.id]: MESSAGES, "s-owner": OWNER_MESSAGES },
     steps: openHistory,
   },
   {

@@ -867,6 +867,7 @@ export const zhHans: Translation<"other"> = {
   "terminal.resume": "恢复",
   "terminal.reconnect": "重新连接",
   "history.title": "会话历史",
+  "history.owner": "汇报给 {owner}",
   "history.messages": "此会话的消息",
   "history.loading": "正在载入历史记录…",
   "history.speaker.user": "你",

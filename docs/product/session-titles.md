@@ -17,7 +17,8 @@ chips, the archive view and the selected session's breadcrumb. Session-owner lab
 the archive, account-switch and delete confirmations, and the confirmation of another session's request to start a
 session (see "The confirmation dialog" in `docs/product/session-requests.md`) identify the session by the same name,
 and so does the responsible-session badge in the Git mode's branch selector while the session it names still exists
-(see "The responsible-session badge" in `docs/product/branch-responsible-session.md`).
+(see "The responsible-session badge" in `docs/product/branch-responsible-session.md`), and the owner link in an
+archived session's history (see "The owner the session reports to" in `docs/product/session-history.md`).
 Names in these surfaces' accessible labels and full-name tooltips follow the visible name.
 
 **Rename** edits the created name alone; it does not replace the task title. Its availability is described
