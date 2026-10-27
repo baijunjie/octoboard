@@ -667,11 +667,14 @@ mapping.
 - **Mechanism.** A section-level `StatusAnnouncer`, mounted with the section and writing every text, the first included,
   after a caller wait. `packages/ui/src/settings/PermissionsSection.tsx` (`PermissionsSection`: the rows show each state
   as ordinary visible copy, not `aria-hidden` and with no `role="status"`, and the permission names with their states go
-  to the announcer as one sentence), `packages/ui/src/components/AttendedStatusAnnouncer.tsx` (writes each text after
+  to the announcer as one text), `packages/ui/src/components/AttendedStatusAnnouncer.tsx` (writes each text after
   `AFTER_FOCUS_MOVE_DELAY_MS` of attended time, restarting the wait on each return to the window, and writes nothing
   again while the text has not changed; heard as a local `PermissionsAnnouncer` holding the same code),
   `packages/ui/src/components/useWindowAttended.ts` and `StatusAnnouncer` with its default 100 ms long elapsed (the wait
-  is the caller's, not `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus.
+  is the caller's, not `firstWriteDelayMs`). Inside Settings' own dialog; the Permissions tab keeps focus. The wording
+  heard below predates the current catalog sentences (one message of whole sentences per permission and state, such
+  as "Screen Recording is not granted."): the same composition, a name and a state per permission in one text, with
+  the timing mechanism unchanged.
 - **ARIA wiring as rendered.** The common mapping; empty when the tab was focused, populated 1.5 s later with the
   sentence in a descendant. A single status holds both permissions; the visible row copy stays separately readable, so
   the states are met twice by a reader going through the rows.

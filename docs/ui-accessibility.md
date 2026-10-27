@@ -1404,9 +1404,10 @@ element, an error from `role="alert"`.
   moves onto the tab, and that text is not said. So every text, the first included, is written
   `AFTER_FOCUS_MOVE_DELAY_MS` of attended time after it arrives, the wait started over each time the user comes back (a
   change made in System Settings is picked up on the way back, when VoiceOver is speaking the focused control), and a
-  text replaced while it waits is never said. Put the subject in the text when several states can change independently:
-  `role="status"` is atomic, so a bare "Granted." names nothing. Reading the rows statically meets each state twice,
-  once in place and once in the status; that is accepted.
+  text replaced while it waits is never said. Put the subject in the text when several states can change independently,
+  as whole sentences per state rather than fragments joined in code: `role="status"` is atomic, so a bare "Granted."
+  names nothing. Reading the rows statically meets each state twice, once in place and once in the status; that is
+  accepted.
 - The file viewer's notices are announced only when they arrive after the viewer has painted, once, from a
   `StatusAnnouncer` with the viewer's first-announcement delay; one present from the first paint is not said, and a
   surface that already speaks the same state (an unchanged change, an expanded diff's notes) says it in place of the

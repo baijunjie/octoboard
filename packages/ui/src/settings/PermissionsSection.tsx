@@ -22,18 +22,35 @@ const PERMISSIONS = [
     // Recording, while Accessibility has no in-place grant to refuse in the first place, so there
     // the pane is simply where it is granted.
     refused: "settings.permissions.screenRecording.refused",
+    announced: {
+      granted: "settings.permissions.announcement.screenRecording.granted",
+      grantedRestart: "settings.permissions.announcement.screenRecording.grantedRestart",
+      notGranted: "settings.permissions.announcement.screenRecording.notGranted",
+      refused: "settings.permissions.announcement.screenRecording.refused",
+    },
   },
   {
     kind: "accessibility",
     label: "settings.permissions.accessibility.label",
     description: "settings.permissions.accessibility.description",
     refused: "settings.permissions.accessibility.refused",
+    announced: {
+      granted: "settings.permissions.announcement.accessibility.granted",
+      notGranted: "settings.permissions.announcement.accessibility.notGranted",
+      refused: "settings.permissions.announcement.accessibility.refused",
+    },
   },
 ] as const satisfies readonly {
   kind: MacosPermissionKind;
   label: PlainMessageKey;
   description: PlainMessageKey;
   refused: PlainMessageKey;
+  announced: {
+    granted: PlainMessageKey;
+    grantedRestart?: PlainMessageKey;
+    notGranted: PlainMessageKey;
+    refused: PlainMessageKey;
+  };
 }[];
 
 /**
@@ -61,28 +78,34 @@ export function PermissionsSection(): React.ReactElement {
   // marked pending rather than disabled.
   useSectionRefocus([status?.screenRecording, status?.accessibility, refused.screenRecording, refused.accessibility]);
 
-  // Where each permission stands, worded once for its row and for the section's status region.
+  // Where each permission stands, for its row and for the section's status region.
   const rows = status
     ? PERMISSIONS.map((permission) => {
       const granted = status[permission.kind];
       // Accessibility is never granted in place: its request only shows the system's dialog and
       // lists Octoboard in System Settings, so that row is expected to stay "not granted" until
       // the user flips the switch there, which the refresh on window focus then picks up.
-      const stateKey: PlainMessageKey = granted ? "settings.permissions.granted" : refused[permission.kind] ? permission.refused : "settings.permissions.notGranted";
-      const state = t(stateKey);
+      const stateKey: PlainMessageKey = refused[permission.kind] ? permission.refused : "settings.permissions.notGranted";
       // Screen Recording reaches a process only at launch, so a grant made since is inert until
       // Octoboard restarts. There is deliberately no restart button: a plain `app.restart()` would
       // cut through the quit flow (daemon shutdown, the quit confirmation) in `exit.rs`. The
       // condition is the shell's own two readings, not something remembered here, so the notice
       // survives this section unmounting on a tab switch — which is the normal next thing the
       // user does.
-      const restart = permission.kind === "screenRecording" && granted && !status.screenRecordingAtLaunch ? t("settings.permissions.restart") : undefined;
-      return { ...permission, granted, state, stateKey, restart };
+      const restart = permission.kind === "screenRecording" && granted && !status.screenRecordingAtLaunch;
+      const { announced } = permission;
+      const announcedKey: PlainMessageKey = granted
+        ? (restart && "grantedRestart" in announced ? announced.grantedRestart : announced.granted)
+        : refused[permission.kind] ? announced.refused : announced.notGranted;
+      return { ...permission, granted, stateKey, restart, announcedKey };
     })
     : undefined;
-  // Each row's state with the permission's name in front, as a bare "Granted." names nothing, glued
-  // with plain spaces: the text is never rendered, so it carries no typography.
-  const announcement = rows?.map((row) => [t(row.label), row.state, row.restart].filter(Boolean).join(" ")).join(" ");
+  // One whole sentence per permission and state, each naming its permission as a bare "Granted." names
+  // nothing, laid side by side by a catalog template of their own, so no separator is chosen in code.
+  const announcement = rows && t("settings.permissions.announcement", {
+    screenRecording: t(rows.find((row) => row.kind === "screenRecording")!.announcedKey),
+    accessibility: t(rows.find((row) => row.kind === "accessibility")!.announcedKey),
+  });
 
   const body = (): React.ReactNode => {
     const line = (message: PlainMessageKey) => <p className="text-sm text-app-muted"><Message id={message} /></p>;

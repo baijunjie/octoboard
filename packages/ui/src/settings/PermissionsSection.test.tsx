@@ -15,6 +15,7 @@ import { PermissionsSection } from "./PermissionsSection";
 const GRANTED_SINCE_LAUNCH = { screenRecording: true, accessibility: true, screenRecordingAtLaunch: false } satisfies MacosPermissionsStatus;
 const GRANTED_AT_LAUNCH = { screenRecording: true, accessibility: true, screenRecordingAtLaunch: true } satisfies MacosPermissionsStatus;
 const SCREEN_RECORDING_MISSING = { screenRecording: false, accessibility: true, screenRecordingAtLaunch: false } satisfies MacosPermissionsStatus;
+const BOTH_MISSING = { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false } satisfies MacosPermissionsStatus;
 
 /**
  * Mounts the section over a platform whose shell answers `statuses` one per read, the last of them
@@ -148,6 +149,8 @@ it.each([
 
 /** What the section's status regions say, one entry per region. */
 const statuses = (container: HTMLElement) => [...container.querySelectorAll('[role="status"]')].map((region) => region.textContent);
+const RESTART_ANNOUNCEMENT =
+  "Screen Recording is granted. Restart Octoboard for it to take effect. Accessibility is granted.";
 const elapse = (ms: number) => act(() => vi.advanceTimersByTime(ms));
 
 // The states are in place as the section appears, which is as focus moves onto its tab: said with
@@ -163,7 +166,7 @@ it("says where every permission stands a moment after the section appears, from 
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(statuses(container)).toEqual([""]);
   await elapse(1);
-  expect(statuses(container)).toEqual(["Screen Recording Not granted. Accessibility Granted."]);
+  expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is granted."]);
 });
 
 // The way back from System Settings has VoiceOver speak the focused control, which a status written
@@ -179,12 +182,33 @@ it("says a grant picked up on the way back from System Settings a moment after t
   await act(async () => {});
   // The rows show it at once; only the region waits.
   expect(container.querySelector(".groove-t")!.textContent).not.toContain("Not granted.");
-  expect(statuses(container)).toEqual(["Screen Recording Not granted. Accessibility Granted."]);
+  expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is granted."]);
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS - 1);
-  expect(statuses(container)).toEqual(["Screen Recording Not granted. Accessibility Granted."]);
+  expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is granted."]);
   await elapse(1);
-  const restart = "Restart Octoboard for it to take effect.";
-  expect(statuses(container)).toEqual([`Screen Recording Granted. ${restart} Accessibility Granted.`]);
+  expect(statuses(container)).toEqual([RESTART_ANNOUNCEMENT]);
+});
+
+// Each permission has its own sentence per state, so the refused guidance reaches the status region too.
+it("says every permission's own sentence for not granted and for refused", async () => {
+  windowAttention();
+  vi.useFakeTimers();
+  onTestFinished(() => void vi.useRealTimers());
+  const { container } = await mount({ statuses: [BOTH_MISSING] });
+  await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is not granted."]);
+  const press = (index: number) => act(async () => void container.querySelectorAll("button")[index]!.click());
+  await press(1);
+  await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(statuses(container)).toEqual([
+    "Screen Recording is not granted. Accessibility is not granted. Switch Octoboard on in System Settings.",
+  ]);
+  await press(0);
+  await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
+  expect(statuses(container)).toEqual([
+    "Screen Recording is not granted. macOS will not ask a second time, so switch it on in System Settings. " +
+      "Accessibility is not granted. Switch Octoboard on in System Settings.",
+  ]);
 });
 
 it("holds what it has to say while the window is not attended", async () => {
@@ -198,7 +222,7 @@ it("holds what it has to say while the window is not attended", async () => {
   attend(true);
   await act(async () => {});
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
-  expect(statuses(container)).toEqual(["Screen Recording Not granted. Accessibility Granted."]);
+  expect(statuses(container)).toEqual(["Screen Recording is not granted. Accessibility is granted."]);
 });
 
 it.each([
@@ -239,8 +263,8 @@ it("says only the latest of readings that follow one another within the wait, an
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS - 1);
   expect(writes).toEqual([]);
   await elapse(1);
-  expect(writes).toEqual(["Screen Recording Granted. Accessibility Granted."]);
+  expect(writes).toEqual(["Screen Recording is granted. Accessibility is granted."]);
   await refocus();
   await elapse(AFTER_FOCUS_MOVE_DELAY_MS);
-  expect(writes).toEqual(["Screen Recording Granted. Accessibility Granted."]);
+  expect(writes).toEqual(["Screen Recording is granted. Accessibility is granted."]);
 });
