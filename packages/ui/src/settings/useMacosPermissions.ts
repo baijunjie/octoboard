@@ -23,6 +23,8 @@ type PerKind = Partial<Record<MacosPermissionKind, boolean>>;
  *   that macOS answers silently puts the guidance back with it.
  * - `pending`: a `request` is in flight. Only Screen Recording's is ever observably pending —
  *   Accessibility's returns at once, while its dialog is still coming up.
+ * - `request`: rejects when the request could not be made, after the read and with `pending` cleared,
+ *   for the caller to show. A request macOS answers without granting does not reject; it sets `refused`.
  * - `openSystemSettings`: rejects when the pane did not open, after the read, for the caller to show.
  */
 export function useMacosPermissions(): {
@@ -79,11 +81,10 @@ export function useMacosPermissions(): {
       try {
         const granted = await macosPermissions.request(kind);
         if (mounted.current && !granted) setRefused((r) => ({ ...r, [kind]: true }));
-      } catch {
-        // The prompt could not be raised; the refresh below shows where things stand.
+      } finally {
+        if (mounted.current) setPending((p) => ({ ...p, [kind]: false }));
+        await refresh();
       }
-      if (mounted.current) setPending((p) => ({ ...p, [kind]: false }));
-      await refresh();
     },
     [macosPermissions, refresh],
   );

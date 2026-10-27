@@ -30,6 +30,15 @@ macOS 15 and later shows it: Screen & System Audio Recording for Screen Recordin
 has only its acknowledgement button, with no remedy button and no request to report an issue (see "The error alert" in
 `docs/product/error-alerts.md`). Whether or not the pane opened, the row's grants are read again afterwards.
 
+When pressing **Grant…** fails to make the request at all, an error alert titled "Could not request the permission"
+opens. It is an unexpected failure, not a refusal: its body says the request for that permission did not go through and
+to grant it by hand in System Settings — choose Privacy & Security, then the permission's pane as named above, adding
+Octoboard with the + button if it is not listed — followed by the request to report an issue, with **Report issue** and
+what the failed request reported under **Error details** (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`). The button stops being pending and the row's grants are read again; since no refusal
+was recorded, the row keeps offering Grant… rather than the System Settings wording. A request macOS answers, granted or
+not, opens no alert.
+
 **Accessibility is granted in System Settings, not from the prompt.** Its Grant… button raises the system's dialog
 asking to let Octoboard control the computer, whose effect is that Octoboard appears in System Settings' own list, so
 the user only flips a switch there instead of adding the application by hand. The request reports back at once, while

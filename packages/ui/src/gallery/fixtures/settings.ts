@@ -535,6 +535,21 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-permissions-request-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Permissions, the request did not go through",
+    description: "Grant on Screen Recording cannot make its request, which is an unexpected failure: an error alert titled \"Could not request the permission\" says the request for Screen Recording did not go through and to grant it yourself in System Settings, choose Privacy & Security, then choose Screen & System Audio Recording, adding Octoboard with the + button if it is not listed. The title is plain text; Screen Recording, System Settings, Privacy & Security, Screen & System Audio Recording, Octoboard and the + in the body are each a chip. Beneath the body sit the report guidance (a bug that cannot be resolved here, with Report issue to file it) and a closed Error details disclosure holding the cause; the buttons are Report issue and OK. After OK the row still offers Grant, not pending and without System Settings guidance.",
+    state,
+    macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
+    macosRequestError: "the shell has no such command",
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.permissions")),
+      (ui) => ui.press(ui.t("settings.permissions.grant")),
+    ],
+  },
+  {
     id: "settings-permissions-system-open-failed",
     group: GROUP,
     category: "exceptional",

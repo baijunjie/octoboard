@@ -78,18 +78,19 @@ let daemonExited: ((detail: string) => void) | undefined;
  * gallery: `windowChrome` while the URL says `chrome=1` (the window shortcuts among it, ⌃Tab
  * between console sessions; it also puts the top bar's drag region on) and, with the scenario's
  * `desktopApp`, the native menu bar (which no menu is drawn for), the macOS privacy grants stubbed
- * from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
- * `macosSettingsOpenError`), there being no other way to look at those rows than to
- * really change a system setting, and `backgroundRun` for a scenario that says so (the Settings
- * switch), the macOS app's system-managed `notifications` for one that says `systemNotifications`
- * (nothing is shown or opened; the pane refused when it gives an `openError`), the clipboard taken
- * away for a scenario that says so, and the configuration-file capability stubbed from the
- * scenario's `configuration` (absent where it says the platform has none) so that no download or
- * file picker is raised from a capture, and the exit capability for a scenario that says
- * `quitRequested`, whose quit request is raised once its steps have run and whose confirmation
- * ends nothing (or fails with the text of its `exitFailure`), the daemon exiting by itself for a
- * scenario that says `daemonExited`, and the updater for a scenario that has one (`updater`), with
- * that same exit capability, since a restart goes through it. Nothing else native. */
+ * from the scenario's `macosPermissions` (its request rejected when it gives a `macosRequestError`,
+ * its System Settings pane refused when it gives a `macosSettingsOpenError`), there being no other
+ * way to look at those rows than to really change a system setting, and `backgroundRun` for a
+ * scenario that says so (the Settings switch), the macOS app's system-managed `notifications` for
+ * one that says `systemNotifications` (nothing is shown or opened; the pane refused when it gives
+ * an `openError`), the clipboard taken away for a scenario that says so, and the configuration-file
+ * capability stubbed from the scenario's `configuration` (absent where it says the platform has
+ * none) so that no download or file picker is raised from a capture, and the exit capability for a
+ * scenario that says `quitRequested`, whose quit request is raised once its steps have run and
+ * whose confirmation ends nothing (or fails with the text of its `exitFailure`), the daemon exiting
+ * by itself for a scenario that says `daemonExited`, and the updater for a scenario that has one
+ * (`updater`), with that same exit capability, since a restart goes through it. Nothing else
+ * native. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const grants = scenario?.macosPermissions;
@@ -103,7 +104,9 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       macosPermissions: {
         status: () =>
           grants === "unreadable" ? Promise.reject(new Error("gallery: the shell has no such command")) : Promise.resolve(grants),
-        request: () => Promise.resolve(false),
+        request: () => scenario?.macosRequestError === undefined
+          ? Promise.resolve(false)
+          : Promise.reject(new Error(scenario.macosRequestError)),
         openSystemSettings: () => scenario?.macosSettingsOpenError === undefined
           ? Promise.resolve()
           : Promise.reject(new Error(scenario.macosSettingsOpenError)),

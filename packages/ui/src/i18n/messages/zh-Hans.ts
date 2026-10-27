@@ -2200,6 +2200,8 @@ export const zhHans: Translation<"other"> = {
   "settings.permissions.openSettings": "打开系统设置",
   "settings.permissions.openFailed": "{systemSettings}没有打开。请自行打开，选择{privacy}，然后选择{pane}。",
   "settings.permissions.openFailedTitle": "无法打开{systemSettings}",
+  "settings.permissions.requestFailed": "{permission}的授权请求没有发出。请自行在{systemSettings}中授权：选择{privacy}，然后选择{pane}。如果列表中没有 {appName}，请用 {add} 按钮添加。",
+  "settings.permissions.requestFailedTitle": "无法请求授权",
   "settings.permissions.privacyPane": "隐私与安全性",
   "settings.permissions.screenRecording.systemPane": "录屏与系统录音",
   "settings.permissions.accessibility.systemPane": "辅助功能",

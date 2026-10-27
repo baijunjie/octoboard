@@ -106,6 +106,33 @@ export function PermissionsSection(): React.ReactElement {
     }
   };
 
+  const grant = async (kind: MacosPermissionKind, label: PlainMessageKey, systemPane: PlainMessageKey) => {
+    try {
+      await request(kind);
+    } catch (cause) {
+      const privacy = t("settings.permissions.privacyPane");
+      const pane = t(systemPane);
+      // The call itself rejecting is no answer from macOS but a defect in the app, so this is raised as an
+      // unexpected failure (a plain `Error`, not an `ActionableError`): the alert keeps what the call said behind
+      // Error details and offers Report issue, while the body still gives the manual workaround.
+      reportError(
+        cause instanceof Error ? cause : new Error(String(cause)),
+        undefined,
+        undefined,
+        <Message
+          id="settings.permissions.requestFailed"
+          params={{
+            permission: <InlineReference dir="auto" wrap>{t(label)}</InlineReference>,
+            privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
+            pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
+            add: <InlineReference dir="auto">+</InlineReference>,
+          }}
+        />,
+        t("settings.permissions.requestFailedTitle"),
+      );
+    }
+  };
+
   // Where each permission stands, for its row and for the section's status region.
   const rows = status
     ? PERMISSIONS.map((permission) => {
@@ -185,7 +212,7 @@ export function PermissionsSection(): React.ReactElement {
                   {t("settings.permissions.openSettings")}
                 </Button>
               ) : (
-                <Button size="sm" variant="primary" preventFocusOnPress isPending={pending[kind]} onPress={() => void request(kind)}>
+                <Button size="sm" variant="primary" preventFocusOnPress isPending={pending[kind]} onPress={() => void grant(kind, label, systemPane)}>
                   {t("settings.permissions.grant")}
                 </Button>
               ))}

@@ -345,13 +345,17 @@ export interface Scenario {
   git?: FixtureGit | null;
   /** What the shell answers about the macOS privacy grants, for the Permissions section.
    * `"unreadable"` is a shell that refuses the read; without this the browser platform's own
-   * answer stands, which is the section's "only in the macOS app" line. A stub `request` always
-   * answers that the permission was not granted, which is how a scenario reaches the row's System
-   * Settings guidance — nothing in a browser can raise a real prompt. */
+   * answer stands, which is the section's "only in the macOS app" line. A stub `request` answers
+   * that the permission was not granted (unless the scenario gives a `macosRequestError`), which is
+   * how a scenario reaches the row's System Settings guidance — nothing in a browser can raise a
+   * real prompt. */
   macosPermissions?: MacosPermissionsStatus | "unreadable";
   /** With `macosPermissions`, the reason the system gives for not opening the System Settings pane a row's
    * Open System Settings points at; without it the pane opens (nothing is shown). */
   macosSettingsOpenError?: string;
+  /** With `macosPermissions`, the reason a row's Grant request call fails with, so the request itself is
+   * rejected; without it the request is answered as not granted. */
+  macosRequestError?: string;
   /** The platform has what the desktop app's window has, so a view that lists or uses it shows the app's: the
    * window chrome (the `chrome=1` of the frame URL, which a view that exists only in the app cannot leave to
    * the address) and the native menu bar. */
