@@ -47,8 +47,10 @@ Per-package commands are in that package's doc.
   runs the checks a branch's changes call for).
 - [`.githooks/`](../.githooks/) — the git hook scripts: the revert gate (`hook.sh`, `revert-gate.py`, installed by
   `install.sh`, resident guarded branches in `branches`) and the `flow-*.sh` scripts for the worktree merge flow.
-- [`.github/workflows/`](../.github/workflows/) — CI: `quality.yml` (ESLint and Rust formatting) and `website.yml`
-  (publishing the website to GitHub Pages).
+- [`.github/workflows/`](../.github/workflows/) — CI: `release.yml` (builds, signs and publishes the desktop release when
+  a version tag is pushed), `quality.yml` (the full set of checks, run as the release's first stage and on request) and
+  `website.yml` (publishing the website to GitHub Pages); [`.github/release-notes.sh`](../.github/release-notes.sh)
+  validates a release tag and prints its notes for `release.yml`.
 - [`config/app.json`](../config/app.json) — the single source for product identity, repository and issue-report
   destinations, author and support contacts, website address, license and copyright year, read by the UI, the website
   and both Cargo crates' `build.rs`; the copies the toolchain requires elsewhere are checked against it.
