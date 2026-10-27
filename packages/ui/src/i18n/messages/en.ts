@@ -2370,6 +2370,8 @@ export const en = {
   "settings.permissions.openSettings": "Open System Settings",
   "settings.permissions.openFailed": "{systemSettings} did not open. Open it yourself, choose {privacy}, then choose {pane}.",
   "settings.permissions.openFailedTitle": "Could not open {systemSettings}",
+  "settings.permissions.requestFailed": "The request for {permission} did not go through. Grant it yourself in {systemSettings}: choose {privacy}, then choose {pane}. If {appName} is not listed, add it with the {add} button.",
+  "settings.permissions.requestFailedTitle": "Could not request the permission",
   // The names of panes in System Settings, as macOS 15 and later shows them.
   "settings.permissions.privacyPane": "Privacy & Security",
   "settings.permissions.screenRecording.systemPane": "Screen & System Audio Recording",
