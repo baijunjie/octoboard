@@ -535,6 +535,22 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-permissions-system-open-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Permissions, System Settings did not open",
+    description: "After Grant is refused on Screen Recording and its Open System Settings is pressed, the system does not open the pane: an error alert titled \"Could not open System Settings\" says it did not open and to open it yourself, choose Privacy & Security, then choose Screen & System Audio Recording. The title is plain text; System Settings, Privacy & Security and Screen & System Audio Recording in the body are each a chip. OK is its only button: no recovery action and no Error details.",
+    state,
+    macosPermissions: { screenRecording: false, accessibility: false, screenRecordingAtLaunch: false },
+    macosSettingsOpenError: "the system did not open x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.permissions")),
+      (ui) => ui.press(ui.t("settings.permissions.grant")),
+      (ui) => ui.press(ui.t("settings.permissions.openSettings")),
+    ],
+  },
+  {
     id: "settings-agent-permissions",
     group: GROUP,
     category: "normal",

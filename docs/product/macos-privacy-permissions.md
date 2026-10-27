@@ -24,6 +24,12 @@ which is what macOS does — a prompt the user refused is never raised again, an
 silent no; for Accessibility it says to switch Octoboard on in System Settings, since that permission is never granted
 in place at all.
 
+When the system does not open the pane, an error alert titled "Could not open System Settings" says that System
+Settings did not open and to open it by hand, choose Privacy & Security, then choose the permission's pane, named as
+macOS 15 and later shows it: Screen & System Audio Recording for Screen Recording, Accessibility for Accessibility. It
+has only its acknowledgement button, with no remedy button and no request to report an issue (see "The error alert" in
+`docs/product/error-alerts.md`). Whether or not the pane opened, the row's grants are read again afterwards.
+
 **Accessibility is granted in System Settings, not from the prompt.** Its Grant… button raises the system's dialog
 asking to let Octoboard control the computer, whose effect is that Octoboard appears in System Settings' own list, so
 the user only flips a switch there instead of adding the application by hand. The request reports back at once, while

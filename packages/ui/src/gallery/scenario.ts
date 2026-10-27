@@ -349,6 +349,9 @@ export interface Scenario {
    * answers that the permission was not granted, which is how a scenario reaches the row's System
    * Settings guidance — nothing in a browser can raise a real prompt. */
   macosPermissions?: MacosPermissionsStatus | "unreadable";
+  /** With `macosPermissions`, the reason the system gives for not opening the System Settings pane a row's
+   * Open System Settings points at; without it the pane opens (nothing is shown). */
+  macosSettingsOpenError?: string;
   /** The platform has what the desktop app's window has, so a view that lists or uses it shows the app's: the
    * window chrome (the `chrome=1` of the frame URL, which a view that exists only in the app cannot leave to
    * the address) and the native menu bar. */

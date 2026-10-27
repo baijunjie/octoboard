@@ -2368,6 +2368,12 @@ export const en = {
   "settings.permissions.announcement.accessibility.refused": "Accessibility is not granted. Switch {appName} on in {systemSettings}.",
   "settings.permissions.grant": "Grant…",
   "settings.permissions.openSettings": "Open System Settings",
+  "settings.permissions.openFailed": "{systemSettings} did not open. Open it yourself, choose {privacy}, then choose {pane}.",
+  "settings.permissions.openFailedTitle": "Could not open {systemSettings}",
+  // The names of panes in System Settings, as macOS 15 and later shows them.
+  "settings.permissions.privacyPane": "Privacy & Security",
+  "settings.permissions.screenRecording.systemPane": "Screen & System Audio Recording",
+  "settings.permissions.accessibility.systemPane": "Accessibility",
   "settings.configuration.unavailable": "Exporting and importing configuration files is not available here.",
   "settings.configuration.export.label": "Export configuration",
   "settings.configuration.export.description":

@@ -342,7 +342,7 @@ export interface MacosPermissionsCapability {
    * dialog is raised asynchronously and is not granted in place, so it resolves `false` at once,
    * while that dialog is still coming up. */
   request(kind: MacosPermissionKind): Promise<boolean>;
-  /** Opens the System Settings pane for `kind`. */
+  /** Opens the System Settings pane for `kind`. Rejects when the system did not open it. */
   openSystemSettings(kind: MacosPermissionKind): Promise<void>;
 }
 
