@@ -110,7 +110,8 @@ function ErrorAlertHost(): React.ReactElement | null {
   const acknowledge = useRef<HTMLButtonElement>(null);
   const issue = useIssueReport(error?.classification.kind === "unexpected" ? alertFailures(error, "report") : undefined);
   // Focus the alert in the render after the one that mounted it, before the task that raised it ends, and nowhere
-  // else: its `Dialog` never puts focus on it by itself, not even when the alert it replaces leaves focus on `<body>`.
+  // else: its `Dialog` never puts focus on it by itself, not even when the alert it replaces leaves focus on `<body>`
+  // (until then it holds focus on an empty element inside the alert; see `focusesItselfOnOpen`).
   // react-aria turns a new modal's focus containment on from a layout effect at mount, which forces a render; the state
   // set here from a layout effect of the same commit is set after it and lands in that render or a later one, and a
   // layout effect of that render runs after the containment's own, which sit below it. Focus must land after that:

@@ -1,6 +1,6 @@
 // Shared by the tests of the questions `PendingQuestionDialog` serves — the trust prompts and the
 // session requests — which answer the same dialog and so change together.
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
@@ -19,10 +19,15 @@ export interface MountedDialog {
 
 /**
  * Renders `PendingQuestionDialog` over a store holding `state` and a daemon whose every request
- * answers with `reply`. The tree is taken down when the test finishes rather than at the end of
- * the caller's own steps, so a failure in the middle of them still leaves nothing mounted.
+ * answers with `reply`, after `under` (a dialog the question comes up over), in `StrictMode` when `strict` is set. The
+ * tree is taken down when the test finishes rather than at the end of the caller's own steps, so a failure in the
+ * middle of them still leaves nothing mounted.
  */
-export function mountPendingQuestionDialog(state: Partial<State>, reply: () => Promise<unknown>): MountedDialog {
+export function mountPendingQuestionDialog(
+  state: Partial<State>,
+  reply: () => Promise<unknown>,
+  { under, strict = false }: { under?: React.ReactNode; strict?: boolean } = {},
+): MountedDialog {
   const daemon: Daemon = {
     store: createStateStore(state),
     request: vi.fn(reply) as never,
@@ -44,13 +49,13 @@ export function mountPendingQuestionDialog(state: Partial<State>, reply: () => P
     act(() => root.unmount());
     container.remove();
   });
-  act(() =>
-    root.render(
-      <DaemonProvider value={daemon}>
-        <PendingQuestionDialog />
-      </DaemonProvider>,
-    ),
+  const tree = (
+    <DaemonProvider value={daemon}>
+      {under}
+      <PendingQuestionDialog />
+    </DaemonProvider>
   );
+  act(() => root.render(strict ? <StrictMode>{tree}</StrictMode> : tree));
   return {
     store: daemon.store,
     sent: () => vi.mocked(daemon.request).mock.calls.map(([body]) => body),

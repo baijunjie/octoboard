@@ -212,8 +212,15 @@ function DialogFrame({
   /** Names what a dialog reused across subjects currently asks about; when it changes and focus
    * was lost with the old content, it is put back on the dialog. */
   resetKey?: string;
-  /** The caller puts focus in the dialog itself, so the frame never puts focus found on `<body>` back on the dialog,
-   * at mount or when `resetKey` changes: a caller that passes this passes no `resetKey`. */
+  /** The caller puts focus on the dialog itself, in the render after the one that mounted it, once react-aria has
+   * turned the modal's focus containment on (from a layout effect at mount, which forces a render), so the frame never
+   * puts focus found on `<body>` back on the dialog, at mount or when `resetKey` changes: a caller that passes this
+   * with a `resetKey` puts focus back itself for each new subject. Until then the frame holds focus on an empty
+   * element inside the dialog from its mount: react-aria takes focus off a dialog that finds focus outside it when the
+   * mount's passive effects run, half a second later, and puts it back only once no transition is running on the page,
+   * so one that never reports its end (in a collapsed disclosure, whose content the browser skips) would leave focus
+   * on the page body. That focus also makes the move a dialog underneath queues against the focus escaping its
+   * containment start from the element, which focus has left by the time the move comes. */
   focusesItselfOnOpen?: boolean;
 } & (
   | {
@@ -253,6 +260,10 @@ function DialogFrame({
   const cancelRef = useRef<HTMLButtonElement>(null);
   useFocusLeavingWhenDisabled(submitRef, submitDisabled === true, cancelRef);
   useRefocusIfLost(() => (focusesItselfOnOpen ? null : dialogAround(markerRef)), [resetKey]);
+  const landingRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    landingRef.current?.focus({ preventScroll: true });
+  }, []);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
   useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable ? onClose : () => {});
@@ -291,6 +302,9 @@ function DialogFrame({
       >
         <FadedScroller region={region} className={size === "viewer" ? "flex min-h-0 flex-1 flex-col" : "flex min-h-0 flex-1 flex-col gap-4 p-1"}>
           {children}
+          {/* Out of the flow, so the body's gap leaves it out, and hidden from assistive technology, so the virtual
+              cursor does not stop on it: it holds focus only within the task that mounts the dialog. */}
+          {focusesItselfOnOpen && <span ref={landingRef} tabIndex={-1} aria-hidden="true" className="absolute" />}
         </FadedScroller>
       </Frame.Body>
       {footer !== null && (
