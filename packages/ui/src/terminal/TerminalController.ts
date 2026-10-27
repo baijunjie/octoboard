@@ -3,6 +3,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { type IBuffer, type IBufferRange, Terminal } from "@xterm/xterm";
 
+import type { TermControl, TermEvent } from "../protocol";
 import { interactionIsTouch } from "../touchInput";
 import { isSecondaryPress } from "../useWindowShortcut";
 import { TerminalLinkColors } from "./linkColors";
@@ -64,16 +65,24 @@ function keepModifiersFromArmingKeyDownSeen(term: Terminal): (event: KeyboardEve
  * since they are not typing. The public API does not expose the mark, so this reaches
  * `coreService.onUserInput` through the private `_core`; recheck it on every `@xterm/xterm`
  * upgrade. Without it nothing is ever marked, so only the user's input typed while saved output is
- * still being parsed is lost.
+ * still being parsed is lost, and xterm's answers go as input rather than as reply frames (see
+ * `sendReply`). Returns whether the mark is watched.
  */
-function watchUserInput(term: Terminal, onUserInput: () => void): void {
+function watchUserInput(term: Terminal, onUserInput: () => void): boolean {
   const core = (
     term as unknown as {
       _core?: { coreService?: { onUserInput?: (listener: () => void) => unknown } };
     }
   )._core;
-  core?.coreService?.onUserInput?.(onUserInput);
+  if (!core?.coreService?.onUserInput) return false;
+  core.coreService.onUserInput(onUserInput);
+  return true;
 }
+
+/** A focus report (`CSI I`, `CSI O`): xterm does not mark it as the user's, but it is this view
+ * gaining or losing focus, not an answer to a query. */
+// eslint-disable-next-line no-control-regex -- Focus reports begin with the escape control character.
+const FOCUS_REPORT = /^\x1b\[[IO]$/;
 
 /** Whether `data` is a mouse report that reaches `onData`: SGR and SGR-pixels (`CSI < b;x;y M|m`),
  * with the button code `b` captured. xterm's default encoding always goes through `onBinary`, and
@@ -251,8 +260,19 @@ export class TerminalController {
    * whether that data came from the user (a key, a paste, an input method) rather than being
    * xterm's own answer to a query. */
   private userInput = false;
+  /** `userInput` is watched, so data it leaves unmarked can be told to be an answer to a query. */
+  private readonly marksUserInput: boolean;
   private disposed = false;
   private pendingInput: Uint8Array[] = [];
+  /** This connection's replay mark, until the replay it describes has arrived. */
+  private replayMark?: TermEvent;
+  /** The point in the output the last frame of this connection ended at, counted as the daemon
+   * counts it; unknown before the replay mark. */
+  private outputEnd?: number;
+  /** The output written to xterm and not yet parsed, oldest first, with the connection it came on
+   * and the point in the output it ends at: xterm parses in order, so the first is what an answer
+   * xterm gives now answers. No point marks output whose queries were answered already. */
+  private parsing: { generation: number; offset?: number }[] = [];
   /** The pending trailing send of `syncSize`, and the size the daemon was last told. */
   private resizeTimer?: ReturnType<typeof setTimeout>;
   private sentSize?: { cols: number; rows: number };
@@ -351,10 +371,18 @@ export class TerminalController {
       return true;
     });
 
-    watchUserInput(this.term, () => (this.userInput = true));
+    this.marksUserInput = watchUserInput(this.term, () => (this.userInput = true));
     this.term.onData((data) => {
       let fromUser = this.userInput;
       this.userInput = false;
+      // Every view attached to the terminal answers the same queries, and a program that got each
+      // answer twice would read the second as input, so answers go as reply frames, of which the
+      // daemon writes one view's (see `apps/daemon/PROTOCOL.md`, "`GET /ws/term/:session` —
+      // terminal stream").
+      if (!fromUser && this.marksUserInput && !FOCUS_REPORT.test(data)) {
+        this.sendReply(data);
+        return;
+      }
       if (fromUser && !isButtonlessMotion(data)) this.userActs++;
       // Saved output may have turned mouse tracking on, with the reset (`RESET_REPORTING_MODES`)
       // still to be parsed: a click then would be reported, and a report is not the user typing.
@@ -603,6 +631,8 @@ export class TerminalController {
     this.sessionId = sessionId;
     // Anything held belonged to the connection before.
     this.pendingInput = [];
+    this.replayMark = undefined;
+    this.outputEnd = undefined;
     // Reset unconditionally rather than appending the replay to what is already on screen: the
     // ring buffer always replays its full retained window from the start, not just what changed
     // since the drop, so appending would duplicate whatever overlaps. Losing scrollback older than
@@ -629,6 +659,10 @@ export class TerminalController {
     });
     socket.addEventListener("message", (ev) => {
       if (generation !== this.generation) return;
+      if (typeof ev.data === "string") {
+        this.readTermEvent(ev.data);
+        return;
+      }
       if (!(ev.data instanceof ArrayBuffer)) return;
       // The daemon replays the ring buffer as one frame, ahead of any live output, and sends none when
       // the ring is empty, so a first frame of live output is held to the same rule.
@@ -636,13 +670,13 @@ export class TerminalController {
       firstFrame = false;
       if (replay) this.replayWritesInFlight++;
       if (this.painted && !replay) {
-        this.write(new Uint8Array(ev.data));
+        this.writeOutput(new Uint8Array(ev.data));
         return;
       }
       const paint = !this.painted;
       // The write callback fires once xterm has parsed the data; the frame after it is when the
       // renderer has drawn it.
-      this.write(new Uint8Array(ev.data), () => {
+      this.writeOutput(new Uint8Array(ev.data), () => {
         if (replay) this.replayWritesInFlight--;
         if (!paint) return;
         requestAnimationFrame(() => {
@@ -726,6 +760,42 @@ export class TerminalController {
       // The process that left these modes on is gone, so nothing is listening for what xterm
       // would report under them.
       this.term.write(RESET_REPORTING_MODES, () => this.savedWritesInFlight--);
+    });
+  }
+
+  private readTermEvent(text: string): void {
+    let event: TermEvent;
+    try {
+      event = JSON.parse(text) as TermEvent;
+    } catch {
+      return;
+    }
+    if (event.type !== "replay") return;
+    if (event.length > 0) this.replayMark = event;
+    else this.outputEnd = event.offset;
+  }
+
+  /** Writes a frame of this connection's output, noting the point in the output it ends at for the
+   * answers xterm gives while parsing it (see `parsing`). The replay is written in two: the output
+   * whose queries were answered already, and the rest. */
+  private writeOutput(data: Uint8Array, onParsed?: () => void): void {
+    const mark = this.replayMark;
+    this.replayMark = undefined;
+    if (mark && mark.length === data.length) {
+      this.outputEnd = mark.offset;
+      this.writeParsed(data.subarray(0, mark.answered), undefined);
+      this.writeParsed(data.subarray(mark.answered), mark.offset, onParsed);
+      return;
+    }
+    if (this.outputEnd !== undefined) this.outputEnd += data.length;
+    this.writeParsed(data, this.outputEnd, onParsed);
+  }
+
+  private writeParsed(data: Uint8Array, offset: number | undefined, onParsed?: () => void): void {
+    this.parsing.push({ generation: this.generation, offset });
+    this.write(data, () => {
+      this.parsing.shift();
+      onParsed?.();
     });
   }
 
@@ -877,6 +947,16 @@ export class TerminalController {
       // idle would all replay into whatever session connects next.
       this.pendingInput.push(data);
     }
+  }
+
+  /** Sends xterm's answer to a query in the output, naming the point in the output it answers.
+   * Dropped for saved output, for output of an earlier connection and for output whose queries were
+   * answered already: their programs are not waiting for it any more and would read it as input. */
+  private sendReply(data: string): void {
+    const parsed = this.parsing[0];
+    if (this.savedWritesInFlight > 0 || parsed?.offset === undefined || parsed.generation !== this.generation) return;
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: "reply", data, offset: parsed.offset } satisfies TermControl));
   }
 
   private sendResize(cols: number, rows: number): void {

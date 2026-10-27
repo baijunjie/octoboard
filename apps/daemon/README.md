@@ -121,6 +121,7 @@ screens, terminal titles and session records the tests replay.
 | `src/session.rs`, `src/term.rs`, `src/term/` | One running agent process (`LiveSession`) and what is the agent's own on top of the PTY: launching an agent and writing messages into a running session |
 | `src/shell_terminal.rs`, `src/shell_terminal/` | Shell terminals: a project's plain login shell on a PTY (`ShellTerminals` on `AppState`) with create, rename, close and a watcher for exit and busyness; the wire contract is "Shell terminals" in [`PROTOCOL.md`](PROTOCOL.md) |
 | `src/terminal_snapshot.rs`, `src/terminal_title.rs`, `src/saved_output.rs` | Parsed terminal snapshots and dormant previews, OSC title parsing, and previews persisted per ended session |
+| `src/reply_route.rs` | Which answers to a terminal program's queries reach it: with several clients attached to one terminal, each runs an emulator that answers, so the daemon lets one client's answer for a point in the output through and drops the rest and the stale; also tells a client attaching how much of its replay is settled |
 | `src/crash_cleanup.rs` | Ending every process on a PTY when the daemon goes down on an internal failure |
 | `src/trust/` | Each agent's folder-trust confirmation: recognising the screen, pressing it, and holding a session's writes meanwhile |
 | `src/agent_dialogs.rs` | Recognising dialogs an agent raises that only a person can answer, and the per-session watch that holds writes while one is up |

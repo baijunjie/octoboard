@@ -131,6 +131,28 @@ program's next copy replaces it.
   against its cell's background whatever colours the agent prints — see "What follows the choice" in
   `docs/product/appearance.md`.
 
+## Answers to a program's queries
+
+A program can ask its terminal about itself through its output — the cursor's position, the background colour, the
+features the terminal supports — and reads the answer back as input. Prompt libraries ask this way before drawing a
+prompt (`gh`'s does, for one), and a program handed an answer it is no longer waiting for reads it as typed text. Every
+client showing the terminal at the same moment (another window, a browser, a phone) runs a terminal of its own that
+answers, yet **the program gets one answer per query**:
+
+- **The first client to answer a query is the one whose answer the program gets**; the copies the other clients send
+  are dropped. So is an answer to output older than output whose query has already been answered.
+- **A query is answered within 5 seconds of its output or not at all.** A later answer is dropped, since a program
+  waits no longer than that and would take a late answer as typed input. A client that falls that far behind, such as
+  a browser tab the browser throttles in the background, has its answers dropped even when it is the only one attached.
+- **Attaching does not answer old queries**: in the output replayed on attaching (selecting a session, reconnecting,
+  reopening the Terminal panel), queries already answered, or more than 5 seconds old, are not answered. A query
+  no client answered, from a program that gave up waiting in under 5 seconds, can still be answered by a client
+  attaching within those 5 seconds.
+- **Read-only screens answer nothing**: an interrupted session's saved preview, a session frozen for archiving, and a
+  shell terminal whose shell has exited.
+- **A report that the terminal gained or lost keyboard focus is not an answer**: each client's report reaches the
+  program as that client's own input.
+
 ## Reconnecting
 
 - A client that stops draining output for more than a few seconds is dropped by the daemon rather than letting output

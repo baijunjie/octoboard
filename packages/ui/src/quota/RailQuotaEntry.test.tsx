@@ -35,6 +35,23 @@ vi.mock("../components/scrollFade", async (importOriginal) => {
   };
 });
 
+// Counts each mount of an account list's motion: the lists ask for it with no options, the tab strip
+// with `contentWidth`.
+const accountLists = vi.hoisted(() => ({ mounted: 0 }));
+vi.mock("../components/useListMotion", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../components/useListMotion")>();
+  const { useEffect } = await import("react");
+  return {
+    ...original,
+    useListMotion: (options?: Parameters<typeof original.useListMotion>[0]) => {
+      useEffect(() => {
+        if (!options?.contentWidth) accountLists.mounted += 1;
+      }, []);
+      return original.useListMotion(options);
+    },
+  };
+});
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MINUTE = 60_000;
@@ -329,6 +346,15 @@ it("has one tab per added agent and lists each agent's accounts with plan and qu
   expect(text()).toContain("Plus");
   expect(text()).toContain("Codex Work");
   expect(text()).not.toContain("Pro");
+});
+
+it("mounts each agent's account list once, not again in the hidden copy the tabs build their collection from", () => {
+  withFakeTimers();
+  const { button } = mount();
+  accountLists.mounted = 0;
+  openPanel(button);
+  expect(tabs()).toHaveLength(2);
+  expect(accountLists.mounted).toBe(2);
 });
 
 it("marks a failed reading on its account's name line, and the mark's popover opens on a tap without closing the panel", async () => {

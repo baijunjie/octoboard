@@ -2138,9 +2138,29 @@ session, and its screen is never frozen; what is said below of a dormant session
   then live output follows. Once the ring has dropped its oldest output, the replay opens with escape sequences that
   restore the terminal's current modes (alternate screen, mouse reporting, focus reporting, bracketed paste,
   application cursor and keypad, a hidden cursor, disabled line wrap), since programs announce those only once.
+- Attaching to a live process, the daemon first sends one **text** frame, before the replay:
+  `{"type":"replay","length":N,"offset":E,"answered":K}`. `length` is the replay's size in bytes; when it is 0 no
+  replay frame follows. `offset` is the count of bytes of output the process had written when the replay was taken,
+  so the end of every later output frame is `offset` plus the bytes received since. `answered` is how many of the
+  replay's leading bytes hold only settled output (see "Answers to the program's queries" below), whose queries the
+  client does not answer. A saved, frozen or dormant preview and an exited shell's replay get no mark.
 - Client to daemon: **binary** frames are raw PTY input, written through verbatim. **Text** frames are JSON control:
-  `{"type":"resize","cols":N,"rows":N}`. Supported dimensions are 2–1,000 columns and 1–500 rows; other sizes are
-  ignored and logged. Input and resizing are refused once the session's preview has been frozen.
+  `{"type":"resize","cols":N,"rows":N}`, and `{"type":"reply","data":"…","offset":O}` (below). Supported dimensions
+  are 2–1,000 columns and 1–500 rows; other sizes are ignored and logged. Input, replies and resizing are refused once
+  the session's preview has been frozen.
+- **Answers to the program's queries.** A program asks its terminal things through its output — the cursor position
+  (`CSI 6n`), a colour (`OSC 11 ?`), the device attributes — and reads the answer as input. Every attached client's
+  terminal answers them, so the client sends its terminal's answers, as opposed to the user's input, as `reply`
+  frames: `data` is the answer, `offset` the end of the output frame whose parsing produced it. Of the answers to a
+  point in the output, the first client's are written (that client may send several for the same point); another
+  client's copies are dropped, and so is an answer to a point before the last one answered, however late it comes,
+  one to output older than 5 seconds (a program waits that long for an answer at most, and one that has given up would
+  read it as input), and one to a point past the output. Output older than 5 seconds or up to the last point answered
+  is settled. A client sends no answers without the mark, for the settled part of its replay, or for output of an
+  earlier connection. Limits: a query nobody answered and whose program gave up in under 5 seconds is still answered
+  by a client attaching within those 5 seconds; the unsettled rest of a replay is answered as of the replay's end, so
+  an answer another client gives to output inside it in the instant after the mark was taken is written too. Focus
+  reports (`CSI I`, `CSI O`) are each client's own and go as input.
 - Attaching to a `starting` session, which has no process yet, is answered as a dormant session with nothing kept:
   the socket closes straight away. A client waits for the session to leave `starting` (its `session_upserted`)
   before attaching.

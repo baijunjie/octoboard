@@ -2025,4 +2025,15 @@ export const SOURCE_CHANGED = "source_changed";
 export const WORKTREE_UNAVAILABLE = "worktree_unavailable";
 
 /** Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input. */
-export type TermControl = { type: "resize"; cols: number; rows: number };
+export type TermControl =
+  | { type: "resize"; cols: number; rows: number }
+  // The terminal answering a query in the output (cursor position, a colour, device attributes),
+  // not the user's input, with the end of the output frame whose parsing produced it (see
+  // `TermEvent`): the daemon writes only the first client's answers to a point.
+  | { type: "reply"; data: string; offset: number };
+
+/** Daemon-sent text frame on `/ws/term/:session`: on attaching to a live process, before the replay,
+ * its length (no replay frame follows when 0), the count of bytes of output written when it was
+ * taken, which live output counts on from, and how many of its leading bytes hold only output whose
+ * queries have been answered already. */
+export type TermEvent = { type: "replay"; length: number; offset: number; answered: number };

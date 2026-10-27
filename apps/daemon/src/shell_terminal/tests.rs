@@ -150,7 +150,7 @@ async fn a_terminal_runs_a_shell_in_its_project_that_takes_input_and_ends_when_c
     output_containing(&shell, "40 100").await;
 
     // A client attaching again is given what scrolled past before it came.
-    let (replay, _live) = shell.attach();
+    let replay = shell.attach().replay;
     let replay = String::from_utf8_lossy(&replay);
     assert!(
         replay.contains("42") && replay.contains("40 100"),
@@ -264,7 +264,7 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
         .await
         .unwrap();
     let shell = process(&state, &created);
-    let (_, mut attached) = shell.attach();
+    let mut attached = shell.attach().live;
 
     shell.write(b"echo last-words; sleep 30 &\r").unwrap();
     record_where(&state, &created.id, |record| record.busy).await;
@@ -280,7 +280,7 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
         tokio::time::timeout(PATIENCE, async { while attached.recv().await.is_some() {} }).await;
     assert!(ended.is_ok(), "the attached client was never let go");
 
-    let (replay, live) = shell.attach();
+    let crate::pty::Attached { replay, live, .. } = shell.attach();
     assert!(String::from_utf8_lossy(&replay).contains("last-words"));
     assert!(live.is_closed(), "an exited shell's replay is all there is");
 

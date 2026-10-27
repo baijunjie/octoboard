@@ -196,6 +196,11 @@ class FakeSocket extends EventTarget {
     const data = Uint8Array.from(text, (char) => char.charCodeAt(0)).buffer;
     this.dispatchEvent(new MessageEvent("message", { data }));
   }
+
+  /** The daemon's mark of the replay that follows, sent first on attaching to a live process. */
+  mark(replay: { length: number; offset: number; answered: number }): void {
+    this.dispatchEvent(new MessageEvent("message", { data: JSON.stringify({ type: "replay", ...replay }) }));
+  }
 }
 
 vi.mock("@xterm/xterm", () => ({ Terminal: FakeTerminal }));
@@ -431,6 +436,62 @@ describe("a dormant session's saved output", () => {
     expect(term.screen).toContain("replay");
     expect(term.screen).not.toContain("old output");
     expect(term.screen).not.toContain("late");
+  });
+});
+
+describe("xterm's answers to queries in the output", () => {
+  const replies = (socket: FakeSocket) => socket.sent.filter((frame) => typeof frame === "string" && frame.includes('"reply"'));
+  const reply = (data: string, offset: number) => JSON.stringify({ type: "reply", data, offset });
+
+  it("go as reply frames naming the point in the output they answer, apart from the user's input", async () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    live.mark({ length: 0, offset: 100, answered: 0 });
+    live.receive("\x1b[c");
+    await settle();
+    term.userTypes("x");
+    live.receive("more\x1b[c");
+    await settle();
+    expect(live.sent.slice(1)).toEqual([reply("\x1b[?1;2c", 103), new TextEncoder().encode("x"), reply("\x1b[?1;2c", 110)]);
+  });
+
+  it("are given for the replay only past what was answered already", async () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    const replay = "old\x1b[c|new\x1b[c";
+    live.mark({ length: replay.length, offset: 50, answered: replay.indexOf("|") });
+    live.receive(replay);
+    await settle();
+    live.receive("\x1b[c");
+    await settle();
+    expect(replies(live)).toEqual([reply("\x1b[?1;2c", 50), reply("\x1b[?1;2c", 53)]);
+  });
+
+  it("are not given without the daemon's mark", async () => {
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    live.receive("\x1b[c");
+    await settle();
+    expect(replies(live)).toEqual([]);
+  });
+
+  it("are not given for output of the connection before, while no reset holds them back", async () => {
+    // Before its first frame after mounting, a reset of the screen holds nothing back.
+    const fresh = new TerminalController({ onStatusChange: () => {} }, "dark");
+    fresh.attach("a", url("a"), false);
+    const first = lastSocket();
+    first.open();
+    first.mark({ length: 0, offset: 0, answered: 0 });
+    first.receive("\x1b[c");
+    fresh.attach("a", url("a"), false);
+    const second = lastSocket();
+    second.open();
+    await settle();
+    fresh.dispose();
+    expect([...replies(first), ...replies(second)]).toEqual([]);
   });
 });
 

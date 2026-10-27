@@ -18,10 +18,10 @@ use crate::coordinator::Followup;
 use crate::hook_queue::Push;
 use crate::hooks::{self, BackgroundTasksChange};
 use crate::protocol::{
-    Agent, BrowseBody, BrowseRequest, Event, Request, SessionStatus, TermControl,
+    Agent, BrowseBody, BrowseRequest, Event, Request, SessionStatus, TermControl, TermEvent,
     BROWSE_REQUEST_TYPES,
 };
-use crate::pty::PtyCore;
+use crate::pty::{Answering, Attached, PtyCore};
 use crate::reporting;
 use crate::rollout;
 use crate::session::LiveSession;
@@ -426,16 +426,31 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
 
     // Snapshot and subscription happen under one lock inside `attach`, so the replay cannot miss a
     // byte or repeat one even while the process is producing output right now. A shell that has
-    // exited answers with its replay alone, read-only, as a dormant session does.
-    let (replay, mut live) = pty.attach();
+    // exited answers with its replay alone, read-only, as a dormant session does. A live one is
+    // first told where its replay stands, for answering the program's queries in it.
+    let Attached {
+        replay,
+        mut live,
+        answering,
+    } = pty.attach();
+    if let Some(answering) = &answering {
+        let mark = TermEvent::Replay {
+            length: replay.len(),
+            offset: answering.mark.offset,
+            answered: answering.mark.answered,
+        };
+        let text = serde_json::to_string(&mark).expect("a replay mark serializes");
+        if socket.send(Message::Text(text)).await.is_err() {
+            return;
+        }
+    }
     if !replay.is_empty() && socket.send(Message::Binary(replay)).await.is_err() {
         return;
     }
-    if live.is_closed() {
+    let Some(Answering { client, .. }) = answering else {
         let _ = socket.send(Message::Close(None)).await;
         return;
-    }
-
+    };
     loop {
         tokio::select! {
             incoming = socket.recv() => {
@@ -450,6 +465,14 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
                             Ok(TermControl::Resize { cols, rows }) => {
                                 if let Err(err) = pty.resize(cols, rows) {
                                     tracing::debug!(terminal = %id, %err, "resize failed");
+                                }
+                            }
+                            Ok(TermControl::Reply { data, offset }) => {
+                                if !pty.admit_reply(client, offset) {
+                                    continue;
+                                }
+                                if let Err(err) = terminal.write_input(data.as_bytes()) {
+                                    tracing::debug!(terminal = %id, %err, "writing a query reply failed");
                                 }
                             }
                             Err(err) => tracing::debug!(terminal = %id, %err, "unreadable terminal control frame"),
@@ -1975,7 +1998,8 @@ mod tests {
 
     /// A client drives a shell terminal end to end over the real sockets: it creates one over the
     /// control socket, types into it and resizes it over the terminal socket, finds its scrollback
-    /// on attaching again, and closes it, which lets the terminal socket go.
+    /// on attaching again, has one copy of the answers two attached clients give written, and
+    /// closes it, which lets the terminal socket go.
     #[tokio::test(flavor = "multi_thread")]
     async fn a_shell_terminal_is_driven_over_the_control_and_terminal_sockets() {
         use futures_util::{SinkExt, StreamExt};
@@ -2039,12 +2063,27 @@ mod tests {
                     Some(Ok(Frame::Binary(bytes))) => {
                         seen.push_str(&String::from_utf8_lossy(&bytes))
                     }
+                    // The replay's mark, which `replay_mark` reads.
+                    Some(Ok(Frame::Text(_))) => {}
                     other => panic!(
                         "the terminal socket ended before {needle:?}: {other:?} after {seen:?}"
                     ),
                 }
             }
             seen
+        }
+        async fn replay_mark(term: &mut Socket) -> serde_json::Value {
+            let frame = tokio::time::timeout(PATIENCE, term.next())
+                .await
+                .expect("the replay's mark in time")
+                .unwrap()
+                .unwrap();
+            let Frame::Text(text) = frame else {
+                panic!("an attach that does not open with the replay's mark: {frame:?}");
+            };
+            let mark: serde_json::Value = serde_json::from_str(&text).unwrap();
+            assert_eq!(mark["type"], "replay", "{mark}");
+            mark
         }
         term.send(Frame::Binary(b"echo $((6*7))\r".to_vec()))
             .await
@@ -2064,6 +2103,43 @@ mod tests {
         let (mut again, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
         let replay = read_until(&mut again, "40 100").await;
         assert!(replay.contains("42"), "{replay}");
+
+        // Two clients answering the same output send the same answers: the first one's are
+        // written, the other's copy is dropped, and so is a late answer to earlier output.
+        let (mut other, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
+        let answered_at = replay_mark(&mut other).await["offset"].as_u64().unwrap();
+        read_until(&mut other, "40 100").await;
+        let reply = |data: &str, offset: u64| {
+            Frame::Text(
+                serde_json::json!({ "type": "reply", "data": data, "offset": offset }).to_string(),
+            )
+        };
+        again
+            .send(Frame::Binary(
+                b"read -r answer; echo \"got[$answer]\"\r".to_vec(),
+            ))
+            .await
+            .unwrap();
+        read_until(&mut again, "got[$answer]").await;
+        other.send(reply("first", answered_at)).await.unwrap();
+        read_until(&mut again, "first").await;
+        again.send(reply("copy", answered_at)).await.unwrap();
+        again.send(reply("late", answered_at - 1)).await.unwrap();
+        other.send(reply("\r", answered_at)).await.unwrap();
+        let answered = read_until(&mut again, "]\r\n").await;
+        assert!(answered.contains("got[first]"), "{answered}");
+        drop(other);
+
+        // A client attaching later is told its replay has been answered up to that point.
+        let (mut third, _) = tokio_tungstenite::connect_async(&term_url).await.unwrap();
+        let mark = replay_mark(&mut third).await;
+        let behind = mark["offset"].as_u64().unwrap() - answered_at;
+        assert_eq!(
+            mark["answered"].as_u64().unwrap(),
+            mark["length"].as_u64().unwrap() - behind,
+            "{mark}"
+        );
+        drop(third);
 
         let close = format!(
             r#"{{"type":"close_shell_terminal","id":"close","shell_terminal":"{terminal}"}}"#

@@ -140,8 +140,8 @@ container.
 ## A react-aria collection renders its parts from a copy it built, not from your component's render
 
 A react-aria-components collection (`Tabs` among them) first renders the content you give it in a hidden copy, to
-build the collection, and then renders the visible parts from what that copy recorded. Two things
-follow in `packages/ui`, and neither shows in a jsdom test that only asserts the DOM.
+build the collection, and then renders the visible parts from what that copy recorded. Three things
+follow in `packages/ui`, and none shows in a jsdom test that only asserts the DOM.
 
 - A tab panel mounts, unmounts and is replaced in a commit that does not render the component holding it:
   react-aria renders the panel from the collection when the selection changes. So a hook whose owner renders
@@ -149,10 +149,16 @@ follow in `packages/ui`, and neither shows in a jsdom test that only asserts the
   they run only on the owner's next render, which already carries that render's change. A hook that watches such an
   element attaches and detaches in a ref callback, as `useListMotion` (`packages/ui/src/components/useListMotion.ts`)
   does.
-- Everything inside `<Tabs>` is rendered twice — a component of yours placed there, such as `AgentTabList`
-  (`packages/ui/src/components/AgentTabList.tsx`), runs its hooks once in the hidden copy and once in the visible one
-  — and each tab's props, its handlers and ref callback among them, come from the hidden copy. A tab's handler that
-  reads a ref or state of that component which only the visible copy fills (a ref on the `Tabs.List`, say) finds it
+- What sits inside `<Tabs>` is rendered twice, except a `Tabs.Panel`'s content and a `Tabs.Tab`'s children, which
+  react-aria's `TabPanel` and `Tab` do not render in the copy. A component of yours anywhere else inside — directly,
+  inside a plain wrapper, or wrapping a `Tabs.Panel` (its own hooks, not the panel's content) — mounts in the copy
+  too and runs its hooks and effects there, as `AgentTabList` (`packages/ui/src/components/AgentTabList.tsx`) does.
+  So anything whose effect must happen once — a connection or socket, a subscription, timers, document listeners —
+  goes outside `<Tabs>`'s children or inside a `Tabs.Panel`'s content, never elsewhere within `<Tabs>`: each shell
+  terminal view placed there opened a second emulator and connection to the same terminal. A jsdom test that counts
+  a mocked child's effect runs catches it.
+- Each tab's props, its handlers and ref callback among them, come from the hidden copy. A tab's handler that
+  reads a ref or state of such a component inside `<Tabs>` which only the visible copy fills (a ref on the `Tabs.List`, say) finds it
   empty and silently does nothing. From an item's handler, reach what you need through the DOM — the item element the
   handler has, walking up from it — rather than through such a ref, as `releaseListMotion(row)` in `useListMotion.ts`
   finds a list's motion from one of its tabs. What an item's own ref callback records and its own handlers read comes

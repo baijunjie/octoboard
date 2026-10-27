@@ -19,6 +19,7 @@ use tokio::sync::mpsc;
 use crate::crash_cleanup;
 use crate::process_session;
 use crate::ptyio;
+use crate::reply_route::{ReplayMark, ReplyRoute};
 use crate::ringbuf::RingBuffer;
 use crate::terminal_snapshot::{TerminalSnapshot, MAX_COLS, MAX_ROWS};
 
@@ -76,6 +77,25 @@ struct Fan {
     next_id: u64,
     /// No client follows the output any more; see [`PtyCore::close_output`].
     closed: bool,
+    /// Which answers to the program's queries are written. Beside the output, since a replay's
+    /// [`ReplayMark`] is taken with it.
+    replies: ReplyRoute,
+}
+
+/// A terminal client registered by [`PtyCore::attach`].
+pub struct Attached {
+    pub replay: Vec<u8>,
+    pub live: mpsc::Receiver<Bytes>,
+    /// For a client following live output: its id among the clients answering the program's
+    /// queries, and where its replay stands for answering them. `None` for a replay alone.
+    pub answering: Option<Answering>,
+}
+
+/// A live client's part in answering the program's queries.
+pub struct Answering {
+    pub client: u64,
+    /// Taken under the same lock as the replay, so no answer lands between the two.
+    pub mark: ReplayMark,
 }
 
 /// A process just started on a PTY, by [`spawn`].
@@ -262,6 +282,7 @@ impl PtyCore {
                 subscribers: Vec::new(),
                 next_id: 0,
                 closed: false,
+                replies: ReplyRoute::default(),
             }),
             reader_running: AtomicBool::new(false),
             final_output_kept: Mutex::new(false),
@@ -272,34 +293,62 @@ impl PtyCore {
         }
     }
 
-    /// Registers a terminal client. The returned snapshot is everything buffered up to this
+    /// Registers a terminal client. The returned replay is everything buffered up to this
     /// instant, preceded by the terminal's current modes once the buffer no longer holds the
     /// start, and the receiver picks up with the very next byte after it. Once frozen, returns the
     /// archived screen with a closed receiver, so exit cleanup cannot replace it; once the output
     /// is closed, the replay with a closed receiver.
-    pub fn attach(&self) -> (Vec<u8>, mpsc::Receiver<Bytes>) {
-        let (tx, rx) = mpsc::channel(SUBSCRIBER_QUEUE);
+    pub fn attach(&self) -> Attached {
+        let (tx, live) = mpsc::channel(SUBSCRIBER_QUEUE);
         let mut fan = self.fan.lock().expect("fan mutex poisoned");
         if let Some(output) = fan.terminal.frozen() {
-            return (output.to_vec(), rx);
+            let replay = output.to_vec();
+            return Attached {
+                replay,
+                live,
+                answering: None,
+            };
         }
-        let mut snapshot = fan.ring.snapshot();
-        if fan.total > snapshot.len() as u64 {
+        let mut replay = fan.ring.snapshot();
+        let replayed = replay.len();
+        let mut preamble = 0;
+        if fan.total > replay.len() as u64 {
             // The ring has lost its head, and with it the mode sequences a program sends once at
             // startup. The parsed terminal still knows them, and they describe the end of the
             // window, which is where the replay leaves the client, so any toggles inside the
             // window land on the same state.
-            let mut replay = fan.terminal.mode_preamble();
-            replay.append(&mut snapshot);
-            snapshot = replay;
+            let mut modes = fan.terminal.mode_preamble();
+            preamble = modes.len();
+            modes.append(&mut replay);
+            replay = modes;
         }
         if fan.closed {
-            return (snapshot, rx);
+            return Attached {
+                replay,
+                live,
+                answering: None,
+            };
         }
-        let id = fan.next_id;
+        let client = fan.next_id;
         fan.next_id += 1;
-        fan.subscribers.push(Subscriber { id, tx });
-        (snapshot, rx)
+        fan.subscribers.push(Subscriber { id: client, tx });
+        let total = fan.total;
+        let mark = fan
+            .replies
+            .replay_mark(total, replayed, preamble, Instant::now());
+        Attached {
+            replay,
+            live,
+            answering: Some(Answering { client, mark }),
+        }
+    }
+
+    /// Whether this client's answer to the output up to `offset` is the one written; see
+    /// [`ReplyRoute::admit`].
+    pub fn admit_reply(&self, client: u64, offset: u64) -> bool {
+        let mut fan = self.fan.lock().expect("fan mutex poisoned");
+        let total = fan.total;
+        fan.replies.admit(client, offset, total, Instant::now())
     }
 
     /// Ends every attached client's stream once the output it follows is over, and makes every
@@ -465,6 +514,8 @@ impl PtyCore {
             fan.ring.push(data);
             fan.terminal.process(data);
             fan.total += data.len() as u64;
+            let total = fan.total;
+            fan.replies.note_output(total, Instant::now());
             let targets = fan
                 .subscribers
                 .iter()
@@ -883,7 +934,7 @@ mod tests {
     fn a_wrapped_ring_replays_behind_the_modes_it_lost() {
         let live = crate::test_support::idle_stand_in("replay-modes");
         live.on_output(b"\x1b[?1049h\x1b[?1000h\x1b[?1006h");
-        let (replay, _rx) = live.attach();
+        let replay = live.attach().replay;
         assert!(replay.starts_with(b"\x1b[?1049h\x1b[?1000h\x1b[?1006h"));
         assert_eq!(
             replay.len(),
@@ -895,7 +946,7 @@ mod tests {
         for _ in 0..super::RING_CAPACITY / redraw.len() + 1 {
             live.on_output(redraw);
         }
-        let (replay, _rx) = live.attach();
+        let replay = live.attach().replay;
         let head = String::from_utf8_lossy(&replay[..80]);
         for expected in ["?1049h", "?1000h", "?1006h"] {
             assert!(head.contains(expected), "{expected} missing from {head:?}");
