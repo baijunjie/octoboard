@@ -80,19 +80,29 @@ it:
 The state-driven second layout effect runs after the containment render, in the same task, before any frame. Do not
 answer either failure with a timer that takes focus back after a delay: it pulls back a user who has already tabbed on.
 
-The modal's own frame must not focus it at mount either: `DialogFrame` in `packages/ui/src/dialogs/Dialog.tsx` runs
-`useRefocusIfLost` from a passive mount effect, and when the modal replaces another one (focus on `<body>`) that is the
-first failure above. Pass `focusesItselfOnOpen` to `DialogFrame`, as `ErrorAlertHost` does.
+The second-render focus is still too late for the modal's own react-aria dialog: `useDialog` checks from a passive
+mount effect, which React flushes before that render, whether focus is inside it, and when it is not, it takes focus
+off the dialog half a second later and gives it back only once no transition is running anywhere on the page — never,
+while a transition sits in a collapsed disclosure (`hidden="until-found"`), whose end Chrome does not report. So
+whenever the caller focuses the modal itself, pass `focusesItselfOnOpen` to `Dialog` / `DialogFrame`
+(`packages/ui/src/dialogs/Dialog.tsx`), with or without a `resetKey`, as `ErrorAlertHost` and an `unprompted`
+`ConfirmDialog` do; a caller with a `resetKey` then refocuses itself for each new subject. The flag keeps the frame's
+own `useRefocusIfLost` from focusing the modal at mount (the first failure above, when the modal replaces another and
+focus is on `<body>`), and holds focus on an empty element inside the modal from the mount until the caller's focus
+lands. Do not swap that element for the dialog itself: focused at mount, the dialog underneath's queued move finds
+focus unchanged and still lands on the first control.
 
 A mouse never shows it, and a jsdom test reaches it only with `setInteractionModality("virtual")` (reset when the test
 finishes), `requestAnimationFrame` stubbed as a 0 ms timer (so a frame runs ahead of any timer set after it) with
-`cancelAnimationFrame` stubbed as `clearTimeout`, a `Dialog` mounted first, the modal raised in an `act` of its own,
-and a drain of several awaited `setTimeout(0)` rounds rather than a fixed wait. Cover the replacing cases too — a
-queued modal shown once the first is acknowledged, and one put in front of it. Copy the "over a dialog opened without
-a pointer" cases in `packages/ui/src/dialogs/ErrorAlerts.test.tsx`. A test without the stub passes against the timer
-version. jsdom has no `inert`, so react-aria hides with `aria-hidden` there, which does not stop focus: a test that
-asserts only where focus is passes against two modals mounted in one commit. Also raise the modal in the same `act` as
-opening the dialog underneath, and assert that it is not inside `[aria-hidden="true"], [inert]` as well as holding
+`cancelAnimationFrame` stubbed as `clearTimeout`, focus on an opener outside (a test starting from `<body>` passes
+either way), a `Dialog` mounted first, the modal raised in an `act` of its own, and a drain of several awaited
+`setTimeout(0)` rounds rather than a fixed wait. The half-second take-back needs on top of that a `transitionrun` that
+never ends, dispatched on an element of the dialog underneath, and a real wait past 500 ms. Cover the replacing cases
+too — a queued modal shown once the first is acknowledged, and one put in front of it. Copy the "over a dialog opened
+without a pointer" cases in `packages/ui/src/dialogs/ErrorAlerts.test.tsx`. A test without the stub passes against the
+timer version. jsdom has no `inert`, so react-aria hides with `aria-hidden` there, which does not stop focus: a test
+that asserts only where focus is passes against two modals mounted in one commit. Also raise the modal in the same `act`
+as opening the dialog underneath, and assert that it is not inside `[aria-hidden="true"], [inert]` as well as holding
 focus, as that file's `alertHoldsFocus` does.
 
 ## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`

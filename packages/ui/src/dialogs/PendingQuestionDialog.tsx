@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 
 import { useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -27,7 +27,16 @@ export function PendingQuestionDialog(): React.ReactElement | null {
   const shownRequest = requestFirst ? request.requestId : undefined;
   useEffect(() => setOnScreen(shownRequest), [shownRequest]);
   const props = trust ?? requestDialog;
-  return props ? <ConfirmDialog {...props} unprompted /> : null;
+  // Comes up from the commit after the one that raised the first question. A dialog opened in the same commit (a
+  // question pushed in the task of the press that opens it) hides the rest of the page with react-aria's
+  // `ariaHideOutside` from a passive effect of that commit, and with the question already in the document it would hide
+  // the question too, for good: the question's own hider never shows what another one hid. React runs those passive
+  // effects before it renders again, and the state set from this layout effect makes that render a synchronous one in
+  // the same task.
+  const asked = props !== undefined;
+  const [shown, setShown] = useState(false);
+  useLayoutEffect(() => setShown(asked), [asked]);
+  return props && shown ? <ConfirmDialog {...props} unprompted /> : null;
 }
 
 /** Whether `PendingQuestionDialog` shows anything, for whatever keeps out of a modal's way. */

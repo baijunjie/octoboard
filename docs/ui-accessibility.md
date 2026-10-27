@@ -186,7 +186,9 @@ also rely on Enter to settle a choice one of these controls holds.
 A confirmation dialog opens with focus on its confirm button, so Enter confirms it at once. Two kinds do not, and keep
 focus on the dialog itself, so an Enter pressed before the user has moved focus onto one of its controls does nothing: a
 destructive one, and a question the user did not ask for (a folder trust prompt, a session request), which can come up
-while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on to. A
+while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on to, and
+starts on the dialog, not on its first control (its close button), also when it comes up over a dialog that a press
+without a pointer opened (an assistive technology's press). A
 destructive confirmation (removing, deleting, archiving) is a warning modal: the warning icon in its header, the
 consequences as its body text (the sessions it ends or takes along listed in that body), its destructive confirm button
 the danger primary at the trailing edge; it is never an ordinary modal with a warning Alert inside it. A

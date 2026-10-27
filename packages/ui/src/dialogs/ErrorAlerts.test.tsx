@@ -353,6 +353,20 @@ describe.each([{ strict: false }, { strict: true }])("over a dialog opened witho
     await settleFrames();
     alertHoldsFocus("Still refused");
   });
+
+  // react-aria's dialog takes focus off itself half a second after it opens, when focus was not inside it as it
+  // mounted, and puts it back once no transition is running on the page. A transition that never reports its end (one
+  // in a collapsed disclosure, whose content the browser skips) leaves focus on the page body for good.
+  it("keeps focus on the alert while a transition underneath never ends", async () => {
+    mountOverVirtuallyOpenedDialog(strict);
+    const name = document.querySelector('input[aria-label="Name"]')!;
+    name.dispatchEvent(Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "translate" }));
+    act(() => errorAlerts.report({ message: "Refused", recovery: "accountNotSignedIn" }));
+    await settleFrames();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+    await settleFrames();
+    alertHoldsFocus("Refused");
+  });
 });
 
 it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback", () => {
