@@ -63,10 +63,12 @@ is lost and opens nothing; macOS swallows it while it leaves fullscreen.
 From top to bottom:
 
 1. **The running sessions**, one group per status, each group under a heading that cannot be chosen and that names the
-   status with the number of sessions in it: **Waiting for you (n)**, then **Working (n)**, then **Working in background
-   (n)**, then **Awaiting instructions (n)**. A group with no session is left out. Sessions still starting, interrupted
-   and archived sessions are never listed. A session working in background (see "Working in background" in
-   `docs/product/session-statuses.md`) is listed in its own group, not under **Working** or **Awaiting instructions**.
+   status with the number of sessions in it: **Waiting for you (n)**, then **Awaiting instructions (n)**, then
+   **Working in background (n)**, then **Working (n)** — the sidebar's status order (see "Order of projects and
+   sessions" in `docs/product/order-of-projects-and-sessions.md`), whatever **Order the sidebar by status** says. A
+   group with no session is left out. Sessions still starting, interrupted and archived sessions are never listed. A
+   session working in background (see "Working in background" in `docs/product/session-statuses.md`) is listed in its
+   own group, not under **Working** or **Awaiting instructions**.
    - **Headings.** A heading is system text at the menu font's size, regular weight, in the secondary text
      colour, with its status glyph to the left of the text. Its glyph and text sit where the session lines below place
      their agent marks and titles — the same left edges and the same line height, the glyph centred on the text — as

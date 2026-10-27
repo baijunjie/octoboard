@@ -3,7 +3,7 @@ import { sessionStatusKind, type StatusKind } from "../sessionLabel";
 
 /** How urgently a session asks for attention: a raised hand, a prompt, background work,
  * foreground work, then no process. Archived sessions are listed separately. */
-const STATUS_RANK: Record<StatusKind, number> = {
+export const STATUS_RANK: Record<StatusKind, number> = {
   waiting_user: 0,
   starting: 1,
   idle: 1,

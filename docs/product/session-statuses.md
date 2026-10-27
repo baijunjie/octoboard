@@ -164,8 +164,8 @@ summaries, it counts as working**: a console's badge on the rail and a collapsed
 console switcher" in `docs/product/console-switcher.md` and "Project rows" in `docs/product/sidebar-project-rows.md`),
 and a switch strip chip (see "The switch strip" in `docs/product/focus-mode.md`). Project and session lists ranked by
 status give it a separate place, following "Order of projects and sessions" in
-`docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu lists it in a group of its own, after
-**Working** (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
+`docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu lists it in a group of its own (see
+"The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 Every session record the session tools give carries the list (see "Session records" in
 `docs/product/what-every-session-reads.md`).

@@ -4,13 +4,14 @@ import type { Console, Project, Session } from "../protocol";
 import { remainingPercentAt } from "../quota/quotaFormat";
 import { accountQuotaLabel, sessionQuotaBarOf } from "../quota/sessionQuota";
 import { sessionStatusKind, sessionWithLocation, statusLabel, type StatusKind } from "../sessionLabel";
-import { sessionsInTreeOrder } from "../sidebar/order";
+import { sessionsInTreeOrder, STATUS_RANK } from "../sidebar/order";
 import { agentIconKey, statusIconKey } from "./statusItemIconKeys";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 
-/** The live statuses the menu lists, each under its own heading, most pressing first. A session
- * running in the background gets a heading of its own, as it has a glyph of its own in the sidebar. */
-const SECTION_ORDER: StatusKind[] = ["waiting_user", "working", "background", "idle"];
+/** The live statuses the menu lists, each under its own heading, in the sidebar's status order
+ * (`STATUS_RANK`). A session running in the background gets a heading of its own, as it has a glyph
+ * of its own in the sidebar. */
+const SECTION_ORDER = (["waiting_user", "idle", "background", "working"] satisfies StatusKind[]).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b]);
 
 /** How many sessions a section names before the rest are summed up in one line, which keeps the
  * menu on screen however many sessions run. */
@@ -38,10 +39,9 @@ export interface StatusItemMenuSource {
   currentConsoleId?: string;
 }
 
-/** The live sessions — waiting for the user, working, working in background, awaiting
- * instructions — in the sidebar's order, each status under its own heading, then a quota submenu
- * per available agent. The icon shows its attention dot (`attention`) while any session waits for
- * the user. */
+/** The live sessions in the sidebar's order, each status under its own heading in the sidebar's
+ * status order (`SECTION_ORDER`), then a quota submenu per available agent. The icon shows its
+ * attention dot (`attention`) while any session waits for the user. */
 export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource): StatusItemMenuDraft {
   const { consoles, projects, sessions, consoleMap, projectMap, quota } = source;
   const perStatus = SECTION_ORDER.map((status) => ({ status, listed: sessionsInTreeOrder(consoles, projects, sessions, (s) => sessionStatusKind(s) === status, source.byStatus) }));

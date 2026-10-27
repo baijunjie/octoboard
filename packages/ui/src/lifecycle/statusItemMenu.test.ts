@@ -41,15 +41,6 @@ describe("buildStatusItemMenu", () => {
     ]);
   });
 
-  it("lists waiting, then working, then idle sessions, each under a heading with its count", () => {
-    const { sections } = menuOf([inProject("i", "idle"), inProject("w", "working"), inProject("h", "waiting_user")]);
-    expect(sections.map((s) => [s.heading, s.items.map((item) => item.session)])).toEqual([
-      ["Waiting for you (1)", ["h"]],
-      ["Working (1)", ["w"]],
-      ["Awaiting instructions (1)", ["i"]],
-    ]);
-  });
-
   it("raises the icon's hand only while a live session waits for the user", () => {
     expect(menuOf([inProject("w", "working"), inProject("i", "idle")]).attention).toBe(false);
     expect(menuOf([inProject("a", "archived"), inProject("b", "interrupted")]).attention).toBe(false);
@@ -62,13 +53,14 @@ describe("buildStatusItemMenu", () => {
     expect(menuOf([orphan]).attention).toBe(false);
   });
 
-  it("lists sessions running in the background under a heading of their own, after the working ones", () => {
+  it("lists each status under a heading with its count, in the order the sidebar ranks statuses, background sessions apart", () => {
     const background = sessionOf("b", "c", "p", "b", "idle", { background_tasks: [{ id: "t1" }] });
-    const { sections } = menuOf([inProject("i", "idle"), inProject("w", "working"), background]);
+    const { sections } = menuOf([inProject("w", "working"), background, inProject("i", "idle"), inProject("h", "waiting_user")]);
     expect(sections.map((s) => [s.heading, s.icon, s.items.map((item) => item.session)])).toEqual([
-      ["Working (1)", "status:working", ["w"]],
-      ["Working in background (1)", "status:background", ["b"]],
+      ["Waiting for you (1)", "status:waiting_user", ["h"]],
       ["Awaiting instructions (1)", "status:idle", ["i"]],
+      ["Working in background (1)", "status:background", ["b"]],
+      ["Working (1)", "status:working", ["w"]],
     ]);
   });
 
