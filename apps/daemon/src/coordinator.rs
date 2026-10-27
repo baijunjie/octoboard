@@ -13670,8 +13670,13 @@ mod tests {
         let told = output_containing(&hub, "released");
         assert!(told.contains("`plain`"), "{told}");
         assert!(told.contains("Retry audit"), "{told}");
-        assert!(told.contains("no longer drive it"), "{told}");
+        assert!(
+            told.contains("no longer instruct, drive or archive it"),
+            "{told}"
+        );
         assert!(told.contains("left with the user"), "{told}");
+        let share_info = mcp::qualified_tool_name(Agent::Claude, "share_info");
+        assert!(told.contains(&format!("`{share_info}`")), "{told}");
         assert_eq!(
             state.store.get_session("plain").unwrap().unwrap().bound_to,
             None

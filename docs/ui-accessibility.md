@@ -27,7 +27,8 @@ Every colour that carries a meaning — neutral, accent, success, warning, dange
 comes from one definition, used the same way everywhere in the application. HeroUI 3's own semantic tokens are that
 definition wherever HeroUI has one; the project defines a token only for a role HeroUI lacks, once, in
 `packages/ui/src/style.css`, and every component reads it from there. No component hard-codes a semantic colour, keeps
-a second recipe for a role that already has a token, or overrides a HeroUI component's semantic colours locally.
+a second recipe for a role that already has a token, or overrides a HeroUI component's semantic colours locally (a
+modal body's text colour, below, is the one exception).
 
 | Role | Source |
 | --- | --- |
@@ -44,6 +45,15 @@ a second recipe for a role that already has a token, or overrides a HeroUI compo
 Native colours that cannot read CSS — the menu bar icon's status colours — are generated from the same values rather
 than written down separately. The terminal's ANSI palette, syntax highlighting, agent brand colours and identity
 colours (avatars, session dots) are not semantic and keep their own palettes.
+
+Secondary text is a choice made where the text is written, never a default inherited from a container. A modal's body
+text — the message of a plain confirmation, a confirmation's consequences, an error alert's description, a form
+dialog's explanatory sentence — is what the user reads to decide, so it is in the foreground colour, in every modal
+alike. HeroUI gives its modal and alert-dialog bodies `text-muted`; the shared modal frame (`Dialog` in
+`packages/ui/src/dialogs/Dialog.tsx`) sets its body back to the foreground, so nothing in a modal turns grey by
+inheritance (the user's decision). Text inside a modal that is secondary — a field's note, an eligibility hint, a
+line saying what an option leaves out — takes the secondary text colour above, `--app-muted` (`text-app-muted`),
+explicitly on its own element; a HeroUI part that colours itself (`Description`, `Alert.Description`) keeps its own.
 
 The user accepts that HeroUI's accent, used as the solid accent and the focus ring, falls below 3:1 on some light
 surfaces — a selected sidebar row, a control fill and its hover, the window chrome — in exchange for one accent colour
@@ -1489,9 +1499,9 @@ confirmation and the patterns known not to work.
 
 Keep HeroUI's default appearance, including its text and placeholder colours, hover opacity and the default fill,
 foreground and shadow of the variant or status chosen for a dialog or popover; the Alert's status background fill
-under "Confirmed visual choices" is the one approved exception. A contrast measurement alone does not justify changing
-its colours, theme tokens, borders, frames or outlines, so add no colour or opacity override to make a default component
-pass the custom-style thresholds. Use the component's own supported variants and slots; layout and sizing adaptations
+under "Confirmed visual choices" and a modal body's foreground text colour (see "One definition per semantic colour")
+are the approved exceptions. A contrast measurement alone does not justify changing its colours, theme tokens, borders,
+frames or outlines, so add no colour or opacity override to make a default component pass the custom-style thresholds. Use the component's own supported variants and slots; layout and sizing adaptations
 do not authorize replacing its visual treatment. Application-authored text on a custom surface is checked against its
 actual background in both appearances.
 

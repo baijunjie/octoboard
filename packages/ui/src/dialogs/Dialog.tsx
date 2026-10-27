@@ -276,12 +276,14 @@ function DialogFrame({
           alone: the scroller is an ordinary overflow container, so the keyboard, the wheel and
           focus moving into view scroll it as they would any other. The padding is the room a focus
           ring needs inside the clip. */}
+      {/* HeroUI's body is muted grey; prose in a dialog reads in the foreground, and a note that is
+          secondary says so itself (`Description`, `text-app-muted`). */}
       {/* The ring of the focusable scroller is drawn on its parent: the fade is a mask on the scroller
             and clips by its border box, so a ring on the scroller itself, which sits outside that box, is
             cut off. The ring is the project's usual one (2px `--focus`), from the scroller's own state. */}
       <Frame.Body
         id={bodyId}
-        className={size === "viewer" ? `relative m-0 flex flex-col overflow-hidden p-0 ${region.focused ? "after:pointer-events-none after:absolute after:inset-0 after:z-10 after:ring-2 after:ring-focus after:ring-inset" : ""}` : `flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}
+        className={`text-foreground ${size === "viewer" ? `relative m-0 flex flex-col overflow-hidden p-0 ${region.focused ? "after:pointer-events-none after:absolute after:inset-0 after:z-10 after:ring-2 after:ring-focus after:ring-inset" : ""}` : `flex flex-col overflow-y-visible rounded-lg ${region.focused ? "ring-2 ring-focus" : ""}`}`}
       >
         <FadedScroller region={region} className={size === "viewer" ? "flex min-h-0 flex-1 flex-col" : "flex min-h-0 flex-1 flex-col gap-4 p-1"}>
           {children}

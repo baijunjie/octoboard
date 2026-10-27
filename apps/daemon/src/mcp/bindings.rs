@@ -259,10 +259,12 @@ pub(crate) async fn tell_former_owner(
     }
     let text = format!(
         "{NOTICE_PREFIX}: the user released {released} from you. It is no longer yours: it has \
-         no owner now and answers only to the user, so you can no longer drive it, send it \
-         messages or archive it, and it does not report to you. Do not count on it any more, and \
+         no owner now and answers only to the user, so you can no longer instruct, drive or \
+         archive it, and it does not report to you. You can still tell it something with \
+         `{share_info}`, which it weighs rather than obeys. Do not count on it any more, and \
          treat any work you handed it as left with the user.",
         released = sharing::named_session(released),
+        share_info = super::qualified_tool_name(owner.agent, "share_info"),
     );
     reporting::write_message_off_runtime(state, owner_id, text, WhenBlocked::Queue)
         .await
@@ -319,8 +321,10 @@ pub(super) async fn release_session(
         "session": released.id,
         "note": format!(
             "Released: `{id}` has no owner now and is no longer yours. It is the user's own \
-             session; you no longer drive it and it does not report to you. {told}",
+             session; you no longer instruct or drive it and it does not report to you, though \
+             `{share_info}` can still tell it something. {told}",
             id = released.id,
+            share_info = super::qualified_tool_name(caller.agent, "share_info"),
             told = told(&delivery, "It"),
         ),
     }))
@@ -513,7 +517,15 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result["session"], "of-a");
-        assert!(result["note"].as_str().unwrap().contains("no longer yours"));
+        let note = result["note"].as_str().unwrap();
+        assert!(note.contains("no longer yours"));
+        assert!(
+            note.contains(&super::super::qualified_tool_name(
+                Agent::Claude,
+                "share_info"
+            )),
+            "{note}"
+        );
         let released = state.store.get_session("of-a").unwrap().unwrap();
         assert_eq!((released.bound_to, released.lead), (None, false));
         let told = output_containing(&of_a, "you have no owner now");

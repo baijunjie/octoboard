@@ -893,6 +893,18 @@ it("names the session and its owner in the unbind confirmation and releases only
   expect(daemon.toastError).not.toHaveBeenCalled();
 });
 
+it("is a warning confirmation when unbinding: the warning icon leads, the action is primary, the consequence is shown and each name appears once", () => {
+  mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable]);
+  const modal = document.querySelector("[role=alertdialog]")!;
+  const header = modal.querySelector("[data-slot=alert-dialog-header]")!;
+  expect(header.firstElementChild?.matches("[data-slot=alert-dialog-icon]")).toBe(true);
+  expect(confirmButton()!.className).not.toContain("danger");
+  const body = modal.querySelector("[data-slot=alert-dialog-body]")!.textContent!.replace(/[\u2066-\u2069]/g, "");
+  expect(body).toContain("The owner will no longer be able to instruct it");
+  expect(body.split("Worker")).toHaveLength(2);
+  expect(body.split("Hub")).toHaveLength(2);
+});
+
 it("releases nothing when the unbind confirmation is cancelled", () => {
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], { onClose });

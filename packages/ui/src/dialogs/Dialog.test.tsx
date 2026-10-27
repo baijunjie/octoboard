@@ -604,3 +604,26 @@ it("turns into a failure modal in place: danger icon, title, explanation, detail
     container.remove();
   }
 });
+
+it("sets the foreground colour on the body of every frame, so prose does not inherit HeroUI's muted grey", () => {
+  for (const props of [{}, { alert: true }, { size: "viewer" as const }]) {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    try {
+      act(() => {
+        root.render(
+          <DaemonProvider value={fakeDaemon()}>
+            <Dialog title="Notice" onClose={() => {}} footer={null} {...props}>
+              <span>body</span>
+            </Dialog>
+          </DaemonProvider>,
+        );
+      });
+      const body = [...document.querySelectorAll("span")].find((span) => span.textContent === "body")?.closest('[data-slot$="body"]');
+      expect(body?.classList.contains("text-foreground"), JSON.stringify(props)).toBe(true);
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+    }
+  }
+});

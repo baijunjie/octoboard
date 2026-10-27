@@ -22,7 +22,10 @@ it shows as its title (see `docs/product/file-viewer.md`).
 along is its body text — the sessions it ends, archives or deletes along with its subject listed there, and a line for
 each option ticked (see "The confirmation" in `docs/product/branch-and-worktree-cleanup.md`) — never an alert inside the
 dialog. That is every confirmation whose confirm button is drawn in the danger colour (see below), and the archive
-confirmation, which carries the warning icon even before an option makes it destructive.
+confirmation, which carries the warning icon even before an option makes it destructive. The unbind confirmation is a
+warning modal too, with a consequence line in its body, though it is not destructive: its confirm button is the primary
+one and keyboard focus starts on it (see "Unbinding a session from the window" in
+`docs/product/changing-session-owners.md`).
 
 ## Where keyboard focus starts in a confirmation
 
