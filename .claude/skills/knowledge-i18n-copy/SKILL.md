@@ -489,8 +489,14 @@ are now wrong or it leaves out one thing, the meaning has changed.
   code outside React. A helper that returns display text takes the `Translate` function as its first parameter, and a
   module-level table stores a `PlainMessageKey`, looked up at render. A sentence with a variable part is one message
   with a `{placeholder}`, never fragments joined in code; markup inside a sentence goes through `<Message id params>`;
-  a count-dependent message is a plural message selected by `count`. (`packages/ui/src/i18n/react.tsx`;
-  `packages/ui/src/i18n/catalog.ts`)
+  a count-dependent message is a plural message selected by `count`. Two whole sentences shown in one paragraph are
+  joined by `common.sentenceSeparator` (a space in en, nothing in zh-Hans), never a hard-coded space, or by one catalog
+  message holding both as placeholders, whose text between them is the language's to say. Either way the separator
+  must not end up as a text node of its own that is only whitespace, which VoiceOver drops, running the two sentences
+  together: put it in the same text node as the sentence after it. `<Message>` does this itself when the parameter
+  after the separator is a string or another `<Message>` whose own text starts with text; one that is any other
+  element leaves the separator a node of its own. (`packages/ui/src/i18n/react.tsx`;
+  `packages/ui/src/i18n/catalog.ts`; `packages/ui/src/i18n/messages/en.ts`; `docs/voiceover-cases.md`)
 - **Glossary**: zh-Hans follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session,
   控制台会话 console session, 项目会话 project session, 智能体 agent, one half-width space between Chinese and Latin text,
   numbers or placeholders, and full-width punctuation in Chinese sentences, parentheses included (`（{detail}）`).

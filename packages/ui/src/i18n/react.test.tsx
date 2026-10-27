@@ -55,3 +55,27 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   act(() => root.render(<Message id="app.quit.title" params={{ appName: globalParam("appName") } as never} />));
   expect(container.querySelector("[data-inline-reference]")).toBeNull();
 });
+
+/** Every text node under `root`. */
+function textNodes(root: Node): Text[] {
+  const found: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) found.push(node as Text);
+  return found;
+}
+
+it.each(["en", "zh-Hans"] as const)("joins two sentences without a whitespace-only text node (%s)", (language) => {
+  const before = currentLanguage();
+  setLanguage(language);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); setLanguage(before); });
+  const cause = <Message id="daemon.sharing.reason.busy" />;
+  const fix = <Message id="daemon.sharing.fix.other" />;
+  act(() => root.render(<Message id="daemon.sharing.withFix" params={{ cause, fix }} />));
+  expect(container.textContent).toBe(format(language, "daemon.sharing.withFix", { cause: format(language, "daemon.sharing.reason.busy"), fix: format(language, "daemon.sharing.fix.other") }));
+  expect(textNodes(container).filter((node) => node.data.trim() === "")).toEqual([]);
+  // A separator before an element that is not a message cannot be merged, but the text stays the same.
+  act(() => root.render(<Message id="daemon.sharing.withFix" params={{ cause, fix: <b>fixed</b> }} />));
+  expect(container.textContent).toBe(`${format(language, "daemon.sharing.reason.busy")}${language === "en" ? " " : ""}fixed`);
+});

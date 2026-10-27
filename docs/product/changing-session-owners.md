@@ -152,7 +152,7 @@ session and its owner by their titles, each once, in a first paragraph saying th
 that owner and will answer only to the user, and that from then on only the session itself can bind to an owner again
 (with `bind_to_session`) — Octoboard cannot do it for the user. A consequence line follows: the owner will no longer be
 able to instruct it, archive it or give it to another owner, archiving the owner will not archive it, and the two can
-still share information with each other. **Cancel** closes the confirmation and releases nothing. **Unbind**, the
+still send each other messages. **Cancel** closes the confirmation and releases nothing. **Unbind**, the
 primary button, which has keyboard focus when the confirmation opens, releases the session as "Releasing a session
 from its owner" above describes, with no note, and closes the confirmation.
 

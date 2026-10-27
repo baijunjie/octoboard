@@ -1405,6 +1405,15 @@ acting on the selected tab. Reordering by dragging has a keyboard counterpart in
 ("Move earlier" / "Move later", never left and right, which swap in a right-to-left layout), and the moved item gets
 focus back once it lands.
 
+### Two sentences in one paragraph
+
+VoiceOver drops a text node that is only whitespace, so two sentences separated by one run together when read
+("permanently.The project's", in `docs/voiceover-cases.md`). Where the UI places two whole sentences side by side in
+one paragraph, the space between them is part of the text node of the sentence after it, never a node of its own;
+`<Message>` (`packages/ui/src/i18n/react.tsx`) keeps a separator standing alone between two placeholders out of a node
+of its own where the parameter after it allows. What separates the sentences is the language's to say (none after 。 in
+Chinese), so it comes from the catalog, never a hard-coded space.
+
 ### Announcing a change
 
 State that changes without the user acting (connection, a terminal problem) is announced from a `role="status"`

@@ -182,7 +182,7 @@ function SharingProgress({ id, progress }: { id: string; progress: NonNullable<A
   const count = t("settings.accounts.sharing.progressCount", { done: progress.done, total: progress.total });
   // Speaks again for ending sessions, waiting and resuming; entering the changing phase keeps what was said.
   const [spoken, setSpoken] = useState<string>();
-  const next = progress.phase === "changing" ? spoken ?? label : `${label}. ${wait}`;
+  const next = progress.phase === "changing" ? spoken ?? label : t("settings.accounts.sharing.progressWithWait", { progress: label, wait });
   if (next !== spoken) setSpoken(next);
   return (
     <div className="mt-2 flex min-w-0 flex-col gap-2 text-sm">

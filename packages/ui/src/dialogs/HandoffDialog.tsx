@@ -85,7 +85,7 @@ function HandoffForm({ session, console: parentConsole, project, onClose, onHand
       autoFocusSubmit
       onSubmit={submit}
     >
-      <p className="text-sm"><Message id="dialog.handOff.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} /> {t("dialog.handOff.message")}</p>
+      <p className="text-sm"><Message id="dialog.handOff.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />{`${t("common.sentenceSeparator")}${t("dialog.handOff.message")}`}</p>
       <HandoffMoves session={session} busy={busy} />
       <AgentAccountField
         label={t("dialog.handOff.agent")}

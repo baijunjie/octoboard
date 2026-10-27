@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import type { AccountSharing } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
+import { currentLanguage, setLanguage } from "../i18n/language";
 import { press } from "../components/tooltipTestSupport";
 import { accountSharing, request, settings } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, mountDetails, openDetailsOf, sharingSwitches } from "./agentAccountsSectionTestSupport";
@@ -196,6 +197,21 @@ describe("the announcement of the phases", () => {
     set("resuming");
     render();
     expect(said()).toBe("Turning sharing on. Resuming sessions…");
+  });
+
+  it("joins the direction and the phase with the Chinese full stop in Chinese", async () => {
+    const before = currentLanguage();
+    setLanguage("zh-Hans");
+    onTestFinished(() => { act(() => setLanguage(before)); });
+    accountSharing.set("codex-work", { account: "codex-work", progress: { share: true, phase: "stopping", done: 0, total: 3 } });
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    const { container: section } = mount("Codex");
+    const container = await openDetailsOf(section, "codex-work", "设置");
+    act(() => { vi.advanceTimersByTime(300); });
+    const said = [...container.querySelectorAll('[role="status"]')].map((node) => node.textContent).find((text) => text?.startsWith("正在开启共享"));
+    expect(said).toBe("正在开启共享。正在结束空闲会话…");
+    expect(said).not.toContain(". ");
   });
 
   it("shows the progress and not the warning when an old failure is still held during the wait", async () => {

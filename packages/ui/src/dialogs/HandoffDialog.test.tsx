@@ -6,6 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { press } from "../components/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
 import { HandoffDialog } from "./HandoffDialog";
@@ -211,4 +212,17 @@ it("shows the receiving agent's only account in an account picker, its usage dra
   expect(accountPicker?.textContent).toContain("Default");
   expect(triggers[0].getAttribute("aria-describedby")).toBeNull();
   expect(document.body.querySelectorAll('[class*="quota-meter--"]')).toHaveLength(1);
+});
+
+it.each([["en", "handed off. A new session"], ["zh-Hans", "移交。另一个智能体的新会话"]] as const)("joins the two sentences as %s does", (language, joined) => {
+  const before = currentLanguage();
+  setLanguage(language);
+  onTestFinished(() => setLanguage(before));
+  mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"));
+  const sentence = document.body.querySelector("[role=dialog] p.text-sm")!;
+  expect(sentence.textContent).toContain(joined);
+  if (language === "en") {
+    const whitespaceOnly = Array.from(sentence.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE && node.textContent!.trim() === "");
+    expect(whitespaceOnly).toEqual([]);
+  }
 });
