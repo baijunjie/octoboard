@@ -83,8 +83,8 @@ export function isRemovalRefusal(err: unknown): err is DaemonRequestError {
 /** What removing project `projectId` with its folder moved to the Trash would also remove, asked
  * afresh each time `asking` turns on (the Trash option ticked) and each time `reinspect` is called;
  * `failed` when the daemon could not say, in which case anything may go. A removal that would be
- * refused lists nothing and has not failed; `inspection` is the token its refusal carried, for the
- * removal to send back. */
+ * refused lists nothing and has not failed; `inspection` is the token its refusal carried, or its
+ * answer where it held worktrees back, for the removal to send back. */
 export function useProjectRemovalBranches(projectId: string, asking: boolean): Inspected & { failed: boolean; inspection: string | undefined; reinspect: () => void } {
   const { request } = useDaemon();
   const [round, setRound] = useState(0);
@@ -105,8 +105,10 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
       let inspection: string | undefined;
       try {
         const result = await request({ type: "inspect_project_removal", project: projectId });
-        if (result.type === "project_removal_inspected") items = result.items;
-        else failed = true;
+        if (result.type === "project_removal_inspected") {
+          items = result.items;
+          inspection = result.inspection || undefined;
+        } else failed = true;
       } catch (err) {
         if (isRemovalRefusal(err)) inspection = err.params.inspection || undefined;
         else failed = true;

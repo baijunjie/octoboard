@@ -45,6 +45,17 @@ export interface SessionBranchItem {
   state: SessionBranchState;
   /** Git's own message, for `failed`. */
   detail: string | null;
+  /** Why a `failed` one is left, where the UI words that itself: `project_folder_unknown` for a worktree kept because
+   * whether it is or holds another project's folder could not be told, whose `detail` is then the daemon's English. */
+  cause?: SessionBranchCause;
+}
+
+/** Why a `failed` `SessionBranchItem` is left, as the UI words it. */
+export type SessionBranchCause = "project_folder_unknown";
+
+/** Whether `item` is a worktree kept because whether it is or holds another project's folder could not be told. */
+export function isProjectFolderUnknown(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+  return item.state === "failed" && item.cause === "project_folder_unknown";
 }
 
 /** A bound item a request forces or keeps, named as its `SessionBranchItem` names it and in the
@@ -1319,8 +1330,9 @@ export type RequestBody =
    * of being refused with `project_has_running_sessions`; default false. `trash_directory` moves
    * the project's folder to the system Trash first, and keeps the project when that fails or
    * the folder is shared with another project; default false. With it, `force_remove` names the
-   * locked worktrees `inspect_project_removal` listed that go too, and `inspection` the token its refusal carried
-   * where a path that could not be resolved decided it, so that the removal repeats that refusal. */
+   * locked worktrees `inspect_project_removal` listed that go too, and `inspection` the token it carried: its refusal's
+   * where a path that could not be resolved decided it, so that the removal repeats that refusal, or its answer's where
+   * it held worktrees back, so that the removal leaves them too. */
   | { type: "delete_project"; project: string; stop_sessions?: boolean; trash_directory?: boolean; force_remove?: SessionBranchTarget[]; inspection?: string }
   | { type: "list_dir"; path: string }
   /** Answered with `agent_detected`, or an error when `path` is not an existing directory. */
@@ -1679,7 +1691,9 @@ export type Event =
   | { type: "session_history"; id?: string; session: string; messages: HistoryMessage[]; unavailable?: boolean }
   | { type: "session_records_inspected"; id?: string; presence: SessionRecordsPresence }
   | { type: "session_branches_inspected"; id?: string; items: SessionBranchItem[] }
-  | { type: "project_removal_inspected"; id?: string; items: SessionBranchItem[] }
+  /** `inspection` is the token the worktrees it held back are kept under, those of which whether they are or hold another
+   * project's folder could not be told, for `delete_project` to send back so that they stay held back. */
+  | { type: "project_removal_inspected"; id?: string; items: SessionBranchItem[]; inspection?: string }
   | {
     type: "snapshot";
     hosts: Host[];

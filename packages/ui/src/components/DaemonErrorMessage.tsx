@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
-import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../daemonMessage";
+import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { ActionableError } from "../actionableError";
@@ -37,7 +37,7 @@ export type DaemonErrorPart = "summary" | "remedy" | "details" | "further" | "ra
 
 /** What a `session_branches_not_removed` alert names, grouped by why each is still there: a lead
  * line per group over a list of names as code chips, with a locked worktree's uncommitted changes
- * and git's own message for one that failed. With a single group its lead says it all, and the
+ * and git's own message for one that failed, and a group's note after its list. With a single group its lead says it all, and the
  * line over the groups is left out. All of it is Details: the summary is the line over the groups, or
  * the one group's lead, and there is no remedy. Where the raw text is kept apart (`further`, `raw`, or the
  * whole message), git's message is not under its name in the list but in `raw`, under that name again. */
@@ -47,13 +47,14 @@ function LeftBranches({ count, items, part }: { count: number; items: LeftBranch
   const groups = leftBranchGroups(items).map((group) => ({
     key: group.key,
     lead: t(group.lead, { count: group.items.length }),
+    note: group.note && t(group.note, { count: group.items.length }),
     rows: group.items.map((item, at) => ({
       id: `${at}`,
       worktree: item.kind === "worktree",
       path: leftBranchName(item, homeDir),
       branch: item.kind === "worktree" ? item.branch : item.name,
       uncommitted: item.state === "locked" && item.uncommitted,
-      detail: item.detail,
+      detail: leftBranchDetail(item),
     })),
   }));
   if (part === "remedy") return null;

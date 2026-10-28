@@ -675,6 +675,30 @@ it("takes a locked worktree, and the branch it has checked out, along with a pro
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
 });
 
+it("lists the worktrees an inspection held back as staying, and sends back its token, only with the folder", async () => {
+  const held = { ...UNCOMMITTED, path: "/r-held", branch: "held", state: "failed" as const, uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" as const };
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => body.type === "inspect_project_removal"
+      ? { type: "project_removal_inspected", items: [UNCOMMITTED, held], inspection: "token-2" }
+      : { type: "ack" },
+  });
+  checkAll();
+  await act(async () => {});
+  expect(listed()).toEqual(["/r-feature on branch feature", "/r-held on branch held"]);
+  const dialog = document.querySelector("[role=alertdialog]")!;
+  expect(dialog.textContent).toContain("What goes with it");
+  expect(dialog.textContent).toContain("What stays");
+  expect(dialog.textContent).toContain("This worktree stays, as whether it is or holds another project's folder could not be checked:");
+  // Only the worktree that goes is counted among what goes.
+  expect(dialog.textContent).toContain("Also moves the worktree outside the folder to the Trash.");
+  expect(dialog.textContent).not.toContain("could not be told");
+  await submitDialog();
+  expect(sent(daemon, "delete_project")).toEqual([expect.objectContaining({ trash_directory: true, inspection: "token-2" })]);
+  act(() => boxes()[0].click());
+  await submitDialog();
+  expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
+});
+
 it("asks again what goes along once a project's removal with its folder is refused, holding Confirm for it, so that a retry carries out what is shown", async () => {
   const refusal = { path: "/work/p", detail: "it did not respond in time", cause: "unanswered" };
   const second = deferred();

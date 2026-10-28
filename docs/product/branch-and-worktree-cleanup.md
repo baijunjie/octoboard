@@ -46,7 +46,7 @@ a console.
 | A branch not merged as above | Kept; the confirmation can force it |
 | A worktree locked with `git worktree lock` (git's lock, not "Locking a session" in `docs/product/sessions.md`) | Kept; the confirmation can take it, under a choice of its own |
 | A branch checked out in a worktree that stays — the main worktree, a worktree not bound, or a bound one that is kept | Kept, whatever is asked |
-| A worktree that is a project's folder, or holds one — any project's | Never touched |
+| A worktree that is a project's folder or holds one — any project's — or of which that cannot be told (see "A worktree that is or holds a project's folder" below) | Never touched |
 
 - **A branch pushed to its upstream counts as merged into it**, so it is deleted locally even when it is merged
   nowhere else; its remote branch stays.
@@ -54,6 +54,33 @@ a console.
 - Worktrees go first, then branches, so a branch whose only worktree has just gone is deleted after it.
 - A worktree whose status cannot be read is not removed, and is reported (see "What is left is reported" below); for
   the forcing rules it counts as having uncommitted changes.
+
+## A worktree that is or holds a project's folder
+
+No cleanup — a session's, or a project's removal with its folder moved to the Trash — removes, forces or moves to the
+Trash a linked worktree that is a project's folder or holds one, since that project's files would go with it. Holding
+the common directory of a project's Git repository counts as holding that project's folder, as a main worktree holds
+the repository a linked worktree elsewhere works from. A session's cleanup looks at every project, its own included; a
+project's removal at every project but the one removed.
+
+- **Folders are told by what they are on disk** (device and inode), not by how their paths are written: a symbolic
+  link, a spelling that differs only in letter case, a bind mount, or a macOS firmlink naming one folder makes no
+  difference. Another project whose path is a file is held by the worktree when the folder holding that file, or
+  holding the file a link at that path leads to, lies in it.
+- **Another project's path that has nothing at it, or cannot be read for want of permission,** is compared by its
+  path's text instead, as written and, where it resolves, as resolved, with the worktree's path as written and as
+  resolved. A worktree whose directory is already gone is compared only that way, as it holds no project's files
+  otherwise.
+- **When it cannot be told, the worktree is kept, as one that holds a project's folder is**: where another project's
+  path fails with another error, lies on a file system that reports no inode, does not answer within about 5 seconds
+  (as on a mount that hangs) or is still not answering an earlier look, or where the worktree's own directory cannot
+  be read or resolved. It is never removed or forced, and unlike a worktree known to be or hold a project's folder it
+  is reported as left (see "What is left is reported" below).
+- **A session's cleanup decides again when it removes.** Its confirmation offers no such worktree to force, so one that
+  could not be told when the confirmation looked, but can be at the removal, goes only as an unforced
+  `git worktree remove` takes it; git keeping it, it is reported like any other item the confirmation did not list.
+- **A project's removal keeps what its confirmation showed staying**, even once it can be told (see "With a project's
+  folder moved to the Trash" below).
 
 ## The confirmation
 
@@ -133,19 +160,24 @@ this order, each group led by one line saying so over the names:
 - the worktree is locked — each one marked when it also has uncommitted changes;
 - the branch is not merged;
 - the branch is checked out in a worktree that stays;
-- the worktree is a project's folder.
+- the worktree is a project's folder;
+- whether the worktree is or holds another project's folder could not be checked (see "A worktree that is or holds a
+  project's folder" above) — with no reason under the item's name, and after the names a note that it may hold
+  another project's files, and that once it can be read, what is in it should be checked before removing it by hand.
 
 Items are named as in the confirmation (see "The confirmation" above). With more than one group, a line saying these
 were to be removed and are still there comes first; with a single group its lead line stands alone.
 
 The alert's recovery guidance is to open a Terminal in the repository — from the project's action menu, when the
 project is still there — deal with what is reported for each item, then remove it with Git or move it to the Trash, or
-leave it in place.
+leave it in place. An alert whose every item is a worktree of which it could not be checked whether it is or holds
+another project's folder has no recovery guidance of its own, that group's note standing for it.
 
-What is reported: every item that could not be removed; every forced item still there; and every item git refuses
-that the confirmation did not list as kept in the state it stands in now — one that came to stand so after the
-confirmation listed it, or that was never listed. What is not reported: items the user chose to keep, while they stand
-as they were listed; a branch checked out in a worktree that stays; a worktree that is a project's folder. Nothing is
+What is reported: every item that could not be removed; every worktree kept because whether it is or holds another
+project's folder could not be told; every forced item still there; and every item git refuses that the confirmation
+did not list as kept in the state it stands in now — one that came to stand so after the confirmation listed it, or
+that was never listed. What is not reported: items the user chose to keep, while they stand as they were listed; a
+branch checked out in a worktree that stays; a worktree known to be a project's folder or to hold one. Nothing is
 shown when nothing is left.
 
 What Octoboard's own deletion of archived sessions whose conversation is gone leaves is not reported to anyone: it is
@@ -215,17 +247,22 @@ otherwise be left without its folder:
 - **A locked worktree** goes only when the user chooses so (below), and only while it has no uncommitted changes the
   confirmation did not show. It is moved to the Trash first and only then unlocked, where the repository outlives the
   folder, so one whose move fails keeps its lock. A branch a locked worktree has checked out goes only with it.
-- **Never touched**: the main worktree, and a worktree that is another project's folder or holds one.
+- **Never touched**: the main worktree, and a worktree that is another project's folder or holds one, or of which that
+  cannot be told (see "A worktree that is or holds a project's folder" above). One that cannot be told is listed by
+  the confirmation as staying and reported as left; where the repository outlives the folder, a branch it has checked
+  out is left, as one checked out in a worktree that stays.
 
 **The confirmation** looks up what goes along each time its option to move the folder to the Trash is ticked, and
 again, still open, after a removal with that option ticked is refused as protected, as shared or as a failed move;
 its Confirm button is pending until the answer arrives, so a retry carries out what is shown then. Under the option, a
 **What goes with it (n)** disclosure, collapsed by default, groups the items, named and set out as in "The
 confirmation" above, as moved to the Trash with the folder (the outside worktrees) and deleted permanently (the
-branches). Locked worktrees come after it as a plain block of their own, as in "The confirmation" above: the checkbox
-**Also move the locked worktrees to the Trash (n)**, its hint, saying they go despite their locks and can be recovered
-from the Trash, and a Details disclosure over them. A branch a locked worktree has checked out is counted among what
-goes only while that box is checked.
+branches). Under it, a **What stays (n)** disclosure, collapsed by default, lists the outside worktrees held back
+because whether they are or hold another project's folder could not be told, in one group whose lead line says they
+stay for that reason; they are counted neither in what goes nor in the consequences. Locked worktrees come after them
+as a plain block of their own, as in "The confirmation" above: the checkbox **Also move the locked worktrees to the
+Trash (n)**, its hint, saying they go despite their locks and can be recovered from the Trash, and a Details disclosure
+over them. A branch a locked worktree has checked out is counted among what goes only while that box is checked.
 
 In the confirmation's consequences, after the options (see `docs/product/removing-projects.md` for the running
 sessions listed there, and "The confirmation" above for how the consequences hold their list and lines), a line appears
@@ -240,11 +277,16 @@ as shared, or as a failed move because a folder it depends on could not be looke
 nothing, adds no line and shows no unknown mark; confirming it shows the refusal.
 
 **What goes is worked out again when the removal is made**, while the folder is still there, so what changed after the
-confirmation listed it is taken into account. It runs after the project has been removed and its sessions' processes
-have ended, waiting as in "When the removal runs" above; the project's removal stands whatever happens to it, and what
-is still there is reported as in "What is left is reported" above. When what goes along cannot be worked out at all, the
-folder is still moved and the project removed, but no worktree outside the folder is touched, and where the repository
-outlives the folder no branch either (where the folder held the repository, its branches went with it). Every window is
+confirmation listed it is taken into account — except that a worktree the confirmation's latest lookup held back
+stays held back even if it can be told by then, and is reported as left, since the confirmation showed it staying.
+The confirmation sends back the token that lookup's answer carried (the `inspection` param); the daemon keeps it until
+the project is removed, so a removal that fails before it stands, retried with it, holds the same worktrees back. A
+token the daemon no longer keeps — pushed out once four newer tokens of the same project are kept, or a restart of
+the daemon in between — holds nothing back, and the removal judges each worktree afresh. It runs after the project has
+been removed and its sessions' processes have ended, waiting as in "When the removal runs" above; the project's
+removal stands whatever happens to it, and what is still there is reported as in "What is left is reported" above.
+When what goes along cannot be worked out at all, the folder is still moved and the project removed, but no worktree
+outside the folder is touched, and where the repository outlives the folder no branch either (where the folder held the repository, its branches went with it). Every window is
 then shown an error alert, `project_branches_not_determined`, titled "Branches and worktrees left in place", naming the
 removed project and saying that the worktrees outside its folder, and its branches if the repository stays, were left,
 with the reason under the sentence as a block of code. Its recovery guidance is to open a Terminal in the repository and

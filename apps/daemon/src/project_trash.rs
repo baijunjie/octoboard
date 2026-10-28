@@ -24,8 +24,9 @@ use crate::state::AppState;
 
 /// How long looking at one path on the file system may take. Past it the path counts as one that
 /// cannot be told apart, which refuses the move: a folder on a mount that does not answer holds the
-/// removal up by this much at most, and never lets it take another project's files.
-const TRASH_LOOK_DEADLINE: Duration = Duration::from_secs(5);
+/// removal up by this much at most, and never lets it take another project's files. The branch
+/// cleanup's looks at the worktrees it may remove take it too.
+pub(crate) const TRASH_LOOK_DEADLINE: Duration = Duration::from_secs(5);
 
 /// Whether `directory` is the root of a disk: `/`, or a mount point such as `/Volumes/Backup`,
 /// which sits on a different device from its parent.
@@ -123,7 +124,7 @@ fn file_identity(metadata: &std::fs::Metadata) -> Option<Identity> {
 }
 
 /// What is at another project's path, at the home directory or at Octoboard's data directory.
-enum Seen {
+pub(crate) enum Seen {
     /// A directory, where it really is, with the place of its Git repository's common directory
     /// when it was looked for and it is in one.
     Directory {
@@ -148,7 +149,7 @@ impl Seen {
     /// `None` when it cannot be told: the path is not absolute, an error other than nothing being
     /// there or a refused permission reading it, or a directory or repository that cannot be
     /// resolved. With `repository`, a directory's repository is looked for too. Blocking.
-    fn of(path: &Path, repository: bool) -> Option<Self> {
+    pub(crate) fn of(path: &Path, repository: bool) -> Option<Self> {
         let path = lexically_normalise(path);
         if !path.is_absolute() {
             return None;
@@ -188,6 +189,31 @@ impl Seen {
         };
         Some(Self::Directory { place, repository })
     }
+
+    /// Whether this is the directory at `place` or lies in it: a directory by its own place, an
+    /// entry by the directory holding its path or the one holding what that resolves to, and one
+    /// told only by its text by whether that text starts with one of `texts`, the directory's path
+    /// as written and as resolved. Without a `place`, where nothing is at the directory, only a
+    /// text can lie in it.
+    pub(crate) fn lies_in(&self, place: Option<&Place>, texts: &[PathBuf]) -> bool {
+        match (self, place) {
+            (Self::Directory { place: ours, .. }, Some(place)) => ours.lies_in(place),
+            (Self::Entry { parents, .. }, Some(place)) => {
+                parents.iter().any(|parent| parent.lies_in(place))
+            }
+            (Self::Text { paths }, _) => paths
+                .iter()
+                .any(|ours| texts.iter().any(|theirs| ours.starts_with(theirs))),
+            (_, None) => false,
+        }
+    }
+
+    /// Whether this is a directory whose Git repository's common directory, looked for with
+    /// [`Seen::of`], lies in the directory at `place`.
+    pub(crate) fn repository_lies_in(&self, place: &Place) -> bool {
+        matches!(self, Self::Directory { repository: Some(repository), .. }
+            if repository.lies_in(place))
+    }
 }
 
 /// The folder moved to the Trash, as far as the paths of what it must not take are compared with
@@ -217,17 +243,8 @@ impl Trashed {
             (_, Seen::Text { paths }) => self.text_overlaps(paths, true),
             (
                 TrashedEntry::Directory { place: ours, .. },
-                Seen::Directory {
-                    place: theirs,
-                    repository,
-                },
-            ) => {
-                theirs.lies_in(ours)
-                    || ours.lies_in(theirs)
-                    || repository
-                        .as_ref()
-                        .is_some_and(|repository| repository.lies_in(ours))
-            }
+                Seen::Directory { place: theirs, .. },
+            ) => theirs.lies_in(ours) || ours.lies_in(theirs) || other.repository_lies_in(ours),
             (TrashedEntry::Directory { place: ours, .. }, Seen::Entry { parents, .. }) => {
                 parents.iter().any(|parent| parent.lies_in(ours))
             }
@@ -265,11 +282,7 @@ impl Trashed {
         let TrashedEntry::Directory { place: ours, .. } = &self.entry else {
             return false;
         };
-        match data {
-            Seen::Directory { place, .. } => place.lies_in(ours),
-            Seen::Entry { parents, .. } => parents.iter().any(|parent| parent.lies_in(ours)),
-            Seen::Text { paths } => self.text_overlaps(paths, false),
-        }
+        data.lies_in(Some(ours), &self.texts)
     }
 }
 
@@ -320,27 +333,37 @@ impl Refusal {
     }
 }
 
-/// The refusals of removal inspections that a path that could not be resolved decided, each by the
-/// token its refusal carried (`inspection`), for the removal confirmed after that inspection to
-/// repeat once ([`directory_to_trash`]). Held in memory only. A token goes when a removal uses it,
-/// when its project is removed, or when its project holds [`KEPT_PER_PROJECT`] newer ones.
+/// What removal inspections answered that a path that could not be resolved decided, each by the
+/// token the answer carried (`inspection`), for the removal confirmed after that inspection to
+/// repeat: a refusal, once ([`directory_to_trash`]), or the worktrees outside the folder it held
+/// back because whether they are or hold another project's folder could not be told
+/// (`crate::branch_origin::cleanup::project`), for every removal that sends the token until one
+/// stands. Held in memory only. A token goes when a removal uses its refusal, when its project is
+/// removed, or when its project holds [`KEPT_PER_PROJECT`] newer ones.
 #[derive(Default)]
 pub struct UnresolvedRemovals(Mutex<Kept>);
 
 #[derive(Default)]
 struct Kept {
-    by_token: HashMap<String, KeptRefusal>,
-    /// Numbers the refusals in the order they were kept, so the oldest of a project goes first.
+    by_token: HashMap<String, KeptAnswer>,
+    /// Numbers the answers in the order they were kept, so the oldest of a project goes first.
     issued: u64,
 }
 
-struct KeptRefusal {
+struct KeptAnswer {
     project: String,
-    refusal: Refusal,
+    answer: Answer,
     issued: u64,
 }
 
-/// How many kept refusals one project holds at most: one per window that inspected its removal
+/// What an inspection answered, as kept for the removal after it.
+enum Answer {
+    Refused(Refusal),
+    /// The roots of the worktrees held back, as `git worktree list` gives them.
+    HeldBack(Vec<PathBuf>),
+}
+
+/// How many kept answers one project holds at most: one per window that inspected its removal
 /// lately is plenty, and an inspection repeated without a removal must not grow the store.
 const KEPT_PER_PROJECT: usize = 4;
 
@@ -352,11 +375,36 @@ impl UnresolvedRemovals {
             .retain(|_, kept| kept.project != project);
     }
 
-    /// Keeps `refusal` for `project` under a new token, which it returns, unless `project` is no
+    /// Keeps the worktree roots `held_back` for `project`, as [`UnresolvedRemovals::keep`] does,
+    /// for [`UnresolvedRemovals::held_back`] to read.
+    pub(crate) fn keep_held_back(
+        &self,
+        state: &AppState,
+        project: &str,
+        held_back: Vec<PathBuf>,
+    ) -> Option<String> {
+        self.keep(state, project, Answer::HeldBack(held_back))
+    }
+
+    /// The worktree roots kept under `token` for `project`; none where the token is unknown,
+    /// another project's, or a refusal's. They stay kept until the project is removed, so a
+    /// removal that fails before it stands and is tried again holds them back too.
+    pub(crate) fn held_back(&self, token: &str, project: &str) -> Vec<PathBuf> {
+        match self.lock().by_token.get(token) {
+            Some(KeptAnswer {
+                project: of,
+                answer: Answer::HeldBack(roots),
+                ..
+            }) if of == project => roots.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Keeps `answer` for `project` under a new token, which it returns, unless `project` is no
     /// longer stored: an inspection that ends after its project was removed keeps nothing. The
     /// project is checked under this store's lock, which its removal takes after deleting it, so
     /// either the check sees it gone or the removal drops what was kept.
-    fn keep(&self, state: &AppState, project: &str, refusal: &Refusal) -> Option<String> {
+    fn keep(&self, state: &AppState, project: &str, answer: Answer) -> Option<String> {
         let mut kept = self.lock();
         if !matches!(state.store.get_project(project), Ok(Some(_))) {
             return None;
@@ -381,9 +429,9 @@ impl UnresolvedRemovals {
         let issued = kept.issued;
         kept.by_token.insert(
             token.clone(),
-            KeptRefusal {
+            KeptAnswer {
                 project: project.to_string(),
-                refusal: refusal.clone(),
+                answer,
                 issued,
             },
         );
@@ -391,12 +439,17 @@ impl UnresolvedRemovals {
     }
 
     /// The refusal kept under `token` for `project`, which it no longer keeps.
-    fn take(&self, token: &str, project: &str) -> Option<Refusal> {
+    fn take_refusal(&self, token: &str, project: &str) -> Option<Refusal> {
         let mut kept = self.lock();
         match kept.by_token.get(token) {
-            Some(entry) if entry.project == project => {
-                kept.by_token.remove(token).map(|entry| entry.refusal)
-            }
+            Some(KeptAnswer {
+                project: of,
+                answer: Answer::Refused(_),
+                ..
+            }) if of == project => match kept.by_token.remove(token)?.answer {
+                Answer::Refused(refusal) => Some(refusal),
+                Answer::HeldBack(_) => None,
+            },
             _ => None,
         }
     }
@@ -431,7 +484,8 @@ pub async fn inspected(
     let home = crate::paths::known_home_dir();
     match judged(state, deleted, projects, home, crate::paths::data_dir()).await {
         Err(mut refusal) if refusal.unresolved => {
-            if let Some(token) = state.unresolved_removals.keep(state, &deleted.id, &refusal) {
+            let kept = Answer::Refused(refusal.clone());
+            if let Some(token) = state.unresolved_removals.keep(state, &deleted.id, kept) {
                 refusal.params.insert("inspection".to_string(), token);
             }
             Err(refusal.error())
@@ -444,14 +498,16 @@ pub async fn inspected(
 /// `inspection` token of an inspection's refusal that a path that could not be resolved decided,
 /// that refusal, even once the path resolves: the person confirmed a removal that was shown to take
 /// nothing along, and a look now could take along what was never shown. The token is then used up.
-/// Otherwise, with no token or one no longer kept, [`judged`].
+/// Otherwise, with no token, one no longer kept, or one that kept the worktrees an inspection held
+/// back (left for [`UnresolvedRemovals::held_back`]), [`judged`].
 pub async fn directory_to_trash(
     state: &AppState,
     deleted: &Project,
     projects: &[Project],
     inspection: Option<&str>,
 ) -> Result<Option<PathBuf>> {
-    let kept = inspection.and_then(|token| state.unresolved_removals.take(token, &deleted.id));
+    let kept =
+        inspection.and_then(|token| state.unresolved_removals.take_refusal(token, &deleted.id));
     if let Some(refusal) = kept {
         return Err(refusal.error());
     }
@@ -618,7 +674,7 @@ mod tests {
     use super::*;
     use crate::protocol::{ProjectAccount, ProjectSource};
     use crate::store::LOCAL_HOST_ID;
-    use crate::test_support::{app_state, git, repo_with};
+    use crate::test_support::{app_state, git, repo_with, second_real_path};
 
     /// A project named `id` stored at `path`.
     fn project_at(id: &str, path: &Path) -> Project {
@@ -856,16 +912,6 @@ mod tests {
             Some(outer.clone()),
             "neither the home directory nor the data is in the folder"
         );
-    }
-
-    /// `/System/Volumes/Data` followed by `real`, where that is the same directory as `real` under
-    /// another real path.
-    fn second_real_path(real: &Path) -> Option<PathBuf> {
-        let second = Path::new("/System/Volumes/Data").join(real.strip_prefix("/").ok()?);
-        let identity = |path: &Path| std::fs::metadata(path).ok().map(|m| hostfs::identity(&m));
-        let distinct = std::fs::canonicalize(&second).ok()? != std::fs::canonicalize(real).ok()?;
-        (distinct && identity(&second).is_some() && identity(&second) == identity(real))
-            .then_some(second)
     }
 
     /// A path whose look outran its deadline counts as overlapping, so the move is refused: as

@@ -5,7 +5,7 @@ import { BranchGroups, type BranchGroup, type BranchRow } from "../components/Br
 import { StatusMark } from "../components/StatusMark";
 import { Message, useT } from "../i18n/react";
 import { abbreviateHome } from "../pathDisplay";
-import type { SessionBranchItem } from "../protocol";
+import { isProjectFolderUnknown, type SessionBranchItem } from "../protocol";
 import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
 import { ConfirmOption } from "./ConfirmOption";
@@ -174,12 +174,14 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
 
 /** The Trash option of a project's removal and what goes along with its folder, asked afresh
  * whenever the option is ticked: under the option, the disclosure of the worktrees moved to the
- * Trash and the branches deleted, each as a group; then the locked worktrees as an option of their
+ * Trash and the branches deleted, each as a group, and the disclosure of the worktrees that stay because whether they
+ * are or hold another project's folder could not be told; then the locked worktrees as an option of their
  * own. `consequences` are the lines the confirmation's consequence text adds while the options are ticked. A
  * lookup that failed, so that the daemon could not say what else goes, is a mark after the Trash
  * option's label instead. A branch a locked worktree has checked
  * out goes only with it. `pending` holds Confirm while the answer is on its way. `choices` carries the token of a
- * refusal that a path that could not be resolved decided, for the removal to repeat it. */
+ * refusal that a path that could not be resolved decided, for the removal to repeat it, or of an answer that held
+ * worktrees back, for the removal to leave them too. */
 export function useProjectRemovalCleanup(projectId: string, trash: boolean, setTrash: (trash: boolean) => void): {
   choices: ReturnType<typeof branchChoices> & { inspection?: string };
   pending: boolean;
@@ -195,7 +197,9 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
   const locked = lockedWorktrees(found.items);
   const [removeLocked, setRemoveLocked] = useChoiceOver(locked);
   const keptBranches = new Set(removeLocked ? [] : locked.map((item) => `${item.repository}:${item.branch}`));
-  const trashed = found.items.filter((item) => item.kind === "worktree" && item.state !== "locked");
+  // A worktree held back, because whether it is or holds another project's folder could not be told, stays.
+  const staying = found.items.filter(isProjectFolderUnknown);
+  const trashed = found.items.filter((item) => item.kind === "worktree" && item.state !== "locked" && !isProjectFolderUnknown(item));
   const deleted = found.items.filter((item) => item.kind === "branch" && !keptBranches.has(`${item.repository}:${item.branch}`));
   const along = [...trashed, ...deleted];
   return {
@@ -226,6 +230,17 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
                   ]}
                   describedBy={trashId}
                   name={t("branchCleanup.along", { count: along.length })}
+                />
+              </div>
+            )}
+          </KeepFocusInDialog>
+          <KeepFocusInDialog>
+            {trash && staying.length > 0 && (
+              <div className="ps-7">
+                <BranchDisclosure
+                  groups={[{ key: "staysUnknown", lead: t("branchCleanup.group.staysUnknown", { count: staying.length }), rows: rows(staying) }]}
+                  describedBy={trashId}
+                  name={t("branchCleanup.stays", { count: staying.length })}
                 />
               </div>
             )}

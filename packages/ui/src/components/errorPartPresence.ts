@@ -1,5 +1,5 @@
 import { ActionableError } from "../actionableError";
-import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasRichMessage, hasTrustDiagnostic, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../daemonMessage";
+import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasRichMessage, hasTrustDiagnostic, leftBranchDetail, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, unwordedReason } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { isMessageKey } from "../i18n/catalog";
@@ -35,7 +35,7 @@ export function hasRawDetails(error: { code: string; params: MessageParams; mess
   if (hasShellTimeoutDetails(error)) return false;
   if (!hasCodeParams(error) || !hasRichMessage(error.code, error.params)) return false;
   const left = leftBranchItems(error.code, error.params);
-  if (left) return left.some((item) => !!item.detail);
+  if (left) return left.some((item) => !!leftBranchDetail(item));
   const sharing = sharingRawReason(error);
   if (sharingFailureItems(error.code, error.params) || sharing?.raw) return true;
   if (!sharing && (DETAIL_BLOCK_CODES.has(error.code) || hasTrustDiagnostic(error.code, error.params)) && error.params.detail) return true;

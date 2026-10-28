@@ -1597,6 +1597,18 @@ export const en = {
     one: "This worktree is a project's folder:",
     other: "These worktrees are project folders:",
   },
+  "branchCleanup.group.projectFolderUnknown": {
+    one: "Whether this worktree is or holds another project's folder could not be checked:",
+    other: "Whether these worktrees are or hold another project's folder could not be checked:",
+  },
+  "branchCleanup.note.projectFolderUnknown": {
+    one: "It may hold another project's files. Once it can be read, check what is in it before you remove it yourself.",
+    other: "They may hold another project's files. Once they can be read, check what is in them before you remove them yourself.",
+  },
+  "branchCleanup.group.staysUnknown": {
+    one: "This worktree stays, as whether it is or holds another project's folder could not be checked:",
+    other: "These worktrees stay, as whether they are or hold another project's folder could not be checked:",
+  },
   "branchCleanup.group.trashed": "Moved to the Trash with the folder:",
   "branchCleanup.group.deleted": "Deleted permanently:",
   "branchCleanup.consequence.force": {
@@ -1623,6 +1635,10 @@ export const en = {
   "branchCleanup.along": {
     one: "What goes with it",
     other: "What goes with it ({count})",
+  },
+  "branchCleanup.stays": {
+    one: "What stays",
+    other: "What stays ({count})",
   },
   "dialog.sessionBranches.force": {
     one: "Also force-remove the worktree or branch {git} keeps",

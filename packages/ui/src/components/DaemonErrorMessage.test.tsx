@@ -17,7 +17,7 @@ import { useDialogAction } from "../dialogs/Dialog";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
-import { hasErrorDetails, hasErrorRemedy } from "./errorPartPresence";
+import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
 import { ErrorAlert } from "./ErrorAlert";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -229,6 +229,33 @@ it("keeps the reason what goes with a removed project's folder is unknown as a c
   expect(raw.querySelector("pre")?.textContent).toBe("fatal: not a git repository");
   expect(body.textContent).not.toContain("fatal");
   expect(body.querySelector("pre")).toBeNull();
+});
+
+it("sets a worktree kept for a project folder that could not be checked apart, in the UI's own words, with what to do", () => {
+  const items = [
+    { kind: "worktree", name: "/home/dev/wt", branch: "a", state: "failed", uncommitted: false, detail: "whether it is or holds another project's folder could not be told", cause: "project_folder_unknown" },
+    { kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", uncommitted: false, detail: "error: refused", cause: null },
+  ];
+  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "2", items: JSON.stringify(items) });
+  const daemon = { store: createStateStore({ homeDir: "/home/dev" }) } as Daemon;
+  const container = mount(<DaemonProvider value={daemon}><DaemonErrorMessage error={error} part="details" /></DaemonProvider>);
+  expect(Array.from(container.querySelectorAll("p"), (line) => line.textContent)).toEqual([
+    "Removing this failed:",
+    "Whether this worktree is or holds another project's folder could not be checked:",
+    "It may hold another project's files. Once it can be read, check what is in it before you remove it yourself.",
+  ]);
+  // The daemon's English is not shown for it; git's message for the other still is.
+  expect(Array.from(container.querySelectorAll("pre"), (block) => block.textContent)).toEqual(["error: refused"]);
+  expect(container.textContent).not.toContain("could not be told");
+  expect(mountApart(error, daemon).raw.textContent).not.toContain("could not be told");
+});
+
+it("offers no Error details for a worktree kept for a project folder that could not be checked, when nothing raw is left", () => {
+  const items = [
+    { kind: "worktree", name: "/home/dev/wt", branch: "a", state: "failed", uncommitted: false, detail: "whether it is or holds another project's folder could not be told", cause: "project_folder_unknown" },
+  ];
+  const error = new DaemonRequestError("plain fallback", "session_branches_not_removed", { count: "1", items: JSON.stringify(items) });
+  expect(hasRawDetails(error)).toBe(false);
 });
 
 it("leaves the line over the groups out when there is one group, whose lead says it all", () => {

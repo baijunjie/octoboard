@@ -113,8 +113,12 @@ impl Fixture {
             .success()
     }
 
-    fn inspect(&self, sessions: &[Session]) -> Vec<SessionBranchItem> {
-        inspect(&self.state, sessions).unwrap()
+    async fn inspect(&self, sessions: &[Session]) -> Vec<SessionBranchItem> {
+        let (state, sessions) = (self.state.clone(), sessions.to_vec());
+        tokio::task::spawn_blocking(move || inspect(&state, &sessions))
+            .await
+            .unwrap()
+            .unwrap()
     }
 
     async fn remove(
@@ -202,7 +206,7 @@ async fn a_clean_worktree_and_its_merged_branch_go_and_another_sessions_stay() {
     let archived = [session("s1", SessionStatus::Archived)];
 
     assert_eq!(
-        summary(&fixture.inspect(&archived)),
+        summary(&fixture.inspect(&archived).await),
         expect(&[
             (true, "mine", SessionBranchState::Removable),
             (false, "mine", SessionBranchState::Removable),
@@ -222,7 +226,7 @@ async fn uncommitted_changes_and_an_unmerged_branch_go_only_when_forced() {
     std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
     let archived = [session("s1", SessionStatus::Archived)];
 
-    let shown = fixture.inspect(&archived);
+    let shown = fixture.inspect(&archived).await;
     assert_eq!(
         summary(&shown),
         expect(&[
@@ -286,6 +290,7 @@ async fn a_force_goes_no_further_than_what_was_shown() {
     let archived = [session("s1", SessionStatus::Archived)];
     let shown: Vec<SessionBranchTarget> = fixture
         .inspect(&archived)
+        .await
         .iter()
         .filter(|item| item.kind == SessionBranchKind::Worktree)
         .map(target)
@@ -338,7 +343,7 @@ async fn a_worktree_with_submodules_goes_only_when_forced() {
     );
     git(&root, &["commit", "-qm", "inner"]);
     let archived = [session("s1", SessionStatus::Archived)];
-    let shown = fixture.inspect(&archived);
+    let shown = fixture.inspect(&archived).await;
     let worktree = shown
         .iter()
         .find(|item| item.kind == SessionBranchKind::Worktree)
@@ -390,7 +395,10 @@ async fn a_git_that_cannot_run_leaves_every_bound_item_failed() {
         ..host_tools()
     });
     let archived = [session("s1", SessionStatus::Archived)];
-    assert!(inspect(&fixture.state, &archived).is_err());
+    let (state, sessions) = (fixture.state.clone(), archived.clone());
+    let inspected =
+        tokio::task::spawn_blocking(move || inspect(&state, &sessions).map(|_| ())).await;
+    assert!(inspected.unwrap().is_err());
     let left = fixture.remove(&archived, &[]).await;
     assert_eq!(
         summary(&left),
@@ -443,6 +451,7 @@ fn the_user_is_told_of_what_was_not_kept_on_purpose() {
         state,
         uncommitted,
         detail: None,
+        cause: None,
     };
     let kept = target(&item(SessionBranchState::UncommittedChanges, true));
     for (left, forced, keep, told) in [
@@ -510,6 +519,7 @@ fn an_agent_is_told_each_item_left_in_plain_text_with_its_reason() {
         state: SessionBranchState::Locked,
         uncommitted: true,
         detail: None,
+        cause: None,
     };
     assert_eq!(
         for_agent(&[item]),
@@ -534,11 +544,12 @@ fn a_client_is_told_each_item_left_as_structured_data() {
         state: SessionBranchState::Failed,
         uncommitted: false,
         detail: Some("error: refused".to_string()),
+        cause: None,
     };
     let parsed: Value = serde_json::from_str(&for_client(&[item])).unwrap();
     assert_eq!(
         parsed,
-        json!([{ "kind": "branch", "name": "a,b", "branch": "a,b", "state": "failed", "uncommitted": false, "detail": "error: refused" }])
+        json!([{ "kind": "branch", "name": "a,b", "branch": "a,b", "state": "failed", "uncommitted": false, "detail": "error: refused", "cause": null }])
     );
 }
 
@@ -588,7 +599,7 @@ async fn the_users_requests_force_what_they_name_and_report_what_is_left() {
         std::fs::write(forced.join("new.txt"), "untracked\n").unwrap();
         let left = fixture.worktree("left", "s1");
         std::fs::write(left.join("new.txt"), "untracked\n").unwrap();
-        let shown = fixture.inspect(&[session("s1", status)]);
+        let shown = fixture.inspect(&[session("s1", status)]).await;
         let named: Vec<SessionBranchTarget> = shown
             .iter()
             .filter(|item| {
@@ -825,6 +836,446 @@ async fn a_removal_after_an_unresolved_inspection_repeats_its_refusal() {
     );
 }
 
+// -- another project's folder, told by what it is ------------------------------------------
+
+/// Stores the project `p2` at `path`, in place of any `p2` stored before.
+fn other_project_at(state: &AppState, path: &Path) {
+    state.store.delete_project("p2").ok();
+    let mut other = project_p1(state);
+    other.id = "p2".to_string();
+    other.path = path.to_string_lossy().into_owned();
+    state.store.insert_project(&other).unwrap();
+}
+
+/// Records a look at `path` as still stuck for as long as `stuck` lives, so the path counts as one
+/// whose look outran its deadline.
+fn stall(state: &AppState, path: &Path, stuck: &Arc<()>) {
+    state.directory_looks.record(
+        crate::hostfs::lexically_normalise(path),
+        Arc::downgrade(stuck),
+    );
+}
+
+/// [`project::plan`] of `p1`'s removal, on a blocking thread as the daemon runs it.
+async fn plan_now(
+    state: &Arc<AppState>,
+    reads: project::Reads,
+    held_back: Vec<PathBuf>,
+) -> Option<project::Removal> {
+    let state = state.clone();
+    tokio::task::spawn_blocking(move || {
+        project::plan(&state, &project_p1(&state), reads, &held_back).unwrap()
+    })
+    .await
+    .unwrap()
+}
+
+/// The state the inspection gives the worktree at `root`, with its detail.
+async fn worktree_stands(
+    fixture: &Fixture,
+    sessions: &[Session],
+    root: &Path,
+) -> (SessionBranchState, Option<String>) {
+    let path = wire_path::encode(root.as_os_str().as_bytes());
+    let item = fixture
+        .inspect(sessions)
+        .await
+        .into_iter()
+        .find(|item| item.path.as_deref() == Some(path.as_str()))
+        .expect("the worktree is listed");
+    (item.state, item.detail)
+}
+
+/// How a project's removal with its folder lists the worktree at `root`: the item, `None` where it
+/// is not listed.
+async fn removal_lists(fixture: &Fixture, root: &Path) -> Option<SessionBranchItem> {
+    let path = wire_path::encode(root.as_os_str().as_bytes());
+    plan_now(&fixture.state, project::Reads::Inspection, Vec::new())
+        .await?
+        .items()
+        .into_iter()
+        .find(|item| item.path.as_deref() == Some(path.as_str()))
+}
+
+/// Whether `item` is one kept because whether it is or holds another project's folder could not be
+/// told.
+fn is_untold(item: &SessionBranchItem) -> bool {
+    item.state == SessionBranchState::Failed
+        && item.cause == Some(SessionBranchCause::ProjectFolderUnknown)
+        && item.detail.as_deref() == Some(HOLDING_UNTOLD)
+}
+
+/// A worktree holding another project's folder is that project's however the folder's path is
+/// spelled: through the second real path a macOS firmlink gives it (as a bind mount does on
+/// Linux), through a link, or in another letter case on a file system that ignores case. It is
+/// never removed, nor taken along with a project's folder. On macOS the scratch directory always
+/// has a second real path, so its absence fails there.
+#[tokio::test]
+async fn a_worktree_holding_another_projects_folder_by_another_path_is_never_removed() {
+    let fixture = Fixture::new("cleanup-holds-other");
+    let archived = [fixture.store("s1", SessionStatus::Archived)];
+    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    std::fs::create_dir(root.join("inner")).unwrap();
+
+    let mut spellings = Vec::new();
+    match crate::test_support::second_real_path(&root) {
+        Some(second) => spellings.push(("firmlink", second.join("inner"))),
+        None if cfg!(target_os = "macos") => panic!("{} has no second real path", root.display()),
+        None => {}
+    }
+    let link = fixture.worktrees.join("link");
+    std::os::unix::fs::symlink(&root, &link).unwrap();
+    spellings.push(("link", link.join("inner")));
+    let name = root.file_name().unwrap().to_string_lossy().to_uppercase();
+    let respelled = root.with_file_name(name);
+    let identity = |path: &Path| {
+        std::fs::metadata(path)
+            .ok()
+            .map(|m| crate::hostfs::identity(&m))
+    };
+    if identity(&respelled) == identity(&root) {
+        spellings.push(("case", respelled.join("INNER")));
+    } else {
+        eprintln!("no case-only respelling: the file system tells case apart");
+    }
+
+    for (how, path) in &spellings {
+        other_project_at(&fixture.state, path);
+        assert_eq!(
+            worktree_stands(&fixture, &archived, &root).await,
+            (SessionBranchState::ProjectFolder, None),
+            "{how}"
+        );
+        assert!(removal_lists(&fixture, &root).await.is_none(), "{how}");
+    }
+    let left = fixture.remove(&archived, &[]).await;
+    assert!(root.exists());
+    assert!(left
+        .iter()
+        .any(|item| item.state == SessionBranchState::ProjectFolder));
+}
+
+/// Where whether a worktree holds another project's folder cannot be told — that project's path
+/// did not answer in time, or the worktree's own root did not — the worktree is kept as if it did:
+/// left with a reason of its own, which the removal reports, and not listed as going along with a
+/// project's folder but held back. Once both answer, it goes as before.
+#[tokio::test]
+async fn a_worktree_whose_holding_cannot_be_told_is_kept_and_reported() {
+    let fixture = Fixture::new("cleanup-holds-untold");
+    let archived = [fixture.store("s1", SessionStatus::Archived)];
+    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let elsewhere = fixture.worktrees.join("elsewhere");
+    std::fs::create_dir(&elsewhere).unwrap();
+    other_project_at(&fixture.state, &elsewhere);
+    let untold = (SessionBranchState::Failed, Some(HOLDING_UNTOLD.to_string()));
+
+    for stalled in [&elsewhere, &root] {
+        let stuck = Arc::new(());
+        stall(&fixture.state, stalled, &stuck);
+        assert_eq!(
+            worktree_stands(&fixture, &archived, &root).await,
+            untold,
+            "{}",
+            stalled.display()
+        );
+        let removal = plan_now(&fixture.state, project::Reads::Inspection, Vec::new())
+            .await
+            .unwrap();
+        let listed: Vec<_> = removal
+            .items()
+            .into_iter()
+            .filter(|item| item.path.is_some())
+            .collect();
+        assert!(listed.len() == 1 && is_untold(&listed[0]), "{listed:?}");
+        assert_eq!(removal.held_back(), vec![root.clone()]);
+    }
+
+    let stuck = Arc::new(());
+    stall(&fixture.state, &root, &stuck);
+    let left = fixture.remove(&archived, &[]).await;
+    assert!(root.exists() && fixture.has_branch("mine"));
+    assert_eq!(
+        summary(&left),
+        expect(&[
+            (true, "mine", SessionBranchState::Failed),
+            (false, "mine", SessionBranchState::CheckedOut),
+        ])
+    );
+    assert!(is_untold(&left[0]));
+    let told: Value = serde_json::from_str(&for_client(&left)).unwrap();
+    assert_eq!(told[0]["cause"], "project_folder_unknown");
+    assert_eq!(told[1]["cause"], Value::Null);
+    drop(stuck);
+
+    assert_eq!(
+        worktree_stands(&fixture, &archived, &root).await,
+        (SessionBranchState::Removable, None)
+    );
+    assert_eq!(
+        removal_lists(&fixture, &root).await.map(|item| item.state),
+        Some(SessionBranchState::Removable)
+    );
+    // Held back by the inspection before it, it stays held back.
+    let removal = plan_now(&fixture.state, project::Reads::Removal, vec![root.clone()])
+        .await
+        .unwrap();
+    let left = carry_out_now(&fixture, removal, &[]);
+    assert_eq!(
+        summary(&left),
+        expect(&[(true, "mine", SessionBranchState::Failed)])
+    );
+    assert!(root.exists());
+}
+
+/// Another project's path with nothing at it, or that cannot be read for want of permission, is
+/// compared by its text, as written and as resolved: inside the worktree it keeps the worktree,
+/// elsewhere it does not. A sibling whose name merely starts the same is not inside. Skipped as
+/// root, who reads a folder whatever its permissions, for the unreadable ones.
+#[tokio::test]
+async fn another_project_with_nothing_there_or_unreadable_is_compared_by_its_text() {
+    let fixture = Fixture::new("cleanup-holds-text");
+    let archived = [fixture.store("s1", SessionStatus::Archived)];
+    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let stands = |path: PathBuf| {
+        let (fixture, archived, root) = (&fixture, &archived, &root);
+        async move {
+            other_project_at(&fixture.state, &path);
+            worktree_stands(fixture, archived, root).await.0
+        }
+    };
+    let held = SessionBranchState::ProjectFolder;
+    let clear = SessionBranchState::Removable;
+    assert_eq!(stands(root.join("missing")).await, held);
+    assert_eq!(
+        stands(fixture.worktrees.join("elsewhere/missing")).await,
+        clear
+    );
+
+    if unsafe { libc::geteuid() } != 0 {
+        use std::os::unix::fs::PermissionsExt;
+        let elsewhere = std::fs::canonicalize(&*fixture.worktrees).unwrap();
+        let locked = [root.join("locked"), elsewhere.join("locked")];
+        for path in &locked {
+            std::fs::create_dir_all(path.join("project")).unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o000)).unwrap();
+        }
+        let inside = stands(locked[0].join("project")).await;
+        let outside = stands(locked[1].join("project")).await;
+        for path in &locked {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            std::fs::remove_dir_all(path).unwrap();
+        }
+        assert_eq!((inside, outside), (held, clear));
+    } else {
+        eprintln!("skipped the unreadable paths: root reads a folder whatever its permissions");
+    }
+
+    let sibling = fixture.worktrees.join("mine-2");
+    std::fs::create_dir(&sibling).unwrap();
+    assert_eq!(stands(sibling).await, clear);
+    let left = fixture.remove(&archived, &[]).await;
+    assert!(left.is_empty(), "{left:?}");
+    assert!(!root.exists());
+}
+
+/// The removal confirmed after an inspection that held a worktree back, given that inspection's
+/// token, leaves it and reports it, even once it can be told; without the token, one whose root
+/// does not answer during the removal is left and reported all the same.
+#[tokio::test]
+async fn a_removal_after_an_inspection_that_held_a_worktree_back_leaves_it() {
+    for with_token in [true, false] {
+        let fixture = Fixture::new(&format!("cleanup-held-back-{with_token}"));
+        let state = &fixture.state;
+        fixture.store("s1", SessionStatus::Archived);
+        let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+        let elsewhere = fixture.worktrees.join("elsewhere");
+        std::fs::create_dir(&elsewhere).unwrap();
+        other_project_at(state, &elsewhere);
+
+        let mut stuck = Some(Arc::new(()));
+        stall(state, &root, stuck.as_ref().unwrap());
+        let inspected = crate::coordinator::handle(
+            state,
+            None,
+            RequestBody::InspectProjectRemoval {
+                project: "p1".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        let Some(Event::ProjectRemovalInspected {
+            items, inspection, ..
+        }) = inspected
+        else {
+            panic!("not inspected: {inspected:?}");
+        };
+        let listed: Vec<_> = items.iter().filter(|item| item.path.is_some()).collect();
+        assert!(listed.len() == 1 && is_untold(listed[0]), "{items:?}");
+        assert!(inspection.is_some());
+        // Without the token the root stays stuck through the removal.
+        if with_token {
+            stuck.take();
+        }
+
+        let mut events = state.subscribe();
+        crate::coordinator::handle(
+            state,
+            None,
+            RequestBody::DeleteProject {
+                project: "p1".to_string(),
+                stop_sessions: true,
+                trash_directory: true,
+                force_remove: Vec::new(),
+                inspection: inspection.filter(|_| with_token),
+            },
+        )
+        .await
+        .unwrap();
+        let told = reported(&mut events).await;
+        assert_eq!(told[0]["state"], "failed", "{told}");
+        assert_eq!(told[0]["cause"], "project_folder_unknown", "{told}");
+        assert_eq!(told[0]["detail"], HOLDING_UNTOLD, "{told}");
+        assert!(root.exists() && !fixture.repo.exists());
+        assert_eq!(state.unresolved_removals.len(), 0);
+    }
+}
+
+/// A removal that fails before it stands, such as one whose folder cannot be moved to the Trash,
+/// leaves the token of the inspection that held a worktree back as it was, so the retry confirmed
+/// with it holds that worktree back too.
+#[tokio::test]
+async fn a_retried_removal_still_holds_back_what_its_inspection_held_back() {
+    let fixture = Fixture::new("cleanup-held-back-retry");
+    let state = &fixture.state;
+    fixture.store("s1", SessionStatus::Archived);
+    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let elsewhere = fixture.worktrees.join("elsewhere");
+    std::fs::create_dir(&elsewhere).unwrap();
+    other_project_at(state, &elsewhere);
+    let stuck = Arc::new(());
+    stall(state, &root, &stuck);
+    let Some(Event::ProjectRemovalInspected { inspection, .. }) = crate::coordinator::handle(
+        state,
+        None,
+        RequestBody::InspectProjectRemoval {
+            project: "p1".to_string(),
+        },
+    )
+    .await
+    .unwrap() else {
+        panic!("not inspected");
+    };
+    drop(stuck);
+    let delete = || {
+        crate::coordinator::handle(
+            state,
+            None,
+            RequestBody::DeleteProject {
+                project: "p1".to_string(),
+                stop_sessions: true,
+                trash_directory: true,
+                force_remove: Vec::new(),
+                inspection: inspection.clone(),
+            },
+        )
+    };
+
+    state.host_tools.replace(crate::host_tools::Tools {
+        trash: |_| anyhow::bail!("the Trash is full"),
+        ..host_tools()
+    });
+    assert!(delete().await.is_err());
+    assert!(state.store.get_project("p1").unwrap().is_some() && fixture.repo.exists());
+    assert_eq!(
+        state.unresolved_removals.len(),
+        1,
+        "the token is still kept"
+    );
+
+    state.host_tools.replace(host_tools());
+    let mut events = state.subscribe();
+    delete().await.unwrap();
+    let told = reported(&mut events).await;
+    assert_eq!(told[0]["cause"], "project_folder_unknown", "{told}");
+    assert!(root.exists() && !fixture.repo.exists());
+    assert_eq!(
+        state.unresolved_removals.len(),
+        0,
+        "dropped with the project"
+    );
+}
+
+/// A removal that cannot run git at all leaves everything it would carry out as failed for that
+/// reason, while what it held back keeps its own reason, and so its group and note.
+#[tokio::test]
+async fn a_removal_that_cannot_run_git_keeps_why_it_held_a_worktree_back() {
+    let fixture = Fixture::new("cleanup-held-back-no-git");
+    let state = &fixture.state;
+    fixture.store("s1", SessionStatus::Archived);
+    let held = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    fixture.worktree("going", "s1");
+    let elsewhere = fixture.worktrees.join("elsewhere");
+    std::fs::create_dir(&elsewhere).unwrap();
+    other_project_at(state, &elsewhere);
+    let stuck = Arc::new(());
+    stall(state, &held, &stuck);
+    let removal = plan_now(state, project::Reads::Removal, Vec::new())
+        .await
+        .unwrap();
+    drop(stuck);
+    state.host_tools.replace(crate::host_tools::Tools {
+        git: || anyhow::bail!("git is not on the PATH"),
+        ..host_tools()
+    });
+    let left =
+        project::carry_out_once_stopped(state.clone(), Vec::new(), removal, Vec::new()).await;
+    let path = wire_path::encode(held.as_os_str().as_bytes());
+    let (kept, others): (Vec<_>, Vec<_>) = left
+        .iter()
+        .partition(|item| item.path.as_deref() == Some(path.as_str()));
+    assert!(kept.len() == 1 && is_untold(kept[0]), "{left:?}");
+    assert!(!others.is_empty());
+    assert!(others
+        .iter()
+        .all(|item| item.state == SessionBranchState::Failed
+            && item.cause.is_none()
+            && item.detail.as_deref() == Some("git is not on the PATH")));
+}
+
+/// A worktree holding another project's repository — its main worktree, with the common directory
+/// a linked worktree elsewhere that is that project's folder works from — would take that
+/// project's history along, so it counts as holding that project's folder.
+#[tokio::test]
+async fn a_worktree_holding_another_projects_repository_is_never_removed() {
+    let fixture = Fixture::new("cleanup-holds-repository");
+    let archived = [fixture.store("s1", SessionStatus::Archived)];
+    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    let nested = root.join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    git(&nested, &["init", "-q", "-b", "main"]);
+    git(&nested, &["commit", "-q", "--allow-empty", "-m", "init"]);
+    let linked = fixture.worktrees.join("linked");
+    git(
+        &nested,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "theirs",
+            linked.to_str().unwrap(),
+        ],
+    );
+    other_project_at(&fixture.state, &linked);
+    assert_eq!(
+        worktree_stands(&fixture, &archived, &root).await,
+        (SessionBranchState::ProjectFolder, None)
+    );
+    assert!(removal_lists(&fixture, &root).await.is_none());
+    fixture.remove(&archived, &[]).await;
+    assert!(root.exists() && linked.exists());
+}
+
 // -- what an agent is told ---------------------------------------------------------------
 
 /// `owner`, an unbound project session, with `worker` bound to it; `worker` made `branch` in a
@@ -911,6 +1362,26 @@ fn listed_worktrees(repo: &Path) -> String {
     String::from_utf8(git(repo, &["worktree", "list", "--porcelain"])).unwrap()
 }
 
+/// Runs `work`, a blocking function of the cleanup, as the daemon runs it: on a thread inside a
+/// runtime, whose blocking threads the looks it waits for run on.
+fn blocking<T: Send>(work: impl FnOnce() -> T + Send) -> T {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+    let handle = runtime.handle().clone();
+    std::thread::scope(|scope| {
+        scope
+            .spawn(move || {
+                let _entered = handle.enter();
+                work()
+            })
+            .join()
+            .unwrap()
+    })
+}
+
 fn carry_out_now(
     fixture: &Fixture,
     removal: project::Removal,
@@ -972,7 +1443,7 @@ fn a_folder_holding_the_repository_takes_every_outside_worktree_but_another_proj
     branch_made_by(&fixture.state, &fixture.repo, "plain", "s1");
 
     let plan = |reads| {
-        project::plan(&fixture.state, &project_p1(&fixture.state), reads)
+        blocking(|| project::plan(&fixture.state, &project_p1(&fixture.state), reads, &[]))
             .unwrap()
             .unwrap()
     };
@@ -1012,7 +1483,7 @@ fn a_locked_worktree_that_gained_changes_since_it_was_shown_stays() {
     let locked = fixture.worktree("locked", "s1");
     fixture.lock(&locked);
     let plan = |reads| {
-        project::plan(&fixture.state, &project_p1(&fixture.state), reads)
+        blocking(|| project::plan(&fixture.state, &project_p1(&fixture.state), reads, &[]))
             .unwrap()
             .unwrap()
     };
@@ -1058,11 +1529,14 @@ fn a_surviving_repository_loses_the_bound_branches_and_keeps_what_it_must() {
     branch_made_by(&fixture.state, &fixture.repo, "in-main", "s1");
     git(&fixture.repo, &["switch", "-q", "in-main"]);
 
-    let shown = project::plan(
-        &fixture.state,
-        &project_p1(&fixture.state),
-        project::Reads::Inspection,
-    )
+    let shown = blocking(|| {
+        project::plan(
+            &fixture.state,
+            &project_p1(&fixture.state),
+            project::Reads::Inspection,
+            &[],
+        )
+    })
     .unwrap()
     .unwrap()
     .items();
@@ -1090,11 +1564,14 @@ fn a_surviving_repository_loses_the_bound_branches_and_keeps_what_it_must() {
     assert_eq!(forced.len(), 1);
 
     // The folder goes to the Trash after the plan and before the rest, as the removal runs.
-    let removal = project::plan(
-        &fixture.state,
-        &project_p1(&fixture.state),
-        project::Reads::Removal,
-    )
+    let removal = blocking(|| {
+        project::plan(
+            &fixture.state,
+            &project_p1(&fixture.state),
+            project::Reads::Removal,
+            &[],
+        )
+    })
     .unwrap()
     .unwrap();
     std::fs::remove_dir_all(&folder).unwrap();
@@ -1122,11 +1599,14 @@ fn a_locked_project_folder_keeps_its_branch_and_says_so() {
     insert_project(&fixture.state, &folder);
     fixture.lock(&folder);
     fixture.store("s1", SessionStatus::Archived);
-    let removal = project::plan(
-        &fixture.state,
-        &project_p1(&fixture.state),
-        project::Reads::Removal,
-    )
+    let removal = blocking(|| {
+        project::plan(
+            &fixture.state,
+            &project_p1(&fixture.state),
+            project::Reads::Removal,
+            &[],
+        )
+    })
     .unwrap()
     .unwrap();
     std::fs::remove_dir_all(&folder).unwrap();
@@ -1147,7 +1627,7 @@ fn a_locked_worktree_whose_move_to_the_trash_fails_keeps_its_lock() {
     let locked = fixture.worktree("pinned", "s1");
     fixture.lock(&locked);
     let plan = |reads| {
-        project::plan(&fixture.state, &project_p1(&fixture.state), reads)
+        blocking(|| project::plan(&fixture.state, &project_p1(&fixture.state), reads, &[]))
             .unwrap()
             .unwrap()
     };

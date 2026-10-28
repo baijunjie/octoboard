@@ -139,6 +139,20 @@ it("puts the reason what goes with a removed project's folder is unknown on a li
   expect(message.endsWith(".\nfatal: not a git repository")).toBe(true);
 });
 
+it("words a worktree kept for a project folder that could not be checked by its own group, with what to do after it", () => {
+  const items = JSON.stringify([
+    { kind: "worktree", name: "/home/dev/wt", branch: null, state: "failed", uncommitted: false, detail: "whether it is or holds another project's folder could not be told", cause: "project_folder_unknown" },
+  ]);
+  const shown = { ...records, homeDir: "/home/dev" };
+  expect(daemonMessage("en", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
+    `Whether this worktree is or holds another project's folder could not be checked: ${isolate("~/wt")} (detached HEAD). `
+      + "It may hold another project's files. Once it can be read, check what is in it before you remove it yourself.",
+  );
+  expect(daemonMessage("zh-Hans", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
+    `无法检查以下工作树是否为或包含其他项目的文件夹：${isolate("~/wt")}（分离的 HEAD）。其中可能有其他项目的文件。请等到可以读取后先检查内容，再自行删除。`,
+  );
+});
+
 it("says a single group of leftovers by its own lead alone", () => {
   const items = JSON.stringify([{ kind: "branch", name: "fix/a", branch: "fix/a", state: "unmerged", uncommitted: false, detail: null }]);
   expect(daemonMessage("en", "session_branches_not_removed", { count: "1", items }, "fallback", records)).toBe(`This branch is not merged: ${isolate("fix/a")}.`);

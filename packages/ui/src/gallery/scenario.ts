@@ -290,8 +290,9 @@ export interface Scenario {
   sessionBranches?: SessionBranchItem[] | "pending" | FixtureError;
   /** What `inspect_project_removal` finds per project: the worktrees and branches its removal with
    * the folder in the Trash takes along, or the error the inspection fails with. A project not
-   * listed has none. */
-  projectRemovalBranches?: Record<string, SessionBranchItem[] | FixtureError>;
+   * listed has none. `{ items, inspection }` is an answer that holds worktrees back (items with a `cause`), carrying the
+   * token the removal sends back so that they stay. */
+  projectRemovalBranches?: Record<string, SessionBranchItem[] | { items: SessionBranchItem[]; inspection: string } | FixtureError>;
   /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;

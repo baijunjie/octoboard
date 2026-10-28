@@ -1132,7 +1132,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           refuseUnknownProject(body.project);
           const found = scenario.projectRemovalBranches?.[body.project] ?? [];
           if ("code" in found) return fail(found);
-          return { type: "project_removal_inspected", items: found };
+          return Array.isArray(found) ? { type: "project_removal_inspected", items: found } : { type: "project_removal_inspected", ...found };
         }
         case "delete_session": {
           const all = [...store.getState().sessions.values()];

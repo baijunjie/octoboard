@@ -123,6 +123,16 @@ export function worktreeItemOf(
   return { kind: "worktree", repository: `${project.path}/.git`, branch, path, project: project.id, session: session?.id ?? null, state, uncommitted, detail: null };
 }
 
+/** A linked worktree of `project`'s repository at `path` that the removal of the project with its folder holds back:
+ * whether it is or holds another project's folder could not be told, so it stays (`failed`, with that `cause`). */
+export function unknownFolderWorktreeOf(project: Project, session: Session | null, branch: string | null, path: string): SessionBranchItem {
+  return {
+    ...worktreeItemOf(project, session, branch, path, "failed", false),
+    detail: "whether it is or holds another project's folder could not be told",
+    cause: "project_folder_unknown",
+  };
+}
+
 export function pageOf(id: string, consoleSessionId: string, html: string, minutes: number): Page {
   return { id, console_session_id: consoleSessionId, html, created_at: minutesAgo(minutes) };
 }

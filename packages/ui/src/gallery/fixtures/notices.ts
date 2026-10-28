@@ -14,6 +14,10 @@ const GIT_REFUSAL = [
   "hint: to remove it, first remove the worktree with git worktree remove, then run git branch -D fix/rename-index again once nothing else holds the branch",
 ].join("\n");
 
+// What the daemon says in English of a worktree it kept for want of knowing whether it is or holds another project's
+// folder; the UI words that itself from `cause` and shows none of this.
+const FOLDER_UNKNOWN_DETAIL = "whether it is or holds another project's folder could not be told";
+
 const { console: console_, web, api } = SAMPLE;
 // A session of each of the other two agents, for the prompts and notices that name the agent.
 const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the retry logic", "working", {
@@ -669,21 +673,42 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Branches and worktrees left after an archive",
-    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: under \"Removing this failed:\" a branch git failed to delete, shown as its name alone, and a locked worktree, its folder icon before the path shortened with ~ and its branch icon on the next line aligned with the folder icon, its row ending with a soft warning \"uncommitted changes\" badge. Recovery guidance follows, then the Error details disclosure, open here: below a heading naming the branch, git's multi-line message sits in a block of its own, so no git text is in the list above. The archive itself stands.",
+    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: under \"Removing this failed:\" a branch git failed to delete, shown as its name alone; under the lead for a locked worktree, that worktree, its folder icon before the path shortened with ~ and its branch icon on the next line aligned with the folder icon, its row ending with a soft warning \"uncommitted changes\" badge; and, last, under the plural lead \"Whether these worktrees are or hold another project's folder could not be checked:\", two worktrees with no raw text of their own, followed by the plural note that they may hold another project's files and to check what is in them before removing them by hand. Recovery guidance follows, then the Error details disclosure, open here: below a heading naming the branch, git's multi-line message sits in a block of its own, so no git text is in the list above and none for the two worktrees. The archive itself stands.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",
       code: "session_branches_not_removed",
       params: {
-        count: "2",
+        count: "4",
         items: JSON.stringify([
           { kind: "worktree", name: "/Users/dev/worktrees/website-changelog-tidy", branch: "changelog-tidy", state: "locked", uncommitted: true, detail: null },
           { kind: "branch", name: "fix/rename-index", branch: "fix/rename-index", state: "failed", uncommitted: false, detail: GIT_REFUSAL },
+          { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-share", branch: "mounted-share", state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
+          { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-assets", branch: null, state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
         ]),
       },
       message: "The worktree is locked; the branch could not be deleted",
     }],
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
+    id: "toast-session-branches-not-removed-folder-unknown",
+    group: TRUST,
+    category: "exceptional",
+    title: "Worktree kept, whether it holds another project's folder unknown",
+    description: "With a single worktree left, the alert has no header: the singular lead \"Whether this worktree is or holds another project's folder could not be checked:\" is its summary, over the worktree (folder icon, path shortened with ~, branch on the next line) with no raw text under it, then the singular note that it may hold another project's files and to check what is in it before removing it by hand. There is no Error details disclosure, as there is no raw text to show.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "error",
+      code: "session_branches_not_removed",
+      params: {
+        count: "1",
+        items: JSON.stringify([
+          { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-share", branch: "mounted-share", state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
+        ]),
+      },
+      message: "The worktree could not be removed",
+    }],
   },
   {
     id: "toast-session-branches-not-removed-locked",

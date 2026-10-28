@@ -7,7 +7,7 @@ import { abbreviateHome } from "./pathDisplay";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, NESTED_FAILURE_CODES, pathLinkRefusedCause, type MessageParams, type QuotaWindow, type SessionBranchState, type SharingEntryCause } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, isProjectFolderUnknown, NESTED_FAILURE_CODES, pathLinkRefusedCause, type MessageParams, type QuotaWindow, type SessionBranchCause, type SessionBranchState, type SharingEntryCause } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -159,32 +159,46 @@ export function runningSessionIds(params: MessageParams): string[] | undefined {
 
 /** One bound branch or worktree a `session_branches_not_removed` alert names: `name` is its path or
  * branch name as text, `state` why it is still there, `uncommitted` whether a worktree has
- * uncommitted changes, `detail` the reason given for a `failed` one. */
-export type LeftBranchItem = { kind: "worktree" | "branch"; name: string; branch: string | null; state: SessionBranchState; uncommitted?: boolean; detail: string | null };
+ * uncommitted changes, `detail` the reason given for a `failed` one, and `cause` why a `failed` one is left where the
+ * UI words that itself (`detail` is then the daemon's English, not shown). */
+export type LeftBranchItem = { kind: "worktree" | "branch"; name: string; branch: string | null; state: SessionBranchState; uncommitted?: boolean; detail: string | null; cause?: SessionBranchCause | null };
 
 /** The groups a `session_branches_not_removed` alert sorts its items into, in the order shown, each
- * with the lead line that says once why its items are still there; what could not be removed at
- * all comes first. */
+ * with the lead line that says once why its items are still there, and for some a note after the list on what to do
+ * with them; what could not be removed at all comes first. A worktree kept because whether it is or holds another
+ * project's folder could not be told is not among what could not be removed, but in a group of its own beside the
+ * project folders. */
 type LeftBranchLead =
   | "branchCleanup.group.notRemoved" | "branchCleanup.group.uncommitted" | "branchCleanup.group.submodules"
   | "branchCleanup.group.locked" | "branchCleanup.group.unmerged" | "branchCleanup.group.checkedOut"
-  | "branchCleanup.group.projectFolder";
-const LEFT_BRANCH_GROUPS: Array<{ key: string; lead: LeftBranchLead; states: SessionBranchState[] }> = [
-  { key: "notRemoved", lead: "branchCleanup.group.notRemoved", states: ["failed", "removable"] },
-  { key: "uncommitted", lead: "branchCleanup.group.uncommitted", states: ["uncommitted_changes"] },
-  { key: "submodules", lead: "branchCleanup.group.submodules", states: ["submodules"] },
-  { key: "locked", lead: "branchCleanup.group.locked", states: ["locked"] },
-  { key: "unmerged", lead: "branchCleanup.group.unmerged", states: ["unmerged"] },
-  { key: "checkedOut", lead: "branchCleanup.group.checkedOut", states: ["checked_out"] },
-  { key: "projectFolder", lead: "branchCleanup.group.projectFolder", states: ["project_folder"] },
+  | "branchCleanup.group.projectFolder" | "branchCleanup.group.projectFolderUnknown";
+type LeftBranchNote = "branchCleanup.note.projectFolderUnknown";
+const LEFT_BRANCH_GROUPS: Array<{ key: string; lead: LeftBranchLead; note?: LeftBranchNote; states: SessionBranchState[]; holds: (item: LeftBranchItem) => boolean }> = [
+  { key: "notRemoved", lead: "branchCleanup.group.notRemoved", states: ["failed", "removable"], holds: (item) => !isProjectFolderUnknown(item) },
+  { key: "uncommitted", lead: "branchCleanup.group.uncommitted", states: ["uncommitted_changes"], holds: () => true },
+  { key: "submodules", lead: "branchCleanup.group.submodules", states: ["submodules"], holds: () => true },
+  { key: "locked", lead: "branchCleanup.group.locked", states: ["locked"], holds: () => true },
+  { key: "unmerged", lead: "branchCleanup.group.unmerged", states: ["unmerged"], holds: () => true },
+  { key: "checkedOut", lead: "branchCleanup.group.checkedOut", states: ["checked_out"], holds: () => true },
+  { key: "projectFolder", lead: "branchCleanup.group.projectFolder", states: ["project_folder"], holds: () => true },
+  {
+    key: "projectFolderUnknown", lead: "branchCleanup.group.projectFolderUnknown", note: "branchCleanup.note.projectFolderUnknown",
+    states: ["failed"], holds: isProjectFolderUnknown,
+  },
 ];
 const LEFT_BRANCH_STATES = new Set(LEFT_BRANCH_GROUPS.flatMap((group) => group.states));
 
 /** `items` sorted into their groups, leaving out the empty ones. */
-export function leftBranchGroups(items: LeftBranchItem[]): Array<{ key: string; lead: LeftBranchLead; items: LeftBranchItem[] }> {
+export function leftBranchGroups(items: LeftBranchItem[]): Array<{ key: string; lead: LeftBranchLead; note?: LeftBranchNote; items: LeftBranchItem[] }> {
   return LEFT_BRANCH_GROUPS
-    .map(({ key, lead, states }) => ({ key, lead, items: items.filter((item) => states.includes(item.state)) }))
+    .map(({ key, lead, note, states, holds }) => ({ key, lead, note, items: items.filter((item) => states.includes(item.state) && holds(item)) }))
     .filter((group) => group.items.length > 0);
+}
+
+/** The reason given for a `failed` item of a `session_branches_not_removed` alert, to show under its name: none for
+ * one whose group says why in the UI's own words. */
+export function leftBranchDetail(item: LeftBranchItem): string | null {
+  return isProjectFolderUnknown(item) ? null : item.detail;
 }
 
 /** How an item of a `session_branches_not_removed` alert is named to a person: a worktree's path
@@ -203,7 +217,8 @@ function leftBranchText(language: Language, item: LeftBranchItem, homeDir: strin
       ? format(language, "branchCleanup.worktreeDetached", { path })
       : format(language, "branchCleanup.worktree", { path, branch: isolate(item.branch) });
   if (item.state === "locked" && item.uncommitted) name = format(language, "branchCleanup.withTag", { name, tag: format(language, "branchCleanup.uncommittedTag", {}) });
-  return item.detail ? format(language, "branchCleanup.failed", { name, detail: isolate(item.detail) }) : name;
+  const detail = leftBranchDetail(item);
+  return detail ? format(language, "branchCleanup.failed", { name, detail: isolate(detail) }) : name;
 }
 
 /** What a sharing change left one entry as. The wire values are the daemon's. */
@@ -551,7 +566,10 @@ export function daemonParams<V = never>(
       lead: format(language, group.lead, { count: group.items.length }),
       items: joined("branchCleanup.plain.items", group.items.map((item) => leftBranchText(language, item, records.homeDir))),
     }));
-    shown.items = format(language, "branchCleanup.plain.end", { groups: joined("branchCleanup.plain.groups", groups) });
+    // A group's note is a sentence of its own, after the list.
+    const notes = leftBranchGroups(left).flatMap((group) => group.note ? [format(language, group.note, { count: group.items.length })] : []);
+    shown.items = [format(language, "branchCleanup.plain.end", { groups: joined("branchCleanup.plain.groups", groups) }), ...notes]
+      .join(format(language, "common.sentenceSeparator", {}));
   }
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);

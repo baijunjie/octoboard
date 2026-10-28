@@ -30,7 +30,8 @@ The confirmation also carries an option to **also move the project folder to the
 confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it can be
 recovered from the Trash. Ticking it makes the message say the folder is moved to the Trash; for the confirm button's
 label, see "What a confirmation's confirm button names" in `docs/product/dialogs.md`. Ticking it also lists the
-worktrees outside the folder, and the branches, that go with it, and offers locked worktrees under a choice of their own
+worktrees outside the folder, and the branches, that go with it, and the worktrees outside it that stay because whether
+they are or hold another project's folder could not be checked, and offers locked worktrees under a choice of their own
 (see "With a project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`). While a removal
 runs, the button shows as pending and the option cannot be changed.
 
@@ -53,9 +54,10 @@ in an error alert over the confirmation and names the reason; nothing is ended, 
   the project.
 - Once the project is removed and its sessions' processes have ended, linked worktrees outside the folder that would
   be left without it, and where the repository outlives the folder the branches of the project's sessions, go too
-  (which ones depends on whether the repository goes with the folder); a failure there
-  does not undo the removal and is reported (see "With a project's folder moved to the Trash" in
-  `docs/product/branch-and-worktree-cleanup.md`).
+  (which ones depends on whether the repository goes with the folder), but never a worktree that is or holds another
+  project's folder, or of which that cannot be told (see "A worktree that is or holds a project's folder" in
+  `docs/product/branch-and-worktree-cleanup.md`); a failure there does not undo the removal and is reported (see "With a
+  project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`).
 - A folder that no longer exists is skipped: nothing is moved, and the project is removed as usual.
 - A project directory that is a symbolic link is moved to the Trash as the link, not as the folder it points to. A
   project path that is a file, a link to a file, or a link that leads nowhere is moved as itself. It holds nothing, so
@@ -107,5 +109,7 @@ in an error alert over the confirmation and names the reason; nothing is ended, 
     lookup's refusal carried (the `inspection` param), and the daemon repeats that refusal once and then drops it. The
     confirmation sends the token of its latest lookup; a lookup in another window does not affect it.
   - A removal with no such token, or with one the daemon no longer keeps — already used, its project or console
-    removed, pushed out once four newer such refusals of the same project are kept, or a restart of the daemon in
-    between — looks for itself when it is confirmed.
+    removed, pushed out once four newer tokens of the same project are kept (a refusal's, or a lookup's that held
+    worktrees back, see "With a project's folder moved to the Trash" in
+    `docs/product/branch-and-worktree-cleanup.md`), or a restart of the daemon in between — looks for itself when it
+    is confirmed.

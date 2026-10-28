@@ -1,4 +1,4 @@
-import { pathLinkRefusedCause, relocationCause, sourceUnavailableCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, NESTED_REMEDY_CODES } from "./protocol";
+import { isProjectFolderUnknown, pathLinkRefusedCause, relocationCause, sourceUnavailableCause, type PathLinkRefusedCause, type RelocationCause, type SourceUnavailableCause, NESTED_REMEDY_CODES } from "./protocol";
 import { ActionableError } from "./actionableError";
 import { DaemonRequestError } from "./daemon-client";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
@@ -143,6 +143,19 @@ const PATH_LINK_REFUSED_RECOVERY: Record<PathLinkRefusedCause, ErrorRecovery> = 
   ambiguous: "pathLinkAmbiguous", launchable: "pathLinkLaunchable", not_private: "pathLinkNotPrivate", not_a_file_or_folder: "none", unreadable: "none", other: "none",
 };
 
+/** Whether every item a `session_branches_not_removed` names is a worktree kept because whether it is or holds another
+ * project's folder could not be told: their group's note says what to do with them, so the alert adds no remedy of its
+ * own. A list that also names anything else keeps it. */
+function onlyProjectFolderUnknown(error: DaemonRequestError): boolean {
+  if (error.code !== "session_branches_not_removed") return false;
+  try {
+    const items: unknown = JSON.parse(error.params.items ?? "");
+    return Array.isArray(items) && items.length > 0 && items.every((item) => !!item && typeof item === "object" && isProjectFolderUnknown(item as Parameters<typeof isProjectFolderUnknown>[0]));
+  } catch {
+    return false;
+  }
+}
+
 /** The remedy for a failure of an operation with nothing left to retry, a session that could not be brought back up:
  * the recovery's variant without a step that retries it ("retry the operation", "choose another accessible folder"). */
 function withoutRetry(recovery: ErrorRecovery | undefined): ErrorRecovery | undefined {
@@ -204,6 +217,7 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     const code = NESTED_REMEDY_CODES.has(error.code) ? error.params.reason_code : error.code;
     if (code === "source_unavailable") return { kind: "actionable", recovery: SOURCE_CAUSE_RECOVERY[sourceUnavailableCause(error.params.cause)] };
     if (code === "path_link_refused") return { kind: "actionable", recovery: PATH_LINK_REFUSED_RECOVERY[pathLinkRefusedCause(error.params.cause)] };
+    if (onlyProjectFolderUnknown(error)) return { kind: "actionable", recovery: "none" };
     const domain = code && DOMAIN_RECOVERY.get(code);
     if (domain) return { kind: "actionable", recovery: domain };
     const relocation = code === "relocation_failed" ? RELOCATION_CAUSE_RECOVERY[relocationCause(error.params.cause)] : undefined;
