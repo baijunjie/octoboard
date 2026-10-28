@@ -654,6 +654,21 @@ pub(crate) fn git_stdin_env(dir: &Path, args: &[&str], env: &[(&str, &str)], inp
     assert!(child.wait().unwrap().success(), "git {args:?}");
 }
 
+/// `/System/Volumes/Data` followed by `real`, where that is the same directory as `real` under
+/// another real path: on macOS the data volume's firmlinks give everything under `/private` and
+/// `/Users` one, as a bind mount does on Linux.
+pub(crate) fn second_real_path(real: &Path) -> Option<PathBuf> {
+    let second = Path::new("/System/Volumes/Data").join(real.strip_prefix("/").ok()?);
+    let identity = |path: &Path| {
+        std::fs::metadata(path)
+            .ok()
+            .map(|metadata| crate::hostfs::identity(&metadata))
+    };
+    let distinct = std::fs::canonicalize(&second).ok()? != std::fs::canonicalize(real).ok()?;
+    (distinct && identity(&second).is_some() && identity(&second) == identity(real))
+        .then_some(second)
+}
+
 /// A repository in a scratch directory with one commit holding `files`.
 pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
     use std::os::unix::ffi::OsStrExt;

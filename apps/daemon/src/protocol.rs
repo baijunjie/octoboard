@@ -2356,6 +2356,18 @@ pub struct SessionBranchItem {
     pub state: SessionBranchState,
     /// Git's own message, for `failed`.
     pub detail: Option<String>,
+    /// Why a `failed` item is left, where a client words that itself; `detail` then says it in
+    /// English.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cause: Option<SessionBranchCause>,
+}
+
+/// Why a `failed` [`SessionBranchItem`] is left, as a client words it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionBranchCause {
+    /// Whether the worktree is or holds another project's folder could not be told, so it is kept.
+    ProjectFolderUnknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2384,7 +2396,8 @@ pub enum SessionBranchState {
     Locked,
     /// A worktree that is a project's folder, or holds one.
     ProjectFolder,
-    /// Git refused or failed to remove it, or to say where it stands.
+    /// Git refused or failed to remove it, or to say where it stands, or whether a worktree is or
+    /// holds a project's folder could not be told.
     Failed,
 }
 
@@ -2469,6 +2482,10 @@ pub enum Event {
     ProjectRemovalInspected {
         id: Option<String>,
         items: Vec<SessionBranchItem>,
+        /// The token the worktrees it held back are kept under, for `delete_project` to send back
+        /// (`crate::branch_origin::cleanup::project`); absent when it held none back.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        inspection: Option<String>,
     },
     Snapshot {
         hosts: Vec<Host>,

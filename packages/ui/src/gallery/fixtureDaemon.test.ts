@@ -870,6 +870,12 @@ describe("the fixture daemon's bound branches and worktrees", () => {
     await expect(daemon.request({ type: "inspect_project_removal", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
   });
 
+  it("hands a project inspection's token over with the items it held back", async () => {
+    const held = { ...unbound, state: "failed" as const, uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" as const };
+    const daemon = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: { items: [worktree, held], inspection: "token-2" } } });
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, held], inspection: "token-2" });
+  });
+
   it("hands a project inspection's refusal over with all its params, the token the removal sends back among them", async () => {
     const refusal = { code: "project_directory_trash_failed", params: { path: "/work/p", detail: "it did not respond in time", cause: "unanswered", inspection: "token-1" }, message: "refused" };
     const daemon = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: refusal } });

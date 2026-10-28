@@ -47,12 +47,6 @@ pub fn move_to_trash(path: &Path) -> Result<()> {
     })
 }
 
-/// `path` with its symbolic links resolved where it exists, and written one way
-/// ([`lexically_normalise`]) where it does not, so two spellings of one directory compare equal.
-pub fn resolve(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| lexically_normalise(path))
-}
-
 /// Whether `err` means nothing is at a path: none there, a link that leads nowhere or round in a
 /// loop, or a file where a folder on the way should be.
 pub fn is_not_found(err: &std::io::Error) -> bool {

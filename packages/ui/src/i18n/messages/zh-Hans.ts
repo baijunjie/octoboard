@@ -1472,6 +1472,15 @@ export const zhHans: Translation<"other"> = {
   "branchCleanup.group.projectFolder": {
     other: "以下工作树是项目文件夹：",
   },
+  "branchCleanup.group.projectFolderUnknown": {
+    other: "无法检查以下工作树是否为或包含其他项目的文件夹：",
+  },
+  "branchCleanup.note.projectFolderUnknown": {
+    other: "其中可能有其他项目的文件。请等到可以读取后先检查内容，再自行删除。",
+  },
+  "branchCleanup.group.staysUnknown": {
+    other: "无法检查以下工作树是否为或包含其他项目的文件夹，因此将保留：",
+  },
   "branchCleanup.group.trashed": "随文件夹移到废纸篓：",
   "branchCleanup.group.deleted": "永久删除：",
   "branchCleanup.consequence.force": {
@@ -1492,6 +1501,9 @@ export const zhHans: Translation<"other"> = {
   "branchCleanup.details": "详情",
   "branchCleanup.along": {
     other: "随之移除的内容（{count}\u00a0项）",
+  },
+  "branchCleanup.stays": {
+    other: "保留的内容（{count}\u00a0项）",
   },
   "dialog.sessionBranches.force": {
     other: "同时强制删除 {git} 保留的工作树和分支（{count}\u00a0项）",

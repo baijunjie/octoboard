@@ -11,8 +11,9 @@
 //! branch through `git branch -d`, git's own check that it is merged into its upstream (into
 //! `HEAD` when it has none). Every command runs in the repository's common directory, where `HEAD`
 //! is the main worktree's, and which outlives any worktree. The main worktree is never removed, nor
-//! a worktree that is a project's folder or holds one; a branch still checked out in a worktree
-//! that stays is left, as git would refuse it anyway.
+//! a worktree that is a project's folder or holds one, nor one of which that cannot be told
+//! ([`Holders`]); a branch still checked out in a worktree that stays is left, as git would refuse
+//! it anyway.
 //!
 //! What git would refuse — a worktree with uncommitted changes or submodules, an unmerged branch, a
 //! locked worktree — goes only when the caller names it as forced (`--force`, `-D`, `--force` twice
@@ -42,10 +43,12 @@ use super::git_files::uses_reftable;
 use super::repo_key;
 use crate::browse::source::admin_dir;
 use crate::browse::wire_path;
-use crate::hostfs;
+use crate::hostfs::place::{looked_within, Place};
+use crate::hostfs::{self, lexically_normalise};
+use crate::project_trash::{Seen, TRASH_LOOK_DEADLINE};
 use crate::protocol::{
-    Session, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget,
-    SessionStatus,
+    Session, SessionBranchCause, SessionBranchItem, SessionBranchKind, SessionBranchState,
+    SessionBranchTarget, SessionStatus,
 };
 use crate::state::AppState;
 
@@ -87,21 +90,23 @@ impl Cleanups {
 }
 
 /// What is bound to `sessions`, and where each item stands now. Runs no `git` when none of the
-/// sessions is responsible for a branch, which is most sessions. Blocking.
+/// sessions is responsible for a branch, which is most sessions. Blocking, waiting for its looks
+/// as [`Holders::look`] says.
 pub fn inspect(state: &AppState, sessions: &[Session]) -> Result<Vec<SessionBranchItem>> {
     let bound = bound_in(state, sessions)?;
     if bound.is_empty() {
         return Ok(Vec::new());
     }
     let git = (state.host_tools.get().git)()?;
-    let folders = project_folders(state, None)?;
-    Ok(bound
-        .iter()
-        .flat_map(|repo| match survey(&git, repo, &folders) {
-            Ok(survey) => survey.items(),
-            Err(detail) => repo.all_failed(&detail),
-        })
-        .collect())
+    let mut holders = Holders::of_projects(state, None)?;
+    let mut items = Vec::new();
+    for repo in &bound {
+        match survey(state, &git, repo, &mut holders) {
+            Ok(survey) => items.extend(survey.items()),
+            Err(detail) => items.extend(repo.all_failed(&detail)),
+        }
+    }
+    Ok(items)
 }
 
 /// Removes, once none of `sessions` has a process any more, what can go of what is bound to those
@@ -145,18 +150,17 @@ pub async fn remove_once_stopped(
             Ok(git) => git,
             Err(err) => return all_failed(&bound, &format!("{err:#}")),
         };
-        let folders = match project_folders(&state, None) {
-            Ok(folders) => folders,
+        let mut holders = match Holders::of_projects(&state, None) {
+            Ok(holders) => holders,
             Err(err) => return all_failed(&bound, &format!("{err:#}")),
         };
-        bound
-            .iter()
-            .flat_map(|repo| {
-                state
-                    .branch_cleanups
-                    .serialized(&repo.repo, || remove_in(&git, repo, &folders, &forced))
-            })
-            .collect()
+        let mut left = Vec::new();
+        for repo in &bound {
+            left.extend(state.branch_cleanups.serialized(&repo.repo, || {
+                remove_in(&state, &git, repo, &mut holders, &forced)
+            }));
+        }
+        left
     })
     .await;
     removed.unwrap_or_else(|err| {
@@ -343,8 +347,8 @@ fn label(item: &SessionBranchItem) -> String {
 }
 
 /// Each item as the `items` param of `session_branches_not_removed` carries it: a JSON list of
-/// `{kind, name, branch, state, uncommitted, detail}`, so a client can word each reason and set
-/// each name apart without splitting a string a name may hold any character of.
+/// `{kind, name, branch, state, uncommitted, detail, cause}`, so a client can word each reason and
+/// set each name apart without splitting a string a name may hold any character of.
 pub fn for_client(items: &[SessionBranchItem]) -> String {
     json!(items
         .iter()
@@ -355,6 +359,7 @@ pub fn for_client(items: &[SessionBranchItem]) -> String {
             "state": item.state,
             "uncommitted": item.uncommitted,
             "detail": item.detail,
+            "cause": item.cause,
         }))
         .collect::<Vec<_>>())
     .to_string()
@@ -391,7 +396,16 @@ fn shown(wire: &str) -> String {
 fn failed(mut item: SessionBranchItem, detail: String) -> SessionBranchItem {
     item.state = SessionBranchState::Failed;
     item.detail = Some(detail);
+    item.cause = None;
     item
+}
+
+/// `item` as one kept because whether it is or holds another project's folder could not be told.
+fn untold(item: SessionBranchItem) -> SessionBranchItem {
+    SessionBranchItem {
+        cause: Some(SessionBranchCause::ProjectFolderUnknown),
+        ..failed(item, HOLDING_UNTOLD.to_string())
+    }
 }
 
 // -- what is bound -------------------------------------------------------------
@@ -446,19 +460,191 @@ fn item_of(
         state,
         uncommitted: false,
         detail: None,
+        cause: None,
     }
 }
 
-/// Every project's folder but `except`'s, resolved, so a worktree that is one, or holds one, can
-/// be told.
-fn project_folders(state: &AppState, except: Option<&str>) -> Result<Vec<PathBuf>> {
-    Ok(state
-        .store
-        .list_projects()?
-        .iter()
-        .filter(|project| Some(project.id.as_str()) != except)
-        .map(|project| hostfs::resolve(Path::new(&project.path)))
-        .collect())
+// -- what holds another project's folder ------------------------------------------
+
+/// Why a worktree is kept when whether it is or holds another project's folder could not be told,
+/// as a `failed` item's `detail`.
+const HOLDING_UNTOLD: &str = "whether it is or holds another project's folder could not be told";
+
+/// Whether a worktree is another project's folder or holds one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Holding {
+    No,
+    Yes,
+    /// It could not be told. A miss would remove that project's files with the worktree, so the
+    /// worktree is kept, as for `Yes`, though named as one that could not be told.
+    Unknown,
+}
+
+/// The root of a worktree the cleanup may remove, as looked at.
+struct Root {
+    /// Where it really is; `None` where nothing is at it.
+    place: Option<Place>,
+    /// Its path as given and, where it resolves, as resolved: what a path told only by its text
+    /// is compared with.
+    texts: Vec<PathBuf>,
+}
+
+impl Root {
+    /// What is at `root`, `None` where that cannot be told: permission to read it is refused,
+    /// another I/O error, something other than a directory, a directory that cannot be resolved (no
+    /// inode). Blocking.
+    fn of(root: &Path) -> Option<Self> {
+        let written = lexically_normalise(root);
+        match std::fs::symlink_metadata(&written) {
+            Err(err) if hostfs::is_not_found(&err) => {
+                return Some(Self {
+                    place: None,
+                    texts: vec![written],
+                })
+            }
+            Err(_) => return None,
+            Ok(_) => {}
+        }
+        let (place, real) = Place::resolved(&written)?;
+        Some(Self {
+            place: Some(place),
+            texts: vec![written, real],
+        })
+    }
+}
+
+/// What one path of [`Holders::look`] was found to be, in each role it was looked at for.
+struct Looked {
+    seen: Option<Seen>,
+    root: Option<Root>,
+}
+
+/// Whether a worktree the cleanup may remove is another project's folder or holds one, told by
+/// device and inode, never by the paths' text, which misses a folder with a second real path (a
+/// bind mount, a macOS firmlink). A miss removes that project's files with the worktree, so what
+/// cannot be told counts as held: another project's path that cannot be resolved (an I/O error
+/// other than a refused permission, no inode, a look that outran its deadline or is still stuck
+/// from an earlier one), and the worktree's root when it cannot be read or resolved. Only another
+/// project's path with nothing at it or that cannot be read for want of permission is compared by
+/// its text, as written and as resolved, with the root's, as is a root with nothing at it, which
+/// holds nothing else.
+///
+/// The paths are read off the store's lock, each distinct one once per cleanup, a few at a time,
+/// each bounded by [`TRASH_LOOK_DEADLINE`] ([`looked_within`]).
+pub(super) struct Holders {
+    /// The other projects' paths, as stored.
+    others: Vec<PathBuf>,
+    /// Whether `others` have been looked at.
+    others_looked: bool,
+    roots_looked: HashSet<PathBuf>,
+    seen: HashMap<PathBuf, Seen>,
+    roots: HashMap<PathBuf, Root>,
+}
+
+impl Holders {
+    /// For the paths of every project but `except`, none of them looked at yet.
+    pub(super) fn of_projects(state: &AppState, except: Option<&str>) -> Result<Self> {
+        Ok(Self {
+            others: state
+                .store
+                .list_projects()?
+                .into_iter()
+                .filter(|project| Some(project.id.as_str()) != except)
+                .map(|project| PathBuf::from(project.path))
+                .collect(),
+            others_looked: false,
+            roots_looked: HashSet::new(),
+            seen: HashMap::new(),
+            roots: HashMap::new(),
+        })
+    }
+
+    /// Looks at the other projects' paths and at the worktree roots `roots`, those not looked at
+    /// yet. Nothing is looked at while there is no other project, as no worktree holds one then.
+    ///
+    /// Blocking: this thread waits for the looks, which the runtime runs on blocking threads of
+    /// their own so each can be left behind at its deadline. So it runs on a blocking thread of
+    /// the runtime (`spawn_blocking`), as every blocking function here does, never on one of its
+    /// workers; off any runtime nothing is looked at, and every worktree counts as untold.
+    pub(super) fn look(&mut self, state: &AppState, roots: impl IntoIterator<Item = PathBuf>) {
+        if self.others.is_empty() {
+            return;
+        }
+        let as_other: HashSet<PathBuf> = if self.others_looked {
+            HashSet::new()
+        } else {
+            self.others.iter().cloned().collect()
+        };
+        let as_root: HashSet<PathBuf> = roots
+            .into_iter()
+            .filter(|root| !self.roots_looked.contains(root))
+            .collect();
+        if as_root.is_empty() {
+            return;
+        }
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            tracing::warn!("no runtime to look at worktrees with; each counts as untold");
+            return;
+        };
+        self.others_looked = true;
+        self.roots_looked.extend(as_root.iter().cloned());
+        let paths: Vec<PathBuf> = as_other.union(&as_root).cloned().collect();
+        let found = runtime.block_on(looked_within(
+            &state.directory_looks,
+            paths,
+            TRASH_LOOK_DEADLINE,
+            move |path| {
+                Some(Looked {
+                    seen: as_other
+                        .contains(path)
+                        .then(|| Seen::of(path, true))
+                        .flatten(),
+                    root: as_root.contains(path).then(|| Root::of(path)).flatten(),
+                })
+            },
+        ));
+        for (path, looked) in found {
+            if let Some(seen) = looked.seen {
+                self.seen.insert(path.clone(), seen);
+            }
+            if let Some(root) = looked.root {
+                self.roots.insert(path, root);
+            }
+        }
+    }
+
+    /// Whether the worktree at `root`, looked at through [`Holders::look`], is another project's
+    /// folder or holds one.
+    fn holding(&self, root: &Path) -> Holding {
+        if self.others.is_empty() {
+            return Holding::No;
+        }
+        let Some(root) = self.roots.get(root) else {
+            return Holding::Unknown;
+        };
+        let mut untold = false;
+        for other in &self.others {
+            match self.seen.get(other) {
+                Some(seen)
+                    if seen.lies_in(root.place.as_ref(), &root.texts)
+                        || root
+                            .place
+                            .as_ref()
+                            .is_some_and(|place| seen.repository_lies_in(place)) =>
+                {
+                    return Holding::Yes
+                }
+                Some(_) => {}
+                // Nothing at the root holds no files of anyone's.
+                None => untold |= root.place.is_some(),
+            }
+        }
+        if untold {
+            Holding::Unknown
+        } else {
+            Holding::No
+        }
+    }
 }
 
 /// The branches of `bound` that are still there, each with its name as bytes. A reftable
@@ -488,18 +674,9 @@ fn held_branches(git: &Git, repo: &Path) -> Result<HashSet<Vec<u8>>, String> {
         .collect())
 }
 
-/// Where a bound linked worktree stands, and whether it has uncommitted changes.
-fn worktree_state(
-    git: &Git,
-    worktree: &Listed,
-    folders: &[PathBuf],
-) -> (SessionBranchState, bool, Option<String>) {
-    if folders
-        .iter()
-        .any(|folder| folder.starts_with(&worktree.root))
-    {
-        return (SessionBranchState::ProjectFolder, false, None);
-    }
+/// Where a bound linked worktree that is not, as far as can be told, another project's folder
+/// and holds none stands, and whether it has uncommitted changes.
+fn worktree_state(git: &Git, worktree: &Listed) -> (SessionBranchState, bool, Option<String>) {
     // A status that cannot be read counts as changes, so a force never takes changes nobody saw.
     let uncommitted = || !worktree.prunable && changes(git, &worktree.root).unwrap_or(true);
     if worktree.locked {
@@ -545,33 +722,59 @@ impl Survey {
     }
 }
 
-fn survey(git: &Git, bound: &Bound, folders: &[PathBuf]) -> Result<Survey, String> {
+fn survey(
+    state: &AppState,
+    git: &Git,
+    bound: &Bound,
+    holders: &mut Holders,
+) -> Result<Survey, String> {
     let listed = worktrees(git, &bound.repo)?;
     let names = stored_names(git, &bound.repo, &bound.branches);
+    let bound_branch = |worktree: &Listed| {
+        names
+            .iter()
+            .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
+            .map(|(_, branch)| *branch)
+    };
+    holders.look(
+        state,
+        listed
+            .iter()
+            .filter(|worktree| !worktree.main && bound_branch(worktree).is_some())
+            .map(|worktree| worktree.root.clone()),
+    );
 
     let mut worktrees = Vec::new();
     for worktree in &listed {
         if worktree.main {
             continue;
         }
-        let Some((_, branch)) = names
-            .iter()
-            .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
-        else {
+        let Some(branch) = bound_branch(worktree) else {
             continue;
         };
-        let (state, uncommitted, detail) = worktree_state(git, worktree, folders);
-        let mut item = item_of(
-            &bound.repo,
-            SessionBranchKind::Worktree,
-            Some(branch.branch.clone()),
-            Some(wire_path::encode(worktree.root.as_os_str().as_bytes())),
-            &branch.project,
-            Some(&branch.session),
-            state,
-        );
-        item.uncommitted = uncommitted;
-        item.detail = detail;
+        let item = |state| {
+            item_of(
+                &bound.repo,
+                SessionBranchKind::Worktree,
+                Some(branch.branch.clone()),
+                Some(wire_path::encode(worktree.root.as_os_str().as_bytes())),
+                &branch.project,
+                Some(&branch.session),
+                state,
+            )
+        };
+        let item = match holders.holding(&worktree.root) {
+            Holding::Yes => item(SessionBranchState::ProjectFolder),
+            Holding::Unknown => untold(item(SessionBranchState::Failed)),
+            Holding::No => {
+                let (state, uncommitted, detail) = worktree_state(git, worktree);
+                SessionBranchItem {
+                    uncommitted,
+                    detail,
+                    ..item(state)
+                }
+            }
+        };
         worktrees.push(WorktreeSurvey {
             item,
             root: worktree.root.clone(),
@@ -723,12 +926,13 @@ fn is_merged(git: &Git, repo: &Path, name: &[u8]) -> bool {
 // -- removing --------------------------------------------------------------------
 
 fn remove_in(
+    state: &AppState,
     git: &Git,
     bound: &Bound,
-    folders: &[PathBuf],
+    holders: &mut Holders,
     forced: &[SessionBranchTarget],
 ) -> Vec<SessionBranchItem> {
-    let survey = match survey(git, bound, folders) {
+    let survey = match survey(state, git, bound, holders) {
         Ok(survey) => survey,
         Err(detail) => return bound.all_failed(&detail),
     };

@@ -3,7 +3,7 @@ import type { Agent, AgentAvailability, RelocationCause, Settings } from "../../
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
 import type { FixtureError } from "./projectFiles";
-import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount, worktreeItemOf } from "./builders";
+import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "./builders";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
@@ -1172,6 +1172,40 @@ export const dialogScenarios: Scenario[] = [
     title: "Remove project to the Trash, lists opened",
     description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The consequence lines under the options include one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. Wrapped paths stay indented to the text column, and detached HEAD notes start in that same column.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
+  },
+  {
+    ...removeProjectTrash,
+    id: "dialog-remove-project-trash-stays",
+    group: "Projects",
+    category: "exceptional",
+    title: "Remove project to the Trash, a worktree stays",
+    description: "The daemon could not tell whether one worktree is or holds another project's folder, so it is held back and stays. Under the Trash option, \"What goes with it (2)\" is closed and counts only the worktree and the branch that go; below it, \"What stays\" is open, and its lead says this worktree stays as whether it is or holds another project's folder could not be checked, over its path and branch with no git text. The consequence lines count only the worktree that goes, and the branch.",
+    projectRemovalBranches: {
+      [tagged[0].id]: {
+        items: [
+          worktreeItemOf(tagged[0], docsSession, "feat/redesign", "/Users/dev/worktrees/docs-site-redesign"),
+          branchItemOf(tagged[0], docsSession, "fix/footer-links"),
+          unknownFolderWorktreeOf(tagged[0], docsSession, "feat/mounted-share", "/Users/dev/worktrees/docs-site-mounted-share"),
+        ],
+        inspection: "inspection-folder-unknown",
+      },
+    },
+    steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.stays", { count: 1 }))],
+  },
+  {
+    ...removeProjectTrash,
+    id: "dialog-remove-project-trash-stays-only",
+    group: "Projects",
+    category: "exceptional",
+    title: "Remove project to the Trash, only a worktree stays",
+    description: "Nothing goes along except the folder: the only item the daemon found is a worktree held back because whether it is or holds another project's folder could not be told. Under the Trash option there is no \"What goes with it\" and no consequence line; \"What stays\" alone is open, with its lead over that worktree.",
+    projectRemovalBranches: {
+      [tagged[0].id]: {
+        items: [unknownFolderWorktreeOf(tagged[0], null, null, "/Users/dev/worktrees/docs-site-mounted-share")],
+        inspection: "inspection-folder-unknown",
+      },
+    },
+    steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.stays", { count: 1 }))],
   },
   {
     ...dialogFixture,

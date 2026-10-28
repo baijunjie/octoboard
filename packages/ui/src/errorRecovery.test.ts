@@ -6,6 +6,7 @@ import { errorAlerts } from "./errorAlerts";
 import { errorPresentation } from "./errorPresentation";
 import { classifyError, pathLinkRecovery } from "./errorRecovery";
 import { ActionableError } from "./actionableError";
+import { hasErrorRemedy } from "./components/errorPartPresence";
 
 it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
@@ -27,6 +28,18 @@ it.each([
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+});
+
+it("gives a list of leftovers that are all worktrees kept for a project folder that could not be checked no remedy of its own", () => {
+  const untold = { kind: "worktree", name: "/wt", branch: "a", state: "failed", uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" };
+  const failed = { kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", uncommitted: false, detail: "error: refused", cause: null };
+  const left = (...items: object[]) => new DaemonRequestError("text", "session_branches_not_removed", { count: String(items.length), items: JSON.stringify(items) });
+  expect(classifyError(left(untold, { ...untold, name: "/wt2" }))).toEqual({ kind: "actionable", recovery: "none" });
+  // Nor does the message itself carry one, for either list.
+  expect(hasErrorRemedy(left(untold))).toBe(false);
+  expect(hasErrorRemedy(left(untold, failed))).toBe(false);
+  expect(classifyError(left(untold, failed))).toEqual({ kind: "actionable", recovery: "sessionBranches" });
+  expect(classifyError(left(failed))).toEqual({ kind: "actionable", recovery: "sessionBranches" });
 });
 
 it.each([

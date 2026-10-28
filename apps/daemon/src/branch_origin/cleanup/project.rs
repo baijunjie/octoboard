@@ -6,7 +6,11 @@
 //! outside worktree is moved to the Trash whatever it holds, as recoverably as the folder itself.
 //! Only a locked worktree waits for the user's own word (`force_remove`), given for it as it was
 //! shown — one that has gained changes since stays — and a worktree that is another project's
-//! folder, or holds one, is never touched.
+//! folder, or holds one, is never touched. Nor is one of which that cannot be told
+//! ([`Holders`]): it is listed as staying, and stays with the removal, which reports it as left.
+//! An inspection that held one back keeps it under a token that the removal confirmed after it
+//! sends back (`crate::project_trash::UnresolvedRemovals`), so that worktree stays even once it
+//! can be told: the confirmation showed it staying.
 //!
 //! When the folder holds the repository — the common directory is inside it — every linked
 //! worktree of the repository outside the folder goes, bound to a session or not, since none of
@@ -28,10 +32,10 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::{
-    exists, failed, is_merged, item_of, names, project_folders, stored_names, wait_until_stopped,
+    exists, failed, is_merged, item_of, names, stored_names, wait_until_stopped, Holders, Holding,
 };
 use crate::branch_origin::bound::bound_in;
-use crate::branch_origin::git::{changes, worktrees, Git};
+use crate::branch_origin::git::{changes, worktrees, Git, Listed};
 use crate::branch_origin::repository_of;
 use crate::browse::wire_path;
 use crate::protocol::{
@@ -54,28 +58,66 @@ pub struct Removal {
     survives: bool,
     worktrees: Vec<(SessionBranchItem, PathBuf)>,
     branches: Vec<(SessionBranchItem, Vec<u8>)>,
+    /// The outside worktrees it would take but for not being able to tell whether they are or hold
+    /// another project's folder, as `failed` items with the cause `project_folder_unknown`, each
+    /// with its root.
+    held_back: Vec<(SessionBranchItem, PathBuf)>,
 }
 
 impl Removal {
     /// Every item it may take along, as a confirmation lists them: a `locked` worktree goes only
-    /// when forced, and a branch it has checked out only with it.
+    /// when forced, and a branch it has checked out only with it; and the worktrees it holds back,
+    /// which stay.
     pub fn items(&self) -> Vec<SessionBranchItem> {
         self.worktrees
             .iter()
+            .chain(&self.held_back)
             .map(|(item, _)| item.clone())
             .chain(self.branches.iter().map(|(item, _)| item.clone()))
             .collect()
     }
 
+    /// Its items, apart: what it would carry out, and what it holds back.
+    fn clone_items(&self) -> Items {
+        Items {
+            carried: self
+                .worktrees
+                .iter()
+                .map(|(item, _)| item.clone())
+                .chain(self.branches.iter().map(|(item, _)| item.clone()))
+                .collect(),
+            held_back: self
+                .held_back
+                .iter()
+                .map(|(item, _)| item.clone())
+                .collect(),
+        }
+    }
+
+    /// The roots of the outside worktrees it holds back, as `git worktree list` gives them.
+    pub fn held_back(&self) -> Vec<PathBuf> {
+        self.held_back
+            .iter()
+            .map(|(_, root)| root.clone())
+            .collect()
+    }
+
     fn is_empty(&self) -> bool {
-        self.worktrees.is_empty() && self.branches.is_empty()
+        self.worktrees.is_empty() && self.branches.is_empty() && self.held_back.is_empty()
     }
 }
 
 /// What removing `project` with its folder would take along now; `None` when nothing. Runs no
 /// `git` for a project in no repository, nor where the repository survives and none of the
-/// project's sessions is responsible for a branch. Blocking.
-pub fn plan(state: &AppState, project: &Project, reads: Reads) -> Result<Option<Removal>> {
+/// project's sessions is responsible for a branch. An outside worktree whose root is among
+/// `held_back`, those its inspection held back, is held back again however it stands now.
+/// Blocking, waiting for its looks as [`Holders::look`] says.
+pub fn plan(
+    state: &AppState,
+    project: &Project,
+    reads: Reads,
+    held_back: &[PathBuf],
+) -> Result<Option<Removal>> {
     let Some(repo) = repository_of(Path::new(&project.path)) else {
         return Ok(None);
     };
@@ -96,16 +138,37 @@ pub fn plan(state: &AppState, project: &Project, reads: Reads) -> Result<Option<
         return Ok(None);
     }
     let git = (state.host_tools.get().git)()?;
-    let others = project_folders(state, Some(&project.id))?;
+    let mut holders = Holders::of_projects(state, Some(&project.id))?;
     let listed = worktrees(&git, &repo).map_err(anyhow::Error::msg)?;
     let names = stored_names(&git, &repo, &bound);
     let full = reads == Reads::Inspection;
+    let bound_branch = |worktree: &Listed| {
+        names
+            .iter()
+            .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
+            .map(|(_, branch)| *branch)
+    };
+    // The outside worktrees it would take, but for another project's folder.
+    let outside = |worktree: &&Listed| {
+        !worktree.main
+            && !worktree.root.starts_with(&folder)
+            && !worktree.prunable
+            && !(survives && bound_branch(worktree).is_none())
+    };
+    holders.look(
+        state,
+        listed
+            .iter()
+            .filter(outside)
+            .map(|worktree| worktree.root.clone()),
+    );
 
     // The worktrees that go, or may: every one inside the folder, which goes with it, one whose
     // directory is gone and whose record a prune takes, and the outside ones taken, a locked one
     // among them only if it is forced.
     let mut going: HashSet<PathBuf> = HashSet::new();
     let mut taken = Vec::new();
+    let mut untold = Vec::new();
     for worktree in &listed {
         if worktree.main {
             continue;
@@ -114,15 +177,32 @@ pub fn plan(state: &AppState, project: &Project, reads: Reads) -> Result<Option<
             going.insert(worktree.root.clone());
             continue;
         }
-        if worktree.prunable || others.iter().any(|other| other.starts_with(&worktree.root)) {
+        if !outside(&worktree) {
             continue;
         }
-        let bound_by = names
-            .iter()
-            .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
-            .map(|(_, branch)| *branch);
-        if survives && bound_by.is_none() {
-            continue;
+        let bound_by = bound_branch(worktree);
+        let item = |state| {
+            item_of(
+                &repo,
+                SessionBranchKind::Worktree,
+                worktree.branch.as_deref().map(wire_path::encode),
+                Some(wire_path::encode(worktree.root.as_os_str().as_bytes())),
+                bound_by.map_or(&project.id, |branch| &branch.project),
+                bound_by.map(|branch| branch.session.as_str()),
+                state,
+            )
+        };
+        // One known to hold another project's folder never counts, whatever its inspection said.
+        match holders.holding(&worktree.root) {
+            Holding::Yes => continue,
+            Holding::No if !held_back.contains(&worktree.root) => {}
+            Holding::No | Holding::Unknown => {
+                untold.push((
+                    super::untold(item(SessionBranchState::Failed)),
+                    worktree.root.clone(),
+                ));
+                continue;
+            }
         }
         // A status that cannot be read counts as changes, so they are shown.
         let uncommitted = full && changes(&git, &worktree.root).unwrap_or(true);
@@ -133,15 +213,7 @@ pub fn plan(state: &AppState, project: &Project, reads: Reads) -> Result<Option<
         } else {
             SessionBranchState::Removable
         };
-        let mut item = item_of(
-            &repo,
-            SessionBranchKind::Worktree,
-            worktree.branch.as_deref().map(wire_path::encode),
-            Some(wire_path::encode(worktree.root.as_os_str().as_bytes())),
-            bound_by.map_or(&project.id, |branch| &branch.project),
-            bound_by.map(|branch| branch.session.as_str()),
-            state,
-        );
+        let mut item = item(state);
         item.uncommitted = uncommitted;
         going.insert(worktree.root.clone());
         taken.push((item, worktree.root.clone()));
@@ -179,6 +251,7 @@ pub fn plan(state: &AppState, project: &Project, reads: Reads) -> Result<Option<
         survives,
         worktrees: taken,
         branches,
+        held_back: untold,
     };
     Ok((!removal.is_empty()).then_some(removal))
 }
@@ -193,7 +266,7 @@ pub async fn carry_out_once_stopped(
     forced: Vec<SessionBranchTarget>,
 ) -> Vec<SessionBranchItem> {
     wait_until_stopped(&state, &ids).await;
-    let unfinished = removal.items();
+    let unfinished = removal.clone_items();
     let done = tokio::task::spawn_blocking(move || {
         let tools = state.host_tools.get();
         match (tools.git)() {
@@ -203,37 +276,46 @@ pub async fn carry_out_once_stopped(
                     .branch_cleanups
                     .serialized(&repo, || carry_out(&git, removal, &forced, tools.trash))
             }
-            Err(err) => {
-                let detail = format!("{err:#}");
-                removal
-                    .items()
-                    .into_iter()
-                    .map(|item| failed(item, detail.clone()))
-                    .collect()
-            }
+            Err(err) => removal.clone_items().all_failed(&format!("{err:#}")),
         }
     })
     .await;
-    done.unwrap_or_else(|err| {
-        let detail = format!("the removal did not finish: {err}");
-        unfinished
+    done.unwrap_or_else(|err| unfinished.all_failed(&format!("the removal did not finish: {err}")))
+}
+
+/// The items of a [`Removal`], apart: what it would carry out, and what it holds back.
+struct Items {
+    carried: Vec<SessionBranchItem>,
+    held_back: Vec<SessionBranchItem>,
+}
+
+impl Items {
+    /// Every item left, for a removal that could not be carried out at all: what it would carry
+    /// out as `failed` with `detail`; what it holds back as it is, whose own reason still holds.
+    fn all_failed(self, detail: &str) -> Vec<SessionBranchItem> {
+        self.carried
             .into_iter()
-            .map(|item| failed(item, detail.clone()))
+            .map(|item| failed(item, detail.to_string()))
+            .chain(self.held_back)
             .collect()
-    })
+    }
 }
 
 /// The outside worktrees go to the Trash first, a locked one unlocked after where the repository
 /// survives, so that the prune after can drop its record. Then, where the repository survives, the
 /// records the moves left behind are pruned and every branch no worktree still has checked out is
-/// deleted.
+/// deleted. What the removal holds back is left.
 pub(crate) fn carry_out(
     git: &Git,
     removal: Removal,
     forced: &[SessionBranchTarget],
     trash: impl Fn(&Path) -> Result<()>,
 ) -> Vec<SessionBranchItem> {
-    let mut left = Vec::new();
+    let mut left: Vec<SessionBranchItem> = removal
+        .held_back
+        .into_iter()
+        .map(|(item, _)| item)
+        .collect();
     let mut kept: HashSet<PathBuf> = HashSet::new();
     for (mut item, root) in removal.worktrees {
         if item.state == SessionBranchState::Locked {

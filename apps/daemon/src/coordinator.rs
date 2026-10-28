@@ -432,14 +432,18 @@ async fn handle_inner(
             // What goes along with the folder is found while the folder, and the records that say
             // what is bound to the project's sessions, are still there.
             // A failure to find it out leaves everything outside the folder, and is told once the
-            // removal stands.
+            // removal stands. The worktrees the inspection before held back stay held back.
             let (along, undetermined) = if to_trash.is_some() {
+                let held_back = inspection.as_deref().map_or_else(Vec::new, |token| {
+                    state.unresolved_removals.held_back(token, &deleted.id)
+                });
                 let (state, project) = (Arc::clone(state), deleted.clone());
                 match tokio::task::spawn_blocking(move || {
                     branch_origin::cleanup::project::plan(
                         &state,
                         &project,
                         branch_origin::cleanup::project::Reads::Removal,
+                        &held_back,
                     )
                 })
                 .await?
@@ -528,22 +532,34 @@ async fn handle_inner(
             // a client lists nothing for it. One a path that could not be resolved decided is kept
             // for the removal to repeat, so it takes nothing along either.
             project_trash::inspected(state, &project, &state.store.list_projects()?).await?;
-            let state = Arc::clone(state);
-            let items = tokio::task::spawn_blocking(move || {
+            let id = project.id.clone();
+            let planning = Arc::clone(state);
+            let (items, held_back) = tokio::task::spawn_blocking(move || {
                 Ok::<_, anyhow::Error>(
                     branch_origin::cleanup::project::plan(
-                        &state,
+                        &planning,
                         &project,
                         branch_origin::cleanup::project::Reads::Inspection,
+                        &[],
                     )?
-                    .map(|along| along.items())
+                    .map(|along| (along.items(), along.held_back()))
                     .unwrap_or_default(),
                 )
             })
             .await??;
+            // The worktrees it held back, not listed as going, are kept for the removal confirmed
+            // after it to hold back too.
+            let inspection = if held_back.is_empty() {
+                None
+            } else {
+                state
+                    .unresolved_removals
+                    .keep_held_back(state, &id, held_back)
+            };
             Ok(Some(Event::ProjectRemovalInspected {
                 id: request_id,
                 items,
+                inspection,
             }))
         }
 
