@@ -1,5 +1,5 @@
 @layer utilities {
-  .history-message[data-speaker="agent"] {
+  .history-message[data-speaker="user"] {
     background-color: var(--accent-soft);
   }
 

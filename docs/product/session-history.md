@@ -33,8 +33,8 @@ record dated it, the date and time, written for the app's language:
   user's own browser.
 
 User messages and agent replies share rounded message surfaces with a soft shadow, distinct from the page. User messages
-have a neutral background; agent replies have a soft accent-coloured background that follows the app's light or dark
-appearance. Both use the app's UI font at 14 px with a 24 px line height. Replies keep compact Markdown spacing; their
+have a soft accent-coloured background; agent replies have a neutral gray background. Both follow the app's light or dark
+appearance and use the app's UI font at 14 px with a 24 px line height. Replies keep compact Markdown spacing; their
 headings use the body text's size and line height with semibold weight, and tables keep the body text's size. Inline
 code and fenced code retain a monospace face; fenced code keeps its code theme. The Markdown style preference for
 documents in the file viewer does not change the history's typography (see "Markdown style" in
