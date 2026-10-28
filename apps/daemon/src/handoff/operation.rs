@@ -19,6 +19,7 @@
 //! The package is named by the receiving session's id, chosen before the session exists, so that
 //! deleting the session removes it (`AppState::forget_handoff_package`).
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -427,10 +428,11 @@ pub(super) async fn tell(
         Ok(branches) if branches.is_empty() => {}
         Ok(branches) => {
             let (noun, them) = crate::branch_origin::handover::branch_noun_and_pronoun(branches);
+            let targets = targets_of(state, receiving, branches).await;
             held.push_str(&format!(
                 "\n- You are now the session responsible for the {noun} {}; the original no \
                  longer is, so carry on the work on {them}.",
-                crate::branch_origin::handover::named_branches(branches)
+                crate::branch_origin::handover::named_branches_with_targets(branches, &targets)
             ));
         }
         Err(reason) => held.push_str(&format!(
@@ -451,6 +453,30 @@ pub(super) async fn tell(
         from = named_session(original),
     );
     send(state, &receiving.id, text).await;
+}
+
+/// The target branch recorded for each of `branches` (wire paths) that `receiving` now holds, by
+/// branch; empty when the session is in no project or they cannot be read.
+async fn targets_of(
+    state: &Arc<AppState>,
+    receiving: &Session,
+    branches: &[String],
+) -> HashMap<String, String> {
+    let Ok(Some(project)) = receiving
+        .project_id
+        .as_deref()
+        .map(|id| state.store.get_project(id))
+        .transpose()
+        .map(Option::flatten)
+    else {
+        return HashMap::new();
+    };
+    let (state, branches) = (state.clone(), branches.to_vec());
+    tokio::task::spawn_blocking(move || {
+        crate::branch_origin::targets_in_project(&state, &project.path, &branches)
+    })
+    .await
+    .unwrap_or_default()
 }
 
 /// Forwards what was queued for the original to the receiving session, in order, through the same

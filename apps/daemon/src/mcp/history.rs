@@ -9,12 +9,12 @@ use std::sync::Arc;
 use anyhow::{bail, Result};
 use serde_json::{json, Map, Value};
 
-use crate::protocol::HistoryMessage;
+use crate::protocol::{HistoryMessage, Session};
 use crate::session_history;
 use crate::state::AppState;
 
-use super::args::{optional_count, required_str};
-use super::exec::resolve_session;
+use super::args::optional_count;
+use super::exec::session_or_caller;
 
 /// How many entries a call returns when `limit` is left out.
 const DEFAULT_LIMIT: usize = 20;
@@ -22,21 +22,23 @@ const DEFAULT_LIMIT: usize = 20;
 /// The most entries a call returns, so that one call never hands back a whole long conversation.
 const MAX_LIMIT: usize = 100;
 
-/// A page of `session`'s history: the `limit` entries before entry `before` (the end of the
-/// history when it is left out), oldest first. Each entry carries `index`, its position in the
-/// whole history from 0, so a page's `index` is the next call's `before`; indices hold while
-/// entries are only appended, and a `total` smaller than before means the history was rewritten (a
-/// Claude Code rewind, a Grok compaction). The last agent entry of a turn still open in a running
-/// session can be a progress note, not yet a final reply. `older` counts the entries before the
-/// page and `total` those there are. A record that cannot be read answers `unavailable: true`
-/// with nothing in it.
+/// A page of `session`'s history (the caller's own when it is left out): the `limit` entries
+/// before entry `before` (the end of the history when it is left out), oldest first. Each entry
+/// carries `index`, its position in the whole history from 0, so a page's `index` is the next
+/// call's `before`; indices hold while entries are only appended, and a `total` smaller than
+/// before means the history was rewritten (a Claude Code rewind, a Grok compaction). The last
+/// agent entry of a turn still open in a running session can be a progress note, not yet a final
+/// reply. `older` counts the entries before the page and `total` those there are. A record that
+/// cannot be read answers `unavailable: true` with nothing in it.
 pub(super) async fn read_session_history(
     state: &Arc<AppState>,
+    caller: &Session,
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let limit = optional_count(arguments, "limit", 1, MAX_LIMIT)?.unwrap_or(DEFAULT_LIMIT);
     let before = optional_count(arguments, "before", 0, usize::MAX)?;
-    let session = resolve_session(state, required_str(arguments, "session")?)?;
+    // Left out, the caller itself, as for `get_session`.
+    let session = session_or_caller(state, caller, arguments)?;
     let messages = session_history::of_session_blocking(state, session.clone()).await?;
     let Some(messages) = messages else {
         return Ok(json!({
@@ -173,6 +175,21 @@ mod tests {
         }
     }
 
+    /// With `session` left out, a session reads its own history, as it reads its own record.
+    #[tokio::test]
+    async fn a_session_reads_its_own_history_by_leaving_the_session_out() {
+        let (state, _dir) = shared_console_state("read-session-history-own");
+        for caller in ["a", "of-b"] {
+            let own = read(&state, caller, json!({})).await.unwrap();
+            assert_eq!(own["session"], caller);
+            assert_eq!(own["unavailable"], false);
+        }
+        let other = read(&state, "a", json!({ "session": "of-b" }))
+            .await
+            .unwrap();
+        assert_eq!(other["session"], "of-b");
+    }
+
     /// A history is read from the agent's own record and paged from the most recent entry back.
     #[tokio::test]
     async fn the_history_of_a_session_is_read_from_its_record_in_pages() {
@@ -241,7 +258,6 @@ mod tests {
     async fn an_unknown_session_and_a_bad_page_are_refused() {
         let (state, _dir) = shared_console_state("read-session-history-refused");
         for (input, reason) in [
-            (json!({}), "`session` is required"),
             (json!({ "session": "absent" }), "there is no session"),
             (
                 json!({ "session": "of-a", "limit": 0 }),

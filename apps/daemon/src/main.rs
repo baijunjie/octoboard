@@ -338,6 +338,11 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     state.sweep_saved_output()?;
     // Likewise for a handoff package whose session is gone.
     handoff::sweep(&state)?;
+    // Pages a session pushed before it took the bound role, which no tool of its can list or
+    // delete, and which a failed withdrawal or a push racing a binding may have left.
+    if let Err(err) = mcp::withdraw_stray_pages(&state) {
+        tracing::warn!(%err, "withdrawing the pages of bound sessions failed");
+    }
 
     // Printed before anything else can block: the application waits for this line to know where to
     // connect.

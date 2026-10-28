@@ -46,8 +46,9 @@ below).
 
 Once handed over, the session is bound to the new owner and reports to it, and the caller no longer drives it. Nothing
 else is moved: the sessions bound to it stay bound to it. A lead session handed to a console session stays a lead
-session; handed to a project session it has the role of a bound one. An ordinary bound session keeps that role
-wherever it goes.
+session; handed to a project session it has the role of a bound one, and every report panel page it pushed is
+withdrawn (see "When a session takes the role of a bound one" in `docs/product/report-panel.md`). An ordinary bound
+session keeps that role wherever it goes.
 
 Both sessions concerned are told, by messages written through the delivery every message takes (queued while one cannot
 take a message; see "Messages held until a session can take them" in `docs/product/message-delivery.md`):
@@ -56,7 +57,8 @@ take a message; see "Messages held until a session can take them" in `docs/produ
   id and title — that it takes work only from the new owner, or from the user typing in its terminal, and reports to it
   with `report`, that this replaces what it was told of its owner when it was started, and that the earlier owner no
   longer drives it. A session that has lost the tools for owning sessions is also told it can no longer start or drive
-  sessions, with the list of the Octoboard tools it has left.
+  sessions, with the list of the Octoboard tools it has left, and that any pages it pushed to the report panel were
+  withdrawn with the tools for them.
 - **The new owner** is told which session handed which session over to it, by id, title and project, that the session
   is its own from now on and is driven with `instruct_session`, `archive_session` and `reopen_session`, and, for a lead
   session, that it keeps its own sessions, which the new owner can read but not drive; then the caller's `note`, every
@@ -193,7 +195,8 @@ the caller is bound: a lead session, bound already, cannot call it to move to an
 Bound to a **console session**, the caller becomes a **lead session**: it keeps the sessions it started and goes on
 driving them (see "Lead sessions" in `docs/product/hub-orchestration.md`). Bound to a **project session** — which
 only a session with no sessions of its own may — it becomes an ordinary bound session, with the role of a bound one:
-it can no longer start or drive sessions.
+it can no longer start or drive sessions, and every report panel page it pushed is withdrawn (see "When a session takes
+the role of a bound one" in `docs/product/report-panel.md`).
 
 **The summary reaches the owner as the caller's first report**, through the ordinary reporting path (see
 `docs/product/reporting-to-owners.md`), with the status `needs_decision` and no open items. The report's summary opens
@@ -215,9 +218,10 @@ from now on the owner is the one it takes work from, or the user typing in its t
 `docs/product/reporting-to-owners.md` — refused for a lead session while a session it started is not archived and no
 lock blocks automatic archiving — while `needs_decision` or open items leave it running; that a lead session keeps
 driving its own sessions with `new_session` and the tools that go with it, and that any other can no longer start or
-drive sessions, with the list of the Octoboard tools it has left; and not to call `bind_to_session` again. Once the
-caller is bound, the binding stands: a summary that could not be delivered is reported in the note, with the reason, and
-the caller is told to send it with `report` itself.
+drive sessions, with the list of the Octoboard tools it has left, and that any pages it pushed to the report panel were
+withdrawn with the tools for them; and not to call `bind_to_session` again. Once the caller is bound, the binding
+stands: a summary that could not be delivered is reported in the note, with the reason, and the caller is told to send
+it with `report` itself.
 
 ## When a binding changes while a session runs
 
@@ -232,14 +236,15 @@ The tools follow the binding as it stands. Octoboard checks every call against i
 is refused even where its agent still lists it. The session's tool list itself is updated with the answer to its next
 call of any Octoboard tool, and its agent is told the list has changed (the MCP `tools/list_changed` notice); whether an
 agent reads the list again on that notice is the agent's own. A call to a tool the session has gained, made before its
-list shows it, is still taken to Octoboard, which decides it by the binding as it stands, and its answer brings the
-list up to date. An agent that checks a tool's name against the last list it received may refuse such a call itself
-before it is made, so the message telling a session it was released has it call `get_session` once with no arguments
-first (see "Releasing a session from its owner" above). Only two changes take tools away — binding to a project
-session, and a lead session handed to one — and they leave the bound session's set: `report`, the reads every session
-has (see `docs/product/what-every-session-reads.md`), `send_message`, `get_project`,
-`request_session` and `request_resume_session`. A release gives a session that had the role of a bound one the
-unbound project session's tools.
+list shows it, is still taken to Octoboard, which decides it by the binding as it stands, and its answer brings the list
+up to date. An agent that checks a tool's name against the last list it received may refuse such a call itself before it
+is made, so the message telling a session it was released has it call `get_session` once with no arguments first (see
+"Releasing a session from its owner" above). Only two changes take tools away — binding to a project session, and a lead
+session handed to one — and they leave the bound session's set: `report`, the reads every session has (see
+`docs/product/what-every-session-reads.md`), `send_message`, `get_project`, `request_session` and
+`request_resume_session`. Losing the report panel tools withdraws the pages the session pushed (see "When a session
+takes the role of a bound one" in `docs/product/report-panel.md`). A release gives a session that had the role of a
+bound one the unbound project session's tools.
 
 ## A change of owner told at the next launch
 
@@ -256,14 +261,15 @@ other session as a message delivered once it can take one (see "Messages held un
 "Information for an interrupted session" in `docs/product/information-between-sessions.md`.
 
 The notice is built at delivery, from the binding as it stands then, so a later change replaces an earlier one still
-owed and several changes end in one notice. A session that has an owner is told that its owner changed while it was
-not running, which session its owner is now, that it takes work only from it or from the user typing in its terminal
-and reports to it with `report`, and that this replaces what it was told of its owner when it was started; one with
-the role of a bound one is also told it can no longer start or drive sessions, with the list of the Octoboard tools it
-has. A session with no owner is told what a released session is told (see "Releasing a session from its owner" above),
-with the parting note of the release that left it unbound, where that release was made with one and is still the
-latest change of the session's owner: a later change of owner — the session binding itself to an owner, say — drops
-the note, and a note kept for a message that could not be written is kept only while the session is still unbound.
+owed and several changes end in one notice. A session that has an owner is told that its owner changed while it was not
+running, which session its owner is now, that it takes work only from it or from the user typing in its terminal and
+reports to it with `report`, and that this replaces what it was told of its owner when it was started; one with the role
+of a bound one is also told it can no longer start or drive sessions, with the list of the Octoboard tools it has, and
+that any pages it pushed to the report panel were withdrawn with the tools for them. A session with no owner is told
+what a released session is told (see "Releasing a session from its owner" above), with the parting note of the release
+that left it unbound, where that release was made with one and is still the latest change of the session's owner: a
+later change of owner — the session binding itself to an owner, say — drops the note, and a note kept for a message that
+could not be written is kept only while the session is still unbound.
 
 The notice, and any note kept with it, is no longer owed once the launch has started the session's process. A launch
 that fails leaves it owed for the next one, so a session may be told of a change twice, but never not at all.

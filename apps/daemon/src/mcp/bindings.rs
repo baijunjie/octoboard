@@ -56,7 +56,8 @@ fn told(delivery: &Result<Option<Delivery>>, who: &str) -> String {
 fn lost_tools(agent: Agent) -> String {
     format!(
         "You can no longer start or drive sessions: of Octoboard's tools you now have {}, and a \
-         call of any other is refused.",
+         call of any other is refused. Any pages you pushed to the report panel were withdrawn \
+         with the tools for them.",
         project_tools(agent, true)
     )
 }
@@ -663,6 +664,16 @@ mod tests {
         let (state, _dir) = peer_state("bind-to-project");
         let _loose = running(&state, "loose");
         let starter = running(&state, "starter");
+        call(
+            &state,
+            "loose",
+            "show_page",
+            &arguments(json!({ "html": "<p>plan</p>" })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(state.store.list_pages("loose").unwrap().len(), 1);
+        let mut events = state.subscribe();
         let result = call(
             &state,
             "loose",
@@ -677,6 +688,21 @@ mod tests {
             "{note}"
         );
         assert!(note.contains("`mcp__octoboard__report`"), "{note}");
+        assert!(note.contains("pages you pushed"), "{note}");
+        // Its pages are withdrawn with the tools for them, and the panels are told.
+        assert!(state.store.list_pages("loose").unwrap().is_empty());
+        let mut withdrawn = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            if let crate::protocol::Event::PagesDeleted {
+                console_session_id,
+                pages,
+            } = event
+            {
+                assert_eq!(console_session_id, "loose");
+                withdrawn.extend(pages);
+            }
+        }
+        assert_eq!(withdrawn.len(), 1);
         let report = output_containing(&starter, "auditing the retries");
         assert!(report.contains("Report from session loose"), "{report}");
 

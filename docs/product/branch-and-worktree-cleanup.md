@@ -200,6 +200,11 @@ an agent's archive leaves; the agent is told instead:
 - **A `done` report** that archives the session names in its answer the bound branches and worktrees that will not be
   removed, judged the same way.
 
+Beforehand, any session can read what such an archive would do with each branch a session is responsible for, and
+with the worktree that has it checked out, as `archive` in `get_session_branches` (see "Reading the branches a session
+is responsible for" in `docs/product/branch-responsible-session.md`); the tool's description tells the agent to read it
+before archiving to decide on `keep`.
+
 **`archive_session` with `keep`** (`true` or `false`, `false` when left out) removes nothing and waits for nothing:
 every branch and worktree stays as it is, bound to the session it was bound to, and comes back with that session when
 it is reopened — a session under a lead session being reopened by its lead. The answer has no `branches_left`; it

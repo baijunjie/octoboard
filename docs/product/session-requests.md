@@ -234,9 +234,10 @@ dialog (see "Approving requests automatically" above):
    automatic approval, automatically under the user's setting to approve session requests without asking — that nobody
    owns it but the user, and that the requesting session is not its owner and the two can only share information with
    each other. Where the request named branches, the paragraph also says the requesting session handed it those
-   branches, naming each, with the same approval, that it is now the session responsible for them and is to carry on the
-   work on them. The paragraph is written when the request is made, so it names every branch the request named, whatever
-   the move then finds.
+   branches, naming each, with its target branch where one is recorded (see "Target branches and fork points" in
+   `docs/product/revert-gate.md`), with the same approval, that it is now the session responsible for them and is to
+   carry on the work on them. The paragraph is written when the request is made, so it names every branch the request
+   named, whatever the move then finds.
 4. **The branches the request named are handed to it** once it has started (see "Handing branches over" below).
 5. **The approval does not archive the caller.** It keeps running, and the approval does not count as a report.
    The result tells the caller to follow the user's direction on continuing its own work or ending after the

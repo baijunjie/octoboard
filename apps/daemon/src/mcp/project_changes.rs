@@ -1,38 +1,30 @@
 //! The tools with which a session looks at what changed in a project's repository,
 //! `list_project_changes` and `read_project_diff`, so that nobody has to run `git status` or
 //! `git diff` there: both rewrite the repository's index, and a console session is not to run git
-//! in a project at all.
-//!
-//! Both are the window's Git mode over the same code: every read goes through `browse::serve` with
-//! the request the window sends, so the path checks, the environment `git` runs in, the budgets
-//! and the rule that nothing is written to the repository are the browse layer's. What is added
-//! here is the reach (any role, the caller's own console's projects only, as `list_projects`
-//! gives another console's projects without their git status), a read slot and a share of the
-//! retained bytes from the same daemon-wide gate the window's reads wait on (all the tools' reads
-//! together held to one connection's share), and a bound on what one answer carries into an
-//! agent's context: a page of the change list, a window of a diff.
+//! in a project at all. The reads, their reach and their gate are `project_browse`'s; what is added
+//! here is a bound on what one answer carries into an agent's context: a page of the change list,
+//! a window of a diff.
 
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
 use base64::Engine as _;
 use serde_json::{json, Map, Value};
 
+use crate::branch_origin;
+use crate::browse::budget;
 use crate::browse::git::GitEnv;
-use crate::browse::lane::Admission;
 use crate::browse::wire_path::{self, RelPath};
-use crate::browse::{self, budget};
 use crate::protocol::{
-    error_code, BrowseBody, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, CodedError,
-    ComparedChangeRef, ContentKind, Event, FileContent, GitSourceInfo, Project, Session, SideKind,
-    SideRead, SideRef, WorktreeInfo,
+    BrowseBody, ChangeEntry, ChangeGroup, ChangeRef, ChangeSide, ComparedChangeRef, ContentKind,
+    Event, FileContent, GitSourceInfo, Project, Session, SideKind, SideRead, SideRef, WorktreeInfo,
 };
 use crate::state::AppState;
 
-use super::args::{find_project, optional_bool, optional_count, optional_string};
+use super::args::{optional_bool, optional_count, optional_string};
+use super::project_browse::{browse, git_source, plain, readable_project, MakeGit};
 
 /// How many changes `list_project_changes` returns when the caller names no `limit`.
 const DEFAULT_CHANGES_LIMIT: usize = 200;
@@ -45,10 +37,6 @@ const DEFAULT_DIFF_BYTES: usize = 32 * 1024;
 
 /// The most of a diff it returns in one answer, however much is asked for.
 const MAX_DIFF_BYTES: usize = 128 * 1024;
-
-/// How the daemon's `git` environment is made: the user's shell in production, a fixture's own in
-/// a test.
-type MakeGit = fn() -> Result<GitEnv>;
 
 pub(super) async fn list_project_changes(
     state: &Arc<AppState>,
@@ -64,104 +52,6 @@ pub(super) async fn read_project_diff(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     read_with(state, caller, arguments, GitEnv::from_shell).await
-}
-
-/// The project a call names, among the caller's own console's: its own when none is named and it
-/// has one. Another console's project is refused as its `git_status` is not listed by
-/// `list_projects`: what its repository holds is for that console to look at.
-fn readable_project(
-    state: &Arc<AppState>,
-    caller: &Session,
-    arguments: &Map<String, Value>,
-) -> Result<Project> {
-    let wanted = match optional_string(arguments, "project") {
-        Some(wanted) => wanted,
-        None => caller
-            .project_id
-            .clone()
-            .ok_or_else(|| anyhow!("`project` is required: a console session has no project"))?,
-    };
-    let project = find_project(state, caller, &wanted)?;
-    if project.console_id != caller.console_id {
-        bail!(
-            "`{wanted}` is a project of another console; the changes in a project can be read \
-             only for this console's own, as `list_projects` lists another console's without \
-             its git status"
-        );
-    }
-    Ok(project)
-}
-
-/// Runs one browse request to its reply on the blocking pool, after waiting for a place in the
-/// tools' share, a read slot and `reservation` retained bytes from the daemon-wide gate, as a
-/// window's request waits for its own. The admission comes back with the reply and is held until
-/// the caller has built its answer from it; if the call is dropped meanwhile, the `git` is stopped
-/// and the admission is given back when it has.
-async fn browse(
-    state: &Arc<AppState>,
-    make_git: MakeGit,
-    body: BrowseBody,
-    reservation: usize,
-) -> Result<(Event, Admission)> {
-    let cancel = Arc::new(AtomicBool::new(false));
-    let _stop = StopOnDrop(cancel.clone());
-    let admission = state.browse_gate.admit(reservation).await;
-    let state = state.clone();
-    let (outcome, admission) = tokio::task::spawn_blocking(move || {
-        let outcome = browse::serve(&state, None, body, &make_git, &cancel);
-        (outcome, admission)
-    })
-    .await?;
-    Ok((outcome.map_err(readable_error)?, admission))
-}
-
-/// Cancels the read it was made for when it drops.
-struct StopOnDrop(Arc<AtomicBool>);
-
-impl Drop for StopOnDrop {
-    fn drop(&mut self) {
-        self.0.store(true, Ordering::Relaxed);
-    }
-}
-
-/// A browse failure worded for the agent: the daemon's message, with the cases an agent can act
-/// on named.
-fn readable_error(err: anyhow::Error) -> anyhow::Error {
-    let Some(coded) = err.downcast_ref::<CodedError>() else {
-        return err;
-    };
-    match coded.code {
-        error_code::NOT_A_GIT_REPOSITORY => anyhow!("the project is not in a git repository"),
-        error_code::LIMIT_EXCEEDED => anyhow!(
-            "too large to read through this tool ({}); it is bounded at the daemon, not by an \
-             argument",
-            coded.message
-        ),
-        _ => anyhow!("{}", coded.message),
-    }
-}
-
-/// What `project_source` says of the project's repository, or the reason there is none.
-async fn git_source(
-    state: &Arc<AppState>,
-    make_git: MakeGit,
-    project: &Project,
-) -> Result<GitSourceInfo> {
-    let body = BrowseBody::GetProjectSource {
-        project: project.id.clone(),
-    };
-    let (Event::ProjectSource { source, .. }, _admission) =
-        browse(state, make_git, body, budget::READ_RESERVATION).await?
-    else {
-        bail!("the daemon answered something other than the project's source");
-    };
-    match source.git {
-        Some(git) => Ok(git),
-        None => match source.git_error {
-            Some(reason) => bail!("git cannot read the project's repository: {reason}"),
-            None => bail!("the project is not in a git repository"),
-        },
-    }
 }
 
 /// The worktree `wanted` names: its path or the branch checked out in it, spelled plain or as the
@@ -206,15 +96,6 @@ async fn find_worktree<'a>(git: &'a GitSourceInfo, wanted: &str) -> Result<&'a W
     })
 }
 
-/// A name the daemon spells as a wire path, as the agent knows it: plain text, as
-/// `get_session_branches` gives paths and branch names.
-fn plain(wire: &str) -> String {
-    wire_path::decode(wire).map_or_else(
-        || wire.to_string(),
-        |bytes| String::from_utf8_lossy(&bytes).into_owned(),
-    )
-}
-
 async fn list_with(
     state: &Arc<AppState>,
     caller: &Session,
@@ -234,25 +115,65 @@ async fn list_with(
         (None, _) if base.is_some() || base_remote || commit.is_some() => {
             bail!("`base`, `base_remote` and `commit` go with `branch`")
         }
-        (Some(_), None) => bail!("`branch` needs `base`, the branch to compare it with"),
+        (Some(_), None) if base_remote => {
+            bail!("`base_remote` goes with `base`: the recorded target branch is a local branch")
+        }
         (Some(_), _) if worktree.is_some() => {
             bail!("`worktree` and `branch` choose different views; give one")
         }
         _ => {}
     }
+    // Left out, `base` is the branch `branch` was created from, when that is recorded.
+    let defaulted = match (&branch, &base) {
+        (Some(branch), None) => Some(recorded_target(state, &project, branch).await?),
+        _ => None,
+    };
+    let base = defaulted.clone().or(base);
     let page = Page { offset, limit };
     match (branch, base) {
         (Some(branch), Some(base)) => {
             let compared = Compared {
-                branch,
+                branch: branch.clone(),
                 base,
                 base_remote,
                 commit,
             };
-            list_branch(state, make_git, &project, compared, page).await
+            list_branch(state, make_git, &project, compared, page)
+                .await
+                .map_err(|err| match defaulted {
+                    // The recorded target may be a branch that has since been deleted or renamed.
+                    Some(target) => anyhow!(
+                        "`base` was left out, so it is the target branch `{target}` recorded for \
+                         `{branch}`, and the comparison failed: {err}"
+                    ),
+                    None => err,
+                })
         }
         _ => list_uncommitted(state, make_git, &project, worktree, page).await,
     }
+}
+
+/// The branch `branch` of `project`'s repository was created from, as the daemon recorded it when
+/// a session's git created `branch`: what `list_project_changes` compares it with when the caller
+/// names no `base`.
+async fn recorded_target(state: &Arc<AppState>, project: &Project, branch: &str) -> Result<String> {
+    let wire = wire_path::encode(branch.as_bytes());
+    let (state, path) = (state.clone(), project.path.clone());
+    let wires = [wire.clone()];
+    let mut recorded = tokio::task::spawn_blocking(move || {
+        branch_origin::recorded_in_project(&state, &path, &wires)
+    })
+    .await??;
+    recorded
+        .remove(&wire)
+        .and_then(|recorded| recorded.target_branch)
+        .ok_or_else(|| {
+            anyhow!(
+                "`branch` needs `base`, the branch to compare it with: no target branch is \
+                 recorded for `{branch}`, which is recorded only for a branch a session's git \
+                 created from another local branch"
+            )
+        })
 }
 
 /// Which changes of a list an answer carries.
@@ -740,11 +661,8 @@ fn window(answer: &mut Value, shown: Shown, offset: usize, max_bytes: usize) -> 
 mod tests {
     use super::*;
     use crate::mcp::exec::tests::{arguments, RepoState};
-    use crate::test_support::{git, isolated_git_env, ScratchDir, SYSTEM_GIT};
-
-    fn test_git() -> Result<GitEnv> {
-        Ok(GitEnv::new(SYSTEM_GIT.to_string(), isolated_git_env()))
-    }
+    use crate::mcp::project_browse::test_git;
+    use crate::test_support::{git, ScratchDir};
 
     async fn list(fixture: &RepoState, caller: &str, input: Value) -> Result<Value> {
         let session = fixture.state.session_record(caller)?;
@@ -1248,6 +1166,81 @@ mod tests {
         // A project session of the other console reads its own console's project.
         let err = list(&fixture, "foreign", json!({})).await.unwrap_err();
         assert!(!err.to_string().contains("another console"), "{err}");
+    }
+
+    /// A branch compared with no `base` is compared with the branch it was recorded as created
+    /// from; one with no such record or whose recorded target is gone, or a remote `base`, is
+    /// refused.
+    #[tokio::test]
+    async fn a_branch_without_a_base_is_compared_with_its_recorded_target() {
+        let fixture = RepoState::new("project-changes-target");
+        let repo = &fixture.repo;
+        crate::test_support::branch_made_from(&fixture.state, repo, "feat", "lead", Some("main"));
+        git(repo, &["switch", "-q", "feat"]);
+        std::fs::write(repo.join("d.txt"), "d\n").unwrap();
+        git(repo, &["add", "d.txt"]);
+        git(repo, &["commit", "-q", "-m", "add d"]);
+        git(repo, &["switch", "-q", "main"]);
+        fixture.branch("plain", "lead");
+
+        let listed = list(
+            &fixture,
+            "a",
+            json!({ "project": "repo", "branch": "feat" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(listed["view"], "branch");
+        assert_eq!(listed["base"], "main");
+        assert_eq!(paths(&listed), [entry("", "added", "d.txt")]);
+
+        // No target is recorded for a branch made from nothing local.
+        let err = list(
+            &fixture,
+            "a",
+            json!({ "project": "repo", "branch": "plain" }),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("no target branch is recorded for `plain`"),
+            "{err}"
+        );
+        // A recorded target that is gone since is named, as the base that was defaulted to.
+        crate::test_support::branch_made_from(
+            &fixture.state,
+            repo,
+            "orphaned",
+            "lead",
+            Some("vanished"),
+        );
+        let err = list(
+            &fixture,
+            "a",
+            json!({ "project": "repo", "branch": "orphaned" }),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("so it is the target branch `vanished` recorded for `orphaned`")
+                && err
+                    .to_string()
+                    .contains("there is no local branch vanished"),
+            "{err}"
+        );
+        let err = list(
+            &fixture,
+            "a",
+            json!({ "project": "repo", "branch": "feat", "base_remote": true }),
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("`base_remote` goes with `base`"),
+            "{err}"
+        );
     }
 
     #[test]

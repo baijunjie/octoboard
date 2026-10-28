@@ -111,7 +111,9 @@ besides the variables a project session's agent is given for its git (see "The l
   `list_consoles`, `list_projects` and `list_archived` — with the rule that a session not its own is to be left alone
   whatever it can read of it, `list_agent_models` to check before naming a model or effort, `list_sessions` and
   `send_message` for information, `get_session_branches` for where the branches a session is responsible for are
-  checked out, and `list_project_changes` and `read_project_diff` for what has changed in a project of its console —
+  checked out and which branch each is to be merged into, `list_project_branches` for a project's branches with the
+  session responsible for each, and `list_project_changes` and `read_project_diff` for what has changed in a project
+  of its console —
   to be used, rather than `git status` or `git diff`, for another session's worktree or branch and for the project's
   folder, which another session may be working in, while in its own worktree it runs `git` as usual (see "Reading a
   project's changes" in `docs/product/what-every-session-reads.md`). Where its project's effective git workflow

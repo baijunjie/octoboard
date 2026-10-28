@@ -4,6 +4,7 @@
 //! `handoff_session`), and nothing in git or on disk changes. The checks on the branches named,
 //! which `new_session` and `request_session` make too, are here as well.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -59,7 +60,7 @@ pub(super) async fn held_by(
     branches: Vec<String>,
 ) -> Result<Handover> {
     // Finding the repository reads the filesystem and the holder check reads the store.
-    let (repository, not_held) = {
+    let (repository, not_held, targets) = {
         let state = state.clone();
         let path = project.path.clone();
         let (branches, holder) = (branches.clone(), holder.id.clone());
@@ -69,7 +70,8 @@ pub(super) async fn held_by(
             };
             let not_held =
                 branch_origin::first_not_held_by(&state, &repository, &branches, &holder)?;
-            Ok::<_, anyhow::Error>(Some((repository, not_held)))
+            let targets = branch_origin::targets_in(&state, &repository, &branches);
+            Ok::<_, anyhow::Error>(Some((repository, not_held, targets)))
         })
         .await??
         .ok_or_else(|| {
@@ -105,6 +107,7 @@ pub(super) async fn held_by(
     Ok(Handover {
         repository,
         branches,
+        targets,
     })
 }
 
@@ -177,7 +180,7 @@ pub(super) async fn handover_branches(
     };
 
     let standing = standing_of(state, &handover.repository, &moved.moved).await;
-    let untold = tell(state, caller, &from, &to, &standing).await;
+    let untold = tell(state, caller, &from, &to, &standing, &handover.targets).await;
     drop(hold);
 
     let mut answer = json!({
@@ -185,7 +188,7 @@ pub(super) async fn handover_branches(
         "to": to.id,
         "branches": standing
             .iter()
-            .map(|(branch, worktree)| branch_entry(branch, worktree))
+            .map(|(_, branch, worktree)| branch_entry(branch, worktree))
             .collect::<Vec<_>>(),
         "not_handed_over": moved
             .unmoved
@@ -312,13 +315,14 @@ fn refuse_if_at_work(state: &Arc<AppState>, from: &Session) -> Result<()> {
     ))
 }
 
-/// Where each of `branches` is checked out now. Reading only; a failure leaves the worktrees
-/// unknown, since the branches have moved by then.
+/// Where each of `branches` is checked out now, as its wire path, its name as text and its
+/// worktree. Reading only; a failure leaves the worktrees unknown, since the branches have moved by
+/// then.
 async fn standing_of(
     state: &Arc<AppState>,
     repository: &Path,
     branches: &[String],
-) -> Vec<(String, Worktree)> {
+) -> Vec<(String, String, Worktree)> {
     let (state, repository, names) = (state.clone(), repository.to_path_buf(), branches.to_vec());
     let read = tokio::task::spawn_blocking(move || {
         session_branches::worktrees_of(&state, &repository, &names)
@@ -328,17 +332,28 @@ async fn standing_of(
         tracing::warn!(%err, "reading the worktrees of the branches handed over failed");
         branches
             .iter()
-            .map(|branch| (branch_name(branch), Worktree::Unknown(format!("{err:#}"))))
+            .map(|wire| {
+                (
+                    wire.clone(),
+                    branch_name(wire),
+                    Worktree::Unknown(format!("{err:#}")),
+                )
+            })
             .collect()
     })
 }
 
 /// The branches with their worktrees and whether those hold uncommitted changes, as a message
-/// names them, one per line.
-fn standing_lines(standing: &[(String, Worktree)]) -> String {
+/// names them, one per line, each with its target branch from `targets` (by wire path) where the
+/// message is to give it. Each entry of `standing` carries the branch's wire path beside its
+/// lossily decoded name, so the lookup in `targets` does not depend on the name being UTF-8.
+fn standing_lines(
+    standing: &[(String, String, Worktree)],
+    targets: Option<&HashMap<String, String>>,
+) -> String {
     standing
         .iter()
-        .map(|(branch, worktree)| {
+        .map(|(wire, branch, worktree)| {
             let place = match worktree {
                 Worktree::CheckedOut { path, uncommitted } => format!(
                     "checked out in the worktree {}, {}",
@@ -355,12 +370,19 @@ fn standing_lines(standing: &[(String, Worktree)]) -> String {
                 Worktree::NotCheckedOut => "not checked out in any worktree".to_string(),
                 Worktree::Unknown(_) => "in a worktree that could not be read".to_string(),
             };
-            format!("\n- `{branch}`: {place}")
+            let target = targets
+                .and_then(|targets| targets.get(wire))
+                .map(|target| format!("; its target branch is `{target}`"))
+                .unwrap_or_default();
+            format!("\n- `{branch}`: {place}{target}")
         })
         .collect()
 }
 
-/// Tells `from` and `to` what moved, unless one is the caller, which knows from the result.
+/// Tells `from` and `to` what moved, unless one is the caller, which knows from the result. `to` is
+/// also told each branch's target branch (`targets`, by wire path), the one it merges the branch
+/// into.
+///
 /// Returns the sessions that could not be told, for the result to name: one with no process, or
 /// one that took no message. The records are right either way.
 async fn tell(
@@ -368,16 +390,21 @@ async fn tell(
     caller: &Session,
     from: &Session,
     to: &Session,
-    standing: &[(String, Worktree)],
+    standing: &[(String, String, Worktree)],
+    targets: &HashMap<String, String>,
 ) -> Vec<Session> {
-    let names: Vec<String> = standing.iter().map(|(branch, _)| branch.clone()).collect();
+    let names: Vec<String> = standing
+        .iter()
+        .map(|(_, branch, _)| branch.clone())
+        .collect();
     let (noun, them) = branch_noun_and_pronoun(&names);
     let named = names
         .iter()
         .map(|branch| format!("`{branch}`"))
         .collect::<Vec<_>>()
         .join(", ");
-    let lines = standing_lines(standing);
+    let lines = standing_lines(standing, None);
+    let lines_with_targets = standing_lines(standing, Some(targets));
     let owner = named_session(caller);
     let messages = [
         (
@@ -396,7 +423,8 @@ async fn tell(
             format!(
                 "{NOTICE_PREFIX}: {owner}, your owner, handed the {noun} {named} over to \
                  you from {from}. You are now the session responsible for {them}, and the previous \
-                 session no longer is. Your owner will tell you what to do with {them}.{lines}",
+                 session no longer is. Your owner will tell you what to do with {them}.\
+                 {lines_with_targets}",
                 from = named_session(from),
             ),
         ),
@@ -440,6 +468,22 @@ mod tests {
     use crate::test_support::{
         branch_made_by, git, heard_after_marker, output_containing, repo_with, running, ScratchDir,
     };
+
+    /// A line names a branch's target branch by its wire path, so a branch whose name is not UTF-8,
+    /// shown lossily, still gets it.
+    #[test]
+    fn a_non_utf8_branch_line_names_its_target_branch() {
+        let wire = wire_path::encode(b"f\xff");
+        let standing = [(
+            wire.clone(),
+            "f\u{FFFD}".to_string(),
+            Worktree::NotCheckedOut,
+        )];
+        let targets = HashMap::from([(wire, "main".to_string())]);
+        let lines = standing_lines(&standing, Some(&targets));
+        assert!(lines.contains("its target branch is `main`"), "{lines}");
+        assert!(!standing_lines(&standing, None).contains("target branch"));
+    }
 
     /// `shared_console_state` plus a project, `repo`, in a real repository, and sessions in it:
     /// `kid` and `other-kid` and an archived `old-kid` of the console session `a`, `busy-kid` of
@@ -530,7 +574,13 @@ mod tests {
     #[tokio::test]
     async fn an_owner_hands_a_branch_from_one_session_of_its_own_to_another() {
         let fixture = fixture("handover-child-to-child");
-        fixture.branch("feature", "kid");
+        crate::test_support::branch_made_from(
+            &fixture.state,
+            &fixture.repo,
+            "feature",
+            "kid",
+            Some("main"),
+        );
         let caller = running(&fixture.state, "a");
         let from = running(&fixture.state, "kid");
         let to = running(&fixture.state, "other-kid");
@@ -550,12 +600,17 @@ mod tests {
         assert_eq!(result["branches"][0]["branch"], "feature");
         let told = output_containing(&from, "do not touch");
         assert!(
-            told.contains("You are no longer responsible for it") && told.contains("`feature`"),
+            told.contains("You are no longer responsible for it")
+                && told.contains("`feature`")
+                && !told.contains("target branch"),
             "{told}"
         );
+        // The session taking the branch is told which branch it merges into.
         let told = output_containing(&to, "Your owner will tell you what to do");
         assert!(
-            told.contains("`feature`") && !told.contains("carry on"),
+            told.contains(
+                "`feature`: not checked out in any worktree; its target branch is `main`"
+            ) && !told.contains("carry on"),
             "{told}"
         );
         assert!(

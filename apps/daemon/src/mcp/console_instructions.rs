@@ -94,16 +94,21 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            tail of its output (8 KiB, or up to 64 KiB if you ask for more); it reads any \
            session, in any console, and with no `session` it reads you, which is how you learn \
            your own Octoboard id. `get_session_branches` — the branches a session is \
-           responsible for and the worktree each is checked out in. \
+           responsible for, the worktree each is checked out in, the target branch it was \
+           created from and what archiving would do with it (read it before `archive_session` \
+           to decide on `keep`). \
            `read_session_history` — what a session's conversation held (the user's messages and \
            the agent's final replies, not its tool calls), a page at a time from the latest.\n\
          - `list_project_changes` — what has changed in a project of this console, without \
            running git there: the uncommitted changes of its worktree, of another worktree \
            (`worktree`, a path `get_session_branches` gave for a session of this console, or the \
            branch checked out in it), or what a `branch` has changed since it forked from \
-           `base`, with the commits it made. `read_project_diff` — one changed file's diff, a \
-           window of it at a time. This is how you check what a session reports, rather than \
-           taking its word or running git. Only this console's projects can be read.\n\
+           `base` (left out, the target branch recorded for it), with the commits it made. \
+           `read_project_diff` — one changed file's diff, a window of it at a time. \
+           `list_project_branches` — a project's branches with the session recorded as \
+           responsible for each, its state and the branch it was created from, which finds who \
+           holds a branch. This is how you check what a session reports, rather than taking its \
+           word or running git. Only this console's projects can be read.\n\
          - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
            language, as for `new_session`) or pin a session of yours.\n\
          - `archive_session` — end and archive a session you are done with; its branches and \
@@ -111,8 +116,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          - `archive_self` — end and archive yourself once your sessions are all archived.\n\
          - `list_archived` / `reopen_session` — pick an earlier session back up instead of \
            starting over, handing it its next task (`list_archived` is newest first: narrow it \
-           with `yours`, `owner` or `project`, `limit` sets how many, and `before` takes the \
-           previous answer's `next` to read the next page).\n\
+           with `yours`, `owner`, `project` or `branch`, `limit` sets how many, and `before` \
+           takes the previous answer's `next` to read the next page; it can also say \
+           whether the agent still holds each conversation, as `resumable`).\n\
          - `get_account_quotas` — how much plan quota each account of each agent has left, as \
            percentages; check it before choosing an account or when one may be running out. \
            Readings are taken about every five minutes; `refresh` takes a new one, at most once \
@@ -134,8 +140,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            is opened on the agent's own record of it. For when the user asked for that \
            conversation.\n\
          - `list_sessions` / `send_message` — the running sessions everywhere (narrow them with \
-           `console`, `project`, `owner` or `yours`; `status: interrupted` lists the \
-           interrupted ones), and telling one of them something.\n\
+           `console`, `project`, `owner`, `yours`, `kind` or `branch`; `status: interrupted` \
+           lists the interrupted ones), and telling one of them something.\n\
          - `show_page` — push an HTML page to the report panel beside you, for anything better \
            shown than typed: a table, a rich comparison, many items, a form. It is a static \
            document with native forms: scripts do not run, and a submitted form comes back to \

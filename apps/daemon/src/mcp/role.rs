@@ -360,7 +360,8 @@ fn relationships(agent: Agent, owns: bool) -> String {
         lines.push(format!(
             "- `{transfer_session}` hands a session of yours to another owner — a console session \
              of this console, or a project session of this project that can own sessions — to \
-             pass its task over. No approval is needed.",
+             pass its task over. A lead session handed to a project session loses its report \
+             panel pages and the tools for them. No approval is needed.",
             transfer_session = tool("transfer_session"),
         ));
         lines.push(format!(
@@ -373,9 +374,11 @@ fn relationships(agent: Agent, owns: bool) -> String {
              session of this console, or a project session of this project that can own sessions \
              — and you become one of its sessions. Only a session with no sessions of its own can \
              bind to a project session, and it then loses `{new_session}` and the other tools \
-             that drive sessions. No approval is needed.",
+             that drive sessions, and every page it pushed to the report panel is withdrawn \
+             with `{show_page}` and the tools for them. No approval is needed.",
             bind_to_session = tool("bind_to_session"),
             new_session = tool("new_session"),
+            show_page = tool("show_page"),
         ));
     }
     lines.push(format!(
@@ -422,8 +425,9 @@ fn relationships(agent: Agent, owns: bool) -> String {
          of which it gives only what `{request_session}` needs to target a project; \
          `project` narrows it to one, and `refresh` checks git status first), and \
          `{list_archived}` the archived sessions, newest first (narrow them with `project`, \
-         `owner` or `yours`, `limit` sets how many, and `before` takes the previous \
-         answer's `next` to read the next page). \
+         `owner`, `yours` or `branch`, `limit` sets how many, and `before` takes the previous \
+         answer's `next` to read the next page; `check_resumable` adds whether the agent still \
+         holds each conversation). \
          A session that is not yours (`yours: false`) is to be left alone, whatever you can read \
          of it.",
         get_session = tool("get_session"),
@@ -435,14 +439,14 @@ fn relationships(agent: Agent, owns: bool) -> String {
     ));
     lines.push(format!(
         "- `{list_project_changes}` shows what has changed in a project of your console without \
-         running git there: the uncommitted changes of a worktree, or what a `branch` has \
-         changed since it forked from `base` and the commits it made; `{read_project_diff}` \
-         reads one changed file's diff, a window of it at a time. Use them, rather than `git \
-         status` or `git diff` (which rewrite the repository's index), to look at another \
-         session's worktree or branch or at the project's directory, which another session may \
-         be working in. Without `worktree` they show the worktree holding the project's \
-         directory, not necessarily your own: name your own, or another session's, by the \
-         `worktree` path or branch. In your own worktree, run git as usual.",
+         running git there: the uncommitted changes of a worktree, or what a `branch` has changed \
+         since it forked from `base` (left out, the target branch recorded for it) and the commits \
+         it made; `{read_project_diff}` reads one changed file's diff, a window of it at a time. \
+         Use them, rather than `git status` or `git diff` (which rewrite the repository's index), \
+         to look at another session's worktree or branch or at the project's directory, which \
+         another session may be working in. Without `worktree` they show the worktree holding the \
+         project's directory, not necessarily your own: name your own, or another session's, by \
+         the `worktree` path or branch. In your own worktree, run git as usual.",
         list_project_changes = tool("list_project_changes"),
         read_project_diff = tool("read_project_diff"),
     ));
@@ -454,9 +458,11 @@ fn relationships(agent: Agent, owns: bool) -> String {
     lines.push(format!(
         "- `{list_sessions}` shows the other running sessions, in every console and project, and \
          who owns each, with its account, model and the names of the branches it is responsible \
-         for (`console`, `project`, `owner` and `yours` narrow it, and `status: interrupted` \
-         lists the interrupted ones instead); `{get_session_branches}` \
-         gives the worktree each of those branches is checked out in. `{send_message}` tells any \
+         for (`console`, `project`, `owner`, `yours`, `kind` and `branch` narrow it, and \
+         `status: interrupted` lists the interrupted ones instead); `{get_session_branches}` \
+         gives the worktree each of those branches is checked out in and its `target_branch`, \
+         the branch it was created from and is merged into; `{list_project_branches}` lists a \
+         project's branches with the session responsible for each. `{send_message}` tells any \
          of them something that touches its work — what you found, decided or changed. It is \
          information for that session to weigh, not an instruction, its own owner is sent a \
          copy, and it needs no relationship between the two of you. An interrupted session \
@@ -464,6 +470,7 @@ fn relationships(agent: Agent, owns: bool) -> String {
          would otherwise trip over, not progress notes.",
         list_sessions = tool("list_sessions"),
         get_session_branches = tool("get_session_branches"),
+        list_project_branches = tool("list_project_branches"),
         send_message = tool("send_message"),
     ));
     format!("{}\n\n{}", lines.join("\n"), handover_guidance(Some(agent)))

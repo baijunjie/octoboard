@@ -9,13 +9,18 @@ use super::{is_same_branch, repo_key, repository_of};
 use crate::protocol::Session;
 use crate::state::AppState;
 
-/// One branch a session is responsible for: its name as a wire path, the session, and that
-/// session's project.
+/// One branch a session is responsible for: its name as a wire path, the session, that session's
+/// project, and what its row records of where the branch came from.
 #[derive(Clone)]
 pub(super) struct BoundBranch {
     pub(super) branch: String,
     pub(super) session: String,
     pub(super) project: String,
+    /// The branch it was created from, as a wire path.
+    pub(super) target_branch: Option<String>,
+    /// The commit it was created at, and when its session became responsible for it.
+    pub(super) birth_commit: String,
+    pub(super) since: i64,
 }
 
 /// One repository the sessions' projects are in, with the branches in it they are responsible
@@ -74,6 +79,9 @@ pub(super) fn bound_in(state: &AppState, sessions: &[Session]) -> Result<Vec<Bou
                     branch: row.branch,
                     session: row.responsible_session,
                     project,
+                    target_branch: row.target_branch,
+                    birth_commit: row.birth_commit,
+                    since: row.responsible_since,
                 }
             })
             .collect();

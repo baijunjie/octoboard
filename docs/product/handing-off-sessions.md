@@ -320,8 +320,9 @@ until a session can take them" in `docs/product/message-delivery.md`):
   `docs/product/reporting-to-owners.md`);
 - **the receiving session** is told what it now holds: its owner and how to report to it — for a lead session, also
   that this replaces what its role description says about being unbound, and how its reports archive it — or that it
-  has no owner and reports to the user; the branches it is now responsible for, or that they could not be moved and
-  still name the original; and each session it now owns, with its status.
+  has no owner and reports to the user; the branches it is now responsible for, each with its target branch where one
+  is recorded (see "Target branches and fork points" in `docs/product/revert-gate.md`), or that they could not be
+  moved and still name the original; and each session it now owns, with its status.
 
 An archived owner is told nothing.
 

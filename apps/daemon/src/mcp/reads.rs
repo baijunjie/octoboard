@@ -5,11 +5,13 @@
 //! have modules of their own. What a session may *do* to another is narrower, and is each write
 //! tool's own rule in `exec`; reads are not limited to the caller's console, writes are.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Result};
 use serde_json::{json, Map, Value};
 
+use crate::agent_records::{self, Locator, Resumability};
 use crate::protocol::{Console, Project, Role, Session, SessionStatus};
 use crate::state::AppState;
 
@@ -19,6 +21,7 @@ use super::args::{
 };
 use super::exec::{
     branch_names_of, describe_session, owned_count_of, owned_counts_of, resolve_session,
+    session_or_caller,
 };
 use super::settings::{describe_project, refresh_git_status};
 
@@ -141,10 +144,7 @@ pub(super) async fn get_session(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     // Left out, the caller itself: the way a session learns its own Octoboard id and record.
-    let target = match optional_string(arguments, "session") {
-        Some(wanted) if wanted != caller.id => resolve_session(state, &wanted)?,
-        _ => state.session_record(&caller.id)?,
-    };
+    let target = session_or_caller(state, caller, arguments)?;
     // Refused outside the bounds rather than clamped, so a caller that asked for more than it can
     // have is not left believing it read it all.
     let tail = optional_count(arguments, "output_bytes", 1, MAX_OUTPUT_TAIL)?
@@ -153,6 +153,11 @@ pub(super) async fn get_session(
     let branches = branch_names_of(state, vec![target.clone()]).await?;
     let owned = owned_count_of(state, &target)?;
     let mut description = describe_session(state, &target, caller, &branches, &owned)?;
+    // Interrupted or archived: no process, and its conversation to be resumed.
+    if state.shown_status(&target).is_dormant() {
+        let resumable = resumable_of(vec![target.clone()]).await?;
+        description["resumable"] = json!(resumable[&target.id]);
+    }
     description["recent_output"] = json!(output);
     if state.shown_status(&target) == SessionStatus::WaitingUser {
         description["note"] = json!(
@@ -187,13 +192,42 @@ async fn recent_output(state: &Arc<AppState>, id: &str, tail: usize) -> Option<S
     })
 }
 
-/// The `console`, `project` and `owner` filters `list_sessions` and `list_archived` share, resolved
-/// once from the call's arguments. Each given one must hold, so they combine as AND; one that
-/// names nothing is refused rather than read as a filter that matches nothing.
+/// For each of `sessions`, whether the agent still holds its conversation, from the agent's own
+/// records in the way `reopen_session` reads them, though through the default [`Locator`] rather
+/// than a launch's environment: `Some(true)` when it does (and for a session with no conversation,
+/// which relaunches into a fresh one), `Some(false)` when it is proven gone, so that
+/// `reopen_session` refuses it, and `None` when that cannot be told, which `reopen_session` lets
+/// through. Looks through the account's records directories, so it runs on the blocking pool.
+async fn resumable_of(sessions: Vec<Session>) -> Result<HashMap<String, Option<bool>>> {
+    Ok(tokio::task::spawn_blocking(move || {
+        let locator = Locator::default();
+        sessions
+            .into_iter()
+            .map(|session| {
+                let resumable = match agent_records::resumability(&locator, &session) {
+                    Resumability::Resumable => Some(true),
+                    Resumability::Unresumable => Some(false),
+                    Resumability::Unknown => None,
+                };
+                (session.id, resumable)
+            })
+            .collect()
+    })
+    .await?)
+}
+
+/// The `console`, `project`, `owner`, `kind` and `branch` filters `list_sessions` and
+/// `list_archived` share, resolved once from the call's arguments. Each given one must hold, so
+/// they combine as AND; one that names nothing is refused rather than read as a filter that
+/// matches nothing. `branch` is matched against the branches a session is responsible for, which
+/// are read apart from the store's sessions, so [`SessionFilters::matches`] leaves it to the
+/// caller.
 struct SessionFilters {
     console: Option<Console>,
     project: Option<Project>,
     owner: Option<Session>,
+    kind: Option<Role>,
+    branch: Option<String>,
 }
 
 impl SessionFilters {
@@ -212,10 +246,23 @@ impl SessionFilters {
         let owner = optional_string(arguments, "owner")
             .map(|wanted| resolve_session(state, &wanted))
             .transpose()?;
+        let kind = match optional_string(arguments, "kind").as_deref() {
+            None => None,
+            Some("console") => Some(Role::Console),
+            Some("project") => Some(Role::Project),
+            Some(other) => bail!("`kind` must be `console` or `project`, not `{other}`"),
+        };
+        if project.is_some() && kind == Some(Role::Console) {
+            bail!(
+                "`kind: console` and `project` cannot both hold: a console session is in no project"
+            );
+        }
         Ok(Self {
             console,
             project,
             owner,
+            kind,
+            branch: optional_string(arguments, "branch"),
         })
     }
 
@@ -231,16 +278,37 @@ impl SessionFilters {
                 .owner
                 .as_ref()
                 .is_none_or(|owner| session.bound_to.as_deref() == Some(&owner.id))
+            && self.kind.is_none_or(|kind| session.role == kind)
+    }
+
+    /// Keeps of `sessions` those responsible for the `branch` filter's branch, when there is one,
+    /// and returns the names of the branches each is responsible for.
+    async fn retain_responsible(
+        &self,
+        state: &Arc<AppState>,
+        sessions: &mut Vec<Session>,
+    ) -> Result<HashMap<String, Vec<String>>> {
+        let branches = branch_names_of(state, sessions.clone()).await?;
+        if let Some(wanted) = &self.branch {
+            sessions.retain(|session| {
+                branches
+                    .get(&session.id)
+                    .is_some_and(|names| names.contains(wanted))
+            });
+        }
+        Ok(branches)
     }
 }
 
 /// The archived sessions of any console, for any role: reads are not limited to the caller's
 /// console, as the writes on them are.
 ///
-/// `console`, `project`, `owner`, `yours` and `kind` narrow the list; each given one must hold, so
-/// they combine as AND. A `console`, `project` or `owner` that names nothing is refused rather
-/// than read as a filter that matches nothing, as is a `kind` of console sessions beside a
-/// `project`, which holds only project sessions. The newest archived come first and at most
+/// `console`, `project`, `owner`, `yours`, `kind` and `branch` narrow the list; each given one must
+/// hold, so they combine as AND. A `console`, `project` or `owner` that names nothing is refused
+/// rather than read as a filter that matches nothing, as is a `kind` of console sessions beside a
+/// `project`, which holds only project sessions. With `check_resumable` each session carries
+/// `resumable` ([`resumable_of`]), left off by default because it looks through the agents' record
+/// directories once per session. The newest archived come first and at most
 /// `limit` are described; `total` counts all that match, and `older` those that match and come
 /// after the page, which `before` reaches: the `next` the previous page answered with, a position
 /// in the order ([`archive_cursor`]) rather than a session, so it holds whatever has become of the
@@ -251,15 +319,7 @@ pub(super) async fn list_archived(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let filters = SessionFilters::parse(state, caller, arguments)?;
-    let kind = match optional_string(arguments, "kind").as_deref() {
-        None => None,
-        Some("console") => Some(Role::Console),
-        Some("project") => Some(Role::Project),
-        Some(other) => bail!("`kind` must be `console` or `project`, not `{other}`"),
-    };
-    if filters.project.is_some() && kind == Some(Role::Console) {
-        bail!("`kind: console` and `project` cannot both hold: a console session is in no project");
-    }
+    let check_resumable = optional_bool(arguments, "check_resumable")?.unwrap_or(false);
     let yours = optional_bool(arguments, "yours")?;
     let limit = optional_count(arguments, "limit", 1, MAX_ARCHIVED_LIMIT)?
         .unwrap_or(DEFAULT_ARCHIVED_LIMIT);
@@ -279,11 +339,17 @@ pub(super) async fn list_archived(
         .into_iter()
         .filter(|session| session.status == SessionStatus::Archived)
         .filter(|session| filters.matches(session))
-        .filter(|session| kind.is_none_or(|kind| session.role == kind))
         .filter(|session| {
             yours.is_none_or(|yours| (session.bound_to.as_deref() == Some(&caller.id)) == yours)
         })
         .collect();
+    // The branches of the whole archive that matches, not of a page: `total` counts what the
+    // `branch` filter keeps.
+    let wide = if filters.branch.is_some() {
+        Some(filters.retain_responsible(state, &mut archived).await?)
+    } else {
+        None
+    };
     archived.sort_by(archived_order);
     let total = archived.len();
     // The cursor is a position in the order, not a session, so sessions archived, reopened or
@@ -298,11 +364,25 @@ pub(super) async fn list_archived(
     let next = (older > 0)
         .then(|| archived.last().map(archive_cursor))
         .flatten();
-    let branches = branch_names_of(state, archived.clone()).await?;
+    let branches = match wide {
+        Some(branches) => branches,
+        None => branch_names_of(state, archived.clone()).await?,
+    };
     let owned = owned_counts_of(state)?;
+    let resumable = if check_resumable {
+        Some(resumable_of(archived.clone()).await?)
+    } else {
+        None
+    };
     let sessions = archived
         .iter()
-        .map(|session| describe_session(state, session, caller, &branches, &owned))
+        .map(|session| {
+            let mut description = describe_session(state, session, caller, &branches, &owned)?;
+            if let Some(resumable) = &resumable {
+                description["resumable"] = json!(resumable[&session.id]);
+            }
+            Ok(description)
+        })
         .collect::<Result<Vec<Value>>>()?;
     Ok(json!({ "sessions": sessions, "total": total, "older": older, "next": next }))
 }
@@ -348,8 +428,8 @@ fn parse_archive_cursor(token: &str) -> Option<(Option<i64>, String)> {
 /// interrupted sessions, which have no process but are resumable; archived ones are
 /// `list_archived`'s.
 ///
-/// `console`, `project`, `owner` and `yours` narrow the list; each given one must hold, so they
-/// combine as AND.
+/// `console`, `project`, `owner`, `yours`, `kind` and `branch` narrow the list; each given one must
+/// hold, so they combine as AND.
 ///
 /// `pub(crate)` for the tests of `shared_config`, which describe a session being restarted.
 pub(crate) async fn list_sessions(
@@ -365,7 +445,7 @@ pub(crate) async fn list_sessions(
         Some("any") => (true, true),
         Some(other) => bail!("`status` must be `live`, `interrupted` or `any`, not `{other}`"),
     };
-    let running: Vec<Session> = state
+    let mut running: Vec<Session> = state
         .store
         .list_sessions()?
         .into_iter()
@@ -383,7 +463,7 @@ pub(crate) async fn list_sessions(
                     .is_none_or(|yours| (session.bound_to.as_deref() == Some(&caller.id)) == yours)
         })
         .collect();
-    let branches = branch_names_of(state, running.clone()).await?;
+    let branches = filters.retain_responsible(state, &mut running).await?;
     let owned = owned_counts_of(state)?;
     let sessions = running
         .iter()
@@ -463,6 +543,9 @@ fn readable_output(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp::exec::call;
+    use crate::mcp::exec::tests::{arguments, RepoState};
+    use crate::test_support::ScratchDir;
 
     #[test]
     fn escape_sequences_and_control_bytes_are_stripped_from_the_output_tail() {
@@ -482,5 +565,134 @@ mod tests {
         let mut raw = "ok ".as_bytes().to_vec();
         raw.extend_from_slice(&"日".as_bytes()[..2]);
         assert!(readable_output(&raw).starts_with("ok "));
+    }
+
+    fn ids(listed: &Value) -> Vec<&str> {
+        let mut ids: Vec<&str> = listed["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|session| session["session"].as_str().unwrap())
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// `kind` and `branch` narrow both lists the same way, and `total` of the archive counts what
+    /// they keep.
+    #[tokio::test]
+    async fn sessions_are_filtered_by_kind_and_by_the_branch_they_are_responsible_for() {
+        let fixture = RepoState::new("reads-kind-branch");
+        let state = &fixture.state;
+        fixture.branch("lead-work", "lead");
+        fixture.branch("kid-work", "kid");
+        let mut kid = state.session_record("kid").unwrap();
+        kid.status = SessionStatus::Archived;
+        state.save_session(&kid).unwrap();
+
+        let live = |filters: Value| async move {
+            call(state, "loose", "list_sessions", &arguments(filters)).await
+        };
+        let archived = |filters: Value| async move {
+            call(state, "loose", "list_archived", &arguments(filters)).await
+        };
+        assert_eq!(
+            ids(&live(json!({ "branch": "lead-work" })).await.unwrap()),
+            ["lead"]
+        );
+        assert!(ids(&live(json!({ "branch": "kid-work" })).await.unwrap()).is_empty());
+        let consoles = live(json!({ "kind": "console" })).await.unwrap();
+        assert!(!ids(&consoles).is_empty());
+        assert!(consoles["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|session| session["role"] == "console"));
+        let projects = live(json!({ "kind": "project" })).await.unwrap();
+        assert!(ids(&projects).contains(&"lead"));
+        assert!(projects["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|session| session["role"] == "project"));
+
+        let found = archived(json!({ "branch": "kid-work" })).await.unwrap();
+        assert_eq!(ids(&found), ["kid"]);
+        assert_eq!(found["total"], 1);
+        assert_eq!(found["sessions"][0]["branches"], json!(["kid-work"]));
+        let none = archived(json!({ "branch": "lead-work" })).await.unwrap();
+        assert!(ids(&none).is_empty());
+        assert_eq!(none["total"], 0);
+
+        for tool in ["list_sessions", "list_archived"] {
+            let err = call(state, "loose", tool, &arguments(json!({ "kind": "hub" })))
+                .await
+                .expect_err(tool);
+            assert!(err.to_string().contains("`kind` must be"), "{tool}: {err}");
+        }
+    }
+
+    /// An interrupted or archived session says whether its agent still holds the conversation:
+    /// proven gone is `false`, one that cannot be told `null`, one with no conversation `true`; a
+    /// running session has no such field, and `list_archived` adds it only when asked.
+    #[tokio::test]
+    async fn a_dormant_session_says_whether_it_can_be_resumed() {
+        let fixture = RepoState::new("reads-resumable");
+        let state = &fixture.state;
+        let account = ScratchDir::new("reads-resumable-account");
+        std::fs::create_dir_all(account.join("projects")).unwrap();
+        let get = |id: &'static str| async move {
+            call(
+                state,
+                "loose",
+                "get_session",
+                &arguments(json!({ "session": id })),
+            )
+            .await
+        };
+
+        let running = get("lead").await.unwrap();
+        assert!(running.get("resumable").is_none());
+
+        let mut kid = state.session_record("kid").unwrap();
+        kid.status = SessionStatus::Interrupted;
+        state.save_session(&kid).unwrap();
+        assert_eq!(get("kid").await.unwrap()["resumable"], true);
+
+        kid.has_conversation = true;
+        kid.agent_session_id = None;
+        state.save_session(&kid).unwrap();
+        assert!(get("kid").await.unwrap()["resumable"].is_null());
+
+        kid.agent_session_id = Some("019a0000-0000-7000-8000-000000000001".to_string());
+        kid.status = SessionStatus::Archived;
+        state.save_session(&kid).unwrap();
+        state
+            .set_session_account("kid", None, Some(&account.to_string_lossy()))
+            .unwrap();
+        assert_eq!(get("kid").await.unwrap()["resumable"], false);
+
+        let asked = call(
+            state,
+            "loose",
+            "list_archived",
+            &arguments(json!({ "check_resumable": true })),
+        )
+        .await
+        .unwrap();
+        let entry_of = |listed: &Value| {
+            listed["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|session| session["session"] == "kid")
+                .unwrap()
+                .clone()
+        };
+        assert_eq!(entry_of(&asked)["resumable"], false);
+        let plain = call(state, "loose", "list_archived", &Map::new())
+            .await
+            .unwrap();
+        assert!(entry_of(&plain).get("resumable").is_none());
     }
 }

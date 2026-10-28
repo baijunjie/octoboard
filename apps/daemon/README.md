@@ -177,7 +177,7 @@ Internals, by file:
 ### `src/mcp/`
 
 The tool surface a session drives Octoboard with. Every session has the same reads (sessions, histories, branches,
-consoles, projects, archives, models, plan quotas and a project's changes); console sessions add orchestration and
+consoles, projects, archives, models, plan quotas, and a project's changes and branches); console sessions add orchestration and
 settings tools, project sessions that can own sessions a narrower orchestration set, bound sessions the reporting tool,
 and every session has information sharing, `request_session` and `request_resume_session`. Which tools a session sees follows its role and
 binding, which the daemon checks on every call. The wire contract is in [`PROTOCOL.md`](PROTOCOL.md).
@@ -188,10 +188,10 @@ binding, which the daemon checks on every call. The wire contract is in [`PROTOC
 | `role.rs`, `console_instructions.rs` | The role description injected at launch, and the console session's instruction file |
 | `exec.rs`, `args.rs` | Dispatching one tool call through the same coordinator and reporting functions the control socket uses, and reading a call's arguments |
 | `reads.rs`, `models.rs`, `history.rs`, `quotas.rs`, `session_branches.rs` | The read-only tools every role has: `get_session`, `list_sessions`, `list_projects`, `list_consoles`, `list_archived`, `list_agent_models`, `read_session_history`, `get_account_quotas`, `get_session_branches` |
-| `project_changes.rs` | The read-only tools every role has for looking at a project's changes: `list_project_changes` (a worktree's uncommitted changes, a branch against a base with its commits, or one commit) and `read_project_diff` (one file's diff, in windows); both read through `browse::serve` with the requests the window sends |
+| `project_changes.rs`, `project_branches.rs`, `project_browse.rs` | The read-only tools every role has for looking at a project's repository: `list_project_changes` (a worktree's uncommitted changes, a branch against a base, by default its recorded target branch, with its commits, or one commit) and `read_project_diff` (one file's diff, in windows) in `project_changes.rs`, `list_project_branches` (a repository's branches with the session recorded as responsible for each) in `project_branches.rs`; `project_browse.rs` is what they share, one `browse::serve` request run under the daemon-wide gate with the requests the window sends |
 | `handoff.rs`, `handover.rs`, `bindings.rs`, `account_switch.rs` | The owner tools: `handoff_session`, `handover_branches`, `transfer_session`, `release_session` and `bind_to_session`, `switch_session_account`; `handover.rs` also holds the branch checks (`branch_names`, `held_by`) that `new_session` and `request_session` use, and `bindings.rs` the owner-notice helpers the owner tools share (`running_or_leave`, `tell_now_or_leave`, `owner_notice`) |
 | `resume_request.rs` | `request_resume_session` |
-| `pages.rs`, `settings.rs` | A session's report panel pages (`show_page`, `list_pages`, `delete_pages`), for a console session and a project session that faces the user, and the settings tools (a project is described with its stored settings and what they resolve to, `effective`) |
+| `pages.rs`, `settings.rs` | A session's report panel pages (`show_page`, `list_pages`, `delete_pages`), for a console session and a project session that faces the user, with `withdraw_pages` for the coordinator to call when a session becomes a bound one and again at daemon start for any page a bound session still has, and the settings tools (a project is described with its stored settings and what they resolve to, `effective`) |
 | `stdio.rs` | `octoboardd mcp` itself: the stdio child forwarding calls to the daemon over loopback, including a tool of the role's other binding catalogue, which the daemon then answers or refuses |
 
 ### `src/browse/`
@@ -200,7 +200,7 @@ Serves the project-browsing control-socket requests (`get_project_source`, `list
 `read_project_file`, the change, branch-comparison and commit listings and reads, and the `…_change_bodies` requests):
 bounded reads from the disk, the index, a branch or a commit. The wire contract and budgets are in "Browsing a project"
 in [`PROTOCOL.md`](PROTOCOL.md). `mod.rs`'s `serve` is the entry point, called from `server.rs` for the control socket
-and from `mcp/project_changes.rs` for the MCP tools of the same reads.
+and from `mcp/project_browse.rs` for the MCP tools of the same reads.
 
 | File | Role |
 |---|---|

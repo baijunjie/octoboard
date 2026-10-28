@@ -3329,7 +3329,22 @@ pub fn bind_session(
             )
         })?;
     state.publish_session(&bound);
+    withdraw_pages_if_bound(state, &session, &bound);
     Ok((bound, owner))
+}
+
+/// Withdraws the report-panel pages of a session that a binding change has just given the role of
+/// a bound one: it has no tool left to list or delete them, and the panel would go on offering
+/// their form. The binding is written by now, so a failure is logged and leaves the pages for
+/// [`submit_page`] to refuse.
+fn withdraw_pages_if_bound(state: &Arc<AppState>, before: &Session, after: &Session) {
+    if !before.has_bound_role() && after.has_bound_role() {
+        if let Err(err) = mcp::withdraw_pages(state, &after.id) {
+            tracing::warn!(
+                session = %after.id, %err, "withdrawing the pages of a bound session failed"
+            );
+        }
+    }
 }
 
 /// Hands `session_id`, bound to `from_id`, to the owner `to_id`, at `from_id`'s request, and tells
@@ -3380,6 +3395,7 @@ pub fn transfer_session(
             )
         })?;
     state.publish_session(&bound);
+    withdraw_pages_if_bound(state, &session, &bound);
     Ok((bound, owner, running))
 }
 
@@ -5485,6 +5501,9 @@ async fn send_message(state: &Arc<AppState>, id: &str, text: String) -> Result<(
 /// A report panel form submission. Refused unless `page_id` names its console session's newest page —
 /// history pages are read-only, and this is where that is actually enforced; a panel that disables
 /// its own submit button on a history page is only reflecting the rule, not the source of it.
+/// Refused too when the session that pushed it has the role of a bound session and so has no tool
+/// to read the submission through; a lead session, though it reports to an owner too, keeps its
+/// pages.
 async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Value) -> Result<()> {
     let page = state.store.get_page(page_id)?.ok_or_else(|| {
         CodedError::raised(
@@ -5499,6 +5518,20 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
             error_code::PAGE_NOT_CURRENT,
             "this page is no longer current; its form can no longer be submitted",
             &[],
+        ));
+    }
+    // A bound session has no tool to read what the page sent; its pages are withdrawn when it
+    // becomes one, so this holds for one left behind by a failed withdrawal, until the daemon's
+    // next start sweeps it.
+    let pusher = state.store.get_session(&page.console_session_id)?;
+    if pusher.is_some_and(|pusher| pusher.has_bound_role()) {
+        return Err(CodedError::raised(
+            error_code::UNKNOWN_PAGE,
+            format!(
+                "unknown page {page_id}: its session has the role of a bound session, which \
+                 pushes no pages"
+            ),
+            &[("page", page_id)],
         ));
     }
     let console_session_id = page.console_session_id;
@@ -13942,8 +13975,17 @@ mod tests {
             assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));
         }
 
+        // A session that becomes a bound one loses the report panel's tools, so its pages are
+        // withdrawn; a lead session keeps them.
+        for (page, session) in [("l-1", "lead"), ("sl-1", "spare-lead")] {
+            state
+                .store
+                .insert_page(&crate::test_support::test_page(page, session, 1))
+                .unwrap();
+        }
         let (lead, ..) = transfer_session(&state, "lead", "hub", "hub-2").unwrap();
         assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub-2"), true));
+        assert_eq!(state.store.list_pages("lead").unwrap().len(), 1);
         let child = state.store.get_session("child").unwrap().unwrap();
         assert_eq!(child.bound_to.as_deref(), Some("lead"));
 
@@ -13959,6 +14001,7 @@ mod tests {
         );
         assert!(spare.has_bound_role());
         assert_eq!(owner.id, "peer");
+        assert!(state.store.list_pages("spare-lead").unwrap().is_empty());
     }
 
     /// Asserts `err` is the coded refusal `code`, naming `session` (and `owner`, when given).
@@ -14883,16 +14926,6 @@ mod tests {
         assert!(!live[0].poll_exit(), "the console session keeps running");
     }
 
-    fn page_of(id: &str, console_session_id: &str, created_at: i64) -> crate::protocol::Page {
-        crate::protocol::Page {
-            id: id.to_string(),
-            console_session_id: console_session_id.to_string(),
-            html: "<p>page</p>".to_string(),
-            anchor_message_id: None,
-            created_at,
-        }
-    }
-
     /// Two console sessions in one console each keep their own page history: a submission is
     /// written into the console session that pushed the page and no other, and "the newest page"
     /// is the newest of that console session, so a later page from the other one does not make an
@@ -14918,9 +14951,9 @@ mod tests {
             live.insert(id, session);
         }
         for page in [
-            page_of("a-old", "owner-a", 1),
-            page_of("a-new", "owner-a", 3),
-            page_of("b-new", "owner-b", 4),
+            crate::test_support::test_page("a-old", "owner-a", 1),
+            crate::test_support::test_page("a-new", "owner-a", 3),
+            crate::test_support::test_page("b-new", "owner-b", 4),
         ] {
             state.store.insert_page(&page).unwrap();
         }
@@ -14933,7 +14966,7 @@ mod tests {
             .unwrap();
         state
             .store
-            .insert_page(&page_of("w-1", "worker", 5))
+            .insert_page(&crate::test_support::test_page("w-1", "worker", 5))
             .unwrap();
         let listing = |session: &str| {
             handle(
@@ -14959,6 +14992,20 @@ mod tests {
             .await
             .expect_err("a history page of its console session");
         assert_eq!(code_of(&refused), error_code::PAGE_NOT_CURRENT);
+
+        // The newest page of a session that has since become a bound one is refused as no page at
+        // all.
+        let mut bound = bare_session("bound-worker", Role::Project);
+        bound.bound_to = Some("owner-a".to_string());
+        state.store.insert_session(&bound).unwrap();
+        state
+            .store
+            .insert_page(&crate::test_support::test_page("bw-1", "bound-worker", 6))
+            .unwrap();
+        let refused = submit_page(&state, "bw-1", serde_json::json!({}))
+            .await
+            .expect_err("a page of a session that has no page tools");
+        assert_eq!(code_of(&refused), error_code::UNKNOWN_PAGE);
 
         submit_page(&state, "a-new", serde_json::json!({}))
             .await

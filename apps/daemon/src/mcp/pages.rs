@@ -1,7 +1,8 @@
 //! The tools with which a session that faces the user, a console session or a project session that
 //! is unbound or a lead session, pushes pages to its report panel, `show_page`, reads back the ones
 //! it pushed, `list_pages`, and withdraws them, `delete_pages`. A session reads and deletes only
-//! its own pages.
+//! its own pages. A session that becomes a bound project session has them all withdrawn
+//! ([`withdraw_pages`]).
 
 use std::sync::Arc;
 
@@ -29,9 +30,57 @@ pub(super) fn show_page(
         anchor_message_id: None,
         created_at: now_millis(),
     };
-    state.store.insert_page(&page)?;
+    // The role is checked in the insert itself: this call's `session` was read before a binding
+    // that is being written now, and a page stored behind that binding would be offered, with its
+    // form, by a session that has no tool to read what it sends.
+    if !state.store.insert_page_unless_bound(&page)? {
+        bail!(
+            "this session has the role of a bound session, which pushes no pages to the report \
+             panel"
+        );
+    }
+    #[cfg(test)]
+    BEFORE_PAGE_CREATED.with(|hook| {
+        if let Some(hook) = hook.borrow().as_ref() {
+            hook(state, &session.id);
+        }
+    });
     state.broadcast(Event::PageCreated { page: page.clone() });
+    // A binding or transfer, or a concurrent `delete_pages`, may withdraw the session's pages
+    // between the insert and the broadcast above, and its `pages_deleted` would then reach the
+    // panel before this `page_created`, which would show a page that is gone. Tell the panel
+    // again, and refuse, rather than hand out the id of a page that no longer exists. A store that
+    // cannot answer leaves the page stored and announced as it is: the push has succeeded, and
+    // failing it now would hide an id that is live.
+    match state.store.get_page(&page.id) {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            announce_deleted(state, &session.id, std::slice::from_ref(&page.id));
+            bail!(
+                "the page was withdrawn while it was being pushed (this session became a bound \
+                 one, or its pages were deleted)"
+            );
+        }
+        Err(err) => {
+            tracing::warn!(
+                page = %page.id,
+                %err,
+                "checking that a pushed page still exists failed"
+            );
+        }
+    }
     Ok(json!({ "page": page.id }))
+}
+
+/// What a test runs after `show_page` stores a page and before it announces it, in place of the
+/// binding, transfer or `delete_pages` that would withdraw the session's pages at that point.
+#[cfg(test)]
+type BeforePageCreated = Box<dyn Fn(&Arc<AppState>, &str)>;
+
+#[cfg(test)]
+thread_local! {
+    static BEFORE_PAGE_CREATED: std::cell::RefCell<Option<BeforePageCreated>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// The pages the caller pushed, oldest first, and only those: a page of another session is no more
@@ -112,13 +161,45 @@ pub(super) fn delete_pages(
         _ => bail!("name the pages to delete in `pages`, or pass `all: true`, not both or neither"),
     };
     let deleted = result.map_err(|id| anyhow!("you have pushed no page `{id}`"))?;
+    announce_deleted(state, &session.id, &deleted);
+    Ok(json!({ "deleted": deleted }))
+}
+
+/// Withdraws every page `session_id` pushed, as `delete_pages` with `all` does, for a session that
+/// has just lost the report panel's tools by becoming a bound project session: its pages would
+/// stay on the panel, and be submittable, with no way left for it to list or delete them.
+pub(crate) fn withdraw_pages(state: &Arc<AppState>, session_id: &str) -> Result<()> {
+    // With `None` the store names no id, so its `Err(id)` arm, a named id that is not the
+    // session's, cannot happen.
+    if let Ok(deleted) = state.store.delete_pages(session_id, None)? {
+        announce_deleted(state, session_id, &deleted);
+    }
+    Ok(())
+}
+
+/// Withdraws the pages of every session that has the role of a bound one now: those a binding
+/// change could not withdraw (a failed withdrawal, a page stored while the binding was being
+/// written) and those pushed before pages were withdrawn on binding. Run once when the daemon
+/// starts. One session's failure is logged and does not stop the others.
+pub(crate) fn withdraw_stray_pages(state: &Arc<AppState>) -> Result<()> {
+    for session_id in state.store.session_ids_with_pages_and_bound_role()? {
+        if let Err(err) = withdraw_pages(state, &session_id) {
+            tracing::warn!(
+                session = %session_id, %err, "withdrawing the pages of a bound session failed"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Tells the panel which of a session's pages the store removed; nothing when none was.
+fn announce_deleted(state: &Arc<AppState>, session_id: &str, deleted: &[String]) {
     if !deleted.is_empty() {
         state.broadcast(Event::PagesDeleted {
-            console_session_id: session.id.clone(),
-            pages: deleted.clone(),
+            console_session_id: session_id.to_string(),
+            pages: deleted.to_vec(),
         });
     }
-    Ok(json!({ "deleted": deleted }))
 }
 
 /// The text of a page's `<title>`, when it has a non-blank one.
@@ -199,6 +280,48 @@ mod tests {
         .await
         .expect_err("another session's page");
         assert!(err.to_string().contains("no page"), "{err}");
+    }
+
+    /// A page withdrawn between its insert and its announcement, whose `pages_deleted` therefore
+    /// reaches the panel before its `page_created`, is announced as deleted again and the push
+    /// refused, so the panel does not keep a page that is gone and the session is not handed its
+    /// id.
+    #[tokio::test]
+    async fn a_page_withdrawn_while_being_pushed_is_refused_and_announced_deleted() {
+        let (state, _dir) = peer_state("peer-withdrawn-push");
+        let mut events = state.subscribe();
+        super::BEFORE_PAGE_CREATED.with(|hook| {
+            *hook.borrow_mut() = Some(Box::new(|state, session| {
+                super::withdraw_pages(state, session).unwrap();
+            }));
+        });
+        let refused = call(
+            &state,
+            "starter",
+            "show_page",
+            &arguments(json!({ "html": "<p>x</p>" })),
+        )
+        .await;
+        super::BEFORE_PAGE_CREATED.with(|hook| *hook.borrow_mut() = None);
+        let err = refused.expect_err("the page was withdrawn");
+        assert!(err.to_string().contains("was withdrawn while"), "{err}");
+        let listed = call(&state, "starter", "list_pages", &Map::new())
+            .await
+            .unwrap();
+        assert_eq!(listed["pages"], json!([]));
+
+        let mut seen = Vec::new();
+        while let Ok(event) = events.try_recv() {
+            match event {
+                Event::PageCreated { page } => seen.push(format!("created {}", page.id)),
+                Event::PagesDeleted { pages, .. } => seen.push(format!("deleted {pages:?}")),
+                _ => {}
+            }
+        }
+        assert_eq!(seen.len(), 3, "{seen:?}");
+        let id = seen[1].strip_prefix("created ").expect("created second");
+        assert_eq!(seen[0], format!("deleted {:?}", [id]));
+        assert_eq!(seen[2], seen[0]);
     }
 
     /// A project session that faces the user pushes, lists and deletes pages like a console
@@ -333,6 +456,77 @@ mod tests {
         // With nothing left it deletes nothing and says nothing.
         let done = delete("starter", json!({ "all": true })).await.unwrap();
         assert_eq!(done["deleted"], json!([]));
+        assert!(events.try_recv().is_err());
+    }
+
+    /// A push whose caller was read before the session was bound stores no page: the role is
+    /// checked where the page is written, so a binding that lands between the dispatcher's check
+    /// and the insert cannot leave a page behind it.
+    #[test]
+    fn a_push_racing_a_binding_leaves_no_page_behind() {
+        let (state, _dir) = peer_state("peer-push-race");
+        let before_binding = state.session_record("other-project").unwrap();
+        state
+            .store
+            .set_binding("other-project", None, "starter", false, true, false)
+            .unwrap()
+            .unwrap();
+        let mut events = state.subscribe();
+
+        let err = super::show_page(
+            &state,
+            &before_binding,
+            &arguments(json!({ "html": "<p>x</p>" })),
+        )
+        .expect_err("bound by now");
+        assert!(err.to_string().contains("role of a bound session"), "{err}");
+        assert!(state.store.list_pages("other-project").unwrap().is_empty());
+        assert!(events.try_recv().is_err(), "no page was announced");
+
+        // A lead session is bound too, and keeps its pages.
+        let (state, _dir) = lead_state("peer-push-lead");
+        let lead = state.session_record("starter").unwrap();
+        super::show_page(&state, &lead, &arguments(json!({ "html": "<p>x</p>" }))).unwrap();
+        assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
+    }
+
+    /// At start the daemon withdraws the pages of every session with the role of a bound one, and
+    /// no other's: a lead session's and an unbound session's stay.
+    #[test]
+    fn the_start_sweep_withdraws_the_pages_left_on_bound_sessions() {
+        let (state, _dir) = lead_state("peer-sweep-pages");
+        // `starter` is a lead session, `mine` is bound to it, `other-project` is unbound.
+        for (id, session) in [
+            ("l-1", "starter"),
+            ("b-1", "mine"),
+            ("b-2", "mine"),
+            ("u-1", "other-project"),
+        ] {
+            state
+                .store
+                .insert_page(&crate::test_support::test_page(id, session, 1))
+                .unwrap();
+        }
+        let mut events = state.subscribe();
+
+        super::withdraw_stray_pages(&state).unwrap();
+
+        assert!(state.store.list_pages("mine").unwrap().is_empty());
+        assert_eq!(state.store.list_pages("starter").unwrap().len(), 1);
+        assert_eq!(state.store.list_pages("other-project").unwrap().len(), 1);
+        let Event::PagesDeleted {
+            console_session_id,
+            pages,
+        } = events.try_recv().unwrap()
+        else {
+            panic!("the panels must be told");
+        };
+        assert_eq!(console_session_id, "mine");
+        assert_eq!(pages.len(), 2);
+        assert!(events.try_recv().is_err());
+
+        // Nothing left to withdraw: nothing said.
+        super::withdraw_stray_pages(&state).unwrap();
         assert!(events.try_recv().is_err());
     }
 }

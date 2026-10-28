@@ -167,7 +167,8 @@ does not count. The answer is one of three:
 Only an unresumable answer is acted on: it refuses the session's reopen and relaunches an archived owner into a fresh
 conversation (see "Archiving, interruption and resuming" above), and it lets an archived session be deleted
 automatically (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`).
-An unknown answer is treated as resumable.
+An unknown answer is treated as resumable. Sessions read the answer beforehand as `resumable` (see "Session records"
+in `docs/product/what-every-session-reads.md`).
 
 ### Switching a session's account
 

@@ -72,6 +72,18 @@ sessions.
 - **Taking over the sessions of an interrupted owner.** A session interrupted under an owner that is itself interrupted
   stays bound to that owner; the work is taken up again by resuming that owner, which then drives its sessions again,
   not by a new console session taking them over.
+- **Changing a console session's colour.** The colour (only a console session has one) is cosmetic and the user's
+  to choose, so there is nothing for a session to gain from a tool.
+- **The project Git actions: pushing, switching branch, restoring changes, pulling.** A session runs git itself, under
+  its own agent's permission prompts, so the project pane's actions are not duplicated for it; restoring changes
+  discards work, and that stays with the user's confirmation. (`list_projects` and `get_project` with `refresh` only
+  check the git status, and fast-forward a branch under the user's `auto_pull_repositories` setting.)
+- **Shell terminals.** A session has its own terminal and runs commands through its agent, under that agent's
+  permission prompts; the project pane's shell terminals are the user's.
+- **Exporting the configuration.** An export carries what the settings tools deliberately do not expose (a console's
+  avatar and console session instructions, and application settings that stay the user's own; see
+  `docs/product/agent-settings-tools.md`), so no tool writes it out; it stays with the user's **Export…** button (see
+  `docs/product/configuration-export-and-import.md`).
 
 **Only an owner can interrupt a turn.** An owner can stop the turn of a session it owns with `interrupt_session` (see
 `docs/product/interrupting-turns.md`); no other session can interrupt another's turn, and what any session writes into
@@ -212,8 +224,9 @@ lead session: it has the role of a bound one.
   synthesised for it while they run (see `docs/product/reporting-to-owners.md`).
 - **Its console session can hand it on.** Handed to another console session of the console it stays a lead session,
   keeping its sessions. It can be handed to a project session only while it has no sessions of its own, archived ones
-  included; it then has the role of a bound session and can own none (see "Handing a session to another owner" in
-  `docs/product/changing-session-owners.md`).
+  included; it then has the role of a bound session and can own none, and the report panel pages it pushed are
+  withdrawn (see "Handing a session to another owner" in `docs/product/changing-session-owners.md`, and "When a session
+  takes the role of a bound one" in `docs/product/report-panel.md`).
 - **It can be released.** Released by its console session or by the user, it is an unbound project session again and
   keeps its sessions (see "Releasing a session from its owner" in `docs/product/changing-session-owners.md`).
 - **Its sessions stay ordinary bound sessions.** A session bound to a lead session has the role of a bound one and can

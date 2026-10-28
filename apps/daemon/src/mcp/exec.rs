@@ -27,7 +27,8 @@ use serde_json::{json, Map, Value};
 
 use crate::branch_origin::cleanup;
 use crate::branch_origin::handover::{
-    branch_name, branch_noun_and_pronoun, move_branches, named_branches, Handed, Handover,
+    branch_name, branch_noun_and_pronoun, move_branches, named_branches_with_targets, Handed,
+    Handover,
 };
 use crate::branch_origin::session_branches;
 use crate::coordinator::{self, LaunchEdit, OpenRequest};
@@ -54,6 +55,7 @@ use super::handover::{self, branch_names, held_by};
 use super::history;
 use super::models;
 use super::pages;
+use super::project_branches;
 use super::project_changes;
 use super::quotas;
 use super::reads;
@@ -129,9 +131,12 @@ pub async fn call(
         "list_project_changes" => {
             project_changes::list_project_changes(state, &session, arguments).await
         }
+        "list_project_branches" => {
+            project_branches::list_project_branches(state, &session, arguments).await
+        }
         "read_project_diff" => project_changes::read_project_diff(state, &session, arguments).await,
         "list_agent_models" => models::list_agent_models(state, arguments).await,
-        "read_session_history" => history::read_session_history(state, arguments).await,
+        "read_session_history" => history::read_session_history(state, &session, arguments).await,
         "get_project" => settings::get_project(state, &session, arguments).await,
         "get_account_quotas" => quotas::get_account_quotas(state, arguments).await,
         "send_message" => send_message(state, &session, arguments).await,
@@ -319,7 +324,7 @@ pub(crate) fn branches_opening_prompt(
         "{BRANCHES_OPENING}{id}` (\"{title}{BRANCHES_MARKER}{noun} {} over to \
          you: you are now the session responsible for {them}, so carry on the work on {them}. \
          This is the brief it wrote:\n\n{brief}",
-        named_branches(&handover.branches),
+        named_branches_with_targets(&handover.branches, &handover.targets),
         id = caller.id,
         title = sharing::one_line(&caller.title),
     )
@@ -1004,7 +1009,7 @@ pub(crate) fn request_opening_prompt(
         format!(
             " It also handed the {noun} {} over to you, with the same approval: you are now the \
              session responsible for {them}, so carry on the work on {them}.",
-            named_branches(&handover.branches)
+            named_branches_with_targets(&handover.branches, &handover.targets)
         )
     });
     format!(
@@ -1043,6 +1048,19 @@ pub(super) fn resolve_session(state: &Arc<AppState>, wanted: &str) -> Result<Ses
         .store
         .get_session(wanted)?
         .ok_or_else(|| anyhow!("there is no session `{wanted}`"))
+}
+
+/// The session a read tool's optional `session` argument names, the caller itself when it is left
+/// out (or names the caller), read afresh from the store. Reading, like [`resolve_session`].
+pub(super) fn session_or_caller(
+    state: &Arc<AppState>,
+    caller: &Session,
+    arguments: &Map<String, Value>,
+) -> Result<Session> {
+    match optional_string(arguments, "session") {
+        Some(wanted) if wanted != caller.id => resolve_session(state, &wanted),
+        _ => state.session_record(&caller.id),
+    }
 }
 
 /// Finds a session the caller may act on: one it can read that is bound to it. Every tool that
@@ -1654,7 +1672,7 @@ pub(super) mod tests {
                 ..project_session("dev", "console-1", None)
             })
             .unwrap();
-        crate::test_support::branch_made_by(&state, &repo, "mine", "dev");
+        crate::test_support::branch_made_from(&state, &repo, "mine", "dev", Some("main"));
         crate::test_support::branch_made_by(&state, &repo, "also", "dev");
         crate::test_support::branch_made_by(&state, &repo, "theirs", "a");
         let _caller = running(&state, "dev");
@@ -1710,7 +1728,8 @@ pub(super) mod tests {
         assert_eq!(answer["branches"], json!(["mine", "also"]));
         let opening = launches.lock().unwrap()[0].2.clone().unwrap();
         assert!(
-            opening.contains("handed the branches `mine`, `also` over to you")
+            opening
+                .contains("handed the branches `mine` (target branch `main`), `also` over to you")
                 && opening.contains("you are now the session responsible for them"),
             "{opening}"
         );
@@ -1782,9 +1801,9 @@ pub(super) mod tests {
                 ..state.store.get_project("project-1").unwrap().unwrap()
             })
             .unwrap();
-        for branch in ["one", "two", "three"] {
-            crate::test_support::branch_made_by(&state, &repo, branch, "loose");
-        }
+        crate::test_support::branch_made_by(&state, &repo, "one", "loose");
+        crate::test_support::branch_made_from(&state, &repo, "two", "loose", Some("main"));
+        crate::test_support::branch_made_by(&state, &repo, "three", "loose");
         let _caller = running(&state, "loose");
 
         for (branches, between) in [
@@ -1796,9 +1815,9 @@ pub(super) mod tests {
             ),
             (
                 json!(["two", "three"]),
-                " It also handed the branches `two`, `three` over to you, with the same approval: \
-                 you are now the session responsible for them, so carry on the work on them. This \
-                 is the brief it wrote:",
+                " It also handed the branches `two` (target branch `main`), `three` over to you, \
+                 with the same approval: you are now the session responsible for them, so carry \
+                 on the work on them. This is the brief it wrote:",
             ),
             (json!([]), " This is the brief it wrote:"),
         ] {

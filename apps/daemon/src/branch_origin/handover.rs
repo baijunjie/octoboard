@@ -2,6 +2,7 @@
 //! the branches are the giver's: `request_session` on approval, `new_session` with `branches`, and
 //! the owner's `handover_branches`. The record move itself is [`super::hand_over`].
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -18,6 +19,10 @@ pub struct Handover {
     pub repository: PathBuf,
     /// Names below `refs/heads/`, as wire paths. Never empty.
     pub branches: Vec<String>,
+    /// The target branch recorded for each of `branches` that has one, as text, by the branch's
+    /// wire path: the branch it was created from, which the session taking it is told to merge it
+    /// into.
+    pub targets: HashMap<String, String>,
 }
 
 /// What became of the branches a handover named.
@@ -68,9 +73,21 @@ pub fn branch_name(branch: &str) -> String {
 
 /// Branch names, as wire paths, set in backticks and separated by commas, for prose.
 pub fn named_branches(branches: &[String]) -> String {
+    named_branches_with_targets(branches, &HashMap::new())
+}
+
+/// [`named_branches`], each branch followed by its target branch from `targets` (by wire path)
+/// where it has one.
+pub fn named_branches_with_targets(
+    branches: &[String],
+    targets: &HashMap<String, String>,
+) -> String {
     branches
         .iter()
-        .map(|branch| format!("`{}`", branch_name(branch)))
+        .map(|branch| match targets.get(branch) {
+            Some(target) => format!("`{}` (target branch `{target}`)", branch_name(branch)),
+            None => format!("`{}`", branch_name(branch)),
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }
