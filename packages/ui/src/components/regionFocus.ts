@@ -30,6 +30,12 @@ export function focusLandingWithoutText(root: Element): boolean {
   return target != null && target.ownerDocument.activeElement === target;
 }
 
+/** Whether `element` can take focus now: in the page, not disabled or hidden, and not behind a modal (`inert`, or
+ * `aria-hidden` where the browser has no `inert`, as in jsdom). */
+export function canTakeFocus(element: Element | null | undefined): element is HTMLElement {
+  return element instanceof HTMLElement && element.isConnected && !element.matches(":disabled") && !element.closest('[inert], [aria-hidden="true"], [hidden]');
+}
+
 /** Puts focus on the first control a keyboard can reach in the region marked `data-region`; a
  * disabled control cannot hold focus and is skipped. */
 export function focusFirstIn(region: Region): void {
@@ -123,9 +129,9 @@ let modalLossTimer: ReturnType<typeof setTimeout> | undefined;
 /** Long enough for a closing modal's exit transition and react-aria's focus restore, a frame after it unmounts. */
 const MODAL_CLOSE_SETTLE_MS = 400;
 
-/** Registers where focus goes when a modal that came up unasked (an error alert, a pending question) closes and leaves
- * it on `<body>` (see `focusAfterModalCloses`); the window passes `focusAfterLoss` with its terminal. Returns what
- * unregisters it. */
+/** Registers where focus goes when a modal that came up unasked (an error alert, a pending question), or Settings with
+ * no dialog under it, closes and leaves it on `<body>` (see `focusAfterModalCloses`); the window passes `focusAfterLoss`
+ * with its terminal. Returns what unregisters it. */
 export function setFocusAfterModalLoss(fallback: () => void): () => void {
   modalLossFallback = fallback;
   return () => {
@@ -135,12 +141,13 @@ export function setFocusAfterModalLoss(fallback: () => void): () => void {
   };
 }
 
-/** Called by each kind of modal that comes up unasked as its own last one closes: the last error alert acknowledged, the
- * last pending question gone. Focus goes back to whatever had it when the modal opened, but there may be none: a
- * control gone with a dialog that closed before the modal came, or no focus at all, as when the modal came in the same
- * task as a press without a pointer that opened a dialog, whose own opening focus react-aria then dropped. Focus left
- * on `<body>` once the modal's exit transition and focus restore are over, which would otherwise undo it, goes to the
- * registered fallback. */
+/** Called by each kind of modal that comes up unasked as its own last one closes (the last error alert acknowledged, the
+ * last pending question gone), and by Settings as it closes with no dialog under it. React Aria gives focus back to
+ * whatever had it when the modal opened, but there may be none: a control gone with a dialog that closed before the
+ * modal came, or no focus at all, as when the modal came in the same task as a press without a pointer that opened a
+ * dialog, whose own opening focus react-aria then dropped. Focus left on `<body>` once the modal's exit transition and
+ * that restore are over, which would otherwise undo the move, goes to the registered fallback, which for the window is
+ * `focusAfterLoss`. */
 export function focusAfterModalCloses(): void {
   cancelFocusAfterModalCloses();
   const fallback = modalLossFallback;

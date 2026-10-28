@@ -79,7 +79,9 @@ tooltips close on turning inert, and a covered alert stays exposed to screen rea
 A modal of this kind also hands focus on when its last one closes with nowhere to return focus to — a control gone
 with the dialog that closed before it, or no focus ever given: call `focusAfterModalCloses` from
 `packages/ui/src/components/regionFocus.ts` as the last one closes and `cancelFocusAfterModalCloses` as one comes up,
-as `packages/ui/src/errorAlerts.ts` and `PendingQuestionDialog` do, rather than a fallback of its own.
+as `packages/ui/src/errorAlerts.ts` and `PendingQuestionDialog` do, rather than a fallback of its own. Any other modal
+that can close with nowhere to return focus to does the same after trying the destinations of its own, as Settings
+closing with no dialog under it does (`packages/ui/src/settings/useSettingsDialog.ts`).
 
 Code that moves focus into such a modal by hand as it mounts (`dialogAround(ref)?.focus()` and the like), where the
 modal can open over another dialog — an alert or a question raised while one is open — focuses it from a layout
@@ -148,6 +150,33 @@ The two failures show under opposite presses, so test both: the mount refocus on
 `autoFocus` only after a keyboard or mouse press, since under a press without a pointer the outer dialog's pull-back is
 put off until it is already inert (the "opens the directory browser on its path field" cases in
 `packages/ui/src/dialogs/ProjectDialog.test.tsx`).
+
+## A dialog another dialog opens as it mounts restores focus to the wrong place, so its close handler hands focus on itself
+
+Applies to `packages/ui`, to a dialog that an outer dialog opens by itself as the outer one mounts — from a mount
+effect, or from the navigation the outer one was opened with — rather than from a press inside it: the Agent accounts
+section's account settings, login and Add agent dialogs over Settings. React Aria's `FocusScope` reads its restore
+target from `document.activeElement` in the inner dialog's first render, before the outer one has focused anything of
+its own (Settings' tabs are not in place yet). On close the restore then lands on `<body>` after a press without a
+pointer, and on the outer dialog's own element after a key or mouse press. The second is not `<body>`, so a repair that
+waits out the restore and acts only on focus left on `<body>` (how the other close hand-offs here work) misses it.
+
+So such a dialog's close handler names the destination itself — the control that opens the dialog, else a control of
+the outer dialog that is always there, such as its section's tab — and focuses it as `handFocusOnceClosed` in
+`packages/ui/src/settings/AgentAccountsSection.tsx` does:
+
+- Retry every animation frame, up to a cap, until the target can take focus (`canTakeFocus` in
+  `packages/ui/src/components/regionFocus.ts`), rather than focus once a frame later. A close that comes from a passive
+  effect (the account removed by another window, a login settled) renders at default priority, so the first frame can
+  arrive while the inner dialog is still mounted and the outer one still `inert`.
+- Landing as the dialog goes puts the move ahead of React Aria's restore, which then finds focus off `<body>` and
+  leaves it. Focus the target once more a turn later if focus has left it: `Dialog`'s give-back to a menu's chosen
+  control (`packages/ui/src/dialogs/Dialog.tsx`) runs from a `setTimeout(0)` on unmount and can land after the move.
+
+Test it under all three press modalities (`framesAsTimers(modality)` from `packages/ui/src/dialogs/dialogTestSupport.ts`),
+since each leaves the restore somewhere else, and the effect-driven close with the store notified outside `act`, which
+is what makes React render it in a task of its own (`notifyLater` in
+`packages/ui/src/settings/SettingsDialog.dialogsInFront.test.tsx`).
 
 ## "Focus left" is three things: check `document.hasFocus()` before answering a `focusout` with no `relatedTarget`
 

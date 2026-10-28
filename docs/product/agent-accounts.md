@@ -85,8 +85,10 @@ The dialog also opens by itself, in front of Settings, when Settings is opened o
 **Add agent…** buttons (see "Opening and closing Settings" in `docs/product/settings.md`): Settings shows this section
 and the dialog opens over it, holding keyboard focus. It opens once per such request; switching to another section of
 Settings and back does not open it again. When the user closes a dialog opened this way, keyboard focus goes to the
-**Add agent** button at the end of the agent strip, when the strip is there. A later request for Settings to show a
-section without this dialog closes the dialog, however it was opened, and focus goes to that section's tab. A refused
+**Add agent** button at the end of the agent strip, or, while no agent is added and there is no strip, to the empty
+state's own **Add agent** button (see "With no agent added" below), its focus ring showing. A later request for
+Settings to show a section without this dialog closes the dialog, however it was opened, and focus goes to that
+section's tab. A refused
 addition — the agent is not installed, is already added, or which agents are installed is not determined yet — is shown
 in an error alert (see `docs/product/error-alerts.md`).
 
@@ -241,9 +243,14 @@ usable until the agent is on `PATH`. Then, one under another:
   configuration**, for an account the user owns (see "Sharing the default configuration" below), then, last,
   **Disable account** (see "Turning an account off" below).
 
-The dialog has no footer: it closes on its close button, on Escape and on a press outside it, and keyboard focus then
-returns to the account's actions menu button in the table. It follows the account as it changes, from any window, and
-closes by itself when the account is removed.
+The dialog has no footer: it closes on its close button, on Escape and on a press outside it. It follows the account
+as it changes, from any window, and closes by itself when the account is removed. However it closes, keyboard focus
+then goes, its focus ring showing:
+
+- opened from the account's actions menu, back to that menu's button in the table, or, when the account's row has gone
+  with the account, to the Agent accounts tab in Settings' list of sections;
+- opened by Settings itself as it opened — by **View in Settings** (see "Starting a session on an account whose last
+  change is incomplete" in `docs/product/sharing-the-default-configuration.md`) — to the Agent accounts tab.
 
 ## Turning an account off
 

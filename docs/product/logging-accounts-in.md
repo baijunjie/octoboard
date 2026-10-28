@@ -55,7 +55,8 @@ actions menu opened it, focus goes back to the row's actions menu button.
 
 When the Agent accounts section opens while a login is already running — after a reload, or started in another window
 — the dialog opens on that login (on one of them, when several are running), without starting another, so it can be
-followed or cancelled there.
+followed or cancelled there. A dialog opened this way has no control to return focus to: however it closes, keyboard
+focus goes to the Agent accounts tab in Settings' list of sections, its focus ring showing.
 
 ## How a login ends
 

@@ -47,6 +47,7 @@ export function EmptyPanel({
   compact,
   silent,
   tone,
+  actionRef,
   announce = false,
   announceKey,
   announceDelayMs,
@@ -80,6 +81,9 @@ export function EmptyPanel({
       landing?: boolean;
       onPress: () => void;
     };
+    /** The action's button, for an owner that puts focus on it itself, as the press never does. Beside `action`
+     * rather than in it, as a ref held in a prop object makes every read of that object a read of a ref. */
+    actionRef?: React.Ref<HTMLButtonElement>;
     silent?: never;
   } & (
     // A row holds at most two buttons: the action and one more, a second way out or a failure's Details. A heading
@@ -110,7 +114,7 @@ export function EmptyPanel({
       announceDelayMs?: never;
     }
   ))
-  | (Announcement & { action?: never; secondaryAction?: never; details?: never; headingMark?: never; silent?: true })
+  | (Announcement & { action?: never; actionRef?: never; secondaryAction?: never; details?: never; headingMark?: never; silent?: true })
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
@@ -147,6 +151,7 @@ export function EmptyPanel({
             // is not also this row's description — `TitledControl` drops a tooltip that repeats an
             // `aria-label` by itself, but cannot see into a name assembled from other elements.
             aria-describedby=""
+            ref={actionRef}
             preventFocusOnPress
             onPress={action.onPress}
             className="h-auto min-h-8 w-full justify-start gap-2 rounded-lg py-1 ps-2 pe-1 text-start font-normal text-[inherit] whitespace-normal hover:bg-panel-hover [&_svg]:m-0"
@@ -190,6 +195,7 @@ export function EmptyPanel({
             // A press never takes focus: it would drop to `<body>` when the panel goes away, and
             // whatever the action opens or starts places focus itself.
             <Button
+              ref={actionRef}
               data-region-landing={action.landing ? "" : undefined}
               size="sm"
               variant={action.variant ?? "secondary"}

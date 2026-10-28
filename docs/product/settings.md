@@ -85,6 +85,17 @@ dialog, on the control that opened Settings — the console dialog's Manage acco
 itself when that control is gone. Opened from the rail while the sidebar's drawer is open, it gives focus back to the
 rail instead (see "Below 1168 px: the sidebar becomes a drawer" in `docs/product/sidebar-drawer.md`).
 
+With no dialog beneath it and no session's terminal to take focus — no session is selected, or Settings was opened
+from the open drawer — focus is still handed to something. It goes, in order:
+
+1. to the control whose press opened Settings, while that control is still on screen, even when the press gave it no
+   focus — a screen reader's press on the terminal empty panel's **Add agent…**, say, or on the rail's **Settings**
+   button. Settings opened from the macOS application menu has no such control;
+2. else to what held keyboard focus when Settings opened, while that is still there;
+3. else to the sidebar, or, when the sidebar is not shown or has no control to take it, to the rail, each landing where
+   `F6` would — where focus goes when the last error alert is acknowledged with nowhere to return to (see "The error
+   alert" in `docs/product/error-alerts.md`).
+
 While Settings is open everything under it stays as it was, the terminal included, and its size does not change.
 
 ## Group headings
