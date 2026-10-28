@@ -256,6 +256,41 @@ async fn uncommitted_changes_and_an_unmerged_branch_go_only_when_forced() {
 }
 
 #[tokio::test]
+async fn what_an_agents_archive_will_leave_is_what_it_leaves() {
+    let fixture = Fixture::new("cleanup-agent-outlook");
+    let root = fixture.worktree("work", "s1");
+    commit_in(&root);
+    std::fs::write(root.join("new.txt"), "untracked\n").unwrap();
+    let locked = fixture.worktree("locked", "s1");
+    commit_in(&locked);
+    fixture.lock(&locked);
+    let clean = fixture.worktree("clean", "s1");
+    commit_in(&clean);
+    let archived = [session("s1", SessionStatus::Archived)];
+
+    let (state, sessions) = (fixture.state.clone(), archived.to_vec());
+    let foreseen = tokio::task::spawn_blocking(move || will_be_left(&state, &sessions))
+        .await
+        .unwrap();
+    // A worktree git refuses keeps the branch it has checked out; one that goes leaves an
+    // unmerged branch that `git branch -d` refuses.
+    assert_eq!(
+        summary(&foreseen),
+        expect(&[
+            (true, "locked", SessionBranchState::Locked),
+            (true, "work", SessionBranchState::UncommittedChanges),
+            (false, "clean", SessionBranchState::Unmerged),
+            (false, "locked", SessionBranchState::CheckedOut),
+            (false, "work", SessionBranchState::CheckedOut),
+        ])
+    );
+    assert_eq!(
+        summary(&fixture.remove(&archived, &[]).await),
+        summary(&foreseen)
+    );
+}
+
+#[tokio::test]
 async fn what_git_must_keep_stays_even_when_forced_and_a_locked_worktree_goes_only_when_forced() {
     let fixture = Fixture::new("cleanup-kept");
     // Checked out in the main worktree.
