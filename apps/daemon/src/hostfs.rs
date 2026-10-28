@@ -200,7 +200,7 @@ pub fn require_directory(path: &Path) -> Result<()> {
 
 /// Lists the directories under `path`, each flagged with whether it is a git repository.
 ///
-/// Only directories, because a project is a directory; dot-directories are skipped as noise. A
+/// Only directories, including dot-directories, because a project is a directory. A
 /// failure here is reported rather than swallowed: on a packaged application a directory on another
 /// volume raises a macOS file-access prompt, and the user may decline it or leave it unanswered —
 /// a normal path, since projects are scattered across volumes.
@@ -231,9 +231,6 @@ pub fn list_dir(path: &Path) -> Result<Vec<DirEntry>> {
             }
         };
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
-            continue;
-        }
         let entry_path = entry.path();
         if !entry_path.is_dir() {
             continue;
@@ -406,10 +403,31 @@ pub(crate) fn repo_name(remote_url: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{detect_agent, probe_remote_agent, repo_name, DirectoryIdentities};
+    use super::{detect_agent, list_dir, probe_remote_agent, repo_name, DirectoryIdentities};
     use crate::protocol::Agent;
     use crate::test_support::ScratchDir;
     use std::path::Path;
+
+    #[test]
+    fn directory_listing_includes_hidden_directories_but_not_files() {
+        let dir = ScratchDir::new("hostfs-hidden-directories");
+        std::fs::create_dir_all(dir.join(".claude/.git")).expect("hidden repository");
+        std::fs::create_dir(dir.join("Documents")).expect("visible directory");
+        std::fs::write(dir.join(".hidden-file"), "").expect("hidden file");
+        std::fs::write(dir.join("visible-file"), "").expect("visible file");
+
+        let entries = list_dir(&dir).expect("listing");
+        assert_eq!(
+            entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            [".claude", "Documents"]
+        );
+        assert_eq!(entries[0].path, dir.join(".claude").to_string_lossy());
+        assert!(entries[0].is_git_repo);
+        assert!(!entries[1].is_git_repo);
+    }
 
     fn detected_with(label: &str, markers: &[&str]) -> Option<Agent> {
         let dir = ScratchDir::new(&format!("hostfs-detect-{label}"));

@@ -31,7 +31,7 @@ There are three sources:
 | Source | Input | Result |
 |---|---|---|
 | A single directory | a path | That one directory becomes a project. The path must exist and be a directory. |
-| A parent directory | a path | Every git repository **directly beneath** that path becomes its own project. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
+| A parent directory | a path | Every git repository **directly beneath** that path becomes its own project, including directories whose names begin with a dot. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
 | A git repository URL | a repository URL plus a parent directory | The repository, from any git remote and not only GitHub, is cloned into a new directory beneath the parent, and the clone is then associated. The parent directory is filled in with the default clone directory (see below), which can be changed in the form or left blank to use that directory anyway. |
 
 For a single directory, the form asks the daemon about the path as soon as it is entered or picked (after a short pause
@@ -307,7 +307,7 @@ is in "Reading and changing them" in `docs/product/git-workflow-settings.md`.
 
 ## Browsing directories
 
-The directory browser lists directories only — a project is a directory — and hides entries whose name begins with a
+The directory browser lists directories only — a project is a directory — including entries whose name begins with a
 dot. Each entry is flagged with whether it is a git repository. Entries are sorted case-insensitively by name. The
 listing always comes from the host the projects live on, never from the application's own filesystem view.
 
