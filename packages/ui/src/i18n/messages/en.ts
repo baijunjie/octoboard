@@ -299,6 +299,8 @@ export const en = {
   "daemon.trust_directory_too_broad.summary": "{path} is too broad to trust as a whole.",
   "daemon.trust_directory_too_broad.recovery": "Trust this project on its own, or move it under a narrower folder and trust that folder.",
   "daemon.trust_directory_too_broad.details": "It is the filesystem root or your home directory, or it contains one of them.",
+  "daemon.trust_directory_unreachable.summary": "{path} or the folder above it did not respond in time, so that folder could not be checked.",
+  "daemon.trust_directory_unreachable.recovery": "Uncheck the folder option to trust this project on its own, or try again once the volume responds again.",
   "daemon.agent_not_available.summary": "{agent} is not available on this machine: its binary does not resolve on your login shell's {pathVar}.",
   "daemon.agent_not_available.recovery": "{appName} supports {claude}, {codex} and {grokBuild}; make sure one of them is on your {pathVar} to open a session.",
   "daemon.queued_messages_dropped.summary": "{appName} dropped what it had queued for this session.",
@@ -526,6 +528,7 @@ export const en = {
   "daemon.request_superseded": "A newer request took the place of this one.",
   "daemon.trust_directory_too_broad":
     "{path} is too broad to trust as a whole. It is the filesystem root or your home directory, or it contains one of them. Trust this project on its own, or move it under a narrower folder and trust that folder.",
+  "daemon.trust_directory_unreachable": "{path} or the folder above it did not respond in time, so that folder could not be checked. Uncheck the folder option to trust this project on its own, or try again once the volume responds again.",
   "daemon.trust_path_not_absolute": "{path} is not an absolute path, so there is no folder above it to trust.",
   "daemon.trust_home_unknown": "The home directory could not be determined, so no folder can be checked against it.",
   "daemon.trust_not_waiting": "This session is no longer waiting at its agent's trust confirmation.",

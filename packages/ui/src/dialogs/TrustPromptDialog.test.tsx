@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { DaemonRequestError } from "../daemon-client";
+import { errorAlerts } from "../errorAlerts";
+import { PlatformProvider } from "../platform/react";
+import { ErrorAlerts } from "./ErrorAlerts";
 import { type TrustPrompt } from "../store";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
 
@@ -75,15 +79,37 @@ it("a prompt asked about again starts unticked", async () => {
   expect(checkbox()?.checked).toBe(false);
 });
 
-// A folder refused as too broad answered nothing, so the dialog stays for the user to untick it
-// and go on without it.
-it("a refused folder keeps the dialog open", async () => {
-  const refused = new DaemonRequestError("too broad", "trust_directory_too_broad", { session: "s-1" });
+// A folder refused as too broad, or whose project's directory could not be looked at in time,
+// answered nothing, so the dialog stays for the user to untick it and go on without it.
+it.each(["trust_directory_too_broad", "trust_directory_unreachable"])("a folder refused with %s keeps the dialog open", async (code) => {
+  const refused = new DaemonRequestError("refused", code, { session: "s-1" });
   const dialog = mount([prompt], () => Promise.reject(refused));
   await tick();
   await confirm();
   expect(dialog.onScreen()).toBe(true);
   expect(checkbox()?.checked).toBe(true);
+});
+
+// A folder that could not be checked in time is a refusal of the trust dialog's own, whose alert
+// says what the dialog offers instead: going on without the folder, or trying again later.
+it("a folder that could not be checked in time is refused with the trust dialog's own remedy", async () => {
+  const clear = () => act(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); });
+  clear();
+  onTestFinished(clear);
+  const refused = new DaemonRequestError("refused", "trust_directory_unreachable", { path: prompt.path });
+  mount([prompt], () => Promise.reject(refused));
+  await tick();
+  await confirm();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => root.render(<PlatformProvider value={{ kind: "browser" }}><ErrorAlerts /></PlatformProvider>));
+  const alert = [...document.body.querySelectorAll("[role=alertdialog]")].map((node) => node.textContent ?? "").find((text) => text.includes("did not respond in time"));
+  expect(alert).toContain("Uncheck the folder option to trust this project on its own");
+  expect(alert).not.toContain("Browse");
 });
 
 // A trust prompt comes up unasked, perhaps while the user is typing in a terminal: neither it nor the

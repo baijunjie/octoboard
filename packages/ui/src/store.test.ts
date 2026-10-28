@@ -168,6 +168,61 @@ it("keeps the shell terminals a snapshot lists and the broadcasts change, and dr
   expect(daemon.store.getState().shellTerminals.size).toBe(0);
 });
 
+// Whether a project lies under a trusted directory is the daemon's call, made from where it really
+// is on disk, so the queue holds every prompt it sends and drops one only when that session stops
+// waiting at the confirmation, which the daemon shows as `waiting_user`.
+it("queues every trust prompt the daemon sends, even for a path under a trusted directory", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  client.onEvents!([
+    { type: "trusted_directories_updated", trusted_directories: ["/work"] },
+    { type: "trust_prompt", session: "s", agent: "claude", project: "p", path: "/work/link/app", trust_dir: null },
+  ]);
+  expect(daemon.store.getState().trustPrompts.map((p) => p.session)).toEqual(["s"]);
+});
+
+it("drops a trust prompt when its own session stops waiting, and only then", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const prompt = (session: string): Event => ({ type: "trust_prompt", session, agent: "claude", project: "p", path: "/work/app", trust_dir: null });
+  const queued = () => daemon.store.getState().trustPrompts.map((p) => p.session);
+  client.onEvents!([{ type: "session_upserted", session: sessionOf("a", "c", "p", "A", "working") }, prompt("a"), prompt("b")]);
+  // An upsert for another session leaves the queue be, and so does one that still shows the wait.
+  client.onEvents!([{ type: "session_upserted", session: sessionOf("c", "c", "p", "C", "idle") }]);
+  expect(queued()).toEqual(["a", "b"]);
+  client.onEvents!([{ type: "session_upserted", session: sessionOf("a", "c", "p", "A", "waiting_user") }]);
+  expect(queued()).toEqual(["a", "b"]);
+  client.onEvents!([{ type: "session_upserted", session: sessionOf("a", "c", "p", "A", "working") }]);
+  expect(queued()).toEqual(["b"]);
+  client.onEvents!([{ type: "session_upserted", session: sessionOf("b", "c", "p", "B", "interrupted") }]);
+  expect(queued()).toEqual([]);
+});
+
+it("holds the prompt a snapshot's repeat brings back, until the session stops waiting", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const snapshot = {
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [sessionOf("s", "c", "p", "S", "waiting_user")], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], home_dir: null, shell_terminals: [],
+  } as unknown as Event;
+  const prompt: Event = { type: "trust_prompt", session: "s", agent: "claude", project: "p", path: "/work/app", trust_dir: null };
+  client.onEvents!([prompt, snapshot, prompt]);
+  expect(daemon.store.getState().trustPrompts.map((p) => p.session)).toEqual(["s"]);
+  client.onEvents!([{ type: "session_upserted", session: sessionOf("s", "c", "p", "S", "idle") }]);
+  expect(daemon.store.getState().trustPrompts).toEqual([]);
+});
+
+// A press that failed leaves the confirmation to the person in the terminal, so its prompt goes; a
+// notice of another kind, or about another session, leaves the queue be.
+it("drops a trust prompt when the daemon could not press its session's confirmation", () => {
+  const daemon = createDaemon("http://localhost:1234");
+  const prompt = (session: string): Event => ({ type: "trust_prompt", session, agent: "claude", project: "p", path: "/work/app", trust_dir: null });
+  const notice = (session: string, code: string): Event => ({ type: "session_notice", session, code, params: {}, message: "" });
+  const queued = () => daemon.store.getState().trustPrompts.map((p) => p.session);
+  client.onEvents!([prompt("a"), prompt("b")]);
+  client.onEvents!([notice("a", "trust_not_carried_over"), notice("c", "trust_answer_failed")]);
+  expect(queued()).toEqual(["a", "b"]);
+  client.onEvents!([notice("a", "trust_answer_failed")]);
+  expect(queued()).toEqual(["b"]);
+});
+
 it("keeps what a session request says it does, and drops it when it closes", () => {
   const daemon = createDaemon("http://localhost:1234");
   const base = { type: "session_request" as const, session: "s", role: "project" as const, console: "c", project: "p", agent: "claude" as const, branches: [], requested_at: 1 };

@@ -90,13 +90,6 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
             if outbound.send(snapshot).await.is_err() {
                 return;
             }
-            // The snapshot cannot say that a session is waiting for the user's go-ahead or answer,
-            // and the prompt or request was broadcast only once.
-            for question in pending_questions(&state) {
-                if outbound.send(question).await.is_err() {
-                    return;
-                }
-            }
         }
         Err(err) => {
             tracing::error!(%err, "building the state snapshot failed");
@@ -104,11 +97,23 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>) {
         }
     }
 
-    let forwarder = tokio::spawn(forward_broadcasts(
-        state.clone(),
-        broadcasts,
-        outbound.clone(),
-    ));
+    // The snapshot cannot say that a session is waiting for the user's go-ahead or answer, and the
+    // prompt or request was broadcast only once, so they are asked again. Deciding which prompts
+    // to repeat looks at the file system (`trust::pending_prompts`), so it runs on the forwarder's
+    // task rather than here, where it would hold up this client's first requests; the broadcasts
+    // follow it there, so one that supersedes a repeated prompt still arrives after it.
+    let forwarder = {
+        let state = state.clone();
+        let outbound = outbound.clone();
+        tokio::spawn(async move {
+            for question in pending_questions(&state).await {
+                if outbound.send(question).await.is_err() {
+                    return;
+                }
+            }
+            forward_broadcasts(state, broadcasts, outbound).await;
+        })
+    };
 
     // The writer ends early when the client has stopped reading, or its socket failed; the
     // connection is then dropped, here, rather than left reading requests it can no longer answer.
@@ -293,7 +298,7 @@ async fn forward_broadcasts(
                     }
                     // Whatever prompt or request the client lagged past is asked again; see the
                     // initial snapshot.
-                    for question in pending_questions(&state) {
+                    for question in pending_questions(&state).await {
                         if outbound.send(question).await.is_err() {
                             return;
                         }
@@ -315,8 +320,8 @@ async fn forward_broadcasts(
 
 /// What the daemon is waiting on the user for, to put to a client again after a `snapshot`: the
 /// trust prompts, then the session requests, oldest first.
-fn pending_questions(state: &AppState) -> Vec<Event> {
-    let mut questions = crate::trust::pending_prompts(state);
+async fn pending_questions(state: &AppState) -> Vec<Event> {
+    let mut questions = crate::trust::pending_prompts(state).await;
     questions.extend(crate::session_request::pending_events(state));
     questions
 }

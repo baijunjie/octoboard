@@ -15,8 +15,9 @@
 //!
 //! The user's agreement comes first, in a dialog of Octoboard's own, and is one permission shared
 //! by every agent, in two forms: per project (`Project::trust_consent`), or for a whole directory
-//! (`trusted_directories`), which covers every project whose path lies under it, existing or added
-//! later. Either form lets a later confirmation of any agent be pressed without asking.
+//! (`trusted_directories`), which covers every project whose directory really lies under it,
+//! existing or added later, judged on the file system rather than on the paths' text ([`Place`]).
+//! Either form lets a later confirmation of any agent be pressed without asking.
 //!
 //! **Detection.** Every session's output is watched by a [`TrustState`], fed from the PTY reader
 //! thread whether or not a client is attached, against its own agent's [`Screen`]. The screen is
@@ -101,6 +102,7 @@
 //! the person to answer it. Each session is answered at most once, so a failed attempt is not
 //! retried behind the person's back.
 
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -111,7 +113,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Context, Result};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
-use crate::hostfs::lexically_normalise;
+use crate::hostfs::{self, lexically_normalise};
 use crate::paths;
 use crate::protocol::{
     error_code, notice_code, trust_reason, Agent, CodedError, Event, Notice, Project, Role, Session,
@@ -120,6 +122,7 @@ use crate::session::LiveSession;
 use crate::state::AppState;
 
 mod carry;
+mod place;
 mod press;
 mod screen;
 #[cfg(test)]
@@ -128,6 +131,7 @@ mod tests;
 pub(crate) use carry::write_replacing;
 pub use carry::CarriedTrust;
 use carry::*;
+use place::*;
 use press::*;
 pub(crate) use press::{wait_for, wait_quiet};
 pub use screen::TrustState;
@@ -148,33 +152,134 @@ const HOOK_FALLBACK: Duration = Duration::from_secs(30);
 /// Whether Octoboard may answer this session's screen without asking: a console session always
 /// may, because its working directory is the console's own, which holds nothing but the
 /// instruction file Octoboard wrote there; a project session only with the user's permission,
-/// either for that project or for a trusted directory its path lies under. The permission is
-/// shared by every agent, so it does not matter which one is asking.
-fn consented(session: &Session, project: Option<&Project>, trusted: &[String]) -> bool {
-    session.role == Role::Console
-        || project.is_some_and(|project| {
-            project.trust_consent || under_a_trusted_directory(&project.path, trusted)
-        })
+/// either for that project or for a trusted directory its directory really lies in
+/// ([`covered`]). The permission is shared by every agent, so it does not matter which one is
+/// asking.
+async fn consented(state: &AppState, session: &Session, project: Option<&Project>) -> Result<bool> {
+    if session.role == Role::Console {
+        return Ok(true);
+    }
+    let Some(project) = project else {
+        return Ok(false);
+    };
+    if project.trust_consent {
+        return Ok(true);
+    }
+    let trusted = state.store.trusted_directories()?;
+    let projects = [project.path.clone()];
+    Ok(covered(state, &projects, &trusted)
+        .await
+        .contains(&project.path))
 }
 
-/// A path as the trusted directories are kept and compared: lexically normalised — `.` dropped,
-/// `..` folded into the component before it, trailing slashes gone — and absolute to be of any
-/// use. Symlinks are deliberately not resolved: a directory is trusted by the path the user chose,
-/// and both sides of every comparison are normalised the same way. The consequence is that a
-/// symlink inside a trusted directory extends the trust to whatever it points at only if the
-/// project's own path goes through it.
+/// A path as the trusted directories are kept and removed: lexically normalised — `.` dropped,
+/// `..` folded into the component before it, trailing slashes gone. Only the text is kept; which
+/// projects a trusted directory covers is judged where it really is ([`covered`]).
 fn normalise_path(text: &str) -> PathBuf {
     lexically_normalise(Path::new(text))
 }
 
-/// Whether `path` is one of the trusted directories or lies below one. Compared component by
-/// component, never as text: `/a/Project` does not cover `/a/Project2`.
-fn under_a_trusted_directory(path: &str, trusted: &[String]) -> bool {
-    let path = normalise_path(path);
-    path.is_absolute()
-        && trusted
-            .iter()
-            .any(|directory| path.starts_with(normalise_path(directory)))
+/// Which of the `projects` paths lie in one of the `trusted` directories: where the project's
+/// directory, with every symbolic link on its path resolved, is the directory a trusted path leads
+/// to or lies below it ([`Place`]). Never the text: `/a/Project` does not cover `/a/Project2`, a
+/// project reached through a link inside a trusted directory that leads out of it is not covered,
+/// and one whose path is spelled through a link into it, or in another letter case on a file
+/// system that ignores case, is. A path that cannot be resolved in time, on either side, covers
+/// nothing and is covered by nothing, and a trusted path whose directory is the root, the home
+/// directory or one above it covers nothing ([`too_broad_to_trust`]); when those directories
+/// cannot be looked at in time, no trusted directory covers anything. The paths are looked at off
+/// the runtime, a few at a time, each bounded by [`LOOK_DEADLINE`] ([`looked_within`]).
+async fn covered(state: &AppState, projects: &[String], trusted: &[String]) -> HashSet<String> {
+    covered_with_home(state, projects, trusted, &paths::home_dir()).await
+}
+
+/// [`covered`], with the home directory given.
+async fn covered_with_home(
+    state: &AppState,
+    projects: &[String],
+    trusted: &[String],
+    home: &Path,
+) -> HashSet<String> {
+    if projects.is_empty() || trusted.is_empty() {
+        return HashSet::new();
+    }
+    let paths = projects.iter().chain(trusted).map(PathBuf::from).collect();
+    let home = home.to_path_buf();
+    let (places, broad) = tokio::join!(
+        looked_within(&state.trust_looks, paths, LOOK_DEADLINE, Place::of),
+        looked_within(
+            &state.trust_looks,
+            vec![home.clone()],
+            LOOK_DEADLINE,
+            |home| Some(too_broad_to_trust(home))
+        ),
+    );
+    let Some(broad) = broad.get(&home) else {
+        return HashSet::new();
+    };
+    let directories: Vec<&Place> = trusted
+        .iter()
+        .filter_map(|directory| places.get(Path::new(directory)))
+        .filter(|directory| !directory.is_one_of(broad))
+        .collect();
+    projects
+        .iter()
+        .filter(|project| {
+            places
+                .get(Path::new(project.as_str()))
+                .is_some_and(|place| directories.iter().any(|directory| place.lies_in(directory)))
+        })
+        .cloned()
+        .collect()
+}
+
+/// The directory each of the `projects` paths has to offer for trusting: its parent
+/// ([`trustable_parent`]), and only where trusting that would cover the project — not for a
+/// project reached through a link that leads out of its parent, nor for one that cannot be
+/// resolved in time. A project with none to offer is absent.
+async fn offered(state: &AppState, projects: Vec<String>) -> HashMap<String, PathBuf> {
+    let home = paths::home_dir();
+    looked_within(
+        &state.trust_looks,
+        projects.into_iter().map(PathBuf::from).collect(),
+        LOOK_DEADLINE,
+        move |project| {
+            let parent = trustable_parent(&project.to_string_lossy(), &home).ok()?;
+            Place::of(project)?
+                .lies_in(&Place::of(&parent)?)
+                .then_some(parent)
+        },
+    )
+    .await
+    .into_iter()
+    .map(|(project, parent)| (project.to_string_lossy().into_owned(), parent))
+    .collect()
+}
+
+/// [`trustable_parent`] for a go-ahead, off the runtime and bounded by [`LOOK_DEADLINE`]: a parent
+/// that cannot be checked in time — its look outran the deadline, or one at the same project is
+/// still stuck — is refused with `trust_directory_unreachable`, so that nothing is pressed on a
+/// check that was not made.
+async fn parent_to_trust(state: &AppState, project_path: &str) -> Result<PathBuf> {
+    let home = paths::home_dir();
+    let path = PathBuf::from(project_path);
+    let mut found = looked_within(
+        &state.trust_looks,
+        vec![path.clone()],
+        LOOK_DEADLINE,
+        move |project| Some(trustable_parent(&project.to_string_lossy(), &home)),
+    )
+    .await;
+    found.remove(&path).unwrap_or_else(|| {
+        Err(CodedError::raised(
+            error_code::TRUST_DIRECTORY_UNREACHABLE,
+            format!(
+                "`{project_path}` or the folder above it did not respond in time, so that folder \
+                 could not be checked"
+            ),
+            &[("path", project_path)],
+        ))
+    })
 }
 
 /// The directory to trust for a project: its parent. Refused when that is the filesystem root, the
@@ -229,9 +334,8 @@ fn trustable_parent(project_path: &str, home: &Path) -> Result<PathBuf> {
 /// or in another letter case on a volume that does not tell them apart. False when either is
 /// unreadable.
 fn same_directory(a: &Path, b: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
     match (std::fs::metadata(a), std::fs::metadata(b)) {
-        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        (Ok(a), Ok(b)) => hostfs::identity(&a) == hostfs::identity(&b),
         _ => false,
     }
 }
@@ -471,30 +575,39 @@ async fn on_sighting(state: &Arc<AppState>, live: &Arc<LiveSession>) -> Result<(
         Some(id) => state.store.get_project(id)?,
         None => None,
     };
-    let trusted = state.store.trusted_directories()?;
-    if consented(&session, project.as_ref(), &trusted) {
+    if consented(state, &session, project.as_ref()).await? {
         answer_and_report(state, live).await;
         return Ok(());
     }
     let project = project.ok_or_else(|| anyhow!("the session's project is gone"))?;
+    // The look at the file system took a while, and the person may have answered meanwhile.
+    if !still_waiting(live) {
+        return Ok(());
+    }
     live.trust.needs_user.store(true, Ordering::Release);
     state.publish_session(&session);
     crate::reporting::spawn_tell_owner_it_waits(state, &live.id);
-    state.broadcast(prompt(&session, &project));
+    let trust_dir = offered(state, vec![project.path.clone()])
+        .await
+        .remove(&project.path);
+    // Again after the second look: a prompt for a screen that has been answered since — in the
+    // terminal, or pressed for a directory trusted meanwhile — would ask about nothing, and could
+    // reach a client after the status that would have dropped it.
+    if still_waiting(live) && live.trust.needs_user() {
+        state.broadcast(prompt(&session, &project, trust_dir));
+    }
     Ok(())
 }
 
 /// The prompt for one session at its screen, naming the agent that is asking, with the directory
-/// its parent-directory button would trust, if there is one to offer.
-fn prompt(session: &Session, project: &Project) -> Event {
+/// its parent-directory button would trust, if there is one to offer ([`offered`]).
+fn prompt(session: &Session, project: &Project, trust_dir: Option<PathBuf>) -> Event {
     Event::TrustPrompt {
         session: session.id.clone(),
         agent: session.agent,
         project: project.id.clone(),
         path: project.path.clone(),
-        trust_dir: trustable_parent(&project.path, &paths::home_dir())
-            .ok()
-            .map(|directory| directory.to_string_lossy().into_owned()),
+        trust_dir: trust_dir.map(|directory| directory.to_string_lossy().into_owned()),
     }
 }
 
@@ -674,12 +787,34 @@ fn report_failure(state: &Arc<AppState>, session_id: &str, agent: Agent, err: &a
 /// its own or through a trusted directory. A prompt is broadcast once, so a client that missed it —
 /// it was not connected, or a snapshot replaced what it had — is told here, and one that already
 /// has it ignores the repeat.
-pub fn pending_prompts(state: &AppState) -> Vec<Event> {
+pub async fn pending_prompts(state: &AppState) -> Vec<Event> {
     let trusted = state.store.trusted_directories().unwrap_or_default();
-    waiting_project_sessions(state)
+    let waiting: Vec<(Arc<LiveSession>, Session, Project)> = waiting_project_sessions(state)
         .into_iter()
-        .filter(|(_, session, project)| !consented(session, Some(project), &trusted))
-        .map(|(_, session, project)| prompt(&session, &project))
+        .filter(|(_, session, project)| session.role != Role::Console && !project.trust_consent)
+        .collect();
+    let paths: Vec<String> = waiting
+        .iter()
+        .map(|(_, _, project)| project.path.clone())
+        .collect();
+    let covered = covered(state, &paths, &trusted).await;
+    let asked: Vec<(Arc<LiveSession>, Session, Project)> = waiting
+        .into_iter()
+        .filter(|(_, _, project)| !covered.contains(&project.path))
+        .collect();
+    let asked_paths = asked
+        .iter()
+        .map(|(_, _, project)| project.path.clone())
+        .collect();
+    let offered = offered(state, asked_paths).await;
+    // The looks took a while: a confirmation answered meanwhile is not asked about again.
+    asked
+        .into_iter()
+        .filter(|(live, _, _)| still_waiting(live))
+        .map(|(_, session, project)| {
+            let trust_dir = offered.get(&project.path).cloned();
+            prompt(&session, &project, trust_dir)
+        })
         .collect()
 }
 
@@ -690,7 +825,7 @@ pub fn pending_prompts(state: &AppState) -> Vec<Event> {
 /// project's when `remember` asks for it, its parent directory's when `trust_parent_dir` does; a
 /// failure to press is reported to the user as a notice as well as to the caller, because the
 /// dialog it came from may be closed by then. A parent directory that is too broad is refused
-/// before anything is pressed.
+/// before anything is pressed, and so is one that cannot be checked in time ([`parent_to_trust`]).
 pub async fn confirm(
     state: &Arc<AppState>,
     session_id: &str,
@@ -724,7 +859,7 @@ pub async fn confirm(
         .ok_or_else(|| CodedError::unknown_project(project_id))?;
 
     let directory = if trust_parent_dir {
-        Some(trustable_parent(&project.path, &paths::home_dir())?)
+        Some(parent_to_trust(state, &project.path).await?)
     } else {
         None
     };
@@ -735,7 +870,7 @@ pub async fn confirm(
     }
 
     if let Some(directory) = directory {
-        add_trusted_directory(state, &directory)?;
+        add_trusted_directory(state, &directory).await?;
     } else if remember && !project.trust_consent {
         state.store.set_project_trust_consent(&project.id, true)?;
         project.trust_consent = true;
@@ -754,9 +889,10 @@ pub async fn confirm(
 }
 
 /// Trusts a directory and everything below it, tells every client, and answers the screens already
-/// waiting in projects under it, whichever agent shows them. Each project's own permission is
-/// untouched. Needs the runtime: the answers go off on tasks of their own.
-fn add_trusted_directory(state: &Arc<AppState>, directory: &Path) -> Result<()> {
+/// waiting in projects that really lie in it ([`covered`]), whichever agent shows them. Each
+/// project's own permission is untouched. Needs the runtime: the answers go off on tasks of their
+/// own.
+async fn add_trusted_directory(state: &Arc<AppState>, directory: &Path) -> Result<()> {
     let directory = directory.to_string_lossy().into_owned();
     if !state.store.add_trusted_directory(&directory)? {
         return Ok(());
@@ -764,9 +900,14 @@ fn add_trusted_directory(state: &Arc<AppState>, directory: &Path) -> Result<()> 
     state.broadcast(Event::TrustedDirectoriesUpdated {
         trusted_directories: state.store.trusted_directories()?,
     });
-    let covered = [directory];
-    for (live, _, project) in waiting_project_sessions(state) {
-        if under_a_trusted_directory(&project.path, &covered) {
+    let waiting = waiting_project_sessions(state);
+    let paths: Vec<String> = waiting
+        .iter()
+        .map(|(_, _, project)| project.path.clone())
+        .collect();
+    let covered = covered(state, &paths, &[directory]).await;
+    for (live, _, project) in waiting {
+        if covered.contains(&project.path) {
             let state = state.clone();
             tokio::spawn(async move { answer_and_report(&state, &live).await });
         }

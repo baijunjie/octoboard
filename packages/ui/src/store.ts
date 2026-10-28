@@ -13,7 +13,6 @@ import { daemonWsUrl, type DaemonOrigin } from "./daemon";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
 import { sameValue } from "./sameValue";
 import {
-  isLive,
   SESSION_REQUEST_ACTIONS,
   type AccountLogin,
   type AccountSharing,
@@ -180,31 +179,6 @@ function sessionRequestOf(event: Extract<Event, { type: "session_request" }>): S
  * broadcast and the repeat after a snapshot arrive in. */
 function withRequest(requests: SessionRequest[], request: SessionRequest): SessionRequest[] {
   return [...requests, request].sort((a, b) => a.requestedAt - b.requestedAt);
-}
-
-/** The components of an absolute path with `.` dropped and each `..` folded into the one before it,
- * or undefined for a path that is not absolute. */
-function pathParts(path: string): string[] | undefined {
-  if (!path.startsWith("/")) return undefined;
-  const parts: string[] = [];
-  for (const part of path.split("/")) {
-    if (part === "" || part === ".") continue;
-    if (part === "..") parts.pop();
-    else parts.push(part);
-  }
-  return parts;
-}
-
-/** Whether the absolute `path` is one of `directories` or lies below one. The paths are compared
- * component by component, never as text — `/a/Project` does not cover `/a/Project2` — after `.` and
- * `..` are folded, and no symlink is followed. A path that is not absolute is under nothing. */
-function isUnderAny(path: string, directories: string[]): boolean {
-  const mine = pathParts(path);
-  if (!mine) return false;
-  return directories.some((directory) => {
-    const theirs = pathParts(directory);
-    return theirs !== undefined && theirs.length <= mine.length && theirs.every((part, i) => mine[i] === part);
-  });
 }
 
 export interface State {
@@ -495,13 +469,10 @@ function reducer(state: State, action: Action): State {
             shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
           };
         case "trusted_directories_updated":
-          // A prompt for a project under a directory that is now trusted has nothing left to ask:
-          // the daemon presses that confirmation itself. The others stay queued.
-          return {
-            ...state,
-            trustedDirectories: event.trusted_directories,
-            trustPrompts: state.trustPrompts.filter((p) => !isUnderAny(p.path, event.trusted_directories)),
-          };
+          // The prompts queued are left alone: whether a project's directory really lies under a
+          // trusted one is the daemon's call, and it tells this client through the session, whose
+          // trust wait ends (`session_upserted`).
+          return { ...state, trustedDirectories: event.trusted_directories };
         case "console_upserted": {
           if (sameValue(state.consoles.get(event.console.id), event.console)) return state;
           const consoles = new Map(state.consoles);
@@ -572,8 +543,12 @@ function reducer(state: State, action: Action): State {
           const sessions = new Map(state.sessions);
           sessions.set(event.session.id, shown);
           const daemonSwitching = withMember(state.daemonSwitching, event.session.id, event.session.switching_account === true);
-          // A session that no longer runs is no longer at a confirmation anyone can answer.
-          const trustPrompts = isLive(event.session.status)
+          // The daemon shows a session at its trust confirmation as `waiting_user`, and publishes
+          // that before it broadcasts the prompt, so a status that is anything else, which a session
+          // that no longer runs has too, means the confirmation is no longer waiting for an answer
+          // here (answered, covered by a permission or a trusted directory, or gone). A prompt not
+          // yet queued is untouched, and one that is is dropped only by its own session's upsert.
+          const trustPrompts = event.session.status === "waiting_user"
             ? state.trustPrompts
             : state.trustPrompts.filter((p) => p.session !== event.session.id);
           return { ...state, sessions, trustPrompts, daemonSwitching };
@@ -599,10 +574,9 @@ function reducer(state: State, action: Action): State {
         }
         case "trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;
-          // Nothing left to ask about a project that has the permission, of its own or through a
-          // trusted directory: the daemon presses its confirmations itself.
+          // The daemon sends only a confirmation nobody has the permission for, judging a trusted
+          // directory by where the project really is on disk, which this client cannot see.
           if (state.projects.get(event.project)?.trust_consent) return state;
-          if (isUnderAny(event.path, state.trustedDirectories)) return state;
           const prompt: TrustPrompt = {
             session: event.session,
             agent: event.agent,
@@ -611,6 +585,14 @@ function reducer(state: State, action: Action): State {
             trustDir: event.trust_dir,
           };
           return { ...state, trustPrompts: [...state.trustPrompts, prompt] };
+        }
+        case "session_notice": {
+          // Octoboard could not press the session's confirmation: it is left for the person to answer
+          // in the terminal, which the notice says, so a prompt still queued for it would ask about
+          // something no go-ahead can do any more.
+          if (event.code !== "trust_answer_failed") return state;
+          const trustPrompts = state.trustPrompts.filter((p) => p.session !== event.session);
+          return trustPrompts.length === state.trustPrompts.length ? state : { ...state, trustPrompts };
         }
         case "session_request": {
           if (state.sessionRequests.some((r) => r.requestId === event.request_id)) return state;
