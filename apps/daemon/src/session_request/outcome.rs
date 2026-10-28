@@ -194,8 +194,8 @@ fn reach_note(state: &Arc<AppState>, caller: &Session, session: &Session) -> Str
         String::new()
     };
     format!(
-        "`{share_info}` tells it something that touches its work{reads}.{bind}",
-        share_info = tool("share_info"),
+        "`{send_message}` tells it something that touches its work{reads}.{bind}",
+        send_message = tool("send_message"),
     )
 }
 

@@ -39,7 +39,7 @@ is unclear. These are instructions for the agent; the user's approval is what Oc
 
 There is no argument for an agent or an account, which are those that hold the conversation, nor for an owner, branches
 or a message to deliver: a session the call resumes is given no instruction, and the caller tells it what it needs
-afterwards with `share_info` (see `docs/product/information-between-sessions.md`).
+afterwards with `send_message` (see `docs/product/information-between-sessions.md`).
 
 The conversation is located exactly as the tab locates it (see "Finding the conversation" in
 `docs/product/resuming-a-conversation-by-its-session-id.md`): a session that records the id as its agent's conversation
@@ -59,9 +59,9 @@ dialog shown and nothing changed:
 - a conversation no session holds and no searched account has a record of;
 - a conversation held by the caller itself;
 - a conversation held by a session bound to the caller, which needs no approval: the refusal points to
-  `reopen_session` while it is archived or interrupted, and to `send_message` while it runs;
+  `reopen_session` while it is archived or interrupted, and to `instruct_session` while it runs;
 - a conversation held by a session that is starting or whose process is running, since there is nothing to resume:
-  the refusal names who the session reports to and says `share_info` tells it something;
+  the refusal names who the session reports to and says `send_message` tells it something;
 - a holder that is being launched or resumed right now, or that is being switched to another account, handed off,
   rebound or having its branches handed over right now; each refusal says which, and to ask again in a moment;
 - a `model` or `effort` that is not blank for a conversation a session holds;
@@ -118,7 +118,7 @@ The call returns:
 | `owner` | The session it reports to, or null when it reports to the user. |
 | `reopened_owners` | The ids of the archived owners the approval reopened with it; empty for none. |
 | `renamed` | Present only when the request asked for a rename that was still needed: true when it was given, false when it could not be. |
-| `note` | Prose telling the caller who approved — the user, or Octoboard under the user's setting to approve resume requests without asking — and what was done to which session (its kind, id, title, agent and where it runs); the archived owners reopened with it, named; a rename that failed, with the reason; whom it reports to, not the caller; that it was given no instruction and waits at its prompt, except where it was already running; that it is not the caller's to drive, and the caller should follow the user's direction on continuing its own work or ending; that `share_info` tells it something, and, where the caller has `get_session`, that it reads it; and, where the caller could bind itself to it, that `bind_to_session` would do so, as for `request_session` (see "On approval" in `docs/product/session-requests.md`). |
+| `note` | Prose telling the caller who approved — the user, or Octoboard under the user's setting to approve resume requests without asking — and what was done to which session (its kind, id, title, agent and where it runs); the archived owners reopened with it, named; a rename that failed, with the reason; whom it reports to, not the caller; that it was given no instruction and waits at its prompt, except where it was already running; that it is not the caller's to drive, and the caller should follow the user's direction on continuing its own work or ending; that `send_message` tells it something, and, where the caller has `get_session`, that it reads it; and, where the caller could bind itself to it, that `bind_to_session` would do so, as for `request_session` (see "On approval" in `docs/product/session-requests.md`). |
 
 The outcome message written into the caller's session carries the same note and names `request_resume_session` as the
 call it is about.

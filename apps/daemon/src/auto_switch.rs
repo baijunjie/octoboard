@@ -505,7 +505,7 @@ fn tell_sessions(
             format!(
                 "It is back awaiting instructions, so send it the next step with `{}` if it has \
                  one pending.",
-                mcp::qualified_tool_name(owner.agent, "send_message")
+                mcp::qualified_tool_name(owner.agent, "instruct_session")
             )
         },
         session = sharing::named_session(moved),

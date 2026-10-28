@@ -2,7 +2,7 @@
 
 An owner can stop the turn a session it owns is in the middle of, as the user pressing the agent's interrupt key in the
 terminal would. The session keeps its process and its conversation and goes back to *awaiting instructions*, for the
-owner to redirect it with `send_message`. This is not the *interrupted* status: that is a session whose process has
+owner to redirect it with `instruct_session`. This is not the *interrupted* status: that is a session whose process has
 ended (see `docs/product/session-statuses.md`), and an interrupted turn leaves the process running.
 
 ## Who can interrupt a turn
@@ -11,7 +11,7 @@ ended (see `docs/product/session-statuses.md`), and an interrupted turn leaves t
   an unbound one or a lead session — get the tool (see "The console session's tools" and "The unbound project
   session's tools" in `docs/product/hub-orchestration.md`); a project session with the role of a bound one does not.
   It acts only on a session bound to the caller: for any other — unbound, bound to another session, a console session,
-  or the caller itself — it is refused in prose naming who owns it, as `send_message` is, and nothing is sent.
+  or the caller itself — it is refused in prose naming who owns it, as `instruct_session` is, and nothing is sent.
 - **A client, through the daemon's `interrupt_session` request.** It checks no ownership: any session can be named.
 - **The window has no control for it.** The user interrupts a turn by pressing the agent's own key in the session's
   terminal.
@@ -131,7 +131,7 @@ The note is prose for the caller, and says whichever of these apply:
   user can answer, something else was written into the terminal just then, or a Grok Build draft could not be read;
 - which keys went in when not all did, and why the rest did not;
 - that the session still reads *working* after the wait;
-- that the turn was stopped and the session awaits its next instruction by `send_message`;
+- that the turn was stopped and the session awaits its next instruction by `instruct_session`;
 - what may have become of the messages written during the cancelled turn, with their approximate count (see
   "Messages during an interrupt" above);
 - that a draft in Grok Build's composer was cleared, which Grok may let the user undo with ctrl+z;

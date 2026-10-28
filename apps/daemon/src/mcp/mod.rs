@@ -436,8 +436,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         name: "new_session",
         description: "Start a session in one of this console's projects and hand it a task. It is \
                       yours for its whole life: it reports to this console session, its owner, and \
-                      you instruct it with `send_message`, archive it once it is done and reopen \
-                      it with `reopen_session` when it has another task. Needs no approval. \
+                      you instruct it with `instruct_session`, archive it once it is done and \
+                      reopen it with `reopen_session` when it has another task. Needs no approval. \
                       Returns the new session's id, its agent, the account it opened on \
                       (`account`, `account_name`) and the `model` and `effort` it was launched \
                       with (`null` is the agent's own default). The brief is rendered into the \
@@ -454,7 +454,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                       leave the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(true),
     },
-    SEND_MESSAGE,
+    INSTRUCT_SESSION,
     INTERRUPT_SESSION,
     GET_SESSION,
     RENAME_SESSION,
@@ -475,7 +475,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     READ_SESSION_HISTORY,
     LIST_AGENT_MODELS,
     LIST_CONSOLES,
-    SHARE_INFO,
+    SEND_MESSAGE,
     GET_ACCOUNT_QUOTAS,
     LIST_PAGES,
     SHOW_PAGE,
@@ -567,10 +567,10 @@ const DELETE_PAGES: ToolDef = ToolDef {
     },
 };
 
-const SEND_MESSAGE: ToolDef = ToolDef {
-    name: "send_message",
+const INSTRUCT_SESSION: ToolDef = ToolDef {
+    name: "instruct_session",
     description: "Append an instruction to a running session of yours: it directs the session; \
-                  to tell a session something without instructing it, use `share_info`. \
+                  to tell a session something without instructing it, use `send_message`. \
                   Delivered straight away when the session is idle or mid-turn; held until the \
                   user is done when the session is waiting for them. The answer says if it was \
                   queued, or written but left unsent by the session's agent. Refused for a \
@@ -594,7 +594,7 @@ const INTERRUPT_SESSION: ToolDef = ToolDef {
     name: "interrupt_session",
     description: "Stop the turn a running session of yours is in the middle of, as the user \
                   pressing its interrupt key would. The session keeps its conversation and \
-                  goes back to awaiting instructions; redirect it with `send_message`. Use it \
+                  goes back to awaiting instructions; redirect it with `instruct_session`. Use it \
                   when the session is working on the wrong thing or should stop now, not to \
                   hurry it along. The answer says whether a turn was stopped (`interrupted`), \
                   the session's `status` afterwards, and in `note` what became of the messages \
@@ -885,21 +885,21 @@ const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
                   its conversation: its process is ended, the conversation is copied to the \
                   account and the session is relaunched resuming it. It is not sent a message for \
                   this: it comes back awaiting instructions, and a turn in progress is cut off, so \
-                  send it the next step with `send_message` — except where the result's `note` \
-                  says it was sent a prompt to continue its task (a turn the switch cut off or a \
-                  usage limit had stopped), which you must not repeat. The user is asked first, \
-                  and may change the account and the session's model and reasoning effort, so read \
-                  what the result says was done; the call waits for their answer, for several \
-                  minutes at most — unless the user has chosen to have account switches approved \
-                  automatically, in which case the call does not wait. A refusal, or no answer in \
-                  time, comes back as an error and changes nothing. Refused at once, before the \
-                  user is asked and changing nothing, for an account of another agent, an account \
-                  the user turned off, the account the session is on already, and an archived \
-                  session; other refusals (an account whose quota is used up or that is not logged \
-                  in, say) can come after the user has chosen. Returns the session with the \
-                  account it is now on and its model and reasoning effort where it has its own. \
-                  `account` in `get_session` shows the account a session is on, to match against \
-                  `get_account_quotas`.",
+                  send it the next step with `instruct_session` — except where the result's \
+                  `note` says it was sent a prompt to continue its task (a turn the switch cut off \
+                  or a usage limit had stopped), which you must not repeat. The user is asked \
+                  first, and may change the account and the session's model and reasoning effort, \
+                  so read what the result says was done; the call waits for their answer, for \
+                  several minutes at most — unless the user has chosen to have account switches \
+                  approved automatically, in which case the call does not wait. A refusal, or no \
+                  answer in time, comes back as an error and changes nothing. Refused at once, \
+                  before the user is asked and changing nothing, for an account of another agent, \
+                  an account the user turned off, the account the session is on already, and an \
+                  archived session; other refusals (an account whose quota is used up or that is \
+                  not logged in, say) can come after the user has chosen. Returns the session with \
+                  the account it is now on and its model and reasoning effort where it has its \
+                  own. `account` in `get_session` shows the account a session is on, to match \
+                  against `get_account_quotas`.",
     schema: || {
         object_schema(
             json!({
@@ -1259,7 +1259,7 @@ const READ_SESSION_HISTORY: ToolDef = ToolDef {
 
 /// What every session, of whatever kind, may do with every other session: look at the running ones,
 /// and tell any of them things (an interrupted one takes it when resumed). Kept apart from
-/// `send_message` so that a message arriving in a session is framed by which tool sent it: an
+/// `instruct_session` so that a message arriving in a session is framed by which tool sent it: an
 /// instruction comes from its owner, and information from anyone.
 const LIST_SESSIONS: ToolDef = ToolDef {
     name: "list_sessions",
@@ -1319,8 +1319,8 @@ const LIST_SESSIONS: ToolDef = ToolDef {
     },
 };
 
-const SHARE_INFO: ToolDef = ToolDef {
-    name: "share_info",
+const SEND_MESSAGE: ToolDef = ToolDef {
+    name: "send_message",
     description: "Tell a session something it may find useful: what you found, decided or \
                   changed that touches its work. Any session can be told, in any project or \
                   console, console sessions included; no session needs to own the other. It is \
@@ -1426,7 +1426,7 @@ const RELEASE_SESSION: ToolDef = ToolDef {
     description: "Release one of your sessions (`yours: true`) from its binding to you, when it \
                   is not yours to drive any more: it has no owner afterwards and is the user's \
                   own, taking work only from the user in its terminal. You can no longer \
-                  instruct or drive it, but `share_info` still lets either of you tell the \
+                  instruct or drive it, but `send_message` still lets either of you tell the \
                   other something. Needs no approval. It stops reporting to anyone, becomes an \
                   ordinary unbound session that can start and drive sessions of its own, and is \
                   no longer archived with you or by its own `done` report. A lead session keeps \
@@ -1467,7 +1467,7 @@ const BIND_TO_SESSION: ToolDef = ToolDef {
                   may join one of those, and it can no longer start or drive sessions afterwards. \
                   The owner must be running, and is sent `summary` as your first report. The \
                   result says which tools you have from then on. Refused once this session is \
-                  bound. To tell a session something without binding, use `share_info`.",
+                  bound. To tell a session something without binding, use `send_message`.",
     schema: || {
         object_schema(
             json!({
@@ -1490,8 +1490,8 @@ const REQUEST_SESSION: ToolDef = ToolDef {
     name: "request_session",
     description: "Ask the user to start a session that is nobody's — neither yours nor your \
                   owner's: it reports to the user, and you and it can only exchange information \
-                  (`share_info`). It can be a project session in any project of any console, or a \
-                  console session. A session you want to drive yourself is one `new_session` \
+                  (`send_message`). It can be a project session in any project of any console, or \
+                  a console session. A session you want to drive yourself is one `new_session` \
                   starts, where you have it. The user is asked first, and the call waits for their \
                   answer, for several minutes at most — unless the user has chosen to have such \
                   requests approved automatically, in which case the result says so and the call \
@@ -1538,7 +1538,7 @@ const REQUEST_RESUME_SESSION: ToolDef = ToolDef {
                   record, and it reports to the user. A conversation held by a session of another \
                   project, or by a console session, is refused. Where you have `reopen_session`, \
                   it reopens only sessions that are yours and needs no approval; this can resume \
-                  any session. No text can be passed along, so afterwards `share_info` tells the \
+                  any session. No text can be passed along, so afterwards `send_message` tells the \
                   session what you need. The user is asked first, and the call waits for their \
                   answer, for several minutes at most — unless the user has chosen to have such \
                   requests approved automatically, in which case the result says so and the call \
@@ -1617,7 +1617,7 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     LIST_CONSOLES,
     LIST_PROJECTS,
     LIST_ARCHIVED,
-    SHARE_INFO,
+    SEND_MESSAGE,
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
     REQUEST_SESSION,
@@ -1636,7 +1636,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
         name: "new_session",
         description: "Start a session in this project and hand it a task. It is yours for its \
                       whole life: it reports to this session, its owner, and you instruct it with \
-                      `send_message`, archive it once it is done and reopen it with \
+                      `instruct_session`, archive it once it is done and reopen it with \
                       `reopen_session` when it has another closely related task and room for it. \
                       Needs no approval. It runs on your own agent. While `auto_select_account` is \
                       on, a left-out account is the one of that agent whose weekly quota resets \
@@ -1663,7 +1663,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
                       the notes and end. Ask the user if their intent is unclear.",
         schema: || new_session_schema(false),
     },
-    SEND_MESSAGE,
+    INSTRUCT_SESSION,
     INTERRUPT_SESSION,
     GET_SESSION,
     ARCHIVE_SESSION,
@@ -1687,7 +1687,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     LIST_AGENT_MODELS,
     LIST_CONSOLES,
     LIST_PROJECTS,
-    SHARE_INFO,
+    SEND_MESSAGE,
     GET_PROJECT,
     GET_ACCOUNT_QUOTAS,
     LIST_PAGES,
@@ -2107,7 +2107,7 @@ mod tests {
                 "list_consoles",
                 "list_projects",
                 "list_archived",
-                "share_info",
+                "send_message",
                 "get_project",
                 "get_account_quotas",
                 "request_session",
@@ -2118,7 +2118,7 @@ mod tests {
             names(Role::Project, false),
             [
                 "new_session",
-                "send_message",
+                "instruct_session",
                 "interrupt_session",
                 "get_session",
                 "archive_session",
@@ -2142,7 +2142,7 @@ mod tests {
                 "list_agent_models",
                 "list_consoles",
                 "list_projects",
-                "share_info",
+                "send_message",
                 "get_project",
                 "get_account_quotas",
                 "list_pages",
@@ -2161,7 +2161,7 @@ mod tests {
                 "get_settings",
                 "update_settings",
                 "new_session",
-                "send_message",
+                "instruct_session",
                 "interrupt_session",
                 "get_session",
                 "rename_session",
@@ -2182,7 +2182,7 @@ mod tests {
                 "read_session_history",
                 "list_agent_models",
                 "list_consoles",
-                "share_info",
+                "send_message",
                 "get_account_quotas",
                 "list_pages",
                 "show_page",

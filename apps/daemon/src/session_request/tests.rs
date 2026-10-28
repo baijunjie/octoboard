@@ -334,7 +334,7 @@ async fn an_approval_starts_a_session_with_no_owner_in_any_project() {
     assert_eq!(result["project"], "project-2");
     let note = result["note"].as_str().unwrap();
     assert!(note.contains("reports to the user"), "{note}");
-    assert!(note.contains("mcp__octoboard__share_info"), "{note}");
+    assert!(note.contains("mcp__octoboard__send_message"), "{note}");
     // Not in the caller's console, so there is no binding to offer.
     assert!(!note.contains("bind_to_session"), "{note}");
     assert!(!note.contains("anded over"), "{note}");
@@ -1407,7 +1407,7 @@ async fn an_approval_reopens_the_session_that_holds_the_conversation() {
     );
     let note = result["note"].as_str().unwrap();
     assert!(note.contains("reports to its owner `boss`"), "{note}");
-    assert!(note.contains("mcp__octoboard__share_info"), "{note}");
+    assert!(note.contains("mcp__octoboard__send_message"), "{note}");
     assert_eq!(resumer.resumed(), ["held"]);
     let held = state.session_record("held").unwrap();
     assert_eq!(

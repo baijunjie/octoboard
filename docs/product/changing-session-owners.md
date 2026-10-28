@@ -39,7 +39,7 @@ a lead session.
 | `to` | yes | The new owner's session id. |
 | `note` | yes | The handover, for the new owner: what the session is doing, where it stands and what is left. |
 
-Besides the rules above, it is refused for a session that is not the caller's (as for `send_message`) and for handing
+Besides the rules above, it is refused for a session that is not the caller's (as for `instruct_session`) and for handing
 a session to the caller itself. The session itself may be running or not; only the new owner must be running. One with
 no process running is told of its new owner when it next starts (see "A change of owner told at the next launch"
 below).
@@ -58,7 +58,7 @@ take a message; see "Messages held until a session can take them" in `docs/produ
   longer drives it. A session that has lost the tools for owning sessions is also told it can no longer start or drive
   sessions, with the list of the Octoboard tools it has left.
 - **The new owner** is told which session handed which session over to it, by id, title and project, that the session
-  is its own from now on and is driven with `send_message`, `archive_session` and `reopen_session`, and, for a lead
+  is its own from now on and is driven with `instruct_session`, `archive_session` and `reopen_session`, and, for a lead
   session, that it keeps its own sessions, which the new owner can read but not drive; then the caller's `note`, every
   line quoted, followed by a closing line.
 
@@ -73,7 +73,7 @@ told, with the reason, or was not told because the message was written
 into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of the
 agent's background agents — the user having been told to check the session (see "A message written but not
 sent" in `docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the
-handover with `share_info`. Once the binding has changed the handover stands, whatever became of the messages.
+handover with `send_message`. Once the binding has changed the handover stands, whatever became of the messages.
 
 ## Releasing a session from its owner
 
@@ -99,7 +99,7 @@ A released session is an **ordinary unbound project session**, the user's own:
   branches the session is responsible for stay its own;
 - its former owner no longer instructs or drives it: archiving that owner no longer takes it along, and nothing archives
   it on a `done` report. Releasing cuts no communication: either of the two can still tell the other something with
-  `share_info`, which the receiver weighs rather than obeys (see `docs/product/information-between-sessions.md`).
+  `send_message`, which the receiver weighs rather than obeys (see `docs/product/information-between-sessions.md`).
 
 A session can be released whatever its state — running, interrupted or archived. The call is refused and changes
 nothing:
@@ -122,7 +122,7 @@ no owner now, having been released from the session it reported to, and is the u
 only from the user typing in its terminal and is not to call `report`, which is refused for a session with no owner;
 that this replaces what it was told of its owner when it was started; that it can start and drive sessions of its
 own with `new_session` and the tools that go with it, and can still tell its former owner something with
-`share_info`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A release made
+`send_message`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A release made
 with a `note` ends that message with the note, marked as its former owner's, every line quoted, followed by a closing
 line. One with no process running is told when it next starts instead, and so is one whose message could not be
 written; the note is kept with what it is owed (see "A change of owner told at the next launch" below).
@@ -132,12 +132,12 @@ it made the call. When the user releases a session, its former owner, if it has 
 written through the same delivery (queued while it cannot take one) which session the user released from it — by
 kind, id and title — that the session has no owner now and answers only to the user, so it can no longer instruct,
 drive or archive it, and the session does not report to it; that it can still tell the session something with
-`share_info`, which the session weighs rather than obeys; that it should no longer count on the session; and that any
+`send_message`, which the session weighs rather than obeys; that it should no longer count on the session; and that any
 work it handed the session is left with the user. A former owner with no process running is not told,
 then or later; a later attempt by it to drive the session is refused as for any session that is not its own.
 
 The call returns `session` and a `note` saying that the session has no owner now, is no longer the caller's, is the
-user's own session, is no longer instructed or driven by the caller and no longer reports to it, though `share_info` can
+user's own session, is no longer instructed or driven by the caller and no longer reports to it, though `send_message` can
 still tell it something, and whether it was told, will be told as soon as it can take a
 message, is not running and will be told when it next starts, or was not told because the message was written into its
 input but its agent did not send it to the conversation, the user having been told to check the session (see "A
@@ -228,7 +228,7 @@ is refused even where its agent still lists it. The session's tool list itself i
 call of any Octoboard tool, and its agent is told the list has changed (the MCP `tools/list_changed` notice); whether an
 agent reads the list again on that notice is the agent's own. Only two changes take tools away — binding to a project
 session, and a lead session handed to one — and they leave the bound session's set: `report`, the reads every session
-has (see `docs/product/what-every-session-reads.md`), `share_info`, `get_project`,
+has (see `docs/product/what-every-session-reads.md`), `send_message`, `get_project`,
 `request_session` and `request_resume_session`. A release gives a session that had the role of a bound one the
 unbound project session's tools.
 

@@ -114,7 +114,7 @@ queued is different: it archives the session on acceptance, as above, so if it i
 session is already archived, and only the notice the user gets tells anyone.
 
 Anything else — open items, `failed`, `needs_decision` — leaves the session running and awaiting
-instructions, for its owner to continue with `send_message` or to archive explicitly.
+instructions, for its owner to continue with `instruct_session` or to archive explicitly.
 
 Automatic archiving archives the reporting session and nothing else. It never archives the owner the session is
 bound to, and does not touch the other sessions bound to it: archiving an owner, and what that takes with it, is

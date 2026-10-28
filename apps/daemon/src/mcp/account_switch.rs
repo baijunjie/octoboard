@@ -144,7 +144,7 @@ async fn perform(
          prompt to continue that task: do not send it one yourself."
     } else {
         "It is back awaiting instructions: a turn it was in the middle of is cut off, so send it \
-         the next step with `send_message`."
+         the next step with `instruct_session`."
     });
     if !(target.has_conversation && target.agent_session_id.is_some()) {
         note.push_str(" It had no conversation yet, so it starts fresh there.");
@@ -355,7 +355,7 @@ mod tests {
         assert!(result["note"]
             .as_str()
             .unwrap()
-            .contains("send it the next step with `send_message`"));
+            .contains("send it the next step with `instruct_session`"));
     }
 
     /// Makes the conversation `prepare` put in the default account end on a tool call that never
@@ -433,7 +433,7 @@ mod tests {
         assert!(result["note"]
             .as_str()
             .unwrap()
-            .contains("send it the next step with `send_message`"));
+            .contains("send it the next step with `instruct_session`"));
     }
 
     /// An unbound project session moves a session of its own back to the default account, which

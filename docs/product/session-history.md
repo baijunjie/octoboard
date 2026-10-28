@@ -47,7 +47,7 @@ session's request, of one handed branches by the session that started it, or of 
 (see `docs/product/handing-off-sessions.md`). This hides only those messages from the history view; the original
 conversation record is unchanged. The agent's final reply to a hidden message remains visible.
 
-**Which messages are Octoboard's is told from how they begin.** So text an owner session sends with `send_message`,
+**Which messages are Octoboard's is told from how they begin.** So text an owner session sends with `instruct_session`,
 which has no fixed opening, reads as the user's; and a message the user typed that happens to begin the way one of
 Octoboard's does is hidden too.
 

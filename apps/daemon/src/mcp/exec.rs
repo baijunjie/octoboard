@@ -85,7 +85,7 @@ pub async fn call(
         "get_settings" => settings::get_settings(state),
         "update_settings" => settings::update_settings(state, arguments),
         "new_session" => new_session(state, &session, arguments, crate::term::launch).await,
-        "send_message" => send_message(state, &session, arguments).await,
+        "instruct_session" => instruct_session(state, &session, arguments).await,
         "interrupt_session" => interrupt_session(state, &session, arguments).await,
         "get_session" => reads::get_session(state, &session, arguments).await,
         "rename_session" => rename_session(state, &session, arguments).await,
@@ -129,7 +129,7 @@ pub async fn call(
         "read_session_history" => history::read_session_history(state, arguments).await,
         "get_project" => settings::get_project(state, &session, arguments).await,
         "get_account_quotas" => quotas::get_account_quotas(state, arguments).await,
-        "share_info" => share_info(state, &session, arguments).await,
+        "send_message" => send_message(state, &session, arguments).await,
         "transfer_session" => bindings::transfer_session(state, &session, arguments).await,
         "release_session" => bindings::release_session(state, &session, arguments).await,
         "bind_to_session" => bindings::bind_to_session(state, &session, arguments).await,
@@ -459,7 +459,7 @@ pub(super) fn callers_account(
     Ok(Some(caller.account_id.clone()))
 }
 
-async fn send_message(
+async fn instruct_session(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -811,7 +811,7 @@ async fn reopen_session(
 
 // -- information exchange ----------------------------------------------------
 
-async fn share_info(
+async fn send_message(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -1030,15 +1030,15 @@ pub(super) fn resolve_owned_session(
     wanted: &str,
 ) -> Result<Session> {
     let session = resolve_session(state, wanted)?;
-    // `share_info` refuses an archived session, so it is not offered for one.
-    let share_info = super::qualified_tool_name(caller.agent, "share_info");
+    // `send_message` refuses an archived session, so it is not offered for one.
+    let send_message = super::qualified_tool_name(caller.agent, "send_message");
     let archived = session.status == SessionStatus::Archived;
     let tell_it = |tail: &str| {
         if archived {
             String::new()
         } else {
             format!(
-                " You can still tell it something with `{share_info}`, which it weighs rather \
+                " You can still tell it something with `{send_message}`, which it weighs rather \
                  than obeys{tail}"
             )
         }
@@ -2768,7 +2768,7 @@ pub(super) mod tests {
                 call(
                     &state,
                     "loose",
-                    "share_info",
+                    "send_message",
                     &arguments(json!({ "session": target, "text": "the port moved" })),
                 )
                 .await
@@ -2822,7 +2822,7 @@ pub(super) mod tests {
         let result = call(
             &state,
             "loose",
-            "share_info",
+            "send_message",
             &arguments(json!({ "session": "of-a", "text": "heads up" })),
         )
         .await
@@ -3242,19 +3242,19 @@ pub(super) mod tests {
     /// The one ownership check, exercised through each write-side tool: a session that is unbound,
     /// bound to the other console session, a console session, or from another console is refused
     /// with a reason. For the two tools whose success would change the session, the session is also
-    /// checked to be untouched; `send_message` has no such visible effect to compare.
+    /// checked to be untouched; `instruct_session` has no such visible effect to compare.
     #[tokio::test]
     async fn writes_are_refused_for_sessions_the_caller_does_not_own() {
         let (state, _dir) = shared_console_state("tool-surface-writes");
         let cases = [
             (
-                "send_message",
+                "instruct_session",
                 "of-b",
                 "bound to another console session, `b`",
             ),
-            ("send_message", "loose", "not bound to any session"),
-            ("send_message", "b", "is a console session;"),
-            ("send_message", "foreign", "not bound to any session"),
+            ("instruct_session", "loose", "not bound to any session"),
+            ("instruct_session", "b", "is a console session;"),
+            ("instruct_session", "foreign", "not bound to any session"),
             (
                 "interrupt_session",
                 "of-b",
@@ -3287,7 +3287,7 @@ pub(super) mod tests {
             .expect_err("refused");
             assert!(err.to_string().contains(reason), "{tool} {target}: {err}");
             let after = state.store.get_session(target).unwrap().unwrap();
-            if tool != "send_message" {
+            if tool != "instruct_session" {
                 assert_eq!(before.status, after.status, "{tool} {target}");
                 assert_eq!(before.ended_at, after.ended_at, "{tool} {target}");
             }
@@ -3321,29 +3321,30 @@ pub(super) mod tests {
     }
 
     /// A refusal to drive a session that is not the caller's says why and what the caller can still
-    /// do, naming `share_info` as the caller's agent qualifies it; a session of the caller's own is
-    /// told to say it to the user instead, since `share_info` is refused for it.
+    /// do, naming `send_message` as the caller's agent qualifies it; a session of the caller's own
+    /// is told to say it to the user instead, since `send_message` is refused for it.
     #[tokio::test]
-    async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_share_info() {
-        let (state, _dir) = shared_console_state("tool-refusal-share-info");
+    async fn a_refusal_to_drive_a_session_that_is_not_the_callers_names_send_message() {
+        let (state, _dir) = shared_console_state("tool-refusal-send-message");
         for target in ["of-b", "loose", "b"] {
             let message = refused(
                 &state,
                 "a",
-                "send_message",
+                "instruct_session",
                 json!({ "session": target, "text": "hi" }),
             )
             .await;
             assert!(
-                message
-                    .contains("You can still tell it something with `mcp__octoboard__share_info`"),
+                message.contains(
+                    "You can still tell it something with `mcp__octoboard__send_message`"
+                ),
                 "{target}: {message}"
             );
         }
         let message = refused(
             &state,
             "a",
-            "send_message",
+            "instruct_session",
             json!({ "session": "of-b", "text": "hi" }),
         )
         .await;
@@ -3359,21 +3360,24 @@ pub(super) mod tests {
         let message = refused(
             &state,
             "a",
-            "send_message",
+            "instruct_session",
             json!({ "session": "loose", "text": "hi" }),
         )
         .await;
-        assert!(message.contains("`octoboard__share_info`"), "{message}");
-        assert!(!message.contains("mcp__octoboard__share_info"), "{message}");
+        assert!(message.contains("`octoboard__send_message`"), "{message}");
+        assert!(
+            !message.contains("mcp__octoboard__send_message"),
+            "{message}"
+        );
 
         let message = refused(
             &state,
             "a",
-            "send_message",
+            "instruct_session",
             json!({ "session": "a", "text": "hi" }),
         )
         .await;
-        assert!(!message.contains("share_info"), "{message}");
+        assert!(!message.contains("send_message"), "{message}");
     }
 
     /// `interrupt_session` on a running session of the caller's answers with the function's
@@ -3456,7 +3460,7 @@ pub(super) mod tests {
         let (state, _dir) = peer_state("peer-tool-gating");
         for (caller, tool) in [
             ("mine", "new_session"),
-            ("mine", "send_message"),
+            ("mine", "instruct_session"),
             ("of-a", "archive_session"),
             ("starter", "add_project"),
             ("mine", "show_page"),
@@ -3551,7 +3555,7 @@ pub(super) mod tests {
             assert_eq!(read["owner_kind"], kind, "{target}");
             assert_eq!(read["yours"], yours, "{target}");
         }
-        for tool in ["send_message", "archive_session"] {
+        for tool in ["instruct_session", "archive_session"] {
             let err = call(
                 &state,
                 "a",
@@ -3788,11 +3792,19 @@ pub(super) mod tests {
     async fn an_unbound_project_session_acts_only_on_the_sessions_bound_to_it() {
         let (state, _dir) = peer_state("peer-writes");
         let cases = [
-            ("send_message", "of-a", "bound to a console session, `a`"),
-            ("send_message", "loose", "not bound to any session"),
-            ("send_message", "starter", "your own session"),
-            ("send_message", "other-project", "not bound to any session"),
-            ("send_message", "a", "is a console session"),
+            (
+                "instruct_session",
+                "of-a",
+                "bound to a console session, `a`",
+            ),
+            ("instruct_session", "loose", "not bound to any session"),
+            ("instruct_session", "starter", "your own session"),
+            (
+                "instruct_session",
+                "other-project",
+                "not bound to any session",
+            ),
+            ("instruct_session", "a", "is a console session"),
             (
                 "interrupt_session",
                 "of-a",
@@ -3919,7 +3931,7 @@ pub(super) mod tests {
             let result = call(
                 &state,
                 caller,
-                "share_info",
+                "send_message",
                 &arguments(json!({ "session": target, "text": "the port moved" })),
             )
             .await
@@ -3934,7 +3946,7 @@ pub(super) mod tests {
         let err = call(
             &state,
             "mine",
-            "share_info",
+            "send_message",
             &arguments(json!({ "session": "mine", "text": "hello" })),
         )
         .await
@@ -3954,7 +3966,7 @@ pub(super) mod tests {
                 call(
                     &state,
                     caller,
-                    "share_info",
+                    "send_message",
                     &arguments(json!({ "session": target, "text": "the port moved" })),
                 )
                 .await
@@ -4009,7 +4021,7 @@ pub(super) mod tests {
         let result = call(
             &state,
             "loose",
-            "share_info",
+            "send_message",
             &arguments(json!({ "session": "of-b", "text": "heads up" })),
         )
         .await
@@ -4025,7 +4037,7 @@ pub(super) mod tests {
         let err = call(
             &state,
             "loose",
-            "share_info",
+            "send_message",
             &arguments(json!({ "session": "of-a", "text": "heads up" })),
         )
         .await
@@ -4413,7 +4425,7 @@ pub(super) mod tests {
             ] {
                 let message = refused(&state, "a", tool, args).await;
                 assert!(
-                    message.contains("share_info") || message.contains("your own"),
+                    message.contains("send_message") || message.contains("your own"),
                     "{message}"
                 );
             }
@@ -5915,10 +5927,10 @@ pub(super) mod tests {
         }
     }
 
-    /// `share_info` is offered as the way to tell a session that is not the caller's only while it
-    /// can take one: not for an archived session, which it refuses.
+    /// `send_message` is offered as the way to tell a session that is not the caller's only while
+    /// it can take one: not for an archived session, which it refuses.
     #[test]
-    fn the_refusal_to_act_on_a_session_offers_share_info_only_while_it_can_take_it() {
+    fn the_refusal_to_act_on_a_session_offers_send_message_only_while_it_can_take_it() {
         let (state, _dir) = shared_console_state("refusal-hint");
         let caller = state.session_record("a").unwrap();
         let refusal = |id: &str| {
@@ -5938,7 +5950,7 @@ pub(super) mod tests {
             ("archived-loose", false),
         ] {
             let message = refusal(id);
-            assert_eq!(message.contains("share_info"), offered, "{id}: {message}");
+            assert_eq!(message.contains("send_message"), offered, "{id}: {message}");
             assert!(message.contains("not yours to"), "{id}: {message}");
         }
     }
