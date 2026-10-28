@@ -262,9 +262,10 @@ CREATE TABLE pages (
     anchor_message_id TEXT,
     created_at        INTEGER NOT NULL
 );
--- Information shared with a session that was interrupted, held to be written into it
--- once it is resumed (`Store::add_pending_info`), oldest first by `id`. Deleting the
--- session takes its rows.
+-- Messages for a session that was interrupted (shared information, and the reports and
+-- notices for an owner), held to be written into it once it is resumed
+-- (`Store::add_kept_message`), oldest first by `id`. Deleting the session takes its rows.
+-- The table keeps the name it was made with.
 CREATE TABLE pending_info (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -1421,11 +1422,11 @@ impl Store {
         Ok(true)
     }
 
-    // -- information held for interrupted sessions ----------------------------
+    // -- messages held for interrupted sessions -------------------------------
 
     /// Holds `text`, a message for the interrupted session `session_id`, until it is resumed and
     /// the message has been written into it. Returns the row it is kept in.
-    pub fn add_pending_info(&self, session_id: &str, text: &str) -> Result<i64> {
+    pub fn add_kept_message(&self, session_id: &str, text: &str) -> Result<i64> {
         let conn = self.lock();
         conn.execute(
             "INSERT INTO pending_info (session_id, text) VALUES (?1, ?2)",
@@ -1435,7 +1436,7 @@ impl Store {
     }
 
     /// What is held for the session with the row each is kept in, oldest first.
-    pub fn pending_info(&self, session_id: &str) -> Result<Vec<(i64, String)>> {
+    pub fn kept_messages(&self, session_id: &str) -> Result<Vec<(i64, String)>> {
         let conn = self.lock();
         let mut stmt =
             conn.prepare("SELECT id, text FROM pending_info WHERE session_id = ?1 ORDER BY id")?;
@@ -1447,7 +1448,7 @@ impl Store {
 
     /// Drops the held messages in these rows, which have been written into their session, in one
     /// transaction.
-    pub fn delete_pending_info(&self, rows: &[i64]) -> Result<()> {
+    pub fn delete_kept_messages(&self, rows: &[i64]) -> Result<()> {
         let mut conn = self.lock();
         let tx = conn.transaction()?;
         for row in rows {
@@ -1458,7 +1459,7 @@ impl Store {
     }
 
     /// Drops everything held for the session, which will not take it.
-    pub fn clear_pending_info(&self, session_id: &str) -> Result<()> {
+    pub fn clear_kept_messages(&self, session_id: &str) -> Result<()> {
         self.lock().execute(
             "DELETE FROM pending_info WHERE session_id = ?1",
             params![session_id],
@@ -4662,25 +4663,25 @@ mod tests {
                 .insert_console(&console(None, None, None))
                 .expect("console");
             store.insert_session(&session(None)).expect("session");
-            store.add_pending_info("session-1", "one").unwrap();
-            store.add_pending_info("session-1", "two").unwrap();
+            store.add_kept_message("session-1", "one").unwrap();
+            store.add_kept_message("session-1", "two").unwrap();
         }
         let store = Store::open(&path).expect("reopened");
-        let held = store.pending_info("session-1").unwrap();
+        let held = store.kept_messages("session-1").unwrap();
         assert_eq!(
             held.iter()
                 .map(|(_, text)| text.as_str())
                 .collect::<Vec<_>>(),
             ["one", "two"]
         );
-        store.delete_pending_info(&[held[0].0]).unwrap();
-        assert_eq!(store.pending_info("session-1").unwrap().len(), 1);
-        store.add_pending_info("session-1", "three").unwrap();
-        store.clear_pending_info("session-1").unwrap();
-        assert!(store.pending_info("session-1").unwrap().is_empty());
-        store.add_pending_info("session-1", "four").unwrap();
+        store.delete_kept_messages(&[held[0].0]).unwrap();
+        assert_eq!(store.kept_messages("session-1").unwrap().len(), 1);
+        store.add_kept_message("session-1", "three").unwrap();
+        store.clear_kept_messages("session-1").unwrap();
+        assert!(store.kept_messages("session-1").unwrap().is_empty());
+        store.add_kept_message("session-1", "four").unwrap();
         store.delete_session("session-1").unwrap();
-        assert!(store.pending_info("session-1").unwrap().is_empty());
+        assert!(store.kept_messages("session-1").unwrap().is_empty());
     }
 
     /// A binding is cleared only while the session is still bound to the owner the caller read,

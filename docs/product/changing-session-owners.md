@@ -68,8 +68,10 @@ reported on to its owner as usual (see "When a session does not report" in
 
 The call returns `session`, `owner` (the new owner's id), `owner_kind` (`console` or `project`) and a `note` saying the
 session now reports to the new owner and is no longer the caller's, and whether each of the two was told, will be told
-as soon as it can take a message, is not running and will be told when it next starts (the session only), could not be
-told, with the reason, or was not told because the message was written
+as soon as it can take a message, is not running and will be told when it next starts (the session only), is not
+running and will be told once resumed (the new owner, should it have been interrupted by then: the message is kept for
+it, see "Reports and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`), could not be told,
+with the reason, or was not told because the message was written
 into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of the
 agent's background agents — the user having been told to check the session (see "A message written but not
 sent" in `docs/product/message-delivery.md`). When the new owner could not be told, the note says to tell it of the
@@ -116,16 +118,17 @@ nothing:
 The window's request is answered with these codes (an id that names no session is `unknown_session`); through the
 tool, every refusal reaches the model as its reason in prose.
 
-**The released session is told**, by a message written through the delivery every message takes (queued while it
-cannot take one; see "Messages held until a session can take them" in `docs/product/message-delivery.md`), that it has
-no owner now, having been released from the session it reported to, and is the user's own session; that it takes work
-only from the user typing in its terminal and is not to call `report`, which is refused for a session with no owner;
-that this replaces what it was told of its owner when it was started; that it can start and drive sessions of its
-own with `new_session` and the tools that go with it, and can still tell its former owner something with
-`send_message`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A release made
-with a `note` ends that message with the note, marked as its former owner's, every line quoted, followed by a closing
-line. One with no process running is told when it next starts instead, and so is one whose message could not be
-written; the note is kept with what it is owed (see "A change of owner told at the next launch" below).
+**The released session is told**, by a message written through the delivery every message takes (queued while it cannot
+take one; see "Messages held until a session can take them" in `docs/product/message-delivery.md`), that it has no owner
+now, having been released from the session it reported to, and is the user's own session; that it takes work only from
+the user typing in its terminal and is not to call `report`, which is refused for a session with no owner; that this
+replaces what it was told of its owner when it was started; that it can start and drive sessions of its own with
+`new_session` and the tools that go with it, calling `get_session` once with no arguments first so that its tool list
+catches up (see "When a binding changes while a session runs" below), and can still tell its former owner something with
+`send_message`, which the former owner weighs rather than obeys; and the list of the Octoboard tools it now has. A
+release made with a `note` ends that message with the note, marked as its former owner's, every line quoted, followed by
+a closing line. One with no process running is told when it next starts instead, and so is one whose message could not
+be written; the note is kept with what it is owed (see "A change of owner told at the next launch" below).
 
 **The former owner is told only of the user's release**: an owner that releases a session itself is sent nothing, since
 it made the call. When the user releases a session, its former owner, if it has a process running, is told by a message
@@ -203,8 +206,10 @@ a `report` produces no synthesised report (see "When a session does not report" 
 The call returns `owner`, `owner_kind` and a `note` telling the caller that it is now bound to that owner (as its lead
 session, where it is one) and whether its summary was sent as its first report — or was written into the owner's input
 as its first report but not sent to its conversation by the owner's agent, so the owner has not read it, the user has
-been told, and it is not to be sent again (see "A message written but not sent" in `docs/product/message-delivery.md`);
-that from now on the owner is the one it takes work from, or the user typing in its terminal, and it reports to it with
+been told, and it is not to be sent again (see "A message written but not sent" in `docs/product/message-delivery.md`) —
+or, the owner having been interrupted by then, was kept for it as its first report and is delivered once it is resumed,
+not to be sent again (see "Reports and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`); that
+from now on the owner is the one it takes work from, or the user typing in its terminal, and it reports to it with
 `report` once per round of work, which replaces what its role description says about being unbound and not calling
 `report`; that `done` with no open items archives it, subject to "Automatic archiving" in
 `docs/product/reporting-to-owners.md` — refused for a lead session while a session it started is not archived and no
@@ -226,7 +231,11 @@ description says that what Octoboard tells it of a later change replaces what it
 The tools follow the binding as it stands. Octoboard checks every call against it, so a tool the session no longer has
 is refused even where its agent still lists it. The session's tool list itself is updated with the answer to its next
 call of any Octoboard tool, and its agent is told the list has changed (the MCP `tools/list_changed` notice); whether an
-agent reads the list again on that notice is the agent's own. Only two changes take tools away — binding to a project
+agent reads the list again on that notice is the agent's own. A call to a tool the session has gained, made before its
+list shows it, is still taken to Octoboard, which decides it by the binding as it stands, and its answer brings the
+list up to date. An agent that checks a tool's name against the last list it received may refuse such a call itself
+before it is made, so the message telling a session it was released has it call `get_session` once with no arguments
+first (see "Releasing a session from its owner" above). Only two changes take tools away — binding to a project
 session, and a lead session handed to one — and they leave the bound session's set: `report`, the reads every session
 has (see `docs/product/what-every-session-reads.md`), `send_message`, `get_project`,
 `request_session` and `request_resume_session`. A release gives a session that had the role of a bound one the

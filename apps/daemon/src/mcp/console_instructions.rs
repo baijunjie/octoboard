@@ -67,7 +67,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            check it before naming a `model` or `effort` anywhere.\n\
          - `add_project` — associate a directory, or clone a repository and associate it.\n\
          - `update_project` — change a project's name, description, tags, pin, default agent, \
-           accounts, or model and effort. `get_settings` lists the accounts to choose from.\n\
+           accounts, model and effort, or git workflow settings. `get_settings` lists the \
+           accounts to choose from.\n\
          - `get_console` / `update_console` — read or change this console's own name, default \
            agents (for console sessions and for project sessions), accounts, or model and \
            effort (for console sessions and for project sessions). A change to your own model or \
@@ -150,7 +151,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          ## Working with sessions\n\
          \n\
          - A session reports back on its own; its report arrives here as a message. You do not \
-           have to poll for one.\n\
+           have to poll for one. Reports, and Octoboard's notices about your sessions, that come \
+           while you are interrupted are kept and arrive once you are resumed, each saying when it \
+           dates from: check the session with `get_session` before acting on one. The notice that \
+           the user released a session from you is the exception: it is not kept.\n\
          - A session reporting `done` with nothing open has already been archived by the time you \
            read it. Anything else leaves it running and awaiting your next instruction.\n\
          - You can read every session of the console, but act only on the ones that report to \

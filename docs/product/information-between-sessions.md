@@ -83,7 +83,9 @@ filter that matches nothing.
 the information is kept in Octoboard's store and written into the session when its process is next started, by a
 resume, a reopen or any other relaunch, such as one for a switch of account. The caller is told it was queued, that it
 is kept until the session is resumed, and not to send it again. The same holds for the copy for an owner that is
-interrupted (see "An owner is told what reaches its sessions" above).
+interrupted (see "An owner is told what reaches its sessions" above). The same store also keeps the reports and
+notices for an interrupted owner, under the rules below (which ones, and how they read, is in "Reports and notices for
+an interrupted owner" in `docs/product/reporting-to-owners.md`).
 
 - **It survives until it is written.** What is kept stays in the store across a restart of Octoboard and a relaunch
   that fails, and through a relaunch that succeeds until it has been written: if the process ends, or Octoboard exits,
@@ -93,20 +95,22 @@ interrupted (see "An owner is told what reaches its sessions" above).
   view of its background agents, counts as written (see "A message written but not sent" and "A message a dialog
   discarded or a view took" in `docs/product/message-delivery.md`) — or when the queue it was on is lost to a partial
   write, which the user is told of as for any message (see "Messages held until a session can take them" there).
-- **Delivered in the order it arrived**, as messages queued for the resumed session, held like any other until the
-  session can take one (see "Messages held until a session can take them" in `docs/product/message-delivery.md`). When
-  the relaunch carries an instruction of its own — an owner's `reopen_session` text, or a notice of a change of owner
-  (see "A change of owner told at the next launch" in `docs/product/changing-session-owners.md`) — a Claude Code
-  session that resumes a conversation has that instruction as its launch prompt and the information written after
-  it; any other session has the information written first and the instruction after it.
+- **Delivered in the order it arrived**, among everything kept for the session, as messages queued for the resumed
+  session, held like any other until the session can take one (see "Messages held until a session can take them" in
+  `docs/product/message-delivery.md`). When the relaunch carries an instruction of its own — an owner's
+  `reopen_session` text, or a notice of a change of owner (see "A change of owner told at the next launch" in
+  `docs/product/changing-session-owners.md`) — a Claude Code session that resumes a conversation has that instruction
+  as its launch prompt and the information written after it; any other session has the information written first and
+  the instruction after it.
 - **Archiving drops it.** Archiving the session discards what was kept for it, so a later reopen is not handed it, and
   deleting the session deletes it with the session. `send_message` to an archived session is refused outright, so that
   nothing piles up for a session that may never be reopened.
 - **A handoff passes it on.** When an interrupted session is handed off to another agent, what was kept for it is
   forwarded to the receiving session with the rest of its queue, each piece once, and then no longer kept for the
   original (see "Messages for the original during a handoff" in `docs/product/handing-off-sessions.md`).
-- **It is counted as waiting.** The `queued_messages` of the session's record counts what is kept for it, each piece
-  once, whether or not a resume has queued it yet (see "Session records" in `docs/product/what-every-session-reads.md`).
+- **It is counted as waiting.** The `queued_messages` of the session's record counts everything kept for it —
+  information, and for an owner the reports and notices — each piece once, whether or not a resume has queued it yet
+  (see "Session records" in `docs/product/what-every-session-reads.md`).
 
 The information is kept in the store rather than in memory because quitting the application is one of the most common
 ways a session becomes interrupted; a queue held in memory would be lost with it.

@@ -71,9 +71,11 @@ nothing else changed, and then asks it to continue its task, as any switch that 
 turn the switch's rules do not continue is sent that notice as a message instead, telling it to carry on or to wait
 for its next instruction.
 
-- **Its owner**, when it has one with a process running, is written a message naming the session and both accounts,
+- **Its owner**, when it has one that is not archived, is written a message naming the session and both accounts,
   saying the conversation came along and either that the session was sent a prompt to continue its task, so the owner
-  is not to send one, or that it is back awaiting instructions and is to be sent its next step.
+  is not to send one, or that it is back awaiting instructions and is to be sent its next step. An interrupted owner
+  has the message kept for its resume, and one in the middle of an operation is waited for (see "Reports and notices
+  for an interrupted owner" in `docs/product/reporting-to-owners.md`).
 - **The user** gets a toast titled with where the session is, saying that the account reached its usage limit, so
   Octoboard switched the session, named by its displayed name, to the other account (see `docs/product/toasts.md`).
   The daemon sends it as a `session_notice` with the code `account_switched_automatically`.
@@ -103,10 +105,10 @@ for its next instruction.
     an unexpected failure, with **Report issue** (see "Recovery and unexpected errors" in
     `docs/product/error-alerts.md`). The daemon sends it as a `session_notice` with the code
     `account_switch_automatically_failed`, carrying the failure's own code and params;
-  - its owner, when it has one with a process running, is written a message saying the session reached its account's
+  - its owner, when it has one that is not archived, is written a message saying the session reached its account's
     usage limit and Octoboard could neither switch it nor bring it back up, with the reason, that it is interrupted
     and its work stopped, and to look at it with `get_session` and relaunch it with `reopen_session` if the work
-    should go on.
+    should go on; it is kept or waited for as the message for a success is.
 - **A process that had already exited by itself** before the switch stopped it is not the switch's: the session is
   neither restored nor reported by the switch, and its owner is told it ended on its own (see "Notices to an owner" in
   `docs/product/reporting-to-owners.md`). A process that the switch or the restore starts and that ends within its

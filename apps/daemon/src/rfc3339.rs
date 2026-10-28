@@ -1,5 +1,6 @@
 //! Reading the timestamps the agents write, and writing the compact UTC stamp the daemon names
-//! backups with. The daemon has no date library and needs nothing else of one.
+//! backups with and the readable one it dates a message kept for a session with. The daemon has no
+//! date library and needs nothing else of one.
 
 /// Milliseconds since the epoch of an RFC 3339 timestamp (`2026-10-24T11:59:59.899528+00:00`),
 /// the form Claude Code and Grok Build write.
@@ -67,6 +68,19 @@ pub fn compact_utc_stamp(seconds: i64) -> String {
     )
 }
 
+/// `millis` since the epoch as a UTC time to the minute a model reads plainly,
+/// `2026-10-24 11:59 UTC`.
+pub fn readable_utc_minute(millis: i64) -> String {
+    let seconds = millis.div_euclid(1_000);
+    let (days, time) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
+    let (year, month, day) = civil_from_days(days);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+        time / 3_600,
+        time % 3_600 / 60
+    )
+}
+
 /// The proleptic Gregorian date `days` after 1970-01-01, the inverse of [`days_from_civil`].
 fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let z = days + 719_468;
@@ -95,6 +109,15 @@ mod tests {
         assert_eq!(compact_utc_stamp(1_792_843_199), "20261024T115959Z");
         assert_eq!(compact_utc_stamp(951_782_400), "20000229T000000Z");
         assert_eq!(compact_utc_stamp(0), "19700101T000000Z");
+    }
+
+    #[test]
+    fn a_readable_stamp_names_the_minute_in_utc() {
+        assert_eq!(
+            readable_utc_minute(1_792_843_199_899),
+            "2026-10-24 11:59 UTC"
+        );
+        assert_eq!(readable_utc_minute(951_782_400_000), "2000-02-29 00:00 UTC");
     }
 
     #[test]

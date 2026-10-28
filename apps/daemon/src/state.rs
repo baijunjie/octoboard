@@ -2075,7 +2075,7 @@ impl AppState {
     }
 
     /// [`Self::queue_message`] for a message kept in the store as `row` (see
-    /// [`Self::keep_info_if_not_running`]): the row is deleted once the message has been written
+    /// [`Self::keep_message_if_not_running`]): the row is deleted once the message has been written
     /// into the session, not when it is queued, so a queue that is lost leaves it for the next
     /// resume.
     pub fn queue_kept_message(&self, id: &str, text: &str, row: i64) {
@@ -2089,26 +2089,27 @@ impl AppState {
     pub fn kept_unqueued_count(&self, id: &str) -> Result<usize> {
         Ok(self
             .store
-            .pending_info(id)?
+            .kept_messages(id)?
             .iter()
             .filter(|(row, _)| !self.outbox.is_row_queued(*row))
             .count())
     }
 
-    /// Keeps `text` in the store for the session `id`, to be queued at its next resume, unless it
-    /// has a process or is being launched, in which case it returns `false` and keeps nothing. The
-    /// check and the insert are one step under the `live` lock, which [`Self::begin_launch`] takes
-    /// for writing before it reads the store, so a launch that begins either sees the row or is
-    /// seen by this check, and a message is never kept for a session that has already read what
-    /// was kept. (An archive can still land between this check and the insert; its rows are then
-    /// cleared by the next archive or delete of the session, and are harmless until a reopen.)
-    pub fn keep_info_if_not_running(&self, id: &str, text: &str) -> Result<bool> {
+    /// Keeps `text` in the store for the session `id`, to be queued at its next resume, and
+    /// returns the row it is kept in, unless it has a process or is being launched, in which case
+    /// it returns `None` and keeps nothing. Shared information is kept this way, and so are the
+    /// reports and notices for an owner (`crate::reporting`). The check and the insert are one
+    /// step under the `live` lock, which [`Self::begin_launch`] takes for writing before it reads
+    /// the store, so a launch that begins either sees the row or is seen by this check, and a
+    /// message is never kept for a session that has already read what was kept. (An archive can
+    /// still land between this check and the insert; its rows are then cleared by the next
+    /// archive or delete of the session, and are harmless until a reopen.)
+    pub fn keep_message_if_not_running(&self, id: &str, text: &str) -> Result<Option<i64>> {
         let live = self.live.read().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) || live.launching.contains(id) {
-            return Ok(false);
+            return Ok(None);
         }
-        self.store.add_pending_info(id, text)?;
-        Ok(true)
+        Ok(Some(self.store.add_kept_message(id, text)?))
     }
 
     /// [`Self::queue_message`] for a session a change of its account's sharing is restarting, and
@@ -2164,7 +2165,7 @@ impl AppState {
         // gone, so a hook from the dying process can arrive reporting work while the live entry it
         // would be drained through is still registered. Nothing is waiting on this answer: a sender
         // is refused before it ever queues for a dormant session, and what is held for an
-        // interrupted one is in the store (`Store::add_pending_info`), not in the queue.
+        // interrupted one is in the store (`Store::add_kept_message`), not in the queue.
         match self.store.get_session(id) {
             Ok(Some(record)) if !record.status.is_dormant() => {}
             _ => return Drain::Pending,
@@ -2202,7 +2203,7 @@ impl AppState {
         // What was kept in the store is now in the session, or at least in its input box.
         let written = self.outbox.take_written();
         if !written.is_empty() {
-            if let Err(err) = self.store.delete_pending_info(&written) {
+            if let Err(err) = self.store.delete_kept_messages(&written) {
                 tracing::warn!(
                     session = %id, %err,
                     "deleting information written into a session failed"

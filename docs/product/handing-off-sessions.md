@@ -313,15 +313,17 @@ until a session can take them" in `docs/product/message-delivery.md`):
   its owner when it was started, and that the original is archived; one with no process — interrupted or archived — is
   told of its owner when it next starts instead (see "A change of owner told at the next launch" in
   `docs/product/changing-session-owners.md`);
-- **the owner, when there is one and it has a process,** is told that its session was handed off to a session of
+- **the owner, when there is one and it is not archived,** is told that its session was handed off to a session of
   another agent, which now reports to it and which it drives like any session of its own, and that the original is
-  archived — unless the owner made the handoff itself with `handoff_session`, whose result tells it instead;
+  archived — unless the owner made the handoff itself with `handoff_session`, whose result tells it instead. An
+  interrupted owner has the message kept for its resume (see "Reports and notices for an interrupted owner" in
+  `docs/product/reporting-to-owners.md`);
 - **the receiving session** is told what it now holds: its owner and how to report to it — for a lead session, also
   that this replaces what its role description says about being unbound, and how its reports archive it — or that it
   has no owner and reports to the user; the branches it is now responsible for, or that they could not be moved and
   still name the original; and each session it now owns, with its status.
 
-An owner with no process — interrupted or archived — is told nothing.
+An archived owner is told nothing.
 
 ## Messages for the original during a handoff
 
@@ -331,9 +333,11 @@ moved. The held queue is kept even if the original's process ends meanwhile.
 
 - Once the receiving session has taken the place, everything queued for the original, including what was already
   waiting there before the handoff, is forwarded to the receiving session, in order, before the original is archived.
-  Information kept for an interrupted original until its resume (see "Information for an interrupted session" in
-  `docs/product/information-between-sessions.md`) follows the queue, each piece once, and is then no longer kept for
-  the original.
+  What was kept for an interrupted original until its resume — information (see "Information for an interrupted
+  session" in `docs/product/information-between-sessions.md`), and for an owner its reports and notices (see "Reports
+  and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`) — follows the queue, each piece once,
+  and is then no longer kept for the original. A kept report or notice is forwarded as it was kept: it still says it
+  was kept while its receiver was interrupted, and names the tools in it as the original's agent calls them.
   So is anything queued for the original after that, until the handoff ends.
 - A handoff that fails before the receiving session has started, or before its place has moved, releases the hold: the
   queue is written into the original as usual.

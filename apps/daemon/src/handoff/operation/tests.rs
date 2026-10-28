@@ -333,6 +333,29 @@ async fn a_bound_session_is_replaced_by_a_session_bound_to_the_same_owner() {
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
 }
 
+/// An owner with no process because it is interrupted is not skipped: the notice of the handoff is
+/// kept for its resume.
+#[tokio::test]
+async fn the_notice_of_a_handoff_is_kept_for_an_interrupted_owner() {
+    let fixture = Fixture::new("interrupted-owner");
+    fixture
+        .state
+        .store
+        .insert_session(&session("boss", true, "interrupted", None, false))
+        .unwrap();
+    fixture.run(session("original", true, "idle", Some("boss"), false));
+
+    let receiving = fixture.hand_off("original").await.unwrap();
+
+    let kept = fixture.state.store.kept_messages("boss").unwrap();
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    assert!(kept[0].1.contains("was handed off"), "{kept:?}");
+    assert!(kept[0].1.contains(&receiving.id), "{kept:?}");
+    assert!(kept[0]
+        .1
+        .contains("Kept for you while you were interrupted"));
+}
+
 /// A console session has no branches and no project; the sessions it owns, its lead sessions
 /// among them, are the ones that move.
 #[tokio::test]
@@ -642,7 +665,7 @@ async fn information_kept_for_an_interrupted_original_goes_to_the_receiving_sess
     fixture
         .state
         .store
-        .add_pending_info("original", "kept before the handoff")
+        .add_kept_message("original", "kept before the handoff")
         .unwrap();
 
     let receiving = fixture.hand_off("original").await.unwrap();
@@ -651,7 +674,7 @@ async fn information_kept_for_an_interrupted_original_goes_to_the_receiving_sess
     assert!(fixture
         .state
         .store
-        .pending_info("original")
+        .kept_messages("original")
         .unwrap()
         .is_empty());
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
@@ -666,7 +689,7 @@ async fn kept_information_that_is_also_queued_is_forwarded_once() {
     let queued = fixture
         .state
         .store
-        .add_pending_info("original", "kept and queued")
+        .add_kept_message("original", "kept and queued")
         .unwrap();
     fixture
         .state
@@ -674,7 +697,7 @@ async fn kept_information_that_is_also_queued_is_forwarded_once() {
     fixture
         .state
         .store
-        .add_pending_info("original", "kept only")
+        .add_kept_message("original", "kept only")
         .unwrap();
 
     let receiving = fixture.hand_off("original").await.unwrap();
@@ -688,7 +711,7 @@ async fn kept_information_that_is_also_queued_is_forwarded_once() {
     assert!(fixture
         .state
         .store
-        .pending_info("original")
+        .kept_messages("original")
         .unwrap()
         .is_empty());
 }

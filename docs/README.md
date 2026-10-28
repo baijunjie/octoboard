@@ -42,8 +42,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Session requests](product/session-requests.md) — a session asking the user to start an ownerless session.
 - [Requests to resume a conversation](product/requests-to-resume-a-conversation.md) — a session asking the user to
   resume a conversation by its ID.
-- [Reporting to an owner](product/reporting-to-owners.md) — how a bound project session reports a round of work and
-  when it archives itself.
+- [Reporting to an owner](product/reporting-to-owners.md) — how a bound project session reports a round of work, when
+  it archives itself, and what is kept for an owner that is interrupted.
 - [Information between sessions](product/information-between-sessions.md) — what a session can see of the other running
   sessions, how it tells them something, and what is kept for an interrupted session.
 - [What every session reads](product/what-every-session-reads.md) — the read-only MCP tools open to all sessions.

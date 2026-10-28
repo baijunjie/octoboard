@@ -3839,8 +3839,9 @@ pub(crate) async fn relaunch_session_with(
     // told of their owner on every resume. Read and built with the refusals, before anything is
     // written, and cleared only for the count seen here, so a change marked since stays owed.
     let owed = state.store.owner_notice_pending(id)?;
-    // Information shared while the session was interrupted, read with the refusals as well.
-    let held = state.store.pending_info(id)?;
+    // What was kept for the session while it was interrupted, read with the refusals as well,
+    // less the waits for the user that are over by now.
+    let held = reporting::current_kept_messages(state, id)?;
     let combined = if owed > 0 {
         let notice = mcp::owner_notice(state, &session)?;
         Some(match instruction {
@@ -4000,7 +4001,7 @@ fn console_session_launch_settings(
 /// neither: for each value independently, the project's own, else its console's project session
 /// value, else `None`, the agent's own default. Each agent has its own pair, since each has its own
 /// model names.
-fn project_launch_settings(
+pub(crate) fn project_launch_settings(
     project: &Project,
     console: &Console,
     agent: Agent,
@@ -4523,12 +4524,12 @@ fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
         // Ending the process waits out the graceful period, which the caller should not.
         stop_process(live);
     }
-    // Information held for it to take at a resume is not for it once archived: a later reopen
-    // must not be handed it.
-    if let Err(err) = state.store.clear_pending_info(id) {
+    // Messages kept for it to take at a resume are not for it once archived: a later reopen must
+    // not be handed them.
+    if let Err(err) = state.store.clear_kept_messages(id) {
         tracing::warn!(
             session = %id, %err,
-            "dropping the information held for an archived session failed"
+            "dropping the messages kept for an archived session failed"
         );
     }
     Ok(())
@@ -14210,7 +14211,7 @@ mod tests {
         );
         let share = |target: &str, text: &str| {
             let (delivery, _) = crate::sharing::deliver_info(&state, "hub", target, text).unwrap();
-            assert_eq!(delivery, crate::reporting::Delivery::Queued);
+            assert_eq!(delivery, crate::reporting::Delivery::Kept);
         };
         share("codex", "first news");
         share("codex", "second news");
@@ -14219,7 +14220,7 @@ mod tests {
         relaunch_stand_in(&state, "codex", true)
             .await
             .expect_err("the launch fails");
-        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+        assert_eq!(state.store.kept_messages("codex").unwrap().len(), 2);
         assert_eq!(state.queued_count("codex"), 0);
 
         // A launch that succeeds queues them, and keeps the rows until they are written.
@@ -14227,13 +14228,13 @@ mod tests {
         assert_eq!(queued.len(), 2, "{queued:?}");
         assert!(queued[0].contains("first news"), "{queued:?}");
         assert!(queued[1].contains("second news"), "{queued:?}");
-        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+        assert_eq!(state.store.kept_messages("codex").unwrap().len(), 2);
 
         // The queue is lost before it drained, as when the daemon exits or the process ends: the
         // next resume queues each message once.
         state.end_process_for_test("codex");
         interrupt(&state, "codex");
-        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+        assert_eq!(state.store.kept_messages("codex").unwrap().len(), 2);
         let (_, queued) = relaunch_stand_in(&state, "codex", false).await.unwrap();
         assert_eq!(queued.len(), 2, "{queued:?}");
 
@@ -14256,24 +14257,25 @@ mod tests {
         .await
         .unwrap();
         drop(claim);
-        assert_eq!(state.store.pending_info("codex").unwrap().len(), 2);
+        assert_eq!(state.store.kept_messages("codex").unwrap().len(), 2);
         let live = state.live_session("codex").expect("running");
         state.flush_outbox("codex", SessionStatus::Idle);
         let seen = crate::test_support::output_containing(&live, "second news");
         assert!(seen.contains("first news"), "{seen}");
-        assert!(state.store.pending_info("codex").unwrap().is_empty());
+        assert!(state.store.kept_messages("codex").unwrap().is_empty());
         assert_eq!(state.queued_count("codex"), 0);
 
         // A share that meets a launch under way keeps nothing: the launch may already have read
         // what was kept.
         let claim = state.begin_launch("archived-later").unwrap();
-        assert!(!state
-            .keep_info_if_not_running("archived-later", "too late")
-            .unwrap());
+        assert!(state
+            .keep_message_if_not_running("archived-later", "too late")
+            .unwrap()
+            .is_none());
         drop(claim);
         assert!(state
             .store
-            .pending_info("archived-later")
+            .kept_messages("archived-later")
             .unwrap()
             .is_empty());
 
@@ -14282,15 +14284,226 @@ mod tests {
         archive_session(&state, "archived-later").unwrap();
         assert!(state
             .store
-            .pending_info("archived-later")
+            .kept_messages("archived-later")
             .unwrap()
             .is_empty());
         state.discard_session("deleted-later").unwrap();
         assert!(state
             .store
-            .pending_info("deleted-later")
+            .kept_messages("deleted-later")
             .unwrap()
             .is_empty());
+    }
+
+    /// An owner that is interrupted, with no process running.
+    fn interrupted_owner(id: &str) -> Session {
+        Session {
+            title: id.to_string(),
+            agent_session_id: Some(format!("conversation-{id}")),
+            has_conversation: true,
+            ..project_session(id, Agent::Claude, SessionStatus::Interrupted)
+        }
+    }
+
+    fn report(
+        summary: &str,
+        status: crate::reporting::ReportStatus,
+    ) -> crate::reporting::Report<'_> {
+        crate::reporting::Report {
+            summary,
+            status,
+            open_items: &[],
+            synthesised: false,
+        }
+    }
+
+    /// A report to an owner that is interrupted is kept for it, and a `done` one archives the
+    /// reporter as a delivered one would; the owner's resume writes it in, dated, in the order it
+    /// came among the information kept for it.
+    #[tokio::test]
+    async fn a_report_to_an_interrupted_owner_is_kept_for_its_resume_in_order() {
+        use crate::reporting::{deliver_report, ReportStatus};
+        let (state, _dir, _live) = binding_fixture(
+            "kept-report",
+            vec![
+                interrupted_owner("starter"),
+                bound_session("worker", SessionStatus::Idle, "starter"),
+                bound_session("asker", SessionStatus::Idle, "starter"),
+                console_session("hub", SessionStatus::Idle),
+            ],
+            &["hub"],
+        );
+        let share = |text: &str| {
+            crate::sharing::deliver_info(&state, "hub", "starter", text).unwrap();
+        };
+
+        share("first news");
+        let note =
+            deliver_report(&state, "worker", report("all done", ReportStatus::Done)).expect("kept");
+        assert!(
+            note.contains("kept for the project session `starter`"),
+            "{note}"
+        );
+        assert!(note.contains("This session is now archived"), "{note}");
+        assert_eq!(
+            state.session_record("worker").unwrap().status,
+            SessionStatus::Archived
+        );
+        let note = deliver_report(
+            &state,
+            "asker",
+            report("which cache?", ReportStatus::NeedsDecision),
+        )
+        .expect("kept");
+        assert!(!note.contains("archived"), "{note}");
+        assert_eq!(
+            state.session_record("asker").unwrap().status,
+            SessionStatus::Idle
+        );
+        share("second news");
+
+        let (_, queued) = relaunch_stand_in(&state, "starter", false).await.unwrap();
+        assert_eq!(queued.len(), 4, "{queued:?}");
+        assert!(queued[0].contains("first news"), "{queued:?}");
+        assert!(
+            queued[1].starts_with("Report from session worker"),
+            "{queued:?}"
+        );
+        assert!(queued[1].contains("all done"), "{queued:?}");
+        assert!(
+            queued[1].contains("Kept for you while you were interrupted; it dates from "),
+            "{queued:?}"
+        );
+        assert!(queued[2].contains("which cache?"), "{queued:?}");
+        assert!(queued[3].contains("second news"), "{queued:?}");
+    }
+
+    /// A report to an archived owner is refused, keeps nothing and leaves the reporter as it was,
+    /// and the refusal names the owner rather than reading as the reporter's own state; a reporter
+    /// archived with its owner is told that too.
+    #[test]
+    fn a_report_to_an_archived_owner_is_refused_naming_the_owner() {
+        use crate::reporting::{deliver_report, ReportStatus};
+        let (state, _dir, _live) = binding_fixture(
+            "report-archived-owner",
+            vec![
+                Session {
+                    status: SessionStatus::Archived,
+                    ..interrupted_owner("starter")
+                },
+                bound_session("left-out", SessionStatus::Idle, "starter"),
+                bound_session("archived-with-it", SessionStatus::Archived, "starter"),
+            ],
+            &[],
+        );
+
+        let err = deliver_report(&state, "left-out", report("done", ReportStatus::Done))
+            .expect_err("refused");
+        assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED, "{err}");
+        assert!(
+            err.to_string()
+                .contains("your owner, the project session `starter`, is archived"),
+            "{err}"
+        );
+        assert!(err.to_string().contains("not delivered"), "{err}");
+        assert_eq!(
+            state.session_record("left-out").unwrap().status,
+            SessionStatus::Idle
+        );
+
+        let err = deliver_report(
+            &state,
+            "archived-with-it",
+            report("done", ReportStatus::Done),
+        )
+        .expect_err("refused");
+        assert!(
+            err.to_string().contains("your owner `starter` is archived"),
+            "{err}"
+        );
+        assert!(state.store.kept_messages("starter").unwrap().is_empty());
+    }
+
+    /// A notice Octoboard writes to an owner that is interrupted is kept for its resume and
+    /// delivered dated; a kept notice that a session waits for the user gives way to anything
+    /// later about that session, a later wait included. What is kept for an owner archived before
+    /// its resume is dropped.
+    #[tokio::test]
+    async fn a_notice_to_an_interrupted_owner_is_kept_and_an_out_of_date_wait_dropped() {
+        use crate::reporting::{tell_owner_it_ended, tell_owner_it_waits};
+        let (state, _dir, _live) = binding_fixture(
+            "kept-notice",
+            vec![
+                interrupted_owner("starter"),
+                bound_session("worker", SessionStatus::WaitingUser, "starter"),
+                bound_session("blocked", SessionStatus::WaitingUser, "starter"),
+                interrupted_owner("archived-later"),
+                bound_session("its-worker", SessionStatus::Interrupted, "archived-later"),
+            ],
+            &[],
+        );
+
+        tell_owner_it_waits(&state, "worker");
+        state.turn_started("worker", Some("go on"));
+        tell_owner_it_waits(&state, "worker");
+        tell_owner_it_waits(&state, "blocked");
+        assert_eq!(state.store.kept_messages("starter").unwrap().len(), 2);
+        let worker = state.session_record("worker").unwrap();
+        tell_owner_it_ended(&state, &worker);
+
+        let (_, queued) = relaunch_stand_in(&state, "starter", false).await.unwrap();
+        assert_eq!(queued.len(), 2, "{queued:?}");
+        assert!(queued[0].contains("`blocked`"), "{queued:?}");
+        assert!(queued[0].contains("is waiting for the user"), "{queued:?}");
+        assert!(queued[1].contains("`worker`"), "{queued:?}");
+        assert!(queued[1].contains("ended on its own"), "{queued:?}");
+        for notice in &queued {
+            assert!(
+                notice.contains("Kept for you while you were interrupted"),
+                "{notice}"
+            );
+        }
+
+        let its_worker = state.session_record("its-worker").unwrap();
+        tell_owner_it_ended(&state, &its_worker);
+        assert_eq!(
+            state.store.kept_messages("archived-later").unwrap().len(),
+            1
+        );
+        archive_session(&state, "archived-later").unwrap();
+        assert!(state
+            .store
+            .kept_messages("archived-later")
+            .unwrap()
+            .is_empty());
+    }
+
+    /// A kept notice that a session waits for the user, which nothing later superseded, is not
+    /// written into the owner at its resume once the session no longer waits.
+    #[tokio::test]
+    async fn a_kept_wait_that_is_over_is_not_delivered_at_the_resume() {
+        use crate::reporting::tell_owner_it_waits;
+        let (state, _dir, _live) = binding_fixture(
+            "kept-wait-over",
+            vec![
+                interrupted_owner("starter"),
+                bound_session("over", SessionStatus::WaitingUser, "starter"),
+                bound_session("still", SessionStatus::WaitingUser, "starter"),
+            ],
+            &[],
+        );
+        tell_owner_it_waits(&state, "over");
+        tell_owner_it_waits(&state, "still");
+        assert_eq!(state.store.kept_messages("starter").unwrap().len(), 2);
+        let mut over = state.session_record("over").unwrap();
+        over.status = SessionStatus::Idle;
+        state.store.update_session(&over).unwrap();
+
+        let (_, queued) = relaunch_stand_in(&state, "starter", false).await.unwrap();
+
+        assert_eq!(queued.len(), 1, "{queued:?}");
+        assert!(queued[0].contains("`still`"), "{queued:?}");
+        assert_eq!(state.store.kept_messages("starter").unwrap().len(), 1);
     }
 
     /// The parting note of an owner that releases a session that is not running is kept with the

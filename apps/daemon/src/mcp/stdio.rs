@@ -129,11 +129,13 @@ impl ServerHandler for OctoboardMcp {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, ErrorData> {
-        // A name outside this role's catalogue is a protocol-level mistake rather than a tool
-        // that failed, so it does not come back as a tool result the model is invited to retry.
-        if super::tool_by_name(self.role, self.bound.load(Ordering::Relaxed), &request.name)
-            .is_none()
-        {
+        // A name outside every catalogue this role has is a protocol-level mistake rather than a
+        // tool that failed, so it does not come back as a tool result the model is invited to
+        // retry. A name that is only in the other binding's catalogue is forwarded: the binding
+        // may have changed since this child last heard of it (a release, or a bind, that the
+        // session learns of from a notice), and the daemon, which refuses what the session cannot
+        // call, answers with the binding as it stands.
+        if !self.is_known_tool(&request.name) {
             return Err(ErrorData::invalid_params(
                 format!("`{}` is not a tool this session can call", request.name),
                 None,
@@ -189,6 +191,14 @@ impl ServerHandler for OctoboardMcp {
 }
 
 impl OctoboardMcp {
+    /// Whether `name` is a tool of this role's catalogue for either binding. Only a project
+    /// session's binding changes while it runs; for any other role the two are the same.
+    fn is_known_tool(&self, name: &str) -> bool {
+        [true, false]
+            .into_iter()
+            .any(|bound| super::tool_by_name(self.role, bound, name).is_some())
+    }
+
     /// Takes the binding the daemon's answer reports, and says whether it changed the catalogue.
     fn follow_binding(&self, body: &[u8]) -> bool {
         let Some(bound) = serde_json::from_slice::<Value>(body)
@@ -369,24 +379,41 @@ mod tests {
         assert!(refused.contains("could not be reached for session s-1"));
     }
 
+    fn server(role: Role, bound: bool) -> OctoboardMcp {
+        OctoboardMcp {
+            session: Arc::new("s-1".to_string()),
+            role,
+            bound: Arc::new(AtomicBool::new(bound)),
+            port: 0,
+            token: Arc::new("t".to_string()),
+        }
+    }
+
     /// The catalogue follows the binding each answer reports, and only a change of it is one the
     /// agent is told of; a console session's never changes.
     #[test]
     fn the_catalogue_follows_the_binding_the_daemon_reports() {
-        let server = |role| OctoboardMcp {
-            session: Arc::new("s-1".to_string()),
-            role,
-            bound: Arc::new(AtomicBool::new(false)),
-            port: 0,
-            token: Arc::new("t".to_string()),
-        };
-        let project = server(Role::Project);
+        let project = server(Role::Project, false);
         let bound = br#"{"ok":true,"result":{},"bound":true}"#;
         assert!(project.follow_binding(bound));
         assert!(!project.follow_binding(bound));
         assert!(project.bound.load(Ordering::Relaxed));
         assert!(!project.follow_binding(br#"{"ok":false,"error":"x"}"#));
-        assert!(!server(Role::Console).follow_binding(bound));
+        assert!(!server(Role::Console, false).follow_binding(bound));
+    }
+
+    /// A session released from its owner is told of tools its child's catalogue does not have yet,
+    /// and following that notice has to reach the daemon, whose answer then updates the catalogue;
+    /// a name no catalogue of the role has stays a protocol error.
+    #[test]
+    fn a_tool_of_the_other_binding_is_forwarded_but_an_unknown_one_is_not() {
+        for bound in [true, false] {
+            let project = server(Role::Project, bound);
+            assert!(project.is_known_tool("report"));
+            assert!(project.is_known_tool("new_session"));
+            assert!(!project.is_known_tool("no_such_tool"));
+        }
+        assert!(!server(Role::Console, false).is_known_tool("report"));
     }
 
     #[test]

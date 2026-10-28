@@ -82,8 +82,10 @@ fn write_or_hold(state: &Arc<AppState>, id: &str, text: &str) -> Result<Delivery
             &[("session", id)],
         ));
     }
-    if session.status == SessionStatus::Interrupted && state.keep_info_if_not_running(id, text)? {
-        return Ok(Delivery::Queued);
+    if session.status == SessionStatus::Interrupted
+        && state.keep_message_if_not_running(id, text)?.is_some()
+    {
+        return Ok(Delivery::Kept);
     }
     reporting::write_message(state, id, text, WhenBlocked::Queue)
 }

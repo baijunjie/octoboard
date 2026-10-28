@@ -289,14 +289,17 @@ agent's records show one, and for Claude Code after a compaction until the next 
 "context": {"tokens": 120000, "window": 200000, "used_percent": 60}
 ```
 
-The `status` these records carry is the one the window shows: a running session reads `waiting_user` while a
+The `status` these records carry is the one the window shows, one of `starting`, `working`, `waiting_user`, `idle`,
+`interrupted` and `archived` (see `docs/product/session-statuses.md`): a running session reads `waiting_user` while a
 folder-trust confirmation that needs the user, a Codex action title or a screen only the user can answer holds it there,
 whatever its agent last reported (see "What the statuses are derived from" in `docs/product/session-statuses.md`), and
 one that a change of its account's sharing has ended and is about to resume reads `starting` (see "When a change is
 carried out" in `docs/product/sharing-the-default-configuration.md`). Each record also carries `queued_messages` and
-`writes_held`, which say how many messages are waiting to be written into the session — information kept for an
-interrupted session until its resume included — and what keeps them from being written whatever its `status` reads (see
-"Messages held until a session can take them" in `docs/product/message-delivery.md`).
+`writes_held`, which say how many messages are waiting to be written into the session — what is kept for an
+interrupted session until its resume included: information, and for an owner the reports and notices (see "Reports
+and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`) — and what keeps them from being
+written whatever its `status` reads (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`).
 
 Each record also carries the facts the tools that act on a session depend on, so a caller can check them beforehand:
 
