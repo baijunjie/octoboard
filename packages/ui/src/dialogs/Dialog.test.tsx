@@ -249,13 +249,19 @@ const render = (root: Root, element: React.ReactElement) =>
  * up whatever `check` does. */
 async function withMeasuredFooters(
   element: React.ReactElement,
-  extent: (title: string) => { left: number; right: number },
+  extent: (title: string) => { left: number; right: number; top?: number; bottom?: number },
   check: (root: Root) => Promise<void>,
 ): Promise<void> {
+  const region = document.body.appendChild(document.createElement("div"));
+  region.dataset.slot = "toast-region";
+  const toast = region.appendChild(document.createElement("div"));
+  toast.dataset.slot = "toast";
+  toast.dataset.frontmost = "true";
+  toast.style.setProperty("--toast-height", "64px");
   const spy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
     if (this.dataset.slot !== "modal-footer") return { top: 0, left: 0, right: 0 } as DOMRect;
     const title = this.closest("[role=dialog]")?.querySelector("h2, [slot=title]")?.textContent ?? "";
-    return { top: window.innerHeight - 80, ...extent(title) } as DOMRect;
+    return { top: window.innerHeight - 80, bottom: window.innerHeight, ...extent(title) } as DOMRect;
   });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -267,6 +273,7 @@ async function withMeasuredFooters(
     act(() => root.unmount());
     container.remove();
     spy.mockRestore();
+    region.remove();
   }
 }
 
@@ -300,6 +307,134 @@ it("leaves the toasts alone for a centred dialog clear of their corner", async (
     () => centred,
     async () => expect(clearance()).toBe(""),
   );
+});
+
+// A centred dialog can reach across the toast column without reaching down to the toast itself.
+// Only its footer's real intersection matters, including for a tall or expanded toast stack.
+it.each([
+  ["below the footer", 600, 660, 64, false],
+  ["overlapping the footer", 670, 730, 100, true],
+  ["above the footer", 756, 768, 16, false],
+])("keeps a toast at its ordinary position when %s", async (_name, top, bottom, height, lifted) => {
+  await withMeasuredFooters(
+    <Dialog title="Processes" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><span>body</span></Dialog>,
+    () => ({ ...wide, top, bottom }),
+    async () => {
+      const toast = document.querySelector<HTMLElement>('[data-slot="toast"]')!;
+      toast.style.setProperty("--toast-height", `${height}px`);
+      await frame();
+      expect(clearance()).toBe(lifted ? `${window.innerHeight - top}px` : "");
+    },
+  );
+});
+
+it("remeasures when a toast arrives, grows or disappears without changing the dialog", async () => {
+  await withMeasuredFooters(
+    <Dialog title="Processes" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><span>body</span></Dialog>,
+    () => ({ ...wide, top: 600, bottom: 660 }),
+    async () => {
+      const region = document.querySelector<HTMLElement>('[data-slot="toast-region"]')!;
+      const toast = region.firstElementChild as HTMLElement;
+      expect(clearance()).toBe("");
+      toast.style.setProperty("--toast-height", "120px");
+      await frame();
+      expect(clearance()).toBe("168px");
+      // Repeated measurements while lifted must still use the ordinary bottom position.
+      window.dispatchEvent(new Event("resize"));
+      await frame();
+      expect(clearance()).toBe("168px");
+      toast.style.setProperty("--toast-height", "64px");
+      await frame();
+      expect(clearance()).toBe("");
+      toast.remove();
+      await frame();
+      expect(clearance()).toBe("");
+      toast.style.setProperty("--toast-height", "120px");
+      region.append(toast);
+      await frame();
+      expect(clearance()).toBe("168px");
+      toast.remove();
+      await frame();
+      expect(clearance()).toBe("");
+    },
+  );
+});
+
+it("keeps the same clearance while a toast stack expands and collapses", async () => {
+  const height = window.innerHeight;
+  window.innerHeight = 800;
+  try {
+    await withMeasuredFooters(
+      <Dialog title="Processes" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><span>body</span></Dialog>,
+      () => ({ ...wide, top: 530, bottom: 566 }),
+      async () => {
+        const region = document.querySelector<HTMLElement>('[data-slot="toast-region"]')!;
+        const front = region.firstElementChild as HTMLElement;
+        front.style.setProperty("--toast-height", "48px");
+        const older = front.cloneNode() as HTMLElement;
+        older.dataset.frontmost = "false";
+        older.style.setProperty("--toast-height", "164px");
+        older.style.setProperty("--front-height", "48px");
+        older.style.setProperty("--offset-collapsed", "12px");
+        older.style.setProperty("--offset-expanded", "60px");
+        region.append(older);
+        for (const expanded of [false, true, false]) {
+          front.dataset.expanded = older.dataset.expanded = String(expanded);
+          // Force a fresh measurement in both states, independent of the observers' filters.
+          window.dispatchEvent(new Event("resize"));
+          await frame();
+          expect(clearance()).toBe("270px");
+        }
+      },
+    );
+  } finally {
+    window.innerHeight = height;
+  }
+});
+
+it("remeasures the ordinary toast position above connection and update strips", async () => {
+  await withMeasuredFooters(
+    <Dialog title="Processes" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><span>body</span></Dialog>,
+    () => ({ ...wide, top: 600, bottom: 660 }),
+    async () => {
+      const style = document.documentElement.style;
+      try {
+        expect(clearance()).toBe("");
+        style.setProperty("--connection-banner-height", "48px");
+        await frame();
+        expect(clearance()).toBe("168px");
+        style.setProperty("--update-notice-height", "160px");
+        await frame();
+        expect(clearance()).toBe("");
+        style.removeProperty("--update-notice-height");
+        await frame();
+        expect(clearance()).toBe("168px");
+        style.removeProperty("--connection-banner-height");
+        await frame();
+        expect(clearance()).toBe("");
+      } finally {
+        style.removeProperty("--connection-banner-height");
+        style.removeProperty("--update-notice-height");
+      }
+    },
+  );
+});
+
+it("mirrors the footer intersection in a right-to-left document", async () => {
+  const computed = window.getComputedStyle;
+  const spy = vi.spyOn(window, "getComputedStyle").mockImplementation((element, pseudo) => {
+    const style = computed(element, pseudo);
+    return element === document.documentElement ? new Proxy(style, { get: (target, key) => key === "direction" ? "rtl" : Reflect.get(target, key) }) : style;
+  });
+  try {
+    await withMeasuredFooters(
+      <Dialog title="Processes" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><span>body</span></Dialog>,
+      () => ({ left: 100, right: 500 }),
+      async () => expect(clearance()).toBe("80px"),
+    );
+  } finally {
+    spy.mockRestore();
+  }
 });
 
 // In a window narrower than the toast breakpoint the toasts are at the top, so no footer is in

@@ -609,6 +609,45 @@ const backgroundArchiveState = snapshotState({
 
 export const dialogScenarios: Scenario[] = [
   {
+    ...dialogFixture,
+    state: consoleSessionLaunchState,
+    id: "toast-centered-dialog",
+    group: "Trust prompts and toasts",
+    category: "normal",
+    title: "Notice below a centered dialog",
+    description: "The notice stays at the window's bottom end when there is room below the dialog, even if its horizontal span reaches the footer. Resize the window to compare genuine overlap with the clear space below a centered dialog.",
+    steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
+    toasts: [{ kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" }],
+  },
+  {
+    ...dialogFixture,
+    state: consoleSessionLaunchState,
+    id: "toast-centered-dialog-stack",
+    group: "Trust prompts and toasts",
+    category: "normal",
+    title: "Notice stack beside a centered dialog",
+    description: "The stack clears the footer even while collapsed, since spreading its notices would otherwise cover the buttons. Hover to expand it, then move away: the stack's anchor stays steady in both states.",
+    steps: [(ui) => ui.press(ui.t("sidebar.consoleSessions.new"))],
+    toasts: [
+      { kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" },
+      { kind: "notice", message: (t) => t("common.pathCopied") },
+    ],
+  },
+  {
+    ...dialogFixture,
+    state: { ...dialogState, settings: { ...accountsState.settings!, accounts: [] } },
+    id: "toast-tall-dialog",
+    group: "Trust prompts and toasts",
+    category: "normal",
+    title: "Notice above a tall dialog's footer",
+    description: "Expanded console settings reach the window's bottom corner, so the notice rises to clear the footer. Cancel and Create remain available without being covered by the notice.",
+    steps: [
+      (ui) => ui.press(ui.t("rail.newConsole")),
+      (ui) => ui.press(ui.t("dialog.agentSettings.advanced")),
+    ],
+    toasts: [{ kind: "session_notice", code: "claude_workspace_untrusted", params: {}, message: "", session: "s-web-1" }],
+  },
+  {
     id: "sidebar-session-menu-unused-locked",
     group: "Sidebar sessions",
     category: "normal",
