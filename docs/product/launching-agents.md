@@ -349,6 +349,9 @@ Two groups of variables are removed from that snapshot:
 
 Besides the terminal type, the variables set over the snapshot are:
 
+- `HOME`, when the user's shell leaves it unset, empty or relative: the daemon's own home directory (`HOME` when
+  absolute, else the user's entry in the system user database, else `/`), so that every directory an agent or
+  Octoboard takes from it is one place rather than one relative to the session's working directory;
 - for a session that holds a config directory of its agent, the agent's own variable: `CLAUDE_CONFIG_DIR` for Claude
   Code, `CODEX_HOME` for Codex, each set to that directory and replacing any value the user's shell exports. A session
   that holds none gets the snapshot's own value, if there is one, unchanged; Octoboard sets `CODEX_HOME` for nothing

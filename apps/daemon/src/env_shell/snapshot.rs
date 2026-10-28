@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::io::{self, Read};
 use std::os::unix::process::CommandExt;
+use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::mpsc;
 use std::thread;
@@ -113,7 +114,7 @@ fn snapshot_marker() -> String {
 }
 
 /// Runs `$SHELL -l -i -c 'env -0 && printf <marker>'` and returns the parsed environment with the
-/// filtered variables already removed.
+/// filtered variables already removed and `HOME` settled (see `settle_home`).
 pub fn take() -> Result<HashMap<String, String>> {
     snapshot_with(&shell_path(), SNAPSHOT_TIMEOUT)
 }
@@ -187,7 +188,24 @@ fn snapshot_with(shell: &str, timeout: Duration) -> Result<HashMap<String, Strin
             env.insert(key.to_string(), value.to_string());
         }
     }
+    settle_home(&mut env);
     Ok(env)
+}
+
+/// Gives the snapshot an absolute `HOME`: one the shell left unset or relative becomes the
+/// daemon's own home directory (`crate::paths::home_dir`). Agents are launched with this
+/// environment, and every directory taken from its `HOME` (an account's, a Codex database's) must
+/// be one place rather than one relative to whatever directory the reader runs in.
+fn settle_home(env: &mut HashMap<String, String>) {
+    let absolute = env
+        .get("HOME")
+        .is_some_and(|home| Path::new(home).is_absolute());
+    if !absolute {
+        env.insert(
+            "HOME".to_string(),
+            crate::paths::home_dir().to_string_lossy().into_owned(),
+        );
+    }
 }
 
 /// Reads `pipe` in chunks until EOF or an error, forwarding each over `tx`. Run on its own thread
@@ -550,6 +568,25 @@ mod tests {
         // stripped before the caller ever sees them.
         assert!(!env.contains_key("TERM"));
         assert!(!env.contains_key("CLAUDE_PID"));
+    }
+
+    /// An absolute `HOME` is kept; one unset, empty or relative becomes the daemon's own home.
+    #[test]
+    fn the_snapshot_always_carries_an_absolute_home() {
+        let own = crate::paths::home_dir().to_string_lossy().into_owned();
+        for (given, expected) in [
+            (Some("/Users/snapshot"), "/Users/snapshot"),
+            (Some(""), own.as_str()),
+            (Some("relative/home"), own.as_str()),
+            (None, own.as_str()),
+        ] {
+            let mut env = HashMap::new();
+            if let Some(home) = given {
+                env.insert("HOME".to_string(), home.to_string());
+            }
+            settle_home(&mut env);
+            assert_eq!(env["HOME"], expected, "{given:?}");
+        }
     }
 
     #[test]
