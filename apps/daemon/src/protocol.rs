@@ -908,7 +908,10 @@ pub struct Settings {
     pub interface_language: Option<String>,
     /// Whether a new session whose account was left out runs on the account of its agent whose
     /// weekly quota resets soonest and still has some left. Off unless the user turned it on.
-    /// When nothing ranks, the account is chosen as it is while this is off.
+    /// Without a weekly pick, try the inherited account, then the first usable in saved order.
+    /// A new session with no named agent or account also tries other installed, added agents in
+    /// added order when the preferred agent has no usable account. A resume, switch or handoff
+    /// keeps its target agent.
     pub auto_select_account: bool,
     /// Whether Octoboard itself moves a session to another account when its turn stopped on the
     /// account's usage limit (see `crate::auto_switch`). Off unless the user turned it on. Only

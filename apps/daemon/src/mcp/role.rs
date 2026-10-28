@@ -334,7 +334,12 @@ fn relationships(agent: Agent, owns: bool) -> String {
              session; otherwise the account is the project's, else the console's (`{get_project}` \
              gives it in `effective.accounts`). Name another account only when the user asked \
              for it, or when it is the way to reach another agent. `title` names it in the \
-             user's language. No approval is needed.",
+             user's language. With automatic selection on and no named agent or account, if \
+             no account of the preferred agent is usable, other installed, added agents are \
+             tried in added order. Within each agent, the weekly pick, inherited account, then \
+             first usable account are tried; no quota reading is still usable. A named agent \
+             limits selection to it; a named account preserves both. Unspecified model and \
+             effort follow the final agent. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
             get_project = tool("get_project"),

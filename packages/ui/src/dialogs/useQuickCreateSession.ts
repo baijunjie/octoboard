@@ -1,8 +1,7 @@
-import { DaemonRequestError } from "../daemon-client";
 import { ActionableError } from "../actionableError";
 import { useRef } from "react";
 
-import { AGENT_LABEL, noAgentState } from "../agents";
+import { noAgentState } from "../agents";
 import { useLatest } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { isolate } from "../i18n/isolate";
@@ -20,9 +19,7 @@ import type { ConfirmLaunch } from "./useConfirmIncompleteLaunch";
  * dialog opens on untouched (`defaultOpenSessionRequest`), and hands the new session's id to
  * `onOpened`, unless the window moved to another console (`currentConsoleId`) while the daemon was
  * answering: there is no dialog holding the window still, and the session is not on that screen.
- * With every account of the agent it would open on used up it opens nothing and says so, naming the
- * `action` of the control that asked; with the account it would open on turned off or not logged in, and no other
- * free, it opens nothing and shows the daemon's own refusal. A refusal has no dialog to show it in, so it uses the shared
+ * Automatic selection can fall back to another agent. With no usable account it opens nothing and shows a short
  * error alert. An account whose last sharing change did not finish is asked about first
  * (`confirmLaunch`), cancelling sending nothing. A press while the previous one is still being
  * answered is ignored, so one gesture cannot open two sessions.
@@ -31,13 +28,13 @@ export function useQuickCreateSession(
   onOpened: (sessionId: string) => void,
   currentConsoleId: string | undefined,
   confirmLaunch: ConfirmLaunch,
-): (target: NewSessionRequest, action: string) => void {
+): (target: NewSessionRequest) => void {
   const t = useT();
   const { resolved: appearance } = useOctoboardTheme();
   const { request, store, toastError } = useDaemon();
   const pending = useRef(false);
   const latestConsoleId = useLatest(currentConsoleId);
-  return (target, action) => {
+  return (target) => {
     if (pending.current) return;
     const state = store.getState();
     const { sessions, settings, agentAvailability } = state;
@@ -53,23 +50,8 @@ export function useQuickCreateSession(
       }
     }
     const opening = defaultOpenSessionRequest(t, target.console, project, binding, state, Date.now(), appearance);
-    if ("usedUp" in opening) {
-      toastError(new ActionableError(t("sidebar.project.openSessionQuickUsedUp", { action: isolate(action) }), "quotaUsedUpAgent", { code: "quick_create_quota_refused", params: { action } }), undefined, t("dialog.session.blockedTitle"));
-      return;
-    }
-    if ("disabled" in opening) {
-      const { agent, name } = opening.disabled;
-      toastError(new DaemonRequestError(t("daemon.account_disabled", { account: isolate(name), agent: AGENT_LABEL[agent] }), "account_disabled", { agent: AGENT_LABEL[agent], account: name }), undefined, t("dialog.session.blockedTitle"));
-      return;
-    }
-    if ("signedOut" in opening) {
-      const { agent, name } = opening.signedOut;
-      toastError(new DaemonRequestError(t("daemon.account_not_signed_in", { account: isolate(name), agent: AGENT_LABEL[agent] }), "account_not_signed_in", { agent: AGENT_LABEL[agent], account: name }), undefined, t("dialog.session.blockedTitle"));
-      return;
-    }
-    if ("changingSharing" in opening) {
-      const { account, name } = opening.changingSharing;
-      toastError(new DaemonRequestError(t("daemon.account_sharing_in_progress", { name: isolate(name) }), "account_sharing_in_progress", { account, name }), undefined, t("dialog.session.blockedTitle"));
+    if (!("request" in opening)) {
+      toastError(new ActionableError(t("daemon.quick_create_unavailable"), "none", { code: "quick_create_unavailable" }), undefined, t("dialog.session.blockedTitle"));
       return;
     }
     const startedIn = latestConsoleId.current;

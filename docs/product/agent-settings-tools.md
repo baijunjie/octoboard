@@ -84,16 +84,15 @@ left as it is, and `null` or a blank string is the agent's own default. A model 
 one the agent offers, under the rules in "The Advanced section" in `docs/product/model-and-reasoning-effort.md`. Results
 give every agent, with `null` for an unset value.
 
-**The default agent and account settings do not decide what a session's own sessions run on.** The tools describe a
-project's `default_agent` and `accounts`, a console's `default_agent`, `project_session_agent` and `accounts`, and what
-`get_console` and `get_project` return — `get_project`'s `effective` included — as applying to sessions opened without
-a choice. They say that a session a
-project session starts itself — with `new_session`, or with `request_session` in its own console — runs on that
-session's own agent unless it chooses another; that one a console session starts for a project — with `new_session` or
-`request_session` — runs on the project's default agent; that a console session's request for a console session runs on
-the requester's own agent; and that a left-out account is chosen as "The agent and account of a session a session
-starts" in `docs/product/hub-orchestration.md` describes. They tell a console session to name another agent or account
-only when the user asked for it.
+**The default agent and account settings are initial preferences, not a guarantee of what a session's own sessions
+run on.** The tools describe a project's `default_agent` and `accounts`, a console's `default_agent`,
+`project_session_agent` and `accounts`, and what `get_console` and `get_project` return — `get_project`'s `effective`
+included — as applying to sessions opened without a choice. A project session's `new_session`, and its
+`request_session` in its own console, instead prefer the caller's agent; a console session starting a project session
+prefers the project's default, and its request for a console session in its own console prefers its own agent. The
+final agent and account, including automatic fallback when enabled, follow "The agent and account of a session a
+session starts" in `docs/product/hub-orchestration.md`. The tools tell a console session to name another agent or
+account only when the user asked for it.
 
 ## A project's settings
 
@@ -115,7 +114,7 @@ same set of fields:
 | `trust_consent` | Whether the user has given the trust permission for it (see "The trust permission" in `docs/product/folder-trust.md`). Read-only. |
 | `accounts` | Its account setting for every agent, as above. |
 | `launch` | Its model and reasoning effort for every agent, as above; for a value it leaves unset, its sessions take its console's `project_session_launch` (see "The console's own settings: `get_console` and `update_console`" below). |
-| `effective` | What `default_agent`, `accounts` and `launch` resolve to under the project's console, worked out as a launch works them out, as `{"default_agent": …, "accounts": …, "launch": …}`: the agent a session opened in the project without a choice runs on (the project's own, else the console's `project_session_agent`, else its `default_agent`); for every agent the account such a session of it gets, by id, or `default` for the agent's default account (the project's own, else the console's); and for every agent the model and reasoning effort it gets (each the project's own, else the console's `project_session_launch`; `null` is the agent's own default). A session's own choices come before these at a launch, and so do the account automatic account selection picks and the starting session's own agent and account (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). |
+| `effective` | What `default_agent`, `accounts` and `launch` resolve to under the project's console, worked out as a launch works them out, as `{"default_agent": …, "accounts": …, "launch": …}`: the agent a session opened in the project without a choice runs on (the project's own, else the console's `project_session_agent`, else its `default_agent`); for every agent the account such a session of it gets, by id, or `default` for the agent's default account (the project's own, else the console's); and for every agent the model and reasoning effort it gets (each the project's own, else the console's `project_session_launch`; `null` is the agent's own default). A session's own choices come before these at a launch, and so do the agent and account automatic selection picks and the starting session's own agent and account (see "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). |
 | `git_workflow` | Its git workflow settings (see `docs/product/git-workflow-settings.md`) as `{"override": …, "effective": …}`: under `override` the project's own value for each of `development`, `rebase_before_merge`, `delivery` and `revert_gate`, `null` for one it leaves to the application-wide value; under `effective` the four resolved values for it now (`rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is). |
 
 Each also carries `git_status`, the project's git state as the daemon last read it, read-only (see "Reading the status
@@ -193,7 +192,7 @@ working directory. Neither the avatar itself nor the console's console session i
 |---|---|
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
-| `auto_select_account` | Whether a new session whose account was not named uses the account of its agent whose weekly quota resets soonest (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). |
+| `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Automatically select an account" in `docs/product/settings.md` and "Which account a session uses" in `docs/product/opening-sessions.md`). |
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The four settings" in `docs/product/git-workflow-settings.md`); `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |

@@ -507,12 +507,6 @@ it.each(["path_not_absolute", "project_directory_shared", "agent_not_available",
   expect(whole()).toBe(normalize(daemonMessage("zh-Hans", code, params, error.message, createStateStore({}).getState())));
 });
 
-it("retains local quota-refusal action metadata in rich copy and a plain fallback", () => {
-  const error = new DaemonRequestError("plain fallback", "quick_create_quota_refused", { action: "New session with defaults" });
-  const container = mount(<DaemonErrorMessage error={error} />);
-  expect(container.querySelector("[data-inline-reference]")?.textContent).toBe("New session with defaults");
-  expect(error.message).toBe("plain fallback");
-});
 
 it.each(["terminal_write_failed", "store_io_failed"])("keeps nested trust %s diagnostics outside the reason sentence", (reason_code) => {
   const detail = "Permission denied\n    /tmp/مراجعة";

@@ -208,12 +208,6 @@ const signedOutQuotas: AccountQuota[] = [
 /** Grok Build's one account, not logged in. */
 const grokSignedOut: AccountQuota[] = [quotaOf("grok", null, null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Grok Build" }, "Grok Build is not signed in") })];
 
-/** Both of Codex's accounts, not logged in. */
-const codexSignedOut: AccountQuota[] = [
-  quotaOf("codex", null, null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "Codex is not signed in") }),
-  quotaOf("codex", "a-team", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "Codex is not signed in") }),
-];
-
 /** Hub's own Codex handoff: the default account is spent and Team is not. */
 const handoffQuotas: AccountQuota[] = [
   codexSpent[0],
@@ -301,6 +295,18 @@ export const quotaGatingScenarios: Scenario[] = [
       settings: { ...settings, auto_select_account: true, accounts: [soonAccount] },
     },
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
+  },
+  {
+    id: "dialog-new-session-auto-select-agent",
+    group: GROUP,
+    category: "normal",
+    title: "New session, automatic selection falls back to another agent",
+    description: "Search API defaults to Codex, whose Default account has reached its limit and whose Team account is turned off. With automatic account selection on, the dialog opens on Claude Code, the first added agent with an available account, with Default selected and Open enabled.",
+    state: {
+      ...launchState([searchApi], [codexSpent[0]]),
+      settings: { ...codexTeamOff, auto_select_account: true },
+    },
+    steps: [openSessionDialog],
   },
   {
     id: "dialog-hand-off-auto-select-account",
@@ -583,41 +589,44 @@ export const quotaGatingScenarios: Scenario[] = [
     ],
   },
   {
+    id: "sidebar-quick-create-auto-select-agent",
+    group: GROUP,
+    category: "normal",
+    title: "Quick create falls back to another agent",
+    description: "The console defaults to Codex, whose Default account has reached its limit and whose Team account is turned off. With automatic account selection on, quick create opens a Claude Code session on Default, the first available agent in the added list. The new session is selected.",
+    state: {
+      ...launchState([searchApi], [codexSpent[0]], codexConsole),
+      settings: { ...codexTeamOff, auto_select_account: true },
+    },
+    steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
+  },
+  {
     id: "sidebar-quick-create-quota-used-up",
     group: GROUP,
     category: "exceptional",
     held: true,
     title: "Quick create, the default agent's accounts at their limit or turned off",
-    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent: its default account has reached its 5h limit and Team is turned off, so no Codex account can open a session. The bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"Default agent's accounts unavailable\", while its accessible name stays \"New console session with defaults\". Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
+    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent: its default account has reached its 5h limit and Team is turned off, so no Codex account can open a session. The bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"No available account\", while its accessible name stays \"New console session with defaults\". Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
     state: { ...launchState([searchApi], [codexSpent[0]], codexConsole), settings: codexTeamOff },
     // The "+" is still plain while the steps run: the modifier is pressed after them, and the open tooltip then reads the reason.
     steps: [(ui) => ui.hoverTitledControl(ui.t("sidebar.consoleSessions.new"))],
   },
   {
-    id: "sidebar-quick-create-quota-refused",
+    id: "sidebar-quick-create-unavailable",
     group: GROUP,
     category: "exceptional",
-    title: "Quick create refused, the default agent's accounts at their limit",
-    description: "The console's sessions run on Codex, the default agent, whose accounts are all at their limit. A press of the new console session button with the modifier down, before the page noticed it, opens no session: an error dialog says that creating a new console session with defaults is unavailable because none of the default agent's accounts can open a session right now, each having reached its usage limit, being not logged in or being disabled, and advises choosing another agent in the new session dialog, or trying again once a usage limit resets, or once you log in to an account or enable a disabled one again.",
-    state: launchState([searchApi], codexSpent, codexConsole),
-    steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
-  },
-  {
-    id: "sidebar-quick-create-disabled-refused",
-    group: GROUP,
-    category: "exceptional",
-    title: "Quick create refused, the default agent's account is turned off",
-    description: "The console's sessions run on Codex, the default agent, whose two accounts are both turned off, and nothing else is free to fall back on. A press of the new console session button with the modifier down, before the page noticed it, opens no session and shows the daemon's own refusal rather than the usage-limit one: an error dialog says that the account is disabled so a session cannot be opened on it, with a Manage accounts… button and the advice to choose another account or enable this account again.",
-    state: { ...launchState([searchApi], [], codexConsole), settings: codexTurnedOff },
-    steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
-  },
-  {
-    id: "sidebar-quick-create-signed-out-refused",
-    group: GROUP,
-    category: "exceptional",
-    title: "Quick create refused, the default agent's accounts are not logged in",
-    description: "The console's sessions run on Codex, the default agent, whose two accounts are both not logged in, and nothing else is free to fall back on. A press of the new console session button with the modifier down, before the page noticed it, opens no session: an error dialog titled \"Cannot open a session\" says that the default account is not logged in so a session cannot be opened on it, with a Manage accounts… button and the advice to choose another account or log in to this one.",
-    state: launchState([searchApi], codexSignedOut, codexConsole),
+    title: "Quick create refused, no agent has an available account",
+    description: "Automatic account selection is on, but none of the added agents can open a session. Pressing New console session with the modifier opens a short error dialog: \"No account is currently available to open a session.\" It offers OK, with no recovery advice or account-management action.",
+    state: {
+      ...launchState([searchApi], [...codexSpent, ...grokSignedOut, { ...signedOutQuotas[1], account: "a-personal" }], codexConsole),
+      settings: {
+        ...settings,
+        auto_select_account: true,
+        disabled_default_accounts: ["claude"],
+        accounts: accounts.map((account) => account.agent === "claude" && account.id !== "a-client" && account.id !== "a-personal" ? { ...account, disabled: true } : account),
+      },
+      accountSharing: clientChangingSharing,
+    },
     steps: [(ui) => ui.pressWithModifier(ui.t("sidebar.consoleSessions.new"))],
   },
   {
@@ -640,7 +649,7 @@ export const quotaGatingScenarios: Scenario[] = [
     category: "exceptional",
     held: true,
     title: "Quick create menu with an agent's accounts at their limit",
-    description: "With the modifier held, the project chooser opened from the focus header is in its quick form: Search API, whose default agent (Codex) has all its accounts at their limit, is greyed out and cannot be chosen, with the short reason \"Default agent's accounts unavailable\" under its name, while Website, which can fall back to Default, is offered.",
+    description: "With the modifier held, the project chooser opened from the focus header is in its quick form: Search API, whose default agent (Codex) has all its accounts at their limit, is greyed out and cannot be chosen, with the short reason \"No available account\" under its name, while Website, which can fall back to Default, is offered.",
     state: launchState([onWork, searchApi], [...claudeQuotas, ...codexSpent]),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub.id}` },
     steps: [(ui) => ui.press(ui.t("sidebar.focus.newSession"))],

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { accountOpenedOn, avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
+import { accountOpenedOn, avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, openingChoice, type AccountChoice, type ChoiceGroup } from "../accountChoices";
 import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { isolate } from "../i18n/isolate";
@@ -47,6 +47,7 @@ export function useChoiceGroups(): ChoiceGroup[] {
  *
  * With automatic account selection on, the account a new session (a handoff's included) opens on is
  * the one whose weekly quota resets soonest rather than the one the project or console resolves to.
+ * With no usable account of that agent, the initial choice tries other agents in added order.
  * A forced choice that can still be picked wins over that. Switching to an agent whose remembered
  * account is no longer an entry falls back the same way.
  *
@@ -99,7 +100,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
   // Keep a value for the refusal when no agent can be chosen, without returning the excluded agent.
   const initialAgent = selectable.includes(wanted) ? wanted : selectable[0]
     ?? agentsInListingOrder(addedAgents).find((agent) => agent !== exclude)!;
-  const initial = avoidUnavailableAccount({ agent: initialAgent, account: openingAccount(initialAgent) }, groups);
+  const initial = openingChoice(parentConsole, project, initialAgent, accounts, groups, addedAgents, autoSelect ? { now } : undefined);
   const forcedEntry = forced && findEntry(allGroups, choiceKey(forced));
   const choice = forced && forcedEntry?.selectable ? forced : currentChoice(picked, initial, groups);
   // A fixed conversation can still name a turned-off account; keep its value so the refusal names it.

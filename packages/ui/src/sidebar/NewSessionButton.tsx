@@ -14,8 +14,8 @@ import { useNewSessionMode } from "./useNewSessionMode";
  * `onQuickCreate` instead of `onOpen`. With no agent that is added and installed there is nothing to create with, so
  * it is disabled. Its quick form, when no account of the agent it would create with can open a session (each is used
  * up, not logged in or turned off), only looks disabled: it keeps its focus, its tooltip and its description give the
- * short reason while its name stays the action, and a press calls `onQuickCreate`, which refuses with the full
- * sentence naming the action by `quickLabel`. A `target` that is not there (`undefined`) makes a press do nothing.
+ * short reason while its name stays the action, and a press calls `onQuickCreate`, which refuses with a short
+ * unavailable-account message. A `target` that is not there (`undefined`) makes a press do nothing.
  */
 export function NewSessionButton({
   label,
@@ -34,7 +34,7 @@ export function NewSessionButton({
   quickTitle?: React.ReactNode;
   target: () => NewSessionRequest | undefined;
   onOpen: (target: NewSessionRequest) => void;
-  onQuickCreate: (target: NewSessionRequest, action: string) => void;
+  onQuickCreate: (target: NewSessionRequest) => void;
   /** Registers the focus header's creation shortcuts. */
   shortcut?: boolean;
   /** The element around the button, for focus to be handed to. */
@@ -49,10 +49,10 @@ export function NewSessionButton({
     if (repeat || blocked) return;
     const request = target();
     if (!request) return;
-    if (action === "quickCreate") onQuickCreate(request, quickLabel);
+    if (action === "quickCreate") onQuickCreate(request);
     else onOpen(request);
   }, shortcut);
-  const quickUnavailable = quick && unavailable ? t("sidebar.project.openSessionQuickUsedUpShort") : undefined;
+  const quickUnavailable = quick && unavailable ? t("sidebar.project.openSessionQuickUnavailable") : undefined;
   const tooltip = quick ? (quickTitle ?? quickLabel) : (title ?? label);
   return (
     <RowIconButton
@@ -65,7 +65,7 @@ export function NewSessionButton({
       onPress={(event) => {
         const request = target();
         if (!request) return;
-        if (quick || isPrimaryModifier(event)) onQuickCreate(request, quickLabel);
+        if (quick || isPrimaryModifier(event)) onQuickCreate(request);
         else onOpen(request);
       }}
     />

@@ -32,7 +32,7 @@ function mount(initial: Partial<State> = {}) {
     terminalUrl: () => "",
   };
   const onOpened = vi.fn();
-  let quickCreate!: (target: NewSessionRequest, action: string) => void;
+  let quickCreate!: (target: NewSessionRequest) => void;
   function Host({ consoleId }: { consoleId: string }) {
     const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch();
     quickCreate = useQuickCreateSession(onOpened, consoleId, confirmLaunch);
@@ -46,7 +46,7 @@ function mount(initial: Partial<State> = {}) {
     act(() => root.unmount());
     container.remove();
   });
-  const run = (target: NewSessionRequest) => act(async () => quickCreate(target, "New session with defaults"));
+  const run = (target: NewSessionRequest) => act(async () => quickCreate(target));
   return { daemon, onOpened, run, showConsole };
 }
 
@@ -89,7 +89,7 @@ it("reports a refusal as a toast and selects nothing", async () => {
   expect(onOpened).not.toHaveBeenCalled();
 });
 
-it("refuses with every account of the agent used up, naming the action that was pressed and pointing to another agent", async () => {
+it("explains that no account is available without adding recovery instructions", async () => {
   const spent = {
     agent: "claude" as const, account: null, fetched_at: 0, plan: null, unavailable: null,
     windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
@@ -98,29 +98,29 @@ it("refuses with every account of the agent used up, naming the action that was 
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
   const [error] = vi.mocked(daemon.toastError).mock.calls[0];
-  expect((error as Error).message).toBe("\u2068New session with defaults\u2069 is unavailable because none of the default agent's accounts can open a session right now: each has reached its usage limit, is not logged in or is disabled.");
-  expect((error as { recovery?: string }).recovery).toBe("quotaUsedUpAgent");
-  expect(error).toMatchObject({ code: "quick_create_quota_refused", params: { action: "New session with defaults" } });
+  expect((error as Error).message).toBe("No account is currently available to open a session.");
+  expect((error as { recovery?: string }).recovery).toBe("none");
+  expect(error).toMatchObject({ code: "quick_create_unavailable", params: {} });
 });
 
-it("refuses with the daemon's own disabled-account refusal when the account it would open on is turned off, and sends nothing", async () => {
+it("refuses a disabled account with the short unavailable message", async () => {
   const { daemon, run } = mount({ settings: { ...createStateStore({}).getState().settings, disabled_default_accounts: [parent.default_agent] } });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
   expect(daemon.toastError).toHaveBeenCalledTimes(1);
   const [error] = vi.mocked(daemon.toastError).mock.calls[0];
-  expect(error).toMatchObject({ code: "account_disabled", params: { agent: "Claude Code" } });
+  expect(error).toMatchObject({ code: "quick_create_unavailable", recovery: "none" });
 });
 
-it("refuses with the daemon's own not-logged-in refusal when the account it would open on is not logged in, and sends nothing", async () => {
+it("refuses a signed-out account with the short unavailable message", async () => {
   const signedOut = { agent: parent.default_agent, account: null, fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } };
   const { daemon, run } = mount({ accountQuotas: [signedOut] });
   await run({ kind: "new-console-session", console: parent });
   expect(daemon.request).not.toHaveBeenCalled();
   expect(daemon.toastError).toHaveBeenCalledTimes(1);
   const [error] = vi.mocked(daemon.toastError).mock.calls[0];
-  expect(error).toMatchObject({ code: "account_not_signed_in", params: { agent: "Claude Code" } });
-  expect((error as Error).message).toContain("is not logged in, so a session cannot be opened on it.");
+  expect(error).toMatchObject({ code: "quick_create_unavailable", recovery: "none" });
+  expect((error as Error).message).toBe("No account is currently available to open a session.");
 });
 
 it("refuses an owner that is no longer live, as the dialog does, and sends nothing", async () => {
@@ -165,4 +165,13 @@ it("sends nothing when the question about an incomplete account is cancelled, an
   expect(document.body.querySelector(ASKING)).toBeNull();
   await base.run(target());
   expect(document.body.querySelector(ASKING)).not.toBeNull();
+});
+
+it("quick creates on another usable agent without showing an error when automatic selection is on", async () => {
+  const settings = { ...createStateStore({}).getState().settings, auto_select_account: true, added_agents: ["claude", "codex"] as const, disabled_default_accounts: ["claude" as const] };
+  const { daemon, onOpened, run } = mount({ settings: { ...settings, added_agents: [...settings.added_agents] } });
+  await run({ kind: "new-console-session", console: parent });
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ agent: "codex", account: null }));
+  expect(daemon.toastError).not.toHaveBeenCalled();
+  expect(onOpened).toHaveBeenCalledWith("s-new");
 });

@@ -32,9 +32,8 @@ export interface SidebarHandlers {
   onSwitchConsoleSession: (session: Session) => void;
   onOpenConsoleSession: (console: Console) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
-  /** Opens the session the dialog `target` would open, without the dialog, on its defaults. `action` is
-   * the name of the control that asked (its quick label), for a refusal to name the same action. */
-  onQuickCreateSession: (target: NewSessionRequest, action: string) => void;
+  /** Opens the session the dialog `target` would open, without the dialog, on its defaults. */
+  onQuickCreateSession: (target: NewSessionRequest) => void;
   /** Enters the focus mode of a project or a console session, or with `undefined` leaves it. */
   onFocus: (target: FocusTarget | undefined) => void;
   onOpenArchive: (scope: ArchiveScope) => void;

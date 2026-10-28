@@ -1,5 +1,4 @@
 import { choiceGroups, settledInitialChoice, type AccountChoice } from "../accountChoices";
-import { defaultAccountName } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, RequestBody, Settings } from "../protocol";
 import type { NewSessionBinding, NewSessionRequest } from "./dialogRequest";
@@ -35,7 +34,7 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
 
 /** What a session-creating control reads from the store to settle the choice a session opens on. */
 export interface QuickCreateState {
-  settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account" | "disabled_default_accounts" | "default_account_names" | "account_order">;
+  settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account" | "disabled_default_accounts" | "account_order">;
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
   accountSharing?: Map<string, AccountSharing>;
@@ -43,7 +42,7 @@ export interface QuickCreateState {
 
 /** The agent and account the session dialog opens on (`settledInitialChoice`) for a session in `parentConsole`
  * and `project`, with the window that still keeps the account from running a session. When
- * `auto_select_account` is on, that account is the one whose weekly quota resets soonest. */
+ * `auto_select_account` is on, weekly quota ranks the accounts and another agent is tried if necessary. */
 function settledQuickChoice(parentConsole: Console, project: Project | undefined, state: QuickCreateState, now: number) {
   const { accounts, added_agents, auto_select_account } = state.settings;
   const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now }, state.accountSharing, state.settings.disabled_default_accounts, state.settings.account_order);
@@ -58,29 +57,16 @@ function settledQuickChoice(parentConsole: Console, project: Project | undefined
   );
 }
 
-/** Whether the agent a session created where `target` would be has all its accounts used up, not logged in or turned
- * off, so that creating with the defaults has nothing to run on. The dialog still opens, as the user can pick
+/** Whether the settled choice for `target` has no usable account after any automatic fallback,
+ * so that creating with defaults has nothing to run on. The dialog still opens, as the user can pick
  * another agent there. */
 export function quickCreateUnavailable(target: NewSessionRequest, state: QuickCreateState, now: number): boolean {
-  const { exhaustedBy, signedOut, disabled } = settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now);
-  return exhaustedBy !== undefined || signedOut || disabled;
+  const { exhaustedBy, changingSharing, signedOut, disabled } = settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now);
+  return exhaustedBy !== undefined || changingSharing || signedOut || disabled;
 }
 
-/** The name the user knows `choice`'s account by: the agent's default account's name, or the account's own. */
-function choiceAccountName(t: Translate, state: QuickCreateState, choice: AccountChoice): string {
-  return choice.account === null
-    ? defaultAccountName(t, state.settings.default_account_names, choice.agent)
-    : state.settings.accounts.find((item) => item.id === choice.account)?.name ?? choice.account;
-}
-
-/** The request the session dialog sends when submitted untouched: the localized default name, the agent and account it
- * opens on (`settledQuickChoice`), the model and effort left to follow the parent, and no owner unless
- * `binding` fixes one (a console session's focus mode). With that account's quota used up it
- * opens on another account of the agent; with every account of the agent used up there
- * is nothing to send, and `usedUp` says so instead (`quickCreateUnavailable`). The same for an account whose sharing
- * change runs, named by `changingSharing`. The same for an account the user turned off, which the daemon would
- * refuse, named by `disabled` (every account of the agent is off, or the inherited one is and nothing else is free),
- * and for one that is not logged in, named by `signedOut` on the same terms. */
+/** The request the untouched session dialog would send, including its localized name and any fixed owner.
+ * Automatic selection can try other agents. With no usable account, no request is sent. */
 export function defaultOpenSessionRequest(
   t: Translate,
   parentConsole: Console,
@@ -89,14 +75,9 @@ export function defaultOpenSessionRequest(
   state: QuickCreateState,
   now: number,
   appearance: "light" | "dark",
-): { request: OpenSessionRequest } | { usedUp: true } | { changingSharing: { account: string; name: string } } | { signedOut: { agent: Agent; name: string } } | { disabled: { agent: Agent; account: string | null; name: string } } {
+): { request: OpenSessionRequest } | { unavailable: true } {
   const { choice, exhaustedBy, changingSharing, signedOut, disabled } = settledQuickChoice(parentConsole, project, state, now);
-  if (disabled) return { disabled: { agent: choice.agent, account: choice.account, name: choiceAccountName(t, state, choice) } };
-  if (exhaustedBy) return { usedUp: true };
-  if (signedOut) return { signedOut: { agent: choice.agent, name: choiceAccountName(t, state, choice) } };
-  if (changingSharing && choice.account !== null) {
-    return { changingSharing: { account: choice.account, name: choiceAccountName(t, state, choice) } };
-  }
+  if (disabled || exhaustedBy || signedOut || changingSharing) return { unavailable: true };
   return {
     request: openSessionRequest(t, {
       console: parentConsole,

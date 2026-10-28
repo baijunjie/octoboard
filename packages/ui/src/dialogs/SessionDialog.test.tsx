@@ -374,3 +374,21 @@ it("updates the fixed owner's displayed name while the session dialog is open", 
   expect(document.body.textContent).toContain(`${isolate("Next task")}｜${isolate(owner.title)}`);
   expect(document.body.textContent).not.toContain("First task");
 });
+
+it("opens on a usable agent automatically and retains an explicit agent pick even when it cannot open", async () => {
+  const { container, root, daemon } = renderDialog([], {
+    settings: {
+      auto_pull_repositories: false, auto_delete_unresumable_archives: true, auto_select_account: true,
+      added_agents: ["claude", "codex"], disabled_default_accounts: [], accounts: [],
+      default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
+    },
+    accountQuotas: [{ agent: "claude", account: null, fetched_at: Date.now(), plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: {}, message: "signed out" } }],
+  }, { default_agent: "claude" });
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  expect(pickerNamed("Codex account")).toBeDefined();
+  await act(async () => pickerNamed("Agent").click());
+  await act(async () => optionElements().find((option) => option.textContent?.includes("Claude Code"))?.click());
+  expect(pickerNamed("Claude Code account")).toBeDefined();
+  expect(buttons().find((button) => button.textContent === "Open")?.disabled).toBe(true);
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "open_session" }));
+});

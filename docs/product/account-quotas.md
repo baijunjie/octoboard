@@ -262,8 +262,8 @@ The window does not offer what the daemon would refuse:
 - the session and handoff dialogs list a used-up account but do not let it be picked, open on another account instead,
   and refuse to submit when no account of the chosen agent is left (see the **Agent** field in "The session dialog" in
   `docs/product/opening-sessions.md`);
-- opening a session with defaults uses another account of the agent, or is unavailable when none is left (see "Opening a
-  session with defaults" in `docs/product/opening-sessions.md`);
+- opening a session with defaults follows its account and agent fallback rules, and is unavailable only after those
+  choices are exhausted (see "Opening a session with defaults" in `docs/product/opening-sessions.md`);
 - a session row's **Switch account** submenu disables a used-up account (see "Session rows" in
   `docs/product/sidebar-session-rows.md`), and the switch confirmation refuses one on Confirm, in an error alert (see
   "Confirming a switch" in `docs/product/switching-session-accounts.md`).
