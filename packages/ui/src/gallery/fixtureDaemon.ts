@@ -367,6 +367,16 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
     const locked = [...sessions].find((session) => session.locked);
     if (locked) return fail({ code: "session_locked", params: { session: locked.id }, message: "This session is locked" });
   };
+  const refuseUnknownProject = (project: string) => {
+    if (!store.getState().projects.has(project)) return fail({ code: "unknown_project", params: { project }, message: `unknown project ${project}` });
+  };
+  /** A project action the host would carry out: refused for an unknown project, failed with the scenario's error when it
+   * sets one, and acknowledged otherwise. */
+  const projectAction = (project: string, error: FixtureError | undefined): Event => {
+    refuseUnknownProject(project);
+    if (error) return fail(error);
+    return { type: "ack" };
+  };
   const gitReply = createGitReplies(git, fail);
   const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail);
   const recordsPresence = (ids: string[]): SessionRecordsPresence => {
@@ -445,7 +455,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           return { type: "ack" };
         }
         case "switch_project_branch": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          refuseUnknownProject(body.project);
           const result = scenario.projectBranchSwitches?.[body.project]?.[body.branch];
           if (!result) return refuseUnfillable(`switch_project_branch (${body.project}, ${body.branch}): no post-switch repository, files and badge supplied`);
           if ("code" in result) return fail(result);
@@ -455,7 +465,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           return { type: "ack" };
         }
         case "restore_project_changes": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          refuseUnknownProject(body.project);
           const result = scenario.projectRestores?.[body.project];
           if (!result) return refuseUnfillable(`restore_project_changes (${body.project}): no post-restore repository and files supplied`);
           if ("code" in result) return fail(result);
@@ -560,9 +570,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
         // Native path operations are acknowledged without launching anything on the host.
         case "open_project_path":
         case "reveal_project_path": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
-          if (scenario.projectPathActionError) return fail(scenario.projectPathActionError);
-          return { type: "ack" };
+          return projectAction(body.project, scenario.projectPathActionError);
         }
         case "open_path_link": {
           // A path found when the output was drawn that is gone now is refused as the daemon refuses it, with the path as given.
@@ -589,22 +597,16 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           return { type: "ack" };
         }
         case "open_project_directory": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
-          if (scenario.projectDirectoryOpenError) return fail(scenario.projectDirectoryOpenError);
-          return { type: "ack" };
+          return projectAction(body.project, scenario.projectDirectoryOpenError);
         }
         case "open_project_terminal": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
-          if (scenario.projectTerminalOpenError) return fail(scenario.projectTerminalOpenError);
-          return { type: "ack" };
+          return projectAction(body.project, scenario.projectTerminalOpenError);
         }
         case "push_project_branch": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
-          if (scenario.projectPushError) return fail(scenario.projectPushError);
-          return { type: "ack" };
+          return projectAction(body.project, scenario.projectPushError);
         }
         case "delete_project": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          refuseUnknownProject(body.project);
           refuseLocked([...store.getState().sessions.values()].filter((session) => session.project_id === body.project));
           if (body.trash_directory && scenario.projectDeleteError) return fail(scenario.projectDeleteError);
           return { type: "ack" };
@@ -1092,7 +1094,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           return { type: "session_branches_inspected", items: (scenario.sessionBranches ?? []).filter((item) => item.session !== null && asked.has(item.session)) };
         }
         case "inspect_project_removal": {
-          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          refuseUnknownProject(body.project);
           const found = scenario.projectRemovalBranches?.[body.project] ?? [];
           if ("code" in found) return fail(found);
           return { type: "project_removal_inspected", items: found };
