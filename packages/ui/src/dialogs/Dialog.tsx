@@ -14,6 +14,7 @@ import { ErrorAlertBody, alertTitle } from "./ErrorAlertBody";
 import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
 import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
+import { useTopLayerAtMount } from "./useTopLayerAtMount";
 
 /** The busy state every dialog that talks to the daemon needs. Execution failures go to the
  * acknowledgement queue; what is wrong with a single field goes to
@@ -198,6 +199,7 @@ function DialogFrame({
   resetKey,
   dismissable = true,
   focusesItselfOnOpen,
+  topLayerAtMount,
 }: {
   /** Text, or an element for a title that needs markup of its own (a file name kept left to right). */
   title: string | React.ReactElement;
@@ -228,9 +230,17 @@ function DialogFrame({
    * element inside the dialog from its mount: react-aria takes focus off a dialog that finds focus outside it when the
    * mount's passive effects run, half a second later, and puts it back only once no transition is running on the page,
    * so one that never reports its end (in Chrome, one still running inside a disclosure as it folds away) would leave
-   * focus on the page body. That focus also makes the move a dialog underneath queues against the focus escaping its
-   * containment start from the element, which focus has left by the time the move comes. */
+   * focus on the page body. The empty element rather than the dialog itself, for a modal that mounts in the same commit
+   * (one that a dialog opens from an effect as it mounts): with the dialog itself focused at mount, focus ends on this
+   * dialog's first control or on that modal's opening control, while focus moved on from the empty element stays put. A
+   * dialog already open underneath plays no part in that while this one is also `topLayerAtMount`, as react-aria never
+   * counts focus inside a top layer as escaping its containment. */
   focusesItselfOnOpen?: boolean;
+  /** Marks the overlay, the element portalled to `<body>`, a react-aria top layer (`data-react-aria-top-layer`) for
+   * the commit it mounts in, and only that commit (see `useTopLayerAtMount`). For a modal that comes up a commit after
+   * what raised it, which can be the very commit another modal mounts in: one that a dialog opens from an effect as it
+   * mounts. */
+  topLayerAtMount?: boolean;
 } & (
   | {
     /** `null` for a dialog without a footer. */
@@ -276,6 +286,7 @@ function DialogFrame({
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
   useEscapeWhileTooltipOpen(() => dialogAround(markerRef), dismissable ? onClose : () => {});
+  const topLayer = useTopLayerAtMount(topLayerAtMount === true, markerRef);
 
   const Frame = alert ? AlertDialog : Modal;
   const alerting = alert || failing;
@@ -350,7 +361,13 @@ function DialogFrame({
   );
 
   return (
-    <Frame.Backdrop isOpen isDismissable={dismissable && !alert} isKeyboardDismissDisabled={!dismissable} onOpenChange={(open) => !open && dismissable && onClose()}>
+    <Frame.Backdrop
+      isOpen
+      isDismissable={dismissable && !alert}
+      isKeyboardDismissDisabled={!dismissable}
+      onOpenChange={(open) => !open && dismissable && onClose()}
+      data-react-aria-top-layer={topLayer ? "true" : undefined}
+    >
       {/* HeroUI pads the container 40px from `sm` up, which below the `docked` breakpoint leaves too
           little of a narrow window for code; the viewer asks for a 16px margin there and the 40px
           one above it. The narrow margin is a `max-docked:` utility, not an `sm:` one paired with a
@@ -432,6 +449,7 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
       failing
       size={props.size}
       alert={props.alert}
+      topLayerAtMount={props.topLayerAtMount}
       resetKey={failure.message}
       dismissable={false}
       onClose={props.onClose}

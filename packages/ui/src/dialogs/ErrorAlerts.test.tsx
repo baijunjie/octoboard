@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, StrictMode } from "react";
+import { act, StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
@@ -9,11 +9,12 @@ import { DaemonRequestError } from "../daemon-client";
 import { ActionableError } from "../actionableError";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
-import { focusAfterLoss } from "../components/regionFocus";
+import { focusAfterLoss, setFocusAfterModalLoss } from "../components/regionFocus";
 import { errorAlerts } from "../errorAlerts";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
 import { framesAsTimers, openable, settleFrames } from "./dialogTestSupport";
+import { OpensAnotherDialog } from "./nestedDialogTestSupport";
 import { ErrorAlerts, issueUrl } from "./ErrorAlerts";
 import { TextInput } from "./TextInput";
 import { createStateStore, type Daemon } from "../store";
@@ -268,7 +269,7 @@ it("hands focus to the window's fallback when acknowledging the last alert leave
   onTestFinished(() => { vi.useRealTimers(); });
   mount();
   const fallback = vi.fn();
-  onTestFinished(errorAlerts.setFocusFallback(fallback));
+  onTestFinished(setFocusAfterModalLoss(fallback));
   act(() => errorAlerts.report({ message: "Plain", recovery: "none" }));
   expect(document.querySelector('[role="alertdialog"] p')).toBeNull();
   act(() => errorAlerts.acknowledge());
@@ -388,7 +389,7 @@ describe.each([{ strict: false }, { strict: true }])("acknowledged over a dialog
 
   it.each(cases)("returns focus to %s", async (_case, dialog, landing) => {
     framesAsTimers();
-    onTestFinished(errorAlerts.setFocusFallback(() => focusAfterLoss(() => {})));
+    onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
     (document.activeElement as HTMLElement | null)?.blur();
     const { element, open } = openable(dialog(), true);
     mount(element, undefined, undefined, strict);
@@ -411,7 +412,7 @@ describe.each([{ strict: false }, { strict: true }])("acknowledged over a dialog
   });
 
   it("returns focus to the control that had it when the alert came after the dialog settled", async () => {
-    onTestFinished(errorAlerts.setFocusFallback(() => focusAfterLoss(() => {})));
+    onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
     mount(<Dialog title="Open session" onClose={() => {}} submitLabel="Open" onSubmit={() => {}}><TextInput label="Name" value="" onChange={() => {}} autoFocus /></Dialog>, undefined, undefined, strict);
     await settleFrames();
     const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Cancel")!;
@@ -638,4 +639,82 @@ it("adds no remedy line of the failure's kind after a daemon message that says w
   // A body of the caller's own says nothing of the daemon's remedy, so the kind's line stays.
   act(() => reportError(new DaemonRequestError("archived", "session_archived", { session: "s1" }), undefined, undefined, <p>Archived.</p>));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Select the current session in the sidebar");
+});
+
+// A dialog that opens a second one from a passive effect as it mounts (Settings opening an account's settings dialog for
+// View in Settings, or its Add agent dialog for an alert's Add agent…) mounts that second one in the same commit as an
+// alert raised in the task of the press that opened it: the alert must stay usable over both, and the second dialog
+// be usable once the alert is acknowledged.
+describe.each([{ strict: false }, { strict: true }])("raised as a dialog opens another dialog a commit later (StrictMode: $strict)", ({ strict }) => {
+  it.each(["virtual", "pointer"] as const)("ends on the alert, which nothing hides (press: %s)", async (modality) => {
+    framesAsTimers(modality);
+    const { element, open } = openable(<OpensAnotherDialog />, true);
+    mount(element, undefined, undefined, strict);
+    act(() => {
+      open();
+      errorAlerts.report({ message: "Refused" });
+    });
+    await settleFrames();
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(2);
+    alertHoldsFocus("Refused");
+    // The alert's own hiding still covers both, as an alert raised over an open dialog's does.
+    for (const covered of document.querySelectorAll('[role="dialog"]')) expect(covered.closest('[aria-hidden="true"], [inert]')).not.toBeNull();
+  });
+
+  it("leaves the second dialog usable once the alert is acknowledged", async () => {
+    framesAsTimers();
+    const { element, open } = openable(<OpensAnotherDialog />, true);
+    mount(element, undefined, undefined, strict);
+    act(() => {
+      open();
+      errorAlerts.report({ message: "Refused" });
+    });
+    await settleFrames();
+    act(() => errorAlerts.acknowledge());
+    await settleFrames();
+    const account = Array.from(document.querySelectorAll('[role="dialog"]')).find((dialog) => dialog.textContent?.includes("Account settings"))!;
+    expect(account.closest('[aria-hidden="true"], [inert]')).toBeNull();
+  });
+});
+
+// A dialog that opens while an alert is up (a question the daemon pushes, a login taken up) goes on top of it, holding
+// focus, and closing it puts focus back in the alert, which is still waiting for its acknowledgement.
+describe.each([{ strict: false }, { strict: true }])("with a dialog opened after it (StrictMode: $strict)", ({ strict }) => {
+  it.each(["pointer", "keyboard"] as const)("lets that dialog hold focus, then returns focus to the alert as it closes (press: %s)", async (modality) => {
+    framesAsTimers(modality);
+    let openLater = () => {};
+    function Later() {
+      const [shown, setShown] = useState(false);
+      openLater = () => setShown(true);
+      return shown ? <Dialog title="Later" onClose={() => setShown(false)} footer={null}><TextInput label="Field" value="" onChange={() => {}} autoFocus /></Dialog> : null;
+    }
+    mount(<Later />, undefined, undefined, strict);
+    act(() => errorAlerts.report({ message: "Refused" }));
+    await settleFrames();
+    alertHoldsFocus("Refused");
+    act(() => openLater());
+    await settleFrames();
+    const later = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const field = later.querySelector("input")!;
+    const covered = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+    expect(later.closest('[aria-hidden="true"], [inert]')).toBeNull();
+    expect(document.activeElement).toBe(field);
+    // On top by its later place in the page, and the alert under it hidden by its hiding.
+    expect(covered.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(covered.closest('[aria-hidden="true"], [inert]')).not.toBeNull();
+    // jsdom has no Tab of its own: each press moves focus only through the later dialog's focus containment, from its
+    // field to its close button and round again.
+    for (let press = 0; press < 4; press++) {
+      const before = document.activeElement;
+      act(() => before!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })));
+      expect(document.activeElement).not.toBe(before);
+      expect(later.contains(document.activeElement)).toBe(true);
+    }
+    act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    await settleFrames();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+    expect(alert.closest('[aria-hidden="true"], [inert]')).toBeNull();
+    expect(alert.contains(document.activeElement)).toBe(true);
+  });
 });

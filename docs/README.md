@@ -120,7 +120,7 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Appearance](product/appearance.md) — light, dark and follow-the-system, and what follows the choice.
 - [Language](product/language.md) — the offered languages, how the choice is made and stored.
 - [Right-to-left layout](product/right-to-left-layout.md) — what is mirrored under a right-to-left language.
-- [Dialogs](product/dialogs.md) — dialog titles, initial focus, and what Enter and confirm buttons do.
+- [Dialogs](product/dialogs.md) — dialog titles, initial focus, what Enter and confirm buttons do, and where an unasked question stands among other dialogs.
 - [Error alerts](product/error-alerts.md) — where a failure, warning or note is shown, by how it arises.
 - [Issue reports](product/issue-reports.md) — what Report issue prefills into a new Issue and what is removed from
   it first.

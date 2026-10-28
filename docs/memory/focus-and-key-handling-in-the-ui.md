@@ -49,19 +49,37 @@ than a check of your own: the browser blurs a control as it is disabled, before 
 hand-rolled "forget the element on blur" has already forgotten it by then. Its caller has to stay mounted and render
 nothing for that check to run in, rather than unmount with the element.
 
-## A modal raised over another dialog mounts a commit after it, and focuses itself one render after mounting
+## A modal raised over another dialog mounts a commit after it as a top layer for that commit, and focuses itself one render after mounting
 
 Applies to `packages/ui`, to a modal shown from state of its own (a store, a daemon push) rather than by the press that
 opens it — an error alert, a pending question — wherever that state can change in the same update that opens another
-dialog, as when a press opens a dialog and reports a failure in the same task. Never let two react-aria modals mount in
-one commit. Each hides the rest of the page with `ariaHideOutside` (`inert` in a browser) from a passive effect, and
-those run once both are in the document, so each hides the other; a hider only hides what lies outside its own modal
-and never lifts what another one hid, even an ancestor of its modal. Both stay inert while the dialog is open, the
-modal's focus call does nothing, and focus falls to `<body>`. Show the raised modal from the commit after: copy the
-raised value into state from a `useLayoutEffect` and render from that state, as `ErrorAlertHost` in
-`packages/ui/src/dialogs/ErrorAlerts.tsx` does. Not from a passive effect: that render lands in a later task, by which
-time the dialog's hider has noticed the insertion and hides the new modal; the layout effect's synchronous render
-stays in the same task, after the dialog's hider has run and before its observer reports.
+dialog, as when a press opens a dialog and reports a failure in the same task. Two react-aria modals mounting in one
+commit each hide the other: each hides the rest of the page with `ariaHideOutside` (`inert` in a browser) from a
+passive effect, those run once both are in the document, and a hider only hides what lies outside its own modal and
+never lifts what another one hid, even an ancestor of its modal. Both stay inert while the dialog is open, the modal's
+focus call does nothing, and focus falls to `<body>`. Such a modal needs both of the following; either alone leaves a
+case where it mounts with another modal:
+
+- Show it from the commit after the one that raised it: copy the raised value into state from a `useLayoutEffect` and
+  render from that state, as `ErrorAlertHost` in `packages/ui/src/dialogs/ErrorAlerts.tsx` and
+  `packages/ui/src/dialogs/PendingQuestionDialog.tsx` do. Not from a passive effect: that render lands in a later task,
+  by which time the dialog's hider has noticed the insertion and hides the new modal; the layout effect's synchronous
+  render stays in the same task, after the dialog's hider has run and before its observer reports.
+- Pass `topLayerAtMount` to its `Dialog` / `ConfirmDialog` (`packages/ui/src/dialogs/useTopLayerAtMount.ts`). The
+  delay moves it out of the press's commit but into the next one, where a dialog that the press's dialog opens in turn
+  from a mount effect also mounts (Settings opening the account settings dialog; an alert's Add agent…), and where an
+  alert and a question raised in the same task meet. The flag keeps the modal out of every hider of its mount commit,
+  and of several flagged in one commit leaves the last rendered on top.
+
+Never mark such a modal a top layer for longer than its mount commit (the lasting marking is for a surface that is not
+a modal): a modal opened later must cover it. Marked for good, a covered question takes focus back from the dialog on top
+(react-aria's containment never counts focus inside a top layer as escaping), a tooltip under it no longer closes, as
+tooltips close on turning inert, and a covered alert stays exposed to screen readers.
+
+A modal of this kind also hands focus on when its last one closes with nowhere to return focus to — a control gone
+with the dialog that closed before it, or no focus ever given: call `focusAfterModalCloses` from
+`packages/ui/src/components/regionFocus.ts` as the last one closes and `cancelFocusAfterModalCloses` as one comes up,
+as `packages/ui/src/errorAlerts.ts` and `PendingQuestionDialog` do, rather than a fallback of its own.
 
 Code that moves focus into such a modal by hand as it mounts (`dialogAround(ref)?.focus()` and the like), where the
 modal can open over another dialog — an alert or a question raised while one is open — focuses it from a layout
@@ -88,9 +106,7 @@ So whenever the caller focuses the modal itself, pass `focusesItselfOnOpen` to `
 (`packages/ui/src/dialogs/Dialog.tsx`), with or without a `resetKey`, as `ErrorAlertHost` and an `unprompted`
 `ConfirmDialog` do; a caller with a `resetKey` then refocuses itself for each new subject. The flag keeps the frame's
 own `useRefocusIfLost` from putting focus found on `<body>` back on the dialog when `resetKey` changes, and holds focus
-on an empty element inside the modal from the mount until the caller's focus lands. Do not swap that element for the
-dialog itself: focused at mount, the dialog underneath's queued move finds focus unchanged and still lands on the first
-control.
+on an empty element inside the modal from the mount until the caller's focus lands.
 
 A mouse never shows it, and a jsdom test reaches it only with `framesAsTimers()` from
 `packages/ui/src/dialogs/dialogTestSupport.ts` (virtual modality, and each animation frame a 0 ms timer that runs ahead
@@ -98,8 +114,11 @@ of any timer set after it), focus on an opener outside (a test starting from `<b
 mounted first (`openable` in the same file), the modal raised in an `act` of its own, and `settleFrames()` rather than a
 fixed wait. The half-second take-back needs on top of that a `transitionrun` that never ends, dispatched on an element
 of the dialog underneath, and a real wait past 500 ms. Cover the replacing cases too — a queued modal shown once the
-first is acknowledged, and one put in front of it — and run them under `StrictMode` as well, as the app does. Copy the
-"over a dialog opened without a pointer" cases in `packages/ui/src/dialogs/ErrorAlerts.test.tsx`. A test without
+first is acknowledged, and one put in front of it — and the meeting ones: a dialog that opens another from a mount
+effect (`OpensAnotherDialog` in `packages/ui/src/dialogs/nestedDialogTestSupport.tsx`), an alert and a question raised
+in one task, and a dialog opened later, which must cover the modal (assert the modal hidden then); run them under
+`StrictMode` as well, as the app does. Copy the "over a dialog opened without a pointer" cases in
+`packages/ui/src/dialogs/ErrorAlerts.test.tsx`. A test without
 `framesAsTimers()` passes against the timer version. jsdom has no `inert`, so react-aria hides with `aria-hidden` there,
 which does not stop focus: a test that asserts only where focus is passes against two modals mounted in one commit. Also
 raise the modal in the same `act` as opening the dialog underneath (`openable(dialog, true)`), and assert that it is not
@@ -236,8 +255,9 @@ key included.
 While a modal is open React Aria sets `inert` on everything outside it (`ariaHideOutside`) and dismisses it on a press
 outside it (`useInteractOutside`); both make an exception for an element carrying `data-react-aria-top-layer="true"` —
 and for the ancestors containing it — which is how HeroUI's own toast region stays usable over a dialog. So that
-marking is how a surface of this project's own is kept reachable there, but it counts only on an element that was
-already in the DOM when the dialog opened: the `MutationObserver` that `ariaHideOutside` watches later additions with
+marking is how a surface of this project's own that is not itself a modal is kept reachable there, but it counts only
+on an element that was already in the DOM when the dialog opened: the `MutationObserver` that `ariaHideOutside` watches
+later additions with
 skips anything added inside a subtree it has already hidden, and never looks at the marking on it. Keep the marked
 element mounted whatever the state therefore — empty, and a flex item of no height, when there is nothing to show — or
 portal it to `document.body` as the toast region does, and never mark it only while its content is on screen.

@@ -1,7 +1,8 @@
 # Dialogs
 
 How a dialog — a form dialog, a confirmation, an error alert or a failure modal — is titled, where keyboard focus starts
-in it, what its confirm button says, what Enter does in it, and how it changes size while open. What an open dialog puts
+in it, where a question the user did not ask for stands among other dialogs, what its confirm button says, what Enter
+does in it, and how it changes size while open. What an open dialog puts
 out of reach in the rest of the window is in "What an open dialog, menu or popover covers" in
 `docs/product/window-layout.md`; error alerts and failure modals themselves are in `docs/product/error-alerts.md`.
 
@@ -41,7 +42,27 @@ A confirmation opens with keyboard focus on its confirm button, so Enter confirm
 - **A question the user did not ask for** — a folder trust prompt (see "The trust dialog" in
   `docs/product/folder-trust.md`) or a session request (see "The confirmation dialog" in
   `docs/product/session-requests.md`) — opens with focus on the dialog itself as well, and focus is put back on the
-  dialog each time it moves on to the next waiting question, so an Enter held past one answer does not answer the next.
+  dialog each time it moves on to the next waiting question, so an Enter held past one answer does not answer the next;
+  not while a dialog opened after it covers it (see "Where a question the user did not ask for stands among other
+  dialogs" below).
+
+## Where a question the user did not ask for stands among other dialogs
+
+A question the user did not ask for — a folder trust prompt or a session request — appears above any open dialog and
+takes keyboard focus, including a dialog opening in the same moment, even one that another dialog opens as it mounts
+(**View in Settings** opening Settings, which opens the account settings dialog). An error alert that comes up in the
+same moment is the exception: the alert goes on top and the question waits under it, taking focus once the alert is
+acknowledged.
+
+A dialog that opens later, while the question is up — an error alert among them — goes on top of it and takes keyboard
+focus. The question waits under it, out of reach; moving on to the next waiting question meanwhile does not take focus
+from that dialog. Closing that dialog puts focus back in the question.
+
+When the last waiting question closes and keyboard focus has nowhere to return to — as when the question came in the
+same moment a press without a pointer opened the dialog under it, which never had focus — focus goes where it goes when
+the last error alert is acknowledged with nowhere to return to: into the dialog still open, on the control that dialog
+opens on, else to the selected session's terminal, the sidebar or the rail (see "The error alert" in
+`docs/product/error-alerts.md`). Where focus had a control to return to when the question came, it goes back there.
 
 ## What a confirmation's confirm button names
 

@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 
+import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "./components/regionFocus";
 import { DaemonRequestError } from "./daemon-client";
 import { errorPresentation } from "./errorPresentation";
 import { errorText } from "./errorText";
@@ -55,13 +56,6 @@ const listeners = new Set<() => void>();
 let nextId = 0;
 let queue: readonly QueuedAlert[] = [];
 const notify = () => listeners.forEach((listener) => listener());
-let focusFallback: (() => void) | undefined;
-let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
-const cancelFallback = () => {
-  clearTimeout(fallbackTimer);
-  fallbackTimer = undefined;
-};
-const FOCUS_FALLBACK_DELAY_MS = 400;
 
 /** The failures an alert is about: those it lists, else its one `error`. Where it has none, the alert's message stands
  * for it in `"view"` (it is what the alert shows); in `"report"` its `diagnostic`, if it has one, does instead, the
@@ -104,7 +98,7 @@ export const errorAlerts = {
     const { view, signature } = viewOf(request);
     if (queue.some((item) => item.signature === signature)) return;
     const item = { ...view, id: ++nextId, signature };
-    cancelFallback();
+    cancelFocusAfterModalCloses();
     queue = options.immediate ? [item, ...queue] : [...queue, item];
     notify();
   },
@@ -113,23 +107,7 @@ export const errorAlerts = {
     notify();
     // An alert that came when a dialog closed itself has no control to give focus back to, so it is left on
     // `<body>`: it goes to the window's fallback instead.
-    cancelFallback();
-    if (queue.length === 0) {
-      const fallback = focusFallback;
-      // After the alert's exit transition, whose focus restore would otherwise undo it.
-      fallbackTimer = setTimeout(() => {
-        fallbackTimer = undefined;
-        if (!document.activeElement || document.activeElement === document.body) fallback?.();
-      }, FOCUS_FALLBACK_DELAY_MS);
-    }
-  },
-  /** Where focus goes when acknowledging the last alert leaves it on `<body>`; returns what unregisters it. */
-  setFocusFallback(fallback: () => void): () => void {
-    focusFallback = fallback;
-    return () => {
-      if (focusFallback !== fallback) return;
-      focusFallback = undefined;
-      cancelFallback();
-    };
+    if (queue.length === 0) focusAfterModalCloses();
+    else cancelFocusAfterModalCloses();
   },
 };

@@ -1022,7 +1022,16 @@ where it was; where that is gone, or the dialog under the alert never had focus 
 the press that opened it), focus goes where that dialog's own opening focus goes — never to the page (see "The error
 alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens
 on is marked for this with `openingFocus` (`packages/ui/src/components/regionFocus.ts`), which `Button` and `TextInput`
-set from their `autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself.
+set from their `autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself. A
+pending question (a trust prompt, a session request) that closes with nowhere to return focus to lands the same way.
+
+The alert, and a pending question, stay usable whatever comes up with them. One that comes up in the same moment as
+another modal — a dialog that a dialog opens as it mounts, or the alert and a question together — is on top and holds
+focus, the other waiting under it (an alert over a question). A dialog opened later, while the alert or question is
+up, goes on top of it instead: the alert or question waits under it, out of reach of the pointer, the keyboard and
+assistive technology alike, and closing that dialog returns focus to it. The alert and the question mark themselves
+as a react-aria top layer for the commit they mount in only (`topLayerAtMount` on `Dialog`), which keeps another
+modal mounting in that commit from hiding them and leaves them to be hidden by any modal opened after.
 
 Distinguish failures the user can resolve from unexpected failures. A recoverable failure explains the specific
 remedy, such as freeing disk space, unlocking a session or correcting a folder's access. An unexpected failure
