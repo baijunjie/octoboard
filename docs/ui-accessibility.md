@@ -135,7 +135,7 @@ approved exception by the user's decision (see "Do not change how a HeroUI compo
 
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
-neutral "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
+warning-coloured "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
 (`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table marks
 such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu bar icon's
 quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the menu's appearance,
@@ -144,8 +144,8 @@ its text below AA.
 
 A disabled account is left out of that panel and of the menu bar icon's quota submenus, except the one the selected
 session is running on. That row is drawn like any other, its name, meters and bars unmuted, since the account is in use,
-and a neutral "Disabled" badge after its plan says in words why it is listed; the submenu's heading for it ends in
-"Disabled" after its quota state. Neither carries a colour of its own for the state.
+and a warning-coloured "Disabled" badge after its plan says in words why it is listed; the submenu's heading for it
+ends in "Disabled" after its quota state. The submenu heading carries the state in words only.
 
 A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the
 button's own is covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in

@@ -332,7 +332,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel, accounts at their limit in different windows beside a usable one",
-    description: "The panel floated in on Claude Code's tab lists the default account as a normal row (72% of its session and 75% of its week left), then four accounts that cannot be used and recede: Work (Team), whose session window is spent and whose latest read failed, so its row also says it is out of date; Second, whose weekly window is spent while its session window is untouched; Third and Fourth, whose session windows are spent with 15% and 86% of the week left. A receded row has a neutral \"Limit reached\" badge after the plan badge, its name and headline muted, and neutral grey bars in place of Claude Code's colour; the default account has none of these. In a short window Third and Fourth are reached by scrolling the list.",
+    description: "The panel floated in on Claude Code's tab lists the default account as a normal row (72% of its session and 75% of its week left), then four accounts that cannot be used and recede: Work (Team), whose session window is spent and whose latest read failed, so its row also says it is out of date; Second, whose weekly window is spent while its session window is untouched; Third and Fourth, whose session windows are spent with 15% and 86% of the week left. A receded row has a warning-coloured \"Limit reached\" badge after the plan badge, its name and headline muted, and neutral grey bars in place of Claude Code's colour; the default account has none of these. In a short window Third and Fourth are reached by scrolling the list.",
     state: usedUpMixState,
     steps: [(ui) => ui.hoverPanel(ui.t("rail.quota"), ui.t("rail.quota"))],
   },
@@ -350,7 +350,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel, the selected session runs on a turned-off account",
-    description: "Hub runs on Work, which is turned off, and keeps running: the usage button carries Hub's compact indicator, and the panel on Claude Code's tab still lists Work, with a neutral \"Disabled\" badge after its name, with the default account and Client, which are on. While the pointer is on the button the other two rows are dimmed and Work stands out. Side project, also turned off, has no row.",
+    description: "Hub runs on Work, which is turned off, and keeps running: the usage button carries Hub's compact indicator, and the panel on Claude Code's tab still lists Work, with a warning-coloured \"Disabled\" badge after its name, with the default account and Client, which are on. While the pointer is on the button the other two rows are dimmed and Work stands out. Side project, also turned off, has no row.",
     state: {
       ...turnedOffRunningOwnedState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, account_id: "a-work" } : session])),
@@ -383,7 +383,7 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage panel, the selected session runs on the default account of an agent with every account turned off",
-    description: "Hub runs on Codex's default account, and all of Codex's accounts are turned off. Codex keeps its tab, open beside Claude Code's, and lists the default account alone, with the neutral \"Disabled\" badge after its name: Personal and Automation have no row.",
+    description: "Hub runs on Codex's default account, and all of Codex's accounts are turned off. Codex keeps its tab, open beside Claude Code's, and lists the default account alone, with the warning-coloured \"Disabled\" badge after its name: Personal and Automation have no row.",
     state: {
       ...turnedOffAgentRunningState,
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "codex" } : session])),

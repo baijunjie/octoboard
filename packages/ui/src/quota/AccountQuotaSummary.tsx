@@ -120,8 +120,8 @@ export function AccountNameLine({ name, quota, usedUp = false, disabled = false,
         <div className={`min-w-0 ${usedUp ? "text-app-muted" : ""}`}>{name}</div>
         <QuotaPlan quota={quota} />
       </div>
-      {disabled && <StatusBadge variant="soft">{t("accountChoice.disabled.reason")}</StatusBadge>}
-      {usedUp && showUsedUp && <StatusBadge variant="soft">{t("quota.usedUp")}</StatusBadge>}
+      {disabled && <StatusBadge variant="soft" color="warning">{t("accountChoice.disabled.reason")}</StatusBadge>}
+      {usedUp && showUsedUp && <StatusBadge variant="soft" color="warning">{t("quota.usedUp")}</StatusBadge>}
       {showFailure && <QuotaFailureMark quota={quota} />}
       {showUpdated && <QuotaUpdated quota={quota} />}
     </div>

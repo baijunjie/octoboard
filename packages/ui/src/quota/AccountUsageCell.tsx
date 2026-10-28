@@ -29,7 +29,7 @@ export function AccountUsageCell({ quota, exhausted }: { quota: QuotaReading; ex
     <div className="flex items-center gap-2">
       <AccountUsageBar agent={quota.agent} quota={quota} now={now} className="w-24" edge={false} usedUp={exhausted !== undefined} stale />
       <span className="sr-only">{exhausted ? quotaUsedUpDetail(t, quota, exhausted, now) : usageBarSummary(t, bar, now)}</span>
-      {exhausted && <StatusBadge variant="soft" separated={false} aria-hidden="true" className="whitespace-nowrap">{t("quota.usedUp")}</StatusBadge>}
+      {exhausted && <StatusBadge variant="soft" color="warning" separated={false} aria-hidden="true" className="whitespace-nowrap">{t("quota.usedUp")}</StatusBadge>}
       <QuotaStaleMark quota={quota} />
     </div>
   );

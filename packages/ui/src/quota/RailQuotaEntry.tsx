@@ -402,7 +402,7 @@ function AgentAccountList({ agent, rows, currentAccount, dimOthers, region }: { 
  * translucent ancestor WebKit paints descendants that fade or sit on a GPU layer as blank tiles. The veil is
  * visual only and lets pointer events through. It takes the dimmed text below WCAG AA on purpose, by the user's
  * decision: a de-emphasis cue, lifted when the mouse enters the panel or the panel closes. A turned-off account, which
- * only the selected running session's exception lists, carries a neutral "Disabled" badge. */
+ * only the selected running session's exception lists, carries a warning-coloured "Disabled" badge. */
 function QuotaAccount({ agent, account, name, rowRef, dimmed, disabled }: { agent: Agent; account: string | null; name: React.ReactNode; rowRef?: React.Ref<HTMLDivElement>; dimmed: boolean; disabled: boolean }): React.ReactElement {
   const quota = useAccountQuota(agent, account);
   const now = useNow();
