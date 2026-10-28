@@ -194,11 +194,12 @@ it" in `docs/product/session-terminal.md`).
 - Clicking a row deliberately does not move keyboard focus away from the terminal; a row reached with Tab can be
   activated with Enter or Space.
 - Each row tells assistive technology what its icons show: a session row its title, agent (Claude Code, Codex or Grok
-  Build) and the account it runs under, status, whether it is pinned, and, for a bound project session, the session it
-  reports to — the console session the binding badge shows, or the project session its row is listed under, both in the
-  same wording (see "The binding badge" in `docs/product/sidebar-session-rows.md`); a project row whether it is pinned
-  and, while it carries an activity marker, what that marker means, plus its branch badge's facts (see "The branch
-  badge" in `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or collapsed.
+  Build) and the account it runs under, status, whether it is pinned, and, for a project session with a parent, the
+  session it reports to — the console session the binding badge shows, or the project session its row is listed under,
+  both in the same wording (see "The binding badge" in `docs/product/sidebar-session-rows.md`); a project row whether it
+  is pinned and, while it carries an activity marker, what that marker means, plus its branch badge's facts (see "The
+  branch badge" in `docs/product/project-git-status.md`). A project row also tells it whether it is expanded or
+  collapsed.
 
 ## Selecting a session
 

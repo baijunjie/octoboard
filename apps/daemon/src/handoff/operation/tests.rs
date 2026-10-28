@@ -249,14 +249,20 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
     );
     assert_eq!(fixture.stored("owned").status, SessionStatus::Idle);
 
-    let told = output_containing(&owned, "your owner has changed");
+    let told = output_containing(&owned, "your parent session has changed");
     assert!(told.contains(&receiving.id), "{told}");
     assert!(
-        told.contains("replaces what you were told of your owner"),
+        told.contains("replaces what you were told of your parent session"),
         "{told}"
     );
     let held = fixture.output_of(&receiving.id, "what it held is yours now");
-    for expected in ["`one`", "`two`", "`owned`", "`owned-archived`", "no owner"] {
+    for expected in [
+        "`one`",
+        "`two`",
+        "`owned`",
+        "`owned-archived`",
+        "no parent session",
+    ] {
         assert!(held.contains(expected), "lacks {expected}: {held}");
     }
     assert!(!held.contains("theirs"), "{held}");
@@ -283,7 +289,7 @@ async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_sessio
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(stored.bound_to.as_deref(), Some("hub"));
-    assert!(stored.lead && !stored.has_bound_role());
+    assert!(stored.lead && !stored.is_worker());
     assert_eq!(
         fixture.stored("worker").bound_to.as_deref(),
         Some(receiving.id.as_str())
@@ -299,7 +305,9 @@ async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_sessio
     );
     let held = fixture.output_of(&receiving.id, "what it held is yours now");
     assert!(
-        held.contains("lead session of the console session `hub`"),
+        held.contains(
+            "Your role is coordinator and your parent session is the console session `hub`"
+        ),
         "{held}"
     );
     assert!(
@@ -395,7 +403,7 @@ async fn a_console_session_hands_the_sessions_it_owns_to_the_receiving_console_s
         );
     }
     assert!(fixture.stored("lead").lead);
-    let told = output_containing(&lead, "your owner has changed");
+    let told = output_containing(&lead, "your parent session has changed");
     assert!(told.contains(&receiving.id), "{told}");
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
 }

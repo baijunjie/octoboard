@@ -55,9 +55,9 @@ fn told(delivery: &Result<Option<Delivery>>, who: &str) -> String {
 /// has left.
 fn lost_tools(agent: Agent) -> String {
     format!(
-        "You can no longer start or drive sessions: of Octoboard's tools you now have {}, and a \
-         call of any other is refused. Any pages you pushed to the report panel were withdrawn \
-         with the tools for them.",
+        "Your role is worker. You can no longer start or drive sessions: of Octoboard's tools \
+         you now have {}, and a call of any other is refused. Any pages you pushed to the \
+         report panel were withdrawn with the tools for them.",
         project_tools(agent, true)
     )
 }
@@ -66,8 +66,8 @@ fn lost_tools(agent: Agent) -> String {
 /// names.
 pub(crate) fn owner_from_now_on(agent: Agent, owner: &str) -> String {
     format!(
-        "{owner} is your owner from now on: take work only from it, or from the user typing in \
-         this terminal, and report to it with `{report}`.",
+        "{owner} is your parent session from now on: take work only from it, or from the user \
+         typing in this terminal, and report to it with `{report}`.",
         report = super::qualified_tool_name(agent, "report"),
     )
 }
@@ -109,7 +109,7 @@ pub(crate) async fn tell_now_or_leave(
     match reporting::write_message_off_runtime(state, id, text, WhenBlocked::Queue).await {
         Ok(delivery) => Ok(Some(delivery)),
         Err(err) => {
-            tracing::debug!(session = %id, %err, "telling a session of its owner failed");
+            tracing::debug!(session = %id, %err, "telling a session of its parent session failed");
             match note {
                 Some(note) => state.store.mark_owner_notice_with_note(id, note)?,
                 None => state.store.mark_owner_notice(id)?,
@@ -135,14 +135,14 @@ pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<S
         Some(owner) => sharing::named_session(&owner),
         None => format!("`{owner_id}`"),
     };
-    let tools = if session.has_bound_role() {
+    let tools = if session.is_worker() {
         format!(" {}", lost_tools(session.agent))
     } else {
-        String::new()
+        " Your role is coordinator: you can create and manage child sessions.".to_string()
     };
     Ok(format!(
-        "{NOTICE_PREFIX}: your owner has changed while you were not running. {owner} This \
-         replaces what you were told of your owner when you were started.{tools}",
+        "{NOTICE_PREFIX}: your parent session has changed while you were not running. {owner} \
+         This replaces what you were told of your parent session when you were started.{tools}",
         owner = owner_from_now_on(session.agent, &owner),
     ))
 }
@@ -161,15 +161,17 @@ pub(super) async fn transfer_session(
     let (moved, owner, running) =
         coordinator::transfer_session(state, &session.id, &caller.id, to)?;
 
-    let tools = if !session.has_bound_role() && moved.has_bound_role() {
+    let tools = if !session.is_worker() && moved.is_worker() {
         format!(" {}", lost_tools(moved.agent))
+    } else if moved.is_worker() {
+        " Your role remains worker: you cannot create or manage child sessions.".to_string()
     } else {
-        String::new()
+        " Your role remains coordinator: you can create and manage child sessions.".to_string()
     };
     let to_session = format!(
-        "{NOTICE_PREFIX}: your owner has changed. {from} handed you over to {to}. {owner_now} \
-         This replaces what you were told of your owner when you were started; `{from_id}` no \
-         longer drives you.{tools}",
+        "{NOTICE_PREFIX}: your parent session has changed. {from} handed you over to {to}. \
+         {owner_now} This replaces what you were told of your parent session when you were \
+         started; `{from_id}` no longer drives you.{tools}",
         from = sharing::named_session(caller),
         to = sharing::named_session(&owner),
         owner_now = owner_from_now_on(moved.agent, "It"),
@@ -177,9 +179,9 @@ pub(super) async fn transfer_session(
     );
     let owner_tool = |name: &str| super::qualified_tool_name(owner.agent, name);
     let lead = if moved.lead {
-        " It keeps the sessions it started, which you can read but not drive."
+        " Its role is coordinator. It keeps its child sessions, which you can read but not drive."
     } else {
-        ""
+        " Its role is worker and it cannot manage child sessions."
     };
     let to_owner = format!(
         "{NOTICE_PREFIX}: {from} handed its session `{id}` (\"{title}\"){place} over to \
@@ -207,11 +209,11 @@ pub(super) async fn transfer_session(
         id = moved.id,
         to = sharing::named_session(&owner),
         child = told(&child, "It"),
-        owner = told(&told_owner, "Its new owner"),
+        owner = told(&told_owner, "Its new parent session"),
     );
     if told_owner.is_err() {
         result_note.push_str(&format!(
-            " Tell the new owner of the handover yourself with `{}`.",
+            " Tell the new parent session of the handover yourself with `{}`.",
             super::qualified_tool_name(caller.agent, "send_message")
         ));
     }
@@ -219,6 +221,7 @@ pub(super) async fn transfer_session(
         "session": moved.id,
         "owner": owner.id,
         "owner_kind": owner.role.kind(),
+        "orchestration_role": moved.orchestration_role(),
         "note": result_note,
     }))
 }
@@ -260,10 +263,10 @@ pub(crate) async fn tell_former_owner(
     }
     let text = format!(
         "{NOTICE_PREFIX}: the user released {released} from you. It is no longer yours: it has \
-         no owner now and answers only to the user, so you can no longer instruct, drive or \
-         archive it, and it does not report to you. You can still tell it something with \
-         `{send_message}`, which it weighs rather than obeys. Do not count on it any more, and \
-         treat any work you handed it as left with the user.",
+         no parent session now and answers only to the user, so you can no longer instruct, \
+         drive or archive it, and it does not report to you. You can still tell it something \
+         with `{send_message}`, which it weighs rather than obeys. Do not count on it any more, \
+         and treat any work you handed it as left with the user.",
         released = sharing::named_session(released),
         send_message = super::qualified_tool_name(owner.agent, "send_message"),
     );
@@ -277,20 +280,22 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
     let tool = |name: &str| super::qualified_tool_name(released.agent, name);
     let note = match note {
         Some(note) => format!(
-            " Your former owner left this note:\n\n{note}\n— end of the note —",
+            " Your former parent session left this note:\n\n{note}\n— end of the note —",
             note = sharing::quote(note),
         ),
         None => String::new(),
     };
     format!(
-        "{NOTICE_PREFIX}: you have no owner now. You were released from the session you \
-         reported to, and you are the user's own session: take work only from the user typing in \
-         this terminal, and do not call `{report}`, which is refused for a session with no owner. \
-         This replaces what you were told of your owner when you were started. You can start and \
-         drive sessions of your own with `{new_session}` and the tools that go with it (call \
-         `{get_session}` once with no arguments first, so that your tool list catches up), and \
-         you can still tell your former owner something with `{send_message}`, which it weighs \
-         rather than obeys; of Octoboard's tools you now have {tools}.{note}",
+        "{NOTICE_PREFIX}: you have no parent session now. Your role is coordinator and your \
+         reporting relationship is independent. You were released from the session you reported \
+         to, and you are the user's own session: take work only from the user typing in this \
+         terminal, and do not call `{report}`, which is refused for a session with no parent \
+         session. This replaces what you were told of your parent session when you were \
+         started. You can start and drive sessions of your own with `{new_session}` and the \
+         tools that go with it (call `{get_session}` once with no arguments first, so that your \
+         tool list catches up), and you can still tell your former parent session something \
+         with `{send_message}`, which it weighs rather than obeys; of Octoboard's tools you now \
+         have {tools}.{note}",
         report = tool("report"),
         get_session = tool("get_session"),
         new_session = tool("new_session"),
@@ -324,10 +329,11 @@ pub(super) async fn release_session(
     let delivery = tell_released(state, &released, running, note.as_deref()).await;
     Ok(json!({
         "session": released.id,
+        "orchestration_role": released.orchestration_role(),
         "note": format!(
-            "Released: `{id}` has no owner now and is no longer yours. It is the user's own \
-             session; you no longer instruct or drive it and it does not report to you, though \
-             `{send_message}` can still tell it something. {told}",
+            "Released: `{id}` has no parent session now and is no longer yours. It is the \
+             user's own session; you no longer instruct or drive it and it does not report to \
+             you, though `{send_message}` can still tell it something. {told}",
             id = released.id,
             send_message = super::qualified_tool_name(caller.agent, "send_message"),
             told = told(&delivery, "It"),
@@ -351,8 +357,8 @@ pub(super) async fn bind_to_session(
 
     let first_report = if lead {
         format!(
-            "This project session bound itself to you, as a lead session: it is yours to drive \
-             from now on, and reports to you. It keeps the sessions it started in its own project \
+            "This project coordinator set you as its parent session: it is yours to drive from \
+             now on, and reports to you. It keeps the sessions it started in its own project \
              and drives them itself; you can read those but not drive them.\n\
              \n\
              What it is doing and needs:\n\
@@ -360,8 +366,8 @@ pub(super) async fn bind_to_session(
         )
     } else {
         format!(
-            "This project session bound itself to you: it is yours to drive from now on, and \
-             reports to you.\n\
+            "This project session is now a worker reporting to you: it is yours to drive from \
+             now on, and reports to you.\n\
              \n\
              What it is doing and needs:\n\
              {summary}"
@@ -413,19 +419,20 @@ pub(super) async fn bind_to_session(
         )
     };
     let note = format!(
-        "You are now bound to {owner}{as_lead}. {first} From now on it is your owner: take work \
-         from it, or from the user typing in this terminal, and report to it with `{report}` once \
-         per round of work. This replaces anything your role description says about being \
-         unbound and not calling `{report}`. {what_now} You are bound now, so do not call \
-         `{bind}` again.",
+        "Your role is {role}. You now report to {owner}. {first} It is your parent session: \
+         take work from it, or from the user typing in this terminal, and report to it with \
+         `{report}` once per round of work. This replaces anything your role description says \
+         about being independent and not calling `{report}`. {what_now} You have a parent \
+         session now, so do not call `{bind}` again.",
         owner = sharing::named_session(&owner),
-        as_lead = if lead { ", as its lead session" } else { "" },
+        role = if lead { "coordinator" } else { "worker" },
         report = tool("report"),
         bind = tool("bind_to_session"),
     );
     Ok(json!({
         "owner": owner.id,
         "owner_kind": owner.role.kind(),
+        "orchestration_role": bound.orchestration_role(),
         "note": note,
     }))
 }
@@ -459,6 +466,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result["owner"], "b");
+        assert_eq!(result["orchestration_role"], "worker");
         assert!(result["note"].as_str().unwrap().contains("no longer yours"));
         assert_eq!(
             state
@@ -470,8 +478,8 @@ mod tests {
                 .as_deref(),
             Some("b")
         );
-        let told = output_containing(&of_a, "your owner has changed");
-        assert!(told.contains("your owner has changed"), "{told}");
+        let told = output_containing(&of_a, "your parent session has changed");
+        assert!(told.contains("your parent session has changed"), "{told}");
         let handed = output_containing(&b, "Half of the endpoints");
         assert!(
             handed.contains("> Half of the endpoints are done."),
@@ -491,6 +499,51 @@ mod tests {
                 .contains("bound to another console session, `b`"),
             "{err}"
         );
+    }
+
+    #[tokio::test]
+    async fn an_empty_coordinators_role_follows_binding_and_transfer() {
+        let (state, _dir) = peer_state("coordinator-role-transfer");
+        let _a = running(&state, "a");
+        let _b = running(&state, "b");
+        let _starter = running(&state, "starter");
+        let _loose = running(&state, "loose");
+        let bound = call(
+            &state,
+            "loose",
+            "bind_to_session",
+            &arguments(json!({
+                "owner": "a", "summary": "Ready to coordinate."
+            })),
+        )
+        .await
+        .unwrap();
+        assert_eq!(bound["orchestration_role"], "coordinator");
+        assert!(bound["note"]
+            .as_str()
+            .unwrap()
+            .contains("Your role is coordinator"));
+        for (caller, parent, expected) in [("a", "b", "coordinator"), ("b", "starter", "worker")] {
+            let moved = call(
+                &state,
+                caller,
+                "transfer_session",
+                &arguments(json!({
+                    "session": "loose", "to": parent, "note": "Continue the task."
+                })),
+            )
+            .await
+            .unwrap();
+            assert_eq!(moved["orchestration_role"], expected);
+            let record = call(&state, "loose", "get_session", &Map::new())
+                .await
+                .unwrap();
+            assert_eq!(record["orchestration_role"], expected);
+            assert_eq!(record["owner"], parent);
+            assert_eq!(record["owned_sessions"], 0);
+            let wire = state.wire_session(state.session_record("loose").unwrap());
+            assert_eq!(json!(wire.orchestration_role), expected);
+        }
     }
 
     /// A release unbinds the session and tells it, in a message, that it has no owner and which
@@ -526,6 +579,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(result["session"], "of-a");
+        assert_eq!(result["orchestration_role"], "coordinator");
         let note = result["note"].as_str().unwrap();
         assert!(note.contains("no longer yours"));
         assert!(
@@ -536,15 +590,21 @@ mod tests {
             "{note}"
         );
         let released = state.store.get_session("of-a").unwrap().unwrap();
+        assert_eq!(
+            state.wire_session(released.clone()).orchestration_role,
+            Some(crate::protocol::OrchestrationRole::Coordinator)
+        );
         assert_eq!((released.bound_to, released.lead), (None, false));
-        let told = output_containing(&of_a, "you have no owner now");
+        let told = output_containing(&of_a, "you have no parent session now");
         assert!(told.contains("`mcp__octoboard__new_session`"), "{told}");
         assert!(
             told.contains("do not call `mcp__octoboard__report`"),
             "{told}"
         );
         assert!(
-            told.contains("tell your former owner something with `mcp__octoboard__send_message`"),
+            told.contains(
+                "tell your former parent session something with `mcp__octoboard__send_message`"
+            ),
             "{told}"
         );
         assert!(
@@ -552,7 +612,7 @@ mod tests {
             "{told}"
         );
         // A blank note adds nothing, and the owner that released it is not told what it did.
-        assert!(!told.contains("former owner left"), "{told}");
+        assert!(!told.contains("former parent session left"), "{told}");
         assert!(!heard_after_marker(&state, &a).contains("released"));
 
         let err = call(
@@ -601,8 +661,11 @@ mod tests {
         .await
         .unwrap();
         let told = output_containing(&released, "Then stop.");
-        assert!(told.contains("you have no owner now"), "{told}");
-        assert!(told.contains("Your former owner left this note:"), "{told}");
+        assert!(told.contains("you have no parent session now"), "{told}");
+        assert!(
+            told.contains("Your former parent session left this note:"),
+            "{told}"
+        );
         assert!(told.contains("> Finish the retries."), "{told}");
         assert!(told.contains("> Then stop."), "{told}");
         // Told in the message, so nothing is left owed.
@@ -682,6 +745,7 @@ mod tests {
         )
         .await
         .unwrap();
+        assert_eq!(result["orchestration_role"], "worker");
         let note = result["note"].as_str().unwrap();
         assert!(
             note.contains("can no longer start or drive sessions"),

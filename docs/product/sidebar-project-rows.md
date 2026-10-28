@@ -92,11 +92,12 @@ sessions yet; the whole row is a button that opens the new-session dialog for th
 does (see "Empty rows" in `docs/product/sidebar.md`). With no agent both added and installed, the row's **+** is
 disabled and the empty row is plain text.
 
-A session **bound to another of the project's sessions** — one that session started, a lead session's own sessions
-included (see "Lead sessions" in `docs/product/hub-orchestration.md`) — is listed **under that session**, one level
-deeper, inset with the same rounded connectors toward each child row. Unbound sessions and sessions bound to a console
-session stay at the project's own level, so a project's sessions go at most two levels deep. The nesting has no fold
-control of its own: the sessions under an owner fold away with their project, like every other session row.
+A session **bound to another of the project's sessions** — one that session started, a coordinator's own sessions
+included (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`) — is listed **under that
+session**, one level deeper, inset with the same rounded connectors toward each child row. Independent project
+coordinators and sessions bound to a console session stay at the project's own level, so a project's sessions go at most
+two levels deep. The nesting has no fold control of its own: the sessions under an owner fold away with their project,
+like every other session row.
 
 ## Opening the system file manager
 

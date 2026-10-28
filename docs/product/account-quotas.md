@@ -446,7 +446,7 @@ seconds:
 Each reading runs the agent's CLI, which is why a session's request is limited per account rather than left to the
 caller: the tool's description tells the agent to ask only when a reading is too old to decide on.
 
-**A bound session is told to report a low quota.** The role description of a session bound to an owner tells it that
+**A worker is told to report a low quota.** The worker's role description tells it that
 its account's quota can run out while it works: to find the account it runs on with `get_session` (no `session`), look
 it up in `get_account_quotas` — where an account the user turned off, possibly its own, is not listed — and, when that
 shows it running low, say so in a `report` with the status `needs_decision`, naming the account and what is left,

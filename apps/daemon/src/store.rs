@@ -1582,7 +1582,7 @@ impl Store {
     }
 
     /// Stores `page` unless its session has the role of a bound session by now (it is bound and
-    /// not a lead session, see [`Session::has_bound_role`]), checked in the same statement so that
+    /// not a lead session, see [`Session::is_worker`]), checked in the same statement so that
     /// a binding written meanwhile cannot leave a page behind it. Returns whether it was stored.
     pub fn insert_page_unless_bound(&self, page: &Page) -> Result<bool> {
         let inserted = self.lock().execute(
@@ -1683,7 +1683,7 @@ impl Store {
     }
 
     /// The ids of the sessions that have a page and the role of a bound session (bound and not a
-    /// lead session, see [`Session::has_bound_role`]), whose pages no tool of theirs can list.
+    /// lead session, see [`Session::is_worker`]), whose pages no tool of theirs can list.
     pub fn session_ids_with_pages_and_bound_role(&self) -> Result<Vec<String>> {
         let conn = self.lock();
         let mut stmt = conn.prepare(
@@ -2907,6 +2907,7 @@ fn read_session(row: &Row<'_>) -> rusqlite::Result<Session> {
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
+        orchestration_role: None,
         has_conversation: row.get(10)?,
         bound_to: row.get(11)?,
         colour: enum_from_row_opt::<ConsoleSessionColour>(row, 12)?,
@@ -3153,6 +3154,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
+            orchestration_role: None,
             context: None,
             observed_model: None,
             observed_effort: None,

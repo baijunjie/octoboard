@@ -632,6 +632,13 @@ pub struct BackgroundTask {
     pub description: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OrchestrationRole {
+    Coordinator,
+    Worker,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -641,6 +648,10 @@ pub struct Session {
     pub project_id: Option<String>,
     pub host_id: String,
     pub role: Role,
+    /// Derived capability, independent of the parent session in `bound_to`. Never stored; filled
+    /// in by `AppState::wire_session`. Authorization derives it from the stored binding instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orchestration_role: Option<OrchestrationRole>,
     pub origin: Origin,
     pub title: String,
     /// Last title emitted by the terminal, retained when its process ends. The store keeps it as
@@ -688,26 +699,17 @@ pub struct Session {
     /// and never typed into is the common case of that. A resume therefore starts a fresh
     /// conversation rather than failing.
     pub has_conversation: bool,
-    /// The session this session is bound to — its owner, which it reports to — or `None` for one
-    /// with no owner, which the user owns. The owner is a console session of the same console, or
-    /// a project session of the same project that can own sessions (see [`Self::has_bound_role`]),
-    /// so orchestration is at most two levels deep. Set when the session is created, and changed
-    /// afterwards only by the session binding itself to an owner
-    /// (`crate::coordinator::bind_session`) or by its owner handing it to another
-    /// (`crate::coordinator::transfer_session`), and cleared when its owner or the user releases it
-    /// (`crate::coordinator::release_session`). A console session is never bound, so this is
-    /// always `None` for one of those. Reports are routed by this field
-    /// (`crate::reporting::deliver_report`): a binding names who to report to directly, rather
-    /// than asking whether the console happens to have one console session to find by lookup.
+    /// The parent this session reports to, or `None` for an independent session. A parent is a
+    /// console session of the same console or a coordinator of the same project. The hierarchy
+    /// has at most two reporting edges. Binding and transfer set this id; release clears it.
+    /// Console sessions have no parent. Reports route directly by this id, since a console can
+    /// have several console sessions. The storage and wire field retain their existing name.
     pub bound_to: Option<String>,
-    /// Whether this is a lead session: a project session bound to a console session that can still
-    /// own sessions of its own project, having been unbound when it was opened and bound only
-    /// afterwards. It keeps the tools of an unbound project session, and reports to its console
-    /// session. Stored rather than worked out from whether it owns sessions, because a lead
-    /// session that has started none yet, or whose sessions have all been deleted, is still one.
-    /// Set by binding to a console session, kept by a transfer to another console session, and
-    /// cleared by a transfer to a project session, which leaves it unable to own any. Daemon-only:
-    /// not part of the record clients are sent.
+    /// Legacy stored flag preserving coordinator capability under a console parent, including
+    /// when the session has no children. Binding an independent coordinator to a console sets
+    /// it; transfer to another console preserves it; transfer to a project or release clears it.
+    /// Sessions created with a parent start as workers. This flag is not sent to clients;
+    /// callers use `orchestration_role()` for capability and `bound_to` for reporting.
     #[serde(skip)]
     pub lead: bool,
     /// A console session's badge colour, assigned on creation and changed afterwards only by
@@ -755,12 +757,18 @@ pub struct Session {
 }
 
 impl Session {
-    /// Whether this session has the role of a session bound to an owner: it reports, and can own
-    /// no session of its own, so it is offered the bound project session's tools. A lead session
-    /// is bound and does not have it. It follows the binding as it stands, so it can change while
-    /// the session runs: binding to a project session, or being handed to one, gives it.
-    pub fn has_bound_role(&self) -> bool {
-        self.bound_to.is_some() && !self.lead
+    /// Capability follows stored state, never the wire-only role field. A parent does not imply
+    /// worker capability: the legacy `lead` flag preserves a coordinator under a console parent.
+    pub fn orchestration_role(&self) -> OrchestrationRole {
+        if self.bound_to.is_some() && !self.lead {
+            OrchestrationRole::Worker
+        } else {
+            OrchestrationRole::Coordinator
+        }
+    }
+
+    pub fn is_worker(&self) -> bool {
+        self.orchestration_role() == OrchestrationRole::Worker
     }
 }
 

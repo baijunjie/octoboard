@@ -107,7 +107,7 @@ conversation. In the daemon protocol, `open_session` takes the ID as `resume_age
 absent, together with the session's `agent` and `account`; the dialog sends the account it found, `null` for the default
 account.
 
-- **A resumed session is a plain, unbound project session.** `open_session` refuses a request that names both a
+- **A resumed session is a plain, independent project session.** `open_session` refuses a request that names both a
   conversation to resume and a session to report to (`conflicting_fields`).
 - **The ID must be a UUID.** `open_session` takes any spelling of a UUID, trimmed, and keeps it lowercase and
   hyphenated; anything else is refused (`resume_id_invalid`).

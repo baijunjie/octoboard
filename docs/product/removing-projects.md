@@ -22,9 +22,9 @@ Removing a project asks for confirmation. **Sessions of the project that are sti
   session's process the way archiving does (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`), then removes the project with all its sessions and the last output
   Octoboard kept for each. Sessions bound to another session of the project are ended before the session they are bound
-  to, the deepest level first, so ending that one is never refused over them. A lead session's console session belongs
-  to no project and is left as it is; the lead session's binding to it goes with the lead session's record (see "Lead
-  sessions" in `docs/product/hub-orchestration.md`).
+  to, the deepest level first, so ending that one is never refused over them. A coordinator's console session belongs to
+  no project and is left as it is; the coordinator's binding to it goes with the coordinator's record (see "Coordinators
+  with a parent session" in `docs/product/hub-orchestration.md`).
 
 The confirmation also carries an option to **also move the project folder to the Trash**, unticked each time the
 confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it can be

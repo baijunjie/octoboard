@@ -58,7 +58,7 @@ pub(crate) use pages::{withdraw_pages, withdraw_stray_pages};
 /// spawned.
 pub const SERVER_KEY: &str = "octoboard";
 
-/// Who a session with the role of a bound one reports to at launch, as far as what the session is
+/// Who a worker reports to at launch, as far as what the session is
 /// told depends on it. A binding can change while the session runs, and the session is told of
 /// that change in a message (`crate::mcp::bindings`), or, when it binds itself, in the call's
 /// result; its role text, recorded once by some agents, is written so that it still holds
@@ -66,7 +66,7 @@ pub const SERVER_KEY: &str = "octoboard";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Owner {
     Console,
-    /// A project session that is unbound or a lead session, named by Octoboard's id for it: a
+    /// A project coordinator, named by Octoboard's id for it: a
     /// title can be renamed after the text naming it has been recorded for good.
     Project {
         session_id: String,
@@ -83,21 +83,18 @@ pub struct ToolDef {
     pub schema: fn() -> Value,
 }
 
-/// The tools a session of this role may call. Nothing else is announced to it, so a bound project
-/// session cannot start or archive sessions and the console session cannot report to itself.
+/// The tools a session may call, by session kind and orchestration capability. Nothing else is
+/// announced to it: workers cannot manage child sessions, and console sessions cannot report.
 ///
-/// `bound` says whether the session has the role of a bound one (`Session::has_bound_role`): it
-/// reports to another session and owns none. A lead session, bound to a console session while
-/// keeping sessions of its own, does not, and keeps the unbound set. A console session is never
-/// bound, and it is ignored for one. The flag follows the binding as it stands, so it can change
-/// while a session runs — when it binds itself to a project session, or is handed to one — and the
-/// daemon checks every call against the set as it is then (`exec::call`); the session's MCP child
-/// is told with each answer and tells its agent the list changed (`stdio`).
+/// `bound` is the legacy transport flag for worker capability (`Session::is_worker`), not
+/// the presence of a parent. A project coordinator reporting to a console still has the
+/// coordinator set. The daemon checks the current capability on every call (`exec::call`) and
+/// tells the MCP child when its catalogue changes (`stdio`).
 pub fn tools_for(role: Role, bound: bool) -> &'static [ToolDef] {
     match (role, bound) {
         (Role::Console, _) => CONSOLE_SESSION_TOOLS,
-        (Role::Project, true) => BOUND_PROJECT_SESSION_TOOLS,
-        (Role::Project, false) => UNBOUND_PROJECT_SESSION_TOOLS,
+        (Role::Project, true) => WORKER_PROJECT_SESSION_TOOLS,
+        (Role::Project, false) => COORDINATOR_PROJECT_SESSION_TOOLS,
     }
 }
 
@@ -174,31 +171,35 @@ macro_rules! session_context_field {
 macro_rules! session_record_fields {
     () => {
         "`status` is `starting` (its agent is still launching), `working` (in a turn), \
-         `waiting_user` (needs the user's answer), `idle` (awaiting instructions), `interrupted` \
-         (its process ended) or `archived`; `reopen_session` reopens either when it is yours. \
-         `account` is the account the session runs on, an account's id or `default` for the \
-         agent's default account as `get_account_quotas` lists them, with its `account_name`; \
-         `switch_session_account` refuses the account a session is on already. \
+         `waiting_user` (needs the user's answer), `idle` (awaiting instructions), \
+         `interrupted` (its process ended) or `archived`; `reopen_session` reopens either when \
+         it is yours. `account` is the account the session runs on, an account's id or \
+         `default` for the agent's default account as `get_account_quotas` lists them, with its \
+         `account_name`; `switch_session_account` refuses the account a session is on already. \
          `observed_model` and `observed_effort` are what the agent's records show the session \
          running with, null until reported; `default_effort` is the effort the agent runs that \
          model at by itself, given when the records name the model but no effort. `pinned` is \
          whether the session is pinned (`set_session_pinned`), and `locked` whether the user \
          locked it, which archiving refuses. `branches` names the git branches the session is \
          responsible for; `handover_branches`, and the `branches` of `new_session` and \
-         `request_session`, need the caller to be responsible for each, and `get_session_branches` \
-         gives each one's worktree. `display_title` is the name the user's session list shows (the \
-         agent's current task before `title`), `agent_session_id` the agent's own id of the \
-         conversation (null until reported), which `request_resume_session` takes as its \
-         `conversation`, and only when the user asked for that conversation, `origin` is `console` \
-         for a session started with `new_session`, `user` for the user's own and for one opened \
-         through `request_session` or `request_resume_session`, and a handoff's replacement copies \
-         the original's, and `has_conversation` says a turn was taken, not that the agent still \
-         holds the record: a `reopen_session` that finds it gone is refused (`resumable` in \
-         `get_session`, and in `list_archived` with `check_resumable`, tells beforehand). `model` \
-         and `effort`, when present, are the session's own choices, `null` leaving them to the \
-         agent's default; absent, it follows its project's (else console's) setting. `lead` \
-         marks a lead session, and `owned_sessions` counts the sessions bound to it in any \
-         status, archived ones included, which is what decides whom it can be transferred to. "
+         `request_session`, need the caller to be responsible for each, and \
+         `get_session_branches` gives each one's worktree. `display_title` is the name the \
+         user's session list shows (the agent's current task before `title`), \
+         `agent_session_id` the agent's own id of the conversation (null until reported), which \
+         `request_resume_session` takes as its `conversation`, and only when the user asked for \
+         that conversation, `origin` is `console` for a session started with `new_session`, \
+         `user` for the user's own and for one opened through `request_session` or \
+         `request_resume_session`, and a handoff's replacement copies the original's, and \
+         `has_conversation` says a turn was taken, not that the agent still holds the record: a \
+         `reopen_session` that finds it gone is refused (`resumable` in `get_session`, and in \
+         `list_archived` with `check_resumable`, tells beforehand). `model` and `effort`, when \
+         present, are the session's own choices, `null` leaving them to the agent's default; \
+         absent, it follows its project's (else console's) setting. `orchestration_role` is \
+         `coordinator` (can manage child sessions) or `worker` (cannot); `owner` is the parent \
+         session, null when independent, and `owner_kind` its kind. A coordinator may have a \
+         parent and no child sessions. `lead` is the compatibility flag for a project \
+         coordinator with a console parent; `owned_sessions` counts child sessions in any \
+         status, archived ones included, which is what decides whom it can be transferred to."
     };
 }
 
@@ -649,22 +650,23 @@ const INTERRUPT_SESSION: ToolDef = ToolDef {
 
 const ARCHIVE_SESSION: ToolDef = ToolDef {
     name: "archive_session",
-    description: "End a session's process and archive it. Use it to wrap a session up explicitly; \
-                  a session that finishes cleanly with nothing left open is archived without being \
-                  asked. Refused for a session that is not yours (`yours: false`): it is somebody \
-                  else's, to be left alone, and for a session that is `locked` (see \
-                  `get_session`). The git branches the sessions archived created, and the linked \
-                  worktrees that have them checked out, are removed once their processes have \
-                  ended, wherever git can do it without force; `branches_left` in the answer names \
-                  any that stay, and why (`archive` in `get_session_branches` says so beforehand, \
-                  for each branch). With `keep` nothing is removed and nothing is waited \
-                  for: they stay bound to their sessions and come back with them when those are \
-                  reopened (a session under a lead session is reopened by its lead), the answer \
-                  carries `branches_kept: true`, and its `note` names the branches of the sessions \
-                  archived with it, a lead session's own (`get_session_branches` lists the \
-                  branches of the session itself). To move them to a session of yours \
-                  now, use `handover_branches` with `from` the session you archived; the branches \
-                  of the sessions archived with it are not yours to name as `from`, so \
+    description: "End a session's process and archive it. Use it to wrap a session up \
+                  explicitly; a session that finishes cleanly with nothing left open is \
+                  archived without being asked. Refused for a session that is not yours \
+                  (`yours: false`): it is somebody else's, to be left alone, and for a session \
+                  that is `locked` (see `get_session`). The git branches the sessions archived \
+                  created, and the linked worktrees that have them checked out, are removed \
+                  once their processes have ended, wherever git can do it without force; \
+                  `branches_left` in the answer names any that stay, and why (`archive` in \
+                  `get_session_branches` says so beforehand, for each branch). With `keep` \
+                  nothing is removed and nothing is waited for: they stay bound to their \
+                  sessions and come back with them when those are reopened (a coordinator's \
+                  child session is reopened by that coordinator), the answer carries \
+                  `branches_kept: true`, and its `note` names the branches of the sessions \
+                  archived with it, a coordinator's child sessions (`get_session_branches` \
+                  lists the branches of the session itself). To move them to a session of yours \
+                  now, use `handover_branches` with `from` the session you archived; the \
+                  branches of the sessions archived with it are not yours to name as `from`, so \
                   `reopen_session` the session you archived with a `text` asking it to \
                   `handover_branches` them from each of those to itself, then hand them on with \
                   `from` set to it once it is idle.",
@@ -687,18 +689,18 @@ const ARCHIVE_SESSION: ToolDef = ToolDef {
 const ARCHIVE_SELF: ToolDef = ToolDef {
     name: "archive_self",
     description: "End this session's own process and archive it, once its work is finished. \
-                  Meant for a session that reports to nobody; one that reports to an owner (a \
-                  lead session) wraps up with `report` instead and is refused here. Refused \
-                  while any session under this one is not archived, running or interrupted: an \
-                  owner archives its sessions once their tasks are done, so an unarchived one \
-                  means its task is not finished. Finish it and archive it with \
-                  `archive_session` first; for one bound to a lead session, wait for the lead \
-                  session to finish it or archive the lead session with `archive_session`. \
-                  Refused while this session or a session under it is locked. The call is \
-                  answered before the process ends. The git branches this session created, and \
-                  the linked worktrees that have them checked out, are removed once it has ended, \
-                  wherever git can do it without force; `branches_left` in the answer names any \
-                  that will stay, and why.",
+                  Meant for a session that reports to nobody; one that reports to a parent \
+                  (worker or coordinator) wraps up with `report` instead and is refused here. \
+                  Refused while any session under this one is not archived, running or \
+                  interrupted: an owner archives its sessions once their tasks are done, so an \
+                  unarchived one means its task is not finished. Finish it and archive it with \
+                  `archive_session` first; for a coordinator's child, wait for that coordinator \
+                  to finish it or archive the coordinator with `archive_session`. Refused while \
+                  this session or a session under it is locked. The call is answered before the \
+                  process ends. The git branches this session created, and the linked worktrees \
+                  that have them checked out, are removed once it has ended, wherever git can \
+                  do it without force; `branches_left` in the answer names any that will stay, \
+                  and why.",
     schema: || object_schema(json!({}), &[]),
 };
 
@@ -959,16 +961,17 @@ const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
 
 const REPORT: ToolDef = ToolDef {
     name: "report",
-    description: "Report the round of work back to your owner, the session this one is bound to: \
-                  a console session or a project session. `summary` is natural language; `status` \
-                  and `open_items` are what your owner acts on. An owner that is interrupted, \
-                  with no process running, has the report kept and delivered once it is resumed; \
-                  an archived owner takes none, and the report is refused. With `done` and no open \
-                  items the session is archived once the report is delivered or kept, and the git \
-                  branches it created, with the linked worktrees that have them checked out, are \
-                  removed once it has ended wherever git can do it without force (the answer names \
-                  any that will stay); anything else leaves it running and awaiting instructions. \
-                  Refused while this session is unbound: nobody owns it but the user.",
+    description: "Report the round of work to your parent session, whether you are a worker or \
+                  a coordinator. The parent is a console session or project coordinator. \
+                  `summary` is natural language; `status` and `open_items` are what the parent \
+                  acts on. An interrupted parent with no process has the report kept until it \
+                  resumes; an archived parent takes none, and the report is refused. With \
+                  `done` and no open items the session is archived once the report is delivered \
+                  or kept, and the git branches it created, with the linked worktrees that have \
+                  them checked out, are removed once it has ended wherever git can do it \
+                  without force (the answer names any that will stay); anything else leaves it \
+                  running and awaiting instructions. Refused while this session is independent: \
+                  it answers directly to the user.",
     schema: || {
         object_schema(
             json!({
@@ -1358,32 +1361,33 @@ const GET_SESSION: ToolDef = ToolDef {
 const LIST_PROJECTS: ToolDef = ToolDef {
     name: "list_projects",
     description: concat!(
-        "List the projects of this session's console (or another console's, see `console`): name, \
-         host, directory, source, remote URL (credentials removed), pin, the tags and the \
-         description (what the project is for) the user gave each, the settings (`default_agent`, \
-         `accounts`, `launch`: each agent's model and reasoning effort, as stored), `effective` \
-         (what they resolve to under the console), the `git_workflow` settings (the project's own \
-         `override`, `null` following the application-wide value, and the `effective` values), \
-         whether the user has `trust_consent`ed to Octoboard pressing the agent's folder-trust \
-         confirmation (read-only), its `git_status`, and the sessions currently running in each — \
-         every session of the console, whichever session owns it. Each carries `owner`, the \
-         session it reports to, `owner_kind` (a `console` or a `project` session) and `yours`; a \
-         project session with `owner: null` is unbound, which the user opened themselves and kept \
-         outside the orchestration. A session with `yours: false` is not this caller's to drive — \
-         it is unbound, or reports to a different session — leave it alone. An idle session with a \
-         non-empty `background_tasks` takes messages like any idle session but still has work \
-         running in the background. A non-null `writes_held` says why messages for a running \
-         session are queued rather than written into it, whatever its `status` reads; \
-         `queued_messages` counts them, and the messages kept for an interrupted session to \
-         take when it is resumed (shared information, and the reports and notices for an owner). \
-         With `console` naming another console (`list_consoles` lists them), only what is \
-         needed to target a project of it with `request_session` or `request_resume_session` is \
-         returned: each project's id (`project`), name, description and tags, and none of its \
-         sessions or settings. `project` narrows the list to one \
-         project. With `refresh` the git status of the projects listed is checked against their \
-         remotes first, as the application's own refresh does, so you need not run git for it; the \
-         answer then carries `git_refresh`, whose `finished` is false, with the `unfinished` \
-         projects, when a check had not finished after 30 seconds. ",
+        "List the projects of this session's console (or another console's, see `console`): \
+         name, host, directory, source, remote URL (credentials removed), pin, the tags and the \
+         description (what the project is for) the user gave each, the settings \
+         (`default_agent`, `accounts`, `launch`: each agent's model and reasoning effort, as \
+         stored), `effective` (what they resolve to under the console), the `git_workflow` \
+         settings (the project's own `override`, `null` following the application-wide value, \
+         and the `effective` values), whether the user has `trust_consent`ed to Octoboard \
+         pressing the agent's folder-trust confirmation (read-only), its `git_status`, and the \
+         sessions currently running in each — every session of the console, whichever session \
+         owns it. Each carries `owner`, the session it reports to, `owner_kind` (a `console` or \
+         a `project` session) and `yours`; a project session with `owner: null` is independent, \
+         which the user opened themselves and kept outside the orchestration. A session with \
+         `yours: false` is not this caller's to drive — it is independent, or reports to a \
+         different parent session — leave it alone. An idle session with a non-empty \
+         `background_tasks` takes messages like any idle session but still has work running in \
+         the background. A non-null `writes_held` says why messages for a running session are \
+         queued rather than written into it, whatever its `status` reads; `queued_messages` \
+         counts them, and the messages kept for an interrupted session to take when it is \
+         resumed (shared information, and the reports and notices for an owner). With `console` \
+         naming another console (`list_consoles` lists them), only what is needed to target a \
+         project of it with `request_session` or `request_resume_session` is returned: each \
+         project's id (`project`), name, description and tags, and none of its sessions or \
+         settings. `project` narrows the list to one project. With `refresh` the git status of \
+         the projects listed is checked against their remotes first, as the application's own \
+         refresh does, so you need not run git for it; the answer then carries `git_refresh`, \
+         whose `finished` is false, with the `unfinished` projects, when a check had not \
+         finished after 30 seconds.",
         git_status_field!(),
         " ",
         session_record_fields!(),
@@ -1754,16 +1758,16 @@ const GET_PROJECT: ToolDef = ToolDef {
 /// binding keeps are checked as for any binding.
 const TRANSFER_SESSION: ToolDef = ToolDef {
     name: "transfer_session",
-    description: "Hand one of your sessions (`yours: true`) to another owner, to pass its task \
-                  over: from then on it reports to that owner, which drives it, and it is no \
-                  longer yours. Needs no approval. The new owner is a console session of this \
-                  console, or a project session of the session's own project that can own \
-                  sessions (unbound, or bound to a console session while keeping sessions of its \
-                  own); a session that has sessions of its own can go only to a console session. \
-                  The new owner must be running. The session is told who its owner now is, when it \
-                  next starts if it is not running, and the new owner is sent `note`. A lead \
-                  session handed to a project session loses `show_page` and the other tools \
-                  for the report panel, and every page it pushed is withdrawn.",
+    description: "Hand one of your child sessions (`yours: true`) to another parent session, to \
+                  pass its task over: from then on it reports to that parent, which drives it, and \
+                  it is no longer yours. Needs no approval. The new parent is a console session of \
+                  this console, or a coordinator of the session's own project. A coordinator with \
+                  child sessions, archived ones included, can go only to a console session. The \
+                  new parent session must be running. The session is told who its parent session \
+                  now is, when it next starts if it is not running, and the new parent session is \
+                  sent `note`. A coordinator handed to a project session becomes a worker and \
+                  loses `show_page` and the other tools for the report panel, and every page it \
+                  pushed is withdrawn.",
     schema: || {
         object_schema(
             json!({
@@ -1771,11 +1775,11 @@ const TRANSFER_SESSION: ToolDef = ToolDef {
                     "type": "string",
                     "description": "The id of the session of yours to hand over.",
                 },
-                "to": { "type": "string", "description": "The new owner's session id." },
+                "to": { "type": "string", "description": "The new parent session's session id." },
                 "note": {
                     "type": "string",
-                    "description": "The handover, in natural language, for the new owner: what \
-                                    the session is doing, where it stands and what is left.",
+                    "description": "The handover, in natural language, for the new parent session: \
+                                    what the session is doing, where it stands and what is left.",
                 },
             }),
             &["session", "to", "note"],
@@ -1787,16 +1791,17 @@ const TRANSFER_SESSION: ToolDef = ToolDef {
 /// sessions go, without the user: the session is its to release, and becomes the user's own.
 const RELEASE_SESSION: ToolDef = ToolDef {
     name: "release_session",
-    description: "Release one of your sessions (`yours: true`) from its binding to you, when it \
-                  is not yours to drive any more: it has no owner afterwards and is the user's \
-                  own, taking work only from the user in its terminal. You can no longer \
-                  instruct or drive it, but `send_message` still lets either of you tell the \
-                  other something. Needs no approval. It stops reporting to anyone, becomes an \
-                  ordinary unbound session that can start and drive sessions of its own, and is \
-                  no longer archived with you or by its own `done` report. A lead session keeps \
-                  the sessions it started, and the branches the session is responsible for stay \
-                  with it. A session is told it has no owner now, when it next starts if it is \
-                  not running, which replaces what it was told of its owner when it was \
+    description:
+        "Release one of your sessions (`yours: true`) from its binding to you, when it is \
+                  not yours to drive any more: it has no parent session afterwards and is the \
+                  user's own, taking work only from the user in its terminal. You can no longer \
+                  instruct or drive it, but `send_message` still lets either of you tell the other \
+                  something. Needs no approval. It stops reporting to anyone, becomes an \
+                  independent coordinator that can create and manage child sessions, and is no \
+                  longer archived with you or by its own `done` report. A coordinator keeps the \
+                  sessions it started, and the branches the session is responsible for stay with \
+                  it. A session is told it has no parent session now, when it next starts if it is \
+                  not running, which replaces what it was told of its parent session when it was \
                   started. An optional `note` is passed on to it as your parting words, so say \
                   there what it should know to carry on without you.",
     schema: || {
@@ -1808,10 +1813,10 @@ const RELEASE_SESSION: ToolDef = ToolDef {
                 },
                 "note": {
                     "type": "string",
-                    "description": "Optional. A parting note for the session, passed on as \
-                                    yours when it is told it has no owner now: what it should \
-                                    know to carry on without you. A blank note is ignored, and \
-                                    one over 4000 characters is refused.",
+                    "description": "Optional. A parting note for the session, passed on as yours \
+                                    when it is told it has no parent session now: what it should \
+                                    know to carry on without you. A blank note is ignored, and one \
+                                    over 4000 characters is refused.",
                 },
             }),
             &["session"],
@@ -1823,26 +1828,26 @@ const RELEASE_SESSION: ToolDef = ToolDef {
 /// itself under that owner, and the rules a binding keeps are checked as for any binding.
 const BIND_TO_SESSION: ToolDef = ToolDef {
     name: "bind_to_session",
-    description: "Bind this session, while it is unbound, to an owner and become one of its \
-                  sessions: from then on you report to it with `report` and take work from it. \
-                  Needs no approval. The owner is a console session of this console — you then \
-                  keep the sessions you started and go on driving them — or a project session of \
-                  this project that can own sessions; only a session with no sessions of its own \
-                  may join one of those, and it can no longer start or drive sessions afterwards, \
-                  and loses `show_page` and the other tools for the report panel: every page \
-                  you pushed there is withdrawn when you bind (binding to a console session \
-                  keeps them). The owner must be running, and is sent `summary` as your first \
-                  report. The result says which tools you have from then on. Refused once this \
-                  session is bound. To tell a session something without binding, use \
-                  `send_message`.",
+    description: "Set a parent for this independent coordinator: from then on you report to it \
+                  with `report` and take work from it. Needs no approval. A console parent of this \
+                  console preserves your coordinator role and child sessions. A project \
+                  coordinator of this project can be your parent only if you have no child \
+                  sessions, archived ones included; you become a worker and can no longer start or \
+                  manage child sessions, and lose `show_page` and the other tools for the report \
+                  panel: every page you pushed there is withdrawn when you bind (binding to a \
+                  console session keeps them). The parent session must be running, and is sent \
+                  `summary` as your first report. The result says which tools you have from then \
+                  on. Refused once this session has a parent. To tell a session something without \
+                  changing the reporting relationship, use `send_message`.",
     schema: || {
         object_schema(
             json!({
-                "owner": { "type": "string", "description": "The owner's session id." },
+                "owner": { "type": "string", "description": "The parent session's session id." },
                 "summary": {
                     "type": "string",
-                    "description": "What you are doing and what you need from the owner, in \
-                                    natural language. It reaches the owner as your first report.",
+                    "description": "What you are doing and what you need from the parent session, \
+                                    in natural language. It reaches the parent session as your \
+                                    first report.",
                 },
             }),
             &["owner", "summary"],
@@ -1971,11 +1976,9 @@ const GET_ACCOUNT_QUOTAS: ToolDef = ToolDef {
     },
 };
 
-/// A project session that reports to another session has the one tool it answers through, the
-/// reads every session has, the read of its project, and the two requests the user approves: for
-/// a session with no owner, and for a conversation to be resumed. Its tools are a subset of an
-/// unbound session's.
-const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
+/// Workers report to a parent and cannot manage child sessions. They keep the shared reads,
+/// information sharing, the project-settings read and the session requests the user approves.
+const WORKER_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REPORT,
     GET_SESSION,
     LIST_SESSIONS,
@@ -1995,14 +1998,10 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REQUEST_RESUME_SESSION,
 ];
 
-/// A project session that can own sessions — unbound, or a lead session — drives its own project
-/// the way a console session drives its console's, and what it starts reports back to it.
-/// `report` is announced too, though a call is refused while the session is unbound: the
-/// catalogue does not change when an unbound session binds itself to a console session. For the
-/// same reason `archive_self` is announced to a lead session and refused at the call. It also has
-/// the report panel's three tools, since it is the project session that faces the user; a bound
-/// session reports to its owner and has none.
-const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
+/// Project coordinators manage child sessions in their own project and have report-panel tools.
+/// Their catalogue stays the same with or without a console parent: `report` refuses independent
+/// sessions, and `archive_self` refuses a coordinator with a parent, which finishes with a report.
+const COORDINATOR_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     ToolDef {
         name: "new_session",
         description: "Start a session in this project and hand it a task. It is yours for its \

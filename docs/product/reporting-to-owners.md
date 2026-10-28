@@ -1,6 +1,7 @@
-# Reporting to an owner
+# Reporting to a parent session
 
-A project session bound to an owner (see `docs/product/hub-orchestration.md`) reports a round of work with `report`:
+A project session with a parent reports a round of work with `report`, whether it is a coordinator or a worker
+(see `docs/product/hub-orchestration.md`). The parent is also called the `owner` in the API:
 
 | Argument | Required | Contents |
 |---|---|---|
@@ -8,8 +9,8 @@ A project session bound to an owner (see `docs/product/hub-orchestration.md`) re
 | `status` | yes | One of `done`, `failed`, `needs_decision`. No other value is accepted. |
 | `open_items` | no | Strings naming what is left unfinished. Empty when nothing is. |
 
-The report is written into the session the reporting session is **bound to**, its **owner** — a console session
-or a project session — named by its own binding rather than looked up, since a console may
+The report is written into its **parent session** — a console session or project coordinator — named by the
+reporting relationship rather than looked up, since a console may
 hold several console sessions. It arrives as a user message naming the reporting session's id, its title and project,
 the status, the open items, and then the summary. The reporting session is told that it was delivered, that it was
 accepted and will reach its owner as soon as the owner can take a message, that it was kept for its owner, which is
@@ -21,7 +22,7 @@ note calls the owner a console session or a project session according to which i
 
 Reporting fails, and leaves the session exactly as it was, when:
 
-- the session is unbound, so there is nobody to report to;
+- the session is independent, so there is nobody to report to;
 - its owner is no longer on record;
 - its owner is archived. Nothing is kept for it: the reason names the owner and tells the session to tell the user in
   its terminal what the report says, since the owner will not read it. The binding names the owner by its id and
@@ -37,13 +38,13 @@ Reporting fails, and leaves the session exactly as it was, when:
   the report says rather than report again;
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time;
-- the session is a lead session, the report has `status: done` and no open items, and a session bound to it is not
-  archived, unless a lock blocks automatic archiving (see "Automatic archiving" below). The reason names those
+- the session is a coordinator with a parent, the report has `status: done` and no open items, and a session bound to it
+  is not archived, unless a lock blocks automatic archiving (see "Automatic archiving" below). The reason names those
   sessions. Its other reports go through, and none of them archives it.
 
 ## When a session does not report
 
-**Reporting is not forced.** When a bound session ends a turn without having called `report`, Octoboard delivers
+**Reporting is not forced.** When a reporting session ends a turn without having called `report`, Octoboard delivers
 that turn's last assistant message to its owner as the report instead.
 The message says plainly that the session stopped without reporting and that the status is
 Octoboard's guess rather than its own word. The status is `needs_decision`, or `failed` when the turn
@@ -57,9 +58,9 @@ then working in background (see "Working in background" in `docs/product/session
 The turn in which Claude Code tells the session that work has finished is judged like any other: reported on, unless it
 too ends with work still running.
 
-**No report is synthesised for a lead session's turn while any session bound to it has a process** — running, or being
+**No report is synthesised for a coordinator's turn while any session bound to it has a process** — running, or being
 launched or resumed: it has stopped to wait for its sessions, not stopped working. With none of them running, its turn
-is reported on as any bound session's is.
+is reported on as any reporting session's is.
 
 **No report is synthesised for a turn that was cancelled** — by the user in the terminal, or by its owner's
 `interrupt_session` (see `docs/product/interrupting-turns.md`): the session is back at its prompt, awaiting
@@ -67,7 +68,7 @@ instructions. How a cancel that fires no hook event is recognised is in `docs/pr
 
 Grok Build reports no turn end at all for some turns, and the backstop Octoboard falls back on
 there fires about a minute after the turn ends, so a synthesised report for one of those turns
-arrives that much later. Sessions outside the orchestration are never reported on.
+arrives that much later. Independent sessions are never reported on.
 
 ## Notices to an owner
 
@@ -77,7 +78,7 @@ say what happened. Each is written through the delivery every message takes, que
 is interrupted (see "Reports and notices for an interrupted owner" below). An archived owner, or one with no process
 running for another reason once the wait there is over, is not told, then or later.
 
-- **A session ended on its own.** When the process of a bound session ends without anyone having asked for it — it
+- **A session ended on its own.** When the process of a reporting session ends without anyone having asked for it — it
   crashed, or the user closed it in its terminal — its owner is told that the session ended on its own although nobody
   archived it, interrupted it or moved it to another account, that it is recorded as interrupted and the work it was
   doing stopped with it, and to look at it with `get_session` and relaunch it with `reopen_session` if the work should
@@ -85,7 +86,7 @@ running for another reason once the wait there is over, is not told, then or lat
   process itself, such as an account switch or a change of sharing. A process that ends by itself while such an
   operation holds the session is told all the same, unless that operation started it and reports its outcome (see
   "When the switch fails" in `docs/product/automatic-account-switch.md`).
-- **A session is waiting for the user.** When a bound session comes to wait for the user — at a permission prompt, a
+- **A session is waiting for the user.** When a reporting session comes to wait for the user — at a permission prompt, a
   question, a trust confirmation, a dialog of its agent, Codex's action title or a request of its own, by whichever
   route it is seen — its owner is told that the session is waiting for the user and only they can clear it, not to
   chase it or send it anything to get it going, a message to it being held until they are done, and to carry on with
@@ -104,8 +105,8 @@ running for another reason once the wait there is over, is not told, then or lat
 An owner that is **interrupted** — its process ended without it being archived — has what comes for it about its
 sessions **kept** for its resume, rather than refused or dropped:
 
-- a session's own report, and the first report of a session binding itself to it (see "Binding an unbound session to an
-  owner" in `docs/product/changing-session-owners.md`);
+- a session's own report, and the first report of a session binding itself to it (see "Setting a parent for an
+  independent session" in `docs/product/changing-session-owners.md`);
 - a synthesised report (see "When a session does not report" above);
 - every notice in "Notices to an owner" above;
 - the notice of a handoff of one of its sessions (see "Who is told" in `docs/product/handing-off-sessions.md`) and the
@@ -142,16 +143,16 @@ session" in `docs/product/information-between-sessions.md`).
 - **A report, or a notice in "Notices to an owner" above, that waited for an owner which a handoff archived
   meanwhile** goes to the session that took the owner's place (see `docs/product/handing-off-sessions.md`).
 
-An owner is told this in its role description — a console session in its instruction file, an unbound project session
-and a lead session in their own text: reports and Octoboard's notices about its sessions that come while it is
-interrupted are kept and arrive once it is resumed, each saying when it dates from, so it checks the session with
-`get_session` before acting on one, and the notice that the user released a session from it is not kept.
+An owner is told this in its role description — a console session in its instruction file, a project coordinator in its
+own text: reports and Octoboard's notices about its sessions that come while it is interrupted are kept and arrive once
+it is resumed, each saying when it dates from, so it checks the session with `get_session` before acting on one, and the
+notice that the user released a session from it is not kept.
 
 ## Automatic archiving
 
 Locks follow "Locking a session" in `docs/product/sessions.md`. If the reporting session or any session under it
 is locked, its report is delivered normally, including `done` with no open items, but it is not archived. The
-unfinished-session refusal for a lead session's completion report does not apply in that case. Unlocking does not
+unfinished-session refusal for a coordinator's completion report does not apply in that case. Unlocking does not
 retroactively archive it; a later qualifying report or an explicit archive must do so.
 
 A report with `status: done` and **no** open items, with no lock blocking it, wraps the session up: once the report

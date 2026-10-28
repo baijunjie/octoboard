@@ -368,6 +368,8 @@ export interface PathLinkView {
   path: string;
 }
 
+export type OrchestrationRole = "coordinator" | "worker";
+
 export interface Session {
   id: string;
   agent: Agent;
@@ -376,6 +378,9 @@ export interface Session {
   project_id?: string | null;
   host_id: string;
   role: Role;
+  /** Capability independent of the reporting relationship. Supplied by the daemon; optional for
+   * older records. Console sessions and independent project sessions are coordinators. */
+  orchestration_role?: OrchestrationRole;
   origin: Origin;
   title: string;
   terminal_title?: string | null;
@@ -387,9 +392,9 @@ export interface Session {
    * when none does. */
   switching_account?: boolean;
   has_conversation: boolean;
-  /** The console session this session is bound to, or absent for one outside the orchestration.
-   * Set when the session is created and never changed afterwards; a console session is never
-   * bound, so this is always absent for one of those. Reports are routed by this field. */
+  /** The parent session this session reports to: a console session of the same console or a
+   * coordinator of the same project. Absent or null means independent. Binding, transfer and
+   * release can change it; a console session has no parent. Role is given by orchestration_role. */
   bound_to?: string | null;
   /** A console session's badge colour, assigned on creation and changed afterwards only by
    * `set_session_colour`. Absent for a project session, which carries no colour of its own. */

@@ -37,19 +37,19 @@ safely; its confirmation lists what git refuses, and locked worktrees, with the 
 once, and its agent's process is ended as soon as it comes up. An archived session keeps its pin, if it had one (see
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`).
 
-Besides the user, four things archive a session: its owner, explicitly; a project session's own report saying the
-work is finished with nothing left open (see "Automatic archiving" in `docs/product/reporting-to-owners.md`); a
-console session or unbound project session archiving itself, which it can do only once every session under it is
-archived (see "A session archiving itself" in `docs/product/hub-orchestration.md`); and a handoff to another agent,
-which archives the original once its place has moved (see `docs/product/handing-off-sessions.md`). Each archives that
-one session and nothing else, except that an owner archiving a lead session archives it as an owner, under the rules
-below.
+Besides the user, four things archive a session: its owner, explicitly; a project session's own report saying the work
+is finished with nothing left open (see "Automatic archiving" in `docs/product/reporting-to-owners.md`); a console
+session or independent project session archiving itself, which it can do only once every session under it is archived
+(see "A session archiving itself" in `docs/product/hub-orchestration.md`); and a handoff to another agent, which
+archives the original once its place has moved (see `docs/product/handing-off-sessions.md`). Each archives that one
+session and nothing else, except that an owner archiving a coordinator archives it as an owner, under the
+rules below.
 
-**Archiving an owner — a console session, or a project session that has started sessions — follows its bindings.**
-It reaches every session **under** it: the sessions bound directly to it and, for a console session, those under a
-bound lead session, including descendants of an already archived lead (see "Lead sessions" in
-`docs/product/hub-orchestration.md`). This includes sessions the user opened and later bound to the owner, as well as
-sessions started by the owner.
+**Archiving an owner — a console session, or a project session that has started sessions — follows its bindings.** It
+reaches every session **under** it: the sessions bound directly to it and, for a console session, those under a
+coordinator reporting to it, including descendants of an already archived coordinator (see "Coordinators with a parent
+session" in `docs/product/hub-orchestration.md`). This includes sessions the user opened and later bound to the owner,
+as well as sessions started by the owner.
 
 - **The user's archive confirmation lists every unarchived session under the owner**, with its current status,
   and says that their processes will end and they will be archived together. The list follows the current bindings
@@ -114,11 +114,11 @@ a project session, by its conversation's session ID, with `request_resume_sessio
   a new one.
 - **Reopening a session whose owner is archived reopens its archived owners first, level by level from the topmost
   down**, then the session itself, so what the session reports reaches a running owner: a session bound to an archived
-  lead session whose console session is archived too brings back the console session, then the lead session, then
-  itself. The walk goes up through the owners that are archived and stops at the first that is not; an owner that is
-  only interrupted is not relaunched by this. If an owner cannot be reopened, the whole reopen fails with its reason:
-  the owners already brought back stay reopened, and the rest, the session included, stay as they were. Likewise, if
-  the owners came back and it is the session's own relaunch that then fails, they stay reopened.
+  coordinator whose console session is archived too brings back the console session, then the coordinator
+  with a parent, then itself. The walk goes up through the owners that are archived and stops at the first that is not;
+  an owner that is only interrupted is not relaunched by this. If an owner cannot be reopened, the whole reopen fails
+  with its reason: the owners already brought back stay reopened, and the rest, the session included, stay as they were.
+  Likewise, if the owners came back and it is the session's own relaunch that then fails, they stay reopened.
   - The session and every owner about to be reopened are looked up in their agents' records before the first owner is
     relaunched, so a session refused with `conversation_unresumable` leaves its owners archived too. The session's own
     `codex unarchive` also runs before any owner is relaunched, so its failure leaves the whole group as it was; an

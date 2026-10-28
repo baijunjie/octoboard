@@ -18,10 +18,10 @@ user has turned it on, is switch a session to another account of the same agent 
 
 ## What can be handed off
 
-A project session or a console session, of any role — unbound, lead or bound — can be handed off while it is waiting for
-instructions, waiting for the user or interrupted. One working in background counts as waiting for instructions: it can
-be handed off, and the work it left running in the background ends with its process (see "Working in background" in
-`docs/product/session-statuses.md`). A handoff is refused, with nothing changed, when:
+A console session or a project session, of either role and with any reporting relationship, can be handed off while it
+is waiting for instructions, waiting for the user or interrupted. One working in background counts as waiting for
+instructions: it can be handed off, and the work it left running in the background ends with its process (see "Working
+in background" in `docs/product/session-statuses.md`). A handoff is refused, with nothing changed, when:
 
 - the session does not exist (`unknown_session`), is archived (`session_archived`; reopen it first), or is in the middle
   of a turn or still starting (`session_working`: a session still at work goes on writing to its worktree while the
@@ -127,12 +127,11 @@ the dialog cannot send, is shown as an unexpected failure.
 
 ## Handing off from an owner's tool
 
-`handoff_session` is offered to every session that can own sessions — a console session, an unbound project session and
-a lead session — and not to a session with the role of a bound one (see "The console session's tools" and "The unbound
-project session's tools" in `docs/product/hub-orchestration.md`). The user is asked to approve the handoff first (see
-"The user's approval of an owner's handoff" below), unless **Automatically approve handoffs** is on, in which
-case the handoff is made at once (see "Approving requests automatically" in
-`docs/product/session-requests.md`).
+`handoff_session` is offered to every session that can own sessions — a console session or project coordinator — and not
+to a worker (see "The console session's tools" and "Project coordinators' tools" in
+`docs/product/hub-orchestration.md`). The user is asked to approve the handoff first (see "The user's approval of an
+owner's handoff" below), unless **Automatically approve handoffs** is on, in which case the handoff is made at once (see
+"Approving requests automatically" in `docs/product/session-requests.md`).
 
 | Argument | Required | Contents |
 |---|---|---|
@@ -163,14 +162,14 @@ The call returns:
 
 Refused before the user is asked, with the reason in prose (as a tool error) and nothing changed:
 
-- a session that is not the caller's — an unbound one, one bound to another session, a console session, or the caller
-  itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
+- a session that is not the caller's — an independent one, one bound to another session, a console session, or the
+  caller itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
 - an `agent` other than the three, or an `account` that is not one of `agent`'s;
 - a session that is archived, in the middle of a turn or still starting, or locked, and a receiving agent that is the
   session's own;
 - what opening the receiving session would refuse (see "What can be handed off" above) — an agent that is not available
   or not added, a model or reasoning effort the agent does not offer, a change of sharing running for the receiving
-  account, for a bound session an owner that could not take it — except an account whose quota is used up or that is
+  account, for a reporting session an owner that could not take it — except an account whose quota is used up or that is
   not logged in, which the user can replace in the form.
 
 Refused when the handoff is made — on approval, or at once when the handoff is made without asking — with nothing
@@ -291,9 +290,10 @@ Once it is running, it takes the original's whole place:
   `docs/product/session-titles.md`. This is saved as the receiving session's created name; its own task title is
   independent and, when present, prefixes that name under the same display rules. A later handoff takes the name
   displayed at that time;
-- **the same role and owner**: a bound session is bound to the original's owner from its first launch; a lead session
-  launches as an unbound project session does and is then bound to the original's console session as its lead session
-  (see "Lead sessions" in `docs/product/hub-orchestration.md`); an unbound session stays unbound;
+- **the same role and parent**: a worker reports to the original's parent from its first launch; a coordinator
+  reporting to a console session launches with the independent coordinator description, then has that same console
+  parent set, retaining the coordinator role (see "Coordinators with a parent session" in
+  `docs/product/hub-orchestration.md`); an independent coordinator stays independent;
 - **every session the original owns**, archived ones included, bound to it instead;
 - **the branches the original is responsible for**, which name it as their responsible session from then on;
 - **the original's pin**, when it had one.
@@ -318,11 +318,11 @@ until a session can take them" in `docs/product/message-delivery.md`):
   archived — unless the owner made the handoff itself with `handoff_session`, whose result tells it instead. An
   interrupted owner has the message kept for its resume (see "Reports and notices for an interrupted owner" in
   `docs/product/reporting-to-owners.md`);
-- **the receiving session** is told what it now holds: its owner and how to report to it — for a lead session, also
-  that this replaces what its role description says about being unbound, and how its reports archive it — or that it
-  has no owner and reports to the user; the branches it is now responsible for, each with its target branch where one
-  is recorded (see "Target branches and fork points" in `docs/product/revert-gate.md`), or that they could not be
-  moved and still name the original; and each session it now owns, with its status.
+- **the receiving session** is told what it now holds: its owner and how to report to it — for a coordinator with a
+  parent, also that this replaces what its role description says about being independent, and how its reports archive it
+  — or that it has no owner and reports to the user; the branches it is now responsible for, each with its target branch
+  where one is recorded (see "Target branches and fork points" in `docs/product/revert-gate.md`), or that they could not
+  be moved and still name the original; and each session it now owns, with its status.
 
 An archived owner is told nothing.
 
@@ -360,11 +360,11 @@ Every refusal comes before anything is written or started. After that:
 
 - **Writing the package or starting the receiving session fails** — opening it is refused, or its agent does not come
   up: the package is removed again, and the original, its binding, its branches and its sessions are left as they were.
-- **Anything that fails once the receiving session is running** — the original's owner no longer able to take a lead
-  session when the binding moves, recording the move, or archiving the original — is answered with an error that names
-  the receiving session, which is left running. Where the binding had not moved yet, nothing of the original's moved
-  and it is not archived; where it had, the place stays with the receiving session and the original may be left
-  unarchived.
+- **Anything that fails once the receiving session is running** — the original's owner no longer able to take a
+  coordinator with a parent when the binding moves, recording the move, or archiving the original — is answered with an
+  error that names the receiving session, which is left running. Where the binding had not moved yet, nothing of the
+  original's moved and it is not archived; where it had, the place stays with the receiving session and the original may
+  be left unarchived.
 - **Branches that cannot be moved** do not fail the handoff: they stay with the original, and the receiving session is
   told so.
 

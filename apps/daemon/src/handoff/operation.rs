@@ -155,7 +155,7 @@ pub(crate) fn receiving_request(
         // A bound session's owner is reported to from the first launch. A lead session is bound
         // after the launch instead, for it launches as an unbound one does, with the tools of one.
         bound_to: original
-            .has_bound_role()
+            .is_worker()
             .then(|| original.bound_to.clone())
             .flatten(),
         resume_agent_session_id: None,
@@ -356,8 +356,8 @@ pub(super) async fn tell(
             }
         };
         let text = format!(
-            "{NOTICE_PREFIX}: your owner has changed. {from} was handed off to {to}, which took \
-             its place. {owner_now} This replaces what you were told of your owner when you \
+            "{NOTICE_PREFIX}: your parent session has changed. {from} was handed off to {to}, which took \
+             its place. {owner_now} This replaces what you were told of your parent session when you \
              were started. `{from_id}` no longer drives you; it is archived.",
             from = named_session(original),
             to = named_session(receiving),
@@ -385,7 +385,7 @@ pub(super) async fn tell(
              reports to you from now on: you drive it like any session of yours, with \
              `{instruct_session}`, `{archive_session}` and `{reopen_session}`. The original is \
              archived. The new session read a package built from the original's conversation \
-             and has its branches and its sessions.",
+             and has its branches and its child sessions.",
             from = named_session(original),
             agent = receiving.agent.label(),
             to = named_session(receiving),
@@ -405,24 +405,28 @@ pub(super) async fn tell(
     let mut held = String::new();
     match &owner {
         Some(owner) if receiving.lead => held.push_str(&format!(
-            "\n- You are a lead session of {owner}: it is your owner, so take work only from it, \
-             or from the user typing in this terminal, and report to it with `{report}` once per \
-             round of work. This replaces anything your role description says about being \
-             unbound and not calling `{report}`. `done` with no open items archives you, and is \
+            "\n- Your role is coordinator and your parent session is {owner}: take work only from \
+             it, or from the user typing in this terminal, and report to it with `{report}` once \
+             per round of work. This replaces anything your role description says about being \
+             independent and not calling `{report}`. `done` with no open items archives you, and is \
              refused while a session you started is not archived; `needs_decision` or open items \
-             leave you running. You keep the sessions you own and go on driving them with \
+             leave you running. You keep your child sessions and go on driving them with \
              `{new_session}` and the tools that go with it.",
             owner = named_session(owner),
             report = tool(receiving.agent, "report"),
             new_session = tool(receiving.agent, "new_session"),
         )),
         Some(owner) => held.push_str(&format!(
-            "\n- Your owner is {}: take work only from it, or from the user typing in this \
-             terminal, and report to it with `{}`.",
+            "\n- Your role is worker and your parent session is {}: take work only from it, or \
+             from the user typing in this terminal, and report to it with `{}`. You cannot create \
+             or manage child sessions.",
             named_session(owner),
             tool(receiving.agent, "report"),
         )),
-        None => held.push_str("\n- You have no owner: you report to the user."),
+        None => held.push_str(
+            "\n- Your role is coordinator and you work independently: you answer directly to the \
+             user and have no parent session.",
+        ),
     }
     match &moved.branches {
         Ok(branches) if branches.is_empty() => {}
@@ -442,7 +446,7 @@ pub(super) async fn tell(
     }
     for session in &moved.owned {
         held.push_str(&format!(
-            "\n- You own {} ({}).",
+            "\n- Your child session: {} ({}).",
             named_session(session),
             word_of(session.status)
         ));

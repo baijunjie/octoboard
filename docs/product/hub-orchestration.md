@@ -1,8 +1,23 @@
 # Orchestration
 
 Orchestration is one session starting other sessions, handing them work, following them up and taking their reports.
-The session doing it is the **owner** of the sessions bound to it; every session it starts is bound to it and reports
-to it. Three kinds of session can be an owner:
+The session directing another is its **parent session**; the session reporting to it is its **child session**.
+The API also calls the parent the `owner`. An independent session answers directly to the user.
+
+Project sessions have two separate axes: their **role** controls whether they can manage children; their **reporting
+relationship** says whether they answer directly to the user or report to a parent session.
+
+| Role | Reporting relationship | Capabilities |
+|---|---|---|
+| Coordinator | Independent | Works in its project, creates and manages child sessions in that project, and has a report panel. |
+| Coordinator | Reports to a console session | Keeps those capabilities and reports its work to that console session. |
+| Worker | Reports to a console or project session | Works in its project and reports to its parent; cannot create or manage child sessions and has no report panel tools. |
+
+A coordinator does not need to have children. Having a parent alone does not make a session a worker. A worker always
+has a parent; releasing it makes it an independent coordinator. A console session is a separate kind of session, with
+coordination capabilities across its own console's projects.
+
+The sessions that can manage children are:
 
 - A **console session** — a session the user brings a request to; a console may run several of them at once (see
   "Several console sessions per console" below). It works out which of its console's projects a request belongs to,
@@ -21,13 +36,9 @@ to it. Three kinds of session can be an owner:
   it changes no project itself, this rule about work that touches no project can be overridden by the user's console
   session instructions (see "Console session instructions" in `docs/product/consoles.md`). Besides its terminal it has
   one surface of its own for showing the user something — the report panel, described in `docs/product/report-panel.md`.
-- An **unbound project session** — a project session bound to no owner: one the user opened by hand without binding it
-  to a console session, or one started on another session's request (see `docs/product/session-requests.md`). It works
-  in its own project and can also start sessions in that project and drive them (see "The unbound project session's
-  tools" below). Like a console session, it has a report panel for showing the user something (see
-  `docs/product/report-panel.md`).
-- A **lead session** — a project session that was unbound and bound itself to a console session of its console,
-  keeping the sessions it had started and its report panel (see "Lead sessions" below).
+- A **project coordinator** — it works in its own project and can create and manage child sessions there, whether
+  independent or reporting to a console session (see "Project coordinators' tools" and "Coordinators with a parent
+  session" below). It has its own report panel (see `docs/product/report-panel.md`).
 
 Every session can also ask the user to start a session that is nobody's — in any project of any console, or a console
 session — which reports to the user and which the caller does not drive (see `docs/product/session-requests.md`), and
@@ -41,27 +52,25 @@ and deleting an owner follow the same rules whichever kind it is (see "Archiving
 
 Octoboard injects the tools into the session. **What a session reads is the same whatever its kind**: every session
 gets the same read-only tools, with the same scope (see `docs/product/what-every-session-reads.md`). What it can
-change follows its kind. A console session gets the full set of tools that act (see "The console session's tools"
-below); a project session that can own sessions — an unbound one or a lead session — a narrower set, scoped to its own
-project for what it starts and drives (see "The unbound project session's tools" below); and a project session with
-the role of a bound one — bound to an owner and not a lead session — gets one tool back the other way, `report`, and
-cannot start or drive sessions. Every session, whatever its kind, also gets `send_message`, for sharing information with
-every other running session (see `docs/product/information-between-sessions.md`), `request_session` and
-`request_resume_session`; every project session also gets `get_project`, a read-only view of its own project's settings
-(see `docs/product/agent-settings-tools.md`).
-**Which tools a session sees follows from its role, fixed for its lifetime, and from its binding as it stands**, which
-can change while the session runs (see `docs/product/changing-session-owners.md`). A console session cannot report, and
-orchestration is at most two levels deep: a console session, a lead session bound to it, and the lead session's own
-sessions.
+change follows its kind and current role. A console session gets the full set of tools that act (see "The console
+session's tools" below); a project coordinator gets a narrower set, scoped to its own project for what it starts and
+drives (see "Project coordinators' tools" below); a worker gets `report` and cannot create or manage child sessions.
+Every session also gets `send_message`, for sharing information with every other running session (see
+`docs/product/information-between-sessions.md`), `request_session` and `request_resume_session`; every project session
+also gets `get_project`, a read-only view of its own project's settings (see `docs/product/agent-settings-tools.md`).
+
+**Tools follow the current role and reporting relationship.** These can change while the session runs (see
+`docs/product/changing-session-owners.md`). A console session cannot report. The reporting hierarchy has at most two
+edges: a console session, a project coordinator reporting to it, and a worker reporting to that coordinator.
 
 **What no tool does, by design.** No session is offered a tool for any of these:
 
 - **Opening a file or a diff in the window for the user.** Besides the sessions' own terminals, the report panel of a
-  console session, an unbound project session or a lead session is the only place a session shows the user anything.
+  console session or project coordinator is the only place a session shows the user anything.
 - **Deleting a session.** Deleting is destructive and cannot be undone, so it stays with the user (see
   `docs/product/deleting-sessions.md`); an owner archives the sessions it is done with instead.
-- **Unbinding itself.** A bound session cannot release itself from its owner: the binding is the owner's to end, so
-  only its owner or the user can release it (see "Releasing a session from its owner" in
+- **Working independently by itself.** A session with a parent cannot release itself: the binding is the owner's to end,
+  so only its owner or the user can release it (see "Releasing a session from its owner" in
   `docs/product/changing-session-owners.md`).
 - **Locking or unlocking a session.** The lock is the user's protection against archiving or deleting a session, so
   only the user sets or clears it (see "Locking a session" in `docs/product/sessions.md`).
@@ -126,7 +135,7 @@ Besides the reads in `docs/product/what-every-session-reads.md`:
 | `handover_branches` | `branches`, `from?`, `to?` | Moves the responsibility for git branches from one session of the caller's own to another, without the user and without replacing any session. A console session is responsible for no branch, so it names both `from` and `to`. See "Handing branches between sessions of an owner" in `docs/product/branch-responsible-session.md`. |
 | `switch_session_account` | `session`, `account` | Moves one of the caller's sessions to another account of its own agent, keeping its conversation, once the user approves, unless they have chosen to have switches approved without asking. The session comes back awaiting its next step from the caller, unless its `note` says it was sent a prompt to continue a turn the switch cut off or a usage limit had stopped, which the caller does not repeat. See "Switching from an owner's tool" and "Continuing after a switch" in `docs/product/switching-session-accounts.md`. |
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's sessions to another owner, without the user. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
-| `release_session` | `session`, `note?` | Releases one of the caller's sessions from its binding, without the user: it becomes the user's own, unbound session, and is passed the optional `note` as its former owner's parting note. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
+| `release_session` | `session`, `note?` | Releases one of the caller's sessions from its binding, without the user: it becomes the user's own, independent session, and is passed the optional `note` as its former owner's parting note. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | `kind`, `project?`, `console?`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?` | Asks the user to resume a conversation by its id, as the session dialog's Resume conversation tab does; a console session has to name the project. See `docs/product/requests-to-resume-a-conversation.md`. |
 | `send_message` | see `docs/product/information-between-sessions.md` | As for every session. |
@@ -141,15 +150,15 @@ console; an ambiguous name is refused and asks for the id. A project of another 
 
 **Writes are the caller's own.** `instruct_session`, `interrupt_session`, `rename_session`, `set_session_pinned`,
 `archive_session`, `reopen_session`, `handoff_session`, `switch_session_account`, `transfer_session` and
-`release_session` act only on a session bound to the caller; for any other — unbound, bound to another console session
-or to a project session, a console session, or the caller itself — they refuse, with a reason naming who owns it, and
-change nothing. The reason says why it is not the caller's to do — only its owner instructs or drives it, or it is the
-user's — and, unless the session is archived, that the caller can still tell it something with `send_message`, which it
-weighs rather than obeys, adding for a bound session that its owner is sent a copy (see
+`release_session` act only on a session bound to the caller; for any other — independent, bound to another console
+session or to a project session, a console session, or the caller itself — they refuse, with a reason naming who owns
+it, and change nothing. The reason says why it is not the caller's to do — only its owner instructs or drives it, or it
+is the user's — and, unless the session is archived, that the caller can still tell it something with `send_message`,
+which it weighs rather than obeys, adding for a reporting session that its owner is sent a copy (see
 `docs/product/information-between-sessions.md`); for the caller itself it says to say it to the user instead.
-`archive_session` aimed at the caller itself is refused pointing to `archive_self` instead.
-`new_session` always binds the new session to the caller, so a console session cannot start one on another's behalf: it
-can hand one over afterwards with `transfer_session`, or ask the user for one that is nobody's with `request_session`.
+`archive_session` aimed at the caller itself is refused pointing to `archive_self` instead. `new_session` always binds
+the new session to the caller, so a console session cannot start one on another's behalf: it can hand one over
+afterwards with `transfer_session`, or ask the user for one that is nobody's with `request_session`.
 `request_resume_session` can bring back a session that is not the caller's, but only with the user's approval, and it
 stays whoever's it was (see `docs/product/requests-to-resume-a-conversation.md`). The settings tools change only the
 caller's own console, its projects and the application-wide settings (see `docs/product/agent-settings-tools.md`).
@@ -157,13 +166,10 @@ caller's own console, its projects and the application-wide settings (see `docs/
 A refused call comes back to the agent as a **tool error carrying the reason in prose**, not as a
 transport failure — "this session is waiting for the user" is advice the model is meant to act on.
 
-## The unbound project session's tools
+## Project coordinators' tools
 
-A project session that can own sessions — an **unbound project session**, one the user opened by hand without choosing a
-console session under "Report to" (see "The session dialog" in `docs/product/opening-sessions.md`) or one started on
-another session's request (see `docs/product/session-requests.md`), and a **lead session** — can start sessions in its
-own project and drive them, the way a console session drives its console's. Besides the reads in
-`docs/product/what-every-session-reads.md`:
+A project coordinator can create and manage child sessions in its own project, whether independent or reporting to
+a console session. Besides the reads in `docs/product/what-every-session-reads.md`:
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -171,7 +177,7 @@ own project and drive them, the way a console session drives its console's. Besi
 | `instruct_session` | `session`, `text` | As the console session's. |
 | `interrupt_session` | `session` | As the console session's. |
 | `archive_session` | `session`, `keep?` | As the console session's. |
-| `archive_self` | — | As the console session's. Offered to a lead session too, but refused for it: it wraps up with `report` instead (see "A session archiving itself" below). |
+| `archive_self` | — | As the console session's. Offered to a coordinator with a parent too, but refused for it: it wraps up with `report` instead (see "A session archiving itself" below). |
 | `reopen_session` | `session`, `text?`, `model?`, `effort?` | As the console session's. |
 | `rename_session` | `session`, `title` | As the console session's. |
 | `set_session_pinned` | `session`, `pinned` | As the console session's. |
@@ -180,10 +186,10 @@ own project and drive them, the way a console session drives its console's. Besi
 | `switch_session_account` | `session`, `account` | As the console session's. |
 | `transfer_session` | `session`, `to`, `note` | As the console session's. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
 | `release_session` | `session`, `note?` | As the console session's. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
-| `bind_to_session` | `owner`, `summary` | Binds the caller, while it is unbound, to an owner, without the user. Refused for a lead session, which is bound already. See "Binding an unbound session to an owner" in `docs/product/changing-session-owners.md`. |
+| `bind_to_session` | `owner`, `summary` | Binds the caller, while it is independent, to an owner, without the user. Refused for a coordinator with a parent, which is bound already. See "Setting a parent for an independent session" in `docs/product/changing-session-owners.md`. |
 | `request_session` | as the console session's | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
 | `request_resume_session` | `conversation`, `project?`, `title?`, `model?`, `effort?` | As the console session's; `project` defaults to the caller's own. See `docs/product/requests-to-resume-a-conversation.md`. |
-| `report` | as in `docs/product/reporting-to-owners.md` | Offered, but refused while the session is unbound: it has nobody to report to. A lead session's `report` is accepted and goes to its console session (see "Lead sessions" below). |
+| `report` | as in `docs/product/reporting-to-owners.md` | Offered, but refused while the session is independent: it has nobody to report to. A coordinator with a parent can report to that console session (see "Coordinators with a parent session" below). |
 | `send_message` | see `docs/product/information-between-sessions.md` | As for every session. |
 | `get_project` | `refresh?` | Its own project's settings, read-only, as for every project session (see "A project's settings" in `docs/product/agent-settings-tools.md`), optionally with its git status checked first (see "Reading the status from a session" in `docs/product/project-git-status.md`). |
 | `show_page`, `list_pages`, `delete_pages` | as the console session's | As the console session's: it is the project session that faces the user, and its pages show in its own report panel in its project's right pane (see `docs/product/report-panel.md`). |
@@ -194,59 +200,56 @@ It has no `add_project`, and none of the tools that change a setting: `update_pr
 **Writes are the caller's own** — the console session's rule. `instruct_session`, `interrupt_session`, `rename_session`,
 `set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session`, `switch_session_account`,
 `transfer_session` and `release_session` act only on a session bound to the caller, and refuse, with a reason naming who
-owns it, and change nothing, for any other: an unbound session, one bound to a console session or to another project
-session, the caller itself, or a console session. For an unbound project session, `archive_session` aimed at itself is
-refused pointing to `archive_self` instead.
+owns it, and change nothing, for any other: an independent session, one bound to a console session or to another project
+session, the caller itself, or a console session. For an independent project session, `archive_session` aimed at itself
+is refused pointing to `archive_self` instead.
 
-A session a project session starts is bound to it, so it has the role of a bound one: it is offered `report`, the reads
-in `docs/product/what-every-session-reads.md`, `send_message`, `get_project`, `request_session` and
-`request_resume_session`, and cannot start or drive sessions of its own. It has no report panel tools either. It reports
-to the project session that started it exactly as a console session's sessions report to their console session: see
-`docs/product/reporting-to-owners.md`.
+A child session created with `new_session` is a worker: it is offered `report`, the reads in
+`docs/product/what-every-session-reads.md`, `send_message`, `get_project`, `request_session` and
+`request_resume_session`, and cannot create or manage child sessions. It has no report panel tools. It reports to the
+session that started it; see `docs/product/reporting-to-owners.md`.
 
-## Lead sessions
+## Coordinators with a parent session
 
-A **lead session** is a project session bound to a console session of its console that can still own sessions of its own
-project. A session becomes one by binding itself, while unbound, to a running console session with `bind_to_session`
-(see "Binding an unbound session to an owner" in `docs/product/changing-session-owners.md`). One with no console session
-to bind to can first ask the user for one with `request_session`, of kind `console`, and bind to it once it has been
-started (see `docs/product/session-requests.md`). A session that takes a lead session's place in a handoff is one too
-(see `docs/product/handing-off-sessions.md`). A session opened bound to a console session, or started by one, is not a
-lead session: it has the role of a bound one.
+An independent project coordinator can set a running console session of its console as its parent with
+`bind_to_session` (see "Setting a parent for an independent session" in `docs/product/changing-session-owners.md`).
+It keeps its coordinator role, including when it has no child sessions. One without a console session to report to
+can first ask the user for one with `request_session`, of kind `console`, and set it as its parent once started
+(see `docs/product/session-requests.md`). A handoff preserves the role and reporting relationship (see
+`docs/product/handing-off-sessions.md`). A session opened with a console parent in the session dialog, or created
+by that console session with `new_session`, starts as a worker.
 
-- **It keeps its sessions.** The sessions it had started stay bound to it, and it goes on driving them with the
-  unbound project session's tools (see "The unbound project session's tools" above), starting more in its own project
-  as before.
-- **It keeps what it was launched with.** Every launch of it — a resume, a reopen, a switch of account — gives it the
-  unbound project session's role description and tool list, as at its first launch, not those of a session bound to a
-  console session.
-- **It reports to its console session**, as any session bound to one does: its `report` is accepted and delivered
-  there. Its `done` report with no open items is refused while its own sessions are unfinished and automatic archiving
-  is not blocked by a lock (see "Automatic archiving" in `docs/product/reporting-to-owners.md`), and no report is
-  synthesised for it while they run (see `docs/product/reporting-to-owners.md`).
-- **Its console session can hand it on.** Handed to another console session of the console it stays a lead session,
-  keeping its sessions. It can be handed to a project session only while it has no sessions of its own, archived ones
-  included; it then has the role of a bound session and can own none, and the report panel pages it pushed are
-  withdrawn (see "Handing a session to another owner" in `docs/product/changing-session-owners.md`, and "When a session
-  takes the role of a bound one" in `docs/product/report-panel.md`).
-- **It can be released.** Released by its console session or by the user, it is an unbound project session again and
-  keeps its sessions (see "Releasing a session from its owner" in `docs/product/changing-session-owners.md`).
-- **Its sessions stay ordinary bound sessions.** A session bound to a lead session has the role of a bound one and can
-  never be an owner: naming one as the owner of a new session, or binding or handing a session to one, is refused.
-  There is no third level and no cycle.
+- **It keeps its child sessions and report panel.** Existing children continue reporting to it, and it can create
+  more in its own project with "Project coordinators' tools" above.
+- **It keeps its launch description.** Every launch — a resume, a reopen, a switch of account — gives it the
+  independent coordinator's role description and tool list. The result that sets its parent, and later notices of
+  reporting changes, replace the description's statement that it is independent.
+- **It reports to its console parent.** Its `report` is accepted and delivered there. A `done` report with no open
+  items is refused while its children are unfinished and automatic archiving is not blocked by a lock (see
+  "Automatic archiving" in `docs/product/reporting-to-owners.md`). No report is synthesised while a child has a
+  process (see "When a session does not report" in that document).
+- **Its console parent can transfer it.** Transfer to another console session of the same console preserves its
+  role and children. Transfer to a project coordinator is allowed only when it has no children, archived ones
+  included; it becomes a worker, loses the tools for managing children, and its report panel pages are withdrawn
+  (see "Handing a session to another owner" in `docs/product/changing-session-owners.md` and "When a session becomes
+  a worker" in `docs/product/report-panel.md`).
+- **It can be released.** Its console parent or the user can release it. It becomes independent, retaining its
+  coordinator role and children (see "Releasing a session from its owner" in `docs/product/changing-session-owners.md`).
+- **Its children are workers.** They cannot be parents: creating a child under one, or transferring or setting a
+  parent to one, is refused. There is no third reporting edge and no cycle.
 
-A session is **under** an owner when it is bound to it, or bound to a lead session that is bound to it. Archiving,
-reopening and deleting follow the bindings across both levels; see "Archiving, interruption and resuming" in
+A session is **under** a parent when it reports directly to it, or reports to a project coordinator that reports to
+it. Archiving, reopening and deleting follow both reporting edges; see "Archiving, interruption and resuming" in
 `docs/product/archiving-and-resuming-sessions.md` and "Deleting archived sessions" in
 `docs/product/deleting-sessions.md`.
 
-**The console session sees the lead session's sessions but does not drive them.** A lead session's `owner_kind` reads
-`console`; its own sessions read `project`, with the lead session as their `owner`. They appear in the console session's
-`list_projects`, `get_session` and `list_sessions`, not as its own; `instruct_session`, `interrupt_session`,
+**A console session sees a coordinator's children but does not manage them.** The coordinator's `owner_kind` reads
+`console`; its children read `project`, with the coordinator as their `owner`. They appear in the console session's
+`list_projects`, `get_session` and `list_sessions`, with `yours: false`. `instruct_session`, `interrupt_session`,
 `rename_session`, `set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session`,
-`switch_session_account`, `transfer_session` and `release_session` aimed at one are refused, naming the lead session as
-its owner (see "Which sessions an owner drives" below). The lead session itself is bound to the console session and is
-driven by it like any other session of its own.
+`switch_session_account`, `transfer_session` and `release_session` aimed at one are refused, naming the coordinator
+as its parent (see "Which sessions an owner drives" below). The console session manages the coordinator itself as
+its direct child.
 
 ## Handing out a task: the brief
 
@@ -351,31 +354,31 @@ an owner's tool" in `docs/product/handing-off-sessions.md`).
 ## Which sessions an owner drives
 
 A session started with `new_session` is always bound to the session that started it — a console session, or a project
-session that is unbound or a lead session — so it reports to it, and it is that owner's while it stays bound to it: the
-owner instructs it, archives it once it is done and reopens it when it has another task — for a project session that
-owns it, another closely related task with room for it (see "Choosing the session a task goes to" below). A session
-started on a `request_session`, once approved, is bound to nobody: it reports to the user, and neither the session that
-asked for it nor that session's owner drives it (see `docs/product/session-requests.md`). A session **the user opens by
-hand is not bound**, unless they choose a console session under "Report to" in the session dialog (see "The session
-dialog" in `docs/product/opening-sessions.md`); the choice is none by default and offers console sessions only. A
-binding changes afterwards only when its owner hands the session over, when an unbound session binds itself, when its
-owner is handed off to another agent and the session moves to the one that takes the owner's place, or when its owner or
-the user releases the session, which leaves it unbound (see `docs/product/changing-session-owners.md`). A session the
-user opened bound to an owner can still be deleted by the user while it is unused, and the owner is not told (see
-"Deleting an unused session" in `docs/product/deleting-sessions.md`); one started with `new_session` cannot.
+coordinator — so it reports to it, and it is that owner's while it stays bound to it: the owner instructs it, archives
+it once it is done and reopens it when it has another task — for a project session that owns it, another closely related
+task with room for it (see "Choosing the session a task goes to" below). A session started on a `request_session`, once
+approved, is bound to nobody: it reports to the user, and neither the session that asked for it nor that session's owner
+drives it (see `docs/product/session-requests.md`). A session **the user opens by hand is independent**, unless they
+choose a console session under "Report to" in the session dialog (see "The session dialog" in
+`docs/product/opening-sessions.md`); the choice is none by default and offers console sessions only. A binding changes
+afterwards only when its owner hands the session over, when an independent session binds itself, when its owner is
+handed off to another agent and the session moves to the one that takes the owner's place, or when its owner or the user
+releases the session, which leaves it independent (see `docs/product/changing-session-owners.md`). A session the user
+opened bound to an owner can still be deleted by the user while it is unused, and the owner is not told (see "Deleting
+an unused session" in `docs/product/deleting-sessions.md`); one started with `new_session` cannot.
 
 An owner drives only the sessions bound to it. Every session record it reads names that session's owner, and a session
-that is unbound, or bound to any other session, is not this one's to drive: it can read such a session, but is told
+that is independent, or bound to any other session, is not this one's to drive: it can read such a session, but is told
 to leave it alone and is refused if it tries to act on it.
 
-A console session itself never reports anywhere, and neither does an unbound project session.
+A console session itself never reports anywhere, and neither does an independent project session.
 
 ## Choosing the session a task goes to
 
-The role description of a project session that can own sessions — an unbound one or a lead session — tells it when to
+The role description of a project coordinator tells it when to
 start sessions of its own and which session a piece of work goes to. A console session is not told: it works out which
 project a request belongs to and does not concern itself with how a project's work is split among sessions. A project
-session with the role of a bound one owns none and is not told either. This is guidance to the agent; Octoboard does not
+session with the worker role owns none and is not told either. This is guidance to the agent; Octoboard does not
 enforce it:
 
 - An ordinary task needs no sessions of its own: the project session does it itself, with subagents where they help.
@@ -398,11 +401,11 @@ agent and account of a session a session starts" above).
 
 ## A session archiving itself
 
-A session that reports to nobody — a console session or an unbound project session — wraps itself up with
+A session that reports to nobody — a console session or an independent project session — wraps itself up with
 `archive_self`, which takes no arguments: it ends the caller's own process and archives the caller. A session bound to
 an owner does not archive itself this way; it wraps up with a `done` report with no open items (see "Automatic
-archiving" in `docs/product/reporting-to-owners.md`). A lead session is offered `archive_self` with the rest of the
-unbound project session's tools, but the call is refused, telling it to report `done` instead.
+archiving" in `docs/product/reporting-to-owners.md`). A coordinator with a parent is offered `archive_self` with the
+rest of the project coordinator's tools, but the call is refused, telling it to report `done` instead.
 
 An owner archives each of its sessions once its task is done (see "Which sessions an owner drives" above), so a
 session under the caller that is not archived means unfinished work. The call is refused, with the reason in prose,
@@ -411,13 +414,13 @@ and changes nothing:
 - **while the caller, or any session under it, is locked** — a session under it counts even when it is archived
   already. The refusal names the locked sessions under it, which the user has to unlock (see "Locking a session" in
   `docs/product/sessions.md`). Locks are checked before what follows.
-- **while any session under it is not archived**, running or interrupted alike. The refusal names each such session
-  by id and title. Those bound to the caller come with the advice to finish them and archive them with
-  `archive_session` first. Those bound to a lead session bound to the caller are not the caller's to archive: they are
-  named grouped under their lead session, with the advice to wait for the lead session to finish them — its own
-  `done` report archives it — or to archive the lead session with `archive_session`, which takes along its sessions
-  that have no process running and is refused while any of them has one (see "Archiving, interruption and resuming"
-  in `docs/product/archiving-and-resuming-sessions.md`).
+- **while any session under it is not archived**, running or interrupted alike. The refusal names each such session by
+  id and title. Those bound to the caller come with the advice to finish them and archive them with `archive_session`
+  first. Those bound to a coordinator reporting to the caller are not the caller's to archive: they are named
+  grouped under their coordinator, with the advice to wait for the coordinator to finish them — its own `done` report
+  archives it — or to archive the coordinator with `archive_session`, which takes along its sessions that have no
+  process running and is refused while any of them has one (see "Archiving, interruption and resuming" in
+  `docs/product/archiving-and-resuming-sessions.md`).
 
 Otherwise the call is answered first — with the caller's id, the status `archived` and a note that its process will
 now end — and then the caller's process is ended and the caller is archived, as an owner's explicit archive does.

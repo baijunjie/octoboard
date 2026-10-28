@@ -74,7 +74,7 @@ pub async fn call(
     arguments: &Map<String, Value>,
 ) -> Result<Value> {
     let session = state.session_record(session_id)?;
-    if super::tool_by_name(session.role, session.has_bound_role(), tool).is_none() {
+    if super::tool_by_name(session.role, session.is_worker(), tool).is_none() {
         bail!("`{tool}` is not a tool this session can call");
     }
 
@@ -1220,6 +1220,7 @@ pub(crate) fn describe_session(
         // The names only: the worktree each stands in is `get_session_branches`'.
         "branches": branches.get(&session.id).cloned().unwrap_or_default(),
         "role": session.role,
+        "orchestration_role": session.orchestration_role(),
         "console": session.console_id,
         "project": session.project_id,
         // The session this one reports to. Null for a project session means unbound: the user
@@ -1364,6 +1365,7 @@ pub(super) mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
+            orchestration_role: None,
             context: None,
             observed_model: None,
             observed_effort: None,
@@ -5796,6 +5798,52 @@ pub(super) mod tests {
         .await
         .unwrap();
         assert_eq!(record["session"], "kid");
+    }
+
+    #[test]
+    fn session_roles_are_derived_independently_of_parent_and_child_count() {
+        use crate::protocol::OrchestrationRole::{Coordinator, Worker};
+
+        let (state, _dir) = peer_state("derived-session-role");
+        let caller = state.session_record("a").unwrap();
+        for (mut session, expected, name) in [
+            (console_session("a"), Coordinator, "console"),
+            (
+                project_session("loose", "console-1", None),
+                Coordinator,
+                "independent",
+            ),
+            (
+                project_session("of-a", "console-1", Some("a")),
+                Worker,
+                "worker",
+            ),
+            (
+                Session {
+                    lead: true,
+                    ..project_session("empty-coordinator", "console-1", Some("a"))
+                },
+                Coordinator,
+                "reporting coordinator without children",
+            ),
+        ] {
+            // A wire value must never become authoritative for a later derivation.
+            session.orchestration_role = Some(if expected == Worker {
+                Coordinator
+            } else {
+                Worker
+            });
+            assert_eq!(session.orchestration_role(), expected, "{name}");
+            assert_eq!(session.is_worker(), expected == Worker, "{name}");
+            let wire = state.wire_session(session.clone());
+            assert_eq!(wire.orchestration_role, Some(expected), "{name}");
+            let record =
+                describe_session(&state, &session, &caller, &HashMap::new(), &HashMap::new())
+                    .unwrap();
+            assert_eq!(record["orchestration_role"], json!(expected), "{name}");
+            assert_eq!(record["owner"], json!(session.bound_to), "{name}");
+            assert_eq!(record["owned_sessions"], 0);
+        }
     }
 
     /// A record carries what an owner needs to tell sessions apart and to decide on a transfer.

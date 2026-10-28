@@ -26,8 +26,8 @@ requests automatically" below).
 
 ## Who is offered the tool
 
-Every session is offered `request_session`: a console session, an unbound project session, a lead session, and a
-project session bound to an owner. The role description of every project session and the console session's
+Every session is offered `request_session`: console sessions and project coordinators and workers, regardless of
+reporting relationship. The role description of every project session and the console session's
 instruction file describe it.
 
 ## Continuing work in another session
@@ -229,8 +229,8 @@ dialog (see "Approving requests automatically" above):
    started in the named console, with that console's badge colour assigned as for any console session. The approval is
    answered only once the launch has settled, with the launch's own refusal when it fails (see "Starting the session" in
    `docs/product/opening-sessions.md`).
-2. **It has no owner.** A project session is an ordinary unbound project session, which the user owns and which can
-   start and drive sessions of its own project (see "The unbound project session's tools" in
+2. **It has no owner.** A project session is an ordinary independent project session, which the user owns and which can
+   start and drive sessions of its own project (see "Project coordinators' tools" in
    `docs/product/hub-orchestration.md`); a console session is an ordinary console session of its console.
 3. **Its opening prompt says who asked for it.** The brief is preceded by a paragraph naming the requesting session by
    id and title, saying the session was started at that session's request with the user's approval — or, for an
@@ -258,7 +258,7 @@ The call returns:
 | `title` | Its title. |
 | `console` | The console it is in. |
 | `project` | The project it is in, or null for a console session. |
-| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `send_message` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
+| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `send_message` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is independent, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). |
 
 **No window follows the new session.** Approving selects nothing and changes no window's view or focus mode.
 

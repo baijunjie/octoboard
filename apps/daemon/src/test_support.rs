@@ -898,6 +898,7 @@ pub(crate) fn bare_session(id: &str, role: Role) -> Session {
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
+        orchestration_role: None,
         context: None,
         observed_model: None,
         observed_effort: None,

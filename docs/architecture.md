@@ -52,8 +52,10 @@ server form is the reverse: one host, and what is remote is the clients.
 | Host | A machine that runs sessions: the user's own machine in the desktop form, the server in the server form. Only the daemon's own machine exists today; every project and session still carries a `host_id`. |
 | Client | A window or browser tab the user operates the daemon through: the desktop application's window, or a browser on any machine that can reach the daemon. Any number of them may be connected at once — the desktop window and a browser tab on a laptop, say — and the daemon does not tell them apart: every client is the same user, sees the same consoles, projects and sessions, and may do everything. |
 | Project | A directory on some host, associated with a console. |
-| Session | An agent CLI process running in a project directory, created by the user, a console session or an unbound project session. |
+| Session | An agent CLI process running in a console or project directory, created by the user or a coordinator session. |
 | Console session | The agent process running in the console's working directory, given the orchestration tools. |
+| Coordinator | A session that can create and manage child sessions. A project coordinator works independently or reports to a console session. |
+| Worker | A project session that reports to a parent session and cannot manage child sessions. |
 | Agent adapter | The layer that plugs an agent CLI in: how to launch it, inject capabilities, report status and resume it. |
 
 The daemon defines a single adapter interface and the rest of Octoboard does not know which agent it is driving. An
@@ -154,6 +156,10 @@ confirmations, settings and sessions would each need an owner and an authorizati
 
 ## Orchestration design decisions
 
+- **Role and reporting relationship are separate.** Coordinator and worker describe whether a session can manage
+  children; independent or reporting to a parent describes who directs it. A coordinator can have a parent and no
+  children yet, so neither the presence of a parent nor the current child count determines its role. The daemon
+  derives the role from its stored session state and sends it to clients explicitly, alongside the parent id.
 - **Capabilities are injected per launch, never by editing the project's or the user's files.** That means arguments,
   an environment variable, or files Octoboard writes itself (for Grok a per-session `GROK_HOME` holding Octoboard's
   `config.toml` and `trusted_folders.toml` copies and `hooks/`). Every session starts with the project directory as its
@@ -196,12 +202,12 @@ confirmations, settings and sessions would each need an owner and an authorizati
   every session, asks the user to start a session with no owner — in any project, or a console session — and only the
   user's approval starts it. `new_session` starts a session the caller owns, with no approval, where the caller
   already has reach. A binding changes after launch by a call of a session concerned, or by the user: an owner hands a
-  session of its own to another owner with `transfer_session` or releases it with `release_session`, an unbound
-  project session binds itself to a console session or a project session of its own project with `bind_to_session`
-  (how a session that asked for a console session comes to be driven by it), and the user releases a bound session
-  from the sidebar. The session's role description is fixed at its first launch, so the change is told to it in prose
-  instead — in the call's result or a message, or at its next launch if it is not running. The behaviour of a request
-  is in `docs/product/session-requests.md`, the rules a binding keeps in "Who can own a session" in
+  child session to another parent with `transfer_session` or releases it with `release_session`, an independent
+  project coordinator sets a console session or a coordinator of its own project as its parent with `bind_to_session`
+  (how a session that asked for a console session comes to be directed by it), and the user lets a session work
+  independently from the sidebar. The session's role description is fixed at its first launch, so the change is told
+  to it in prose instead — in the call's result or a message, or at its next launch if it is not running. The behaviour
+  of a request is in `docs/product/session-requests.md`, the rules a binding keeps in "Who can own a session" in
   `docs/product/changing-session-owners.md`, and the deferred notice in "A change of owner told at the next launch"
   there.
 - **A project session goes to the user directly for permissions and questions, not through the console session.**
@@ -295,16 +301,19 @@ version N to N+1.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
-- `Session.bound_to` is the id of the session a session reports to — a console session, or an unbound project session
-  or lead session of the same project — or unset. It is always set to the starting session for a session started
-  through `new_session`. It can change: `transfer_session` hands a session to another owner, `bind_to_session` binds
-  an unbound project session to an owner, and `release_session` clears it (and `lead`), leaving the session unbound.
-  An unbound project session bound to a console session becomes a lead session: it keeps the sessions bound to it, so
-  orchestration is at most two levels deep. `Session.lead` (stored, never sent to clients) marks such a session,
-  because nothing else in the record tells a session bound later from one opened bound, and only the former keeps the
-  unbound project session's role description and tools on every launch. A console session itself is never bound, and a
-  session bound to a lead session owns no other. Reports are routed by this field rather than by a lookup for "the"
-  console session of a console, because a console may hold several at once.
+- `Session.bound_to` is the id of a session's parent — a console session or a project coordinator of the same
+  project — or unset for an independent session. `new_session` sets it to the creating session; `transfer_session`
+  changes the parent; `bind_to_session` sets a parent for an independent project coordinator; and `release_session`
+  clears it and `lead`, leaving an independent coordinator. A coordinator that sets a console session as its parent
+  keeps its children and its ability to manage them. `Session.lead` (stored, never sent to clients) preserves that
+  capability even when it has no children; a project session created with a parent instead starts as a worker.
+  `Session::orchestration_role()` derives `coordinator` or `worker` from that stored state; capability checks use
+  `Session::is_worker()`. The wire-only `Session.orchestration_role` field carries the derived role to client and MCP
+  records, separately from the parent id; it is not stored and never authorizes a request. A console session is always
+  an independent coordinator.
+  A project session reporting to another project session is always a worker, so orchestration has at most two levels
+  of reporting relationships. Reports route directly to the parent id because a console may hold several console
+  sessions at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself
@@ -331,8 +340,8 @@ version N to N+1.
   stale with every agent release.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
-- `Page.console_session_id` is the session that pushed the page — a console session, or an unbound or lead project
-  session — not its console or project: each session has its own page history, and the column keeps its name for either
+- `Page.console_session_id` is the coordinator that pushed the page — a console session or a project coordinator —
+  not its console or project: each session has its own page history, and the column keeps its name for either
   kind. Deleting a session deletes its pages in the database, and deleting its project or console therefore deletes them
   too.
 - `Page.anchor_message_id` records the conversation position a page was pushed at. It is stored and never read; a

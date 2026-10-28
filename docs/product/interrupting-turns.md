@@ -7,11 +7,11 @@ ended (see `docs/product/session-statuses.md`), and an interrupted turn leaves t
 
 ## Who can interrupt a turn
 
-- **An owner, through its `interrupt_session` tool.** A console session and a project session that can own sessions —
-  an unbound one or a lead session — get the tool (see "The console session's tools" and "The unbound project
-  session's tools" in `docs/product/hub-orchestration.md`); a project session with the role of a bound one does not.
-  It acts only on a session bound to the caller: for any other — unbound, bound to another session, a console session,
-  or the caller itself — it is refused in prose naming who owns it, as `instruct_session` is, and nothing is sent.
+- **An owner, through its `interrupt_session` tool.** A console session and a project session that can own sessions — a
+  coordinator — get the tool (see "The console session's tools" and "Project coordinators' tools" in
+  `docs/product/hub-orchestration.md`); a project session with the worker role does not. It acts only on a session bound
+  to the caller: for any other — independent, bound to another session, a console session, or the caller itself — it is
+  refused in prose naming who owns it, as `instruct_session` is, and nothing is sent.
 - **A client, through the daemon's `interrupt_session` request.** It checks no ownership: any session can be named.
 - **The window has no control for it.** The user interrupts a turn by pressing the agent's own key in the session's
   terminal.
