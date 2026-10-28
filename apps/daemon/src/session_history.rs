@@ -282,6 +282,7 @@ mod tests {
         let handover = Handover {
             repository: "/repo/.git".into(),
             branches: vec!["feat/a".to_owned()],
+            targets: Default::default(),
         };
         let prompts = [
             mcp::exec::request_opening_prompt(&caller, None, false, "the brief"),

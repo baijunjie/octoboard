@@ -3,29 +3,30 @@
 The read-only tools of Octoboard's MCP server (see `docs/product/hub-orchestration.md`). Every session — a console
 session, a project session that can own sessions and a project session with the role of a bound one alike — is offered
 the same ones, and each reads the same for every caller: any session, of any project or console, and the projects and
-archives of any console — except the reads of a project's changes, which reach only the caller's own console's
-projects (see "Reading a project's changes" below).
+archives of any console — except the reads of a project's repository, its changes and its branches, which reach only
+the caller's own console's projects (see "Reading a project's changes" and "Listing a project's branches" below).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `get_session` | `session?`, `output_bytes?` | The record of any session, of any console, or with `session` left out of the caller itself, which is how a session learns its own id — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, the names of the branches it is responsible for, and the rest of "Session records" below — plus a tail of what it has printed. |
-| `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `status?` | The running sessions other than the caller — or with `status` the interrupted ones, or both — in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
-| `read_session_history` | `session`, `limit?`, `before?` | What any session's conversation held, a page at a time from the latest. See "Reading a session's history" below. |
-| `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project and worktree. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
+| `get_session` | `session?`, `output_bytes?` | The record of any session, of any console, or with `session` left out of the caller itself, which is how a session learns its own id — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, the names of the branches it is responsible for, and the rest of "Session records" below — plus a tail of what it has printed, and, for an interrupted or archived session, whether its conversation can still be resumed. |
+| `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `status?` | The running sessions other than the caller — or with `status` the interrupted ones, or both — in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
+| `read_session_history` | `session?`, `limit?`, `before?` | What any session's conversation held, or with `session` left out the caller's own, a page at a time from the latest. See "Reading a session's history" below. |
+| `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project, worktree, target branch and fork point, since when the session is responsible for it, and what archiving the session would do with it. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
 | `list_project_changes` | `project?`, `worktree?`, `branch?`, `base?`, `base_remote?`, `commit?`, `limit?`, `offset?` | What has changed in a project of the caller's own console, without running `git` there: the uncommitted changes of one of its worktrees, what a branch has changed since it forked from a base together with its commits, or one of those commits; a page at a time. See "Reading a project's changes" below. |
+| `list_project_branches` | `project?`, `limit?`, `offset?` | The local branches of a project of the caller's own console, without running `git` there, each with its tip, its worktree and the session responsible for it; a page at a time. See "Listing a project's branches" below. |
 | `read_project_diff` | `project?`, `path`, `old_path?`, `group?`, `worktree?`, `commit?`, `parent?`, `offset?`, `max_bytes?` | The diff of one change `list_project_changes` lists, a window of it at a time. See "Reading a project's changes" below. |
 | `list_agent_models` | `agent`, `account?` | The models an agent offers and the reasoning-effort levels of each. See "Reading the models an agent offers" below. |
 | `list_consoles` | — | Every console, each as `console` (its id), `name` and `yours` (whether it is the caller's own console). The id, or a name that names one console, is what a `console` argument takes. |
 | `list_projects` | `console?`, `project?`, `refresh?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects; optionally one project, and optionally with their git status checked first. See "Listing a console's projects" below. |
-| `list_archived` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `limit?`, `before?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed, a page at a time. See "Listing archived sessions" below. |
+| `list_archived` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `check_resumable?`, `limit?`, `before?` | The archived sessions of every console, console sessions included, whoever owns them, each with its owner, newest archived first, optionally narrowed, a page at a time. See "Listing archived sessions" below. |
 | `get_account_quotas` | `agent?`, `refresh?` | Each account's plan quota, optionally read again first. See "Reading quotas from a session" in `docs/product/account-quotas.md`. |
 
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
 directory, at once — two console sessions can dispatch into it, say — and one that could not see the others' sessions
 would collide with them. That holds for a bound session as much as for one that can own sessions, so a bound session
 is offered every read too, at the cost of a few more tool descriptions in its context. What stays narrower is the
-reach of the reads of a project's changes, held to the caller's own console (see "Reading a project's changes" below),
-a read of settings — `get_project` is a project session's read of its own project (see
+reach of the reads of a project's repository, held to the caller's own console (see "Reading a project's changes"
+below), a read of settings — `get_project` is a project session's read of its own project (see
 `docs/product/agent-settings-tools.md`), and `get_console` and `get_settings` are the console session's (see "The
 console session's tools" in `docs/product/hub-orchestration.md`) — and `list_pages`, the read of the report panel pages
 the caller pushed itself, offered with the other report panel tools to a console session and to an unbound project
@@ -82,20 +83,26 @@ The arguments choose one of three views:
 - **`worktree`**: the uncommitted changes of that worktree of the project's repository, named by its path (as
   `get_session_branches` gives it) or by the branch checked out in it. One that names no worktree of the repository is
   refused, the reason listing the worktrees there are.
-- **`branch` with `base`**: what the local branch `branch` has changed since it forked from `base` — as
-  `git diff base...branch` shows it — and the commits it has made since. `base` is a local branch, or with
-  `base_remote: true` a remote-tracking one such as `origin/main`, as the repository last fetched it; nothing contacts
-  the remote. Unlike the Git mode, which compares with the branch the main working copy has checked out, the base is
-  always the caller's to name; the tool's description suggests the target branch of the session's report, or the branch
-  the project's folder has checked out (`git_status.branch` in `list_projects`). With `commit` besides — the full id of
-  one of the commits the branch view lists — the answer is that one commit's changes against its first parent; a commit
-  not among them is refused, the reason saying whether it may be an older one than the 100 listed, or one of those left
-  out where the daemon cut the list short.
+- **`branch`**: what the local branch `branch` has changed since it forked from `base` — as `git diff base...branch`
+  shows it — and the commits it has made since. `base` is a local branch, or with `base_remote: true` a
+  remote-tracking one such as `origin/main`, as the repository last fetched it; nothing contacts the remote. Unlike the
+  Git mode, which compares with the branch the main working copy has checked out, the base is the caller's to name, or,
+  left out, the **target branch recorded for `branch`** — the local branch a session's git created it from, as
+  `get_session_branches` and `list_project_branches` give it as `target_branch` (see "Target branches and fork points"
+  in `docs/product/revert-gate.md`). For a branch with none recorded, or to compare with another, the tool's
+  description suggests the target branch of the session's report, or the branch the project's folder has checked out
+  (`git_status.branch` in `list_projects`). With `commit` besides — the full id of one of the commits the branch view
+  lists — the answer is that one commit's changes against its first parent; a commit not among them is refused, the
+  reason saying whether it may be an older one than the 100 listed, or one of those left out where the daemon cut the
+  list short.
 
-`branch` without `base`, `base`, `base_remote` or `commit` without `branch`, and `worktree` together with `branch` are
-refused. The changes come a page at a time: `limit` is a whole number from 1 to 1000, 200 when left out, and `offset`
-one of 0 or more, 0 when left out; a value outside those is refused. Reading a worktree that is changing twice can give
-two different lists, so a page of one read is not a page of the next.
+Refused: `branch` without `base` when no target branch is recorded for it, the reason saying a target branch is
+recorded only for a branch a session's git created from another local branch; `base_remote` without `base`, the
+recorded target being a local branch; `base` or `commit` without `branch`; and `worktree` together with `branch`. When
+`base` is left out and the comparison with the recorded target fails — that branch no longer exists, say — the reason
+names the recorded target branch it compared with. The changes come a page at a time: `limit` is a whole number from 1
+to 1000, 200 when left out, and `offset` one of 0 or more, 0 when left out; a value outside those is refused. Reading a
+worktree that is changing twice can give two different lists, so a page of one read is not a page of the next.
 
 Every answer carries:
 
@@ -111,12 +118,12 @@ Every answer carries:
 
 The uncommitted views add `worktree`: `path` and `branch` as plain text, as `get_session_branches` gives them (`branch`
 `null` when `HEAD` is detached or unborn), and `head`, the commit the staged changes are against (`null` before the
-first commit). The branch view adds `branch`, `base`, `branch_commit` and `base_commit` (the full ids of the two tips),
-`merge_base` (the commit they forked at; the changes are those between it and `branch_commit`), `commits` — newest
-first, at most 100, each `commit`, `parent` (its first parent, `null` for a root commit), `subject` and `files` (how
-many of the project's files it changed) — and `commits_complete`, `false` when the branch made more commits than are
-listed or the daemon cut the last one's changes short. The commit view adds the commit's `commit`, `parent` and
-`subject`.
+first commit). The branch view adds `branch`, `base` (the branch compared with: the recorded target branch when `base`
+was left out), `branch_commit` and `base_commit` (the full ids of the two tips), `merge_base` (the commit they forked
+at; the changes are those between it and `branch_commit`), `commits` — newest first, at most 100, each `commit`,
+`parent` (its first parent, `null` for a root commit), `subject` and `files` (how many of the project's files it
+changed) — and `commits_complete`, `false` when the branch made more commits than are listed or the daemon cut the
+last one's changes short. The commit view adds the commit's `commit`, `parent` and `subject`.
 
 Each change is:
 
@@ -172,6 +179,55 @@ daemon and not by an argument.
 Each read waits for the same capacity the windows' reads of a repository wait for, as one window's requests do. The
 reads of every session together are held to one window's share of it, so a window's own reads keep their share however
 many sessions are reading, and a call can wait while others are read. A call that is dropped stops its `git`.
+`list_project_branches` (see "Listing a project's branches" below) shares the same capacity the same way.
+
+## Listing a project's branches
+
+`list_project_branches` lists the local branches of a project's git repository — every one of them, whichever session,
+if any, is responsible for it — without the caller running `git` there. It reads the branch list the project pane's
+Git mode reads for its branch selector (see "The branch selector" in `docs/product/project-pane-git-mode.md`), and
+like the Git mode it never writes to the repository. The project is named, and held to the caller's own console, as in
+"Reading a project's changes" above, and a project that is not in a git repository, or whose repository `git` cannot
+read, is refused with the reason. It is how a session finds who holds a branch, or that the session that held it is
+gone, without reading every session.
+
+The branches come in byte order of their names, a page at a time: `limit` is a whole number from 1 to 1000, 200 when
+left out, and `offset` one of 0 or more, 0 when left out; a value outside those is refused. The answer is:
+
+| Field | Contents |
+|---|---|
+| `project` | The project's id. |
+| `branches` | The page of branches. |
+| `total`, `offset`, `next_offset` | How many branches there are, where the page starts, and where the next one starts (`null` on the last page). |
+| `complete` | `false` when the daemon cut the list short at its own limits, so the branches past the cut are not listed. |
+| `upstreams_complete` | `false` when the lookup of the main working copy's remote branch went past the daemon's limits, so that branch may lack its `upstream`, and the answer its `default_branch`. |
+| `default_branch` | The repository's remote default branch, as `branch` and `commit` (see "Committed changes" in `docs/product/project-pane-git-change-list.md`), given only when the branch the main working copy has checked out has no `upstream` and the remote default branch was found; `null` otherwise. |
+
+Each branch is:
+
+- `branch`, its name as plain text, and `tip`, the full id of the commit it names.
+- `upstream`: for the branch the repository's main working copy has checked out, the remote branch the Git mode
+  compares it with (see "Committed changes" in `docs/product/project-pane-git-change-list.md`), as `branch` and
+  `commit`; `null` when it has none, and for every other branch.
+- `worktree`: `null` when no worktree has the branch checked out, else `path`, `main` (whether it is the repository's
+  main working copy) and `holds_project_directory` (whether it is the worktree holding the project's folder).
+- `origin`: `null` when the branch has no responsible session, else what its record holds (see "The responsible
+  session" in `docs/product/branch-responsible-session.md`):
+  - `session`, the responsible session's id, which can name a session that no longer exists;
+  - `title`, the created name recorded for it when it became responsible;
+  - `session_state`: `live` (it has a process), `interrupted`, `archived`, or `gone` when no record of the session is
+    left;
+  - `since`, when it became responsible, in milliseconds since the epoch — the branch's creation by its git, or a
+    handover;
+  - `target_branch` and `fork_point`, the branch it was created from (`null` when it was created from something that is
+    no local branch) and the commit it was created at (see "Target branches and fork points" in
+    `docs/product/revert-gate.md`).
+
+Listing the branches brings the repository's records up to date first, as the Git mode's listing does (see "What the
+record is" in `docs/product/branch-responsible-session.md`), so `origin` is as the records stand after that. A branch
+whose responsible session is `gone` cannot be handed over: `handover_branches` takes branches only from the caller or
+a session it owns (see "Handing branches between sessions of an owner" in
+`docs/product/branch-responsible-session.md`), and no session can be named for one that no longer exists.
 
 ## Listing archived sessions
 
@@ -190,6 +246,8 @@ a session is listed only when it matches every one given:
   that were not.
 - `kind`: `console` for console sessions only, `project` for project sessions only. `kind: console` together with a
   `project` is refused, a console session being in no project.
+- `branch`: only the sessions responsible for the local branch of that name, as their `branches` name it (see "Session
+  records" below).
 - `limit`: how many sessions to return, a whole number from 1 to 200, 50 when left out.
 - `before`: the `next` of the previous page, passed back unchanged; only the sessions after that position are
   returned. Left out, the list starts from the most recently archived.
@@ -204,6 +262,10 @@ nothing, a name that names more than one console or project, a `kind` of any oth
 `before` that is not a cursor the daemon made, a session id say, are refused, with the reason in prose, and nothing is
 listed.
 
+`check_resumable` (`true` or `false`, `false` when left out) adds `resumable` to each session listed, as `get_session`
+gives it (see "Session records" below). It is off by default because it looks through the agents' records once for
+each session listed.
+
 ## Reading a session's history
 
 `read_session_history` reads the conversation of any session, running, interrupted or archived, from the agent's own
@@ -213,8 +275,8 @@ notice — and the agent's final reply to each turn. Unlike the view, it hides n
 as Octoboard's instead; everything else the view leaves out (see "What the history lists" there), tool calls among it,
 is left out here too.
 
-It takes `session` and two optional arguments, which page the history by entry count from the most recent entry
-backwards:
+It takes an optional `session`, any session, the caller itself when left out, and two more optional arguments, which
+page the history by entry count from the most recent entry backwards:
 
 - `limit`, how many entries to return: a whole number from 1 to 100, 20 when left out;
 - `before`, an entry's `index`: only the entries before it are returned. A whole number, 0 or more, and not past the
@@ -334,6 +396,14 @@ And each record carries what tells sessions apart and what an owner decides on:
   original's.
 - `has_conversation`: whether a turn was ever taken in the session. It does not say that the agent still holds the
   conversation's record; a `reopen_session` that finds it gone is refused (`conversation_unresumable`).
+- `resumable`, in `get_session`'s record of an interrupted or archived session only — and in `list_archived`'s with
+  `check_resumable` (see "Listing archived sessions" above): whether the agent still holds the conversation, looked up
+  in its own records under the session's account as a reopen looks it up (see "When a conversation can no longer be
+  resumed" in `docs/product/archiving-and-resuming-sessions.md`). `true` when it does, and for a session with no
+  conversation, which a reopen starts afresh; `false` when the conversation is proven gone, so that `reopen_session`
+  would refuse it; `null` when that cannot be told, which `reopen_session` lets through. It is read in the daemon's own
+  environment rather than a launch's, so in rare cases a reopen can find otherwise. A running session's record has no
+  `resumable`.
 - `model` and `effort`, the session's own launch choices (see `docs/product/model-and-reasoning-effort.md`): a key is
   absent when the session follows its project's, else its console's, setting, and `null` when the session leaves the
   value to the agent's own default. They differ from `observed_model` and `observed_effort`, which say what the agent's

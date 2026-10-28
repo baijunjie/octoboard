@@ -316,6 +316,37 @@ pub fn for_agent(items: &[SessionBranchItem]) -> Value {
         .collect::<Vec<_>>())
 }
 
+/// What an agent's own archive would do with the branch `wire` (a wire path) and the worktree that
+/// has it checked out, from `items` as [`inspect`] found them: `branch` and `worktree` each as
+/// `{state, reason}`, `null` for a worktree it has none and for an item [`inspect`] did not find,
+/// and `removed`, whether archiving takes all it has. `null` when `items` hold neither.
+pub fn archive_outlook(items: &[SessionBranchItem], wire: &str) -> Value {
+    let named = |kind| {
+        items
+            .iter()
+            .find(|item| item.kind == kind && item.branch.as_deref() == Some(wire))
+    };
+    let (branch, worktree) = (
+        named(SessionBranchKind::Branch),
+        named(SessionBranchKind::Worktree),
+    );
+    if branch.is_none() && worktree.is_none() {
+        return Value::Null;
+    }
+    let outlook = |item: Option<&SessionBranchItem>| {
+        item.map(|item| json!({ "state": item.state, "reason": reason(item) }))
+    };
+    let removed = [branch, worktree]
+        .into_iter()
+        .flatten()
+        .all(|item| item.state == SessionBranchState::Removable);
+    json!({
+        "removed": removed,
+        "branch": outlook(branch),
+        "worktree": outlook(worktree),
+    })
+}
+
 /// One line per item, in English: what it is and why it stands as it does.
 pub fn lines(items: &[SessionBranchItem]) -> Vec<String> {
     items

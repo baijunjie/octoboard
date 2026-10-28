@@ -6,7 +6,7 @@ Neither needs to own the other.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `status?` | The running sessions other than the caller (or, with `status`, the interrupted ones too or instead; see "Narrowing the list of sessions" below), in every console and project, console sessions included — one that a change of its account's sharing has ended and is about to resume included, as `starting` (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`) — each with its status, title, agent, `role` (a console or a project session), `console`, `project` (null for a console session), `background_tasks`, `context`, `queued_messages`, `writes_held`, `account`, `account_name`, `observed_model`, `observed_effort`, `default_effort`, `pinned`, `locked`, `branches`, `owner`, `owner_kind` and `yours` as in the orchestration tools' reads (see "The console session's tools" in `docs/product/hub-orchestration.md`), and `your_owner` marking the one that owns the caller. The caller's own owner is also given at the top level (null when the caller is unbound or a console session). See "Narrowing the list of sessions" below for its arguments. |
+| `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `status?` | The running sessions other than the caller (or, with `status`, the interrupted ones too or instead; see "Narrowing the list of sessions" below), in every console and project, console sessions included — one that a change of its account's sharing has ended and is about to resume included, as `starting` (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`) — each with its status, title, agent, `role` (a console or a project session), `console`, `project` (null for a console session), `background_tasks`, `context`, `queued_messages`, `writes_held`, `account`, `account_name`, `observed_model`, `observed_effort`, `default_effort`, `pinned`, `locked`, `branches`, `owner`, `owner_kind` and `yours` as in the orchestration tools' reads (see "The console session's tools" in `docs/product/hub-orchestration.md`), and `your_owner` marking the one that owns the caller. The caller's own owner is also given at the top level (null when the caller is unbound or a console session). See "Narrowing the list of sessions" below for its arguments. |
 | `send_message` | `session`, `text` | Writes `text` into another session, of any project or console, console sessions included, as information from the caller; an interrupted session has it kept and written into it once it is resumed (see "Information for an interrupted session" below). Answers with `delivered` and a `note` saying, as the owner's `instruct_session` does (see "The console session's tools" in `docs/product/hub-orchestration.md`), whether it was delivered, queued, kept for an interrupted session's resume, or written into the receiver's input but not sent to its conversation by its agent, and whether the receiver's owner was sent a copy — a copy written into the owner's input but not sent to its conversation is reported as such, the user having been told; one kept for an interrupted owner is reported as kept. `delivered` is `false` for information kept for a resume. Refused, with the reason in prose, for the caller itself, a session that does not exist, an archived session, which takes nothing until it is reopened, and any other session with no process running, such as one whose launch has not brought its process up yet — except one a change of its account's sharing of the default configuration is restarting, which accepts it and holds it for the resumed process (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`). |
 
 **Information is not instruction.** Every session knows who it belongs to: the console session or project session it is
@@ -51,7 +51,7 @@ setting.
 
 ## Narrowing the list of sessions
 
-`list_sessions` takes five optional arguments, the same for every caller whatever its role. `status` picks which
+`list_sessions` takes seven optional arguments, the same for every caller whatever its role. `status` picks which
 sessions are listed, and an archived session never is, whatever `status` is — archived sessions are `list_archived`'s
 (see "Listing archived sessions" in `docs/product/what-every-session-reads.md`):
 
@@ -62,7 +62,7 @@ sessions are listed, and an archived session never is, whatever `status` is — 
   `docs/product/hub-orchestration.md`);
 - `any`: both.
 
-Each of the other four, given, narrows the list, and a session is listed only when it matches every one:
+Each of the other six, given, narrows the list, and a session is listed only when it matches every one:
 
 - `console`: only the sessions of that console, named by its id or by a name that names one console (`list_consoles`
   lists them).
@@ -72,10 +72,13 @@ Each of the other four, given, narrows the list, and a session is listed only wh
   is in no project, so it is never listed under one.
 - `owner`: only the sessions bound to that session, named by its id.
 - `yours`: `true` lists only the sessions bound to the caller, `false` only those that are not.
+- `kind`: `console` for console sessions only, `project` for project sessions only.
+- `branch`: only the sessions responsible for the local branch of that name, as their `branches` name it (see "Session
+  records" in `docs/product/what-every-session-reads.md`).
 
 A `console`, `project` or `owner` that names nothing, a name that names more than one console or project, a `yours` that
-is not `true` or `false`, and a `status` of any other value are refused, with the reason in prose, rather than read as a
-filter that matches nothing.
+is not `true` or `false`, a `kind` or a `status` of any other value, and `kind: console` together with a `project` are
+refused, with the reason in prose, rather than read as a filter that matches nothing.
 
 ## Information for an interrupted session
 

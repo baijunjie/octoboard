@@ -113,8 +113,18 @@ pub fn names_by_session(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResponsibleBranch {
     pub project: String,
+    /// The branch as text.
     pub branch: String,
+    /// The branch as a wire path, which names it to [`super::cleanup`].
+    pub wire: String,
     pub worktree: Worktree,
+    /// The branch it was created from, as text; `None` when it was created from something that is
+    /// no local branch.
+    pub target_branch: Option<String>,
+    /// The commit it was created at.
+    pub fork_point: String,
+    /// When its session became responsible for it, in milliseconds since the epoch.
+    pub since: i64,
 }
 
 /// The branches `session` is responsible for with their worktrees, in the store's order. Blocking.
@@ -129,10 +139,14 @@ pub fn responsible_for(state: &AppState, session: &Session) -> Result<Vec<Respon
             .collect();
         let worktrees = worktrees_of(state, &repo.repo, &wires);
         responsible.extend(repo.branches.into_iter().zip(worktrees).map(
-            |(bound, (branch, worktree))| ResponsibleBranch {
+            |(bound, (_, branch, worktree))| ResponsibleBranch {
                 project: bound.project,
                 branch,
+                wire: bound.branch,
                 worktree,
+                target_branch: bound.target_branch.as_deref().map(branch_name),
+                fork_point: bound.birth_commit,
+                since: bound.since,
             },
         ));
     }
@@ -141,14 +155,25 @@ pub fn responsible_for(state: &AppState, session: &Session) -> Result<Vec<Respon
 
 /// Where each of `branches` (wire paths) of the repository `repo` is checked out, and whether that
 /// worktree holds uncommitted changes, in the order given: the worktrees are listed once and only
-/// the checked-out ones are asked for their changes. Blocking. When `git` cannot be run, or the
-/// worktrees cannot be listed, every branch is [`Worktree::Unknown`]; a failure to run `git` is
-/// logged.
-pub fn worktrees_of(state: &AppState, repo: &Path, branches: &[String]) -> Vec<(String, Worktree)> {
+/// the checked-out ones are asked for their changes. Each entry holds the branch's wire path as
+/// given, its name as text and its worktree, so that a caller finds a branch again by its wire path
+/// without keeping a second list in step. Blocking. When `git` cannot be run, or the worktrees
+/// cannot be listed, every branch is [`Worktree::Unknown`]; a failure to run `git` is logged.
+pub fn worktrees_of(
+    state: &AppState,
+    repo: &Path,
+    branches: &[String],
+) -> Vec<(String, String, Worktree)> {
     let unknown = |reason: String| {
         branches
             .iter()
-            .map(|wire| (branch_name(wire), Worktree::Unknown(reason.clone())))
+            .map(|wire| {
+                (
+                    wire.clone(),
+                    branch_name(wire),
+                    Worktree::Unknown(reason.clone()),
+                )
+            })
             .collect()
     };
     let git = match (state.host_tools.get().git)() {
@@ -167,7 +192,11 @@ pub fn worktrees_of(state: &AppState, repo: &Path, branches: &[String]) -> Vec<(
         .map(|wire| {
             let name = wire_path::decode(wire).unwrap_or_default();
             let worktree = worktree_of(&git, &listed, &name).0;
-            (String::from_utf8_lossy(&name).into_owned(), worktree)
+            (
+                wire.clone(),
+                String::from_utf8_lossy(&name).into_owned(),
+                worktree,
+            )
         })
         .collect()
 }

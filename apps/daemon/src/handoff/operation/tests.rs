@@ -7,8 +7,8 @@ use crate::branch_origin::{repo_key, repository_of};
 use crate::mcp::Owner;
 use crate::protocol::{Account, Availability, Role};
 use crate::test_support::{
-    app_state, branch_made_by, console, heard_after_marker, insert_project, output_containing,
-    repo_with, running, stand_in_launch, Launched, ScratchDir, StandIn,
+    app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
+    output_containing, repo_with, running, stand_in_launch, Launched, ScratchDir, StandIn,
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
@@ -189,7 +189,13 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
         Some("original"),
         false,
     ));
-    branch_made_by(&fixture.state, &fixture.repo, "one", "original");
+    branch_made_from(
+        &fixture.state,
+        &fixture.repo,
+        "one",
+        "original",
+        Some("main"),
+    );
     branch_made_by(&fixture.state, &fixture.repo, "two", "original");
     branch_made_by(&fixture.state, &fixture.repo, "theirs", "someone-else");
 
@@ -254,6 +260,11 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
         assert!(held.contains(expected), "lacks {expected}: {held}");
     }
     assert!(!held.contains("theirs"), "{held}");
+    // The branches are named with the target branch each has recorded, where it has one.
+    assert!(
+        held.contains("the branches `one` (target branch `main`), `two`;"),
+        "{held}"
+    );
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);
     drop(original);
 }

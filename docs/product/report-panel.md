@@ -5,7 +5,8 @@ language, see `docs/product/right-to-left-layout.md`): a card like any other in 
 the top bar (see `docs/product/right-pane-panels.md`), showing the pages a session pushed. Two kinds of session push
 pages: a **console session**, and a project session that faces the user — an **unbound project session** or a **lead
 session** (see `docs/product/hub-orchestration.md`). A project session with the role of a bound one has no tool to
-push pages, since it reports to its owner rather than to the user.
+push pages, since it reports to its owner rather than to the user, and a session that comes to have that role loses
+the pages it pushed (see "When a session takes the role of a bound one" below).
 
 **Pages belong to the session that pushed them**, not to its console or project: each session has its own pages, and
 the panel shows those of the selected session only, so two sessions never share a history.
@@ -32,6 +33,11 @@ The session pushes a page with its `show_page` tool (see "The console session's 
 session's tools" in `docs/product/hub-orchestration.md`). The call answers with the new page's **id**, which is what a
 later form submission names, so a session that has pushed several pages can tell which one a submission came from. An
 `html` argument that is empty or only whitespace is refused.
+
+A push is also refused, and leaves no page, when the session has the role of a bound one by the time the page is
+stored — a binding made while the call was under way. A page withdrawn while it is being pushed — by such a binding,
+or by a `delete_pages` of the same session's — is refused too, rather than its id handed out, and every window is told
+it is deleted, so no panel keeps it.
 
 Pushing a page keeps it and moves the panel to it. Nothing else in Octoboard shows a page and nothing announces one: a
 page pushed while the user was looking at another session is simply there in the panel when they come back to the
@@ -76,13 +82,34 @@ the last page goes, a console session's panel shows its empty state (see "Paging
 project session's Report panel goes, its toggle with it (see "A project session's Report panel" in
 `docs/product/right-pane-panels.md`).
 
+## When a session takes the role of a bound one
+
+A session that pushed pages can come to have the role of a bound one in two ways: an unbound project session binding
+itself to a project session with `bind_to_session`, and a lead session handed to a project session with
+`transfer_session` (see `docs/product/changing-session-owners.md`). Either takes `show_page`, `list_pages` and
+`delete_pages` away from it, and **every page it pushed is withdrawn at once**, as `delete_pages` with `all: true`
+withdraws them: the panel follows in every window as in "Withdrawing pages" above, so no form is left offered that the
+session could no longer read the submission of. Nothing brings the pages back, a later release included.
+
+- **A lead session keeps its pages.** Binding to a console session makes a lead session, which keeps the report panel
+  tools, and so does handing a lead session to another console session.
+- **The agent is told.** The descriptions of `show_page`, `bind_to_session` and `transfer_session`, and what a project
+  session's role description says of the latter two, say beforehand that such a binding withdraws the pages, and the
+  binding's own word to the session — the `bind_to_session` result, the message a handover writes into it, or the notice
+  at its next launch (see "A change of owner told at the next launch" in `docs/product/changing-session-owners.md`) —
+  says afterwards that its pages were withdrawn with the tools for them.
+- **Pages a withdrawal missed go when Octoboard starts.** Each time the daemon starts, it withdraws every page still
+  held by a session with the role of a bound one — one whose withdrawal failed, say — and the windows are told as for
+  any withdrawal. Until then a form submitted from such a page is refused (see "Submitting a form back to the session"
+  below).
+
 ## Paging through the history
 
-**Every page pushed is kept** until the session that pushed it withdraws it (see "Withdrawing pages" above) or is
-deleted itself: a page is deleted with its session, and so with the session's project or console, which delete their
-sessions (see "Deleting archived sessions" and "Deleting an unused session" in `docs/product/deleting-sessions.md`,
-`docs/product/removing-projects.md` and "Deleting a console" in `docs/product/consoles.md`). Nothing else deletes a
-page.
+**Every page pushed is kept** until the session that pushed it withdraws it (see "Withdrawing pages" above), takes the
+role of a bound one (see "When a session takes the role of a bound one" below), or is deleted itself: a page is deleted
+with its session, and so with the session's project or console, which delete their sessions (see "Deleting archived
+sessions" and "Deleting an unused session" in `docs/product/deleting-sessions.md`, `docs/product/removing-projects.md`
+and "Deleting a console" in `docs/product/consoles.md`). Nothing else deletes a page.
 
 The panel's header (see "A panel's header" in `docs/product/right-pane-panels.md`) carries, after its title, left to
 right (mirrored under a right-to-left language, except for what `docs/product/right-to-left-layout.md` lists as keeping
@@ -207,10 +234,11 @@ session is working or awaiting instructions, and **queued** while the session is
 than refused, because the user is the one submitting and there is nobody to ask to answer the session's prompt first.
 
 The submission goes to the session that pushed the page, found from the page itself, whichever session the user happens
-to be looking at. It fails, and the failure is shown to the user, when the page is no longer its session's newest or
-the session's process is not running. A failed submission changes nothing. The message names which session the
-submission was meant for, so that it cannot be read as being about whichever session the user happens to be looking
-at.
+to be looking at. It fails, and the failure is shown to the user, when the page is no longer its session's newest, when
+the session's process is not running, or when the session has the role of a bound one by then, which has no tool to read
+the submission — the daemon refuses that page as one that does not exist. A failed submission changes nothing. The
+message names which session the submission was meant for, so that it cannot be read as being about whichever session the
+user happens to be looking at.
 
 ## Escape and F6 inside a page
 

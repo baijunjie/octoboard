@@ -1581,6 +1581,27 @@ impl Store {
         Ok(page)
     }
 
+    /// Stores `page` unless its session has the role of a bound session by now (it is bound and
+    /// not a lead session, see [`Session::has_bound_role`]), checked in the same statement so that
+    /// a binding written meanwhile cannot leave a page behind it. Returns whether it was stored.
+    pub fn insert_page_unless_bound(&self, page: &Page) -> Result<bool> {
+        let inserted = self.lock().execute(
+            "INSERT INTO pages (id, console_session_id, html, anchor_message_id, created_at)
+             SELECT ?1, ?2, ?3, ?4, ?5
+             WHERE NOT EXISTS (SELECT 1 FROM sessions
+                               WHERE id = ?2 AND bound_to IS NOT NULL AND lead = 0)",
+            params![
+                page.id,
+                page.console_session_id,
+                page.html,
+                page.anchor_message_id,
+                page.created_at,
+            ],
+        )?;
+        Ok(inserted > 0)
+    }
+
+    #[cfg(test)]
     pub fn insert_page(&self, page: &Page) -> Result<()> {
         self.lock().execute(
             "INSERT INTO pages (id, console_session_id, html, anchor_message_id, created_at)
@@ -1659,6 +1680,22 @@ impl Store {
         }
         tx.commit()?;
         Ok(Ok(deleted))
+    }
+
+    /// The ids of the sessions that have a page and the role of a bound session (bound and not a
+    /// lead session, see [`Session::has_bound_role`]), whose pages no tool of theirs can list.
+    pub fn session_ids_with_pages_and_bound_role(&self) -> Result<Vec<String>> {
+        let conn = self.lock();
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT p.console_session_id FROM pages p
+             JOIN sessions s ON s.id = p.console_session_id
+             WHERE s.bound_to IS NOT NULL AND s.lead = 0
+             ORDER BY p.console_session_id",
+        )?;
+        let ids = stmt
+            .query_map([], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(ids)
     }
 
     /// The id of the session's newest page, or `None` if it has none yet. The ordering is the exact
@@ -5306,16 +5343,6 @@ mod tests {
         assert_eq!(named.title, "Investigate the outage");
     }
 
-    fn page(id: &str, console_session_id: &str, created_at: i64) -> Page {
-        Page {
-            id: id.to_string(),
-            console_session_id: console_session_id.to_string(),
-            html: String::new(),
-            anchor_message_id: None,
-            created_at,
-        }
-    }
-
     /// Pages belong to the console session that pushed them: listing and "the newest" are per
     /// console session even within one console, a tie on `created_at` still resolves to the same
     /// page in both, and deleting a console session takes its pages and no one else's.
@@ -5328,10 +5355,10 @@ mod tests {
             store.insert_session(&console_session(id)).unwrap();
         }
         for page in [
-            page("a-1", "session-a", 1),
-            page("b-1", "session-b", 2),
-            page("a-2", "session-a", 3),
-            page("a-3", "session-a", 3),
+            crate::test_support::test_page("a-1", "session-a", 1),
+            crate::test_support::test_page("b-1", "session-b", 2),
+            crate::test_support::test_page("a-2", "session-a", 3),
+            crate::test_support::test_page("a-3", "session-a", 3),
         ] {
             store.insert_page(&page).unwrap();
         }
@@ -5376,9 +5403,9 @@ mod tests {
             store.insert_session(&console_session(id)).unwrap();
         }
         for page in [
-            page("a-1", "session-a", 1),
-            page("a-2", "session-a", 2),
-            page("b-1", "session-b", 3),
+            crate::test_support::test_page("a-1", "session-a", 1),
+            crate::test_support::test_page("a-2", "session-a", 2),
+            crate::test_support::test_page("b-1", "session-b", 3),
         ] {
             store.insert_page(&page).unwrap();
         }

@@ -811,6 +811,7 @@ fn handover_of(state: &Arc<AppState>, branches: &[&str]) -> (Handover, ScratchDi
     let handover = Handover {
         repository: repository_of(&repo).unwrap(),
         branches: branches.iter().map(|branch| branch.to_string()).collect(),
+        targets: Default::default(),
     };
     (handover, repo)
 }

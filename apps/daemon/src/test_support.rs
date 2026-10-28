@@ -17,7 +17,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 use crate::protocol::{
-    Account, Agent, Console, Origin, Project, ProjectAccount, ProjectSource, Role, Session,
+    Account, Agent, Console, Origin, Page, Project, ProjectAccount, ProjectSource, Role, Session,
     SessionStatus,
 };
 use crate::session::{LiveSession, NewSession};
@@ -689,6 +689,17 @@ pub(crate) fn repo_with(label: &str, files: &[(&[u8], &[u8])]) -> ScratchDir {
 /// session, as the hook's report would have; the branch is the one the record was made for, which
 /// is what a handover asks.
 pub(crate) fn branch_made_by(state: &AppState, repo: &Path, branch: &str, session: &str) {
+    branch_made_from(state, repo, branch, session, None);
+}
+
+/// [`branch_made_by`], with the branch `target` recorded as the one it was created from.
+pub(crate) fn branch_made_from(
+    state: &AppState,
+    repo: &Path,
+    branch: &str,
+    session: &str,
+    target: Option<&str>,
+) {
     git(repo, &["branch", branch]);
     let reflog = std::fs::read_to_string(repo.join(".git/logs/refs/heads").join(branch)).unwrap();
     let head = reflog.lines().next().unwrap().split('\t').next().unwrap();
@@ -710,7 +721,7 @@ pub(crate) fn branch_made_by(state: &AppState, repo: &Path, branch: &str, sessio
                 responsible_session: session.to_string(),
                 responsible_since: time * 1000,
                 responsible_title: format!("Work {session}"),
-                target_branch: None,
+                target_branch: target.map(str::to_string),
             }],
             100,
         )
@@ -1026,4 +1037,15 @@ pub(crate) fn codex_chain(home: &Path, thread: &str, compressed: bool) -> CodexC
     // modification time past the head's.
     move_modification_time_back(&chain.head);
     chain
+}
+
+/// A page of the report panel pushed by `console_session_id` at `created_at`.
+pub(crate) fn test_page(id: &str, console_session_id: &str, created_at: i64) -> Page {
+    Page {
+        id: id.to_string(),
+        console_session_id: console_session_id.to_string(),
+        html: "<p>page</p>".to_string(),
+        anchor_message_id: None,
+        created_at,
+    }
 }

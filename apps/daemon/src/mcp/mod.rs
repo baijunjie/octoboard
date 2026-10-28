@@ -32,6 +32,8 @@ mod handover;
 mod history;
 mod models;
 mod pages;
+mod project_branches;
+mod project_browse;
 mod project_changes;
 mod quotas;
 pub(crate) mod reads;
@@ -49,6 +51,7 @@ pub(crate) use bindings::{
     is_running, owner_from_now_on, owner_notice, running_or_leave, tell_former_owner,
     tell_now_or_leave, tell_released,
 };
+pub(crate) use pages::{withdraw_pages, withdraw_stray_pages};
 
 /// The key the adapters register the server under. It must not collide with a server the project
 /// defines: on Claude Code a colliding key means the *project's* definition is silently never
@@ -190,11 +193,12 @@ macro_rules! session_record_fields {
          for a session started with `new_session`, `user` for the user's own and for one opened \
          through `request_session` or `request_resume_session`, and a handoff's replacement copies \
          the original's, and `has_conversation` says a turn was taken, not that the agent still \
-         holds the record: a `reopen_session` that finds it gone is refused. `model` and `effort`, \
-         when present, are the session's own choices, `null` leaving them to the agent's default; \
-         absent, it follows its project's (else console's) setting. `lead` marks a lead session, \
-         and `owned_sessions` counts the sessions bound to it in any status, archived ones \
-         included, which is what decides whom it can be transferred to. "
+         holds the record: a `reopen_session` that finds it gone is refused (`resumable` in \
+         `get_session`, and in `list_archived` with `check_resumable`, tells beforehand). `model` \
+         and `effort`, when present, are the session's own choices, `null` leaving them to the \
+         agent's default; absent, it follows its project's (else console's) setting. `lead` \
+         marks a lead session, and `owned_sessions` counts the sessions bound to it in any \
+         status, archived ones included, which is what decides whom it can be transferred to. "
     };
 }
 
@@ -497,6 +501,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
     LIST_PROJECT_CHANGES,
+    LIST_PROJECT_BRANCHES,
     READ_PROJECT_DIFF,
     READ_SESSION_HISTORY,
     LIST_AGENT_MODELS,
@@ -532,24 +537,24 @@ const LIST_PAGES: ToolDef = ToolDef {
 };
 const SHOW_PAGE: ToolDef = ToolDef {
     name: "show_page",
-    description: "Push a page to the report panel the user sees beside this session. Every \
-                  page pushed is kept, and the user can page back through earlier ones. `html` \
-                  is a static, self-contained HTML document: scripts and event handlers are \
-                  removed and never run, and nothing external loads (no `<link>` elements, \
-                  frames or external URLs), so inline any styles, stick to generic font \
-                  families rather than a custom typeface, and give an image as a `data:` URL. \
-                  Use it for anything better shown than typed into the terminal: a table, a \
-                  comparison, a set of choices. \
-                  A page may include a native HTML form: when the user submits it, its fields \
-                  are sent back to this session as a message, each field's `name` becoming a \
-                  key, so give every field you want back a `name`. For a choice use \
-                  `<button name=\"choice\" value=\"...\">`; the pressed button's value comes \
-                  back. `required` and `pattern` validation works. The call's result carries \
-                  the pushed page's id; keep it, since it is how a later submission is told to \
-                  have come from this page rather than one pushed after it (`list_pages` \
-                  lists the ids again). Only the newest page accepts a submission: pushing a \
-                  new page makes the previous page's form read-only, so push a fresh form \
-                  rather than expecting an answer from an old one.",
+    description: "Push a page to the report panel the user sees beside this session. Every page \
+                  pushed is kept, and the user can page back through earlier ones, until this \
+                  session is bound to a project session (`bind_to_session`, or handed to one with \
+                  `transfer_session`): that withdraws them all. `html` is a static, self-contained \
+                  HTML document: scripts and event handlers are removed and never run, and nothing \
+                  external loads (no `<link>` elements, frames or external URLs), so inline any \
+                  styles, stick to generic font families rather than a custom typeface, and give \
+                  an image as a `data:` URL. Use it for anything better shown than typed into the \
+                  terminal: a table, a comparison, a set of choices. A page may include a native \
+                  HTML form: when the user submits it, its fields are sent back to this session as \
+                  a message, each field's `name` becoming a key, so give every field you want back \
+                  a `name`. For a choice use `<button name=\"choice\" value=\"...\">`; the pressed \
+                  button's value comes back. `required` and `pattern` validation works. The call's \
+                  result carries the pushed page's id; keep it, since it is how a later submission \
+                  is told to have come from this page rather than one pushed after it \
+                  (`list_pages` lists the ids again). Only the newest page accepts a submission: \
+                  pushing a new page makes the previous page's form read-only, so push a fresh \
+                  form rather than expecting an answer from an old one.",
     schema: || {
         object_schema(
             json!({
@@ -651,7 +656,8 @@ const ARCHIVE_SESSION: ToolDef = ToolDef {
                   `get_session`). The git branches the sessions archived created, and the linked \
                   worktrees that have them checked out, are removed once their processes have \
                   ended, wherever git can do it without force; `branches_left` in the answer names \
-                  any that stay, and why. With `keep` nothing is removed and nothing is waited \
+                  any that stay, and why (`archive` in `get_session_branches` says so beforehand, \
+                  for each branch). With `keep` nothing is removed and nothing is waited \
                   for: they stay bound to their sessions and come back with them when those are \
                   reopened (a session under a lead session is reopened by its lead), the answer \
                   carries `branches_kept: true`, and its `note` names the branches of the sessions \
@@ -999,14 +1005,28 @@ const GET_SESSION_BRANCHES: ToolDef = ToolDef {
                   left, the directory is not), `none` (no worktree has it) or `unknown` (it \
                   could not be read), `worktree` its path when there is one, and \
                   `uncommitted_changes` whether a checked-out worktree holds uncommitted changes \
-                  (null when there is no worktree or it could not be read). Use it to see which \
-                  branches `handover_branches`, or the `branches` of `new_session` and \
-                  `request_session`, can take (each must be one the session is responsible for), \
-                  and which branches and worktrees archiving the session would try to remove. \
-                  `session` is any session, of any console or project, and defaults to this \
-                  one. A console session is responsible for no branch, so its list is empty. \
-                  `branches` in `get_session` and `list_sessions` names the same branches \
-                  without the worktrees.",
+                  (null when there is no worktree or it could not be read). Each branch also \
+                  has `target_branch` (the local branch it was created from, the one to merge \
+                  it into; null when it was created from something that is no local branch), \
+                  `fork_point` (the commit it was created at) and `responsible_since` (when the \
+                  session became responsible for it, in milliseconds since the epoch: its \
+                  creation, or a handover), and `archive`: what archiving the session would do \
+                  with it, as `archive_session` or a `done` report with no open items does, \
+                  which never forces anything. `archive.removed` is true when the branch and \
+                  its worktree both go; `archive.branch` and `archive.worktree` (null when no \
+                  linked worktree has the branch: the main working copy is never removed, so a \
+                  branch checked out there has `worktree_status` `checked_out` and a null \
+                  `archive.worktree`) are each `{state, reason}`, with `state` one of \
+                  `removable`, `uncommitted_changes`, `submodules`, `unmerged`, `checked_out`, \
+                  `locked`, `project_folder` or `failed`, and everything but `removable` stays. \
+                  `archive` is null when that could not be judged. Read it before archiving to \
+                  decide on `keep`. Use it also to see which branches `handover_branches`, or the \
+                  `branches` of `new_session` and `request_session`, can take (each must be one \
+                  the session is responsible for). `session` is any session, of any console or \
+                  project, and defaults to this one. A console session is responsible for no \
+                  branch, so its list is empty. `branches` in `get_session` and `list_sessions` \
+                  names the same branches without the worktrees; `list_project_branches` lists \
+                  a project's branches whoever is responsible for them.",
     schema: || {
         object_schema(
             json!({
@@ -1030,29 +1050,30 @@ const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
                   `branch`: the uncommitted changes of the worktree holding the project's \
                   directory (not necessarily this session's own worktree: reach that, or any \
                   other, with `worktree`). With `worktree`: the uncommitted changes of that \
-                  worktree of the project's repository. With `branch` and `base`: what `branch` \
-                  has changed since it forked from `base` (as `git diff base...branch` shows \
-                  it), and the commits it made since; with `commit` besides, the changes of that \
-                  one commit. Only changes that touch the project's directory are listed. Every \
-                  answer has `project` (its id), `view` (`uncommitted`, `branch` or `commit`), \
-                  `changes`, `total` (all the changes there are), `offset` (where `changes` \
-                  starts), `next_offset` (where the next page starts, `null` on the last) and \
-                  `complete` (false when the daemon cut the list at its own limit, so `total` \
-                  and the changes after it are not known). Each change has `status` (`added`, \
-                  `deleted`, `modified`, `renamed`, `type_changed`, or for a conflicted path how \
-                  it conflicts: `both_modified`, `both_added`, `both_deleted`, `added_by_us`, \
-                  `added_by_them`, `deleted_by_us`, `deleted_by_them`), `path` (inside the \
-                  project, spelled as `read_project_diff` takes it, with `%XX` escapes for a \
-                  name that is not UTF-8 or holds a `%`; the removed path for a deletion), \
+                  worktree of the project's repository. With `branch` (and `base`, which \
+                  defaults to the branch `branch` was created from when that is recorded): what \
+                  `branch` has changed since it forked from `base` (as `git diff base...branch` \
+                  shows it), and the commits it made since; with `commit` besides, the changes \
+                  of that one commit. Only changes that touch the project's directory are \
+                  listed. Every answer has `project` (its id), `view` (`uncommitted`, `branch` or \
+                  `commit`), `changes`, `total` (all the changes there are), `offset` (where \
+                  `changes` starts), `next_offset` (where the next page starts, `null` on the \
+                  last) and `complete` (false when the daemon cut the list at its own limit, so \
+                  `total` and the changes after it are not known). Each change has `status` \
+                  (`added`, `deleted`, `modified`, `renamed`, `type_changed`, or for a conflicted \
+                  path how it conflicts: `both_modified`, `both_added`, `both_deleted`, \
+                  `added_by_us`, `added_by_them`, `deleted_by_us`, `deleted_by_them`), `path` \
+                  (inside the project, spelled as `read_project_diff` takes it, with `%XX` escapes \
+                  for a name that is not UTF-8 or holds a `%`; the removed path for a deletion), \
                   `old_path` (a rename's former path), `kind` (only for a `symlink` or a \
                   `submodule`; for a type change, the new side's), `outside_project` (only when \
-                  the other end of a rename lies outside the project's directory: `side`, `old` \
-                  or `new`, and its `repository_path`; such a change is still `renamed`, with no \
+                  the other end of a rename lies outside the project's directory: `side`, `old` or \
+                  `new`, and its `repository_path`; such a change is still `renamed`, with no \
                   `old_path`, and inside the project amounts to an addition or a deletion), and \
-                  `lines_added` and `lines_removed`, `null` where git counts none (a binary \
-                  file, a link, a submodule, a change with a side outside the project, a very \
-                  large change). In the uncommitted views each change also has `group`: \
-                  `staged`, `unstaged`, `untracked` or `conflicted`; one path can be \
+                  `lines_added` and `lines_removed`, `null` where git counts none (a binary file, \
+                  a link, a submodule, a change with a side outside the project, a very large \
+                  change). In the uncommitted views each change also has `group`: `staged`, \
+                  `unstaged`, `untracked` or `conflicted`; one path can be \
                   in two groups, and a conflicted path has no diff to read. The uncommitted \
                   views add `worktree`: `path` and `branch` as plain text, as \
                   `get_session_branches` gives them (`branch` is `null` when HEAD is detached or \
@@ -1067,11 +1088,15 @@ const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
                   has the commit's `commit`, `parent` and `subject`. Read the diff of a change \
                   with `read_project_diff`. Reading a changing worktree twice can give \
                   different lists, so a page of one is not a page of the other. To check a \
-                  branch a session reports, give the branch and, as `base`, the one it was \
-                  made against, usually the target branch in the session's report or the \
-                  branch the project's directory has checked out (`git_status.branch` in \
-                  `list_projects`). Only projects of this session's own console can be read, \
-                  even when the worktree or branch came from a session of another console.",
+                  branch a session reports, give the branch alone: `base` is then its recorded \
+                  target branch, the `target_branch` of `get_session_branches` and \
+                  `list_project_branches`, which is refused as missing for a branch no session's \
+                  git created from another local branch. For such a branch, or to compare with \
+                  another, give the `base` it was made against, usually the target branch in \
+                  the session's report or the branch the project's directory has checked out \
+                  (`git_status.branch` in `list_projects`). Only projects of this session's own \
+                  console can be read, even when the worktree or branch came from a session of \
+                  another console.",
     schema: || {
         object_schema(
             json!({
@@ -1093,13 +1118,15 @@ const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
                 "branch": {
                     "type": "string",
                     "description": "A local branch to list the changes of since it forked from \
-                                    `base`. Needs `base`. Not with `worktree`.",
+                                    `base`. Needs `base` unless a target branch is recorded \
+                                    for it. Not with `worktree`.",
                 },
                 "base": {
                     "type": "string",
                     "description": "With `branch`: the branch it is compared with, a local \
                                     branch (a remote-tracking one, such as `origin/main`, with \
-                                    `base_remote`).",
+                                    `base_remote`). Left out, the target branch recorded for \
+                                    `branch`, which `base_remote` does not go with.",
                 },
                 "base_remote": {
                     "type": "boolean",
@@ -1123,6 +1150,61 @@ const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
                     "type": "integer",
                     "minimum": 0,
                     "description": "Skip this many changes: a previous answer's `next_offset`. \
+                                    Defaults to 0.",
+                },
+            }),
+            &[],
+        )
+    },
+};
+
+/// The local branches of a project's repository with the session each is recorded as the
+/// responsibility of, read through the browse layer. See `project_branches`.
+const LIST_PROJECT_BRANCHES: ToolDef = ToolDef {
+    name: "list_project_branches",
+    description: "Read-only: the local branches of a project's git repository, without running \
+         git there, in byte order of their names. Each has `branch`, `tip` (the commit it names), \
+         `upstream` (`branch` and `commit` of the remote-tracking branch, only for the branch the \
+         repository's main working copy has checked out, and only when it has one; null \
+         otherwise), `worktree` (null, or the worktree that has it checked out: `path`, `main` \
+         for the repository's main working copy, `holds_project_directory` for the one the \
+         project's directory is in) and `origin`: who the daemon has recorded as responsible for \
+         it, null when nobody is. `origin` has `session` (its id, which may name a session that \
+         no longer exists), `title` (the session's title when it became responsible), \
+         `session_state` (`live`, `interrupted`, `archived` or `gone`: no record of the session \
+         is left), `since` (milliseconds since the epoch: the branch's creation by that session, \
+         or a handover), `target_branch` (the local branch it was created from, the one to merge \
+         it into; null when it was created from something that is no local branch) and \
+         `fork_point` (the commit it was created at). Use it to see who holds a branch, or \
+         whether the session that did is gone, instead of searching every session; a branch of a \
+         session that is `gone` cannot be taken with `handover_branches`. The answer has \
+         `project`, `total` (all the branches there are), `offset`, `next_offset` (`null` on the \
+         last page), `complete` (false when the daemon cut the list at its own limit), \
+         `upstreams_complete` (false when the lookup of the main working copy's upstream was cut \
+         short) and `default_branch` (`branch` and `commit` of the remote's default branch, given \
+         only when the main working copy's branch has no `upstream` and the daemon found it, as \
+         the Git mode compares that branch with it; null otherwise). Only projects of this \
+         session's own console can be read.",
+    schema: || {
+        object_schema(
+            json!({
+                "project": {
+                    "type": "string",
+                    "description": "The project's id, or its name when that is unambiguous. \
+                                    Defaults to this session's own project; a console session \
+                                    has to give it. It must be a project of this session's own \
+                                    console.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "description": "How many branches to return, 200 when left out.",
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Skip this many branches: a previous answer's `next_offset`. \
                                     Defaults to 0.",
                 },
             }),
@@ -1230,22 +1312,23 @@ const GET_SESSION: ToolDef = ToolDef {
     name: "get_session",
     description: concat!(
         "The session's status, plus a tail of what it has printed (the last 8 KiB, or \
-         `output_bytes` of it; a session that has ended keeps its last output; `null` if \
-         none was kept). With `session` left out it reads this session itself, which is how a \
-         session learns its own Octoboard id (`session`) and record. Any session can \
-         be read, in any project or console, but one with `yours: false` is not \
-         yours to act on, whether nobody owns it (`owner: null` on a project session) or \
-         it reports to a different session: leave it alone. A session that is waiting \
-         for the user must be left alone until they have answered. `owner` says whose \
-         it is, `owner_kind` whether that is a console or a project session, and `role` \
-         whether the session itself is a console session. An idle \
-         session with a non-empty `background_tasks` takes messages like any idle \
-         session but still has work running in the background. \
-         A non-null `writes_held` says why messages for a running session are \
-         queued rather than written into it, whatever its `status` reads; \
-         `queued_messages` counts them, and the messages kept for an interrupted \
-         session to take when it is resumed (shared information, and the reports and notices for \
-         an owner). ",
+         `output_bytes` of it; a session that has ended keeps its last output; `null` if none was \
+         kept). With `session` left out it reads this session itself, which is how a session \
+         learns its own Octoboard id (`session`) and record. Any session can be read, in any \
+         project or console, but one with `yours: false` is not yours to act on, whether nobody \
+         owns it (`owner: null` on a project session) or it reports to a different session: leave \
+         it alone. A session that is waiting for the user must be left alone until they have \
+         answered. `owner` says whose it is, `owner_kind` whether that is a console or a project \
+         session, and `role` whether the session itself is a console session. An idle session with \
+         a non-empty `background_tasks` takes messages like any idle session but still has work \
+         running in the background. A non-null `writes_held` says why messages for a running \
+         session are queued rather than written into it, whatever its `status` reads; \
+         `queued_messages` counts them, and the messages kept for an interrupted session to take \
+         when it is resumed (shared information, and the reports and notices for an owner). An \
+         interrupted or archived session also has `resumable`, whether its agent still holds the \
+         conversation: `true` when it does, and for a session with no conversation yet, `false` \
+         when it is proven gone, so that `reopen_session` would refuse it, `null` when that cannot \
+         be told (`reopen_session` goes ahead then). ",
         session_record_fields!(),
         session_context_field!()
     ),
@@ -1356,15 +1439,21 @@ const LIST_ARCHIVED: ToolDef = ToolDef {
     description: concat!(
         "List archived sessions, in any console, whichever session owns them: those of one \
          project, or with `project` left out those of every project and the console sessions too. \
-         `console`, `project`, `owner`, `yours` and `kind` narrow the list, and a session must \
-         match every one given; give `yours`, `owner` or `project` when you can, since an \
-         unfiltered list is long. The newest archived come first, at most `limit` of them; `total` \
-         is how many match, and `older` how many of them come after the page: when there are some, \
-         `next` is a cursor, to pass as `before` to read the next page (it is null on the last). \
-         Each carries its `owner`, `owner_kind` and `yours`, so an earlier one of yours can be \
-         reopened instead of starting over (`yours: true` lists just those; `owner` with another \
-         session's id lists that one's). A session with `yours: false` is somebody else's: leave \
-         it alone. ",
+         `console`, `project`, `owner`, `yours`, `kind` and `branch` narrow the list, and a \
+         session must match every one given; give `yours`, `owner` or `project` when you can, \
+         since an unfiltered list is long. `branch` finds the sessions responsible for a branch \
+         by name (their `branches` name it). With `check_resumable` each session also carries \
+         `resumable`, whether its agent still holds the conversation: `true` when it does, \
+         and for a session with no conversation yet, `false` when it is proven gone, so that \
+         `reopen_session` would refuse it, `null` when that cannot be told (`reopen_session` \
+         goes ahead then); it is off by default because it looks through the agents' record \
+         directories for every session listed. The newest archived come first, at most `limit` \
+         of them; `total` is how many match, and `older` how many of them come after the page: \
+         when there are some, `next` is a cursor, to pass as `before` to read the next page (it \
+         is null on the last). Each carries its `owner`, `owner_kind` and `yours`, so an earlier \
+         one of yours can be reopened instead of starting over (`yours: true` lists just those; \
+         `owner` with another session's id lists that one's). A session with `yours: false` is \
+         somebody else's: leave it alone. ",
         session_record_fields!(),
         session_context_field!()
     ),
@@ -1396,6 +1485,20 @@ const LIST_ARCHIVED: ToolDef = ToolDef {
                     "type": "string",
                     "enum": ["console", "project"],
                     "description": "Only console sessions, or only project sessions.",
+                },
+                "branch": {
+                    "type": "string",
+                    "description": "Only sessions responsible for the local branch of this \
+                                    name (`branches` in each record).",
+                },
+                "check_resumable": {
+                    "type": "boolean",
+                    "description": "Add `resumable` to each session listed: `true` when the \
+                                    agent still holds its conversation (or it has none), \
+                                    `false` when that is proven gone, `null` when it cannot be \
+                                    told. Looks through the agents' record directories for \
+                                    each session, so ask only when you mean to reopen one. \
+                                    Defaults to false.",
                 },
                 "limit": {
                     "type": "integer",
@@ -1461,24 +1564,27 @@ const READ_SESSION_HISTORY: ToolDef = ToolDef {
     description: "Read a session's conversation, read-only: the user's messages, the messages \
                   Octoboard wrote into it (a brief, a report, shared information, a notice) and \
                   the agent's final reply to each, never its tool calls or the progress notes \
-                  before a reply. In a session that is running, the last `agent` entry of the \
-                  turn still open can be a progress note rather than a final reply. Any session \
-                  can be read, in any project or console, as with `get_session`. It is paged by \
-                  entry count from the most recent entry backwards: `entries` are the latest \
-                  `limit` ones, oldest first, each with its `index` (its position in the whole \
-                  history from 0), `speaker` (`user`, `octoboard` or `agent`), `text`, `turn` \
-                  and `at` (milliseconds since the Unix epoch, null when the record gives \
-                  none). `older` counts the entries before the page and `total` all there are; \
-                  pass the first entry's `index` as `before` to read the page before. Indices \
-                  hold only while entries are appended: a `total` smaller than an earlier one \
-                  means the history was rewritten (a rewind, a compaction), so start again from \
-                  the latest page. `unavailable` is true when the agent's record of the \
-                  conversation cannot be found or read, and a session that has had no \
-                  conversation answers no entries.",
+                  before a reply. In a session that is running, the last `agent` entry of the turn \
+                  still open can be a progress note rather than a final reply. Any session can be \
+                  read, in any project or console, as with `get_session`, and with `session` left \
+                  out this session's own is. It is paged by entry count from the most recent entry \
+                  backwards: `entries` are the latest `limit` ones, oldest first, each with its \
+                  `index` (its position in the whole history from 0), `speaker` (`user`, \
+                  `octoboard` or `agent`), `text`, `turn` and `at` (milliseconds since the Unix \
+                  epoch, null when the record gives none). `older` counts the entries before the \
+                  page and `total` all there are; pass the first entry's `index` as `before` to \
+                  read the page before. Indices hold only while entries are appended: a `total` \
+                  smaller than an earlier one means the history was rewritten (a rewind, a \
+                  compaction), so start again from the latest page. `unavailable` is true when the \
+                  agent's record of the conversation cannot be found or read, and a session that \
+                  has had no conversation answers no entries.",
     schema: || {
         object_schema(
             json!({
-                "session": { "type": "string", "description": "The session's id." },
+                "session": {
+                    "type": "string",
+                    "description": "The session's id. Defaults to this session.",
+                },
                 "limit": {
                     "type": "integer",
                     "minimum": 1,
@@ -1492,7 +1598,7 @@ const READ_SESSION_HISTORY: ToolDef = ToolDef {
                                     `index`. Left out, the latest entries are returned.",
                 },
             }),
-            &["session"],
+            &[],
         )
     },
 };
@@ -1511,8 +1617,8 @@ const LIST_SESSIONS: ToolDef = ToolDef {
          reports to, `owner_kind` saying whether that is a console or a project session; \
          null when nobody owns it and it reports to the user). `yours` marks a session \
          that reports to you, and `your_owner` the session you report to, which is also \
-         given at the top level. `console`, `project`, `owner` and `yours` narrow the \
-         list, and a session must match every one given. Use it to find who to share \
+         given at the top level. `console`, `project`, `owner`, `yours`, `kind` and `branch` \
+         narrow the list, and a session must match every one given. Use it to find who to share \
          information with, or an owner to hand a session to or bind to. An idle session \
          with a non-empty `background_tasks` takes messages like any idle session but \
          still has work running in the background. A non-null `writes_held` says why \
@@ -1545,6 +1651,16 @@ const LIST_SESSIONS: ToolDef = ToolDef {
                     "type": "boolean",
                     "description": "`true`: only the sessions that report to you. `false`: only \
                                     the ones that do not.",
+                },
+                "kind": {
+                    "type": "string",
+                    "enum": ["console", "project"],
+                    "description": "Only console sessions, or only project sessions.",
+                },
+                "branch": {
+                    "type": "string",
+                    "description": "Only sessions responsible for the local branch of this \
+                                    name (`branches` in each record).",
                 },
                 "status": {
                     "type": "string",
@@ -1645,7 +1761,9 @@ const TRANSFER_SESSION: ToolDef = ToolDef {
                   sessions (unbound, or bound to a console session while keeping sessions of its \
                   own); a session that has sessions of its own can go only to a console session. \
                   The new owner must be running. The session is told who its owner now is, when it \
-                  next starts if it is not running, and the new owner is sent `note`.",
+                  next starts if it is not running, and the new owner is sent `note`. A lead \
+                  session handed to a project session loses `show_page` and the other tools \
+                  for the report panel, and every page it pushed is withdrawn.",
     schema: || {
         object_schema(
             json!({
@@ -1710,10 +1828,13 @@ const BIND_TO_SESSION: ToolDef = ToolDef {
                   Needs no approval. The owner is a console session of this console — you then \
                   keep the sessions you started and go on driving them — or a project session of \
                   this project that can own sessions; only a session with no sessions of its own \
-                  may join one of those, and it can no longer start or drive sessions afterwards. \
-                  The owner must be running, and is sent `summary` as your first report. The \
-                  result says which tools you have from then on. Refused once this session is \
-                  bound. To tell a session something without binding, use `send_message`.",
+                  may join one of those, and it can no longer start or drive sessions afterwards, \
+                  and loses `show_page` and the other tools for the report panel: every page \
+                  you pushed there is withdrawn when you bind (binding to a console session \
+                  keeps them). The owner must be running, and is sent `summary` as your first \
+                  report. The result says which tools you have from then on. Refused once this \
+                  session is bound. To tell a session something without binding, use \
+                  `send_message`.",
     schema: || {
         object_schema(
             json!({
@@ -1860,6 +1981,7 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
     LIST_PROJECT_CHANGES,
+    LIST_PROJECT_BRANCHES,
     READ_PROJECT_DIFF,
     READ_SESSION_HISTORY,
     LIST_AGENT_MODELS,
@@ -1933,6 +2055,7 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
     LIST_PROJECT_CHANGES,
+    LIST_PROJECT_BRANCHES,
     READ_PROJECT_DIFF,
     READ_SESSION_HISTORY,
     LIST_AGENT_MODELS,
@@ -2385,6 +2508,7 @@ mod tests {
                 "list_sessions",
                 "get_session_branches",
                 "list_project_changes",
+                "list_project_branches",
                 "read_project_diff",
                 "read_session_history",
                 "list_agent_models",
@@ -2423,6 +2547,7 @@ mod tests {
                 "list_sessions",
                 "get_session_branches",
                 "list_project_changes",
+                "list_project_branches",
                 "read_project_diff",
                 "read_session_history",
                 "list_agent_models",
@@ -2466,6 +2591,7 @@ mod tests {
                 "list_sessions",
                 "get_session_branches",
                 "list_project_changes",
+                "list_project_branches",
                 "read_project_diff",
                 "read_session_history",
                 "list_agent_models",
@@ -2484,6 +2610,9 @@ mod tests {
             "list_sessions",
             "read_session_history",
             "get_session_branches",
+            "list_project_changes",
+            "list_project_branches",
+            "read_project_diff",
             "list_agent_models",
             "list_consoles",
             "list_projects",
@@ -2626,6 +2755,10 @@ mod tests {
         for (name, key) in [
             ("list_archived", "before"),
             ("list_archived", "yours"),
+            ("list_archived", "branch"),
+            ("list_archived", "check_resumable"),
+            ("list_sessions", "kind"),
+            ("list_sessions", "branch"),
             ("list_projects", "project"),
             ("list_projects", "refresh"),
             ("archive_session", "keep"),
@@ -2635,6 +2768,42 @@ mod tests {
                 tool(name).description.contains(&format!("`{key}`")),
                 "{name}.{key}"
             );
+        }
+        // A session reads its own history by leaving `session` out.
+        assert_eq!(schema("read_session_history")["required"], json!([]));
+        assert!(tool("read_session_history")
+            .description
+            .contains("`session` left out"));
+        // The new fields are named where the results carry them.
+        for (name, fields) in [
+            (
+                "get_session_branches",
+                &[
+                    "`target_branch`",
+                    "`fork_point`",
+                    "`responsible_since`",
+                    "`archive`",
+                ][..],
+            ),
+            (
+                "list_project_branches",
+                &[
+                    "`tip`",
+                    "`upstream`",
+                    "`worktree`",
+                    "`origin`",
+                    "`session_state`",
+                    "`target_branch`",
+                    "`fork_point`",
+                    "`default_branch`",
+                ][..],
+            ),
+            ("get_session", &["`resumable`"][..]),
+            ("list_archived", &["`resumable`"][..]),
+        ] {
+            for field in fields {
+                assert!(tool(name).description.contains(field), "{name}: {field}");
+            }
         }
         let project = tool_by_name(Role::Project, true, "get_project").unwrap();
         assert!((project.schema)()["properties"]["refresh"].is_object());

@@ -139,10 +139,11 @@ struct Ended {
 
 /// What an approval does, as the request was made.
 pub(crate) enum Action {
-    /// Starts a session, unbound, from `open`, and moves `handover`'s branches to it.
+    /// Starts a session, unbound, from `open`, and moves `handover`'s branches to it. The handover
+    /// is boxed so that this variant stays near the size of the others.
     Start {
         open: OpenRequest,
-        handover: Option<Handover>,
+        handover: Option<Box<Handover>>,
     },
     /// Brings back the archived or interrupted session `target`, which holds the conversation;
     /// `archived` is which it was when the request was made, which is what the dialog words the
@@ -590,7 +591,10 @@ pub async fn ask_for_session(
     ask_to_approve(
         state,
         caller,
-        Action::Start { open, handover },
+        Action::Start {
+            open,
+            handover: handover.map(Box::new),
+        },
         automatic,
         limit,
     )

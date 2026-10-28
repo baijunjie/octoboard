@@ -80,7 +80,8 @@ and a move that cannot be recorded does not fail the call, leaving the caller re
 What differs is that the new session is owned by the caller and no user approval is involved.
 
 - **The opening prompt says so.** The brief is preceded by a paragraph naming the caller by id and title, saying that
-  it started the new session and handed it those branches, naming each, and that the new session is now responsible
+  it started the new session and handed it those branches, naming each, with its target branch where one is recorded
+  (see "Target branches and fork points" in `docs/product/revert-gate.md`), and that the new session is now responsible
   for them and is to carry on the work on them. The paragraph is written before the move, so it names every branch the
   call named, whatever the move then finds.
 - **The result says what became of them.** Where `branches` names at least one branch, the answer adds `branches`, the
@@ -132,9 +133,10 @@ the caller itself, and the two must differ. No approval is asked: the caller own
   caller as their owner and listing each branch with where it is checked out and whether that worktree holds
   uncommitted changes. `from`'s says it is no longer responsible for the branches, must not touch them or their
   worktrees, and must leave any uncommitted changes there as they are. `to`'s says it is now the session responsible
-  for them, the previous one no longer is, and its owner will tell it what to do with them. A session that is
-  interrupted or archived, or that a message could not be written to, is not told; the `note` names it and asks the
-  caller to tell it once it can take a message.
+  for them, the previous one no longer is, and its owner will tell it what to do with them; its list also gives each
+  branch's target branch, where one is recorded (see "Target branches and fork points" in
+  `docs/product/revert-gate.md`). A session that is interrupted or archived, or that a message could not be written
+  to, is not told; the `note` names it and asks the caller to tell it once it can take a message.
 - **Cleanup follows the new responsible session.** Archiving or deleting a session removes the branches it is
   responsible for (see `docs/product/branch-and-worktree-cleanup.md`), so after the move the branches go with `to` and
   no longer with `from`.
@@ -150,17 +152,36 @@ responsible for — and which branches and worktrees archiving the session would
 - **Any session can be read.** `session` is optional and names any session on record, of any console or project,
   archived ones included; left out, it is the caller. A session that does not exist is refused.
 - **What it answers.** `{ session, branches }`, `session` being the id of the session read and `branches` one entry
-  per branch that session is responsible for: `branch`, the branch's name; `project`, the id of the project the
-  session is in; and `worktree`, `worktree_status` and `uncommitted_changes` as the result of `handover_branches`
-  gives them for each branch moved (see "Handing branches between sessions of an owner" above). When `git` cannot be
-  run, or the worktrees cannot be listed, every branch is still listed, with `worktree_status` `unknown`, `worktree`
-  `null` and `uncommitted_changes` `null`.
+  per branch that session is responsible for:
+  - `branch`, the branch's name, and `project`, the id of the project the session is in;
+  - `worktree`, `worktree_status` and `uncommitted_changes`, as the result of `handover_branches` gives them for each
+    branch moved (see "Handing branches between sessions of an owner" above). When `git` cannot be run, or the
+    worktrees cannot be listed, every branch is still listed, with `worktree_status` `unknown`, `worktree` `null` and
+    `uncommitted_changes` `null`;
+  - `target_branch`, the local branch the branch was created from, the one to merge it into — `null` when it was
+    created from something that is no local branch — and `fork_point`, the commit it was created at (see "Target
+    branches and fork points" in `docs/product/revert-gate.md`);
+  - `responsible_since`, when the session became responsible for the branch, in milliseconds since the epoch: the
+    branch's creation by its git, or a handover;
+  - `archive`, what archiving the session by an agent — `archive_session` without `keep`, or a `done` report with no
+    open items — would do with the branch and the linked worktree that has it checked out, judged as that archive judges
+    it (see "Where each item stands" and "Archives made by an agent" in `docs/product/branch-and-worktree-cleanup.md`):
+    `removed`, whether the branch would go, and its linked worktree with it where it has one, and `branch` and
+    `worktree`, each `{ state, reason }`, `reason` saying in prose why it stands so. `state` is `removable`,
+    `uncommitted_changes`, `submodules`, `unmerged`, `checked_out` (checked out in a worktree that stays), `locked`,
+    `project_folder` (a worktree that is a project's folder or holds one) or `failed` (git could not say where it
+    stands); all but `removable` stay, an agent's archive forcing nothing. `worktree` is `null` when no linked worktree
+    has the branch: the main working copy is never removed, so a branch checked out there has `worktree_status`
+    `checked_out` and a `null` `archive.worktree`. `archive` is `null` when it could not be judged.
 - **An empty list** for a session responsible for no branch, and always for a console session (see "Project sessions
   only" below).
 
 The names alone are also part of every session record the orchestration tools give, as `branches` (see "Session
 records" in `docs/product/what-every-session-reads.md`); reading them there runs no `git`, while
-`get_session_branches` runs it to find the worktrees, and only when the session is responsible for a branch.
+`get_session_branches` runs it to find the worktrees and to judge `archive`, and only when the session is responsible
+for a branch. The other way round — every branch of a project with the session responsible for each, a session that
+no longer exists included — is `list_project_branches` (see "Listing a project's branches" in
+`docs/product/what-every-session-reads.md`).
 
 ## When a branch gets a responsible session
 
@@ -268,10 +289,10 @@ process outside the agent's tree.
 - **A record lives and dies with its branch.** Deleting the branch — after merging it, say — deletes its record, so
   a merged-and-deleted branch can no longer be traced. A branch deleted and created again under the same name is a new
   branch and does not inherit the old record.
-- **When records change.** A record is written when a session's report is taken. Whenever the Git mode lists the
-  branches, the records of the repository are brought up to date: the record of a branch that
-  is gone is removed, one whose branch was deleted and made again is dropped, and a renamed branch's record moves to
-  its new name. Nothing runs on a periodic timer.
+- **When records change.** A record is written when a session's report is taken. Whenever the branches are listed — by
+  the Git mode, or by a session's `list_project_branches` — the records of the repository are brought up to date: the
+  record of a branch that is gone is removed, one whose branch was deleted and made again is dropped, and a renamed
+  branch's record moves to its new name. Nothing runs on a periodic timer.
 - **Removing a project** clears the records of its repository, unless another project still points into that repository
   (see `docs/product/removing-projects.md`). Deleting a console removes every project under it, so it clears theirs the
   same way.
