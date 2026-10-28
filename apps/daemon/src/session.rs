@@ -107,6 +107,10 @@ pub struct LiveSession {
     /// meanwhile that operation reports the outcome, and the owner is not also told the process
     /// ended on its own.
     watched_under_claim: AtomicBool,
+    /// Set by the exit watcher (`AppState::watch_exit`) once it is done with this process's end:
+    /// the end is recorded and the owner, if it was to be told, has been sent the notice (written
+    /// to it or queued for it) or could not be.
+    exit_settled: AtomicBool,
 }
 
 impl std::ops::Deref for LiveSession {
@@ -168,6 +172,7 @@ impl LiveSession {
             screen_watchers: AtomicU32::new(0),
             ended_on_purpose: AtomicBool::new(false),
             watched_under_claim: AtomicBool::new(false),
+            exit_settled: AtomicBool::new(false),
         }
     }
 
@@ -465,6 +470,18 @@ impl LiveSession {
     /// Whether [`Self::end`] stopped this process.
     pub fn was_ended_on_purpose(&self) -> bool {
         self.ended_on_purpose.load(Ordering::Acquire)
+    }
+
+    /// Notes that the exit watcher is done with this process's end.
+    pub fn settle_exit(&self) {
+        self.exit_settled.store(true, Ordering::Release);
+    }
+
+    /// Whether the exit watcher is done with this process's end, so that what it would send is
+    /// sent: what a test waits for before asserting an owner was not told.
+    #[cfg(test)]
+    pub fn is_exit_settled(&self) -> bool {
+        self.exit_settled.load(Ordering::Acquire)
     }
 }
 

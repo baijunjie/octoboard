@@ -2560,9 +2560,10 @@ impl AppState {
                         Ok(()) if unasked && session.bound_to.is_some() => {
                             // Delivery writes into the owner's PTY, which blocks.
                             let state = state.clone();
-                            tokio::task::spawn_blocking(move || {
+                            let _ = tokio::task::spawn_blocking(move || {
                                 crate::reporting::tell_owner_it_ended(&state, &session)
-                            });
+                            })
+                            .await;
                         }
                         Ok(()) => {}
                         Err(err) => {
@@ -2578,6 +2579,7 @@ impl AppState {
                     tracing::warn!(session = %live.id, %err, "reading the exited session failed")
                 }
             }
+            live.settle_exit();
         });
     }
 

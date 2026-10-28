@@ -102,7 +102,10 @@ and only then spawns the task that tells the owner — so a marker sent once tha
 first. A test asserting such a message is present therefore waits for the message's own text with
 `test_support::output_containing` and asserts it in what that returns, keeping the marker only for what must be
 absent or counted afterwards; reading behind the marker and asserting presence fails intermittently under the full
-suite's load. The marker does not make an absence of such a spawned write meaningful either.
+suite's load. A test asserting the owner was not told of an end first waits with `test_support::exit_settled` for
+every process whose end could have told it — including one production code started and watched on its own, such as
+the process a relaunch started, which the test reaches through its stand-in launch's list of started processes — and
+only then reads behind the marker.
 
 ## Seed the agent's model list before a daemon test gives anything a model or an effort
 

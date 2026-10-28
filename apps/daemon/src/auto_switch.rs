@@ -1762,6 +1762,10 @@ mod tests {
             "on its own account again"
         );
         assert!(fixture.state.live_session("w").is_some());
+        let died = (*fixture.started.lock().unwrap()[0]).clone();
+        for process in [&*fixture.worker_process, &died] {
+            crate::test_support::exit_settled(process).await;
+        }
         let heard = owner_heard(&fixture).await;
         assert!(!heard.contains("ended on its own"), "{heard}");
         assert!(!heard.contains("could neither switch"), "{heard}");

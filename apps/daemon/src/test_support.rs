@@ -275,6 +275,17 @@ pub(crate) fn running(state: &Arc<AppState>, id: &str) -> StandIn {
     live
 }
 
+/// Waits until the exit watcher is done with the end of `live`'s process, so that whatever it
+/// would send the session's owner is sent: what an absence asserted behind
+/// [`heard_after_marker`] needs, since the watcher tells the owner only after recording the end.
+pub(crate) async fn exit_settled(live: &Arc<LiveSession>) {
+    let live = live.clone();
+    assert!(
+        within(PATIENCE, move || live.is_exit_settled()).await,
+        "the exit watcher was done with the end"
+    );
+}
+
 /// Polls a stand-in session's output until it holds `needle`.
 pub(crate) fn output_containing(live: &LiveSession, needle: &str) -> String {
     let deadline = Instant::now() + PATIENCE;

@@ -1382,11 +1382,9 @@ mod tests {
             // What an account switch's stop does; archive and shutdown mark the record first.
             live.end();
         }
-        for id in ["worker", "claimed", "going-down", "alone"] {
-            recorded_ended(&state, id).await;
+        for live in &ending {
+            crate::test_support::exit_settled(live).await;
         }
-        // The notice, if there were one, is written off the watcher right after the record.
-        tokio::time::sleep(Duration::from_millis(300)).await;
 
         let heard = hub_heard(&state, &hub).await;
         assert!(!heard.contains("ended on its own"), "{heard}");

@@ -327,7 +327,7 @@ mod tests {
         state.store.set_auto_approve_account_switches(true).unwrap();
         let snapshot = prepare(&state, &dir, "of-a");
         let caller = running(&state, "a");
-        let _original = live_and_watched(&state, "of-a");
+        let original = live_and_watched(&state, "of-a");
         let (launches, started, resumed) = Default::default();
 
         let result = switch_session_account(
@@ -347,6 +347,8 @@ mod tests {
         assert_eq!(launches.lock().unwrap().len(), 1);
         let record = state.store.get_session("of-a").unwrap().unwrap();
         assert_eq!(record.bound_to.as_deref(), Some("a"));
+        // The original process's end is the exit watcher's to judge, after the switch returned.
+        crate::test_support::exit_settled(&original).await;
         assert_nobody_told(&state, &caller, &started);
         // Its conversation shows no turn in progress, so it is not continued.
         assert_eq!(launches.lock().unwrap()[0].2, None);
@@ -442,7 +444,7 @@ mod tests {
         state.store.set_auto_approve_account_switches(true).unwrap();
         let snapshot = prepare(&state, &dir, "mine");
         let caller = running(&state, "starter");
-        let _original = live_and_watched(&state, "mine");
+        let original = live_and_watched(&state, "mine");
         state
             .set_session_account("mine", Some("claude-a"), dir.join("claude-a").to_str())
             .unwrap();
@@ -475,6 +477,8 @@ mod tests {
             *resumed.lock().unwrap(),
             [(Some("agent-1".to_string()), None)]
         );
+        // The original process's end is the exit watcher's to judge, after the switch returned.
+        crate::test_support::exit_settled(&original).await;
         assert_nobody_told(&state, &caller, &started);
     }
 
