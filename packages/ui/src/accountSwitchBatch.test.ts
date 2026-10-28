@@ -168,10 +168,27 @@ it("keeps a queued session shown as switching through the daemon's own updates, 
   const gate = deferred();
   const done = batch(store, ["a"], "a-1", () => gate.promise);
   applyDaemonEvent(store, { type: "session_upserted", session: session("a", { switching_account: true }) });
-  applyDaemonEvent(store, { type: "session_upserted", session: session("a") });
+  applyDaemonEvent(store, { type: "session_upserted", session: session("a", { switching_account: true, account_id: "a-1" }) });
+  const switching = store.getState().sessions;
+  applyDaemonEvent(store, { type: "session_upserted", session: session("a", { account_id: "a-1" }) });
+  expect(store.getState().sessions).toBe(switching);
   expect(store.getState().sessions.get("a")!.switching_account).toBe(true);
   gate.resolve();
   await done;
+  expect(store.getState().sessions.get("a")!.switching_account).toBeUndefined();
+});
+
+it("remembers a daemon switch starting under the queue overlay after the batch lets go", async () => {
+  const store = storeOf([session("a")]);
+  const gate = deferred();
+  const done = batch(store, ["a"], "a-1", () => gate.promise);
+  const switching = store.getState().sessions;
+  applyDaemonEvent(store, { type: "session_upserted", session: session("a", { switching_account: true }) });
+  expect(store.getState().sessions).toBe(switching);
+  gate.resolve();
+  await done;
+  expect(store.getState().sessions.get("a")!.switching_account).toBe(true);
+  applyDaemonEvent(store, { type: "session_upserted", session: session("a") });
   expect(store.getState().sessions.get("a")!.switching_account).toBeUndefined();
 });
 
