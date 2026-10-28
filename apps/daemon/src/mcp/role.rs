@@ -244,11 +244,29 @@ pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
 }
 
 /// Shared intent rules use qualified tool names in project prompts and bare names in the
-/// console instruction file, which serves every agent.
-pub(super) fn handover_guidance(agent: Option<Agent>) -> String {
+/// console instruction file, which serves every agent. A session that cannot start sessions of
+/// its own (`directs_sessions` false) is not told of the tools that do, which it does not have.
+pub(super) fn handover_guidance(agent: Option<Agent>, directs_sessions: bool) -> String {
     let tool = |name: &str| match agent {
         Some(agent) => qualified_tool_name(agent, name),
         None => name.to_string(),
+    };
+    let (directing, unsure) = if directs_sessions {
+        (
+            format!(
+                "- Use `{new_session}` only when the user wants you to keep directing the \
+                   recipient and receiving its reports. `{handoff_session}` replaces an existing \
+                   session you own; it does not hand your own work to a peer.\n",
+                new_session = tool("new_session"),
+                handoff_session = tool("handoff_session"),
+            ),
+            "a peer session, handover notes followed by ending, or a child session you direct",
+        )
+    } else {
+        (
+            String::new(),
+            "a peer session or handover notes followed by ending",
+        )
     };
     format!(
         "## Continuing work in another session\n\n\
@@ -260,17 +278,12 @@ pub(super) fn handover_guidance(agent: Option<Agent>) -> String {
          - When the user asks you to leave handover notes and finish, or says you can end, \
            without asking to start a successor, leave the notes and end your work. Do not \
            create or transfer sessions or continue work in the background.\n\
-         - Use `{new_session}`, where available, only when the user wants you to keep directing \
-           the recipient and receiving its reports. `{handoff_session}`, where available, \
-           replaces an existing session you own; it does not hand your own work to a peer.\n\
+         {directing}\
          - Instructions to persist until completion, permission to act without approval and \
            earlier permission to delegate do not override the user's intent for this handover \
-           or a request to end. If you cannot tell whether the user wants a peer session, \
-           handover notes followed by ending, or a child session you direct, ask the user \
+           or a request to end. If you cannot tell whether the user wants {unsure}, ask the user \
            before acting.",
         request_session = tool("request_session"),
-        new_session = tool("new_session"),
-        handoff_session = tool("handoff_session"),
     )
 }
 
@@ -318,12 +331,13 @@ fn relationships(agent: Agent, owns: bool) -> String {
              point says. While `auto_select_account` is on, a left-out account is the one of that \
              agent whose weekly quota resets soonest and that can still open a session. When none \
              does, your own account is used only when it is your own agent and can still open a \
-             session; otherwise the account is the project's, else the console's (`get_project` \
+             session; otherwise the account is the project's, else the console's (`{get_project}` \
              gives it in `effective.accounts`). Name another account only when the user asked \
              for it, or when it is the way to reach another agent. `title` names it in the \
              user's language. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
+            get_project = tool("get_project"),
         ));
         lines.push(session_choice_guidance(agent));
         lines.push(format!(
@@ -459,10 +473,11 @@ fn relationships(agent: Agent, owns: bool) -> String {
         "- `{list_sessions}` shows the other running sessions, in every console and project, and \
          who owns each, with its account, model and the names of the branches it is responsible \
          for (`console`, `project`, `owner`, `yours`, `kind` and `branch` narrow it, and \
-         `status: interrupted` lists the interrupted ones instead); `{get_session_branches}` \
-         gives the worktree each of those branches is checked out in and its `target_branch`, \
-         the branch it was created from and is merged into; `{list_project_branches}` lists a \
-         project's branches with the session responsible for each. `{send_message}` tells any \
+         `status` is `live` (the running ones) by default, `interrupted` for the interrupted \
+         ones, or `any` for both); `{get_session_branches}` gives the worktree each of those \
+         branches is checked out in and its `target_branch`, the branch it was created from \
+         and is merged into; `{list_project_branches}` lists a project's branches with the \
+         session responsible for each. `{send_message}` tells any \
          of them something that touches its work — what you found, decided or changed. It is \
          information for that session to weigh, not an instruction, its own owner is sent a \
          copy, and it needs no relationship between the two of you. An interrupted session \
@@ -473,7 +488,11 @@ fn relationships(agent: Agent, owns: bool) -> String {
         list_project_branches = tool("list_project_branches"),
         send_message = tool("send_message"),
     ));
-    format!("{}\n\n{}", lines.join("\n"), handover_guidance(Some(agent)))
+    format!(
+        "{}\n\n{}",
+        lines.join("\n"),
+        handover_guidance(Some(agent), owns)
+    )
 }
 
 /// What a project session bound to another session is told. It never talks to its owner directly:
@@ -617,7 +636,8 @@ mod tests {
     use crate::mcp::console_instructions::console_session_instructions;
 
     /// A role description that names a tool with the wrong prefix points the model at something it
-    /// cannot see, and the prefix differs between the agents.
+    /// cannot see, and the prefix differs between the agents; every tool each kind is offered is
+    /// named in it by that name.
     #[test]
     fn tool_names_in_the_role_text_carry_that_agents_prefix() {
         for agent in Agent::ALL {
@@ -649,6 +669,56 @@ mod tests {
                 assert!(!console_session.contains("mcp__"));
                 assert!(!project_session.contains("mcp__"));
                 assert!(!unbound_session.contains("mcp__"));
+            }
+        }
+    }
+
+    /// A project session's text names no tool it is not offered, and none by a bare name: a
+    /// backticked token with that agent's prefix is a tool the kind is offered, and one without it
+    /// is no tool's bare name (argument names and statuses are not tool names). A bound session,
+    /// which cannot start sessions of its own, is not offered the child session it would direct.
+    #[test]
+    fn a_project_sessions_text_names_only_the_tools_it_is_offered() {
+        let every_tool = [
+            crate::mcp::tools_for(Role::Console, false),
+            crate::mcp::tools_for(Role::Project, true),
+            crate::mcp::tools_for(Role::Project, false),
+        ]
+        .concat();
+        for agent in Agent::ALL {
+            let prefix = qualified_tool_name(agent, "");
+            let project_session = role_description(
+                Role::Project,
+                Some(&Owner::Console),
+                agent,
+                &RoleOptions::default(),
+            );
+            let unbound_session =
+                role_description(Role::Project, None, agent, &RoleOptions::default());
+            for (text, bound) in [(&project_session, true), (&unbound_session, false)] {
+                assert_eq!(
+                    text.matches('`').count() % 2,
+                    0,
+                    "unbalanced backticks (bound: {bound})"
+                );
+                assert_eq!(
+                    text.contains("a child session you direct"),
+                    !bound,
+                    "child session option (bound: {bound})"
+                );
+                let catalogue = crate::mcp::tools_for(Role::Project, bound);
+                for token in text.split('`').skip(1).step_by(2) {
+                    match token.strip_prefix(&prefix) {
+                        Some(name) => assert!(
+                            catalogue.iter().any(|tool| tool.name == name),
+                            "`{name}` is named but not offered (bound: {bound})"
+                        ),
+                        None => assert!(
+                            every_tool.iter().all(|tool| tool.name != token),
+                            "`{token}` is a tool named without its prefix (bound: {bound})"
+                        ),
+                    }
+                }
             }
         }
     }

@@ -12,7 +12,9 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`, and the reads
   It changes nothing of another console.
 - **A project session**, bound or not, reads its own project's settings with `get_project`, which takes no `project`
   and answers for no other project; its only argument is an optional `refresh`, which checks the project's git status
-  first (see "Reading the status from a session" in `docs/product/project-git-status.md`). It changes no setting.
+  first (see "Reading the status from a session" in `docs/product/project-git-status.md`). It changes no setting, not
+  even its own project's description or tags. This is by design: a project's settings are changed only by a console
+  session (or by the user).
 - **Every session**, of either kind, reads the settings of every project of its own console with `list_projects`; of
   another console's projects it reads only each one's id, name, description and tags (see "Listing a console's
   projects" in `docs/product/what-every-session-reads.md`).
