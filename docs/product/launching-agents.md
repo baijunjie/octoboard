@@ -157,8 +157,11 @@ with.
 
 The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and reasoning
 effort" below), as is an explicit Codex approval reviewer or Claude Code approval mode chosen for the agent (see
-"Approval modes" in `docs/product/agent-accounts.md`). These are the user's choices carried to the agent, separate from
-the injected capabilities.
+"Approval modes" in `docs/product/agent-accounts.md`), and, for Codex and Grok Build while the agent's Claude
+compatibility is on, what has the session load Claude Code's configuration: for Codex, a section appended to its
+developer instructions and Claude Code's MCP servers, for Grok Build, its own switches for Claude Code's configuration
+(see "Claude compatibility" in `docs/product/agent-accounts.md`). These are the user's choices carried to the agent,
+separate from the injected capabilities.
 
 ### The console session's instruction file
 
@@ -365,6 +368,11 @@ Besides the terminal type, the variables set over the snapshot are:
   `docs/product/per-agent-launch-specifics.md`). A Grok Build config directory is not passed as `GROK_HOME` itself;
 - for every Grok Build session, `GROK_THEME`, which picks Grok's own colour theme to match the session terminal (see
   "Grok Build's theme" in `docs/product/per-agent-launch-specifics.md`);
+- for a Grok Build session while Grok Build's Claude compatibility is on, the five `GROK_CLAUDE_*_ENABLED` variables, set
+  to `true` (see "Claude compatibility for Grok Build" in `docs/product/per-agent-launch-specifics.md`);
+- for a Codex session while Codex's Claude compatibility is on, the variables that carry the passed Claude Code MCP
+  servers' header and `env` values (see "Claude compatibility for Codex" in
+  `docs/product/per-agent-launch-specifics.md`);
 - for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR`
   (when exactly, an account whose last change of sharing is incomplete included, is in "Claude Code's auto memory" in
   `docs/product/sharing-the-default-configuration.md`).

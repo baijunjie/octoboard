@@ -56,7 +56,8 @@ export function SettingSwitch({
   onChange: (value: boolean) => void;
   /** The ids of the notes that describe the switch. */
   describedBy?: string;
-  /** The switch cannot be changed now, for a reason `describedBy` gives. It is not natively disabled, which would take
+  /** The switch cannot be changed now: for a reason `describedBy` gives, or only for as long as an operation it
+   * started is unanswered, which needs no note. It is not natively disabled, which would take
    * it out of the Tab order and drop focus from a user who is on it: it stays focusable, reads as `aria-disabled`,
    * looks faded, and a press or Space leaves it as it is. */
   isUnavailable?: boolean;

@@ -21,7 +21,9 @@ import {
   applyToAll,
   availableFor,
   choicesFor,
+  claudeCompatibilityChanges,
   directoryProblem,
+  hasClaudeCompatibilityChoices,
   hasRecordedPath,
   isUsableDirectory,
   targetOf,
@@ -296,6 +298,11 @@ export function ImportReview({
         sameValue(settings.git_workflow, settings.current_git_workflow)
           ? <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.same")} />
           : <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
+      )}
+      {hasClaudeCompatibilityChoices(settings.claude_compatibility) && settings.current_claude_compatibility && (
+        claudeCompatibilityChanges(settings.claude_compatibility, settings.current_claude_compatibility)
+          ? <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.settings.badge.changes")} tone="accent" />
+          : <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.settings.badge.same")} />
       )}
       {shortcuts && (
         !shortcuts.changes

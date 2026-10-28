@@ -382,9 +382,14 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
         description: "The application-wide settings: `auto_pull_repositories`, \
                       `auto_delete_unresumable_archives`, `auto_select_account`, \
                       `sidebar_order_by_status`, `default_clone_dir`, the `git_workflow` settings, \
-                      the `accounts` (each agent also has a default account, listed with the id \
-                      `default`; `disabled` marks one the user turned off for new sessions), and \
-                      the `trusted_directories`. Accounts and trusted directories are read-only here.",
+                      `claude_compatibility` (per agent other than Claude Code, whether its \
+                      sessions load Claude Code's instructions (CLAUDE.md and rules), skills, \
+                      agents, commands, MCP servers, hooks and permissions; until the user \
+                      chooses, Grok Build is on and Codex is on while Claude Code is an added \
+                      agent), the `accounts` (each agent also has a default account, listed with \
+                      the id `default`; `disabled` marks one the user turned off for new \
+                      sessions), and the `trusted_directories`. Accounts and \
+                      trusted directories are read-only here.",
         schema: || object_schema(json!({}), &[]),
     },
     ToolDef {
@@ -431,6 +436,21 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
                                         goes back to the built-in default.",
                     },
                     "git_workflow": git_workflow_schema(GitWorkflowFor::Application),
+                    "claude_compatibility": {
+                        "type": "object",
+                        "description": "Per agent other than Claude Code (`codex`, `grok`), \
+                                        whether that agent's sessions load Claude Code's \
+                                        instructions (CLAUDE.md and rules), skills, agents, \
+                                        commands, MCP servers, hooks and permissions. An agent \
+                                        left out is left as it is. Setting it records a choice \
+                                        that then holds whatever agents are added. Read when a \
+                                        session starts, resumes or switches account.",
+                        "properties": {
+                            "codex": { "type": "boolean" },
+                            "grok": { "type": "boolean" },
+                        },
+                        "additionalProperties": false,
+                    },
                 }),
                 &[],
             )

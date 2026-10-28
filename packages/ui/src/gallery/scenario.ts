@@ -302,6 +302,9 @@ export interface Scenario {
   sessionHandoffs?: Record<string, FixtureError | "pending">;
   /** A refusal to save an agent's permission approval, Codex's reviewer or Claude Code's mode; successful requests update settings. */
   accountApprovalError?: FixtureError;
+  /** A refusal to save an agent's Claude compatibility switch (an `update_settings` carrying `claude_compatibility`);
+   * successful requests update settings. */
+  claudeCompatibilityError?: FixtureError;
   /** How a `set_account_sharing` that is not turned away at once ends. An `account_sharing_failed` error is a change that
    * fails part-way: the choice is recorded, the account stays incomplete and the failure (its items and detail from the
    * error's params) is kept in the account's sharing state until the next change starts. Any other error is a refusal

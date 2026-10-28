@@ -41,15 +41,22 @@ holding none of the agent's record directories has never shown a record to be mi
 answers, and unknown never destroys anything; `agent_records::Resumability` is the shape for a session's
 conversation.
 
-## Read a file inside a project only through `browse::live`, never with `File::open`
+## Read a file inside a project only through `browse::live`, and one a launch reads outside it without blocking
 
 Applies to daemon code that reads a file's content from a project's directory or worktree — to count it, sniff it,
-hash it, send it. Go through `live::read_file` (from a path relative to the scope) or `live::read_resolved` (once the
-path has been resolved inside it), never `File::open` or `fs::read`. What sits in a project is whatever the user or an
-agent put there: a link leading out of the project, a FIFO whose open blocks until a writer appears — holding one of
-the browse reads' few daemon-wide slots with no deadline — a device that reads forever, a file swapped mid-read. `live`
-refuses each of these and honours the request's cancel; a direct open does none of it, and a fixture of plain files
-cannot tell the two apart.
+hash it, send it, or to read an agent's configuration there while launching a session (`.mcp.json`,
+`.claude/settings.local.json`, `.codex/config.toml`). Go through `live::read_file` (from a path relative to the scope)
+or `live::read_resolved` (once the path has been resolved inside it), never `File::open`, `fs::read` or
+`fs::read_to_string`. What sits in a project is whatever the user or an agent put there: a link leading out of the
+project, a FIFO whose open blocks until a writer appears — holding one of the browse reads' few daemon-wide slots, or
+the launch itself, with no deadline — a device that reads forever, a file swapped mid-read. `live` refuses each of
+these and honours the request's cancel; a direct open does none of it, and a fixture of plain files cannot tell the
+two apart.
+
+A configuration file a launch reads outside the project (a directory above it, the home directory) cannot go through
+`live`, but still must not block: open it with `O_NONBLOCK`, refuse anything but a regular file, and bound the bytes
+read. In an adapter, `read_bounded_text` in `apps/daemon/src/adapter/files.rs` does both cases, picking by whether the
+path is inside the project.
 
 ## Decide whether two account directories are one by `account_dir_key`, never by comparing their text
 

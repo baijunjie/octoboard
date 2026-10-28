@@ -4,6 +4,7 @@ import type { Imported } from "../../configuration/ImportResult";
 import type { Inspection } from "../../configuration/ImportReview";
 import type { AccountFallback } from "../../protocol";
 import { SCENARIOS } from ".";
+import { effectiveClaudeCompatibility } from "./builders";
 import { DEFAULT_CLONE_DIR } from "./configuration";
 
 type Shown<T> = { id: string; machine: NonNullable<NonNullable<(typeof SCENARIOS)[number]["state"]>["settings"]> | undefined } & T;
@@ -93,6 +94,10 @@ it("reports the setting this machine has now as the scenario's own state has it"
     }
     if (inspection.settings!.git_workflow) {
       expect(inspection.settings!.current_git_workflow, id).toEqual(machine!.git_workflow);
+    }
+    if (inspection.settings!.claude_compatibility) {
+      // The values in effect on this machine, not its explicit choices alone.
+      expect(inspection.settings!.current_claude_compatibility, id).toEqual(effectiveClaudeCompatibility(machine!.claude_compatibility ?? {}, machine!.added_agents));
     }
   }
 });
@@ -195,6 +200,9 @@ it("reports application settings only for a document that carries them", () => {
       }
       if (inspection.settings.git_workflow) {
         expect(result.settings_applied.git_workflow, id).toEqual(inspection.settings.git_workflow);
+      }
+      if (inspection.settings.claude_compatibility) {
+        expect(result.settings_applied.claude_compatibility, id).toEqual(inspection.settings.claude_compatibility);
       }
     }
   }

@@ -195,16 +195,19 @@ working directory. Neither the avatar itself nor the console's console session i
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The four settings" in `docs/product/git-workflow-settings.md`); `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
+| `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/agent-accounts.md`). |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 
 `update_settings` takes `auto_pull_repositories`, `auto_delete_unresumable_archives`, `auto_select_account`,
-`sidebar_order_by_status`, `default_clone_dir` and `git_workflow`, under the rules of the same settings in Settings: the
-switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a blank one goes back to the
-built-in default. `git_workflow` is an object of any of the four git workflow settings, with the values
-`update_project`'s takes (`rebase_before_merge` and `delivery` apply only while `development` is not `in_place`, and
-keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
-unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
+`sidebar_order_by_status`, `default_clone_dir`, `git_workflow` and `claude_compatibility`, under the rules of the same
+settings in Settings: the switches take `true` or `false`, a clone directory must be absolute or start with `~/`, and a
+blank one goes back to the built-in default. `git_workflow` is an object of any of the four git workflow settings, with
+the values `update_project`'s takes (`rebase_before_merge` and `delivery` apply only while `development` is not
+`in_place`, and keep their values while it is); an item left out, or given as `null`, stays as it is.
+`claude_compatibility` is an object of `codex` and `grok`, each `true` or `false`; an agent left out stays as it is, and
+an agent given is recorded as the user's choice, which then holds whatever agents are added, as turning its switch in
+Settings does. A refused value leaves the others unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
 `auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices` or
 `interface_language` argument is ignored — the setting stays as it is, `get_settings` never lists any of them, and the rest of the call applies as usual.
 Turning `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch
@@ -224,7 +227,8 @@ afterwards. A changed `project_session_launch` reaches a project session at its 
 session sets that value itself. A changed `development`, `rebase_before_merge` or `delivery`, application-wide or a
 project's own, is sure to reach only project sessions begun after it (see "When a change reaches a session" in
 `docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The switch" in
-`docs/product/revert-gate.md`).
+`docs/product/revert-gate.md`). A changed `claude_compatibility` reaches a session of that agent when it next starts or
+resumes, an account switch included.
 
 ## Refusals
 
@@ -233,4 +237,6 @@ tool. Besides the refusals above, an argument of the wrong type — a boolean, a
 is refused with a reason rather than read as left out. So is a `git_workflow` object, for a project or
 application-wide, that holds a key other than the four git workflow settings, a `development` other than `in_place`,
 `branch` and `worktree`, or a `delivery` other than `ask`, `merge` and `pull_request`,
-so that a misspelt item is not taken for a change that changed nothing.
+so that a misspelt item is not taken for a change that changed nothing. So is a `claude_compatibility` object that
+names `claude`, which has no such setting, or anything that is not an agent, or holds a value other than `true` or
+`false`.

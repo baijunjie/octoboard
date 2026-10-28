@@ -264,20 +264,37 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: &Path) -> Result<LaunchPlan> {
         Some(TerminalAppearance::Dark) => "groknight",
         None => "auto",
     };
+    let mut env = vec![
+        (
+            "GROK_HOME".to_string(),
+            grok_home.to_string_lossy().into_owned(),
+        ),
+        ("GROK_THEME".to_string(), theme.to_string()),
+    ];
+    // Grok's own Claude compatibility is on unless its configuration or the user's shell turns it
+    // off; these outrank both. Turned off in Octoboard, nothing is passed and Grok follows its own
+    // configuration.
+    if spec.claude_compatibility {
+        env.extend(CLAUDE_COMPATIBILITY_VARS.map(|var| (var.to_string(), "true".to_string())));
+    }
     Ok(LaunchPlan {
         args,
-        env: vec![
-            (
-                "GROK_HOME".to_string(),
-                grok_home.to_string_lossy().into_owned(),
-            ),
-            ("GROK_THEME".to_string(), theme.to_string()),
-        ],
+        env,
         carried_trust: Some(carried_trust),
         shared_config_writeback: shared_config_writeback(&source_home, &grok_home, spec.model),
         ..LaunchPlan::default()
     })
 }
+
+/// The environment variables of Grok's `compat.claude.{skills,rules,agents,mcps,hooks}`
+/// configuration, which outrank the configuration files.
+const CLAUDE_COMPATIBILITY_VARS: [&str; 5] = [
+    "GROK_CLAUDE_SKILLS_ENABLED",
+    "GROK_CLAUDE_RULES_ENABLED",
+    "GROK_CLAUDE_AGENTS_ENABLED",
+    "GROK_CLAUDE_MCPS_ENABLED",
+    "GROK_CLAUDE_HOOKS_ENABLED",
+];
 
 /// Refuses a pinned source home Grok has never been run against: it carries no `sessions/`
 /// directory for the per-session farm to link, so a conversation Grok writes during the session
@@ -971,6 +988,33 @@ mod tests {
         assert_eq!(theme(None), "auto");
         assert_eq!(theme(Some(TerminalAppearance::Light)), "grokday");
         assert_eq!(theme(Some(TerminalAppearance::Dark)), "groknight");
+    }
+
+    /// Claude compatibility turns Grok's own switches for Claude Code's configuration on at launch;
+    /// off, none of them is passed and Grok follows its own configuration.
+    #[test]
+    fn claude_compatibility_sets_groks_claude_switches_only_when_on() {
+        let mut fixture = spec_fixture();
+        with_default_home(&mut fixture);
+        let claude_vars = |plan: &LaunchPlan| -> Vec<(String, String)> {
+            plan.env
+                .iter()
+                .filter(|(key, _)| key.starts_with("GROK_CLAUDE_"))
+                .cloned()
+                .collect()
+        };
+        assert!(claude_vars(&plan_isolated(&fixture.spec()).unwrap()).is_empty());
+
+        let mut spec = fixture.spec();
+        spec.claude_compatibility = true;
+        let plan = plan_isolated(&spec).unwrap();
+        assert_eq!(plan.env[0].0, "GROK_HOME");
+        assert_eq!(
+            claude_vars(&plan),
+            CLAUDE_COMPATIBILITY_VARS
+                .map(|var| (var.to_string(), "true".to_string()))
+                .to_vec()
+        );
     }
 
     /// With no model or effort set, neither flag is passed, so Grok keeps its own choice.

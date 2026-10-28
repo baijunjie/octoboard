@@ -33,7 +33,9 @@
 //! adapter has to generate beyond the event name itself.
 
 pub mod claude;
+mod claude_mcp;
 pub mod codex;
+mod files;
 pub mod grok;
 
 use std::collections::HashMap;
@@ -102,6 +104,11 @@ pub struct LaunchSpec<'a> {
     pub approval_reviewer: Option<ApprovalReviewer>,
     /// Claude Code-only override; absent follows its own configuration and passes no flag.
     pub approval_mode: Option<ClaudeApprovalMode>,
+    /// Whether this session of Codex or Grok Build is to load Claude Code's instructions, skills
+    /// and the rest: its setting is in effect (`Store::claude_compatibility_of`). Always false for
+    /// Claude Code. Codex is told in its instructions to read them (`claude_compatibility.md`) and
+    /// is given Claude Code's MCP servers (`claude_mcp`); Grok Build is given its own switches.
+    pub claude_compatibility: bool,
     /// The default account's directory, fully resolved, when the session's account shares the
     /// default configuration (`crate::shared_config`); `None` for every other launch. An adapter
     /// whose agent keeps per-project memory in its conversation directory points that memory
@@ -324,7 +331,9 @@ pub fn account_command_of(
 #[derive(Default)]
 pub struct LaunchPlan {
     pub args: Vec<String>,
-    /// Environment entries layered on top of the shell snapshot.
+    /// Environment entries layered on top of the shell snapshot. The launch sets `TERM` after
+    /// these, and in a project session `GIT_CONFIG_*`, `OCTOBOARD_SESSION_ID` and
+    /// `OCTOBOARD_DAEMON_PORT` too, so an adapter can neither see nor override their final values.
     pub env: Vec<(String, String)>,
     /// Codex's user configuration or account override can resolve permissions automatically, so
     /// a permission hook alone does not establish a user interaction. Visible action prompts are
@@ -544,6 +553,7 @@ pub mod tests {
                 config_dir: self.config_dir.as_deref(),
                 approval_reviewer: None,
                 approval_mode: None,
+                claude_compatibility: false,
                 shared_default_dir: self.shared_default_dir.as_deref(),
                 model: self.model.as_deref(),
                 effort: self.effort.as_deref(),

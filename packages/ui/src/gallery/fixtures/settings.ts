@@ -104,6 +104,12 @@ const quotaState: Scenario["state"] = {
   ],
 };
 
+/** `quotaState` with Claude Code not among the added agents, and Claude compatibility never chosen for any agent. */
+const noClaudeCodeState: Scenario["state"] = {
+  ...quotaState,
+  settings: { ...quotaState.settings!, added_agents: ["codex", "grok"] },
+};
+
 /** Claude Code's accounts in every state a person meets (`USED_UP_MIX`), the default account being the usable one.
  * Client is left out; Codex and Grok stay as they were. */
 const usedUpMixState: Scenario["state"] = {
@@ -649,7 +655,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "Claude Code's tab. Account rows have drag grips, including Default, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Status, Usage and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a soft success \"Logged in\" badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
+    description: "Claude Code's tab. Account rows have drag grips, including Default, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic; there is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Status, Usage and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a soft success \"Logged in\" badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
     state: { ...quotaState, settings: { ...quotaState.settings!, account_order: { claude: ["a-work", null, "a-long"], codex: ["a-codex-auto", "a-codex", "a-codex-user", null] } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -789,7 +795,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Codex tab",
-    description: "Codex's tab has its own Permission approval row, \"Applies to every Codex account\", on Automatic review, the reviewers' wording. Codex has no model-specific window: each Usage cell is the two-layer bar, the 5h window over the weekly one. Automation has no plan, so no plan badge, and its 5h window, read as spent 16 minutes ago, reset a minute ago: its top layer is full; Production, further down, is nearly spent: both layers are almost empty.",
+    description: "Codex's tab has its own Permission approval row, \"Applies to every Codex account\", on Automatic review, the reviewers' wording. Right under it comes the Claude compatibility row, with its \"?\" after the name, the same \"Applies to every Codex account\" line and its switch at the end, on (its default while Claude Code is an added agent), before the accounts table. Codex has no model-specific window: each Usage cell is the two-layer bar, the 5h window over the weekly one. Automation has no plan, so no plan badge, and its 5h window, read as spent 16 minutes ago, reset a minute ago: its top layer is full; Production, further down, is nearly spent: both layers are almost empty.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -812,11 +818,24 @@ export const settingsScenarios: Scenario[] = [
     ],
   })),
   {
+    id: "settings-accounts-codex-no-claude-code",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, Codex tab with Claude Code not added",
+    description: "Claude Code is not among the added agents (the tab strip has Codex and Grok Build only) and Claude compatibility was never chosen, so the Claude compatibility switch on Codex's tab is off, where it is on when Claude Code is added.",
+    state: noClaudeCodeState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      (ui) => ui.press(AGENT_LABEL.codex),
+    ],
+  },
+  {
     id: "settings-accounts-grok",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Grok Build tab",
-    description: "Grok Build has no permission approval choice, so its tab has no Permission approval row above the table: the tab strip is followed directly by the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Status, Usage and Disable.",
+    description: "Grok Build has no permission approval choice, so its tab has no Permission approval row: the tab strip is followed by the Claude compatibility row alone, \"Applies to every Grok Build account\" under its name and its switch at the end, on (its default), and directly under it the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Status, Usage and Disable.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -824,6 +843,20 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.press(AGENT_LABEL.grok),
     ],
   },
+  ...(["codex", "grok"] as const).map((agent): Scenario => ({
+    id: `settings-accounts-claude-compatibility-help-${agent}`,
+    group: GROUP,
+    category: "normal",
+    title: `Settings: accounts, ${AGENT_LABEL[agent]} Claude compatibility explanation`,
+    description: "The help button beside the Claude compatibility label is touched with a finger. Its popover says what the switch does for this agent and that a change takes effect when a session next starts or resumes; the agent's name, Claude Code, CLAUDE.md and Octoboard are chips, and a chip may wrap across lines.",
+    state: quotaState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.accounts")),
+      (ui) => ui.press(AGENT_LABEL[agent]),
+      (ui) => ui.touchPress(ui.t("settings.accounts.claudeCompat.helpLabel")),
+    ],
+  })),
   {
     id: "settings-accounts-quota-narrow",
     group: GROUP,
@@ -1275,6 +1308,20 @@ export const settingsScenarios: Scenario[] = [
     steps: [
       ...bypassSteps,
       (ui) => ui.confirm(),
+    ],
+  },
+  {
+    id: "settings-account-claude-compatibility-error",
+    group: GROUP,
+    category: "exceptional",
+    title: "Claude compatibility could not be saved",
+    description: "Turning Claude compatibility off on Codex's tab was refused. The error alert is titled \"Could not save Claude compatibility\" and says only \"Access was denied.\" with the permissions remedy, the system's text being only in its Error details disclosure, closed here; the switch is available again and still on.",
+    state: quotaState,
+    claudeCompatibilityError: { code: "store_io_failed", params: { detail: "Permission denied (os error 13)" }, message: "The settings could not be saved: Permission denied (os error 13)" },
+    steps: [
+      ...openAccounts,
+      (ui) => ui.press(AGENT_LABEL.codex),
+      (ui) => ui.press(ui.t("settings.accounts.claudeCompat.label", { agent: AGENT_LABEL.codex })),
     ],
   },
   {

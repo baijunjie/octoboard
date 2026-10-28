@@ -116,6 +116,7 @@ pub(super) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "sidebar_order_by_status": state.store.sidebar_order_by_status()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "git_workflow": state.store.git_workflow_settings()?,
+        "claude_compatibility": state.store.claude_compatibility()?,
         "accounts": listed,
         "trusted_directories": state.store.trusted_directories()?,
     }))
@@ -153,6 +154,7 @@ pub(super) fn update_settings(
             auto_start_quota_windows: None,
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
             git_workflow: git_workflow_argument(arguments)?,
+            claude_compatibility: claude_compatibility_argument(arguments)?,
         },
     )?;
     get_settings(state)
@@ -237,6 +239,23 @@ pub(super) fn git_workflow_argument<T: serde::de::DeserializeOwned + Default>(
                 .map_err(|err| anyhow!("`git_workflow` is not valid: {err}"))
         }
     }
+}
+
+/// The `claude_compatibility` argument: agent wire name to on or off, for the agents it is
+/// given. Naming Claude Code is refused by the settings update itself.
+fn claude_compatibility_argument(
+    arguments: &Map<String, Value>,
+) -> Result<std::collections::BTreeMap<String, bool>> {
+    per_agent(arguments, "claude_compatibility")?
+        .into_iter()
+        .map(|(agent, value)| match value {
+            Value::Bool(enabled) => Ok((agent.wire_name().to_string(), *enabled)),
+            _ => bail!(
+                "`claude_compatibility.{}` must be true or false",
+                agent.wire_name()
+            ),
+        })
+        .collect()
 }
 
 /// The entries of an argument that is an object keyed by agent, in no particular order.

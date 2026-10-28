@@ -65,6 +65,8 @@ pub struct LaunchRequest {
     pub approval_reviewer: Option<ApprovalReviewer>,
     /// Claude Code permission mode override for this launch.
     pub approval_mode: Option<ClaudeApprovalMode>,
+    /// See `LaunchSpec::claude_compatibility`.
+    pub claude_compatibility: bool,
     /// The default account's directory, fully resolved, when the session's account shares it;
     /// see `LaunchSpec::shared_default_dir`.
     pub shared_default_dir: Option<PathBuf>,
@@ -102,6 +104,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         config_dir,
         approval_reviewer,
         approval_mode,
+        claude_compatibility,
         shared_default_dir,
         model,
         effort,
@@ -170,6 +173,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         config_dir: config_dir.as_deref(),
         approval_reviewer,
         approval_mode,
+        claude_compatibility,
         shared_default_dir: shared_default_dir.as_deref(),
         model: model.as_deref(),
         effort: effort.as_deref(),

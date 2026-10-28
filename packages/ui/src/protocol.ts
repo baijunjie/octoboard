@@ -692,6 +692,11 @@ export interface Settings {
   codex_approval_reviewer?: ApprovalReviewer | null;
   /** Every Claude Code account's approval mode; absent or null follows each account's own configuration. */
   claude_approval_mode?: ClaudeApprovalMode | null;
+  /** Whether each agent other than Claude Code loads Claude Code's instructions and skills in its sessions, one value for
+   * every account of the agent. It carries the value the daemon has in effect (the user's choice, else a default that
+   * follows the agent and the added agents); an agent without an entry, or the field absent from a daemon that predates
+   * it, is read as on, only as a fallback. */
+  claude_compatibility?: Partial<Record<Agent, boolean>>;
   /** The name the user gave an agent's default account, by agent; an agent without an entry shows the client's own
    * word for it. Absent from a daemon that predates it. */
   default_account_names?: Partial<Record<Agent, string>>;
@@ -788,6 +793,9 @@ export interface DocumentSettings {
   ask_questions_as_choices?: boolean | null;
   /** Absent in a file exported before the settings were carried; applying then leaves them as they are. */
   git_workflow?: GitWorkflowSettings | null;
+  /** Absent in a file exported before the setting was carried; applying then leaves it as it is. An agent the file does not
+   * list is left as it is. */
+  claude_compatibility?: Partial<Record<Agent, boolean>> | null;
   /** The keyboard shortcuts the exporting client changed, by command id: added by the client to the
    * document it saves, never by the daemon, which only carries them through. Absent in a file
    * without them; applying then leaves the client's shortcuts as they are. */
@@ -904,6 +912,10 @@ export interface InspectedSettings {
   git_workflow?: GitWorkflowSettings | null;
   /** This machine's values. Absent when the reply predates the settings. */
   current_git_workflow?: GitWorkflowSettings;
+  /** Absent when the document predates the setting. */
+  claude_compatibility?: Partial<Record<Agent, boolean>> | null;
+  /** This machine's values. Absent when the reply predates the setting. */
+  current_claude_compatibility?: Partial<Record<Agent, boolean>>;
 }
 
 /** An `error` reply's `code`, `params` and `message`, for something an import could not do. */
@@ -1468,7 +1480,7 @@ export type RequestBody =
   /** Each settable field is optional: absent means leave it as it is. Answered with `ack`;
    * broadcasts `settings_updated` only when something actually changed (the trusted-folders
    * pattern). */
-  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; interface_language?: string; auto_select_account?: boolean; auto_switch_on_usage_limit?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; git_workflow?: GitWorkflowSettingsChanges }
+  | { type: "update_settings"; auto_pull_repositories?: boolean; auto_delete_unresumable_archives?: boolean; auto_approve_session_requests?: boolean; auto_approve_resume_requests?: boolean; auto_approve_account_switches?: boolean; auto_approve_handoffs?: boolean; ask_questions_as_choices?: boolean; interface_language?: string; auto_select_account?: boolean; auto_switch_on_usage_limit?: boolean; sidebar_order_by_status?: boolean; auto_start_quota_windows?: boolean; default_clone_dir?: string; git_workflow?: GitWorkflowSettingsChanges; claude_compatibility?: Partial<Record<Agent, boolean>> }
   /** Answered with `ack` at once; each reading that finishes arrives as `account_quotas_updated`.
    * Re-reads the quotas of the accounts it selects whose last attempt is older than the polling
    * interval, and also those whose last attempt is over 30 seconds old and which hold no windows

@@ -3,6 +3,7 @@
 //! that decide between HTTP and command hooks, and the trust state in the global config file. Read,
 //! never written: Octoboard does not edit any of these files.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::adapter::LaunchSpec;
@@ -10,9 +11,12 @@ use crate::protocol::{notice_code, Notice};
 
 /// The configuration directory in effect for this launch's Claude Code, when there is one: the
 /// session's, else one the user's own shell exports.
-fn explicit_config_dir(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Option<PathBuf> {
+fn explicit_config_dir(
+    shell_env: &HashMap<String, String>,
+    pinned: Option<&Path>,
+) -> Option<PathBuf> {
     pinned.map(PathBuf::from).or_else(|| {
-        spec.shell_env
+        shell_env
             .get("CLAUDE_CONFIG_DIR")
             .filter(|dir| !dir.is_empty())
             .map(PathBuf::from)
@@ -20,8 +24,8 @@ fn explicit_config_dir(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Option<P
 }
 
 /// The home directory the launch's shell snapshot carries, else the daemon's own.
-fn home_dir(spec: &LaunchSpec<'_>) -> PathBuf {
-    spec.shell_env
+fn home_dir(shell_env: &HashMap<String, String>) -> PathBuf {
+    shell_env
         .get("HOME")
         .filter(|home| !home.is_empty())
         .map(PathBuf::from)
@@ -31,7 +35,8 @@ fn home_dir(spec: &LaunchSpec<'_>) -> PathBuf {
 /// The configuration directory this launch's Claude Code reads its user settings from: the one in
 /// effect, else `~/.claude`.
 pub(super) fn user_config_dir(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
-    explicit_config_dir(spec, pinned).unwrap_or_else(|| home_dir(spec).join(".claude"))
+    explicit_config_dir(spec.shell_env, pinned)
+        .unwrap_or_else(|| home_dir(spec.shell_env).join(".claude"))
 }
 
 /// The settings files the user and the project write, lowest precedence first: the user's in
@@ -136,12 +141,23 @@ fn wildcard_matches(pattern: &str, text: &str) -> bool {
 
 /// The global config file this launch's Claude Code will read: inside the configuration directory
 /// when one is in effect — the session's, else one the user's own shell exports — and
-/// `~/.claude.json` otherwise.
-fn global_config_file(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> PathBuf {
-    match explicit_config_dir(spec, pinned) {
+/// `~/.claude.json` otherwise. `shell_env` is the launch's shell snapshot.
+pub(in crate::adapter) fn global_config_file(
+    shell_env: &HashMap<String, String>,
+    pinned: Option<&Path>,
+) -> PathBuf {
+    match explicit_config_dir(shell_env, pinned) {
         Some(dir) => dir.join(".claude.json"),
-        None => home_dir(spec).join(".claude.json"),
+        None => home_dir(shell_env).join(".claude.json"),
     }
+}
+
+/// The entry of the global config file's `projects` map for exactly the directory `dir`.
+pub(in crate::adapter) fn project_entry<'a>(
+    config: &'a serde_json::Value,
+    dir: &Path,
+) -> Option<&'a serde_json::Value> {
+    config.get("projects")?.get(dir.to_string_lossy().as_ref())
 }
 
 /// What to tell the user when Claude Code will ignore this project's own `allow` rules.
@@ -160,15 +176,14 @@ pub(super) fn untrusted_workspace_notice(
     spec: &LaunchSpec<'_>,
     pinned: Option<&Path>,
 ) -> Option<Notice> {
-    let config: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(global_config_file(spec, pinned)).ok()?)
-            .ok()?;
+    let config: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(global_config_file(spec.shell_env, pinned)).ok()?,
+    )
+    .ok()?;
 
     let canonical = std::fs::canonicalize(spec.cwd).unwrap_or_else(|_| spec.cwd.to_path_buf());
-    let projects = config.get("projects")?;
     let accepted = |dir: &Path| {
-        projects
-            .get(dir.to_string_lossy().as_ref())
+        project_entry(&config, dir)
             .and_then(|entry| entry.get("hasTrustDialogAccepted"))
             .and_then(serde_json::Value::as_bool)
     };

@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { REVIEW } from "../gallery/fixtures/configuration";
 import type { ImportedConsole } from "../protocol";
+import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
 import {
   applyToAll,
   availableFor,
   choicesFor,
+  claudeCompatibilityChanges,
   directoryProblem,
   documentShortcuts,
+  hasClaudeCompatibilityChoices,
   initialReview,
   outcomeOf,
   resolutionsOf,
@@ -157,5 +160,31 @@ describe("the keyboard shortcuts of a document", () => {
 
   it("count a swap and a chain whole", () => {
     expect(shortcutsReview({ lock: { code: "KeyP", primary: true, shift: true }, pin: { code: "KeyL", primary: true, shift: true } }, {})).toEqual({ count: 2, changes: true });
+  });
+});
+
+describe("Claude compatibility in a document", () => {
+  it("says nothing when no agent was chosen for or the document predates it", () => {
+    expect(hasClaudeCompatibilityChoices({})).toBe(false);
+    expect(hasClaudeCompatibilityChoices(undefined)).toBe(false);
+    expect(hasClaudeCompatibilityChoices(null)).toBe(false);
+    expect(hasClaudeCompatibilityChoices({ codex: false })).toBe(true);
+  });
+
+  it("counts only the agents that have the setting", () => {
+    expect(hasClaudeCompatibility("codex")).toBe(true);
+    expect(hasClaudeCompatibility("grok")).toBe(true);
+    expect(hasClaudeCompatibility("claude")).toBe(false);
+    expect(hasClaudeCompatibility("other")).toBe(false);
+    expect(hasClaudeCompatibilityChoices({ claude: true })).toBe(false);
+    expect(hasClaudeCompatibilityChoices({ other: true } as never)).toBe(false);
+    expect(hasClaudeCompatibilityChoices({ claude: true, grok: false })).toBe(true);
+    expect(claudeCompatibilityChanges({ claude: false }, { claude: true })).toBe(false);
+  });
+
+  it("changes only where an agent this machine reports differs", () => {
+    expect(claudeCompatibilityChanges({ codex: false }, { codex: true, grok: true })).toBe(true);
+    expect(claudeCompatibilityChanges({ codex: true }, { codex: true, grok: true })).toBe(false);
+    expect(claudeCompatibilityChanges({ codex: false }, {})).toBe(false);
   });
 });

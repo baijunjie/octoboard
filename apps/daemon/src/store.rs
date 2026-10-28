@@ -326,6 +326,9 @@ CREATE TABLE settings (
     -- One choice per agent; NULL until the user makes one.
     codex_approval_reviewer TEXT,
     claude_approval_mode   TEXT,
+    -- NULL until the user makes a choice for an agent's Claude compatibility; see
+    -- `Store::claude_compatibility_choices`.
+    claude_compatibility   TEXT,
     development         TEXT NOT NULL DEFAULT 'worktree',
     rebase_before_merge INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
@@ -933,6 +936,7 @@ impl Store {
             added_agents: self.added_agents()?,
             codex_approval_reviewer: self.codex_approval_reviewer()?,
             claude_approval_mode: self.claude_approval_mode()?,
+            claude_compatibility: self.claude_compatibility()?,
             default_account_names: self.default_account_names()?,
             disabled_default_accounts: self.disabled_default_accounts()?,
             git_workflow: self.git_workflow_settings()?,
@@ -943,6 +947,62 @@ impl Store {
     /// is not a JSON object of strings reads as no names.
     pub fn default_account_names(&self) -> Result<std::collections::BTreeMap<String, String>> {
         read_default_account_names(&self.lock())
+    }
+
+    /// The choices the user made for the Claude compatibility setting, by the agent's wire name.
+    /// An agent they never chose for has no entry. A value that is not a JSON object of booleans
+    /// reads as no choices.
+    pub fn claude_compatibility_choices(&self) -> Result<std::collections::BTreeMap<String, bool>> {
+        read_claude_compatibility_choices(&self.lock())
+    }
+
+    /// Whether `agent`'s sessions are to load Claude Code's instructions, skills and the rest: the
+    /// user's choice when they made one. Until then Grok Build follows its own default, which is
+    /// on, and Codex is on while Claude Code is among the added agents, so adding or removing it
+    /// moves the value. Claude Code itself has no such setting and reads as off.
+    pub fn claude_compatibility_of(&self, agent: Agent) -> Result<bool> {
+        let conn = self.lock();
+        let choices = read_claude_compatibility_choices(&conn)?;
+        Ok(effective_claude_compatibility(
+            agent,
+            &choices,
+            read_added_agents(&conn)?.as_deref(),
+        ))
+    }
+
+    /// The effective setting for every agent that has one, by wire name.
+    pub fn claude_compatibility(&self) -> Result<std::collections::BTreeMap<String, bool>> {
+        let conn = self.lock();
+        let choices = read_claude_compatibility_choices(&conn)?;
+        let added = read_added_agents(&conn)?;
+        Ok(Agent::ALL
+            .into_iter()
+            .filter(|agent| agent.has_claude_compatibility())
+            .map(|agent| {
+                (
+                    agent.wire_name().to_string(),
+                    effective_claude_compatibility(agent, &choices, added.as_deref()),
+                )
+            })
+            .collect())
+    }
+
+    /// Records the user's choice of `enabled` for `agent`'s Claude compatibility. The read and the
+    /// write are one step under the store's lock. Whether the stored choice changed.
+    pub fn set_claude_compatibility(&self, agent: Agent, enabled: bool) -> Result<bool> {
+        let conn = self.lock();
+        let mut choices = read_claude_compatibility_choices(&conn)?;
+        if choices.insert(agent.wire_name().to_string(), enabled) == Some(enabled) {
+            return Ok(false);
+        }
+        conn.execute(
+            "UPDATE settings SET claude_compatibility = ?2 WHERE id = ?1",
+            params![
+                SETTINGS_ID,
+                serde_json::to_string(&choices).expect("a map of booleans serializes to JSON")
+            ],
+        )?;
+        Ok(true)
     }
 
     /// The agents, by wire name, whose default account is turned off for new work. A value that is
@@ -2876,6 +2936,40 @@ fn read_default_account_names(
         .unwrap_or_default())
 }
 
+/// The stored Claude compatibility choices; a value that is not a JSON object of booleans reads as
+/// none.
+fn read_claude_compatibility_choices(
+    conn: &Connection,
+) -> Result<std::collections::BTreeMap<String, bool>> {
+    let text: Option<String> = conn.query_row(
+        "SELECT claude_compatibility FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| row.get(0),
+    )?;
+    Ok(text
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default())
+}
+
+/// The Claude compatibility setting in effect for `agent` given the user's `choices` and the
+/// added agents (`None` while undecided, which counts as Claude Code not being among them).
+fn effective_claude_compatibility(
+    agent: Agent,
+    choices: &std::collections::BTreeMap<String, bool>,
+    added: Option<&[Agent]>,
+) -> bool {
+    if !agent.has_claude_compatibility() {
+        return false;
+    }
+    choices
+        .get(agent.wire_name())
+        .copied()
+        .unwrap_or_else(|| match agent {
+            Agent::Codex => added.is_some_and(|added| added.contains(&Agent::Claude)),
+            _ => true,
+        })
+}
+
 /// The stored agents whose default account is disabled; a value that is not a JSON array of strings
 /// reads as none.
 fn read_disabled_default_accounts(conn: &Connection) -> Result<std::collections::BTreeSet<String>> {
@@ -3197,6 +3291,55 @@ mod tests {
             )
             .expect("the old row is still there");
         assert_eq!(name, "Old");
+    }
+
+    /// Until the user chooses, Grok Build's Claude compatibility is on and Codex's follows whether
+    /// Claude Code is an added agent; a choice is stored per agent and wins from then on; Claude
+    /// Code never has the setting.
+    #[test]
+    fn the_claude_compatibility_follows_added_agents_until_chosen_and_round_trips_per_agent() {
+        let path = temp_db("claude-compatibility");
+        let store = Store::open(&path).expect("store");
+        let stored = |store: &Store| -> Option<String> {
+            store
+                .lock()
+                .query_row(
+                    "SELECT claude_compatibility FROM settings WHERE id = ?1",
+                    params![SETTINGS_ID],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        let on = |store: &Store, agent| store.claude_compatibility_of(agent).unwrap();
+        assert!(!on(&store, Agent::Codex));
+        assert!(on(&store, Agent::Grok));
+        assert!(!on(&store, Agent::Claude));
+
+        store
+            .set_added_agents_if_undecided(&[Agent::Codex])
+            .unwrap();
+        assert!(!on(&store, Agent::Codex));
+        store.add_added_agent(Agent::Claude).unwrap();
+        assert!(on(&store, Agent::Codex));
+        assert_eq!(stored(&store), None);
+        assert!(store.claude_compatibility_choices().unwrap().is_empty());
+
+        assert!(store.set_claude_compatibility(Agent::Codex, false).unwrap());
+        assert!(!store.set_claude_compatibility(Agent::Codex, false).unwrap());
+        assert_eq!(stored(&store).as_deref(), Some(r#"{"codex":false}"#));
+        assert!(!on(&store, Agent::Codex));
+        assert!(on(&store, Agent::Grok));
+        assert_eq!(
+            store.get_settings().unwrap().claude_compatibility,
+            [("codex".to_string(), false), ("grok".to_string(), true)].into()
+        );
+
+        // A choice outlives the added agents, whichever way it went.
+        assert!(store.set_claude_compatibility(Agent::Codex, true).unwrap());
+        store.remove_added_agent(Agent::Claude).unwrap();
+        assert!(on(&store, Agent::Codex));
+        assert!(store.set_claude_compatibility(Agent::Grok, false).unwrap());
+        assert!(!on(&store, Agent::Grok));
     }
 
     /// A file that is not a SQLite database makes `open` fail and is left byte for byte as it was.

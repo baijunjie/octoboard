@@ -572,6 +572,14 @@ its text lands in the composer behind a literal `[200~`. With Octoboard's title 
 `project-name`) the activity item is a braille spinner while a turn runs, and the title is back to the project or thread
 name once the Esc has landed.
 
+**An MCP server's environment and secret headers can come from Codex's own environment.** Besides `command`, `args`,
+`env`, `url` and `http_headers`, a server under `mcp_servers.<key>` accepts `cwd`, `env_vars` (names of variables
+forwarded from Codex's own environment to a stdio server), `env_http_headers` (a header name mapped to the variable
+holding its value) and `bearer_token_env_var`; all four were accepted by 0.163.0 in a scratch `CODEX_HOME`, listed by
+`codex mcp list`. `env_vars` cannot rename a variable: the server receives it under the name Codex holds it by. What a
+server does with them at run time, and whether commands Codex runs for its model see the same variables, was not
+measured.
+
 ## Grok Build
 
 16 hook events, payload as JSON on stdin, with **every field present in both camelCase and snake_case**. The hook
@@ -737,6 +745,12 @@ prompt asks to be pressed again to quit. During a blocking shell command with a 
 `StopCancelled` and the queued message was submitted 4 ms later. Ctrl-U deletes one line of the composer a press, at the
 start of a line the line break before it, and a line wrapped over two rows in one press; the composer then shows "Input
 cleared · ctrl+z to undo". Not measured: Ctrl-C with the subagents' cancel-turn panel up, and at a permission card.
+
+**Grok scans Claude Code's configuration by default.** The `[compat.claude]` table of Grok's `config.toml` has five
+boolean cells, `skills`, `rules` (which covers `CLAUDE.md`), `agents`, `mcps` and `hooks`, each defaulting to true, and
+each overridden by an environment variable `GROK_CLAUDE_<CELL>_ENABLED` (`true` or `false`); Grok's user guide shipped
+under `~/.grok/docs/` and the 1.0.70 executable both name them, and like cells exist for Cursor (`GROK_CURSOR_*`) and
+Codex (`GROK_CODEX_*`). That the variable outranks the file is what the guide states; it was not measured.
 
 ## Across the three agents
 
