@@ -201,7 +201,8 @@ field. A dialog's form ignores the repeats of a held Enter or Space, except Spac
 multi-line one, so the press that opened it cannot go on to submit it.
 
 A form dialog opens with focus in its first text field, so the user can type at once and Enter submits; one with no text
-field opens with focus on its submit button instead. A field that appears later, after a tab or a choice has changed
+field opens with focus on its submit button instead. That holds however it was opened, by a press without a pointer (an
+assistive technology's press) as much as by the keyboard or the mouse, and for a dialog opened over another one. A field that appears later, after a tab or a choice has changed
 what the form holds, does not take focus, so it never pulls it off the control the user is on.
 
 ### Reaching a control with Tab
@@ -760,6 +761,13 @@ visible text may differ from where it leads. Nothing else carries the target, bu
 reaches no assistive technology (xterm.js keeps its rows `aria-hidden` and runs without its screen-reader mode), so the
 tooltip withholds nothing the text around it would otherwise give.
 
+A tooltip of any shape closes once what it belongs to turns inert: a dialog or a modal popover opening over it, or a
+region the window makes inert itself. An overlay that covers the control under a resting pointer sends no
+`pointerleave`, so without this the tooltip would stay drawn over the overlay, naming a control that can no longer be
+reached, until the pointer next moved. A tooltip of a control inside the overlay is unaffected. The surface every
+tooltip shape draws on does this (`hintTooltips.tsx` in `packages/ui/src/components/`), so a new tooltip needs nothing
+of its own.
+
 ### A help tip: an explanation behind a "?"
 
 An explanation moved off the screen into a "?" uses `HelpTip` (`packages/ui/src/components/HelpTip.tsx`), never a
@@ -1009,7 +1017,12 @@ it; the body's opening sentence is optional, never restating the title, so an al
 remedy; focus lands on the alert itself, not on its first control, also when it opens over a dialog that a press without a
 pointer opened (an assistive technology's press), where Enter on a first control such as Manage accounts… would act.
 Distinct failures wait in a queue; repeated copies of a pending failure do not multiply it. An error above a form leaves
-that form available after acknowledgement, with its values and retry action intact.
+that form available after acknowledgement, with its values and retry action intact. Acknowledging it returns focus to
+where it was; where that is gone, or the dialog under the alert never had focus (the alert came in the same moment as
+the press that opened it), focus goes where that dialog's own opening focus goes — never to the page (see "The error
+alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens
+on is marked for this with `openingFocus` (`packages/ui/src/components/regionFocus.ts`), which `Button` and `TextInput`
+set from their `autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself.
 
 Distinguish failures the user can resolve from unexpected failures. A recoverable failure explains the specific
 remedy, such as freeing disk space, unlocking a session or correcting a folder's access. An unexpected failure
@@ -1875,6 +1888,14 @@ popover-level overlays, so a new overlay needs no guard of its own. The few stoc
 select's chevron turning as its list opens, a combo box trigger's hover and press fade, and a checkbox's checkmark
 drawing itself in) are guarded there too, and `packages/ui/src/style.test.ts` fails on any other an imported HeroUI
 sheet brings.
+
+No transition starts inside content folded with `hidden="until-found"` (a disclosure's closed panel): a transition
+started there never reports its end, and react-aria holds every focus move that follows a press without a pointer
+until no transition is running, so focus would stay on the page. One rule in `packages/ui/src/style.css` turns them off;
+the content is not rendered while folded, so nothing visible changes. The rule cannot stop a transition still running
+as the content folds, whose end Chrome does not report until the content is shown again, so a dialog that must take
+focus at once places it itself rather than leaving it to react-aria's deferred focus (`ConfirmDialog`, and a caller of
+`focusesItselfOnOpen`).
 
 Below the `phone` breakpoint a pane slides in from the side it lives on as it fades — the sidebar's drawer, with its
 rail, from the start edge, a floating right-pane card from the end edge — mirrored under a right-to-left language.

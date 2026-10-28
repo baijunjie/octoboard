@@ -102,7 +102,13 @@ and available daemon code and parameters must all match. Pending errors survive 
 screens until acknowledged. Startup and rendering failures use the same acknowledgement flow.
 
 When the last pending alert is acknowledged and keyboard focus has nowhere to return to — the control that had it is
-gone, as when a dialog closed before the alert appeared — focus goes to the dialog still open, if any.
+gone, as when a dialog closed before the alert appeared, or the dialog under the alert never had it, as when the alert
+came in the same moment a press without a pointer opened that dialog — focus goes into the dialog still open, if any,
+where that dialog's own opening focus goes: the control it opens on — a text field, a button, a tab or a switch — or,
+for a dialog that opens on itself, the dialog. Settings opens on its selected section's tab, the account settings dialog
+opened by **View in Settings** on its sharing switch, and the project filter's popover, which counts as such a dialog,
+on its search field; form dialogs and confirmations are in "Where keyboard focus starts in a form dialog" and "Where
+keyboard focus starts in a confirmation" in `docs/product/dialogs.md`.
 Otherwise it goes to the selected session's terminal. With no session selected, or no console at all, neither the
 terminal's empty panel nor the welcome screen takes it, as neither takes focus while it is on nothing (see "With no
 session selected" in `docs/product/session-terminal.md` and "Keyboard focus" in `docs/product/welcome-screen.md`):

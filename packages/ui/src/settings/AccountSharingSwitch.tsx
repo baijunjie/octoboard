@@ -41,7 +41,7 @@ import { SettingRow, SettingSwitch } from "./SettingRow";
  *   its caption (a hidden copy, since the popover is not there while closed); the title is spoken when the mark appears
  *   after a change this view saw, unless this window asked for it: the error alert dialog that opens then speaks it.
  *   Focus on the mark or in its popover goes to the switch when the mark goes. */
-export function AccountSharingSwitch({ account }: { account: Account }): React.ReactElement {
+export function AccountSharingSwitch({ account, opensFocused }: { account: Account; opensFocused?: boolean }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const sharing = useDaemonStore((s) => s.accountSharing.get(account.id));
@@ -146,7 +146,7 @@ export function AccountSharingSwitch({ account }: { account: Account }): React.R
     >
       <div className="flex items-center gap-2">
         <div ref={root} data-sharing-account={account.id}>
-          <SettingSwitch label={label} isSelected={shown} onChange={ask} isUnavailable={locked} describedBy={describedBy} />
+          <SettingSwitch label={label} isSelected={shown} onChange={ask} isUnavailable={locked} describedBy={describedBy} opensFocused={opensFocused} />
         </div>
         {unfinished && (
           <SharingIncomplete

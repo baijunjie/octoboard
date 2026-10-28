@@ -3,6 +3,7 @@ import { Bell, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Settin
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { TitledControl } from "../components/TitledControl";
+import { openingFocus } from "../components/regionFocus";
 import { FadedScroller } from "../components/scrollFade";
 import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { dialogAround } from "../dialogs/dialogElement";
@@ -206,6 +207,7 @@ export function SettingsDialog({
                     id={id}
                     className="justify-start gap-2 whitespace-nowrap hover:text-foreground hover:opacity-100 max-docked:w-auto max-docked:flex-none max-docked:scroll-mx-1.5"
                     ref={id === sectionId ? attachSelected : undefined}
+                    {...(id === sectionId && !sectionTakesFocus && openingFocus(true))}
                   >
                     <Icon aria-hidden="true" className="size-4 shrink-0" />
                     {t(label)}

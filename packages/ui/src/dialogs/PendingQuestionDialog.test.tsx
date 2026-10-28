@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { act, useState } from "react";
-import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { act } from "react";
+import { describe, expect, it, onTestFinished } from "vitest";
 
-import { setInteractionModality } from "react-aria";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import { Dialog } from "./Dialog";
+import { framesAsTimers, openable, settleFrames } from "./dialogTestSupport";
 import { mountPendingQuestionDialog } from "./pendingQuestionTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,28 +36,13 @@ const editProject = <Dialog title="Edit project" onClose={() => {}} submitLabel=
  * one before the next timer task. With `deferred`, the dialog is not opened but `open` opens it, for a test to call in
  * one update with raising a question, the way a question pushed in the task of the press does. */
 function mountUnder(modality: "virtual" | "pointer" | "keyboard", strict: boolean, deferred = false) {
-  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => Number(setTimeout(() => callback(performance.now()), 0)));
-  vi.stubGlobal("cancelAnimationFrame", (handle: number) => clearTimeout(handle));
-  onTestFinished(() => { vi.unstubAllGlobals(); });
-  act(() => setInteractionModality(modality));
-  onTestFinished(() => { act(() => setInteractionModality("pointer")); });
+  framesAsTimers(modality);
   const opener = document.body.appendChild(document.createElement("button"));
   onTestFinished(() => { opener.remove(); });
   opener.focus();
-  let open = (): void => {};
-  function Opener() {
-    const [shown, setShown] = useState(!deferred);
-    open = () => setShown(true);
-    return shown ? editProject : null;
-  }
-  const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { under: <Opener />, strict });
-  return { ...dialog, open: () => open() };
-}
-
-/** Runs every frame and timer pending, and those they set in turn, for longer than the longest chain of frames that
- * moves focus here. */
-async function settleFrames(): Promise<void> {
-  for (let round = 0; round < 10; round += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  const { element, open } = openable(editProject, deferred);
+  const dialog = mountPendingQuestionDialog({ homeDir: "/Users/dev" }, () => Promise.resolve({ type: "ack" }), { under: element, strict });
+  return { ...dialog, open };
 }
 
 const questionHoldsFocus = () => {
@@ -90,8 +75,8 @@ describe.each([{ strict: false }, { strict: true }])("raised over another dialog
     });
 
     // react-aria's dialog takes focus off itself half a second after it opens, when focus was not inside it as it
-    // mounted, and puts it back once no transition is running on the page. A transition that never reports its end (one
-    // in a collapsed disclosure, whose content the browser skips) leaves focus on the page body for good.
+    // mounted, and puts it back once no transition is running on the page. A transition that never reports its end (in
+    // Chrome, one still running inside a disclosure as it folds away) leaves focus on the page body until it ends.
     it("keeps focus while a transition underneath never ends", async () => {
       const dialog = mountUnder("virtual", strict);
       const name = document.querySelector('input[aria-label="Name"]')!;

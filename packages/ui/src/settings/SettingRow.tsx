@@ -49,6 +49,7 @@ export function SettingSwitch({
   onChange,
   describedBy,
   isUnavailable,
+  opensFocused,
 }: {
   label: string;
   isSelected: boolean;
@@ -59,6 +60,8 @@ export function SettingSwitch({
    * it out of the Tab order and drop focus from a user who is on it: it stays focusable, reads as `aria-disabled`,
    * looks faded, and a press or Space leaves it as it is. */
   isUnavailable?: boolean;
+  /** The switch is where the dialog around it puts focus on opening (see `openingFocus`). */
+  opensFocused?: boolean;
 }): React.ReactElement {
   const root = useRef<HTMLDivElement>(null);
   // The library puts `isReadOnly` on the input as `aria-readonly` and leaves out `aria-disabled`, which says it is
@@ -68,6 +71,12 @@ export function SettingSwitch({
     if (isUnavailable) input?.setAttribute("aria-disabled", "true");
     else input?.removeAttribute("aria-disabled");
   }, [isUnavailable]);
+  // The library gives the input no way to take the mark as a prop.
+  useEffect(() => {
+    const input = root.current?.querySelector("input");
+    if (opensFocused) input?.setAttribute("data-opening-focus", "");
+    else input?.removeAttribute("data-opening-focus");
+  }, [opensFocused]);
   return (
     <Switch
       ref={root}

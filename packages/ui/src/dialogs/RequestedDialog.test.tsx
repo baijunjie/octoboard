@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, StrictMode } from "react";
+import { setInteractionModality } from "react-aria";
 import { expect, it, vi } from "vitest";
 
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
@@ -746,6 +747,8 @@ it("shows consequence text only once an option is ticked where the confirmation 
 });
 
 it.each(CONFIRMATIONS)("is a warning modal when %s: the warning icon in the header, the list as body text, the danger action trailing", (_, dialog, listed) => {
+  // An earlier test's `click()` leaves react-aria's modality on virtual, where the dialog's opening focus waits a frame.
+  act(() => setInteractionModality("pointer"));
   mount(dialog, [owner, listed]);
   const modal = document.querySelector("[role=alertdialog]")!;
   expect(modal.querySelector("[data-slot=alert-dialog-header] [data-slot=alert-dialog-icon]")).not.toBeNull();

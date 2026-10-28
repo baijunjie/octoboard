@@ -130,7 +130,7 @@ export function AccountDetailsDialog({ agent, account, focusSharing = false, onL
           {showsUsage ? <AccountQuotaSummary quota={quota} single /> : <NoUsageReading />}
         </Part>
         <div>
-          {stored && <AccountSharingSwitch account={stored} />}
+          {stored && <AccountSharingSwitch account={stored} opensFocused={focusSharing} />}
           <DisableAccountRow agent={agent} account={account} name={name} />
         </div>
       </div>

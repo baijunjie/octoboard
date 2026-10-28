@@ -39,6 +39,8 @@ it("opens with focus in the path field", async () => {
     ),
   );
   expect(document.activeElement?.getAttribute("aria-label")).toBe("Directory path");
+  // So that focus lost later, with an alert acknowledged, comes back here (`focusAfterLoss`).
+  expect(document.activeElement?.hasAttribute("data-opening-focus")).toBe(true);
 });
 
 it("shows a listing failure in an Alert with its reason and Try again, and opens no error alert dialog", async () => {

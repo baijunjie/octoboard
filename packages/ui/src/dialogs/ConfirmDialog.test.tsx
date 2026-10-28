@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
@@ -7,6 +7,8 @@ import { errorAlerts } from "../errorAlerts";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Dialog } from "./Dialog";
+import { framesAsTimers, settleFrames } from "./dialogTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -73,6 +75,41 @@ it("shows the localized confirmation example and keeps the literal and editable 
 
 const labels = () => Array.from(document.body.querySelectorAll("[role=alertdialog] button")).map((button) => button.textContent).filter(Boolean);
 const closeButton = () => document.body.querySelector("[role=alertdialog] button[aria-label=Close]");
+
+// react-aria puts off a button's `autoFocus` after a press without a pointer (assistive technology, a script) until no
+// transition is running anywhere on the page, so one that never reports its end (in Chrome, one still running inside a
+// disclosure as it folds away) would leave a confirmation raised by another dialog's confirm button without focus.
+// The half-second wait outlasts react-aria's dialog taking focus off itself after mounting.
+it("puts focus on Confirm of a confirmation raised over another dialog without a pointer while a transition never ends", async () => {
+  framesAsTimers();
+  function Stacked() {
+    const [asking, setAsking] = useState(false);
+    return (
+      <Dialog title="Switch account" onClose={() => {}} submitLabel="Switch" onSubmit={() => setAsking(true)}>
+        <input aria-label="Name" />
+        {asking && <ConfirmDialog title="Start on this account" message="Start anyway?" confirmLabel="Start anyway" hideCancel errorTitle="Could not start" onConfirm={async () => {}} onCancel={() => setAsking(false)} />}
+      </Dialog>
+    );
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => root.render(<DaemonProvider value={fakeDaemon()}><Stacked /></DaemonProvider>));
+  await settleFrames();
+  const name = document.querySelector('input[aria-label="Name"]')!;
+  name.dispatchEvent(Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "translate" }));
+  onTestFinished(() => { name.dispatchEvent(Object.assign(new Event("transitionend", { bubbles: true }), { propertyName: "translate" })); });
+  await act(async () => document.querySelector<HTMLButtonElement>('[role="dialog"] button[type="submit"]')!.click());
+  await settleFrames();
+  await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+  await settleFrames();
+  const confirmation = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  expect(confirmation.closest('[aria-hidden="true"], [inert]')).toBeNull();
+  expect(document.activeElement).toBe(confirmation.querySelector('button[type="submit"]'));
+});
 
 it("shows Cancel and the close button by default", () => {
   mount({});

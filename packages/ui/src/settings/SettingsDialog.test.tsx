@@ -66,6 +66,18 @@ it("opens on the section it is asked for and takes the Add agent request up once
   expect(taken.count).toBe(1);
 });
 
+it("marks the selected tab as the dialog's opening focus", async () => {
+  const { selected } = mount({ nonce: 1, section: "git", addAgent: false });
+  await act(async () => {});
+  expect([...document.querySelectorAll("[data-opening-focus]")]).toEqual([selected()]);
+});
+
+it("marks no tab when the Add agent dialog takes focus in its place", async () => {
+  mount({ nonce: 1, section: "accounts", addAgent: true });
+  await act(async () => {});
+  expect(document.querySelector("[data-opening-focus]")).toBeNull();
+});
+
 it("follows a later request: another section is shown and its tab takes focus", async () => {
   const { show, selected } = mount({ nonce: 1, section: "accounts", addAgent: false });
   show({ nonce: 2, section: "git", addAgent: false });

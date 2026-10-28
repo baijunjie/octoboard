@@ -155,3 +155,14 @@ it("stops under reduced motion every transition an imported HeroUI sheet leaves 
   );
   expect(missing, "unguarded transitions").toEqual([]);
 });
+
+// A transition started inside content a disclosure has folded away (`hidden="until-found"`) never reports its end, and
+// react-aria holds a focus move after a press without a pointer until no transition runs on the page, so `style.css`
+// lets nothing transition there. jsdom runs no transition, so this reads the rule; the gallery's directory picker
+// over Add project (`dialog-directory-picker`), closed by a script's click on Cancel, shows the focus it guards.
+it("lets nothing transition inside folded disclosure content, outside the cascade layers", () => {
+  const style = readFileSync(new URL("style.css", SRC), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  expect(imported).toContain("disclosure");
+  expect(style).not.toMatch(/@layer\s+[\w-]+\s*\{/);
+  expect(style).toMatch(/(^|\n)\[hidden="until-found"\] \*\s*\{\s*transition-property: none;\s*\}/);
+});

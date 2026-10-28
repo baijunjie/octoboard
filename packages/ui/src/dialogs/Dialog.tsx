@@ -53,10 +53,18 @@ export function useDialogAction(resetKey: string | undefined, errorTitle: string
 
 /** Puts keyboard focus back on the element `target` returns when `deps` change and focus has fallen to `<body>`,
  * which is where it goes when the focused control is unmounted by the change. Left alone, a dialog's
- * Escape handling and Tab containment stop working, since they hang off focus being inside it. */
+ * Escape handling and Tab containment stop working, since they hang off focus being inside it.
+ *
+ * Never at mount, StrictMode's second run included: a dialog opened by a press without a pointer (assistive
+ * technology, a script) has no focus yet then, since react-aria puts off its opening focus (`autoFocus`, or the dialog
+ * itself) until transitions end and drops it if focus has moved meanwhile, so focusing anything here would take the
+ * dialog's opening focus away from its first field. */
 export function useRefocusIfLost(target: () => HTMLElement | null | undefined, deps: React.DependencyList): void {
+  const seen = useRef(deps);
   useEffect(() => {
-    if (document.activeElement === document.body) target()?.focus();
+    const changed = deps.some((dep, index) => !Object.is(dep, seen.current[index]));
+    seen.current = deps;
+    if (changed && document.activeElement === document.body) target()?.focus();
   }, deps);
 }
 
@@ -169,7 +177,8 @@ let openDialogs = 0;
  * has become disabled: it moves to Cancel. A form dialog puts `autoFocus` on its first text field, so Enter
  * submits at once; one with no text field passes `autoFocusSubmit` to open on the submit button instead, or on
  * Cancel when there is nothing to submit yet (a dialog with its own `footer` puts `autoFocus` on its own
- * button).
+ * button). `Button` and `TextInput` mark that control with `openingFocus`, which is where focus comes back to when an
+ * acknowledged alert leaves it nowhere to return (`focusAfterLoss`); a field built from HeroUI's own parts marks itself.
  */
 function DialogFrame({
   title,
@@ -214,12 +223,12 @@ function DialogFrame({
   resetKey?: string;
   /** The caller puts focus on the dialog itself, in the render after the one that mounted it, once react-aria has
    * turned the modal's focus containment on (from a layout effect at mount, which forces a render), so the frame never
-   * puts focus found on `<body>` back on the dialog, at mount or when `resetKey` changes: a caller that passes this
+   * puts focus found on `<body>` back on the dialog when `resetKey` changes: a caller that passes this
    * with a `resetKey` puts focus back itself for each new subject. Until then the frame holds focus on an empty
    * element inside the dialog from its mount: react-aria takes focus off a dialog that finds focus outside it when the
    * mount's passive effects run, half a second later, and puts it back only once no transition is running on the page,
-   * so one that never reports its end (in a collapsed disclosure, whose content the browser skips) would leave focus
-   * on the page body. That focus also makes the move a dialog underneath queues against the focus escaping its
+   * so one that never reports its end (in Chrome, one still running inside a disclosure as it folds away) would leave
+   * focus on the page body. That focus also makes the move a dialog underneath queues against the focus escaping its
    * containment start from the element, which focus has left by the time the move comes. */
   focusesItselfOnOpen?: boolean;
 } & (

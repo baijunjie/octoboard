@@ -1,10 +1,11 @@
 import { Tooltip } from "@heroui/react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { mergeProps, useFocusable } from "react-aria";
-import { Popover as SurfacePopover, TooltipTriggerStateContext } from "react-aria-components";
+import { Popover as SurfacePopover, TooltipContext, TooltipTriggerStateContext, useSlottedContext } from "react-aria-components";
 
 import { useT } from "../i18n/react";
 import { interactionIsTouch } from "../touchInput";
+import { useLatest } from "./useLatest";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 
 // The tooltip kinds of `Hint` (see Hint.tsx): `control`, `indicator` and `anchored`, and the touch popover
@@ -18,7 +19,31 @@ function TooltipSurface({
   placement = PLACEMENT,
   ...props
 }: Omit<React.ComponentProps<typeof Tooltip.Content>, "className">): React.ReactElement {
+  const trigger = useSlottedContext(TooltipContext);
+  useCloseWhenTriggerInert(props.triggerRef ?? trigger?.triggerRef);
   return <Tooltip.Content {...props} placement={placement} offset={OFFSET} className="control-fills pointer-events-none" />;
+}
+
+/** Closes the open tooltip once what it belongs to is inside an inert region: a modal overlay opening over it (a
+ * dialog, or a modal popover such as a menu), which react-aria marks with `inert` as it opens (`ariaHideOutside`), or
+ * a region the app makes inert itself. The overlay covers the trigger without the pointer leaving it, so a pointer at
+ * rest sends no `pointerleave`, and the tooltip would stay drawn over the overlay, naming a control that can no longer
+ * be reached, until the pointer next moves. A combo box's open list hides the page with `aria-hidden` instead, which
+ * leaves it usable, so it does not close the tooltip. */
+function useCloseWhenTriggerInert(triggerRef: React.RefObject<Element | null> | undefined): void {
+  const state = useContext(TooltipTriggerStateContext);
+  const close = useLatest(state?.close);
+  const isOpen = state?.isOpen ?? false;
+  useEffect(() => {
+    if (!isOpen || !triggerRef) return;
+    const closeIfInert = () => {
+      if (triggerRef.current?.closest("[inert]")) close.current?.(true);
+    };
+    closeIfInert();
+    const observer = new MutationObserver(closeIfInert);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["inert"], subtree: true });
+    return () => observer.disconnect();
+  }, [isOpen, triggerRef, close]);
 }
 
 /** The open state of a touch popover and the element it is placed against, which the press that

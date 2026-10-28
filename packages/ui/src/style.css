@@ -1122,6 +1122,23 @@ html.pane-resizing * {
   }
 }
 
+/* No transition starts inside content a disclosure has folded away (`hidden="until-found"`), which the
+   browser does not render: neither WebKit nor Chrome reports the end of one started there. react-aria
+   holds every focus move that follows a press without a pointer (assistive technology, a script) until no
+   transition is running anywhere on the page, so one such transition would hold back a dialog's opening
+   focus and the focus a closed dialog hands back for as long as the content stays folded, leaving focus
+   on the page body. A tab indicator under a dialog's folded Advanced section is one that starts there:
+   one that takes over the place of an earlier one slides from it even while folded away, as each one
+   does under StrictMode's double mount. Under this rule WebKit also cancels a transition still running
+   as the content folds; Chrome sends no end for that one until the content is revealed again, which no
+   rule here prevents. Revealing the content changes no value, so the transitions it gets back start
+   none, and folded content is not seen, so nothing visible is lost. Outside the cascade layers, so it
+   wins over HeroUI's and Tailwind's layered transitions (not over an inline style or `!important`); a longhand, as
+   jsdom does not expand the `transition` shorthand for a test to read. */
+[hidden="until-found"] * {
+  transition-property: none;
+}
+
 /* The few transitions HeroUI leaves running under reduced motion, where it guards the rest with
    `motion-reduce:transition-none`: a select's chevron turning as its list opens, a combo box trigger's
    hover and press fade, and a checkbox's checkmark drawing itself in. `style.test.ts` finds any other
@@ -1153,16 +1170,6 @@ html.pane-resizing * {
    to just before it. Unlayered, so it wins over HeroUI's rule in `@layer components`. */
 .tabs__list-container[data-trailing-control] > .tabs__list-container__scroll-next {
   inset-inline-end: 1.75rem;
-}
-
-/* A tab indicator does not slide inside a collapsed disclosure. Chrome skips that content
-   (`hidden="until-found"`) and never reports the end of a transition started there, while react-aria
-   holds every deferred focus move on the page until no transition is running, so a single one there
-   would hold them for as long as the content stays folded. The indicator is what starts one there:
-   one that takes over the place of an earlier one slides from it, even while folded away. Revealing
-   the content changes no value, so the transition it gets back starts none. */
-[hidden="until-found"] .tabs__indicator {
-  transition-property: none;
 }
 
 @media (prefers-reduced-motion: no-preference) {

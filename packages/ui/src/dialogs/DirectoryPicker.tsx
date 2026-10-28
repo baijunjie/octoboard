@@ -1,11 +1,12 @@
 import { Description, Input, ListBox } from "@heroui/react";
 import { CornerLeftUp, Folder, FolderX } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FailureAlert } from "../components/FailureAlert";
 import { PathText } from "../components/MarkedPath";
+import { openingFocus } from "../components/regionFocus";
 import { useStickyHeadingFocus } from "../components/stickyHeadingFocus";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { StatusBadge } from "../components/StatusBadge";
@@ -112,6 +113,16 @@ export function DirectoryPicker({
     // via `useState`'s initializer above, so it is intentionally not a dependency here.
   }, []);
 
+  // The path field takes focus once the picker's focus scope exists, rather than through the field's own
+  // `autoFocus`: React focuses an `autoFocus` field as it inserts it, before react-aria has set up the scope around
+  // it, and the dialog it opens from (a project's, an account's, Settings, the import dialog) keeps focus contained,
+  // so it reads that focus as escaping and pulls it back to its Browse button, after which react-aria focuses the
+  // picker's dialog itself. A layout effect here runs after the scope's own, in the same task, before any frame.
+  const pathRef = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    pathRef.current?.focus();
+  }, []);
+
   // Loading replaces the list, unmounting the entry that was pressed. The list itself is the
   // stable place to put focus back, so Tab carries on from the entries.
   useRefocusIfLost(() => listRef.current, [entries]);
@@ -140,7 +151,7 @@ export function DirectoryPicker({
   return (
     <Dialog title={title} onClose={onClose} footer={footer} onSubmit={() => void load(path)}>
       <div className="flex gap-2">
-        <Input autoFocus fullWidth variant="secondary" dir="ltr" aria-label={t("directoryPicker.path")} placeholder={t("directoryPicker.pathExample")} {...pathField} />
+        <Input ref={pathRef} {...openingFocus(true)} fullWidth variant="secondary" dir="ltr" aria-label={t("directoryPicker.path")} placeholder={t("directoryPicker.pathExample")} {...pathField} />
         <Button type="submit" variant="secondary">
           {t("directoryPicker.go")}
         </Button>

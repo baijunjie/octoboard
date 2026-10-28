@@ -42,17 +42,30 @@ export function focusTopBar(): void {
   focusFirstIn("topbar");
 }
 
+/** Marks the control a dialog's opening focus goes to, the one given `autoFocus`: react-aria leaves no trace of it in
+ * the page, and for a press without a pointer it drops that focus if anything else took focus first (an alert raised as
+ * the dialog opens), so `focusOpenDialog` finds it by this mark. `Button` and `TextInput` set it from their `autoFocus`;
+ * a dialog that focuses a control of its own on opening sets it on that control. */
+export function openingFocus(autoFocus: boolean | undefined): { "data-opening-focus"?: "" } {
+  return autoFocus ? { "data-opening-focus": "" } : {};
+}
+
 /** Returns to the foremost modal instead of an inert window region. A remembered control is
- * preferred while it still belongs to that dialog; the dialog itself survives replaced content. */
-export function focusOpenDialog(previous?: Element | null): boolean {
+ * preferred while it still belongs to that dialog; the dialog itself survives replaced content.
+ * With `opening`, focus that has no remembered control goes where the dialog's opening focus goes
+ * (the control it opens on, marked by `openingFocus`) rather than to the dialog: the
+ * dialog may never have had that focus, and the dialog itself is where only a dialog that opens on
+ * itself (a destructive confirmation, an unprompted question) starts. */
+export function focusOpenDialog(previous?: Element | null, { opening = false }: { opening?: boolean } = {}): boolean {
   const dialogs = document.querySelectorAll<HTMLElement>(
     '[role="dialog"]:not([aria-modal="false"]), [role="alertdialog"]:not([aria-modal="false"])',
   );
   const dialog = Array.from(dialogs).reverse().find((element) => !element.closest('[inert], [aria-hidden="true"]'));
   if (!dialog) return false;
-  const target = previous instanceof HTMLElement && dialog.contains(previous) && !previous.matches(":disabled")
-    ? previous
-    : dialog;
+  const usable = (element: Element | null | undefined): element is HTMLElement =>
+    element instanceof HTMLElement && dialog.contains(element) && !element.matches(":disabled") && !element.closest("[hidden]");
+  const landing = opening ? Array.from(dialog.querySelectorAll("[data-opening-focus]")).find(usable) : undefined;
+  const target = usable(previous) ? previous : landing ?? dialog;
   target.focus();
   return dialog.contains(document.activeElement);
 }
@@ -88,7 +101,8 @@ export function focusRegion(region: Region, focusTerminal: () => void): boolean 
 }
 
 /** Where focus goes when the control that held it has gone and nothing hands it back (an alert acknowledged
- * while focus is on `<body>`): the dialog still open (the window's regions are inert behind it), else
+ * while focus is on `<body>`): the dialog still open (the window's regions are inert behind it), where its
+ * opening focus goes (see `focusOpenDialog`), else
  * wherever `focusTerminal` puts it, which for the selected session's terminal is the terminal; the empty
  * terminal and the welcome screen decline from `<body>`, so then the first of the sidebar and the rail that has
  * a control takes it, each landing where F6 would. With none to take it, focus stays on `<body>`. Keyboard modality
@@ -96,7 +110,7 @@ export function focusRegion(region: Region, focusTerminal: () => void): boolean 
  * (`ringForAutomaticFocus`). */
 export function focusAfterLoss(focusTerminal: () => void): void {
   ringForAutomaticFocus();
-  if (focusOpenDialog()) return;
+  if (focusOpenDialog(undefined, { opening: true })) return;
   focusTerminal();
   if (document.activeElement && document.activeElement !== document.body) return;
   for (const region of ["sidebar", "rail"] as const) {

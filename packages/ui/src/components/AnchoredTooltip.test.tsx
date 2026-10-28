@@ -128,3 +128,16 @@ it.each([
   expect(tooltip()).not.toBeNull();
   finish();
 });
+
+it("closes once its anchor is inside a region a modal opening over the page makes inert", async () => {
+  const { container, hover, settle, finish } = mount();
+  hover(true);
+  settle();
+  expect(tooltip()).not.toBeNull();
+  // jsdom has no `inert`, so react-aria hides with `aria-hidden` there; the attribute is set as a browser's modal does.
+  act(() => container.setAttribute("inert", ""));
+  await act(() => Promise.resolve());
+  expect(tooltip()).toBeNull();
+  container.removeAttribute("inert");
+  finish();
+});
