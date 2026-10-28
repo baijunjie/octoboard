@@ -104,7 +104,9 @@ function ErrorAlertHost(): React.ReactElement | null {
   // inert and the dialog, hidden in turn, drops focus to `<body>`. React runs a commit's passive effects before it
   // renders again, so the dialog's has run by the time the alert mounts. The alert is set from a layout effect, which
   // makes that render a synchronous one in the same task, before any frame and before the dialog's hiding answers the
-  // alert's insertion, and in time for the focusing below.
+  // alert's insertion, and in time for the focusing below. A dialog that the press's dialog opens in turn from an effect
+  // as it mounts still mounts in the alert's commit, so the alert is marked `topLayerAtMount` for that dialog's hiding to
+  // leave it out.
   const [error, setError] = useState<typeof raised>();
   useLayoutEffect(() => { setError(raised); }, [raised]);
   const acknowledge = useRef<HTMLButtonElement>(null);
@@ -139,6 +141,7 @@ function ErrorAlertHost(): React.ReactElement | null {
       title={alertTitle(t, error)}
       onClose={() => {}}
       focusesItselfOnOpen
+      topLayerAtMount
       footer={<>
         {unexpected && issue.link}
         {action && (

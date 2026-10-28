@@ -19,14 +19,15 @@ export interface MountedDialog {
 
 /**
  * Renders `PendingQuestionDialog` over a store holding `state` and a daemon whose every request
- * answers with `reply`, after `under` (a dialog the question comes up over), in `StrictMode` when `strict` is set. The
+ * answers with `reply`, after `under` (a dialog the question comes up over) and before `after` (what the window mounts
+ * after the application, as the error alerts are), in `StrictMode` when `strict` is set. The
  * tree is taken down when the test finishes rather than at the end of the caller's own steps, so a failure in the
  * middle of them still leaves nothing mounted.
  */
 export function mountPendingQuestionDialog(
   state: Partial<State>,
   reply: () => Promise<unknown>,
-  { under, strict = false }: { under?: React.ReactNode; strict?: boolean } = {},
+  { under, after, strict = false }: { under?: React.ReactNode; after?: React.ReactNode; strict?: boolean } = {},
 ): MountedDialog {
   const daemon: Daemon = {
     store: createStateStore(state),
@@ -53,6 +54,7 @@ export function mountPendingQuestionDialog(
     <DaemonProvider value={daemon}>
       {under}
       <PendingQuestionDialog />
+      {after}
     </DaemonProvider>
   );
   act(() => root.render(strict ? <StrictMode>{tree}</StrictMode> : tree));

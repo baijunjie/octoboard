@@ -35,6 +35,8 @@ export interface ConfirmDialogProps {
    * focus starts on the dialog rather than on Confirm, for every subject it asks about, so an Enter
    * meant for something else (or held down past the previous answer) answers nothing. */
   unprompted?: boolean;
+  /** Keeps the question out of what a modal mounting in the same commit hides (see `Dialog`'s `topLayerAtMount`). */
+  topLayerAtMount?: boolean;
   /** A control shown under the message that settles what Confirm does, such as a checkbox widening
    * what the action covers; the caller holds its state and reads it in `onConfirm`. A function is
    * given whether `onConfirm` is running, for a control to freeze while it does. */
@@ -81,6 +83,7 @@ export function ConfirmDialog({
   destructive,
   otherAction,
   unprompted,
+  topLayerAtMount,
   resetKey,
   errorTitle,
   failure,
@@ -156,7 +159,7 @@ export function ConfirmDialog({
   );
 
   return (
-    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <AlertDialog.Icon status="warning" /> : undefined} onClose={busy ? () => {} : onCancel} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
+    <Dialog title={title} headerLeading={destructive || consequences !== undefined ? <AlertDialog.Icon status="warning" /> : undefined} onClose={busy ? () => {} : onCancel} footer={footer} failure={failure} resetKey={resetKey} focusesItselfOnOpen={unprompted} topLayerAtMount={topLayerAtMount} size={size} onSubmit={() => confirmed && !busy && !waiting && void run(onConfirm)} alert>
       {typeof message === "string" ? (
         // The separator (a space in English, nothing in Chinese) joins the message's own text node: VoiceOver drops a text
         // node that is only whitespace, and would run the two sentences together.

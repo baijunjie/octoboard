@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useState } from "react";
 
+import { cancelFocusAfterModalCloses, focusAfterModalCloses } from "../components/regionFocus";
 import { useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { useSessionRequestDialogProps } from "./SessionRequestDialog";
@@ -32,11 +33,19 @@ export function PendingQuestionDialog(): React.ReactElement | null {
   // `ariaHideOutside` from a passive effect of that commit, and with the question already in the document it would hide
   // the question too, for good: the question's own hider never shows what another one hid. React runs those passive
   // effects before it renders again, and the state set from this layout effect makes that render a synchronous one in
-  // the same task.
+  // the same task. A dialog that the press's dialog opens in turn from an effect as it mounts still mounts in the
+  // question's commit, so the question is marked `topLayerAtMount` for that dialog's hiding to leave it out.
   const asked = props !== undefined;
   const [shown, setShown] = useState(false);
   useLayoutEffect(() => setShown(asked), [asked]);
-  return props && shown ? <ConfirmDialog {...props} unprompted /> : null;
+  // The last question closing may leave focus nowhere: see `focusAfterModalCloses`.
+  const showing = asked && shown;
+  useEffect(() => {
+    if (!showing) return;
+    cancelFocusAfterModalCloses();
+    return focusAfterModalCloses;
+  }, [showing]);
+  return showing && props ? <ConfirmDialog {...props} unprompted topLayerAtMount /> : null;
 }
 
 /** Whether `PendingQuestionDialog` shows anything, for whatever keeps out of a modal's way. */

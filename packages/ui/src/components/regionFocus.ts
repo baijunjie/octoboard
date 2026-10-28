@@ -118,6 +118,45 @@ export function focusAfterLoss(focusTerminal: () => void): void {
   }
 }
 
+let modalLossFallback: (() => void) | undefined;
+let modalLossTimer: ReturnType<typeof setTimeout> | undefined;
+/** Long enough for a closing modal's exit transition and react-aria's focus restore, a frame after it unmounts. */
+const MODAL_CLOSE_SETTLE_MS = 400;
+
+/** Registers where focus goes when a modal that came up unasked (an error alert, a pending question) closes and leaves
+ * it on `<body>` (see `focusAfterModalCloses`); the window passes `focusAfterLoss` with its terminal. Returns what
+ * unregisters it. */
+export function setFocusAfterModalLoss(fallback: () => void): () => void {
+  modalLossFallback = fallback;
+  return () => {
+    if (modalLossFallback !== fallback) return;
+    modalLossFallback = undefined;
+    cancelFocusAfterModalCloses();
+  };
+}
+
+/** Called by each kind of modal that comes up unasked as its own last one closes: the last error alert acknowledged, the
+ * last pending question gone. Focus goes back to whatever had it when the modal opened, but there may be none: a
+ * control gone with a dialog that closed before the modal came, or no focus at all, as when the modal came in the same
+ * task as a press without a pointer that opened a dialog, whose own opening focus react-aria then dropped. Focus left
+ * on `<body>` once the modal's exit transition and focus restore are over, which would otherwise undo it, goes to the
+ * registered fallback. */
+export function focusAfterModalCloses(): void {
+  cancelFocusAfterModalCloses();
+  const fallback = modalLossFallback;
+  if (!fallback) return;
+  modalLossTimer = setTimeout(() => {
+    modalLossTimer = undefined;
+    if (!document.activeElement || document.activeElement === document.body) fallback();
+  }, MODAL_CLOSE_SETTLE_MS);
+}
+
+/** Drops a fallback `focusAfterModalCloses` has put off, for a modal that comes up in the meantime and focuses itself. */
+export function cancelFocusAfterModalCloses(): void {
+  clearTimeout(modalLossTimer);
+  modalLossTimer = undefined;
+}
+
 /** Where focus goes when something inside `region` goes while it (or a popover it opened) holds focus: the region's
  * first control. React suspends focus events during removal, so it waits until the surviving control can observe its
  * focus and draw its ring; another hand-off in the same commit takes precedence. */

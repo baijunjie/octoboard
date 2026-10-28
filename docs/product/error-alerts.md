@@ -68,7 +68,13 @@ and removing an account" in `docs/product/agent-accounts.md`) or a conversation 
 ## The error alert
 
 The error alert uses the standard danger icon and a danger acknowledgement button. It appears above any open dialog and
-takes keyboard focus. It identifies the failure and preserves available details. Its title says in plain words what
+takes keyboard focus. That includes a dialog opening in the same moment, even one that another dialog opens as it
+mounts — **View in Settings** opening Settings, which opens the account settings dialog, or an alert's **Add agent…**
+opening Settings with the Add agent dialog in front — and a question the user did not ask for that comes up in the same
+moment (see "Where a question the user did not ask for stands among other dialogs" in `docs/product/dialogs.md`). A
+dialog that opens later, while the alert is up, goes on top of it and takes keyboard focus; the alert waits under it,
+out of reach, and closing that dialog puts focus back in the alert, still waiting for its acknowledgement. It
+identifies the failure and preserves available details. Its title says in plain words what
 failed — "Could not start the session", "Could not export the configuration" — and names no session, account or other
 subject (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`). Every alert raised by a
 user's action, and every one a daemon broadcast raises, has such a title: the action's — "Could not save the

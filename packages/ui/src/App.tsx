@@ -2,7 +2,6 @@ import { runAccountSwitchBatch } from "./accountSwitchBatch";
 import { StatusAnnouncer } from "./components/StatusAnnouncer";
 import type { PlainMessageKey } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
-import { errorAlerts } from "./errorAlerts";
 import { noAgentState, pickableAgents } from "./agents";
 import { reportExternalLinkFailure } from "./components/ExternalLink";
 import { copyText } from "./components/copyText";
@@ -32,7 +31,7 @@ import { BareTitleBar, TitleBar } from "./components/TitleBar";
 import { Toasts } from "./components/Toasts";
 import { useFirstConsoleHandoff } from "./components/useFirstConsoleHandoff";
 import { useLatest, useStableHandler } from "./components/useLatest";
-import { focusAfterLoss } from "./components/regionFocus";
+import { focusAfterLoss, setFocusAfterModalLoss } from "./components/regionFocus";
 import { DaemonRequestError } from "./daemon-client";
 import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
@@ -998,9 +997,9 @@ export function App(): React.ReactElement {
   const stableSetPinned = useStableHandler(setPinned);
   const stableOpenSettingsAt = useStableHandler(openSettingsAt);
   useEffect(() => registerSettingsLauncher(stableOpenSettingsAt), [stableOpenSettingsAt]);
-  // Where focus goes once the last alert is acknowledged with nothing to give it back to.
-  const focusAfterAlert = useStableHandler(() => focusAfterLoss(focusTerminal));
-  useEffect(() => errorAlerts.setFocusFallback(focusAfterAlert), [focusAfterAlert]);
+  // Where focus goes once the last alert or pending question closes with nothing to give it back to.
+  const focusAfterModal = useStableHandler(() => focusAfterLoss(focusTerminal));
+  useEffect(() => setFocusAfterModalLoss(focusAfterModal), [focusAfterModal]);
   const stableBack = useStableHandler(navigation.back);
   const stableForward = useStableHandler(navigation.forward);
 
