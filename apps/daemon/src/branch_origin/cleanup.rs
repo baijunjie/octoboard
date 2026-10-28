@@ -1018,12 +1018,9 @@ fn remove_in(
         merged,
     } in survey.branches
     {
+        // A branch a worktree that stays has checked out is kept for that, merged or not.
         let flag = if held.contains(&name) {
-            item.state = if merged {
-                SessionBranchState::CheckedOut
-            } else {
-                SessionBranchState::Unmerged
-            };
+            item.state = SessionBranchState::CheckedOut;
             left.push(item);
             continue;
         } else if !merged && consented(&item) {
