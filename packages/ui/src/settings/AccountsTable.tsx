@@ -55,6 +55,7 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
         <table aria-label={t("settings.accounts.table.label", { agent: AGENT_LABEL[agent] })} className="w-full min-w-[38rem] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
+              <th aria-hidden="true" className={`${HEADER} w-px`} />
               <th scope="col" className={HEADER}>{t("settings.accounts.table.account")}</th>
               <th scope="col" className={HEADER}>{t("settings.accounts.table.status")}</th>
               <th scope="col" className={HEADER}>{t("settings.accounts.table.usage")}</th>
@@ -109,17 +110,17 @@ export function AccountTableRow({ agent, account, name, menu, onLogin, onDragSta
   const actions = useRef<HTMLDivElement>(null);
   return (
     <tr data-account-row={id ?? `default:${agent}`} data-list-motion={id ?? `default:${agent}`} className="group/row bg-overlay">
+      <td className={`${CELL} w-px`}>
+        {onDragStart && (
+          <span aria-hidden="true" data-account-grip="" className={`flex row-icon-control items-center justify-center ${dragDisabled ? "text-app-muted/50" : "cursor-grab text-app-muted active:cursor-grabbing"}`} onPointerDown={onDragStart}>
+            <GripVertical className="size-4" />
+          </span>
+        )}
+      </td>
       <th scope="row" className={`${CELL} text-start font-normal`}>
-        <div className="flex items-center gap-1">
-          {onDragStart && (
-            <span aria-hidden="true" data-account-grip="" className={`flex size-7 shrink-0 items-center justify-center ${dragDisabled ? "text-app-muted/50" : "cursor-grab text-app-muted active:cursor-grabbing"}`} onPointerDown={onDragStart}>
-              <GripVertical className="size-4" />
-            </span>
-          )}
-          <div className="max-w-56 min-w-28">
-            <AccountNameLine name={<FadeOverflow dir="auto" titleWhenClipped={name}>{name}</FadeOverflow>} quota={quota} usedUp={exhausted !== undefined} showUpdated={false} showFailure={false} showUsedUp={false} />
-            <AccountLoginAnnouncer login={succeeded} name={name} />
-          </div>
+        <div className="max-w-56 min-w-28">
+          <AccountNameLine name={<FadeOverflow dir="auto" titleWhenClipped={name}>{name}</FadeOverflow>} quota={quota} usedUp={exhausted !== undefined} showUpdated={false} showFailure={false} showUsedUp={false} />
+          <AccountLoginAnnouncer login={succeeded} name={name} />
         </div>
       </th>
       <td className={`${CELL} whitespace-nowrap`}>

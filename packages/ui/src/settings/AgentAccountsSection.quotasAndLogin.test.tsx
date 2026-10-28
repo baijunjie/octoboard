@@ -136,7 +136,7 @@ it("logs in a signed-out account from the icon button after its badge in the Sta
   expect(login.textContent).toBe("");
   expect(login.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Log in to claude-work");
   // It follows the badge, in the Status cell.
-  expect(login.closest("td")).toBe(rowOf(container, "claude-work").querySelectorAll("td")[0]);
+  expect(login.closest("td")).toBe(rowOf(container, "claude-work").querySelectorAll("td")[1]);
   expect(login.previousElementSibling?.textContent).toBe("Not logged in");
   await act(async () => login.click());
   expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
