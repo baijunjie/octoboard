@@ -27,6 +27,7 @@ import { AccountLoginDialog } from "./AccountLoginDialog";
 import { AccountsTable, AccountTableRow, rowActionsTrigger } from "./AccountsTable";
 import { AddAgentDialog } from "./AddAgentDialog";
 import { AgentApprovalSetting } from "./AgentApprovalSetting";
+import { AgentClaudeCompatibilitySetting } from "./AgentClaudeCompatibilitySetting";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentTabActions, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
 import { useAccountOrder } from "./useAccountOrder";
@@ -339,8 +340,9 @@ export function AgentAccountsSection(): React.ReactElement {
   );
 }
 
-/** One agent's tab panel: its Permission approval row (not for Grok), which applies to every account of the agent, and
- * the table of the agent's accounts in their saved order. */
+/** One agent's tab panel: its Permission approval row (not for Grok) and its Claude compatibility row (Codex and Grok
+ * only), each of which applies to every account of the agent, and the table of the agent's accounts in their saved
+ * order. */
 function AgentAccountsPanel(props: AgentAccountsPanelProps): React.ReactElement {
   const order = useAccountOrder(props.agent, props.owned);
   return (
@@ -394,6 +396,7 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
   return (
     <>
       <AgentApprovalSetting agent={agent} />
+      <AgentClaudeCompatibilitySetting agent={agent} />
       <AccountsTable agent={agent}>
         {order.rows.map((account) => (
           <AccountTableRow

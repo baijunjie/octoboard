@@ -107,7 +107,10 @@ with a badge for what applying would change from what is set now: **Turns on**, 
 setting's own words (see "The application settings a full export carries" below); **Turns off**; or **No change**. A
 document that carries the application-wide git workflow settings adds one line for all four, named **Git workflow**,
 badged **Set to the file's** when they differ from the current ones and **No change** when they do
-not. A document that carries keyboard shortcuts adds a line for them, badged **Set to the file's**, with how many of the
+not. A document that carries a Claude compatibility choice for an agent that has the setting adds one line for them all,
+named **Claude compatibility**, badged **Set to the file's** when applying would change the value of an agent this
+machine reports and **No change** when it would not; a document with no such choice has no line. A document that
+carries keyboard shortcuts adds a line for them, badged **Set to the file's**, with how many of the
 file's shortcuts differ from the defaults — counting only those that can be used here — and that they apply to this
 device or browser only; **Back to defaults**, with that it applies to this device or browser only; or **No change**,
 when the file's are the ones this device already has. These lines are the checkbox's description.
@@ -134,7 +137,8 @@ The **result** replaces the review, in this order:
   result has no list of them elsewhere.
 - When the application settings were applied, a card headed **Application settings applied**, with a line for each
   setting applied, badged **On** or **Off**; one line for the git workflow settings, when the document carried them,
-  badged **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with
+  badged **Matches the file**; one line for Claude compatibility, when the document carried a choice for an agent that
+  has the setting, badged **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with
   how many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts
   could not be used here and were left out said under it, when any were.
 
@@ -255,8 +259,8 @@ stored at all and are in no document either (see
 
 ### The application settings a full export carries
 
-Twelve, each under its own key. The first is in every document that has application settings. Each of the other
-eleven is missing from a document exported before it was carried, and applying that document's settings then leaves
+Thirteen, each under its own key. The first is in every document that has application settings. Each of the other
+twelve is missing from a document exported before it was carried, and applying that document's settings then leaves
 the importing machine's value as it is; the import review notes each of the ten switches after the first only when the
 document carries it as a boolean. A document exported by a build that carried a "Talk to me in the interface language"
 switch, under `reply_in_interface_language`, still imports: that key is ignored. The language the daemon holds for the
@@ -299,6 +303,13 @@ settings leaves it as the importing daemon holds it.
   Applying the document's settings sets all four to the document's values, and a document without it, or with `null`
   there, leaves them as they are. The import review and its result each have one line for all four (see "In the window"
   above).
+- **Claude compatibility** (see "Claude compatibility" in `docs/product/agent-accounts.md`), under
+  `claude_compatibility`, an object keyed by agent (`codex`, `grok`) holding `true` or `false`. It carries only the
+  choices the user made: an agent never chosen for is absent, so on the importing machine it keeps following that
+  machine's default — an unset Codex there follows whether Claude Code is added there — and an export where no choice
+  was made carries `{}`. Applying the document's settings records each choice it carries as the importing machine's own,
+  agent by agent, and leaves an agent it does not carry as it is; an agent the document names that has no such setting
+  here, Claude Code or one this build does not know, is skipped rather than refused.
 
 **The keyboard shortcuts of the exporting client** travel with these, under `keyboard_shortcuts`. They are not the
 daemon's: each client keeps its own (see "Where the shortcuts are kept" in `docs/product/keyboard-shortcuts.md`), so
@@ -415,8 +426,8 @@ automatically deleting archived sessions makes it delete sessions by itself, aut
 new session that names no account take the one whose weekly quota resets soonest, automatic switching at the usage
 limit ends sessions' processes and moves them to other accounts by itself, starting usage windows automatically spends
 a little of the accounts' quota by itself, and the four automatic approvals let agents' requests, account
-switches and handoffs through without asking the user, and asking questions as choices changes what sessions are told at
-launch, so applying them changes how the daemon's host behaves rather than only adding to what it holds. The inspection
+switches and handoffs through without asking the user, asking questions as choices changes what sessions are told at
+launch, and Claude compatibility changes what Codex and Grok Build sessions load at launch, so applying them changes how the daemon's host behaves rather than only adding to what it holds. The inspection
 says both what the document sets and what is set now, so what applying would change can be shown before anything is
 done. The settings are applied last, through the same path as a change made in Settings — so an import that turns
 automatic pulling on runs the same immediate fast-forward pass turning it on by hand does (see "Turning the switch on"
@@ -425,8 +436,8 @@ scheduled check, as the switch does, one that turns automatic account selection 
 open, one that turns automatic switching at the usage limit on or off changes no session, one that turns the
 starting of usage windows on looks over the quota readings already held at once (see "When an
 account is kicked" in `docs/product/starting-usage-windows.md`), one that turns an automatic approval on or off changes
-no request already waiting, and one that turns asking questions as choices on or off changes no session already running
-— and the result of the import reports what was applied. Asking to apply the settings of a document that carries none is
+no request already waiting, and one that turns asking questions as choices or an agent's Claude compatibility on or off
+changes no session already running — and the result of the import reports what was applied. Asking to apply the settings of a document that carries none is
 refused rather than quietly ignored, so a request never does less than it was told to.
 
 The keyboard shortcuts follow the same choice, and are applied by the client that runs the import, to itself alone,

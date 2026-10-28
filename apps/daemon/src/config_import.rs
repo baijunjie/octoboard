@@ -9,7 +9,7 @@
 //! an existing directory or clones a remote. A document names no database id and no folder-trust
 //! state, so a project created here is as untrusted as one added by hand.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -172,6 +172,9 @@ pub struct InspectedSettings {
     /// Absent when the document predates the settings, which applying it then leaves as they are.
     pub git_workflow: Option<GitWorkflowSettings>,
     pub current_git_workflow: GitWorkflowSettings,
+    /// Absent when the document predates the setting, which applying it then leaves as it is.
+    pub claude_compatibility: Option<BTreeMap<String, bool>>,
+    pub current_claude_compatibility: BTreeMap<String, bool>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -445,6 +448,19 @@ struct Probe {
     clone: Option<PathBuf>,
 }
 
+/// The entries of an exported `claude_compatibility` object that name an agent with the setting; a
+/// document from a build that knows more agents lists keys this one skips.
+fn known_claude_compatibility(
+    choices: &BTreeMap<String, bool>,
+) -> impl Iterator<Item = (String, bool)> + '_ {
+    choices
+        .iter()
+        .filter(|(name, _)| {
+            Agent::from_wire_name(name).is_some_and(Agent::has_claude_compatibility)
+        })
+        .map(|(name, enabled)| (name.clone(), *enabled))
+}
+
 fn text(path: PathBuf) -> String {
     path.to_string_lossy().into_owned()
 }
@@ -547,6 +563,11 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             current_ask_questions_as_choices: state.store.ask_questions_as_choices()?,
             git_workflow: settings.git_workflow,
             current_git_workflow: state.store.git_workflow_settings()?,
+            claude_compatibility: settings
+                .claude_compatibility
+                .as_ref()
+                .map(|choices| known_claude_compatibility(choices).collect()),
+            current_claude_compatibility: state.store.claude_compatibility()?,
         }),
         None => None,
     };
@@ -763,6 +784,13 @@ pub async fn apply(
                 .git_workflow
                 .map(GitWorkflowSettingsChanges::from)
                 .unwrap_or_default(),
+            // An agent this build has no such setting for is skipped, so a document from a build
+            // that knows more agents still applies the rest of its settings.
+            claude_compatibility: settings
+                .claude_compatibility
+                .iter()
+                .flat_map(known_claude_compatibility)
+                .collect(),
         };
         match coordinator::update_settings(state, changes) {
             Ok(()) => settings_applied = Some(settings),
@@ -1861,6 +1889,7 @@ mod tests {
                 auto_approve_handoffs: None,
                 ask_questions_as_choices: None,
                 git_workflow: None,
+                claude_compatibility: None,
                 keyboard_shortcuts: None,
             })
         );
@@ -1989,6 +2018,49 @@ mod tests {
         assert!(target.store.ask_questions_as_choices().unwrap());
         apply(&target, &full, Vec::new(), true).await.unwrap();
         assert!(!target.store.ask_questions_as_choices().unwrap());
+    }
+
+    /// What travels is the user's choice for an agent, not the value in effect: an agent never
+    /// chosen for is not exported. The importing machine takes the choices only when settings are
+    /// applied, per agent.
+    #[tokio::test]
+    async fn turning_off_an_agents_claude_compatibility_round_trips_in_a_full_export() {
+        let (source, source_dir) = app_state("import-claude-compat-source");
+        source
+            .store
+            .set_claude_compatibility(Agent::Codex, false)
+            .unwrap();
+        source
+            .store
+            .insert_console(&crate::test_support::console(&source_dir))
+            .unwrap();
+        let full =
+            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
+                .unwrap();
+        assert_eq!(
+            full["settings"]["claude_compatibility"],
+            serde_json::json!({ "codex": false })
+        );
+
+        let (target, _target_dir) = app_state("import-claude-compat-target");
+        target
+            .store
+            .set_claude_compatibility(Agent::Grok, false)
+            .unwrap();
+        target
+            .store
+            .set_claude_compatibility(Agent::Codex, true)
+            .unwrap();
+        let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
+        assert!(!settings.claude_compatibility.unwrap()["codex"]);
+        assert!(!settings.current_claude_compatibility["grok"]);
+
+        apply(&target, &full, Vec::new(), false).await.unwrap();
+        assert!(target.store.claude_compatibility_of(Agent::Codex).unwrap());
+        apply(&target, &full, Vec::new(), true).await.unwrap();
+        assert!(!target.store.claude_compatibility_of(Agent::Codex).unwrap());
+        // The document makes no choice for Grok Build, so the target's stays.
+        assert!(!target.store.claude_compatibility_of(Agent::Grok).unwrap());
     }
 
     /// The interface language is a client's report, not part of the document: an export does not
@@ -2252,6 +2324,7 @@ mod tests {
                 auto_approve_handoffs: None,
                 ask_questions_as_choices: None,
                 git_workflow: None,
+                claude_compatibility: None,
                 keyboard_shortcuts: None,
             })
         );
@@ -2286,6 +2359,7 @@ mod tests {
                 auto_approve_handoffs: None,
                 ask_questions_as_choices: None,
                 git_workflow: None,
+                claude_compatibility: None,
                 keyboard_shortcuts: None,
             })
         );

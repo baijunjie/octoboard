@@ -58,10 +58,13 @@
 //! `agent_session_id` until they type something. The id then arrives on the `SessionStart` hook
 //! payload, and thread id and session id are the same value.
 
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use serde_json::json;
 
+use super::claude_mcp::Reserved;
+use super::files::{read_bounded_text, SMALL_FILE_LIMIT};
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
 use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError};
@@ -266,6 +269,39 @@ impl AgentAdapter for CodexAdapter {
             super::MCP_TOOL_TIMEOUT_SECS
         ));
 
+        let config = read_config(spec, pinned);
+        // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
+        // stands.
+        let mut env = pinned
+            .map(|dir| vec![("CODEX_HOME".to_string(), dir.to_string_lossy().into_owned())])
+            .unwrap_or_default();
+        // Claude Code's MCP servers, for the session's working directory. A server of the same name
+        // in the account's own `config.toml` or the project's `.codex/config.toml` stays as it is,
+        // and an unreadable one leaves nothing to compare with, so then none is added.
+        if spec.claude_compatibility {
+            let project = project_server_names(spec.cwd);
+            let taken = |name: &str| {
+                project.as_ref().is_none_or(|names| names.contains(name))
+                    || match &config {
+                        ConfigFile::Absent => false,
+                        ConfigFile::Unreadable => true,
+                        ConfigFile::Parsed(parsed) => server_names(parsed).contains(name),
+                    }
+            };
+            let servers = super::claude_mcp::codex_servers(
+                spec.shell_env,
+                &env,
+                &reserved_env,
+                spec.cwd,
+                &taken,
+            );
+            for server_override in servers.overrides {
+                args.push("-c".to_string());
+                args.push(server_override);
+            }
+            env.extend(servers.env);
+        }
+
         // Codex's own update prompt ("Update now / Skip") would otherwise come up before its trust
         // screen, unrecognised and in the way of it. Off for this launch only.
         args.push("-c".to_string());
@@ -284,15 +320,20 @@ impl AgentAdapter for CodexAdapter {
             args.push(format!("notice.model_migrations={upgrades}"));
         }
 
+        let mut instructions = mcp::role::role_description(
+            spec.role,
+            spec.owner.as_ref(),
+            Agent::Codex,
+            &spec.role_options(),
+        );
+        if spec.claude_compatibility {
+            instructions.push_str("\n\n");
+            instructions.push_str(&claude_compatibility_instructions(spec.shell_env));
+        }
         args.push("-c".to_string());
         args.push(format!(
             "developer_instructions={}",
-            toml_string(&mcp::role::role_description(
-                spec.role,
-                spec.owner.as_ref(),
-                Agent::Codex,
-                &spec.role_options(),
-            ))
+            toml_string(&instructions)
         ));
 
         // Codex has no effort flag; the effort is reachable only as a config override, so the
@@ -323,12 +364,6 @@ impl AgentAdapter for CodexAdapter {
                 args.push(task.to_string());
             }
         }
-
-        let config = read_config(spec, pinned);
-        // Set only for a pinned directory; otherwise the shell snapshot's own value, if any, stands.
-        let env = pinned
-            .map(|dir| vec![("CODEX_HOME".to_string(), dir.to_string_lossy().into_owned())])
-            .unwrap_or_default();
 
         Ok(LaunchPlan {
             args,
@@ -458,6 +493,106 @@ fn read_config(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> ConfigFile {
     }
 }
 
+/// The names of the MCP servers a parsed `config.toml` defines.
+fn server_names(config: &toml::Table) -> BTreeSet<String> {
+    config
+        .get("mcp_servers")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|servers| servers.keys().cloned())
+        .collect()
+}
+
+/// The names of the MCP servers the project's `.codex/config.toml` files define, layered over the
+/// account's own: the one in the session's working directory and in each directory above it up to
+/// the repository root (the nearest one holding `.git`; the working directory alone outside a
+/// repository). `None` when one of them exists and cannot be read or parsed.
+fn project_server_names(cwd: &Path) -> Option<BTreeSet<String>> {
+    let project = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+    let mut dirs = Vec::new();
+    let mut found = false;
+    for dir in project.ancestors() {
+        dirs.push(dir);
+        if dir.join(".git").exists() {
+            found = true;
+            break;
+        }
+    }
+    if !found {
+        dirs.truncate(1);
+    }
+    let mut names = BTreeSet::new();
+    for dir in dirs {
+        let path = dir.join(".codex/config.toml");
+        let text = match read_bounded_text(&path, &project, SMALL_FILE_LIMIT) {
+            Ok(text) => text,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => {
+                tracing::warn!(path = %path.display(), %err, "could not read a project Codex config");
+                return None;
+            }
+        };
+        match text.parse::<toml::Table>() {
+            Ok(parsed) => names.extend(server_names(&parsed)),
+            Err(err) => {
+                tracing::warn!(path = %path.display(), %err, "could not parse a project Codex config");
+                return None;
+            }
+        }
+    }
+    Some(names)
+}
+
+/// How a Claude Code MCP server's `env` may treat a variable name. `OCTOBOARD_*` is Octoboard's own
+/// namespace (its header variables are in `plan.env`), the session variables and `GIT_CONFIG_*` are
+/// set after `plan.env` in project sessions, and `TERM` is set last, so a server naming one is
+/// refused. What steers Codex itself is `Held`: its authentication and behaviour (`CODEX_*`,
+/// `OPENAI_*`), logging (`RUST_LOG`, `RUST_BACKTRACE`), network (the proxy variables in both cases,
+/// `SSL_CERT_FILE`, `SSL_CERT_DIR`) and process (`NODE_OPTIONS`, `DYLD_*`, `LD_*`); a server may
+/// name those only at the value the shell or `plan.env` already gives them.
+fn reserved_env(name: &str) -> Reserved {
+    if name == "TERM"
+        || ["GIT_CONFIG_", "OCTOBOARD_"]
+            .iter()
+            .any(|p| name.starts_with(p))
+    {
+        return Reserved::Refused;
+    }
+    let held_name = [
+        "RUST_LOG",
+        "RUST_BACKTRACE",
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "NODE_OPTIONS",
+    ]
+    .contains(&name)
+        || ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"]
+            .iter()
+            .any(|proxy| name.eq_ignore_ascii_case(proxy))
+        || ["CODEX_", "OPENAI_", "DYLD_", "LD_"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix));
+    if held_name {
+        Reserved::Held
+    } else {
+        Reserved::No
+    }
+}
+
+/// The instructions that have Codex read Claude Code's configuration (`claude_compatibility.md`),
+/// with `{CLAUDE_CONFIG_DIR}` filled in by [`claude_compatibility_instructions`].
+const CLAUDE_COMPATIBILITY_INSTRUCTIONS: &str = include_str!("claude_compatibility.md");
+
+/// The instructions that have Codex read Claude Code's instructions and skills, naming the
+/// user-level configuration directory of Claude Code's default account as the launch's shell
+/// snapshot resolves it (`~/.claude` when it names none).
+fn claude_compatibility_instructions(shell_env: &HashMap<String, String>) -> String {
+    CLAUDE_COMPATIBILITY_INSTRUCTIONS.replace(
+        "{CLAUDE_CONFIG_DIR}",
+        &super::default_account_dir(Agent::Claude, shell_env).to_string_lossy(),
+    )
+}
+
 /// Whether `wanted` appears as a string anywhere inside this value.
 fn mentions(value: &toml::Value, wanted: &str) -> bool {
     match value {
@@ -490,7 +625,7 @@ fn is_project_item(item: &str, name: &str) -> bool {
 
 /// A TOML basic string. JSON string escaping is a subset of TOML's, so serde_json produces a valid
 /// one and spares us a second escaping implementation.
-fn toml_string(value: &str) -> String {
+pub(super) fn toml_string(value: &str) -> String {
     json!(value).to_string()
 }
 
@@ -698,6 +833,193 @@ mod tests {
             ))
         ))));
         assert!(!overrides.iter().any(|o| o.starts_with("instructions=")));
+    }
+
+    /// Claude compatibility appends the instructions that have Codex read Claude Code's
+    /// configuration after the role text, naming the directory the launch's Claude Code default
+    /// account resolves to; off, the instructions are the role text alone.
+    #[test]
+    fn claude_compatibility_appends_the_instructions_naming_the_claude_config_dir() {
+        let instructions = |plan: &crate::adapter::LaunchPlan| {
+            overrides(&plan.args)
+                .into_iter()
+                .find(|o| o.starts_with("developer_instructions="))
+                .expect("developer_instructions")
+        };
+        let mut fixture = spec_fixture();
+        fixture.shell_env.insert(
+            "CLAUDE_CONFIG_DIR".to_string(),
+            "/work/claude-home".to_string(),
+        );
+        let off = instructions(&CodexAdapter.plan(&fixture.spec()).unwrap());
+        assert!(!off.contains("Claude Code compatibility"));
+
+        let mut spec = fixture.spec();
+        spec.claude_compatibility = true;
+        let on = instructions(&CodexAdapter.plan(&spec).unwrap());
+        let role = toml_string(&mcp::role::role_description(
+            fixture.role,
+            fixture.owner.as_ref(),
+            Agent::Codex,
+            &spec.role_options(),
+        ));
+        let role_text = role.trim_end_matches('"');
+        assert!(on.starts_with(&format!("developer_instructions={role_text}")));
+        assert!(on.contains("# Claude Code compatibility"));
+        assert!(on.contains("/work/claude-home"));
+        assert!(!on.contains("{CLAUDE_CONFIG_DIR}"));
+    }
+
+    /// With Claude compatibility on, Claude Code's servers reach the launch as overrides and the
+    /// values that may be secret as environment, never argv; a server the account's own
+    /// `config.toml` defines is left alone; off, nothing is added.
+    #[test]
+    fn claude_compatibility_passes_claude_codes_mcp_servers_without_secrets_on_argv() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("home");
+        let codex_home = fixture.scratch.join("codex-home");
+        std::fs::create_dir_all(&codex_home).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(
+            codex_home.join("config.toml"),
+            "[mcp_servers.mine]\ncommand = \"mine\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            home.join(".claude.json"),
+            serde_json::json!({"mcpServers": {
+                "remote": {"type": "http", "url": "https://x.example/mcp",
+                           "headers": {"Authorization": "Bearer hunter2"}},
+                "mine": {"command": "claude-mine"},
+                "octoboard": {"command": "claude-octoboard"}
+            }})
+            .to_string(),
+        )
+        .unwrap();
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        fixture.config_dir = Some(codex_home);
+
+        let plan = CodexAdapter.plan(&fixture.spec()).unwrap();
+        assert!(!overrides(&plan.args)
+            .iter()
+            .any(|o| o.starts_with("mcp_servers.remote")));
+
+        let mut spec = fixture.spec();
+        spec.claude_compatibility = true;
+        let plan = CodexAdapter.plan(&spec).unwrap();
+        let all = overrides(&plan.args);
+        assert!(all.contains(&"mcp_servers.remote.url=\"https://x.example/mcp\"".to_string()));
+        assert!(all
+            .iter()
+            .any(|o| o.starts_with("mcp_servers.remote.env_http_headers=")));
+        assert!(!all.iter().any(|o| o.contains("hunter2")));
+        assert!(!all.iter().any(|o| o.ends_with("command=\"claude-mine\"")
+            || o.ends_with("command=\"claude-octoboard\"")));
+        assert!(plan.env.iter().any(|(name, value)| {
+            name.starts_with("OCTOBOARD_CLAUDE_MCP_") && value == "Bearer hunter2"
+        }));
+    }
+
+    /// A server whose `env` sets a variable the launch or Codex owns is skipped as a whole; an
+    /// ordinary one beside them still passes.
+    #[test]
+    fn claude_compatibility_skips_servers_that_set_what_the_launch_or_codex_owns() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("home");
+        let codex_home = fixture.scratch.join("codex-home");
+        std::fs::create_dir_all(&codex_home).unwrap();
+        std::fs::create_dir_all(&home).unwrap();
+        let server =
+            |key: &str, value: &str| serde_json::json!({"command": "c", "env": {key: value}});
+        std::fs::write(
+            home.join(".claude.json"),
+            serde_json::json!({"mcpServers": {
+                "home": server("CODEX_HOME", "/elsewhere"),
+                "gitcfg": server("GIT_CONFIG_COUNT", "0"),
+                "octo": server("OCTOBOARD_X", "1"),
+                "log": server("RUST_LOG", "trace"),
+                "proxy": server("https_proxy", "http://p"),
+                "ordinary": server("MY_KEY", "v")
+            }})
+            .to_string(),
+        )
+        .unwrap();
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        // The shell already holds the value the server asks for, so only `Refused` skips it.
+        fixture
+            .shell_env
+            .insert("GIT_CONFIG_COUNT".to_string(), "0".to_string());
+        fixture.config_dir = Some(codex_home);
+
+        let mut spec = fixture.spec();
+        spec.claude_compatibility = true;
+        let plan = CodexAdapter.plan(&spec).unwrap();
+        let all = overrides(&plan.args);
+        for skipped in ["home", "gitcfg", "octo", "log", "proxy"] {
+            let prefix = format!("mcp_servers.{skipped}.");
+            assert!(!all.iter().any(|o| o.starts_with(&prefix)), "{skipped}");
+        }
+        assert!(all.contains(&"mcp_servers.ordinary.command=\"c\"".to_string()));
+        assert_eq!(
+            plan.env
+                .iter()
+                .filter(|(name, _)| name == "CODEX_HOME")
+                .count(),
+            1
+        );
+        assert!(plan.env.contains(&("MY_KEY".to_string(), "v".to_string())));
+    }
+
+    /// A server the project's `.codex/config.toml` defines, in the working directory or up to the
+    /// repository root, is left alone; one that cannot be read leaves nothing to compare with.
+    #[test]
+    fn claude_compatibility_leaves_servers_the_projects_codex_config_defines() {
+        let mut fixture = spec_fixture();
+        let repo = fixture.scratch.join("repo");
+        let cwd = repo.join("sub");
+        std::fs::create_dir_all(repo.join(".git")).unwrap();
+        std::fs::create_dir_all(cwd.join(".codex")).unwrap();
+        std::fs::create_dir_all(repo.join(".codex")).unwrap();
+        std::fs::write(
+            cwd.join(".codex/config.toml"),
+            "[mcp_servers.near]\ncommand = \"n\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            repo.join(".codex/config.toml"),
+            "[mcp_servers.root]\ncommand = \"r\"\n",
+        )
+        .unwrap();
+        let home = fixture.scratch.join("home");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(
+            home.join(".claude.json"),
+            serde_json::json!({"mcpServers": {
+                "near": {"command": "c"}, "root": {"command": "c"}, "free": {"command": "c"}
+            }})
+            .to_string(),
+        )
+        .unwrap();
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        fixture.cwd = cwd.clone();
+        let mut spec = fixture.spec();
+        spec.claude_compatibility = true;
+        let all = overrides(&CodexAdapter.plan(&spec).unwrap().args);
+        assert!(all.contains(&"mcp_servers.free.command=\"c\"".to_string()));
+        assert!(!all.iter().any(|o| o.starts_with("mcp_servers.near.")));
+        assert!(!all.iter().any(|o| o.starts_with("mcp_servers.root.")));
+
+        std::fs::write(cwd.join(".codex/config.toml"), "= not toml").unwrap();
+        let mut spec = fixture.spec();
+        spec.claude_compatibility = true;
+        let all = overrides(&CodexAdapter.plan(&spec).unwrap().args);
+        assert!(!all.iter().any(|o| o.starts_with("mcp_servers.free.")));
     }
 
     #[test]

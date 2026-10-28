@@ -6,6 +6,7 @@ import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import { currentLanguage, t } from "../i18n/language";
 import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
+import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../quota/quotaFormat";
 import { applyDaemonEvent, createStateStore, errorToast, type Daemon, type ToastRequest } from "../store";
@@ -15,6 +16,7 @@ import { createConfigurationReplies } from "./fixtureConfiguration";
 import { createGitReplies } from "./fixtureGit";
 import { refuseUnfillable } from "./banner";
 import { SAMPLE_MODELS } from "./fixtures/agentModels";
+import { ALL_AGENTS, effectiveClaudeCompatibility } from "./fixtures/builders";
 import { SAMPLE_FILES, permissionDenied, sourceUnavailable, type FixtureError, type FixtureFile, type FixtureFiles } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
 
@@ -223,6 +225,18 @@ function quotaWindowName(window: QuotaWindow): string {
  */
 export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
   const store = createStateStore(scenario.state);
+  // The scenario's `settings.claude_compatibility` is read as the user's explicit choices, as the daemon stores them; what the
+  // window is told is the value in effect, which follows the added agents while Codex's is unset.
+  let claudeCompatibilityChoices = scenario.state?.settings?.claude_compatibility ?? {};
+  const syncClaudeCompatibility = () => {
+    const { settings } = store.getState();
+    const effective = effectiveClaudeCompatibility(claudeCompatibilityChoices, settings.added_agents);
+    if (ALL_AGENTS.some((agent) => hasClaudeCompatibility(agent) && settings.claude_compatibility?.[agent] !== effective[agent])) {
+      store.setState({ settings: { ...settings, claude_compatibility: effective } });
+    }
+  };
+  syncClaudeCompatibility();
+  store.subscribe(syncClaudeCompatibility);
   const toastListeners = new Set<(toast: ToastRequest) => void>();
   const emitToast = (toast: ToastRequest) => toastListeners.forEach((listener) => listener(toast));
   let toastsRaised = false;
@@ -378,7 +392,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
     return { type: "ack" };
   };
   const gitReply = createGitReplies(git, fail);
-  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail);
+  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => claudeCompatibilityChoices);
   const recordsPresence = (ids: string[]): SessionRecordsPresence => {
     let presence: SessionRecordsPresence = "absent";
     for (const id of ids) {
@@ -677,6 +691,14 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           return { type: "session_opened", session };
         }
         case "update_settings": {
+          // The daemon refuses a name that has no such setting (Claude Code, which the others are made compatible with) before
+          // it writes anything, whichever other field the request carries.
+          const unsupported = Object.keys(body.claude_compatibility ?? {}).find((name) => !hasClaudeCompatibility(name));
+          if (unsupported !== undefined) {
+            const message = `\`${unsupported}\` has no Claude compatibility setting; it applies to codex and grok`;
+            return fail({ code: "internal_error", params: { detail: message }, message });
+          }
+          if (body.claude_compatibility !== undefined && scenario.claudeCompatibilityError) return fail(scenario.claudeCompatibilityError);
           const current = store.getState();
           let cloneDir = current.settings.default_clone_dir;
           if (body.default_clone_dir !== undefined) {
@@ -687,6 +709,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
               cloneDir = normalizedPath(given);
             }
           }
+          if (body.claude_compatibility !== undefined) claudeCompatibilityChoices = { ...claudeCompatibilityChoices, ...body.claude_compatibility };
           store.setState({ settings: { ...current.settings, auto_pull_repositories: body.auto_pull_repositories ?? current.settings.auto_pull_repositories, auto_delete_unresumable_archives: body.auto_delete_unresumable_archives ?? current.settings.auto_delete_unresumable_archives, ...(body.auto_approve_session_requests !== undefined && { auto_approve_session_requests: body.auto_approve_session_requests }), ...(body.auto_approve_resume_requests !== undefined && { auto_approve_resume_requests: body.auto_approve_resume_requests }), ...(body.auto_approve_account_switches !== undefined && { auto_approve_account_switches: body.auto_approve_account_switches }), ...(body.auto_approve_handoffs !== undefined && { auto_approve_handoffs: body.auto_approve_handoffs }), ...(body.ask_questions_as_choices !== undefined && { ask_questions_as_choices: body.ask_questions_as_choices }), ...(body.interface_language !== undefined && { interface_language: body.interface_language }), ...(body.auto_select_account !== undefined && { auto_select_account: body.auto_select_account }), ...(body.auto_switch_on_usage_limit !== undefined && { auto_switch_on_usage_limit: body.auto_switch_on_usage_limit }), ...(body.sidebar_order_by_status !== undefined && { sidebar_order_by_status: body.sidebar_order_by_status }), ...(body.auto_start_quota_windows !== undefined && { auto_start_quota_windows: body.auto_start_quota_windows }), ...(body.git_workflow !== undefined && { git_workflow: { ...current.settings.git_workflow, ...body.git_workflow } }), default_clone_dir: cloneDir } });
           return { type: "ack" };
         }

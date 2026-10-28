@@ -1,5 +1,6 @@
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
 import type { PlainMessageKey, Translate } from "../../i18n/catalog";
+import { hasClaudeCompatibility } from "../../settings/claudeCompatibility";
 import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
@@ -217,3 +218,12 @@ export const SAMPLE = (() => {
  * error itself rather than through the action: the message at `key`, worded in the viewing language, so a title the
  * app renames or drops breaks the scenario at type checking. */
 export const failureTitle = (key: PlainMessageKey) => (t: Translate) => t(key);
+
+/** The Claude compatibility the daemon puts in `Settings.claude_compatibility` and in an import's
+ * `current_claude_compatibility`: the user's explicit choice for an agent when there is one, otherwise Grok Build on and
+ * Codex on only while Claude Code is among the added agents (an undecided list counts as not). The gallery's daemon keeps
+ * a scenario's `settings.claude_compatibility` as the explicit choices and reports this. */
+export function effectiveClaudeCompatibility(choices: Partial<Record<Agent, boolean>>, added: Agent[] | null): Partial<Record<Agent, boolean>> {
+  const defaults: Record<Exclude<Agent, "claude">, boolean> = { codex: added?.includes("claude") ?? false, grok: true };
+  return Object.fromEntries(ALL_AGENTS.filter(hasClaudeCompatibility).map((agent) => [agent, choices[agent] ?? defaults[agent]]));
+}

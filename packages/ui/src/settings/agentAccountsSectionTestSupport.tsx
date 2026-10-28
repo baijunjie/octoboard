@@ -56,6 +56,7 @@ beforeEach(() => {
   settings.accounts = [account("claude-work", "claude"), account("codex-work", "codex"), account("grok-work", "grok")];
   settings.codex_approval_reviewer = null;
   settings.claude_approval_mode = null;
+  settings.claude_compatibility = undefined;
   accountQuotas.length = 0;
   accountLogins.length = 0;
   accountSharing.clear();

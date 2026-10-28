@@ -1,10 +1,12 @@
 import type {
+  Agent,
   ImportChoiceKind,
   ImportedConsole,
   InspectedConsole,
   InspectedProject,
   ProjectResolution,
 } from "../protocol";
+import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
 import { overridesEqual, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 
 /** The choices a project's offers can name: the three directories the daemon works out. The fourth,
@@ -171,4 +173,18 @@ export function documentShortcuts(document: unknown): Record<string, unknown> | 
 export function shortcutsReview(shortcuts: Record<string, unknown>, current: Overrides): { count: number; changes: boolean } {
   const { overrides } = sanitizeOverrides(shortcuts);
   return { count: Object.keys(overrides).length, changes: !overridesEqual(overrides, current) };
+}
+
+/** Whether a document's Claude compatibility choices say anything: an empty object is a machine where the user
+ * chose for no agent, an absent one a document that predates the setting, and a key for an agent without the
+ * setting counts for nothing. */
+export function hasClaudeCompatibilityChoices(choices: Partial<Record<Agent, boolean>> | null | undefined): choices is Partial<Record<Agent, boolean>> {
+  return choices != null && Object.keys(choices).some(hasClaudeCompatibility);
+}
+
+/** Whether applying a document's Claude compatibility `wanted` would change a value here. Only an agent that has
+ * the setting and that this machine reports in `current` counts: the daemon skips the others, and for an agent it
+ * does not report nothing is known to compare with. */
+export function claudeCompatibilityChanges(wanted: Partial<Record<Agent, boolean>>, current: Partial<Record<Agent, boolean>>): boolean {
+  return (Object.entries(wanted) as [Agent, boolean][]).some(([agent, on]) => hasClaudeCompatibility(agent) && current[agent] !== undefined && current[agent] !== on);
 }

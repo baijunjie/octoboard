@@ -101,6 +101,13 @@ pub struct DocumentSettings {
     /// `worktrees`, which `config_upgrade` converts.
     #[serde(default)]
     pub git_workflow: Option<GitWorkflowSettings>,
+    /// The choices the user made on whether an agent other than Claude Code (by wire name) loads
+    /// Claude Code's instructions and skills. An agent they never chose for is not listed, so the
+    /// importing machine keeps following its own default for it. Absent in a document exported
+    /// before the setting was carried: importing it leaves the setting as it is. An agent the
+    /// document does not list is left as it is.
+    #[serde(default)]
+    pub claude_compatibility: Option<std::collections::BTreeMap<String, bool>>,
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the client
     /// reads and writes: the client adds them to a full export it saves (an empty object when it has
     /// none changed, which on import means every shortcut at its default) and applies them from an
@@ -239,6 +246,7 @@ pub fn build(
             auto_approve_handoffs: Some(store.auto_approve_handoffs()?),
             ask_questions_as_choices: Some(store.ask_questions_as_choices()?),
             git_workflow: Some(store.git_workflow_settings()?),
+            claude_compatibility: Some(store.claude_compatibility_choices()?),
             keyboard_shortcuts: None,
         }),
     };
@@ -566,6 +574,7 @@ mod tests {
                 auto_approve_handoffs: Some(false),
                 ask_questions_as_choices: Some(true),
                 git_workflow: Some(GitWorkflowSettings::default()),
+                claude_compatibility: Some(std::collections::BTreeMap::new()),
                 keyboard_shortcuts: None,
             })
         );

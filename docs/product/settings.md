@@ -266,7 +266,7 @@ application settings a full export carries" in `docs/product/configuration-expor
 
 The agents the user has added and every account of each, grouped by agent, with the means to add, reorder and remove
 agents, to add, edit, rename and remove accounts, to turn an account off and on, to sign an account in, each agent's
-permission approval, each account's plan quota and each account's details, and the three switches **Automatically
+permission approval and Claude compatibility, each account's plan quota and each account's details, and the three switches **Automatically
 select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows automatically**.
 Where those switches sit, and what the rest of the section shows and offers, are in `docs/product/agent-accounts.md`.
 

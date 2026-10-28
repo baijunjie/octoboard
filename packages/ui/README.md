@@ -117,6 +117,11 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   could not have seen coming; left out, they follow the added list's own rules. `trustParentDirError` makes a
   `confirm_trust` that ticks the parent folder (`trust_parent_dir`) refuse with that error; a go-ahead for the project
   alone is always acknowledged.
+  `claudeCompatibilityError` makes an `update_settings` carrying `claude_compatibility` (an agent's Claude compatibility
+  switch) refuse with that error.
+  A scenario's `state.settings.claude_compatibility` holds the user's explicit choices, as the daemon stores them; the
+  window is told the value in effect (`effectiveClaudeCompatibility`, `builders.ts`), so Codex reads on only while Claude
+  Code is among `added_agents` unless chosen, and follows the added list when a step changes it.
 - Account sharing in Settings → Agent accounts and in the account pickers: `state.accountSharing` holds the sharing
   states the daemon reports when the window opens, by account; build it with `accountSharingOf` (`builders.ts`, taken
   by `snapshotState` as `accountSharing`). An entry with `in_use` makes the account's switch unusable, and one with
@@ -288,7 +293,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/browser/` | The project browser, the Files panel's content: `ProjectBrowser` with its Files tree and search, and the Git mode's Changes view over uncommitted changes, branch comparison and commits; also the viewer over a file a terminal path link named |
 | `src/viewer/` | The read-only file viewer modal: `FileViewer` over the application-owned `ViewerSubject` model, with code, diff and Markdown surfaces; `renderer.tsx` is the only importer of `@pierre/diffs` |
 | `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, and `RailQuotaEntry`, the rail's quota entry and panel |
-| `src/settings/` | The settings modal: `SettingsDialog` and its sections (general, git, agent accounts and the added agents, agent behavior, trusted folders, macOS permissions, notifications, shortcuts, configuration, About) |
+| `src/settings/` | The settings modal: `SettingsDialog` and its sections (general, git, agent accounts and the added agents, with each agent's Claude compatibility switch in `AgentClaudeCompatibilitySetting.tsx` and `hasClaudeCompatibility` (`claudeCompatibility.ts`) saying which agents have it, agent behavior, trusted folders, macOS permissions, notifications, shortcuts, configuration, About) |
 | `src/dialogs/` | The console, project, session, rename, confirmation, directory-picker and daemon-question dialogs on the shared `Dialog` frame, `ErrorAlerts` (the acknowledgement host), `useFailureWhenBlocked` (turns a dialog unusable as it stands into a failure modal) and the shared form controls |
 | `src/configuration/` | Configuration export and import: `ExportConfigurationDialog`, `ImportConfigurationDialog` and the pure import plan |
 | `src/about/`, `src/updates/` | The third-party licenses dialog and its data (the generated `licenses.generated.json`, with the committed `licenses.fallback.json` standing in until the generator has run; `src/cssDependencies.test.ts` checks that every package a stylesheet names is a production dependency, so it reaches that list); the self-update on the UI side: `createUpdateStore`, `UpdatesProvider`, the persisted channel and `UpdateNotice` |

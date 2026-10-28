@@ -1034,6 +1034,7 @@ async fn handle_inner(
             auto_start_quota_windows,
             default_clone_dir,
             git_workflow,
+            claude_compatibility,
         } => {
             update_settings(
                 state,
@@ -1052,6 +1053,7 @@ async fn handle_inner(
                     auto_start_quota_windows,
                     default_clone_dir,
                     git_workflow: git_workflow.unwrap_or_default(),
+                    claude_compatibility: claude_compatibility.unwrap_or_default(),
                 },
             )?;
             Ok(None)
@@ -4132,6 +4134,7 @@ async fn start_process(
         config_dir: session.config_dir.as_ref().map(PathBuf::from),
         approval_reviewer: CODEX_REVIEWER.for_session(state, session)?,
         approval_mode: CLAUDE_MODE.for_session(state, session)?,
+        claude_compatibility: state.store.claude_compatibility_of(session.agent)?,
         shared_default_dir: sharing.shared_default_dir,
         model,
         effort,
@@ -6422,6 +6425,9 @@ pub struct SettingsChanges {
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
     pub git_workflow: GitWorkflowSettingsChanges,
+    /// By agent wire name; an agent left out is left alone. Refused for Claude Code, which has no
+    /// such setting, and for a name that is no agent.
+    pub claude_compatibility: std::collections::BTreeMap<String, bool>,
 }
 
 /// Applies `changes`: absent means "leave it alone", as in `update_project`. Broadcasts
@@ -6442,12 +6448,22 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_start_quota_windows,
         default_clone_dir,
         git_workflow,
+        claude_compatibility,
     } = changes;
     if let Some(tag) = &interface_language {
         if !crate::interface_language::is_offered(tag) {
             anyhow::bail!("`{tag}` is not a language the interface is offered in");
         }
     }
+    let claude_compatibility = claude_compatibility
+        .into_iter()
+        .map(|(name, enabled)| match Agent::from_wire_name(&name) {
+            Some(agent) if agent.has_claude_compatibility() => Ok((agent, enabled)),
+            _ => Err(anyhow::anyhow!(
+                "`{name}` has no Claude compatibility setting; it applies to codex and grok"
+            )),
+        })
+        .collect::<Result<Vec<_>>>()?;
     // Checked before anything is written, so a refused directory leaves the other field unapplied
     // too rather than half the request taking effect.
     let default_clone_dir = match default_clone_dir {
@@ -6500,6 +6516,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;
+    }
+    for (agent, enabled) in claude_compatibility {
+        changed |= state.store.set_claude_compatibility(agent, enabled)?;
     }
     changed |= state.store.change_git_workflow_settings(&git_workflow)?;
     if !changed {
@@ -8820,6 +8839,44 @@ mod tests {
             availability,
             default_account_dir: None,
         }]);
+    }
+
+    /// Claude compatibility is set per agent, is refused for Claude Code and unknown names without
+    /// applying any of the request, and broadcasts only a change. Codex starts off here, since
+    /// Claude Code is not among the added agents.
+    #[tokio::test]
+    async fn claude_compatibility_is_set_per_agent_and_refused_for_claude_code() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-claude-compat");
+        let set = |changes: &[(&str, bool)]| {
+            update_settings(
+                &state,
+                SettingsChanges {
+                    claude_compatibility: changes
+                        .iter()
+                        .map(|(name, enabled)| (name.to_string(), *enabled))
+                        .collect(),
+                    ..SettingsChanges::default()
+                },
+            )
+        };
+        assert!(!state.store.claude_compatibility_of(Agent::Codex).unwrap());
+
+        let mut events = state.subscribe();
+        set(&[("codex", true)]).unwrap();
+        assert!(matches!(
+            events.try_recv(),
+            Ok(Event::SettingsUpdated { settings })
+                if settings.claude_compatibility
+                    == [("codex".to_string(), true), ("grok".to_string(), true)].into()
+        ));
+        assert!(state.store.claude_compatibility_of(Agent::Codex).unwrap());
+        assert!(state.store.claude_compatibility_of(Agent::Grok).unwrap());
+        set(&[("codex", true)]).unwrap();
+        assert!(events.try_recv().is_err(), "no change, no broadcast");
+
+        assert!(set(&[("grok", false), ("claude", true)]).is_err());
+        assert!(set(&[("nobody", true)]).is_err());
+        assert!(state.store.claude_compatibility_of(Agent::Grok).unwrap());
     }
 
     /// Adding is refused for an agent determined not installed, for one whose availability is not

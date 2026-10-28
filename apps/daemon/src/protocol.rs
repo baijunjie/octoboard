@@ -45,6 +45,12 @@ impl Agent {
             .find(|agent| agent.wire_name() == name)
     }
 
+    /// Whether the agent has the Claude compatibility setting: every agent but Claude Code, which
+    /// is what the others are made compatible with.
+    pub fn has_claude_compatibility(self) -> bool {
+        self != Agent::Claude
+    }
+
     /// How the agent is named in a message shown to the user.
     pub fn label(self) -> &'static str {
         match self {
@@ -927,6 +933,12 @@ pub struct Settings {
     /// Launch override for every Claude Code session, whichever account it uses; never written
     /// into Claude Code's own configuration. Null follows each account's configuration. Kept local.
     pub claude_approval_mode: Option<ClaudeApprovalMode>,
+    /// Whether each agent other than Claude Code (by wire name) loads Claude Code's instructions
+    /// (CLAUDE.md and rules), skills, agents, commands, MCP servers, hooks and permissions in its
+    /// sessions: one value per agent, whichever account a session uses. It is the value in effect:
+    /// the user's choice for the agent, else on for Grok Build and, for Codex, on while Claude Code
+    /// is an added agent. Read when a session starts, resumes or switches account.
+    pub claude_compatibility: std::collections::BTreeMap<String, bool>,
     /// The name the user gave an agent's default account, by agent; an agent without an entry shows
     /// the client's own word for it. Not an account row and not carried by an export.
     pub default_account_names: std::collections::BTreeMap<String, String>,
@@ -960,6 +972,7 @@ impl Default for Settings {
             added_agents: None,
             codex_approval_reviewer: None,
             claude_approval_mode: None,
+            claude_compatibility: std::collections::BTreeMap::new(),
             default_account_names: Default::default(),
             disabled_default_accounts: Default::default(),
             git_workflow: Default::default(),
@@ -2063,6 +2076,11 @@ pub enum RequestBody {
         /// alone.
         #[serde(default)]
         git_workflow: Option<crate::git_workflow::GitWorkflowSettingsChanges>,
+        /// Per agent other than Claude Code, by wire name: whether its sessions load Claude Code's
+        /// instructions and skills. An agent left out is left alone; Claude Code or an unknown
+        /// name is refused.
+        #[serde(default)]
+        claude_compatibility: Option<std::collections::BTreeMap<String, bool>>,
     },
     /// Both fields are required: an account always has a name and a directory. Broadcasts
     /// `settings_updated`.

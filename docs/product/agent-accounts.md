@@ -169,8 +169,9 @@ are shown" in `docs/product/settings.md`.
 ## The accounts table
 
 Each agent's tab panel holds, for Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes"
-below), then one table of the agent's accounts, named for the agent ("Claude Code accounts"): a row per account, in the
-saved order (see "Reordering accounts" below). Its columns:
+below), then, for Codex and Grok Build, the agent's **Claude compatibility** row (see "Claude compatibility" below),
+then one table of the agent's accounts, named for the agent ("Claude Code accounts"): a row per account, in the saved
+order (see "Reordering accounts" below). Its columns:
 
 | Column | What a row shows |
 |---|---|
@@ -459,6 +460,42 @@ the user has agreed there, Claude Code's own blocking warning for that mode neve
 The choices are stored by Octoboard and stay on this machine (see "What is not configuration and never travels" in
 `docs/product/configuration-export-and-import.md`). Versions of Octoboard that kept a choice per account are moved over
 once: each agent's setting takes the choice its default account had, and the other accounts' choices are dropped.
+
+## Claude compatibility
+
+Whether an agent other than Claude Code — Codex and Grok Build — has its sessions load Claude Code's configuration as
+well as its own: Claude Code's instructions (`CLAUDE.md` and rules), skills, agents, commands and MCP servers, and
+following Claude Code's hooks and permissions. It is **one setting per agent**, applied to every account of that agent,
+the default account included. Claude Code has no such setting.
+
+It is set in the agent's tab, in the **Claude compatibility** row: under the Permission approval row for Codex, directly
+above the accounts table for Grok Build, and never in Claude Code's tab. The row is there whether or not Claude Code is
+an added agent. It holds the row's name with a "?" help tip ("About Claude compatibility"), a line saying that it
+applies to every account of the agent, and a switch at the row's end, named "Claude compatibility for" and the agent.
+The help tip says what the setting does whatever the switch's position: when on, the agent's sessions load Claude
+Code's instructions, skills, agents, commands and MCP servers and follow its hooks and permissions; when off, they
+follow only their own configuration. For Codex it adds that Octoboard passes these in when a session starts or resumes,
+so a change takes effect then; for Grok Build, that Octoboard turns on the Claude support built into Grok Build, and
+that a change takes effect when a session next starts or resumes.
+
+**Until the user chooses** for an agent, its value follows a default: **Grok Build is on**, which is Grok's own default;
+**Codex is on while Claude Code is an added agent** and off otherwise (see "Added agents" above). Codex's default is
+worked out afresh whenever it is read, so adding or removing Claude Code moves it; while the list of added agents is
+still undecided, Claude Code counts as not added. Once the user has turned an agent's switch, that choice holds,
+whatever agents are added or removed later. The switch always shows the value in effect.
+
+The choice is saved when the switch is turned. The switch is unavailable while the save is unanswered — it looks
+disabled but stays focusable — and a failure is shown in an error alert titled "Could not save Claude compatibility",
+the switch keeping its position. The value is read when a session of any account of the agent starts or resumes,
+including an account switch; a running process keeps what it was started with. What a launch is given for it is in
+"Claude compatibility for Codex" and "Claude compatibility for Grok Build" in
+`docs/product/per-agent-launch-specifics.md`. Octoboard writes none of Claude Code's, Codex's or Grok Build's
+configuration files for it.
+
+The choices are kept by the daemon, so every window shows the same. Unlike the approval modes, a console session may
+read and change them (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md`), and a full configuration export carries the explicit choices (see "The
+application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Adding, editing and removing an account
 

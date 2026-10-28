@@ -567,9 +567,9 @@ describe("the fixture daemon's settings and trusted folders", () => {
     await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
     expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "~/work/../repos" });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/repos", git_workflow: DEFAULT_GIT_WORKFLOW, accounts });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/repos", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, claude_compatibility: { codex: false, grok: true } });
     await daemon.request({ type: "update_settings", auto_pull_repositories: false, default_clone_dir: " " });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts });
+    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, claude_compatibility: { codex: false, grok: true } });
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBeUndefined();
@@ -630,6 +630,25 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(exportedDocument(daemon.store.getState()).settings?.auto_start_quota_windows).toBe(true);
     await daemon.request({ type: "remove_trusted_directory", path: "~/work/../code" });
     expect(daemon.store.getState().trustedDirectories).toEqual([]);
+  });
+
+  it("exports only the Claude compatibility the user chose, refuses a name that has none and leaves the request unapplied", async () => {
+    const daemon = createFixtureDaemon({ id: "claude-compat-export", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] } }) });
+    const exported = async () => ((await daemon.request({ type: "export_configuration" })) as { document: ReturnType<typeof exportedDocument> }).document.settings?.claude_compatibility;
+    // The values in effect follow the added agents; none has been chosen, so the export carries none.
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: true });
+    expect(await exported()).toEqual({});
+    await daemon.request({ type: "update_settings", claude_compatibility: { grok: false } });
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
+    expect(await exported()).toEqual({ grok: false });
+    await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, claude_compatibility: { codex: false, claude: true } })).rejects.toMatchObject({ code: "internal_error" });
+    expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
+    expect(await exported()).toEqual({ grok: false });
+    // A later refusal leaves the choices unapplied too, whatever the request carries before it.
+    await expect(daemon.request({ type: "update_settings", claude_compatibility: { codex: false }, default_clone_dir: "relative/dir" })).rejects.toMatchObject({ code: "path_not_absolute" });
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
+    expect(daemon.store.getState().settings.default_clone_dir).toBe("/Users/dev/Projects");
+    expect(await exported()).toEqual({ grok: false });
   });
 });
 
@@ -1052,10 +1071,10 @@ describe("the fixture daemon's permission approval", () => {
     const daemon = createFixtureDaemon(scenario);
     await daemon.request({ type: "set_codex_approval_reviewer", reviewer: "auto_review" });
     await daemon.request({ type: "set_claude_approval_mode", mode: "bypass" });
-    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, codex_approval_reviewer: "auto_review", claude_approval_mode: "bypass" });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, claude_compatibility: { codex: false, grok: true }, codex_approval_reviewer: "auto_review", claude_approval_mode: "bypass" });
     await daemon.request({ type: "set_codex_approval_reviewer", reviewer: null });
     await daemon.request({ type: "set_claude_approval_mode", mode: null });
-    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, codex_approval_reviewer: null, claude_approval_mode: null });
+    expect(daemon.store.getState().settings).toEqual({ ...scenario.state.settings, claude_compatibility: { codex: false, grok: true }, codex_approval_reviewer: null, claude_approval_mode: null });
   });
 
   it("retains every selection when saving fails", async () => {
@@ -1065,6 +1084,30 @@ describe("the fixture daemon's permission approval", () => {
     await expect(daemon.request({ type: "set_codex_approval_reviewer", reviewer: "auto_review" })).rejects.toMatchObject(error);
     await expect(daemon.request({ type: "set_claude_approval_mode", mode: "bypass" })).rejects.toMatchObject(error);
     expect(daemon.store.getState().settings).toEqual(before);
+  });
+});
+
+describe("the fixture daemon's Claude compatibility", () => {
+  const settings = (added_agents: Agent[], claude_compatibility?: Partial<Record<Agent, boolean>>) => ({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [], ...(claude_compatibility && { claude_compatibility }) });
+  const daemonOf = (added: Agent[], choices?: Partial<Record<Agent, boolean>>) => createFixtureDaemon({ id: "claude-compat", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: settings(added, choices) }) });
+
+  it("reports Codex on only while Claude Code is added, and Grok Build on, until the user chooses", () => {
+    const daemon = daemonOf(["codex", "grok"]);
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: false, grok: true });
+    daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: ["claude", "codex", "grok"] } });
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: true });
+    daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: null } });
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: false, grok: true });
+  });
+
+  it("keeps the user's choice whatever agents are added, and reads a scenario's value as a choice", async () => {
+    const daemon = daemonOf(["codex"], { grok: false });
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: false, grok: false });
+    await daemon.request({ type: "update_settings", claude_compatibility: { codex: true } });
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
+    daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: ["claude"] } });
+    daemon.store.setState({ settings: { ...daemon.store.getState().settings, added_agents: [] } });
+    expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: false });
   });
 });
 

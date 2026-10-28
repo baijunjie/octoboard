@@ -21,6 +21,7 @@ agent.
 | The role description | `--append-system-prompt`, added to Claude Code's own system prompt | `-c developer_instructions=…`, a developer message added beside Codex's own prompt, which stays as it is | `--rules`, appended to Grok's system prompt |
 | The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
 | An explicit approval choice (see "Approval modes" in `docs/product/agent-accounts.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me** | Not applicable |
+| Claude compatibility while on (see "Claude compatibility" in `docs/product/agent-accounts.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" below) | `GROK_CLAUDE_*_ENABLED=true` in the environment (see "Claude compatibility for Grok Build" below) |
 | Anything else | The status line, and under **Approve everything** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | Nothing else |
 
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
@@ -118,6 +119,66 @@ requests by itself is read from `config.toml` in the Codex home that launch uses
 else a `CODEX_HOME` the user's shell exports, else `~/.codex`. A trusted project's own `.codex/config.toml`, which Codex
 itself layers over that file, is not consulted for this. The choices and their lifetime rules are in "Approval modes" in
 `docs/product/agent-accounts.md`.
+
+### Claude compatibility for Codex
+
+While Codex's Claude compatibility is on (see "Claude compatibility" in `docs/product/agent-accounts.md`), every launch,
+a resume and an account switch included, gives Codex two things; while it is off, it gives neither. Nothing is written
+into any of Claude Code's or Codex's files for it.
+
+**A "Claude Code compatibility" section** is appended to the developer instructions Octoboard already passes (after the
+role description). It names the user-level Claude Code configuration directory — the directory of Claude Code's default
+account as the launch's shell environment resolves it: a `CLAUDE_CONFIG_DIR` the user's shell exports, else
+`~/.claude` — and the project-level one, the `.claude/` directory at the repository root and in any subdirectory the
+task touches. It tells Codex, before planning or changing any file, to read at both levels what the task needs: the
+settings files and the plugins they enable, the `CLAUDE.md` files with their `@` imports (and `CLAUDE.local.md` and
+`.claude/CLAUDE.md`), skills, commands, agents and rules, and the documentation the entry files point to; that Claude
+Code's MCP servers have already been added, so it is not to set them up itself; to apply `permissions.deny`,
+`permissions.ask` and blocking hooks in full by intent, never lifted by agreement in the conversation, to carry out
+other hooks by intent at the moment they would run, and not to use permission allowlists to get around those
+restrictions; not to modify `.claude/` or create Codex configuration unless asked; that system, developer and user
+instructions and the applicable `AGENTS.md` outrank the section, except that a Claude-side restriction holds against a
+conflicting user instruction; and to say in one sentence which kinds of Claude rules it adopted and carry on. Codex
+follows this as instructions: Octoboard does not check what it reads or how it follows it.
+
+**Claude Code's MCP servers** for the session's working directory are passed as `-c mcp_servers.<name>.…` overrides.
+They are gathered as Claude Code gathers them, by server name, a later scope replacing an earlier one:
+
+| Scope | Where it is read | Taken when |
+|---|---|---|
+| User | `mcpServers` at the top of Claude Code's global config file: `.claude.json` inside a `CLAUDE_CONFIG_DIR` the user's shell exports, else `~/.claude.json` | Always |
+| Project | `mcpServers` of each `.mcp.json` from the filesystem root down to the working directory, the nearest one winning | Only once approved: `enableAllProjectMcpServers` is true, or the server is listed in `enabledMcpjsonServers`, and it is not listed in `disabledMcpjsonServers`, in any of the user-level `settings.json` (in the user-level directory above), the working directory's `.claude/settings.local.json` and the working directory's entry under `projects` in the global config file. The project's shared `.claude/settings.json` approves nothing, so a repository cannot approve its own servers; managed settings are not read, so a server approved only there stays off |
+| Local | `mcpServers` of the working directory's entry under `projects` in the global config file | Always |
+
+A server that the working directory's entry lists in `disabledMcpServers` is dropped from every scope. Plugins'
+servers are not passed. A server is also left out when:
+
+- its name is `octoboard` (Octoboard's own), or is not made only of letters, digits, `-` and `_`;
+- a server of the same name is defined in the `config.toml` of the Codex home the launch uses, or in a project
+  `.codex/config.toml` — the working directory's and each one above it up to the repository root (the nearest directory
+  holding `.git`; the working directory's alone outside a repository). Codex's own definition then stands. When one of
+  these files exists but cannot be read or parsed, no Claude Code server is passed at all;
+- it uses a transport other than stdio and streamable HTTP (`"type": "http"`) — SSE, for one — or has a
+  `headersHelper`, or a field of the wrong type, or no `command` (stdio) or `url` (HTTP);
+- a `${VAR}` in it has no `:-default` and `VAR` is not set in the launch's shell environment;
+- its `url` has a `${VAR}` that the environment fills, carries credentials (`user:pass@`) or has a query string;
+- an `env` entry has a name that cannot be a variable's, or an `env` or header value holds a NUL byte;
+- an `env` entry names `TERM`, a `GIT_CONFIG_*` or an `OCTOBOARD_*` variable, at any value;
+- an `env` entry names a variable that steers Codex itself — `CODEX_*`, `OPENAI_*`, `RUST_LOG`, `RUST_BACKTRACE`,
+  `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` and `NO_PROXY` in either letter case, `SSL_CERT_FILE`, `SSL_CERT_DIR`,
+  `NODE_OPTIONS`, `DYLD_*`, `LD_*` — at a value other than the one the launch already gives it;
+- an `env` entry would give a variable a value other than the one the user's shell, the launch or a server passed
+  before it gives it.
+
+A server left out is left out whole, and the others are still passed; nothing in the window says which were left out.
+
+**What reaches Codex's command line.** A stdio server's `command`, `args` and `cwd`, with their variables expanded, and
+an HTTP server's `url` are on Codex's own argv, which other users of the machine can list; `command` and `args` become
+the server's own argv when Codex starts it anyway, as under Claude Code. Header values and `env` values are kept off
+it: each header value is put in the Codex process's environment under a variable of Octoboard's own,
+`OCTOBOARD_CLAUDE_MCP_<n>_<m>_TOKEN`, which the server's `env_http_headers` names; each `env` entry is passed by name
+through the server's `env_vars`, and an entry the user's shell does not already hold at that value is set, under its
+own name, on the Codex process as a whole rather than on the server alone.
 
 ## Grok Build
 
@@ -227,6 +288,16 @@ explicit `/theme` saves the chosen theme in the session copy; when the source `c
 into the linked file on exit under the rules in "The per-session Grok home" above, even when it is the theme the
 appearance picked. The next launch applies the terminal's appearance again. Claude Code and Codex are told nothing of
 the appearance.
+
+### Claude compatibility for Grok Build
+
+Grok Build has Claude Code support of its own, for Claude Code's skills, rules, agents, MCP servers and hooks. While
+Grok Build's Claude compatibility is on (see "Claude compatibility" in `docs/product/agent-accounts.md`), every launch, a
+resume and an account switch included, sets `GROK_CLAUDE_SKILLS_ENABLED`, `GROK_CLAUDE_RULES_ENABLED`,
+`GROK_CLAUDE_AGENTS_ENABLED`, `GROK_CLAUDE_MCPS_ENABLED` and `GROK_CLAUDE_HOOKS_ENABLED` to `true`, which outrank a
+`false` for any of them in Grok's configuration file or the user's shell. While it is off, none of them is set by
+Octoboard, and Grok follows its own configuration and whatever the user's shell exports. Nothing is written into the
+Grok configuration for it.
 
 ### A Grok Build config directory
 

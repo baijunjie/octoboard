@@ -10,7 +10,7 @@ import { Message, useT } from "../i18n/react";
 import type { AccountFallback, Event, ImportChoiceKind, ImportedProject, ImportFailure } from "../protocol";
 import { isolate } from "../i18n/isolate";
 import { useFailureNode, useFailureText } from "./failureText";
-import { outcomeOf } from "./importPlan";
+import { hasClaudeCompatibilityChoices, outcomeOf } from "./importPlan";
 import { BOOLEAN_SETTINGS, CARD_CLASS, FallbackMark, SettingLine } from "./importParts";
 
 export type Imported = Extract<Event, { type: "configuration_imported" }>;
@@ -267,6 +267,7 @@ export function ImportResult({ result, shortcuts }: { result: Imported; shortcut
               return typeof on === "boolean" && <SettingLine key={field} label={t(label)} badge={t(on ? "configuration.import.result.badge.on" : "configuration.import.result.badge.off")} />;
             })}
             {applied.git_workflow && <SettingLine label={t("configuration.import.gitWorkflow")} badge={t("configuration.import.result.badge.matches")} />}
+            {hasClaudeCompatibilityChoices(applied.claude_compatibility) && <SettingLine label={t("configuration.import.claudeCompatibility")} badge={t("configuration.import.result.badge.matches")} />}
             {shortcuts && (
               <SettingLine
                 label={t("settings.section.shortcuts")}

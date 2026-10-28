@@ -8,7 +8,7 @@ import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 import type { GitWorkflowSettings, InspectedProject } from "../../protocol";
 import type { Ui } from "../interact";
 import type { ConfigurationFixture, Scenario, Step } from "../scenario";
-import { ALL_AGENTS, SAMPLE, consoleOf, projectOf, snapshotState } from "./builders";
+import { ALL_AGENTS, SAMPLE, consoleOf, effectiveClaudeCompatibility, projectOf, snapshotState } from "./builders";
 import type { FixtureError } from "./projectFiles";
 
 const GROUP = "Configuration";
@@ -85,6 +85,14 @@ const project = (extra: Partial<InspectedProject> & Pick<InspectedProject, "name
 /** The git workflow settings the full export carries: not the ones this machine starts with. */
 const FILE_GIT_WORKFLOW: GitWorkflowSettings = { development: "branch", rebase_before_merge: false, delivery: "merge", revert_gate: true };
 
+/** The Claude compatibility the full export carries: only what the user chose on the exporting machine, here Codex's off,
+ * where this machine has every agent's on. */
+const FILE_CLAUDE_COMPATIBILITY = { codex: false };
+
+/** This machine's Claude compatibility as an import's review reports it: the values in effect for both agents. The
+ * machines the document is set up on have every agent added and no explicit choice, so both are on. */
+const THIS_CLAUDE_COMPATIBILITY = effectiveClaudeCompatibility({}, ALL_AGENTS);
+
 /** A document of a laptop's layout set up on a machine where it sits elsewhere: one project at its
  * recorded path, one found under the default clone directory, one to be cloned and one that nothing
  * places (whose recorded path is long enough to break over lines, and whose account falls back too),
@@ -115,6 +123,8 @@ export const REVIEW: Omit<Inspection, "type"> = {
     current_ask_questions_as_choices: true,
     git_workflow: FILE_GIT_WORKFLOW,
     current_git_workflow: DEFAULT_GIT_WORKFLOW,
+    claude_compatibility: FILE_CLAUDE_COMPATIBILITY,
+    current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
   },
   consoles: [
     {
@@ -266,7 +276,7 @@ const LONG_CLONE_DETAIL = [
  * it was imported, a clone that failed with a long reason, a project nothing placed, a console that
  * could not be created with its project not tried, and the account references that fell back. */
 export const MIXED_RESULT: Omit<Imported, "type"> = {
-  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW },
+  settings_applied: { auto_pull_repositories: true, auto_delete_unresumable_archives: false, auto_select_account: true, auto_switch_on_usage_limit: true, sidebar_order_by_status: false, auto_start_quota_windows: true, auto_approve_session_requests: true, auto_approve_resume_requests: true, auto_approve_account_switches: true, auto_approve_handoffs: true, ask_questions_as_choices: false, git_workflow: FILE_GIT_WORKFLOW, claude_compatibility: FILE_CLAUDE_COMPATIBILITY },
   consoles: [
     {
       name: "Work laptop",
@@ -435,10 +445,16 @@ const SETTINGS_APPLIED_RESULT: Omit<Imported, "type"> = {
   consoles: SETTINGS_FAILED_RESULT.consoles,
 };
 
-/** `WITH_SETTING_OFF`, its document carrying the git workflow settings this machine already has. */
-const WITH_GIT_WORKFLOW_HERE: Omit<Inspection, "type"> = {
+/** `WITH_SETTING_OFF`, its document carrying the git workflow and Claude compatibility settings this machine already has. */
+const WITH_SETTINGS_HERE: Omit<Inspection, "type"> = {
   ...WITH_SETTING_OFF,
-  settings: { ...WITH_SETTING_OFF.settings!, git_workflow: DEFAULT_GIT_WORKFLOW, current_git_workflow: DEFAULT_GIT_WORKFLOW },
+  settings: {
+    ...WITH_SETTING_OFF.settings!,
+    git_workflow: DEFAULT_GIT_WORKFLOW,
+    current_git_workflow: DEFAULT_GIT_WORKFLOW,
+    claude_compatibility: { grok: true },
+    current_claude_compatibility: THIS_CLAUDE_COMPATIBILITY,
+  },
 };
 
 const reviewing = (extra: Partial<ConfigurationFixture> = {}): ConfigurationFixture => ({ file: FILE, inspection: REVIEW, imported: MIXED_RESULT, ...extra });
@@ -648,7 +664,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, review",
-    description: "Cards for three consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps and no state line under its name. A warning triangle follows the name of the Work laptop console in its heading and the name of Search API in its row, where an account the file names is not set up here (the popover is in the next scenario); no sentence or alert repeats it. The not-found project, Notes, carries one warning triangle after its name, \"Notes not found, and accounts not set up\": the project is missing and its account falls back too, which are one point and so one mark (its popover is in a scenario below). The last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow reads \"Set to the file's\", and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
+    description: "Cards for three consoles, then the application-settings card, with the clone note last. Project rows show each state: found at its exported path (only \"Placed in\"), found in the default clone directory, can be cloned (\"Clone from\" and \"Clone into\") and not found, left out, with a long exported path that wraps and no state line under its name. A warning triangle follows the name of the Work laptop console in its heading and the name of Search API in its row, where an account the file names is not set up here (the popover is in the next scenario); no sentence or alert repeats it. The not-found project, Notes, carries one warning triangle after its name, \"Notes not found, and accounts not set up\": the project is missing and its account falls back too, which are one point and so one mark (its popover is in a scenario below). The last console says it has no projects. The settings card starts unchecked: lines that turn a setting on carry a muted consequence line (the automatic-switch line, \"Automatically switch accounts at the usage limit\", says a session that stops at its account's usage limit is then switched to another account with usage left and carries on), lines that turn one off do not (their \"Turns off\" badge is neutral, not accented), Git workflow and Claude compatibility read \"Set to the file's\" (the file turns Codex's off), and keyboard shortcuts read \"Set to the file's\" with a note that 3 of the file's shortcuts differ from the defaults and apply to this device or browser only.",
     state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
     steps: [
@@ -699,11 +715,11 @@ export const configurationScenarios: Scenario[] = [
     id: "configuration-import-review-shortcuts-same",
     group: GROUP,
     category: "normal",
-    title: "Import, keyboard shortcuts and git workflow settings the device already has",
-    description: "Git workflow and keyboard shortcuts both read \"No change\" because the file's are the ones this device already has, below automatic pull, which turns off.",
+    title: "Import, keyboard shortcuts, git workflow and Claude compatibility the device already has",
+    description: "Git workflow, Claude compatibility and keyboard shortcuts all read \"No change\" because the file's are the ones this device already has, below automatic pull, which turns off.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
-    configuration: { file: SHORTCUTS_FILE, inspection: WITH_GIT_WORKFLOW_HERE },
+    configuration: { file: SHORTCUTS_FILE, inspection: WITH_SETTINGS_HERE },
     steps: [
       ...importFromSettings,
       chooseFile,
@@ -714,7 +730,7 @@ export const configurationScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Import, an older file whose keyboard shortcuts are all defaults",
-    description: "The checkbox is ticked. The older file carries only automatic pull, which turns off, and its keyboard shortcuts are all defaults, so that line reads \"Back to defaults\" with the note that it applies to this device or browser only.",
+    description: "The checkbox is ticked. The older file carries only automatic pull, which turns off, so there is no Git workflow or Claude compatibility line, and its keyboard shortcuts are all defaults, so that line reads \"Back to defaults\" with the note that it applies to this device or browser only.",
     state: autoPulling,
     preferences: { keyboardShortcuts: SHORTCUTS_HERE },
     configuration: { file: SHORTCUTS_DEFAULT_FILE, inspection: WITH_SETTING_OFF },
@@ -834,7 +850,7 @@ export const configurationScenarios: Scenario[] = [
     title: "Import result with failures and fallbacks",
     state: state,
     configuration: reviewing({ file: SHORTCUTS_FILE }),
-    description: "The table groups projects under their console, with a console's own result on its header row when it failed (\"Side projects\") or came out empty (\"Scratch\"); a failed project's result is a button opening the reason, and its Detail is empty. A warning triangle follows the Work laptop name in its header row and the Search API name in its row, for the accounts that fell back to the default; no alert or section lists them. Below the table comes the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. Phone width stacks each row into labelled blocks under the console's name; a short height exposes scrolling.",
+    description: "The table groups projects under their console, with a console's own result on its header row when it failed (\"Side projects\") or came out empty (\"Scratch\"); a failed project's result is a button opening the reason, and its Detail is empty. A warning triangle follows the Work laptop name in its header row and the Search API name in its row, for the accounts that fell back to the default; no alert or section lists them. Below the table comes the \"Application settings applied\" card, whose badges read On, Off, \"Matches the file\" (git workflow and Claude compatibility, in that order) and \"3 changes from the defaults\", the last with a muted line saying 2 shortcuts could not be applied. Phone width stacks each row into labelled blocks under the console's name; a short height exposes scrolling.",
     steps: [
       ...importFromSettings,
       chooseFile,

@@ -36,8 +36,14 @@ const isClonableRemote = (url: string): boolean =>
  * application settings; consoles by creation time and a console's projects by name, with no id and
  * no console working directory in it, and an account carried by its name alone. Without
  * `includePaths` a project's path is only its directory's name, and its remote is kept only where
- * it can be cloned from. */
-export function exportedDocument(state: State, consoleId?: string, includePaths = true): ConfigurationDocument {
+ * it can be cloned from. A full export carries the user's explicit Claude compatibility `choices` (not the values in
+ * effect, which `state.settings` holds), `{}` when the user chose for no agent. */
+export function exportedDocument(
+  state: State,
+  consoleId?: string,
+  includePaths = true,
+  choices: Partial<Record<Agent, boolean>> = {},
+): ConfigurationDocument {
   const accountName = (agent: Agent, id: string | null | undefined): AccountName | null => {
     const account = state.settings.accounts.find((candidate) => candidate.id === id && candidate.agent === agent);
     return account ? { name: account.name } : null;
@@ -115,6 +121,7 @@ export function exportedDocument(state: State, consoleId?: string, includePaths 
         ...(typeof state.settings.auto_approve_handoffs === "boolean" && { auto_approve_handoffs: state.settings.auto_approve_handoffs }),
         ...(typeof state.settings.ask_questions_as_choices === "boolean" && { ask_questions_as_choices: state.settings.ask_questions_as_choices }),
         git_workflow: state.settings.git_workflow,
+        claude_compatibility: { ...choices },
       },
     }),
     consoles,
@@ -173,11 +180,12 @@ export function createConfigurationReplies(
   fixture: ConfigurationFixture | undefined,
   getState: () => State,
   fail: (error: FixtureError) => never,
+  claudeCompatibilityChoices: () => Partial<Record<Agent, boolean>>,
 ): (body: RequestBody) => Event | Promise<Event> | undefined {
   return (body) => {
     switch (body.type) {
       case "export_configuration":
-        return { type: "configuration_exported", document: exportedDocument(getState(), body.console, body.include_paths) };
+        return { type: "configuration_exported", document: exportedDocument(getState(), body.console, body.include_paths, claudeCompatibilityChoices()) };
       case "inspect_configuration": {
         const inspection = fixture?.inspection;
         if (inspection === undefined) return refuseUnfillable("the scenario gives no inspection to answer inspect_configuration with");
