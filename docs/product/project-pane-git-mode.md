@@ -28,6 +28,10 @@ branch it compares with is as the repository last fetched it (see "Committed cha
 exception is Git itself before version 2.45: reading an object that a partial clone does not have yet can make such a
 Git fetch it.
 
+Sessions read the same changes through Octoboard's MCP tools, under the same rule, a page of changes and a window of a
+diff at a time rather than through the viewer (see "Reading a project's changes" in
+`docs/product/what-every-session-reads.md`).
+
 The project's **branch badge** in the sidebar is separate (see `docs/product/project-git-status.md`): its check fetches
 the remote's refs and, with Automatically pull repositories on or on Pull current branch, may fast-forward the branch.
 Pushing the current branch is not that check and not this mode (see "Pushing the current branch" in

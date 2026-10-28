@@ -32,6 +32,7 @@ mod handover;
 mod history;
 mod models;
 mod pages;
+mod project_changes;
 mod quotas;
 pub(crate) mod reads;
 mod resume_request;
@@ -472,6 +473,8 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     REQUEST_RESUME_SESSION,
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
+    LIST_PROJECT_CHANGES,
+    READ_PROJECT_DIFF,
     READ_SESSION_HISTORY,
     LIST_AGENT_MODELS,
     LIST_CONSOLES,
@@ -982,6 +985,210 @@ const GET_SESSION_BRANCHES: ToolDef = ToolDef {
                 },
             }),
             &[],
+        )
+    },
+};
+
+/// What has changed in a project's repository, read through the browse layer instead of by running
+/// `git status` or `git diff` there. See `project_changes`.
+const LIST_PROJECT_CHANGES: ToolDef = ToolDef {
+    name: "list_project_changes",
+    description: "Read-only: what has changed in a project's git repository, without running git \
+                  there (`git status` and `git diff` rewrite the repository's index; this does \
+                  not). The arguments choose one of three views. With neither `worktree` nor \
+                  `branch`: the uncommitted changes of the worktree holding the project's \
+                  directory (not necessarily this session's own worktree: reach that, or any \
+                  other, with `worktree`). With `worktree`: the uncommitted changes of that \
+                  worktree of the project's repository. With `branch` and `base`: what `branch` \
+                  has changed since it forked from `base` (as `git diff base...branch` shows \
+                  it), and the commits it made since; with `commit` besides, the changes of that \
+                  one commit. Only changes that touch the project's directory are listed. Every \
+                  answer has `project` (its id), `view` (`uncommitted`, `branch` or `commit`), \
+                  `changes`, `total` (all the changes there are), `offset` (where `changes` \
+                  starts), `next_offset` (where the next page starts, `null` on the last) and \
+                  `complete` (false when the daemon cut the list at its own limit, so `total` \
+                  and the changes after it are not known). Each change has `status` (`added`, \
+                  `deleted`, `modified`, `renamed`, `type_changed`, or for a conflicted path how \
+                  it conflicts: `both_modified`, `both_added`, `both_deleted`, `added_by_us`, \
+                  `added_by_them`, `deleted_by_us`, `deleted_by_them`), `path` (inside the \
+                  project, spelled as `read_project_diff` takes it, with `%XX` escapes for a \
+                  name that is not UTF-8 or holds a `%`; the removed path for a deletion), \
+                  `old_path` (a rename's former path), `kind` (only for a `symlink` or a \
+                  `submodule`; for a type change, the new side's), `outside_project` (only when \
+                  the other end of a rename lies outside the project's directory: `side`, `old` \
+                  or `new`, and its `repository_path`; such a change is still `renamed`, with no \
+                  `old_path`, and inside the project amounts to an addition or a deletion), and \
+                  `lines_added` and `lines_removed`, `null` where git counts none (a binary \
+                  file, a link, a submodule, a change with a side outside the project, a very \
+                  large change). In the uncommitted views each change also has `group`: \
+                  `staged`, `unstaged`, `untracked` or `conflicted`; one path can be \
+                  in two groups, and a conflicted path has no diff to read. The uncommitted \
+                  views add `worktree`: `path` and `branch` as plain text, as \
+                  `get_session_branches` gives them (`branch` is `null` when HEAD is detached or \
+                  unborn), and `head`, the commit the staged changes are against (`null` before \
+                  the first commit). The `branch` view adds `branch`, `base`, `branch_commit` \
+                  and `base_commit` (the full ids of the two tips), `merge_base` (the commit \
+                  they forked at; the changes are between it and `branch_commit`), and \
+                  `commits`, newest first and at most 100: `commit`, `parent` (its first \
+                  parent, `null` for a root commit), `subject` and `files` (how many project \
+                  files it changed); `commits_complete` is false when there were more commits \
+                  than listed or the daemon cut the last commit's files short. The `commit` view \
+                  has the commit's `commit`, `parent` and `subject`. Read the diff of a change \
+                  with `read_project_diff`. Reading a changing worktree twice can give \
+                  different lists, so a page of one is not a page of the other. To check a \
+                  branch a session reports, give the branch and, as `base`, the one it was \
+                  made against, usually the target branch in the session's report or the \
+                  branch the project's directory has checked out (`git_status.branch` in \
+                  `list_projects`). Only projects of this session's own console can be read, \
+                  even when the worktree or branch came from a session of another console.",
+    schema: || {
+        object_schema(
+            json!({
+                "project": {
+                    "type": "string",
+                    "description": "The project's id, or its name when that is unambiguous. \
+                                    Defaults to this session's own project; a console session \
+                                    has to give it. It must be a project of this session's own \
+                                    console.",
+                },
+                "worktree": {
+                    "type": "string",
+                    "description": "Uncommitted changes of this worktree of the project's \
+                                    repository instead of the one holding the project's \
+                                    directory: its path (`worktree` in `get_session_branches`) \
+                                    or the branch checked out in it. It must be a worktree of \
+                                    this project's repository. Not with `branch`.",
+                },
+                "branch": {
+                    "type": "string",
+                    "description": "A local branch to list the changes of since it forked from \
+                                    `base`. Needs `base`. Not with `worktree`.",
+                },
+                "base": {
+                    "type": "string",
+                    "description": "With `branch`: the branch it is compared with, a local \
+                                    branch (a remote-tracking one, such as `origin/main`, with \
+                                    `base_remote`).",
+                },
+                "base_remote": {
+                    "type": "boolean",
+                    "description": "With `branch`: `base` names a remote-tracking branch, as of \
+                                    the last fetch; nothing contacts the remote. Defaults to \
+                                    false.",
+                },
+                "commit": {
+                    "type": "string",
+                    "description": "With `branch`: the full id of one of the commits the \
+                                    answer's `commits` lists; the answer then holds that \
+                                    commit's changes against its first parent.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000,
+                    "description": "How many changes to return, 200 when left out.",
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Skip this many changes: a previous answer's `next_offset`. \
+                                    Defaults to 0.",
+                },
+            }),
+            &[],
+        )
+    },
+};
+
+/// The diff of one change `list_project_changes` lists. See `project_changes`.
+const READ_PROJECT_DIFF: ToolDef = ToolDef {
+    name: "read_project_diff",
+    description: "Read-only: the diff of one changed file of a project, as `list_project_changes` \
+                  lists the change, without running git there. Name the file with `path` (and \
+                  `old_path` for a rename), then say which change it is: an uncommitted one with \
+                  `group` (and `worktree` for a worktree other than the one holding the \
+                  project's directory), or one between two commits with `commit` and `parent`: \
+                  for a commit of the `branch` view pass its `commit` and `parent`, and for the \
+                  whole branch against where it forked pass the answer's `branch_commit` as \
+                  `commit` and its `merge_base` as `parent`. The answer has `project`, `path`, \
+                  `old_path` (when given), `format`, `text`, `size_bytes`, `offset`, \
+                  `next_offset`, `truncated` and `note`. `format` says what `text` holds: \
+                  `patch` is the unified diff as git writes it (a file changed only in its mode \
+                  or only renamed has a patch with no hunk; an empty `text` means the path has \
+                  no difference there, which is no change); `file` is the whole content of an \
+                  untracked file, which has no diff, every line added; `binary` is a binary \
+                  change, whose `text` is git's one-line `Binary files ... differ` for a patch \
+                  and `null` for an untracked file; `none` is a link or submodule with no \
+                  content, `text` `null`. `size_bytes` is the full size of the diff or file in \
+                  bytes as git has it. At most `max_bytes` of `text` are returned, ending on a \
+                  line where it can: when the diff is longer `truncated` is true and \
+                  `next_offset` is the `offset` to pass to read on (`null` otherwise); `offset` \
+                  and `next_offset` count the bytes of the returned text, which differ from \
+                  `size_bytes` when `note` says bytes were replaced. An uncommitted change is \
+                  read as it is now, so reading on after it changed can give a different text. \
+                  A diff over 4 MiB, and a file over 4 MiB, are refused rather than cut. `note` \
+                  is `null` unless something about `text` is worth knowing (a patch that is not \
+                  plain text reads the bytes that are not UTF-8 as U+FFFD). Only projects of \
+                  this session's own console can be read.",
+    schema: || {
+        object_schema(
+            json!({
+                "project": {
+                    "type": "string",
+                    "description": "The project's id, or its name when that is unambiguous. \
+                                    Defaults to this session's own project; a console session \
+                                    has to give it. It must be a project of this session's own \
+                                    console.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "The file, relative to the project's directory, as a change \
+                                    of `list_project_changes` gives it: a name that is not \
+                                    UTF-8 or holds a `%` is spelled with `%XX` escapes there, \
+                                    and the same here.",
+                },
+                "old_path": {
+                    "type": "string",
+                    "description": "For a renamed file: its former path, the change's \
+                                    `old_path`.",
+                },
+                "group": {
+                    "type": "string",
+                    "enum": ["staged", "unstaged", "untracked"],
+                    "description": "Which uncommitted change of the path: the change's `group`. \
+                                    Not with `commit`.",
+                },
+                "worktree": {
+                    "type": "string",
+                    "description": "With `group`: the worktree the change is in, as for \
+                                    `list_project_changes`. Defaults to the one holding the \
+                                    project's directory.",
+                },
+                "commit": {
+                    "type": "string",
+                    "description": "The full id of the commit holding the new version. Not with \
+                                    `group`.",
+                },
+                "parent": {
+                    "type": "string",
+                    "description": "With `commit`: the full id of the commit holding the old \
+                                    version. Left out, the old version is nothing, which is a \
+                                    root commit's.",
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Where in the returned text to start, in bytes: a previous \
+                                    answer's `next_offset`. Defaults to 0.",
+                },
+                "max_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 131072,
+                    "description": "The most bytes of the diff to return, 32768 when left out.",
+                },
+            }),
+            &["path"],
         )
     },
 };
@@ -1612,6 +1819,8 @@ const BOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     GET_SESSION,
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
+    LIST_PROJECT_CHANGES,
+    READ_PROJECT_DIFF,
     READ_SESSION_HISTORY,
     LIST_AGENT_MODELS,
     LIST_CONSOLES,
@@ -1683,6 +1892,8 @@ const UNBOUND_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     REPORT,
     LIST_SESSIONS,
     GET_SESSION_BRANCHES,
+    LIST_PROJECT_CHANGES,
+    READ_PROJECT_DIFF,
     READ_SESSION_HISTORY,
     LIST_AGENT_MODELS,
     LIST_CONSOLES,
@@ -2102,6 +2313,8 @@ mod tests {
                 "get_session",
                 "list_sessions",
                 "get_session_branches",
+                "list_project_changes",
+                "read_project_diff",
                 "read_session_history",
                 "list_agent_models",
                 "list_consoles",
@@ -2138,6 +2351,8 @@ mod tests {
                 "report",
                 "list_sessions",
                 "get_session_branches",
+                "list_project_changes",
+                "read_project_diff",
                 "read_session_history",
                 "list_agent_models",
                 "list_consoles",
@@ -2179,6 +2394,8 @@ mod tests {
                 "request_resume_session",
                 "list_sessions",
                 "get_session_branches",
+                "list_project_changes",
+                "read_project_diff",
                 "read_session_history",
                 "list_agent_models",
                 "list_consoles",

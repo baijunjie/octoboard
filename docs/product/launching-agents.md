@@ -110,21 +110,24 @@ besides the variables a project session's agent is given for its git (see "The l
   quota has left, the reads every session has whatever its kind — `get_session`, `read_session_history`,
   `list_consoles`, `list_projects` and `list_archived` — with the rule that a session not its own is to be left alone
   whatever it can read of it, `list_agent_models` to check before naming a model or effort, `list_sessions` and
-  `send_message` for information, and `get_session_branches` for where the branches a session is responsible for are
-  checked out. Where its project's effective git workflow settings have sessions develop on a branch or in a worktree of
-  their own at the launch, it also carries the development rule (see "The development rule" in
-  `docs/product/git-workflow-settings.md`), where **Ask questions as choices** is on at the launch, the guidance on
-  asking the user after it (see "The guidance on asking the user" below), and where the language the daemon holds is not
-  English, the guidance on the user's language after that (see "The guidance on the user's language" below). Every
-  project session's text ends by saying that everything else is the ordinary work of the project, under its own
-  instructions, conventions and configuration. The text is written from who the session reports to when it launches, and
-  says that what Octoboard tells it of a later change of owner replaces what it says (see "When a binding changes while
-  a session runs" in `docs/product/changing-session-owners.md`); a change made while the session was not running is told
-  at its next launch, ahead of that launch's own instruction (see "A change of owner told at the next launch" in
-  `docs/product/changing-session-owners.md`). The role and the session's binding as it stands decide which tools the
-  session is offered, so an unbound project session still has `report`, and calling it is refused while it is unbound
-  (see `docs/product/reporting-to-owners.md` and "The unbound project session's tools" in
-  `docs/product/hub-orchestration.md`).
+  `send_message` for information, `get_session_branches` for where the branches a session is responsible for are
+  checked out, and `list_project_changes` and `read_project_diff` for what has changed in a project of its console —
+  to be used, rather than `git status` or `git diff`, for another session's worktree or branch and for the project's
+  folder, which another session may be working in, while in its own worktree it runs `git` as usual (see "Reading a
+  project's changes" in `docs/product/what-every-session-reads.md`). Where its project's effective git workflow
+  settings have sessions develop on a branch or in a worktree of their own at the launch, it also carries the
+  development rule (see "The development rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as
+  choices** is on at the launch, the guidance on asking the user after it (see "The guidance on asking the user" below),
+  and where the language the daemon holds is not English, the guidance on the user's language after that (see "The
+  guidance on the user's language" below). Every project session's text ends by saying that everything else is the
+  ordinary work of the project, under its own instructions, conventions and configuration. The text is written from who
+  the session reports to when it launches, and says that what Octoboard tells it of a later change of owner replaces
+  what it says (see "When a binding changes while a session runs" in `docs/product/changing-session-owners.md`); a
+  change made while the session was not running is told at its next launch, ahead of that launch's own instruction (see
+  "A change of owner told at the next launch" in `docs/product/changing-session-owners.md`). The role and the session's
+  binding as it stands decide which tools the session is offered, so an unbound project session still has `report`, and
+  calling it is refused while it is unbound (see `docs/product/reporting-to-owners.md` and "The unbound project
+  session's tools" in `docs/product/hub-orchestration.md`).
 
 The arguments and files through which each agent is given these are in "How each agent is given the injection" in
 `docs/product/per-agent-launch-specifics.md`.
@@ -169,7 +172,9 @@ agent's prefix. Each console session's role description points it to the file by
 
 The file holds the console session's role (see the console session in `docs/product/hub-orchestration.md`) in two
 sections: one on what it does and does not do — decompose, dispatch, follow up and summarize work on the console's
-projects, and make no change to a project itself, reading one being how it checks what its sessions report — and a
+projects, and make no change to a project itself, reading one being how it checks what its sessions report, with
+`list_project_changes` and `read_project_diff` rather than `git status` or `git diff` for what a session has changed —
+and a
 separate one on work that touches no project, which it carries out itself. The file also holds how to use the
 orchestration and settings tools, and, when **Ask questions as choices** is on as the file is written, the guidance on
 asking the user (see "The guidance on asking the user" below) after the rest of the built-in part, with one sentence

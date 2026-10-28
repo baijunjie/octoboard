@@ -2148,6 +2148,7 @@ born yet, and its staged changes are compared with the empty tree.
 | Outstanding requests, per connection | 16 | Waiting, being read, or queued until their reply is written. One more is refused with `limit_exceeded` at once, so a flooding client cannot grow the daemon's backlog |
 | Reserved per request | about 12 MiB for a file or a project source, about 7.8 MiB for a listing, about 21.9 MiB for a search, about 11.8 MiB for a branch list, about 35 MiB for a change list or a comparison, about 35.3 MiB for a commit list, about 24.3 MiB for a change of either, or for the bodies of one | Each request reserves its worst case before it starts. For a file that is three times the file body (a text body held as read and serialized, JSON escaping at most doubling it; a binary body held base64-encoded and serialized again) and room for the rest of the frame; for a listing, its names and the rest of its entries, each held as read and serialized, and for a search the same with its ignored paths (the `git ls-files` output while it is read and the paths as a set holds them, at 64 bytes each beside their bytes); for a branch list, the `git for-each-ref` output while it is read, its branches at 128 bytes each beside their names and the origins attached to at most 1,000 of them at 768 bytes each, held as built and serialized, and the upstream lookup's names and output; for a change list, the `git status` output while it is read and its entries, at 768 bytes each beside their paths, held as built and serialized, and for a comparison the same with its `git diff-tree` output, and for a commit list the same with its `git log` output and its commits at 1,536 bytes each beside their changes, each with the line counts' output (2 MiB) and the paths and records they are matched with, at 128 bytes each beside their paths; for a change of either kind, two bodies as a file reserves them beside a patch of at most 64 KiB, a body coming with a patch only when the patch carries no content (a text patch alone, at most 4 MiB, needs no more than one body). The reservation shrinks to the serialized reply and is given back once the reply is written to the socket. A reply that would be larger than its reservation is refused (`reply_bytes`) |
 | Bytes held for replies, per connection | about 48 MiB | Four file reads at their worst, so one window gets every read the daemon runs at a time |
+| Bytes held for replies, MCP tools together | about 48 MiB | The `list_project_changes` and `read_project_diff` reads of every session share one connection's share, taken before the daemon-wide bytes and a read slot, so a few agents' reads cannot hold the budget a window's reads need; a read keeps its place until the agent's answer is built, and gives it back as soon as its `git` stops if the call is dropped |
 | Bytes held for replies, daemon-wide | about 96 MiB | Twice one connection's share, so a client that stops reading cannot hold every other connection's reads up |
 | Writing one frame | 30 s | Any frame on the control socket, not only a browse reply. On a loopback connection a client that takes no bytes for this long has stopped reading; its connection is closed, giving back what its queued replies held, and it reconnects to a fresh `snapshot` and asks again |
 
@@ -2371,7 +2372,7 @@ in `docs/product/session-requests.md` ("Waiting for the answer", "How a request 
 | `add_project`, `update_project`, `get_console`, `update_console`, `get_settings`, `update_settings` | yes | — | — |
 | `show_page`, `list_pages`, `delete_pages` | yes | yes (a lead session included) | — |
 | `new_session`, `instruct_session`, `interrupt_session`, `archive_session`, `reopen_session`, `rename_session`, `set_session_pinned` | yes | yes | — |
-| `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`, `send_message`, `get_account_quotas` | yes | yes | yes |
+| `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_project_changes`, `read_project_diff`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived`, `send_message`, `get_account_quotas` | yes | yes | yes |
 | `archive_self` | yes | yes (refused once bound, a lead session included, which wraps up with `report`) | — |
 | `handoff_session`, `handover_branches`, `switch_session_account`, `transfer_session`, `release_session` | yes | yes | — |
 | `bind_to_session` | — | yes (refused once bound, a lead session included) | — |
@@ -2423,13 +2424,14 @@ never the caller's own and never a console session. Nothing here deletes a proje
 another console, changes a project's path, source, host, remote or `trust_consent`, or writes an account or a trusted
 directory.
 
-- `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_agent_models`,
-  `list_consoles`, `list_projects`, `list_archived` and `get_account_quotas` (the third row of the table above, without
-  `send_message`, which writes) have one definition and one scope for every role: any session reads any session, and any
-  console's project list and archive. What stays narrower is `get_project` (a project session's own project),
-  `get_console` and `get_settings` (the console session's own console and the application's settings), and the writes.
-  `list_consoles` answers `{ consoles: [{ console, name, yours }] }`, every console with the id and name that `console`
-  takes, `yours` marking the caller's own.
+- `get_session`, `list_sessions`, `read_session_history`, `get_session_branches`, `list_project_changes`,
+  `read_project_diff`, `list_agent_models`, `list_consoles`, `list_projects`, `list_archived` and `get_account_quotas`
+  (`list_project_changes` and `read_project_diff` read the caller's own console's projects only, below; the third row of
+  the table above, without `send_message`, which writes) have one definition and one scope for every role: any session
+  reads any session, and any console's project list and archive. What stays narrower is `get_project` (a project
+  session's own project), `get_console` and `get_settings` (the console session's own console and the application's
+  settings), and the writes. `list_consoles` answers `{ consoles: [{ console, name, yours }] }`, every console with the
+  id and name that `console` takes, `yours` marking the caller's own.
 - `list_projects` takes an optional `console` (an id, or a name that names one console), defaulting to the caller's own,
   so for a project session the console it is in, and an optional `project` (an id, or a name that names one project in
   that console; anything else is refused) that narrows either answer to that project, which is how a console session
@@ -2730,6 +2732,30 @@ directory.
   Archived owners that come back with it keep their settings. It answers `{ session, account, account_name, model,
   effort }`: the account the session is on, as `new_session` names it, and the model and effort the relaunch used (the
   session's own, else its project's or console's; `null` is the agent's own default).
+- `list_project_changes` and `read_project_diff` are the browse requests of the Git mode (`list_project_changes`,
+  `compare_project_branches`, `list_project_commits`, `read_project_change`, `read_project_commit_change`; see "Browsing
+  a project"), served by `browse::serve` for a session instead of a window: the path checks, the `git` invocation and
+  the rule that nothing is written to the repository are theirs, and each read waits for a read slot and its reservation
+  from the same daemon-wide gate as a window's, all of them together held to one connection's share of the retained
+  bytes ("Browse budgets"), not a connection's own bounds. They are offered to every role, and read only a project of
+  the caller's own console (a project of another console is refused, since `list_projects` lists those without their git
+  status); `project` defaults to a project session's own project and is required of a console session.
+  `list_project_changes` takes `worktree` (a worktree's path or the branch checked out in it) for the uncommitted
+  changes of another worktree, or `branch` with `base` (and `base_remote` for a remote-tracking base) for what the
+  branch changed since it forked, with `commit` to narrow that to one of its commits, and pages its `changes` by `limit`
+  (200, at most 1000) and `offset`. It answers `{ project, view, changes, total, offset, next_offset, complete }` plus,
+  for `uncommitted`, `worktree: { path, branch, head }` (`path` and `branch` plain text, as `get_session_branches` gives
+  them); for `branch`, `branch`, `base`, `branch_commit`, `base_commit`, `merge_base`, `commits: [{ commit, parent,
+  subject, files }]` (at most 100, newest first) and `commits_complete`; for `commit`, `commit`, `parent` and `subject`.
+  A change is `{ group?, status, path, old_path?, kind?, outside_project?: { side, repository_path }, lines_added,
+  lines_removed }`, `group` only in the uncommitted views. `read_project_diff` takes `path`, `old_path`, then `group`
+  (with `worktree`) or `commit` with `parent`, and `offset` and `max_bytes` (32768, at most 131072) for the window of
+  the diff it returns; it answers `{ project, path, old_path?, format, text, size_bytes, offset, next_offset, truncated,
+  note }`, `format` being `patch`, `file` (an untracked file's whole content), `binary` or `none`. A window ends on a
+  line where one lies in it; a patch or file over the browse layer's 4 MiB is refused, not cut. `base`, the branch
+  compared with, is always named by the caller, and `branch`, `base` and a `worktree` given by branch are plain names
+  (the wire spelling is accepted for a worktree path or branch too). `path` and `old_path` keep the wire spelling, so
+  that what a change lists is what the diff takes.
 - `get_session_branches` takes an optional `session` (any session, defaulting to the caller) and answers
   `{ session, branches }`, each branch `{ branch, project, worktree, worktree_status, uncommitted_changes }`:
   `worktree_status` is `checked_out`, `gone`, `none` or `unknown` (`git` could not be run or the worktrees could not be

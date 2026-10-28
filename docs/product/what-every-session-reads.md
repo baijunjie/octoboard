@@ -3,7 +3,8 @@
 The read-only tools of Octoboard's MCP server (see `docs/product/hub-orchestration.md`). Every session — a console
 session, a project session that can own sessions and a project session with the role of a bound one alike — is offered
 the same ones, and each reads the same for every caller: any session, of any project or console, and the projects and
-archives of any console.
+archives of any console — except the reads of a project's changes, which reach only the caller's own console's
+projects (see "Reading a project's changes" below).
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -11,6 +12,8 @@ archives of any console.
 | `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `status?` | The running sessions other than the caller — or with `status` the interrupted ones, or both — in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
 | `read_session_history` | `session`, `limit?`, `before?` | What any session's conversation held, a page at a time from the latest. See "Reading a session's history" below. |
 | `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project and worktree. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
+| `list_project_changes` | `project?`, `worktree?`, `branch?`, `base?`, `base_remote?`, `commit?`, `limit?`, `offset?` | What has changed in a project of the caller's own console, without running `git` there: the uncommitted changes of one of its worktrees, what a branch has changed since it forked from a base together with its commits, or one of those commits; a page at a time. See "Reading a project's changes" below. |
+| `read_project_diff` | `project?`, `path`, `old_path?`, `group?`, `worktree?`, `commit?`, `parent?`, `offset?`, `max_bytes?` | The diff of one change `list_project_changes` lists, a window of it at a time. See "Reading a project's changes" below. |
 | `list_agent_models` | `agent`, `account?` | The models an agent offers and the reasoning-effort levels of each. See "Reading the models an agent offers" below. |
 | `list_consoles` | — | Every console, each as `console` (its id), `name` and `yours` (whether it is the caller's own console). The id, or a name that names one console, is what a `console` argument takes. |
 | `list_projects` | `console?`, `project?`, `refresh?` | The projects of a console: the caller's own in full, another's only as far as needed to target one of its projects; optionally one project, and optionally with their git status checked first. See "Listing a console's projects" below. |
@@ -20,15 +23,16 @@ archives of any console.
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
 directory, at once — two console sessions can dispatch into it, say — and one that could not see the others' sessions
 would collide with them. That holds for a bound session as much as for one that can own sessions, so a bound session
-is offered every read too, at the cost of a few more tool descriptions in its context. What stays narrower is a read of
-settings — `get_project` is a project session's read of its own project (see `docs/product/agent-settings-tools.md`),
-and `get_console` and `get_settings` are the console session's (see "The console session's tools" in
-`docs/product/hub-orchestration.md`) — and `list_pages`, the read of the report panel pages the caller pushed itself,
-offered with the other report panel tools to a console session and to an unbound project session or a lead session
-(see "Reading back the pages pushed" in `docs/product/report-panel.md`). What a session may do to another is
-narrower too (see "Which sessions an owner drives" in `docs/product/hub-orchestration.md`). The tool descriptions, the
-console session's instructions and every project session's role description tell it that a session it does not own is
-somebody else's and is to be left alone, whatever it can read of it.
+is offered every read too, at the cost of a few more tool descriptions in its context. What stays narrower is the
+reach of the reads of a project's changes, held to the caller's own console (see "Reading a project's changes" below),
+a read of settings — `get_project` is a project session's read of its own project (see
+`docs/product/agent-settings-tools.md`), and `get_console` and `get_settings` are the console session's (see "The
+console session's tools" in `docs/product/hub-orchestration.md`) — and `list_pages`, the read of the report panel pages
+the caller pushed itself, offered with the other report panel tools to a console session and to an unbound project
+session or a lead session (see "Reading back the pages pushed" in `docs/product/report-panel.md`). What a session may do
+to another is narrower too (see "Which sessions an owner drives" in `docs/product/hub-orchestration.md`). The tool
+descriptions, the console session's instructions and every project session's role description tell it that a session it
+does not own is somebody else's and is to be left alone, whatever it can read of it.
 
 ## Listing a console's projects
 
@@ -52,6 +56,122 @@ remotes before answering, as the application's own check does, so that a session
 repository stands (see "Reading the status from a session" in `docs/product/project-git-status.md`). It is refused
 with another console, whose projects are listed without a git status. The answer then carries `git_refresh` at its top
 level. The tool's description tells the agent to ask for it only when a status is too old to decide on.
+
+## Reading a project's changes
+
+`list_project_changes` and `read_project_diff` show what has changed in a project's git repository without the caller
+running `git` there: `git status` and `git diff` rewrite the repository's index, and can fail a command another session
+working there is running. They are the project pane's Git mode read for a session: the same reads, so what they list is
+what the change list lists (see "What is listed" in `docs/product/project-pane-git-change-list.md`) — for a project that
+is a subdirectory of its repository, only the changes that touch the project's folder — and, like the Git mode, they
+never write to the repository (see "Reading only" in `docs/product/project-pane-git-mode.md`).
+
+**Which project.** `project` names it by id, or by a name that names one project (looked for among the caller's own
+console's projects first). Left out, it is a project session's own project; a console session has to give it. Only a
+project of the caller's own console can be read: one of another console is refused, as `list_projects` lists another
+console's projects without their git status — even when the worktree or branch asked about came from a session of
+that other console. A project that is not in a git repository, or one whose repository `git` cannot read, is refused
+with the reason.
+
+### Listing the changes: `list_project_changes`
+
+The arguments choose one of three views:
+
+- **Neither `worktree` nor `branch`**: the uncommitted changes of the worktree holding the project's folder — not
+  necessarily the caller's own worktree.
+- **`worktree`**: the uncommitted changes of that worktree of the project's repository, named by its path (as
+  `get_session_branches` gives it) or by the branch checked out in it. One that names no worktree of the repository is
+  refused, the reason listing the worktrees there are.
+- **`branch` with `base`**: what the local branch `branch` has changed since it forked from `base` — as
+  `git diff base...branch` shows it — and the commits it has made since. `base` is a local branch, or with
+  `base_remote: true` a remote-tracking one such as `origin/main`, as the repository last fetched it; nothing contacts
+  the remote. Unlike the Git mode, which compares with the branch the main working copy has checked out, the base is
+  always the caller's to name; the tool's description suggests the target branch of the session's report, or the branch
+  the project's folder has checked out (`git_status.branch` in `list_projects`). With `commit` besides — the full id of
+  one of the commits the branch view lists — the answer is that one commit's changes against its first parent; a commit
+  not among them is refused, the reason saying whether it may be an older one than the 100 listed, or one of those left
+  out where the daemon cut the list short.
+
+`branch` without `base`, `base`, `base_remote` or `commit` without `branch`, and `worktree` together with `branch` are
+refused. The changes come a page at a time: `limit` is a whole number from 1 to 1000, 200 when left out, and `offset`
+one of 0 or more, 0 when left out; a value outside those is refused. Reading a worktree that is changing twice can give
+two different lists, so a page of one read is not a page of the next.
+
+Every answer carries:
+
+| Field | Contents |
+|---|---|
+| `project` | The project's id. |
+| `view` | `uncommitted`, `branch` or `commit`. |
+| `changes` | The page of changes. |
+| `total` | How many changes there are altogether. |
+| `offset` | Where `changes` starts. |
+| `next_offset` | Where the next page starts, `null` on the last page. |
+| `complete` | `false` when the daemon cut the list short at its own limits (see "What the list says instead" in `docs/product/project-pane-git-change-list.md`), so `total` and the changes past the cut are not known. |
+
+The uncommitted views add `worktree`: `path` and `branch` as plain text, as `get_session_branches` gives them (`branch`
+`null` when `HEAD` is detached or unborn), and `head`, the commit the staged changes are against (`null` before the
+first commit). The branch view adds `branch`, `base`, `branch_commit` and `base_commit` (the full ids of the two tips),
+`merge_base` (the commit they forked at; the changes are those between it and `branch_commit`), `commits` — newest
+first, at most 100, each `commit`, `parent` (its first parent, `null` for a root commit), `subject` and `files` (how
+many of the project's files it changed) — and `commits_complete`, `false` when the branch made more commits than are
+listed or the daemon cut the last one's changes short. The commit view adds the commit's `commit`, `parent` and
+`subject`.
+
+Each change is:
+
+- `group`, in the uncommitted views only: `staged`, `unstaged`, `untracked` or `conflicted`. A path can be in two
+  groups, as a file staged and changed again since is in the change list.
+- `status`: `added`, `deleted`, `modified`, `renamed` or `type_changed`, or for a conflicted path how it conflicts —
+  `both_modified`, `both_added`, `both_deleted`, `added_by_us`, `added_by_them`, `deleted_by_us` or `deleted_by_them`.
+- `path`: relative to the project's folder, the removed path for a deletion. A name that is not UTF-8 or holds a `%` is
+  spelled with `%XX` escapes, which is how `read_project_diff` takes it back.
+- `old_path`: a rename's former path.
+- `kind`: only for a `symlink` or a `submodule`; for a type change, the new side's.
+- `outside_project`: only for a rename whose other end lies outside the project's folder — `side` (`old` or `new`) and
+  that end's `repository_path`, from the repository's root. Such a change is `renamed` without an `old_path`, and inside
+  the project it amounts to an addition or a deletion.
+- `lines_added` and `lines_removed`: `null` where `git` counts none — a binary file, a link, a submodule, a change with
+  a side outside the project, a very large change, and a conflicted path.
+
+### Reading one change's diff: `read_project_diff`
+
+`path` (required) names the file as the change lists it, and `old_path` a rename's former path. The change is then
+either:
+
+- **an uncommitted one**: `group` — `staged`, `unstaged` or `untracked`; a conflicted path has no diff to read — with
+  `worktree`, as for `list_project_changes`, for a worktree other than the one holding the project's folder;
+- **one between two commits**: `commit`, the full id of the commit holding the new version, and `parent`, that of the
+  commit holding the old one; left out, the old version is nothing, as for a root commit. For a commit of the branch
+  view, its `commit` and `parent`; for the whole branch since it forked, the answer's `branch_commit` and `merge_base`.
+
+Refused: neither `group` nor `commit`, or both; `parent` with `group`; `worktree` with `commit`; `old_path` for an
+untracked file; a `commit` or `parent` that is not a full id of a commit there is; and a `path` or `old_path` that is
+not a path inside the project — absolute, with `.` or `..`, with an empty component, or the project's folder itself.
+
+A window of the diff comes back at a time: `max_bytes` is a whole number from 1 to 131072 (128 KiB), 32768 (32 KiB) when
+left out, and `offset`, 0 or more and 0 when left out, is where in the text to start; an `offset` past the end is
+refused. The answer is:
+
+| Field | Contents |
+|---|---|
+| `project`, `path`, `old_path` | The project's id and the file named; `old_path` only when given. |
+| `format` | What `text` holds: `patch`, the unified diff as `git` writes it — a file changed only in its mode, or only renamed, has a patch with no hunk, and an empty `text` means the path differs in nothing there; `file`, the whole content of an untracked file, which has no diff, every line of it added; `binary`, a binary change, `text` being `git`'s one line saying the binary files differ for a patch, and `null` for an untracked file; `none`, a link, submodule or side outside the project with no content to show, `text` `null`. |
+| `text` | The window. It ends at the end of a line where one lies in it, and always on a whole character. |
+| `size_bytes` | The full size of the diff or file in bytes, as `git` has it. |
+| `offset` | Where the window starts. |
+| `truncated`, `next_offset` | Whether more follows, and the `offset` to read on from; `next_offset` is `null` when nothing does. |
+| `note` | `null`, unless something about `text` is worth knowing: a patch that is not plain text has the bytes that are not UTF-8 shown as U+FFFD — so `offset` and `next_offset`, which count the bytes of the text returned, then differ from `size_bytes` — and a `none` says why there is nothing to show. |
+
+An uncommitted change is read as it is now, so reading on after it has changed can give a text that does not follow on.
+A patch, or a file shown whole, larger than 4 MiB is refused rather than cut, the reason saying it is bounded by the
+daemon and not by an argument.
+
+### Sharing the daemon's reads with the window
+
+Each read waits for the same capacity the windows' reads of a repository wait for, as one window's requests do. The
+reads of every session together are held to one window's share of it, so a window's own reads keep their share however
+many sessions are reading, and a call can wait while others are read. A call that is dropped stops its `git`.
 
 ## Listing archived sessions
 

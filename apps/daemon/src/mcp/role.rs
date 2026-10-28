@@ -434,6 +434,19 @@ fn relationships(agent: Agent, owns: bool) -> String {
         request_session = tool("request_session"),
     ));
     lines.push(format!(
+        "- `{list_project_changes}` shows what has changed in a project of your console without \
+         running git there: the uncommitted changes of a worktree, or what a `branch` has \
+         changed since it forked from `base` and the commits it made; `{read_project_diff}` \
+         reads one changed file's diff, a window of it at a time. Use them, rather than `git \
+         status` or `git diff` (which rewrite the repository's index), to look at another \
+         session's worktree or branch or at the project's directory, which another session may \
+         be working in. Without `worktree` they show the worktree holding the project's \
+         directory, not necessarily your own: name your own, or another session's, by the \
+         `worktree` path or branch. In your own worktree, run git as usual.",
+        list_project_changes = tool("list_project_changes"),
+        read_project_diff = tool("read_project_diff"),
+    ));
+    lines.push(format!(
         "- `{list_agent_models}` lists the models an agent offers, with the reasoning efforts of \
          each; check it before naming a `model` or `effort` in a call that takes one.",
         list_agent_models = tool("list_agent_models"),

@@ -54,6 +54,7 @@ use super::handover::{self, branch_names, held_by};
 use super::history;
 use super::models;
 use super::pages;
+use super::project_changes;
 use super::quotas;
 use super::reads;
 use super::session_branches as session_branches_tool;
@@ -125,6 +126,10 @@ pub async fn call(
         "get_session_branches" => {
             session_branches_tool::get_session_branches(state, &session, arguments).await
         }
+        "list_project_changes" => {
+            project_changes::list_project_changes(state, &session, arguments).await
+        }
+        "read_project_diff" => project_changes::read_project_diff(state, &session, arguments).await,
         "list_agent_models" => models::list_agent_models(state, arguments).await,
         "read_session_history" => history::read_session_history(state, arguments).await,
         "get_project" => settings::get_project(state, &session, arguments).await,

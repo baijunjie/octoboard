@@ -109,7 +109,7 @@ screens, terminal titles and session records the tests replay.
 |---|---|
 | `src/git_env.rs` | The base every `git` the daemon runs is built from (non-interactive, read-only, variable filtering) |
 | `src/git_status.rs`, `src/git_push.rs`, `src/git_switch.rs`, `src/git_restore.rs`, `src/git_remote.rs`, `src/git_watch.rs` | Per-project git: status against the remote and fast-forward, push, switch to a local branch, restore of tracked changes, the recorded remote URL, and the ref watch that republishes the branch header |
-| `src/browse/` | Project-browsing reads over the control socket (below) |
+| `src/browse/` | Project-browsing reads, over the control socket and for the MCP tools that look at a project's changes (below) |
 | `src/hostfs.rs`, `src/open_directory.rs`, `src/open_terminal.rs`, `src/path_links.rs`, `src/host_tools.rs` | Host filesystem work (browsing, Trash, repository discovery, clone, remote probing, agent detection), launching the system terminal, file manager or default application, probing and opening the file paths a terminal shows, and `HostTools`, the seam a test substitutes stand-ins behind |
 | `src/subprocess.rs`, `src/process_session.rs` | Running a spawned process to completion within bounds, and starting, observing and ending a process as the leader of a session of its own |
 | `src/env_shell/` | The user's real shell environment every agent is launched with, and resolving a binary on it |
@@ -176,9 +176,9 @@ Internals, by file:
 ### `src/mcp/`
 
 The tool surface a session drives Octoboard with. Every session has the same reads (sessions, histories, branches,
-consoles, projects, archives, models and plan quotas); console sessions add orchestration and settings tools, project
-sessions that can own sessions a narrower orchestration set, bound sessions the reporting tool, and every session has
-information sharing, `request_session` and `request_resume_session`. Which tools a session sees follows its role and
+consoles, projects, archives, models, plan quotas and a project's changes); console sessions add orchestration and
+settings tools, project sessions that can own sessions a narrower orchestration set, bound sessions the reporting tool,
+and every session has information sharing, `request_session` and `request_resume_session`. Which tools a session sees follows its role and
 binding, which the daemon checks on every call. The wire contract is in [`PROTOCOL.md`](PROTOCOL.md).
 
 | File | Role |
@@ -187,6 +187,7 @@ binding, which the daemon checks on every call. The wire contract is in [`PROTOC
 | `role.rs`, `console_instructions.rs` | The role description injected at launch, and the console session's instruction file |
 | `exec.rs`, `args.rs` | Dispatching one tool call through the same coordinator and reporting functions the control socket uses, and reading a call's arguments |
 | `reads.rs`, `models.rs`, `history.rs`, `quotas.rs`, `session_branches.rs` | The read-only tools every role has: `get_session`, `list_sessions`, `list_projects`, `list_consoles`, `list_archived`, `list_agent_models`, `read_session_history`, `get_account_quotas`, `get_session_branches` |
+| `project_changes.rs` | The read-only tools every role has for looking at a project's changes: `list_project_changes` (a worktree's uncommitted changes, a branch against a base with its commits, or one commit) and `read_project_diff` (one file's diff, in windows); both read through `browse::serve` with the requests the window sends |
 | `handoff.rs`, `handover.rs`, `bindings.rs`, `account_switch.rs` | The owner tools: `handoff_session`, `handover_branches`, `transfer_session`, `release_session` and `bind_to_session`, `switch_session_account`; `handover.rs` also holds the branch checks (`branch_names`, `held_by`) that `new_session` and `request_session` use, and `bindings.rs` the owner-notice helpers the owner tools share (`running_or_leave`, `tell_now_or_leave`, `owner_notice`) |
 | `resume_request.rs` | `request_resume_session` |
 | `pages.rs`, `settings.rs` | A session's report panel pages (`show_page`, `list_pages`, `delete_pages`), for a console session and a project session that faces the user, and the settings tools |
@@ -197,14 +198,15 @@ binding, which the daemon checks on every call. The wire contract is in [`PROTOC
 Serves the project-browsing control-socket requests (`get_project_source`, `list_project_dir`, `search_project_files`,
 `read_project_file`, the change, branch-comparison and commit listings and reads, and the `…_change_bodies` requests):
 bounded reads from the disk, the index, a branch or a commit. The wire contract and budgets are in "Browsing a project"
-in [`PROTOCOL.md`](PROTOCOL.md). `mod.rs`'s `serve` is the entry point, called from `server.rs`.
+in [`PROTOCOL.md`](PROTOCOL.md). `mod.rs`'s `serve` is the entry point, called from `server.rs` for the control socket
+and from `mcp/project_changes.rs` for the MCP tools of the same reads.
 
 | File | Role |
 |---|---|
 | `mod.rs`, `source.rs`, `wire_path.rs` | `serve`, resolving a project to its root, repository and worktrees, and `RelPath`, the canonical wire form of a path |
 | `live.rs`, `blob.rs`, `ignored.rs` | Reading and listing files on disk and the file-name search, reading blobs from the index or a commit, and which entries Git ignores |
 | `changes.rs`, `compare.rs`, `commits.rs`, `tree_diff.rs`, `line_counts.rs` | A worktree's uncommitted changes, branch comparisons, the commits a branch made since it forked, and the shared reading of `git`'s tree-diff and line-count output |
-| `git.rs`, `budget.rs`, `lane.rs` | The one way browse runs `git` (isolated, bounded, never writing), the limits every read is held to, and the per-connection lane |
+| `git.rs`, `budget.rs`, `lane.rs` | The one way browse runs `git` (isolated, bounded, never writing), the limits every read is held to, and the per-connection lane, with `Gate::admit`, which admits an MCP tool's read to the same budget outside any connection's lane |
 
 ### `src/adapter/`
 
