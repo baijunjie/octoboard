@@ -47,7 +47,7 @@ use std::path::Path;
 
 use serde_json::json;
 
-use super::files::canonical_project;
+use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
 use super::{
     hook_command, hook_url, shell_quote, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec,
     NamedTitle, HOOK_TIMEOUT_SECS,
@@ -256,7 +256,8 @@ impl AgentAdapter for ClaudeAdapter {
                 return None;
             }
             if name == "claude-code" {
-                let manifest = std::fs::read_to_string(dir.join("package.json")).ok()?;
+                let manifest =
+                    read_regular_text(&dir.join("package.json"), SMALL_FILE_LIMIT).ok()?;
                 let manifest: serde_json::Value = serde_json::from_str(&manifest).ok()?;
                 return parse_version(manifest.get("version")?.as_str()?);
             }
@@ -1020,6 +1021,40 @@ mod tests {
                 Agent::Claude,
                 &fixture.spec().role_options(),
             )
+        );
+    }
+
+    #[test]
+    fn bounded_agent_files_allow_claude_launch_planning() {
+        use crate::adapter::tests::{agent_file, bounded_file_cases};
+        bounded_file_cases(
+            "adapter::claude::tests::bounded_agent_files_allow_claude_launch_planning",
+            &["regular", "linked", "fifo", "oversized"],
+            |case| {
+                let mut fixture = spec_fixture();
+                fixture.config_dir = Some(fixture.scratch.join("claude-home"));
+                std::fs::create_dir_all(fixture.config_dir.as_ref().unwrap()).unwrap();
+                let package = fixture
+                    .scratch
+                    .join("node_modules/@anthropic-ai/claude-code");
+                std::fs::create_dir_all(&package).unwrap();
+                let binary = package.join("cli.js");
+                std::fs::write(&binary, "").unwrap();
+                agent_file(
+                    &package.join("package.json"),
+                    case,
+                    r#"{"version":"2.1.100"}"#,
+                    SMALL_FILE_LIMIT,
+                );
+                fixture.agent_version = ClaudeAdapter.installed_version(&binary.to_string_lossy());
+                let readable = matches!(case, "regular" | "linked");
+                assert_eq!(fixture.agent_version, readable.then_some((2, 1, 100)));
+                let hooks = injected_hooks(&fixture);
+                assert_eq!(
+                    hooks["Stop"][0]["hooks"][0]["type"],
+                    if readable { "http" } else { "command" }
+                );
+            },
         );
     }
 }

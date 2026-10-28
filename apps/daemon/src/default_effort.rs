@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use crate::adapter::files::read_regular_text;
 use crate::agent_records::Locator;
 use crate::line_file::{Signature, JSON_FILE_LIMIT};
 use crate::protocol::Agent;
@@ -102,11 +103,11 @@ impl Catalogue {
             self.signature = Some(signature);
             return;
         }
-        let Ok(bytes) = std::fs::read(path) else {
+        let Ok(text) = read_regular_text(path, JSON_FILE_LIMIT as usize) else {
             return;
         };
         self.signature = Some(signature);
-        if let Ok(catalogue) = serde_json::from_slice::<Value>(&bytes) {
+        if let Ok(catalogue) = serde_json::from_str::<Value>(&text) {
             self.defaults = Some(codex_defaults(&catalogue));
         }
     }
@@ -225,6 +226,40 @@ mod tests {
         assert_eq!(
             lookup(&mut defaults, &account, Some("gpt-6.1-sol"), None),
             Some(Some("medium".to_owned()))
+        );
+    }
+
+    #[test]
+    fn bounded_agent_files_preserve_catalogue_defaults() {
+        use crate::adapter::tests::{agent_file, bounded_file_cases};
+        bounded_file_cases(
+            "default_effort::tests::bounded_agent_files_preserve_catalogue_defaults",
+            &["regular", "linked", "fifo", "oversized"],
+            |case| {
+                let account = ScratchDir::new("bounded-catalogue");
+                let path = account.join(CODEX_CATALOGUE_FILE);
+                agent_file(&path, case, CATALOGUE, JSON_FILE_LIMIT as usize);
+                let mut defaults = DefaultEfforts::default();
+                let expected =
+                    matches!(case, "regular" | "linked").then(|| Some("medium".to_owned()));
+                assert_eq!(
+                    lookup(&mut defaults, &account, Some("gpt-6.1-sol"), None),
+                    expected
+                );
+                std::fs::remove_file(&path).unwrap();
+                std::fs::write(&path, CATALOGUE).unwrap();
+                defaults.begin_pass();
+                assert_eq!(
+                    lookup(&mut defaults, &account, Some("gpt-6.1-sol"), None),
+                    Some(Some("medium".to_owned()))
+                );
+                agent_file(&path, case, CATALOGUE, JSON_FILE_LIMIT as usize);
+                defaults.begin_pass();
+                assert_eq!(
+                    lookup(&mut defaults, &account, Some("gpt-6.1-sol"), None),
+                    Some(Some("medium".to_owned()))
+                );
+            },
         );
     }
 }

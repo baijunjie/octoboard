@@ -35,7 +35,7 @@
 pub mod claude;
 mod claude_mcp;
 pub mod codex;
-mod files;
+pub(crate) mod files;
 pub mod grok;
 
 use std::collections::HashMap;
@@ -509,6 +509,69 @@ pub mod tests {
     use super::LaunchSpec;
     use crate::mcp::Owner;
     use crate::protocol::TerminalAppearance;
+
+    /// Runs each file case in a killable process: a regressed FIFO open must not strand a test
+    /// thread. The parent owns the temporary root, including fixtures a killed child cannot drop.
+    pub(crate) fn bounded_file_cases(name: &str, cases: &[&str], check: impl Fn(&str)) {
+        const CASE: &str = "OCTOBOARDD_TEST_FILE_CASE";
+        const DONE: &str = "OCTOBOARDD_TEST_FILE_DONE";
+        if let Ok(case) = std::env::var(CASE) {
+            check(&case);
+            std::fs::write(std::env::var_os(DONE).unwrap(), "done").unwrap();
+            return;
+        }
+        let mut failures = Vec::new();
+        for case in cases {
+            let root = crate::test_support::ScratchDir::new("bounded-file-case");
+            let done = root.join("done");
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args(["--exact", name, "--nocapture", "--test-threads=1"])
+                .env(CASE, case)
+                .env(DONE, &done)
+                .env("TMPDIR", &*root);
+            let bounds = crate::subprocess::Bounds {
+                timeout: crate::test_support::PATIENCE,
+                stdout_limit: 64 * 1024,
+                stderr_limit: 64 * 1024,
+                reach: crate::subprocess::Reach::ProcessGroup,
+            };
+            match crate::subprocess::run_bounded(
+                &mut command,
+                &bounds,
+                &std::sync::atomic::AtomicBool::new(false),
+            ) {
+                Ok(output) if output.status.success() && done.is_file() => {}
+                Ok(output) => failures.push(format!(
+                    "{case}: {}\n{}\n{}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                )),
+                Err(error) => failures.push(format!("{case}: {error}")),
+            }
+        }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+    }
+
+    /// Replaces a fixture with readable text, a regular symlink, a FIFO or valid oversized text.
+    pub(crate) fn agent_file(path: &std::path::Path, case: &str, text: &str, limit: usize) {
+        std::fs::remove_file(path).ok();
+        match case {
+            "fifo" => {
+                let path = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+                assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+            }
+            "oversized" => std::fs::write(path, format!("{text}{}", " ".repeat(limit))).unwrap(),
+            "linked" => {
+                let target = path.with_extension("target");
+                std::fs::write(&target, text).unwrap();
+                std::os::unix::fs::symlink(target, path).unwrap();
+            }
+            "regular" => std::fs::write(path, text).unwrap(),
+            _ => panic!("unknown file case {case}"),
+        }
+    }
 
     /// A launch to plan against, with a real temporary directory standing in for the session's
     /// scratch space — the Grok adapter writes into it, so it cannot be a fiction.

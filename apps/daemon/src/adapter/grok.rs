@@ -724,7 +724,7 @@ impl SharedConfigWriteback {
             anyhow::bail!("the shared configuration did not resolve to a file");
         }
 
-        let session: toml::Table = std::fs::read_to_string(&self.session_config)
+        let session: toml::Table = read_regular_text(&self.session_config, SMALL_FILE_LIMIT)
             .with_context(|| format!("reading {}", self.session_config.display()))?
             .parse()
             .context("the session's configuration is not valid TOML")?;
@@ -734,7 +734,7 @@ impl SharedConfigWriteback {
             return Ok(());
         }
 
-        let current = std::fs::read_to_string(target)
+        let current = read_regular_text(target, SMALL_FILE_LIMIT)
             .with_context(|| format!("reading {}", target.display()))?;
         let merged = apply_changes(&current, &changes)?;
         if merged == current {
@@ -2308,6 +2308,72 @@ command = \"/usr/bin/true\"
         assert_eq!(
             std::fs::read_to_string(&shared).expect("shared"),
             "ui = \"dark\"\n"
+        );
+    }
+
+    #[test]
+    fn bounded_agent_files_do_not_hold_grok_writeback() {
+        use crate::adapter::tests::{agent_file, bounded_file_cases};
+        bounded_file_cases(
+            "adapter::grok::tests::bounded_agent_files_do_not_hold_grok_writeback",
+            &[
+                "shared-regular",
+                "session-linked",
+                "shared-fifo",
+                "session-fifo",
+                "shared-oversized",
+                "session-oversized",
+            ],
+            |case| {
+                let (which, kind) = case.split_once('-').unwrap();
+                let mut fixture = spec_fixture();
+                let shared = link_config(&mut fixture, SHARED_CONFIG);
+                let plan = plan_isolated(&fixture.spec()).unwrap();
+                let session = session_config(&plan);
+                let changed = SHARED_CONFIG.replace("dark", "tokyonight");
+                std::fs::write(&session, &changed).unwrap();
+                let path = if which == "shared" { &shared } else { &session };
+                let text = if which == "shared" {
+                    SHARED_CONFIG
+                } else {
+                    &changed
+                };
+                agent_file(path, kind, text, SMALL_FILE_LIMIT);
+                let writeback = plan.shared_config_writeback.unwrap();
+                let readable = matches!(kind, "regular" | "linked");
+                if !readable {
+                    let error = writeback.publish_locked().unwrap_err();
+                    assert!(
+                        format!("{error:#}").contains(if kind == "fifo" {
+                            "not a regular file"
+                        } else {
+                            "file too large"
+                        }),
+                        "{error:#}"
+                    );
+                }
+                writeback.publish();
+                if readable {
+                    assert!(std::fs::read_to_string(&shared)
+                        .unwrap()
+                        .contains("tokyonight"));
+                } else if which == "session" {
+                    assert_eq!(std::fs::read_to_string(&shared).unwrap(), SHARED_CONFIG);
+                } else if kind == "oversized" {
+                    assert_eq!(
+                        std::fs::metadata(&shared).unwrap().len(),
+                        (SHARED_CONFIG.len() + SMALL_FILE_LIMIT) as u64
+                    );
+                } else {
+                    use std::os::unix::fs::FileTypeExt;
+                    assert!(std::fs::symlink_metadata(&shared)
+                        .unwrap()
+                        .file_type()
+                        .is_fifo());
+                }
+                std::fs::remove_dir_all(session.parent().unwrap()).unwrap();
+                assert!(!session.parent().unwrap().exists());
+            },
         );
     }
 }
