@@ -61,7 +61,7 @@ still controls whether a `request_session` call starts anything.
 | `console` | no | For `console`: the console, by id or by an unambiguous name. Defaults to the caller's own console. Refused with `kind: project`, whose session is in its project's console. |
 | `brief` | yes | The task, as `new_session`'s brief (see "Handing out a task: the brief" in `docs/product/hub-orchestration.md`). |
 | `title` | no | The new session's name, as `new_session` takes it: left out or blank, it is titled from its goal (see "Naming the sessions a session starts" in `docs/product/hub-orchestration.md`). |
-| `agent`, `account`, `model`, `effort` | no | The new session's agent, account, model and reasoning effort, exactly as `new_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. Left out, `agent` and `account` are settled as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes, including automatic account selection when that setting is on, in the caller's own console and in another. |
+| `agent`, `account`, `model`, `effort` | no | The new session's agent, account, model and reasoning effort, exactly as `new_session` takes them (see "The console session's tools" in `docs/product/hub-orchestration.md`); `account` is read among the accounts of the agent the new session will run. Left out, `agent` and `account` are settled as "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md` describes, including automatic selection of a usable account and, when neither choice is explicit, fallback to another added agent while that setting is on, in the caller's own console and in another. |
 | `branches` | no | For `project`: local branches, by name, to hand over to the new session (see "Handing branches over" below). Left out, or an empty list, the request hands nothing over and behaves as one without it. |
 
 **A request that could never be carried out is refused before the user is asked**, with the reason in prose and no
@@ -223,12 +223,12 @@ dialog (see "Approving requests automatically" above):
 
 1. **The session is started where the request named, exactly as `new_session` would start it** with the same brief and
    overrides: named by the request's `title`, else titled from its goal, on the agent and account the call named or
-   defaulted to, the other overrides applied, listed as *starting* until its launch settles, and its folder-trust
-   confirmation handled the same way (see "Handing out a task: the brief", "Naming the sessions a session starts" and
-   "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`). A console session is
-   started in the named console, with that console's badge colour assigned as for any console session. The approval is
-   answered only once the launch has settled, with the launch's own refusal when it fails (see "Starting the session" in
-   `docs/product/opening-sessions.md`).
+   defaulted to when the call was made, the other overrides applied, listed as *starting* until its launch settles,
+   and its folder-trust confirmation handled the same way (see "Handing out a task: the brief", "Naming the sessions a
+   session starts" and    "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`).
+   A console session is    started in the named console, with that console's badge colour assigned as for any console
+   session. The approval is    answered only once the launch has settled, with the launch's own refusal when it fails
+   (see "Starting the session" in    `docs/product/opening-sessions.md`).
 2. **It has no owner.** A project session is an ordinary independent project session, which the user owns and which can
    start and drive sessions of its own project (see "Project coordinators' tools" in
    `docs/product/hub-orchestration.md`); a console session is an ordinary console session of its console.

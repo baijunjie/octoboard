@@ -19,8 +19,7 @@ import { useNewSessionMode } from "./useNewSessionMode";
 /**
  * A "+" that is a menu of `projects`, for a view with no project of its own to open a session in.
  * Choosing a project opens the session dialog for `target(project)`; while the modifier is held and an
- * agent is available it turns into a bolt named `quickLabel` and choosing one calls `onQuickCreate` (with
- * `quickLabel`) instead. A project whose agent has no account that can open a session (each used up, not logged in
+ * agent is available it turns into a bolt named `quickLabel` and choosing one calls `onQuickCreate` instead. A project whose agent has no account that can open a session (each used up, not logged in
  * or turned off) is disabled then, with why under its name and in its accessible name. With no project, or
  * no agent that is added and installed, it is a disabled "+".
  */
@@ -37,7 +36,7 @@ export function NewSessionMenu({
   projects: Project[];
   target: (project: Project) => NewSessionRequest;
   onOpen: (target: NewSessionRequest) => void;
-  onQuickCreate: (target: NewSessionRequest, action: string) => void;
+  onQuickCreate: (target: NewSessionRequest) => void;
 }): React.ReactElement {
   const t = useT();
   const { quick: heldQuick, blocked } = useNewSessionMode();
@@ -78,12 +77,12 @@ export function NewSessionMenu({
       onClosed={() => setShortcutMode(undefined)}
       trigger={quick ? <Zap aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
       items={sortProjects(projects, () => []).map((project) => {
-        const reason = unavailable.has(project.id) ? { state: t("sidebar.project.openSessionQuickUsedUpShort") } : undefined;
+        const reason = unavailable.has(project.id) ? { state: t("sidebar.project.openSessionQuickUnavailable") } : undefined;
         return {
           label: project.name,
           reason,
           icon: FolderOpen,
-          onClick: () => (quick ? onQuickCreate(target(project), quickLabel) : onOpen(target(project))),
+          onClick: () => (quick ? onQuickCreate(target(project)) : onOpen(target(project))),
         };
       })}
     />

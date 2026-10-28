@@ -188,7 +188,7 @@ it.each([false, true])("project focus creation shortcut opens an unbound session
   expect(createShortcut(quick).defaultPrevented).toBe(true);
   const request = { kind: "new-session", console: main, project: web, binding: { kind: "unbound" } };
   if (quick) {
-    expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith(request, "New session with defaults");
+    expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith(request);
     expect(handlers.onOpenDialog).not.toHaveBeenCalled();
   } else {
     expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith(request);
@@ -212,7 +212,7 @@ it.each([false, true])("console focus creation shortcut keeps its chosen mode af
   act(() => item?.click());
   const request = { kind: "new-session", console: main, project: web, binding: bound };
   if (quick) {
-    expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith(request, "New session with defaults");
+    expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith(request);
     expect(handlers.onOpenDialog).not.toHaveBeenCalled();
   } else {
     expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith(request);
@@ -237,7 +237,7 @@ it("with the modifier held, a project group's new-session button quick-creates i
   ), sessions);
   hold();
   act(() => container.querySelector<HTMLElement>(`button[aria-label="New session in ${isolate("Website")} with defaults"]`)?.click());
-  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound }, `New session in ${isolate("Website")} with defaults`);
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
   expect(handlers.onOpenDialog).not.toHaveBeenCalled();
   unmount();
 });
@@ -250,7 +250,7 @@ it("with the modifier held, the header's project menu quick-creates for the chos
   act(() => container.querySelector<HTMLElement>('button[aria-label="New session with defaults"]')?.click());
   const item = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find((el) => el.textContent === "Website");
   act(() => item?.click());
-  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound }, "New session with defaults");
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: bound });
   expect(handlers.onOpenDialog).not.toHaveBeenCalled();
   unmount();
 });
@@ -273,7 +273,7 @@ it("a project's focus mode header quick-creates an unbound session while the mod
   ));
   hold();
   act(() => container.querySelector<HTMLElement>('button[aria-label="New session with defaults"]')?.click());
-  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } }, "New session with defaults");
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } });
   unmount();
 });
 

@@ -86,14 +86,14 @@ it("opens the dialog on a plain press and quick-creates on a press while held", 
   expect(onQuickCreate).not.toHaveBeenCalled();
   key("keydown", true);
   click();
-  expect(onQuickCreate).toHaveBeenCalledWith(request, "New session with defaults");
+  expect(onQuickCreate).toHaveBeenCalledWith(request);
   expect(onOpen).toHaveBeenCalledTimes(1);
 });
 
 it("quick-creates on a press carrying the modifier even when the key state was missed", () => {
   const { click, onOpen, onQuickCreate } = mount();
   click(MODIFIER);
-  expect(onQuickCreate).toHaveBeenCalledWith(request, "New session with defaults");
+  expect(onQuickCreate).toHaveBeenCalledWith(request);
   expect(onOpen).not.toHaveBeenCalled();
 });
 
@@ -122,10 +122,10 @@ it("keeps the quick form focusable, named for the action and described by why it
   expect(button().getAttribute("aria-disabled")).toBe("true");
   expect(button().getAttribute("aria-label")).toBe("New session with defaults");
   const reason = document.getElementById(button().getAttribute("aria-describedby")!);
-  expect(reason?.textContent).toBe("Default agent's accounts unavailable");
+  expect(reason?.textContent).toBe("No available account");
   // The press goes to the quick create, which refuses with the reason; it does not open a session.
   click();
-  expect(onQuickCreate).toHaveBeenCalledWith(request, "New session with defaults");
+  expect(onQuickCreate).toHaveBeenCalledWith(request);
   expect(onOpen).not.toHaveBeenCalled();
   key("keyup", false);
   expect(button().getAttribute("aria-disabled")).toBeNull();

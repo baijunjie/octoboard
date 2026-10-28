@@ -272,17 +272,18 @@ Where those switches sit, and what the rest of the section shows and offers, are
 
 ### Automatically select an account
 
-A switch, **off to begin with**: whether a new session whose
-account was not named uses the account of its agent whose weekly quota resets soonest. While the switch is off the row's
-description says what turning it on will do, and while it is on it says what is happening now: a new session uses the
-account whose weekly limit resets soonest, so usage left before a reset is not wasted. The daemon stores it as
-`auto_select_account` and keeps it, so every window shows the same. Unlike the switches in Agent behavior, a console
-session may read and change it, and a full configuration export carries it (see "Application settings: `get_settings`
-and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
+A switch, **off to begin with**: whether a new session whose account was not named automatically chooses a usable
+account, preferring the account of its initial agent whose weekly quota resets soonest and trying another added agent
+only when that agent has no usable account. While the switch is off the row's description says what turning it on will
+do, and while it is on it says what is happening now: a new session uses the account whose weekly limit resets soonest,
+so usage left before a reset is not wasted. The daemon stores it as `auto_select_account` and keeps it, so every window
+shows the same. Unlike the switches in Agent behavior, a console session may read and change it, and a full
+configuration export carries it (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
 `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies the choice, are in "Which
-account a session uses" in `docs/product/opening-sessions.md`. Turning it on or off changes no session already open.
-It governs only how a new session picks its account: it does not move a session that is already running (see
-"Automatically switch accounts at the usage limit" below).
+account a session uses" in `docs/product/opening-sessions.md`. Turning it on or off changes no session already open. It
+governs the initial agent and account of new sessions; explicit choices still win, and it does not move a session that
+is already running (see "Automatically switch accounts at the usage limit" below).
 
 ### Automatically switch accounts at the usage limit
 

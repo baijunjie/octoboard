@@ -2749,7 +2749,23 @@ fn resolve_open_with(
         request.bound_to.clone(),
     )?;
 
-    let agent = session_agent(request.agent, project.as_ref(), &console);
+    let preferred = session_agent(request.agent, project.as_ref(), &console);
+    let automatic = request.account.is_none()
+        && request.resume_agent_session_id.is_none()
+        && state.store.auto_select_account()?;
+    let picked = if automatic {
+        automatic_open_choice(
+            state,
+            preferred,
+            &console,
+            project.as_ref(),
+            None,
+            request.agent.is_none(),
+        )?
+    } else {
+        None
+    };
+    let agent = picked.as_ref().map_or(preferred, |(agent, _)| *agent);
     refuse_if_agent_unavailable(state, agent)?;
     // After the availability check, as in the UI, where "not installed" wins over "not added".
     refuse_unless_agent_added(state, agent)?;
@@ -2759,7 +2775,9 @@ fn resolve_open_with(
         agent,
         &console,
         project.as_ref(),
-        request.account.clone(),
+        picked
+            .map(|(_, account)| account)
+            .or_else(|| request.account.clone()),
     )?;
     refuse_if_account_disabled(state, agent, account_id.as_deref())?;
     if enforce_quota {
@@ -5709,6 +5727,79 @@ pub(crate) fn account_can_open(
     .is_none())
 }
 
+/// Chooses a new session's agent and account while automatic selection is on. Each agent
+/// keeps its own account preference before another agent is tried. An explicit agent restricts
+/// the search to it; an explicit account never comes through this function.
+pub(crate) fn automatic_open_choice(
+    state: &Arc<AppState>,
+    preferred: Agent,
+    console: &Console,
+    project: Option<&Project>,
+    inherited: Option<(Agent, Option<String>)>,
+    allow_other_agents: bool,
+) -> Result<Option<(Agent, Option<String>)>> {
+    let usable = |agent, account: Option<&str>| -> Result<bool> {
+        Ok(
+            !account.is_some_and(|id| state.sharing_locked(id).is_some())
+                && account_can_open(state, agent, account)?,
+        )
+    };
+    let mut agents = vec![preferred];
+    if allow_other_agents {
+        for agent in state
+            .store
+            .added_agents()?
+            .unwrap_or_else(|| Agent::ALL.to_vec())
+        {
+            if agent != preferred {
+                agents.push(agent);
+            }
+        }
+    }
+    for agent in agents {
+        if !agent_can_open(state, agent)? {
+            continue;
+        }
+        if let Some(account) = preferred_weekly_account(state, agent)? {
+            return Ok(Some((agent, account)));
+        }
+        let inherited = match inherited.as_ref() {
+            Some((inherited_agent, account))
+                if *inherited_agent == agent && usable(agent, account.as_deref())? =>
+            {
+                Some(account.clone())
+            }
+            _ => None,
+        };
+        let (account, _) = session_account(state, agent, console, project, inherited)?;
+        if usable(agent, account.as_deref())? {
+            return Ok(Some((agent, account)));
+        }
+        let mut accounts = vec![None];
+        accounts.extend(
+            state
+                .store
+                .list_accounts()?
+                .into_iter()
+                .filter(|account| account.agent == agent)
+                .map(|account| Some(account.id)),
+        );
+        let order = state.store.account_order(agent)?;
+        accounts.sort_by_key(|account| {
+            order
+                .iter()
+                .position(|id| id == account)
+                .unwrap_or(usize::MAX)
+        });
+        for account in accounts {
+            if usable(agent, account.as_deref())? {
+                return Ok(Some((agent, account)));
+            }
+        }
+    }
+    Ok(None)
+}
+
 /// The account of `agent` to use when a new session leaves its account out and
 /// `auto_select_account` is on. `Some(Some(id))` is a stored account, `Some(None)` the default
 /// account, and `None` when no account has a weekly window that still has quota and resets
@@ -8217,6 +8308,155 @@ mod tests {
             .await
             .expect_err("fails further on, for want of a process");
         assert_ne!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN);
+    }
+
+    #[test]
+    fn automatic_open_choice_uses_another_agent_only_after_all_preferred_accounts() {
+        let (state, _dir) = state_for_opening("automatic-open-agent-fallback");
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Claude, Agent::Grok, Agent::Codex])
+            .unwrap();
+        set_account_disabled(&state, Agent::Claude, None, true).unwrap();
+        let resolved = resolve_open(&state, &open_request()).unwrap();
+        assert_eq!(resolved.agent, Agent::Grok);
+        assert_eq!(resolved.account_id, None);
+
+        let explicit = OpenRequest {
+            agent: Some(Agent::Claude),
+            ..open_request()
+        };
+        assert_eq!(
+            code_of(&resolve_open(&state, &explicit).err().unwrap()),
+            error_code::ACCOUNT_DISABLED
+        );
+        let explicit = OpenRequest {
+            account: Some(None),
+            ..open_request()
+        };
+        assert_eq!(
+            code_of(&resolve_open(&state, &explicit).err().unwrap()),
+            error_code::ACCOUNT_DISABLED
+        );
+
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-unread".to_string(),
+                agent: Agent::Claude,
+                name: "Unread".to_string(),
+                config_dir: "/tmp/claude-unread".to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        let resolved = resolve_open(&state, &open_request()).unwrap();
+        assert_eq!(resolved.agent, Agent::Claude);
+        assert_eq!(resolved.account_id.as_deref(), Some("claude-unread"));
+        let account = state.store.get_account("claude-unread").unwrap().unwrap();
+        let (_, lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+        assert_eq!(
+            resolve_open(&state, &open_request()).unwrap().agent,
+            Agent::Grok
+        );
+        drop(lock);
+        state.store.set_auto_select_account(false).unwrap();
+        assert_eq!(
+            code_of(&resolve_open(&state, &open_request()).err().unwrap()),
+            error_code::ACCOUNT_DISABLED
+        );
+    }
+
+    #[test]
+    fn automatic_open_choice_uses_saved_account_order_for_unranked_accounts() {
+        let (state, _dir) = state_for_opening("automatic-open-account-order");
+        state.store.set_auto_select_account(true).unwrap();
+        set_account_disabled(&state, Agent::Claude, None, true).unwrap();
+        for id in ["first", "second"] {
+            state
+                .store
+                .insert_account(&Account {
+                    id: id.to_string(),
+                    agent: Agent::Claude,
+                    name: id.to_string(),
+                    config_dir: format!("/tmp/{id}"),
+                    share_default_config: false,
+                    share_default_config_incomplete: false,
+                    disabled: false,
+                })
+                .unwrap();
+        }
+        state
+            .store
+            .reorder_accounts(
+                Agent::Claude,
+                &[Some("second".to_string()), None, Some("first".to_string())],
+            )
+            .unwrap();
+        assert_eq!(
+            resolve_open(&state, &open_request())
+                .unwrap()
+                .account_id
+                .as_deref(),
+            Some("second")
+        );
+    }
+
+    #[test]
+    fn automatic_open_choice_keeps_a_weekly_preference_within_its_agent() {
+        use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+        let (state, _dir) = state_for_opening("automatic-open-weekly");
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .insert_account(&Account {
+                id: "claude-weekly".to_string(),
+                agent: Agent::Claude,
+                name: "Weekly".to_string(),
+                config_dir: "/tmp/claude-weekly".to_string(),
+                share_default_config: false,
+                share_default_config_incomplete: false,
+                disabled: false,
+            })
+            .unwrap();
+        state.account_quotas.hold_in_dir_for_test(
+            &AccountQuota {
+                agent: Agent::Claude,
+                account: Some("claude-weekly".to_string()),
+                fetched_at: 1,
+                plan: None,
+                unavailable: None,
+                windows: vec![QuotaWindow {
+                    kind: QuotaWindowKind::Weekly,
+                    label: None,
+                    used_percent: 70.0,
+                    resets_at: Some(now_millis() + 60_000),
+                    window_minutes: None,
+                }],
+            },
+            "/tmp/claude-weekly",
+        );
+        assert_eq!(
+            resolve_open(&state, &open_request())
+                .unwrap()
+                .account_id
+                .as_deref(),
+            Some("claude-weekly")
+        );
+        assert_eq!(
+            resolve_open(
+                &state,
+                &OpenRequest {
+                    account: Some(None),
+                    ..open_request()
+                }
+            )
+            .unwrap()
+            .account_id,
+            None
+        );
     }
 
     /// A session is opened only on an added agent, wherever the agent comes from: the request's

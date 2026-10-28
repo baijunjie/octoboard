@@ -29,14 +29,17 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
 - **Agent** — an agent picker joined to an account picker, as in the project dialog. The agent picker lists the agents
   that can be picked, in the order of the added agents, with their icons and names, and otherwise only the one it holds
   (see "Which agents the agent pickers list" in `docs/product/consoles.md`). An agent whose default account and every
-  named account are turned off is left out altogether, even while selected. The field opens on the default resolved in
-  "Which agent a session uses" below when that agent can be picked, otherwise on the first agent that can, whenever
-  there is one; if the selected agent's last enabled account is turned off while the dialog is open, the field falls
-  back by that same rule. Quota exhaustion, being logged out or a sharing change alone does not hide an agent. The
+  named account are turned off is left out altogether, even while selected, whether automatic account selection is
+  on or off. Quota exhaustion, being logged out or a sharing change alone does not hide an agent. The field opens on
+  the default resolved in "Which agent a session uses" below when that agent can be picked, otherwise on the first
+  agent that can, including automatic fallback to another agent with a usable account when enabled. If the selected
+  agent's last enabled account is turned off while the dialog is open, the field falls back by that same rule. The
   account picker offers only that agent's accounts, in the saved display order (see "Reordering accounts" in
   `docs/product/agent-accounts.md`), and is shown even when the default account is the agent's only one,
   offering that account alone. It opens on the account "Which account a session uses" below describes. There is no
-  inheritance entry: both pickers settle concrete choices for this session.
+  inheritance entry: both pickers settle concrete choices for this session. An agent the user picks stays selected
+  while it can be picked; automatic fallback for unavailable accounts applies only to the initial choice. An account
+  the user picks is retained even if a later reading makes it unavailable, and then prevents submission.
   Each account in the picker carries a compact usage bar (see "In an account picker" in
   `docs/product/account-quotas.md`). A used-up account (see "A used-up account" in `docs/product/account-quotas.md`) is
   listed but cannot be picked, with a short note under its name saying it is used up and when it resets. When the
@@ -69,8 +72,8 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   whose last change of sharing is incomplete can be picked, and
   submitting on it asks the user first (see "Starting a session on an account whose last change is incomplete" in
   `docs/product/sharing-the-default-configuration.md`). Switching agents retains each agent's account choice separately.
-  If a remembered account is removed while the dialog is open, that agent stays selected and its account falls back to
-  the account the field would open on for that agent (see "Which account a session uses" below); with its last named
+  If a remembered account is removed while the dialog is open and its agent can still be picked, that agent stays
+  selected and its account falls back to the account the field would open on for that agent (see "Which account a session uses" below); with its last named
   account removed, the picker stays, offering the default account. Switching agents returns focus to the Agent picker.
 - **Report to** (project sessions only; a choice, "No console session" by default) — one of the console's console
   sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its
@@ -302,31 +305,22 @@ still opened but not selected.
 When no agent is both added and installed, no **+** shows its quick form, and every one of them is disabled (see "When
 no agent can open a session" above).
 
-When the account the dialog would open on is used up, not logged in, turned off, or having its sharing of the default
-configuration changed, the session opened with defaults takes another account of the same agent, as the dialog does (see
-**Agent** above). When no account of the agent is left that is none of these, and the one it would open on is turned
-off, nothing is sent and an error alert says the account is turned off, as the daemon's `account_disabled` refusal does
-(see "When the agent or the account cannot open a session" above); when the one it would open on is not logged in,
-nothing is sent and an error alert says so, as the daemon's `account_not_signed_in` refusal does; when it is having its
-sharing changed instead, nothing is sent and an error alert says the account's sharing is being changed, as the daemon's
-`account_sharing_in_progress` refusal does. When the account it opens on has an incomplete last change of sharing, the
-user is asked first, and cancelling opens nothing (see "Starting a session on an account whose last change is
-incomplete" in `docs/product/sharing-the-default-configuration.md`). When no account of that agent can open a session,
-each being used up, not logged in or turned off, there is nothing to open with defaults:
+The agent and account follow the dialog's initial choice, including fallback to another agent while **Automatically
+select an account** is on (see "Which agent a session uses" and "Which account a session uses" below). An account whose
+last change of sharing is incomplete still asks the user first; cancelling opens nothing (see "Starting a session on an
+account whose last change is incomplete" in `docs/product/sharing-the-default-configuration.md`).
+
+When the resolved choice has no usable account after the applicable fallbacks — every candidate is used up, not logged
+in, turned off or changing its sharing of the default configuration — nothing can be opened with defaults:
 
 - the **+** in its quick form looks disabled but stays focusable and under the pointer; its accessible name stays its
-  action, while its tooltip, and its description for assistive technology, say in short that the default agent's
-  accounts are unavailable, without naming the agent;
-- pressing it — or pressing a **+** with the modifier before the hold was noticed — opens nothing and shows an error
-  alert: when the account it would open on is turned off, the alert for a turned-off account above; when it is not
-  logged in, the alert for an account that is not logged in above; otherwise one that
-  names the button's action and says it is unavailable because none of the default agent's accounts can open a session
-  right now, each having reached its usage limit, not being logged in or being disabled, with the advice to choose
-  another agent in the new session dialog, or to try again once a usage limit resets, or once an account is logged in
-  to or turned back on;
+  action, while its tooltip and its description for assistive technology briefly say that no account is available;
+- pressing it — or pressing a **+** with the modifier before the hold was noticed — sends nothing and shows a known
+  failure (`quick_create_unavailable`) saying only that no account is currently available to open a session. It has
+  an acknowledgement button, with no recovery instructions, account-management button or request to report an issue;
 - in the **+** menu of projects in a console session's focus mode, held in its quick form, each such project is
-  disabled, with a short note under its name saying the default agent's accounts are unavailable; it stays reachable
-  with the arrow keys, and its accessible name ends with that note.
+  disabled, with a short note under its name saying no account is available; it stays reachable with the arrow keys,
+  and its accessible name ends with that note.
 
 Without the modifier, the same **+** opens the dialog as usual.
 
@@ -345,14 +339,24 @@ console sessions when none is given; the default for project sessions never appl
 all read the same instruction file, described in "The console session's instruction file" in
 `docs/product/launching-agents.md`.
 
-The same order settles the agent everywhere a session's agent is not given outright: the session dialog's initial
-choice, a session opened with defaults, and a session of a project associated with "Detect from files" whose directory
-named no agent (see "The project's default agent" in `docs/product/projects.md`). A session that a project session
-starts itself without naming an agent — with `new_session`, or with `request_session` in the caller's own console — runs
-the caller's own agent instead, and so does a console session's request for a console session in its own console; either
-falls back to this order only when that agent cannot open a session. A session a console session starts in a project,
-and a session request for another console, follow this order (see "The agent and account of a session a session starts"
-in `docs/product/hub-orchestration.md`).
+This order supplies the initial agent for the session dialog, a session opened with defaults, and a session of a
+project associated with "Detect from files" whose directory named no agent (see "The project's default agent" in
+`docs/product/projects.md`). The dialog and quick creation first move to an added, installed agent if that initial
+agent cannot be picked. MCP calls have their own initial preference for the caller's agent or the destination's
+default, described in "The agent and account of a session a session starts" in `docs/product/hub-orchestration.md`.
+
+While **Automatically select an account** is on, a new conversation without an explicit account tries all usable
+accounts of its initial agent before considering another agent. If none can open a session, it tries the other added,
+installed agents in added-agent order, applying the same account rules to each (see "Which account a session uses"
+below). Accounts of different agents are never ranked against each other. This applies to the dialog's untouched
+initial choice, quick creation, `open_session`, `new_session` and `request_session`. An explicitly named agent restricts
+automatic selection to that agent; an explicitly named account is used as given. A manual choice in the dialog also
+stays with that agent or account while its agent can still be picked and its account still exists. An agent with
+every account turned off is excluded from the launch pickers regardless of this setting. Turning automatic selection
+off adds no fallback to another agent for quota exhaustion, being logged out or a running sharing change.
+
+Resuming a conversation, handing a session off to a specified agent and switching its account keep their specified
+agent; none silently changes it under automatic account selection.
 
 A session's agent is fixed for its lifetime. Resuming or reopening a session always relaunches the same agent — session
 records belong to a specific agent and cannot be moved across agents.
@@ -377,8 +381,11 @@ neither pins anything. The session's account is named in its agent icon's toolti
 (see "What both views show" in `docs/product/focus-mode.md`) and of its row in the archive view (see "The archive view"
 in `docs/product/archive-view.md`); wherever the agent's name is shown, it carries no account suffix.
 
-While the switch is on, a new session whose account was not named uses the account of that session's agent whose weekly
-quota resets soonest, among the accounts that can still open a session. An account the session names still wins,
+While the switch is on, a new session whose account was not named first prefers the usable account of its initial
+agent whose weekly quota resets soonest. If none ranks, it tries the usable account inherited from the project or
+console, then the first usable account in that agent's saved display order. Only when that agent has no usable account
+does selection try another agent as described in "Which agent a session uses" above. An unread quota or a reading that
+cannot report a quota does not by itself make an account unusable. An account the session names still wins,
 including an explicit choice of the agent's default account, which does not fall through to a project pin. On
 `open_session`, `null` is that explicit choice of the default account, not the absence of a choice. Where an agent's
 tool names an account, `default` is the same choice; leaving `account` out, or sending it blank, is not.
@@ -386,8 +393,8 @@ tool names an account, `default` is the same choice; leaving `account` out, or s
 Who makes the pick:
 
 - The new-session dialog computes it, shows it in the account picker, and sends it as the session's own choice. The user
-  can still pick another account. Until the user does, the account shown follows the dialog's clock (see "A used-up
-  account" in `docs/product/account-quotas.md`). The handoff dialog does the same for the receiving session (see
+  can still pick another agent or account. Until the user does, the choice shown follows the dialog's clock (see
+  "A used-up account" in `docs/product/account-quotas.md`). The handoff dialog does the same for the receiving session (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`).
 - Opening a session with defaults uses the same account the dialog would open on, and sends it the same way (see
   "Opening a session with defaults" above).
@@ -397,17 +404,20 @@ Who makes the pick:
 - The **Resume conversation** tab does not follow the pick. It sends the agent and account that hold the conversation,
   shown locked, when that account can still be selected (see
   `docs/product/resuming-a-conversation-by-its-session-id.md`).
-- `handoff_session`, when `account` is left out or blank, has the daemon make the same pick for the receiving session
-  (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
+- `handoff_session`, when `account` is left out or blank, has the daemon prefer the same weekly ranking within its
+  receiving agent (see "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`).
 
-When the switch is on but no account ranks, the account is the one it would be while the switch is off. The new-session
-dialog, the handoff dialog and a session opened with defaults open on the account the project or console resolves to,
-then another account of that agent when that one is used up, not logged in or turned off. For `new_session` and
-`request_session` the fallback is in "The agent and account of a session a session starts" in
-`docs/product/hub-orchestration.md`: in the caller's own console, the caller's own account only when the session is of
-the caller's own agent and that account can still open a session, otherwise the project's for the agent, else the
-console's; in another console, the project's, else the console's, and never the caller's. `handoff_session` falls back
-as `new_session` does in the caller's own console, a session the caller owns always being in it.
+For `new_session` and `request_session`, the caller's usable account can take the place of the inherited account when
+both sessions are in the same console and use the same agent; see "The agent and account of a session a session starts"
+in `docs/product/hub-orchestration.md`. Their automatically chosen agent and account are settled when the call is made,
+so a session request keeps that pair while waiting for approval. A handoff's account selection stays within its
+receiving agent and follows "Handing off from an owner's tool" or "Handing off from the window" in
+`docs/product/handing-off-sessions.md`.
+
+With automatic selection off, the new-session and handoff dialogs, and quick creation, still pass over an inherited
+account that is used up, not logged in, turned off or changing its sharing, choosing the first usable account of the
+same agent in saved display order. MCP calls retain their caller/project/console inheritance rules in
+`docs/product/hub-orchestration.md`.
 
 The dialog and the daemon rank the same way:
 

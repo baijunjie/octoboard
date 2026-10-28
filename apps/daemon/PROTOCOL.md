@@ -894,11 +894,22 @@ model's own weekly window, a 5-hour window and a monthly credit period do not ra
 below 100, and the reset must be strictly ahead; a reset that has passed or is missing does not rank. The default
 account is a candidate, ahead of that agent's stored accounts in the order they are kept. Soonest reset wins, so quota
 about to reset is spent first; a larger remainder breaks a tie, and an earlier candidate wins one that is still tied.
-When none ranks, the account is chosen as it is while the setting is off: in the caller's own console, the caller's own
+The inherited account is resolved as follows: in the caller's own console, the caller's own
 account when it is the same agent and that account can open the session, otherwise the project's for the agent, else the
 console's; in another console, the project's, else the console's, with no fall-back to the caller; a handoff's session
-is always in the caller's own console. Agents may read and change the setting. A full configuration export carries it; a
+is always in the caller's own console and uses this inherited account when no weekly window ranks. Agents may read and
+change the setting. A full configuration export carries it; a
 document exported before it existed omits it, and importing that document leaves the stored value unchanged.
+
+For a new `open_session`, `new_session` or `request_session` with automatic selection on and no explicit account, the
+preferred agent is tried first: its weekly pick, then the inherited account above, then its first usable account (saved
+account order, default before stored accounts when unset). Accounts with no quota reading remain usable. If no account
+works and no agent was explicitly named, other installed agents on the added list are tried in that list's order, using
+each agent's weekly, inherited and first-usable account order. An undecided added list uses the built-in agent order. An
+explicit agent restricts selection to that agent; an explicit account preserves both agent and account. A resume,
+account switch or handoff never falls back to another agent. Unspecified model and effort inherit the final agent's
+settings. Quick create fails only after this search finds no usable choice. These rules also apply to `request_session`
+in another console.
 
 `ask_questions_as_choices` (default `true`) is whether the instructions
 every session is launched with ask it to put each question that needs the user's decision or answer as options to pick
@@ -2595,18 +2606,19 @@ directory.
   (`null` is the agent's own default), and with `branches` the `branches` moved and a `note`. `title` is the session's
   title, trimmed; left out or blank, the title is the first line of `brief.goal` cut to 48 characters. Left out, `agent`
   is the caller's own agent — unless that agent has been determined unavailable or is not on the added agents list, when
-  the project's and console's default applies as for `open_session`. While `auto_select_account` is on, a left-out
-  `account` is the account of the session's agent whose weekly quota resets soonest, among accounts that can still open
-  a session. A 5-hour, account-wide weekly, or credit-period window that is used up drops the whole account. The window
-  that ranks is an account-wide weekly window, or a credit period of about a week (`window_minutes` from 6 to 8 days),
-  whose `used_percent` is finite and below 100 and whose reset is strictly ahead. A model's own weekly window, a 5-hour
-  window, a monthly credit period, a reset that has passed or is missing, and a reading taken under another directory do
-  not rank. When the setting is off, or no such account ranks, `account` for a session of the caller's own agent is the
-  caller's own account (`Session.account_id`, the default account included) unless that account no longer exists or it
-  is disabled (see `account_disabled`), its quota is used up by the reading held (see `account_quota_exhausted`) or the
-  reading found it not logged in (see `account_not_signed_in`); a
+  the project's and console's default applies as for `open_session` while automatic selection is off. While
+  `auto_select_account` is on, a left-out `account` is the account of the session's agent whose weekly quota resets
+  soonest, among accounts that can still open a session. A 5-hour, account-wide weekly, or credit-period window that is
+  used up drops the whole account. The window that ranks is an account-wide weekly window, or a credit period of about a
+  week (`window_minutes` from 6 to 8 days), whose `used_percent` is finite and below 100 and whose reset is strictly
+  ahead. A model's own weekly window, a 5-hour window, a monthly credit period, a reset that has passed or is missing,
+  and a reading taken under another directory do not rank. When the setting is off, or no such account ranks, `account`
+  for a session of the caller's own agent is the caller's own account (`Session.account_id`, the default account
+  included) unless that account no longer exists or it is disabled (see `account_disabled`), its quota is used up by the
+  reading held (see `account_quota_exhausted`) or the reading found it not logged in (see `account_not_signed_in`); a
   session of another agent, or one whose caller's account was passed over, takes the project's account for the agent,
-  else the console's, as for `open_session`.
+  else the console's, as for `open_session`. With automatic selection on, the account and agent fallback rules in the
+  settings description above apply before a request is refused.
 - `request_session` takes `kind` (`project` or `console`), `project`, `console`, `brief` and an optional `branches` —
   and the overrides of `new_session` — and waits for the user's answer. `branches` is a list of local branch names in
   the project's repository to hand to the new session; each must be one the caller is responsible for (see

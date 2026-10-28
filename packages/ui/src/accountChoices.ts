@@ -1,5 +1,5 @@
 import { orderedAccounts } from "./accountOrder";
-import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
+import { accountsByAgent, agentsInListingOrder, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
@@ -275,6 +275,28 @@ export function avoidUnavailableAccount(choice: AccountChoice, groups: ChoiceGro
   return usable ? { agent: choice.agent, account: usable.account } : choice;
 }
 
+/** The initial choice of a new session. Automatic selection tries other added agents in listing order only
+ * when the preferred agent has no usable account. Explicit picks do not pass through this fallback. */
+export function openingChoice(
+  owner: Console,
+  project: Project | undefined,
+  agent: Agent,
+  accounts: Account[],
+  groups: ChoiceGroup[],
+  added: Agent[] | null,
+  autoSelect?: { now: number },
+): AccountChoice {
+  const forAgent = (candidate: Agent) => avoidUnavailableAccount({ agent: candidate, account: accountOpenedOn(owner, project, candidate, accounts, groups, autoSelect) }, groups);
+  const initial = forAgent(agent);
+  if (!autoSelect) return initial;
+  for (const candidate of [agent, ...agentsInListingOrder(added).filter((other) => other !== agent)]) {
+    const choice = candidate === agent ? initial : forAgent(candidate);
+    const entry = findEntry(groups, choiceKey(choice));
+    if (entry?.selectable && !entry.exhaustedBy && !entry.changingSharing && !entry.signedOut && !entry.disabled) return choice;
+  }
+  return initial;
+}
+
 /** Where the session dialog's control opens: the agent the dialog already resolves — a project
  * session's: the project's default, else the console's project session default; a console
  * session's: the console's default — moved to one that may be picked when that one is known
@@ -282,6 +304,7 @@ export function avoidUnavailableAccount(choice: AccountChoice, groups: ChoiceGro
  * setting for it, else the console `owner`'s, moved to another account of the agent when that one's quota is
  * used up, its sharing change runs, it is not logged in or it is turned off (`avoidUnavailableAccount`). With `autoSelect`, an account of that agent whose weekly quota resets
  * soonest (`preferExpiringWeekly`) replaces the inherited one before that move, when the group has one;
+ * when none of its accounts can be used, another selectable agent is tried in added order. With it
  * omitted, the inherited account is used as before. The choice made in the dialog sits above this, as the
  * daemon's own chain puts a session's choice above both. `groups` are the agents' entries with their quotas
  * judged (`choiceGroups`). `exhaustedBy` is the window that still keeps the account from running a session
@@ -297,7 +320,7 @@ export function settledInitialChoice(
   autoSelect?: { now: number },
 ): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined; changingSharing: boolean; signedOut: boolean; disabled: boolean } {
   const agent = selectableAgent(agentAvailability, added, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
-  const choice = avoidUnavailableAccount({ agent, account: accountOpenedOn(owner, project, agent, accounts, groups, autoSelect) }, groups);
+  const choice = openingChoice(owner, project, agent, accounts, groups, added, autoSelect);
   return { choice, exhaustedBy: choiceExhaustion(choice, groups), changingSharing: choiceChangingSharing(choice, groups), signedOut: choiceSignedOut(choice, groups), disabled: choiceDisabled(choice, groups) };
 }
 

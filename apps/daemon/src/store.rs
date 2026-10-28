@@ -1470,6 +1470,12 @@ impl Store {
         Ok(ReorderOutcome::Reordered)
     }
 
+    pub fn account_order(&self, agent: Agent) -> Result<Vec<Option<String>>> {
+        Ok(read_account_order(&self.lock())?
+            .remove(agent.wire_name())
+            .unwrap_or_default())
+    }
+
     /// Validates and saves an agent's display order under one lock, so an account edit cannot
     /// race the validation. Other agents' orders and the accounts' storage order stay untouched.
     pub fn reorder_accounts(&self, agent: Agent, order: &[Option<String>]) -> Result<bool> {

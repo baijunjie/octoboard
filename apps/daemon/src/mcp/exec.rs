@@ -389,9 +389,13 @@ fn session_in(
     let in_own_console = caller.console_id == console.id;
     let follows_callers_agent =
         in_own_console && !(caller.role == Role::Console && project.is_some());
-    let agent = match optional_agent(arguments, "agent")? {
+    let chosen_agent = optional_agent(arguments, "agent")?;
+    let mut agent = match chosen_agent {
         Some(agent) => Some(agent),
-        None if follows_callers_agent && coordinator::agent_can_open(state, caller.agent)? => {
+        None if follows_callers_agent
+            && (state.store.auto_select_account()?
+                || coordinator::agent_can_open(state, caller.agent)?) =>
+        {
             Some(caller.agent)
         }
         None => None,
@@ -399,10 +403,29 @@ fn session_in(
     // An account is one agent's, so it is read for the agent the session will be of, as
     // `coordinator::session_agent` settles it.
     let session_agent = coordinator::session_agent(agent, project.as_ref(), console);
-    let account = match optional_string(arguments, "account") {
+    let mut account = match optional_string(arguments, "account") {
         Some(wanted) => Some(resolve_account(state, session_agent, &wanted)?),
+        None if state.store.auto_select_account()? => None,
         None => account_when_unset(state, caller, session_agent, in_own_console)?,
     };
+    if optional_string(arguments, "account").is_none() && state.store.auto_select_account()? {
+        let inherited = if in_own_console {
+            callers_account(state, caller, caller.agent)?.map(|account| (caller.agent, account))
+        } else {
+            None
+        };
+        if let Some((picked_agent, picked_account)) = coordinator::automatic_open_choice(
+            state,
+            session_agent,
+            console,
+            project.as_ref(),
+            inherited,
+            chosen_agent.is_none(),
+        )? {
+            agent = Some(picked_agent);
+            account = Some(picked_account);
+        }
+    }
     Ok(OpenRequest {
         console_id: console.id.clone(),
         project_id: project.map(|project| project.id),
@@ -455,7 +478,7 @@ pub(super) fn account_when_unset(
 /// `caller`'s own, for a session of `caller`'s own agent, so that work a session hands out goes on
 /// in the same agent and account unless the user asked otherwise. `None` — the project's account
 /// for the agent, else the console's — for another agent, and when `caller`'s account could not
-/// open a session now: removed since, turned off, or with its quota used up.
+/// open a session now: removed since, turned off, logged out, or with its quota used up.
 pub(super) fn callers_account(
     state: &Arc<AppState>,
     caller: &Session,
@@ -5422,6 +5445,117 @@ pub(super) mod tests {
         agent_and_account(state, caller, "console-1", "project-1", args).1
     }
 
+    #[test]
+    fn auto_select_account_skips_a_sharing_caller_only_when_enabled() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-sharing-caller-scope");
+        let account = state.store.get_account("codex-work").unwrap().unwrap();
+        let (_, _lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("codex-work".to_string())),
+        );
+        state.store.set_auto_select_account(true).unwrap();
+        assert_eq!(own_console_account(&state, &caller, json!({})), Some(None));
+    }
+
+    #[test]
+    fn auto_select_account_uses_the_project_pin_when_the_callers_sharing_change_runs() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-sharing-caller-project-pin");
+        insert_codex(&state, "project-pin", "/tmp/codex-project-pin");
+        let mut project = state.store.get_project("project-1").unwrap().unwrap();
+        project.codex_account_id = ProjectAccount::Account {
+            id: "project-pin".to_string(),
+        };
+        state.store.update_project(&project).unwrap();
+        let account = state.store.get_account("codex-work").unwrap().unwrap();
+        let (_, _lock) = state.lock_account_sharing(&account, |_, _| Ok(())).unwrap();
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("codex-work".to_string())),
+        );
+        state.store.set_auto_select_account(true).unwrap();
+        assert_eq!(
+            own_console_account(&state, &caller, json!({})),
+            Some(Some("project-pin".to_string())),
+        );
+    }
+
+    #[test]
+    fn auto_select_account_falls_back_across_agents_only_for_unnamed_choices() {
+        let (state, _dir, caller) = codex_caller_state("auto-select-agent-fallback");
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Grok, Agent::Claude])
+            .unwrap();
+        state
+            .store
+            .set_default_account_disabled(Agent::Codex, true)
+            .unwrap();
+        state
+            .store
+            .set_account_disabled("codex-work", true)
+            .unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (Some(Agent::Grok), Some(None)),
+        );
+        assert_eq!(
+            agent_and_account(
+                &state,
+                &caller,
+                "console-1",
+                "project-1",
+                json!({"agent": "codex"})
+            )
+            .0,
+            Some(Agent::Codex),
+        );
+        assert_eq!(
+            agent_and_account(
+                &state,
+                &caller,
+                "console-1",
+                "project-1",
+                json!({"account": "Work"})
+            ),
+            (Some(Agent::Codex), Some(Some("codex-work".to_string()))),
+        );
+        // The shared builder also resolves requests made in another console.
+        state
+            .store
+            .set_default_account_disabled(Agent::Claude, true)
+            .unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
+            (Some(Agent::Grok), Some(None)),
+        );
+    }
+
+    #[test]
+    fn auto_select_account_fallback_to_callers_agent_keeps_its_usable_account() {
+        let (state, _dir, mut caller) = codex_caller_state("auto-select-caller-fallback");
+        caller.role = Role::Console;
+        caller.project_id = None;
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .set_added_agents_if_undecided(&[Agent::Claude, Agent::Codex])
+            .unwrap();
+        state
+            .store
+            .set_default_account_disabled(Agent::Claude, true)
+            .unwrap();
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-1", "project-1", json!({})),
+            (Some(Agent::Codex), Some(Some("codex-work".to_string()))),
+        );
+        assert_eq!(
+            agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
+            (Some(Agent::Codex), Some(None)),
+        );
+    }
+
     /// With the setting off, a left-out account stays the caller's even when another account's
     /// weekly quota resets sooner.
     #[test]
@@ -5552,7 +5686,7 @@ pub(super) mod tests {
         state.store.set_auto_select_account(true).unwrap();
         assert_eq!(
             own_console_account(&state, &caller, json!({ "agent": "claude" })),
-            None
+            Some(None)
         );
 
         let (state, _dir, caller) = codex_caller_state("auto-select-caller-used-up");
@@ -5570,13 +5704,13 @@ pub(super) mod tests {
                 window_minutes: Some(5 * 60),
             }],
         );
-        assert_eq!(own_console_account(&state, &caller, json!({})), None);
+        assert_eq!(own_console_account(&state, &caller, json!({})), Some(None));
     }
 
     /// Another console still takes a rankable account, and leaves the account unset when none
     /// ranks — not the caller's.
     #[test]
-    fn auto_select_account_on_in_another_console_picks_or_leaves_the_account_unset() {
+    fn auto_select_account_on_in_another_console_picks_or_inherits_the_account() {
         let soon = now_millis() + 60_000;
         let (state, _dir, caller) = codex_caller_state("auto-select-other-console");
         state.store.set_auto_select_account(true).unwrap();
@@ -5601,7 +5735,7 @@ pub(super) mod tests {
         );
         assert_eq!(
             agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
-            (None, Some(Some("claude-soon".to_string())))
+            (Some(Agent::Claude), Some(Some("claude-soon".to_string())))
         );
 
         let (state, _dir, caller) = codex_caller_state("auto-select-other-console-none");
@@ -5615,7 +5749,7 @@ pub(super) mod tests {
         );
         assert_eq!(
             agent_and_account(&state, &caller, "console-2", "project-2", json!({})),
-            (None, None)
+            (Some(Agent::Claude), Some(None))
         );
     }
 
@@ -6265,6 +6399,44 @@ pub(super) mod tests {
         assert_eq!(answer["account_name"], "Second");
         assert_eq!(answer["model"], "sonnet");
         assert_eq!(answer["effort"], "high");
+    }
+
+    #[tokio::test]
+    async fn new_session_automatic_agent_fallback_inherits_the_final_agents_launch_settings() {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        use std::sync::Mutex;
+
+        let (state, _dir) = shared_console_state("new-session-agent-fallback-launch");
+        state.store.set_auto_select_account(true).unwrap();
+        state
+            .store
+            .set_default_account_disabled(Agent::Claude, true)
+            .unwrap();
+        crate::test_support::offer_models(&state, Agent::Codex, &[("fallback-model", &["high"])]);
+        let mut project = state.store.get_project("project-1").unwrap().unwrap();
+        project.claude_session_model = Some("sonnet".to_string());
+        project.codex_session_model = Some("fallback-model".to_string());
+        project.codex_session_effort = Some("high".to_string());
+        state.store.update_project(&project).unwrap();
+        let caller = state.session_record("a").unwrap();
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+        let answer = new_session(
+            &state,
+            &caller,
+            &arguments(json!({"project": "project-1", "brief": {"goal": "x"}})),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(answer["agent"], "codex");
+        assert_eq!(answer["account"], "default");
+        assert_eq!(answer["model"], "fallback-model");
+        assert_eq!(answer["effort"], "high");
+        let session = state
+            .session_record(answer["session"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(session.agent, Agent::Codex);
     }
 
     /// `archive_session` with `keep` removes no branch or worktree, where without it a merged

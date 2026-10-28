@@ -85,7 +85,12 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            only when the session's agent is your own and that account can still open a session; \
            any other takes the account its project, else its console, sets. Name another agent \
            or account only when the user asked for them. Returns the session's id. The session is \
-           yours for its whole life.\n\
+           yours for its whole life. With automatic selection on and no named agent or \
+           account, if no account of the preferred agent is usable, other installed, added \
+           agents are tried in added order. Within each agent, the weekly pick, inherited \
+           account, then first usable account are tried; no quota reading is still usable. \
+           A named agent limits selection to it; a named account preserves both. Unspecified \
+           model and effort follow the final agent.\n\
          - `instruct_session` — the next instruction for a session already running.\n\
          - `interrupt_session` — stop the turn a session of yours is in the middle of, when it \
            is working on the wrong thing; it keeps its conversation and awaits your next \

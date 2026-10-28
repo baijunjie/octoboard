@@ -301,55 +301,54 @@ not check the name's language.
 
 ## The agent and account of a session a session starts
 
-A session that a session starts itself — with `new_session`, or with `request_session` — runs on the agent and account
-below unless the call names others. In the caller's own console the caller's own agent takes the place of the default
-the project and console set (see "Which agent a session uses" in `docs/product/opening-sessions.md`), which applies only
-where the caller's own cannot — except that a session a console session starts in a project always takes that default.
-The account does not always follow the caller.
+A session started with `new_session` or `request_session` begins with an agent preference based on its destination
+and caller. An explicit agent or account wins; automatic selection can change an unnamed choice as described below.
 
-- **The agent.** Left out, `agent` is settled by who calls and where the session is:
-  - A project session's `new_session`, and its `request_session` in its own console, run the caller's own agent — not
-    the project's default agent, which `get_project` gives in `effective.default_agent` — unless that agent has been
-    determined unavailable on this machine or is not on the list of added agents; then it is settled as for a session
-    opened without a choice.
-  - A console session's `new_session`, and its `request_session` for a project session, run the project's default
-    agent — the project's own, else its console's default agent for project sessions — as for a session opened without
-    a choice, and never follow the caller's own agent.
-  - A console session's `request_session` for a console session in its own console runs the caller's own agent, with
-    the same fallback as a project session's.
-  - In another console a left-out `agent` is that console's and its project's, as for a session opened without a
-    choice.
-- **The account.** An `account` the call names is used as given, including `default`, which chooses the agent's default
-  account and does not fall through to a project pin. Left out or blank, while **Automatically select an account** is on
-  (see that section in `docs/product/settings.md`), it is the account of the session's agent whose weekly quota resets
-  soonest, among accounts that can still open a session — the same pick the new-session dialog makes, ranked as in
-  "Which account a session uses" in `docs/product/opening-sessions.md`. That pick applies in the caller's own console
-  and in another. When the setting is off, or no account ranks: in the caller's own console, it is the caller's own
-  account, the agent's default account included, when the session is of the caller's own agent — named, or settled on,
-  as when a project's default agent is the console session's own — and that account can still open a session. The
-  caller's account is passed over, silently, when it no longer exists, is turned off (see "Turning an account off" in
-  `docs/product/agent-accounts.md`), is used up by the reading the daemon holds (see "A used-up account" in
-  `docs/product/account-quotas.md`) or that reading found it not logged in (see "An account that is not logged in"
-  there). Then, and for a session of another agent, the account is the project's for that agent, else the console's —
-  which a project session reads for its own project in `get_project`'s `effective.accounts` (see "A project's settings"
-  in `docs/product/agent-settings-tools.md`). In another console, when none ranks, the account is the project's, else
-  the console's, and never the caller's. The call is refused only when the account it settles on is turned off, used up
-  or not logged in as well (see "When the agent or the account cannot open a session" in
-  `docs/product/opening-sessions.md`).
-- **Named ones win.** An `agent` or `account` the call names is used as given. A console session's tools, and every
+- **The initial agent.** Left out, `agent` is settled by who calls and where the session is:
+
+  - A project session's `new_session`, and its `request_session` in its own console, prefer the caller's own agent.
+  - A console session's `new_session`, and its `request_session` for a project session, prefer the project's default
+    agent — the project's own, else the console's project-session default — as in "Which agent a session uses" in
+    `docs/product/opening-sessions.md`.
+  - A console session's `request_session` for a console session in its own console prefers the caller's own agent.
+  - In another console, the initial agent comes from that console and its project; the caller's agent is not inherited.
+
+  With automatic selection off, an inherited caller's agent that is unavailable or not added falls back to the
+  destination's default. With automatic selection on, the usable-account search below also skips unavailable or
+  unadded agents.
+- **Automatic selection.** While **Automatically select an account** is on and `account` is left out or blank, each
+  candidate agent uses this account preference, stopping at the first usable choice:
+
+  1. Its usable account whose weekly quota resets soonest, ranked as in "Which account a session uses" in
+     `docs/product/opening-sessions.md`.
+  2. The caller's own account, including the agent's default account, only in the caller's own console and only when
+     this candidate is the caller's agent.
+  3. The project's inherited account for this agent, else the console's, else the agent's default account.
+  4. The first usable account in this agent's saved display order.
+
+  Removed accounts, turned-off accounts, accounts found not logged in, used-up accounts and accounts whose sharing of
+  the default configuration is being changed are passed over. An unknown or unavailable quota reading alone does not
+  exclude an account. If no account of the initial agent is usable and `agent` was not named, the other added,
+  installed agents are tried in added-agent order, each with the same preferences. A fallback to the caller's agent
+  within the same console still considers the caller's account; in another console it never does. The resulting
+  agent and account are fixed when the call is made, including for a request that waits for approval.
+- **With automatic selection off**, a left-out or blank account is the caller's own account when the destination is
+  in the same console, uses the same agent and that account can still open a session. A removed, turned-off, used-up
+  or not-logged-in caller account is passed over. Otherwise the account comes from the project, else the console,
+  else the agent's default account. No search of other accounts or agents is added for unavailable accounts.
+- **Named ones win.** A named `agent` restricts automatic selection to that agent. A named `account` is used as given,
+  including `default`, which selects the agent's default account outright. A console session's tools, and every
   session's `request_session`, tell the caller to name either only when the user asked for it. A project session's
-  `new_session` also lets it name another agent unasked when it judges that agent fits the work better and an account
-  of it can open a session, and another account when that is the way to reach that agent (see "Choosing the session a
-  task goes to" below).
-- **The model and reasoning effort** are not the caller's: left out, they are inherited as for any new session of that
-  agent (see "Which model and reasoning effort a session uses" in `docs/product/opening-sessions.md`).
+  `new_session` also lets it name another agent unasked when that agent fits the work better and an account of it can
+  open a session, and another account when that is the way to reach that agent (see "Choosing the session a task goes
+  to" below).
+- **The model and reasoning effort** are not the caller's. Left out, they are inherited for the final selected agent
+  from the destination project or console (see "Which model and reasoning effort a session uses" in
+  `docs/product/opening-sessions.md`). Explicit values are checked against that agent's offered choices.
 
-A `request_session` for a session in **another console** — a console session there, or a session in one of its
-projects — takes its agent from that console and its project, and nothing of the caller's agent. Its account, when
-left out, is the pick above while automatic account selection is on, and the project's, else the console's, when the
-setting is off or none ranks. `handoff_session` always names its receiving agent; a left-out account follows the
-account rule above as in the caller's own console, the session it hands off being always in it (see "Handing off from
-an owner's tool" in `docs/product/handing-off-sessions.md`).
+`handoff_session` always names its receiving agent and keeps it. Its left-out account follows "Handing off from an
+owner's tool" in `docs/product/handing-off-sessions.md`; automatic selection never redirects the handoff to another
+agent. Resuming a conversation and switching a session's account likewise keep their specified agent.
 
 ## Which sessions an owner drives
 
