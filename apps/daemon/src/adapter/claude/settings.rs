@@ -6,6 +6,10 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::adapter::files::{
+    canonical_project, is_agent_config_dir, read_bounded_text, read_regular_text, LARGE_FILE_LIMIT,
+    SMALL_FILE_LIMIT,
+};
 use crate::adapter::LaunchSpec;
 use crate::protocol::{notice_code, Notice};
 
@@ -39,28 +43,61 @@ pub(super) fn user_config_dir(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> P
         .unwrap_or_else(|| home_dir(spec.shell_env).join(".claude"))
 }
 
+/// A settings file Claude Code reads: one the project keeps, read through `browse::live`, or one
+/// it does not (the user's, the managed ones), read as a regular file wherever it lies, since a
+/// home directory opened as the project holds the user's own.
+pub(super) enum SettingsFile {
+    Project(PathBuf),
+    Other(PathBuf),
+}
+
+impl SettingsFile {
+    fn path(&self) -> &Path {
+        match self {
+            Self::Project(path) | Self::Other(path) => path,
+        }
+    }
+
+    /// Its text, within the size bound. `project` is the canonical working directory.
+    fn read(&self, project: &Path) -> std::io::Result<String> {
+        match self {
+            Self::Project(path) => read_bounded_text(path, project, SMALL_FILE_LIMIT),
+            Self::Other(path) => read_regular_text(path, SMALL_FILE_LIMIT),
+        }
+    }
+}
+
 /// The settings files the user and the project write, lowest precedence first: the user's in
-/// `user_dir`, then the project's shared and local ones under `cwd`. Claude Code's flags and its
-/// managed settings outrank all three.
-fn own_settings_files(user_dir: &Path, cwd: &Path) -> [PathBuf; 3] {
+/// `user_dir`, then the project's shared and local ones under `project`. Claude Code's flags and
+/// its managed settings outrank all three. The project's are the user's own when its `.claude` is
+/// `user_dir`, as in a home directory opened as the project.
+fn own_settings_files(user_dir: &Path, project: &Path) -> [SettingsFile; 3] {
+    let dir = project.join(".claude");
+    let project_file = if is_agent_config_dir(&dir, user_dir) {
+        SettingsFile::Other
+    } else {
+        SettingsFile::Project
+    };
     [
-        user_dir.join("settings.json"),
-        cwd.join(".claude/settings.json"),
-        cwd.join(".claude/settings.local.json"),
+        SettingsFile::Other(user_dir.join("settings.json")),
+        project_file(dir.join("settings.json")),
+        project_file(dir.join("settings.local.json")),
     ]
 }
 
 /// The `statusLine` the user's and the project's settings files give, without Octoboard's: each
 /// file's object merged over the one below it key by key, as Claude Code merges its settings. A
-/// file that cannot be read or parsed, or holds no object there, counts for nothing; `None` when no
-/// file has one.
+/// file that cannot be read within its size bound or parsed, or holds no object there, counts for
+/// nothing; `None` when no file has one.
 pub fn user_status_line(
     user_dir: &Path,
     cwd: &Path,
 ) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let project = canonical_project(cwd);
     let mut merged: Option<serde_json::Map<String, serde_json::Value>> = None;
-    for file in own_settings_files(user_dir, cwd) {
-        let Some(serde_json::Value::Object(line)) = std::fs::read_to_string(file)
+    for file in own_settings_files(user_dir, &project) {
+        let Some(serde_json::Value::Object(line)) = file
+            .read(&project)
             .ok()
             .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
             .and_then(|mut settings| settings.get_mut("statusLine").map(std::mem::take))
@@ -75,30 +112,60 @@ pub fn user_status_line(
 /// The settings files whose `allowedHttpHookUrls` this launch's Claude Code would merge: the
 /// user's, the project's two, and the managed file and drop-in directory. Policy delivered through
 /// an MDM profile or the claude.ai console is in none of them and cannot be read from here.
-pub(super) fn settings_files(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> Vec<PathBuf> {
+/// `project` is the canonical working directory.
+pub(super) fn settings_files(
+    spec: &LaunchSpec<'_>,
+    pinned: Option<&Path>,
+    project: &Path,
+) -> Vec<SettingsFile> {
     let managed = Path::new(if cfg!(target_os = "macos") {
         "/Library/Application Support/ClaudeCode"
     } else {
         "/etc/claude-code"
     });
-    let mut files = own_settings_files(&user_config_dir(spec, pinned), spec.cwd).to_vec();
-    files.push(managed.join("managed-settings.json"));
+    let mut files = Vec::from(own_settings_files(&user_config_dir(spec, pinned), project));
+    files.push(SettingsFile::Other(managed.join("managed-settings.json")));
+    // The entries Claude Code takes from the drop-in directory (read out of Claude Code 2.1.312):
+    // files and links named `*.json`, not hidden.
     if let Ok(entries) = std::fs::read_dir(managed.join("managed-settings.d")) {
-        files.extend(entries.flatten().map(|entry| entry.path()));
+        files.extend(
+            entries
+                .flatten()
+                .filter(|entry| {
+                    let name = entry.file_name();
+                    let name = name.to_string_lossy();
+                    entry
+                        .file_type()
+                        .is_ok_and(|kind| kind.is_file() || kind.is_symlink())
+                        && name.ends_with(".json")
+                        && !name.starts_with('.')
+                })
+                .map(|entry| SettingsFile::Other(entry.path())),
+        );
     }
     files
 }
 
 /// Whether Claude Code would run an HTTP hook for `url` given `files`: it does unless some file
 /// defines `allowedHttpHookUrls`, whose arrays merge across files, and no merged pattern matches.
-/// A pattern's `*` stands for anything; a file that cannot be read or parsed counts for nothing.
-pub(super) fn http_hooks_allowed(url: &str, files: &[PathBuf]) -> bool {
+/// A pattern's `*` stands for anything; a file that is absent, is not a regular file once links
+/// are followed, or cannot be parsed counts for nothing. A regular file that cannot be read here
+/// answers no: Claude Code may still read what is refused here (a project file linked out of
+/// `project`, which is the canonical working directory, or a file above the size bound), and an
+/// allowlist in it leaving the daemon out would drop every HTTP hook without a word, while the
+/// command form always runs.
+pub(super) fn http_hooks_allowed(url: &str, files: &[SettingsFile], project: &Path) -> bool {
     let mut patterns: Option<Vec<String>> = None;
     for file in files {
-        let Some(settings) = std::fs::read_to_string(file)
-            .ok()
-            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        else {
+        let text = match file.read(project) {
+            Ok(text) => text,
+            // `metadata` does not open the file, so a FIFO cannot block it.
+            Err(_) if std::fs::metadata(file.path()).is_ok_and(|meta| meta.is_file()) => {
+                return false
+            }
+            Err(_) => continue,
+        };
+        let Ok(settings) = serde_json::from_str::<serde_json::Value>(&text) else {
             continue;
         };
         if let Some(list) = settings
@@ -177,11 +244,15 @@ pub(super) fn untrusted_workspace_notice(
     pinned: Option<&Path>,
 ) -> Option<Notice> {
     let config: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(global_config_file(spec.shell_env, pinned)).ok()?,
+        &read_regular_text(
+            &global_config_file(spec.shell_env, pinned),
+            LARGE_FILE_LIMIT,
+        )
+        .ok()?,
     )
     .ok()?;
 
-    let canonical = std::fs::canonicalize(spec.cwd).unwrap_or_else(|_| spec.cwd.to_path_buf());
+    let canonical = canonical_project(spec.cwd);
     let accepted = |dir: &Path| {
         project_entry(&config, dir)
             .and_then(|entry| entry.get("hasTrustDialogAccepted"))
@@ -337,12 +408,134 @@ mod tests {
         assert!(warns(&fixture));
     }
 
+    /// What sits in a project or a config directory is whatever was put there: a FIFO at a settings
+    /// or config path counts as unreadable instead of holding the launch until a writer appears.
+    #[test]
+    fn a_fifo_at_a_settings_or_config_path_does_not_hold_the_launch() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("home");
+        std::fs::create_dir_all(home.join(".claude")).expect("user config dir");
+        std::fs::create_dir_all(fixture.cwd.join(".claude")).expect("project config dir");
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        // A version that reads `allowedHttpHookUrls` too.
+        fixture.agent_version = Some((2, 1, 63));
+        for path in [
+            fixture.cwd.join(".claude/settings.local.json"),
+            fixture.cwd.join(".claude/settings.json"),
+            home.join(".claude/settings.json"),
+            home.join(".claude.json"),
+        ] {
+            let c = std::ffi::CString::new(path.into_os_string().into_encoded_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        }
+
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let plan = ClaudeAdapter.plan(&fixture.spec()).map(|plan| plan.notice);
+            let _ = done.send(plan.is_ok_and(|notice| notice.is_none()));
+        });
+        assert_eq!(
+            finished.recv_timeout(std::time::Duration::from_secs(10)),
+            Ok(true),
+            "the launch was held by a FIFO or did not plan"
+        );
+    }
+
+    /// A settings file above its size bound counts for nothing, as an unreadable one does.
+    #[test]
+    fn an_oversized_settings_file_counts_for_nothing() {
+        let dir = crate::test_support::ScratchDir::new("oversized-settings");
+        let user = dir.join("user");
+        let cwd = dir.join("project");
+        std::fs::create_dir_all(&user).expect("user dir");
+        std::fs::create_dir_all(cwd.join(".claude")).expect("project dir");
+        let padded = |settings: serde_json::Value| {
+            let mut settings = settings;
+            settings["pad"] = serde_json::json!("x".repeat(SMALL_FILE_LIMIT));
+            settings.to_string()
+        };
+        let line = serde_json::json!({ "statusLine": { "type": "command", "command": "x" } });
+        std::fs::write(user.join("settings.json"), padded(line.clone())).expect("user settings");
+        std::fs::write(
+            cwd.join(".claude/settings.local.json"),
+            padded(line.clone()),
+        )
+        .expect("project settings");
+        assert!(user_status_line(&user, &cwd).is_none());
+        std::fs::write(user.join("settings.json"), line.to_string()).expect("user settings");
+        assert!(user_status_line(&user, &cwd).is_some());
+
+        let url = "http://127.0.0.1:4321/hook/session-1";
+        // Read, the allowlist lets the daemon in; above the bound it cannot be read here while
+        // Claude Code may still read it, so the command form is kept.
+        let allowlist = serde_json::json!({ "allowedHttpHookUrls": ["http://127.0.0.1:*"] });
+        let project = canonical_project(&cwd);
+        let file = project.join(".claude/settings.json");
+        std::fs::write(&file, padded(allowlist.clone())).expect("allowlist");
+        let files = [SettingsFile::Project(file.clone())];
+        assert!(!http_hooks_allowed(url, &files, &project));
+        std::fs::write(&file, allowlist.to_string()).expect("allowlist");
+        assert!(http_hooks_allowed(url, &files, &project));
+    }
+
+    /// A home directory opened as the project holds the user's own settings and global config,
+    /// which a dotfiles manager may link elsewhere: they are read as Claude Code reads them, not
+    /// refused as links out of the project.
+    #[test]
+    fn the_users_files_under_a_home_opened_as_the_project_are_read_through_their_links() {
+        let mut fixture = spec_fixture();
+        let dotfiles = crate::test_support::ScratchDir::new("dotfiles");
+        let home = canonical_project(&fixture.cwd);
+        fixture
+            .shell_env
+            .insert("HOME".to_string(), home.to_string_lossy().into_owned());
+        std::fs::create_dir_all(dotfiles.join("claude")).expect("linked config dir");
+        std::fs::write(
+            dotfiles.join("claude/settings.json"),
+            serde_json::json!({ "statusLine": { "type": "command", "command": "x" } }).to_string(),
+        )
+        .expect("user settings");
+        std::fs::write(
+            dotfiles.join(".claude.json"),
+            serde_json::json!({
+                "projects": { home.to_string_lossy(): { "hasTrustDialogAccepted": false } }
+            })
+            .to_string(),
+        )
+        .expect("global config");
+        std::os::unix::fs::symlink(dotfiles.join("claude"), home.join(".claude")).expect("link");
+        std::os::unix::fs::symlink(dotfiles.join(".claude.json"), home.join(".claude.json"))
+            .expect("link");
+
+        assert!(user_status_line(&home.join(".claude"), &home).is_some());
+        // The project's `.claude` is the user's: its files hold no allowlist, so HTTP hooks stand.
+        let files = own_settings_files(&home.join(".claude"), &home);
+        assert!(http_hooks_allowed(
+            "http://127.0.0.1:4321/hook/session-1",
+            &files,
+            &home
+        ));
+        assert!(ClaudeAdapter
+            .plan(&fixture.spec())
+            .expect("plan")
+            .notice
+            .is_some());
+    }
+
     /// An `allowedHttpHookUrls` that leaves the daemon's URL out keeps the command form, whichever
     /// file defines it.
     #[test]
     fn an_http_hook_allowlist_without_the_daemon_keeps_the_command_form() {
         let url = "http://127.0.0.1:4321/hook/session-1";
         let dir = crate::test_support::ScratchDir::new("hook-allowlist");
+        let others = |paths: &[&PathBuf]| -> Vec<SettingsFile> {
+            paths
+                .iter()
+                .map(|path| SettingsFile::Other(path.to_path_buf()))
+                .collect()
+        };
         let file = |name: &str, content: &str| {
             let path = dir.join(name);
             std::fs::write(&path, content).expect("settings");
@@ -361,12 +554,17 @@ mod tests {
         let empty = file("empty.json", r#"{"allowedHttpHookUrls":[]}"#);
         let missing = dir.join("missing.json");
 
-        assert!(http_hooks_allowed(url, &[none.clone(), broken, missing]));
-        assert!(!http_hooks_allowed(url, std::slice::from_ref(&other)));
-        assert!(!http_hooks_allowed(url, &[empty]));
-        assert!(http_hooks_allowed(url, std::slice::from_ref(&loopback)));
+        let project = dir.join("project");
+        // Not a regular file: nothing Claude Code takes an allowlist from either.
+        let directory = dir.join("directory.json");
+        std::fs::create_dir(&directory).expect("directory");
+        let allowed = |paths: &[&PathBuf]| http_hooks_allowed(url, &others(paths), &project);
+        assert!(allowed(&[&none, &broken, &missing, &directory]));
+        assert!(!allowed(&[&other]));
+        assert!(!allowed(&[&empty]));
+        assert!(allowed(&[&loopback]));
         // The arrays merge, so one file naming the daemon is enough.
-        assert!(http_hooks_allowed(url, &[other, none, loopback]));
+        assert!(allowed(&[&other, &none, &loopback]));
         assert!(wildcard_matches("http://*/hook/*", url));
         assert!(!wildcard_matches("http://*/hook", url));
     }

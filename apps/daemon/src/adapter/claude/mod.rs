@@ -47,6 +47,7 @@ use std::path::Path;
 
 use serde_json::json;
 
+use super::files::canonical_project;
 use super::{
     hook_command, hook_url, shell_quote, AgentAdapter, AgentVersion, LaunchPlan, LaunchSpec,
     NamedTitle, HOOK_TIMEOUT_SECS,
@@ -127,8 +128,10 @@ impl ClaudeAdapter {
     /// the session with it.
     fn settings_json(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> String {
         let url = hook_url(spec.session_id, spec.daemon_port);
-        let http = spec.agent_version.is_some_and(|v| v >= HTTP_HOOKS_SINCE)
-            && http_hooks_allowed(&url, &settings_files(spec, pinned));
+        let http = spec.agent_version.is_some_and(|v| v >= HTTP_HOOKS_SINCE) && {
+            let project = canonical_project(spec.cwd);
+            http_hooks_allowed(&url, &settings_files(spec, pinned, &project), &project)
+        };
         let command = json!({
             "type": "command",
             "command": hook_command(spec.self_exe, spec.session_id, spec.daemon_port),

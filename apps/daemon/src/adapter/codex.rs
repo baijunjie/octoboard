@@ -64,8 +64,11 @@ use std::path::{Path, PathBuf};
 use serde_json::json;
 
 use super::claude_mcp::Reserved;
-use super::files::{read_bounded_text, SMALL_FILE_LIMIT};
+use super::files::{
+    canonical_project, is_agent_config_dir, read_bounded_text, read_regular_text, SMALL_FILE_LIMIT,
+};
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use crate::line_file::JSON_FILE_LIMIT;
 use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError};
 
@@ -269,7 +272,8 @@ impl AgentAdapter for CodexAdapter {
             super::MCP_TOOL_TIMEOUT_SECS
         ));
 
-        let config = read_config(spec, pinned);
+        let home = codex_home(spec, pinned);
+        let config = read_config(&home);
         // Set only for a pinned directory; otherwise the shell snapshot's own value, if any,
         // stands.
         let mut env = pinned
@@ -279,9 +283,11 @@ impl AgentAdapter for CodexAdapter {
         // in the account's own `config.toml` or the project's `.codex/config.toml` stays as it is,
         // and an unreadable one leaves nothing to compare with, so then none is added.
         if spec.claude_compatibility {
-            let project = project_server_names(spec.cwd);
+            let project_names = project_server_names(&canonical_project(spec.cwd), &home);
             let taken = |name: &str| {
-                project.as_ref().is_none_or(|names| names.contains(name))
+                project_names
+                    .as_ref()
+                    .is_none_or(|names| names.contains(name))
                     || match &config {
                         ConfigFile::Absent => false,
                         ConfigFile::Unreadable => true,
@@ -315,7 +321,7 @@ impl AgentAdapter for CodexAdapter {
         }
         args.push("-c".to_string());
         args.push("notice.hide_rate_limit_model_nudge=true".to_string());
-        if let Some(upgrades) = model_migrations(&codex_home(spec, pinned)) {
+        if let Some(upgrades) = model_migrations(&home) {
             args.push("-c".to_string());
             args.push(format!("notice.model_migrations={upgrades}"));
         }
@@ -444,10 +450,15 @@ const TERMINAL_TITLE: &str = "[\"activity\",\"thread-name\",\"project-name\"]";
 
 /// The `notice.model_migrations` table for the models cache in `codex_home`: every model that has
 /// an upgrade target, mapped to it, so that whichever model ends up in effect, Codex's "try the new
-/// model" prompt is not shown. `None` when the cache is missing, unreadable or lists no upgrade.
-/// Read from the file, since asking Codex would start a process on every launch.
+/// model" prompt is not shown. `None` when the cache is missing, unreadable within its size bound
+/// or lists no upgrade. Read from the file, since asking Codex would start a process on every
+/// launch.
 fn model_migrations(codex_home: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(codex_home.join("models_cache.json")).ok()?;
+    let text = read_regular_text(
+        &codex_home.join("models_cache.json"),
+        JSON_FILE_LIMIT as usize,
+    )
+    .ok()?;
     upgrade_table(&text)
 }
 
@@ -473,14 +484,13 @@ fn upgrade_table(cache: &str) -> Option<String> {
 /// own safe side of.
 enum ConfigFile {
     Absent,
-    /// It exists but cannot be read or parsed.
+    /// It exists but cannot be read within its size bound, or parsed.
     Unreadable,
     Parsed(toml::Table),
 }
 
-fn read_config(spec: &LaunchSpec<'_>, pinned: Option<&Path>) -> ConfigFile {
-    let config = codex_home(spec, pinned).join("config.toml");
-    let text = match std::fs::read_to_string(&config) {
+fn read_config(codex_home: &Path) -> ConfigFile {
+    let text = match read_regular_text(&codex_home.join("config.toml"), SMALL_FILE_LIMIT) {
         Ok(text) => text,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return ConfigFile::Absent,
         Err(_) => return ConfigFile::Unreadable,
@@ -506,9 +516,10 @@ fn server_names(config: &toml::Table) -> BTreeSet<String> {
 /// The names of the MCP servers the project's `.codex/config.toml` files define, layered over the
 /// account's own: the one in the session's working directory and in each directory above it up to
 /// the repository root (the nearest one holding `.git`; the working directory alone outside a
-/// repository). `None` when one of them exists and cannot be read or parsed.
-fn project_server_names(cwd: &Path) -> Option<BTreeSet<String>> {
-    let project = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
+/// repository). `None` when one of them exists and cannot be read or parsed. `project` is the
+/// canonical working directory; a `.codex` that is `codex_home`, as in a home directory opened as
+/// the project, holds the user's own `config.toml` rather than the project's.
+fn project_server_names(project: &Path, codex_home: &Path) -> Option<BTreeSet<String>> {
     let mut dirs = Vec::new();
     let mut found = false;
     for dir in project.ancestors() {
@@ -524,7 +535,12 @@ fn project_server_names(cwd: &Path) -> Option<BTreeSet<String>> {
     let mut names = BTreeSet::new();
     for dir in dirs {
         let path = dir.join(".codex/config.toml");
-        let text = match read_bounded_text(&path, &project, SMALL_FILE_LIMIT) {
+        let read = if is_agent_config_dir(&dir.join(".codex"), codex_home) {
+            read_regular_text(&path, SMALL_FILE_LIMIT)
+        } else {
+            read_bounded_text(&path, project, SMALL_FILE_LIMIT)
+        };
+        let text = match read {
             Ok(text) => text,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
             Err(err) => {
@@ -1113,6 +1129,84 @@ mod tests {
                 .plan(&fixture.spec())
                 .expect("plan")
                 .resolves_approvals_itself
+        );
+    }
+
+    /// A FIFO at `config.toml` or at the models cache counts as unreadable instead of holding the
+    /// launch until a writer appears, and so does either file above its size bound.
+    #[test]
+    fn a_fifo_or_an_oversized_config_counts_as_unreadable() {
+        let mut fixture = spec_fixture();
+        let home = fixture.scratch.join("codex-home");
+        std::fs::create_dir_all(&home).expect("codex home");
+        fixture.shell_env.insert(
+            "CODEX_HOME".to_string(),
+            home.to_string_lossy().into_owned(),
+        );
+        let config = home.join("config.toml");
+        for path in [&config, &home.join("models_cache.json")] {
+            let c = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        }
+        let (done, finished) = std::sync::mpsc::channel();
+        let fixture = std::thread::spawn(move || {
+            let planned = CodexAdapter.plan(&fixture.spec()).is_ok();
+            let _ = done.send(planned);
+            fixture
+        });
+        assert_eq!(
+            finished.recv_timeout(std::time::Duration::from_secs(10)),
+            Ok(true),
+            "the launch was held by a FIFO or did not plan"
+        );
+        let fixture = fixture.join().expect("planned");
+
+        let cache = home.join("models_cache.json");
+        std::fs::remove_file(&cache).expect("FIFO removed");
+        let models = json!({ "models": [{ "slug": "a", "upgrade": { "model": "b" } }] });
+        std::fs::write(&cache, models.to_string()).expect("cache");
+        assert!(model_migrations(&home).is_some());
+        let mut padded = models;
+        padded["pad"] = json!("x".repeat(JSON_FILE_LIMIT as usize));
+        std::fs::write(&cache, padded.to_string()).expect("cache");
+        assert_eq!(model_migrations(&home), None);
+
+        std::fs::remove_file(&config).expect("FIFO removed");
+        std::fs::write(
+            &config,
+            format!(
+                "approvals_reviewer = \"auto_review\"\n# {}\n",
+                "x".repeat(SMALL_FILE_LIMIT)
+            ),
+        )
+        .expect("config");
+        assert!(matches!(read_config(&home), ConfigFile::Unreadable));
+        assert!(
+            !CodexAdapter
+                .plan(&fixture.spec())
+                .expect("plan")
+                .resolves_approvals_itself
+        );
+    }
+
+    /// A home directory opened as the project holds the user's own Codex home, which a dotfiles
+    /// manager may link elsewhere: its `config.toml` is read as Codex reads it, not refused as a
+    /// link out of the project.
+    #[test]
+    fn a_linked_codex_home_under_a_home_opened_as_the_project_is_read() {
+        let home = crate::test_support::ScratchDir::new("codex-home-as-project");
+        let home = canonical_project(&home);
+        let dotfiles = crate::test_support::ScratchDir::new("codex-dotfiles");
+        std::fs::create_dir(dotfiles.join("codex")).expect("linked home");
+        std::fs::write(
+            dotfiles.join("codex/config.toml"),
+            "[mcp_servers.mine]\ncommand = \"x\"\n",
+        )
+        .expect("config");
+        std::os::unix::fs::symlink(dotfiles.join("codex"), home.join(".codex")).expect("link");
+        assert_eq!(
+            project_server_names(&home, &home.join(".codex")),
+            Some(BTreeSet::from(["mine".to_string()]))
         );
     }
 
