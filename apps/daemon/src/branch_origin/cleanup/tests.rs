@@ -234,7 +234,17 @@ async fn uncommitted_changes_and_an_unmerged_branch_go_only_when_forced() {
             (false, "work", SessionBranchState::Unmerged),
         ])
     );
-    assert_eq!(fixture.remove(&archived, &[]).await.len(), 2);
+    // Kept for its changes, the worktree keeps the branch it has checked out, merged or not.
+    let left = fixture.remove(&archived, &[]).await;
+    assert_eq!(
+        summary(&left),
+        expect(&[
+            (true, "work", SessionBranchState::UncommittedChanges),
+            (false, "work", SessionBranchState::CheckedOut),
+        ])
+    );
+    let told = to_report(left, &[], &[]);
+    assert!(told.len() == 1 && told[0].kind == SessionBranchKind::Worktree);
     assert!(root.join("new.txt").exists());
     assert!(fixture.has_branch("work"));
 
@@ -278,6 +288,28 @@ async fn what_git_must_keep_stays_even_when_forced_and_a_locked_worktree_goes_on
     assert_eq!(fixture.remove(&archived, &forced).await.len(), 3);
     assert!(!locked.exists() && !fixture.has_branch("locked"));
     assert!(folder.exists() && fixture.has_branch("folder") && fixture.has_branch("in-main"));
+}
+
+#[tokio::test]
+async fn an_unmerged_branch_checked_out_in_a_worktree_that_stays_is_left_as_checked_out() {
+    let fixture = Fixture::new("cleanup-held-unmerged");
+    let folder = fixture.worktree("folder", "s1");
+    commit_in(&folder);
+    other_project_at(&fixture.state, &folder);
+    let archived = [session("s1", SessionStatus::Archived)];
+
+    let shown = fixture.inspect(&archived).await;
+    assert_eq!(
+        summary(&shown),
+        expect(&[
+            (true, "folder", SessionBranchState::ProjectFolder),
+            (false, "folder", SessionBranchState::CheckedOut),
+        ])
+    );
+    let left = fixture.remove(&archived, &[]).await;
+    assert_eq!(summary(&left), summary(&shown));
+    assert!(to_report(left, &[], &[]).is_empty());
+    assert!(fixture.has_branch("folder"));
 }
 
 #[tokio::test]
@@ -1246,6 +1278,76 @@ async fn a_removal_that_cannot_run_git_keeps_why_it_held_a_worktree_back() {
         .all(|item| item.state == SessionBranchState::Failed
             && item.cause.is_none()
             && item.detail.as_deref() == Some("git is not on the PATH")));
+}
+
+/// A project's removal looks again when it carries out: an outside worktree that came to hold
+/// another project's folder after the plan stays, unreported, and so does the branch it has
+/// checked out.
+#[tokio::test]
+async fn a_removal_leaves_a_worktree_that_came_to_hold_a_project_folder_after_its_plan() {
+    let fixture = Fixture::without_project("cleanup-project-look-again");
+    let folder = fixture.worktree("folder", "s1");
+    insert_project(&fixture.state, &folder);
+    fixture.store("s1", SessionStatus::Archived);
+    let outside = std::fs::canonicalize(fixture.worktree("outside", "s1")).unwrap();
+    let removal = plan_now(&fixture.state, project::Reads::Removal, Vec::new())
+        .await
+        .unwrap();
+    assert!(removal
+        .items()
+        .iter()
+        .any(|item| item.kind == SessionBranchKind::Worktree
+            && item.branch.as_deref() == Some("outside")));
+
+    let inner = outside.join("inner");
+    std::fs::create_dir(&inner).unwrap();
+    other_project_at(&fixture.state, &inner);
+    let left =
+        project::carry_out_once_stopped(fixture.state.clone(), Vec::new(), removal, Vec::new())
+            .await;
+    assert!(inner.exists());
+    assert!(fixture.has_branch("outside"));
+    assert!(
+        !left
+            .iter()
+            .any(|item| item.branch.as_deref() == Some("outside")),
+        "{left:?}"
+    );
+}
+
+/// A worktree of which it cannot be told, when the removal looks again, whether it holds another
+/// project's folder is held back then: left and reported as such, with the branch it has checked
+/// out staying, unreported.
+#[tokio::test]
+async fn a_removal_holds_back_a_worktree_it_can_no_longer_tell_about() {
+    let fixture = Fixture::without_project("cleanup-project-look-again-untold");
+    let folder = fixture.worktree("folder", "s1");
+    insert_project(&fixture.state, &folder);
+    fixture.store("s1", SessionStatus::Archived);
+    let outside = std::fs::canonicalize(fixture.worktree("outside", "s1")).unwrap();
+    let elsewhere = fixture.worktrees.join("elsewhere");
+    std::fs::create_dir(&elsewhere).unwrap();
+    other_project_at(&fixture.state, &elsewhere);
+    let removal = plan_now(&fixture.state, project::Reads::Removal, Vec::new())
+        .await
+        .unwrap();
+
+    let stuck = Arc::new(());
+    stall(&fixture.state, &outside, &stuck);
+    let left =
+        project::carry_out_once_stopped(fixture.state.clone(), Vec::new(), removal, Vec::new())
+            .await;
+    drop(stuck);
+    assert!(outside.exists());
+    assert!(fixture.has_branch("outside"));
+    let about: Vec<_> = left
+        .iter()
+        .filter(|item| item.branch.as_deref() == Some("outside"))
+        .collect();
+    assert!(
+        about.len() == 1 && about[0].kind == SessionBranchKind::Worktree && is_untold(about[0]),
+        "{left:?}"
+    );
 }
 
 /// A worktree holding another project's repository — its main worktree, with the common directory

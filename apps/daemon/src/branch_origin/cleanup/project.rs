@@ -10,7 +10,10 @@
 //! ([`Holders`]): it is listed as staying, and stays with the removal, which reports it as left.
 //! An inspection that held one back keeps it under a token that the removal confirmed after it
 //! sends back (`crate::project_trash::UnresolvedRemovals`), so that worktree stays even once it
-//! can be told: the confirmation showed it staying.
+//! can be told: the confirmation showed it staying. As the removal runs only once the project's
+//! sessions have no process, it looks again just before it carries out: an outside worktree that
+//! has come to be or hold another project's folder by then stays too, and one of which that can
+//! no longer be told is held back.
 //!
 //! When the folder holds the repository — the common directory is inside it — every linked
 //! worktree of the repository outside the folder goes, bound to a session or not, since none of
@@ -18,10 +21,10 @@
 //! folder is a part of a bigger repository, or a linked worktree of one) the repository stays:
 //! only the worktrees bound to the project's sessions go, a locked one unlocked once it is in the
 //! Trash, the records the moves left behind are pruned, and the bound branches are deleted with
-//! `git branch -D`, except one still checked out in a worktree that stays, which is reported unless
-//! it is a locked worktree the user chose to keep. Every command runs in the repository's common
-//! directory, which outlives the folder however the repository is laid out. The main worktree is
-//! never touched.
+//! `git branch -D`, except one still checked out in a worktree that stays, which is reported only
+//! when that worktree was to go and did not (a locked one the user chose to keep was not). Every
+//! command runs in the repository's common directory, which outlives the folder however the
+//! repository is laid out. The main worktree is never touched.
 
 use std::collections::HashSet;
 use std::ffi::OsStr;
@@ -53,6 +56,8 @@ pub enum Reads {
 
 /// What the removal of one project, folder and all, takes along.
 pub struct Removal {
+    /// The project removed, whose own folder no worktree counts as holding.
+    project: String,
     repo: PathBuf,
     /// Whether the repository outlives the project's folder.
     survives: bool,
@@ -62,6 +67,9 @@ pub struct Removal {
     /// another project's folder, as `failed` items with the cause `project_folder_unknown`, each
     /// with its root.
     held_back: Vec<(SessionBranchItem, PathBuf)>,
+    /// The roots of the worktrees that go, or may: those inside the folder, which go with it, one
+    /// whose record a prune takes, and the outside ones it takes.
+    going: HashSet<PathBuf>,
 }
 
 impl Removal {
@@ -104,6 +112,32 @@ impl Removal {
 
     fn is_empty(&self) -> bool {
         self.worktrees.is_empty() && self.branches.is_empty() && self.held_back.is_empty()
+    }
+
+    /// Looks again at whether each outside worktree it takes is or holds another project's folder,
+    /// as one may have come to since the plan: one that is stays, unreported, as one known to be so
+    /// at the plan does, and one of which that cannot be told now is held back. Blocking, as
+    /// [`Holders::look`] says.
+    fn look_again(&mut self, state: &AppState) {
+        let mut holders = Holders::of_projects(state, Some(&self.project));
+        if let Ok(holders) = &mut holders {
+            holders.look(state, self.worktrees.iter().map(|(_, root)| root.clone()));
+        }
+        for (item, root) in std::mem::take(&mut self.worktrees) {
+            let holding = holders
+                .as_ref()
+                .map_or(Holding::Unknown, |holders| holders.holding(&root));
+            match holding {
+                Holding::No => self.worktrees.push((item, root)),
+                Holding::Yes => {
+                    self.going.remove(&root);
+                }
+                Holding::Unknown => {
+                    self.going.remove(&root);
+                    self.held_back.push((super::untold(item), root));
+                }
+            }
+        }
     }
 }
 
@@ -247,11 +281,13 @@ pub fn plan(
         }
     }
     let removal = Removal {
+        project: project.id.clone(),
         repo,
         survives,
         worktrees: taken,
         branches,
         held_back: untold,
+        going,
     };
     Ok((!removal.is_empty()).then_some(removal))
 }
@@ -272,9 +308,11 @@ pub async fn carry_out_once_stopped(
         match (tools.git)() {
             Ok(git) => {
                 let repo = removal.repo.clone();
-                state
-                    .branch_cleanups
-                    .serialized(&repo, || carry_out(&git, removal, &forced, tools.trash))
+                state.branch_cleanups.serialized(&repo, || {
+                    let mut removal = removal;
+                    removal.look_again(&state);
+                    carry_out(&git, removal, &forced, tools.trash)
+                })
             }
             Err(err) => removal.clone_items().all_failed(&format!("{err:#}")),
         }
@@ -379,9 +417,10 @@ pub(crate) fn carry_out(
             .iter()
             .find(|worktree| worktree.branch.as_deref() == Some(name.as_slice()))
         {
-            // One a locked worktree the user chose to keep has checked out stays with it, as they
-            // were shown; any other holder was to go and did not.
-            if !kept.contains(&holder.root) {
+            // Only a holder that was to go and did not is reported. One a locked worktree the user
+            // chose to keep has checked out stays with it, as they were shown; one any other
+            // worktree has checked out, the removal never took or no longer takes.
+            if removal.going.contains(&holder.root) && !kept.contains(&holder.root) {
                 item.state = SessionBranchState::CheckedOut;
                 left.push(item);
             }

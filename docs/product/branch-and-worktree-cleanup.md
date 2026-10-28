@@ -82,6 +82,12 @@ project's removal at every project but the one removed.
   `git worktree remove` takes it; git keeping it, it is reported like any other item the confirmation did not list.
 - **A project's removal keeps what its confirmation showed staying**, even once it can be told (see "With a project's
   folder moved to the Trash" below).
+- **A project's removal also looks again when it carries out.** Right before it moves the outside worktrees it takes to
+  the Trash — once its sessions' processes have ended — it looks again at each of them. One that has come to be or hold
+  another project's folder by then stays, and so does the branch it has checked out, neither of them reported. One of
+  which that cannot be told by then stays and is reported as left, like any other worktree that cannot be told, the
+  branch it has checked out staying unreported. When the projects cannot be listed at that point, none of the outside
+  worktrees it takes can be told.
 
 ## The confirmation
 
@@ -188,7 +194,9 @@ What is not reported:
 
 - items the user chose to keep, while they stand as they were listed;
 - a branch checked out in a worktree that stays, unless the user forced that branch in an archive or deletion. After a
-  project's removal, such a worktree is one the removal was never to take, or a locked worktree the user chose to keep;
+  project's removal, such a worktree is one the removal does not take — the main worktree, one not bound, or one that
+  is or holds another project's folder or of which that cannot be told, even when that is found only as the removal
+  carries out — or a locked worktree the user chose to keep;
 - a worktree known to be a project's folder or to hold one, unless the user forced that worktree in an archive or
   deletion. After a project's removal it is never reported.
 
@@ -258,8 +266,10 @@ otherwise be left without its folder:
 - **When the repository outlives the folder** — the folder is part of a bigger repository, or is itself a linked
   worktree — the linked worktrees outside the folder that are bound to the project's sessions are moved to the Trash,
   the repository's worktree records are then pruned, and the branches bound to the project's sessions are deleted with
-  `git branch -D`, permanently. A branch still checked out in a worktree that stays is not deleted, and is reported,
-  unless that worktree is a locked one the user chose to keep.
+  `git branch -D`, permanently. A branch still checked out in a worktree that stays is not deleted. It is reported only
+  when that worktree was to go and did not — a forced locked worktree with uncommitted changes the confirmation did not
+  show, say, or one whose move to the Trash failed; a branch checked out in a worktree the removal does not take (see
+  "Never touched" below), or in a locked one the user chose to keep, is not reported.
 - **No safety check is made**: an outside worktree is moved to the Trash whatever it holds, uncommitted changes
   included, and a branch is deleted merged or not. What is moved can be recovered from the Trash; a deleted branch
   cannot.
@@ -267,9 +277,10 @@ otherwise be left without its folder:
   confirmation did not show. It is moved to the Trash first and only then unlocked, where the repository outlives the
   folder, so one whose move fails keeps its lock. A branch a locked worktree has checked out goes only with it.
 - **Never touched**: the main worktree, and a worktree that is another project's folder or holds one, or of which that
-  cannot be told (see "A worktree that is or holds a project's folder" above). One that cannot be told is listed by
-  the confirmation as staying and reported as left; where the repository outlives the folder, a branch it has checked
-  out is left, as one checked out in a worktree that stays.
+  cannot be told (see "A worktree that is or holds a project's folder" above). One that cannot be told is reported as
+  left, and listed by the confirmation as staying when it could not be told by then; where the repository outlives
+  the folder, a branch such a worktree has checked out is left, unreported, as one checked out in a worktree that
+  stays.
 
 **The confirmation** looks up what goes along each time its option to move the folder to the Trash is ticked, and
 again, still open, after a removal with that option ticked is refused as protected, as shared or as a failed move;
