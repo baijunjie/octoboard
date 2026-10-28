@@ -74,8 +74,9 @@ project's removal at every project but the one removed.
 - **When it cannot be told, the worktree is kept, as one that holds a project's folder is**: where another project's
   path fails with another error, lies on a file system that reports no inode, does not answer within about 5 seconds
   (as on a mount that hangs) or is still not answering an earlier look, or where the worktree's own directory cannot
-  be read or resolved. It is never removed or forced, and unlike a worktree known to be or hold a project's folder it
-  is reported as left (see "What is left is reported" below).
+  be read or resolved. It is never removed or forced, and it is always reported as left, where a worktree known to be
+  or hold a project's folder is reported only when the user forced it in an archive or deletion (see "What is left is
+  reported" below).
 - **A session's cleanup decides again when it removes.** Its confirmation offers no such worktree to force, so one that
   could not be told when the confirmation looked, but can be at the removal, goes only as an unforced
   `git worktree remove` takes it; git keeping it, it is reported like any other item the confirmation did not list.
@@ -173,12 +174,25 @@ project is still there — deal with what is reported for each item, then remove
 leave it in place. An alert whose every item is a worktree of which it could not be checked whether it is or holds
 another project's folder has no recovery guidance of its own, that group's note standing for it.
 
-What is reported: every item that could not be removed; every worktree kept because whether it is or holds another
-project's folder could not be told; every forced item still there; and every item git refuses that the confirmation
-did not list as kept in the state it stands in now — one that came to stand so after the confirmation listed it, or
-that was never listed. What is not reported: items the user chose to keep, while they stand as they were listed; a
-branch checked out in a worktree that stays; a worktree known to be a project's folder or to hold one. Nothing is
-shown when nothing is left.
+What is reported:
+
+- every item that could not be removed;
+- every worktree kept because whether it is or holds another project's folder could not be told;
+- every forced item still there, whatever keeps it now. After an archive or deletion, that includes a forced worktree
+  that came to be or hold a project's folder before its removal ran, reported in the project's-folder group;
+- every item git refuses that the confirmation did not list as kept in the state it stands in now: one that came to
+  stand so after the confirmation listed it, or that was never listed;
+- after a project's removal, a branch still checked out in a worktree that was to go and did not.
+
+What is not reported:
+
+- items the user chose to keep, while they stand as they were listed;
+- a branch checked out in a worktree that stays, unless the user forced that branch in an archive or deletion. After a
+  project's removal, such a worktree is one the removal was never to take, or a locked worktree the user chose to keep;
+- a worktree known to be a project's folder or to hold one, unless the user forced that worktree in an archive or
+  deletion. After a project's removal it is never reported.
+
+Nothing is shown when nothing is left.
 
 What Octoboard's own deletion of archived sessions whose conversation is gone leaves is not reported to anyone: it is
 only written to the daemon's log.
