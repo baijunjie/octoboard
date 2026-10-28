@@ -539,10 +539,13 @@ function reducer(state: State, action: Action): State {
         case "session_upserted": {
           // A session's status broadcasts repeat what the store holds as often as they change it.
           const shown = shownSwitching(event.session, state.queuedAccountSwitches);
-          if (sameValue(state.sessions.get(event.session.id), shown)) return state;
+          const daemonSwitching = withMember(state.daemonSwitching, event.session.id, event.session.switching_account === true);
+          // The queue can hide a daemon switch starting or ending without changing the shown session.
+          if (sameValue(state.sessions.get(event.session.id), shown)) {
+            return daemonSwitching === state.daemonSwitching ? state : { ...state, daemonSwitching };
+          }
           const sessions = new Map(state.sessions);
           sessions.set(event.session.id, shown);
-          const daemonSwitching = withMember(state.daemonSwitching, event.session.id, event.session.switching_account === true);
           // The daemon shows a session at its trust confirmation as `waiting_user`, and publishes
           // that before it broadcasts the prompt, so a status that is anything else, which a session
           // that no longer runs has too, means the confirmation is no longer waiting for an answer
