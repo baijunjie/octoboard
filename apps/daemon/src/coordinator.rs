@@ -798,6 +798,16 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::SetSessionModel {
+            session,
+            model,
+            effort,
+            terminal_appearance,
+        } => {
+            set_session_model(state, &session, model, effort, terminal_appearance).await?;
+            Ok(None)
+        }
+
         RequestBody::HandOffSession {
             session,
             agent,
@@ -5106,6 +5116,274 @@ async fn came_up_under_claim(state: &Arc<AppState>, id: &str) -> bool {
         live.release_watch();
     }
     up
+}
+
+/// What [`set_session_model_with`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ModelChange {
+    /// The session already had that model and effort as its own: nothing was written or restarted.
+    Unchanged,
+    /// The session had no process: the model and effort were recorded for its next resume.
+    Recorded,
+    /// The session's process was ended and relaunched with them, resuming its conversation.
+    /// `continued` says whether it was sent [`switch_continue::CONTINUE_PROMPT`] to carry on with
+    /// a turn the restart cut off or a usage limit had stopped.
+    Restarted { continued: bool },
+}
+
+/// Changes the model and reasoning effort of a session that is not archived, as the user asks from
+/// the window: see [`set_session_model_with`]. `model` and `effort` are as `open_session` takes
+/// them, each absent to keep what the session has.
+pub async fn set_session_model(
+    state: &Arc<AppState>,
+    id: &str,
+    model: Option<Option<String>>,
+    effort: Option<Option<String>>,
+    terminal_appearance: Option<TerminalAppearance>,
+) -> Result<()> {
+    set_session_model_with(
+        state,
+        id,
+        LaunchEdit { model, effort },
+        ModelAsker::User,
+        terminal_appearance,
+        env_shell::launch_snapshot,
+        term::launch,
+    )
+    .await
+    .map(drop)
+}
+
+/// Who asks [`set_session_model_with`] for a change.
+#[derive(Clone, Copy)]
+pub(crate) enum ModelAsker<'a> {
+    /// The user, from the window, who owns nothing to check and can see what the session waits on.
+    User,
+    /// The owner whose id this is, over MCP: the session must still be bound to it once the change
+    /// holds its claim, and a session waiting for the user is refused
+    /// (`session_waiting_for_user`), since the restart would end the prompt the user alone answers.
+    Owner(&'a str),
+}
+
+/// Changes the model and reasoning effort `edit` gives a session, which become its own choices,
+/// checked as opening a session checks them against what its agent offers under its own account.
+/// One mechanism serves every agent, the account switch's without the move: a session with a
+/// running process has the process ended the way archiving ends it (archiving nothing), the new
+/// values recorded, and is relaunched on the same account resuming its conversation, as a resume
+/// does. A turn the restart cut off, or one a usage limit had stopped, is sent
+/// [`switch_continue::CONTINUE_PROMPT`] as the relaunch's instruction, as after a switch; otherwise
+/// the session comes back awaiting instructions. A session waiting on a prompt of its agent's has
+/// that prompt ended with the process, unless an owner asks (see [`ModelAsker::Owner`]).
+///
+/// Every client is shown the session `starting` from the moment the restart is decided until it is
+/// over (`AppState::mark_model_change`), and the model and effort the agent's records showed are
+/// forgotten once the process is down, for what it records after the relaunch to replace them.
+///
+/// An interrupted session only has the values recorded, for its next resume; a session whose
+/// values are already those is answered [`ModelChange::Unchanged`] with nothing done. Refused, with
+/// nothing changed: no value given (`field_required`), an archived session (`session_archived`;
+/// reopening one with another model is `resume_session`'s), one being launched, resumed,
+/// switched, handed off or otherwise claimed (`session_already_starting`) or shown starting, a
+/// value the agent does not offer, and a change of its account's sharing under way. Refused after the process was
+/// asked to end, with nothing recorded: `model_change_did_not_stop`. Once the process is down, a
+/// relaunch the launch rules refuse, or one whose process ends at once
+/// (`model_change_did_not_come_up`), leaves the session interrupted with the model and effort it
+/// had.
+///
+/// The shell snapshot the default account is resolved from comes from `snapshot`, and the process
+/// is started by `launch`: `env_shell::launch_snapshot` and `term::launch` outside the tests.
+pub(crate) async fn set_session_model_with(
+    state: &Arc<AppState>,
+    id: &str,
+    edit: LaunchEdit,
+    asker: ModelAsker<'_>,
+    terminal_appearance: Option<TerminalAppearance>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static,
+) -> Result<ModelChange> {
+    if edit.model.is_none() && edit.effort.is_none() {
+        return Err(field_required("model"));
+    }
+    // Held until this function returns, as a switch holds its own: nothing else launches,
+    // resumes, switches or deletes the session while its process is down or being watched.
+    let claim = state.begin_switch(id)?;
+    let before = state.session_record(id)?;
+    if let ModelAsker::Owner(owner) = asker {
+        refuse_unless_still_askers(&before, Some(owner))?;
+    }
+    if before.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+    let shown = state.shown_status(&before);
+    if shown == SessionStatus::Starting {
+        return Err(CodedError::raised(
+            error_code::SESSION_ALREADY_STARTING,
+            "this session is already being started",
+            &[("session", id)],
+        ));
+    }
+    crate::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
+    let model = normalize_session_launch_setting(edit.model).or_else(|| before.model.clone());
+    let effort = normalize_session_launch_setting(edit.effort).or_else(|| before.effort.clone());
+    if (&model, &effort) == (&before.model, &before.effort) {
+        return Ok(ModelChange::Unchanged);
+    }
+    let fallback = match &model {
+        Some(model) => model.clone(),
+        None => {
+            let console = state
+                .store
+                .get_console(&before.console_id)?
+                .ok_or_else(|| CodedError::unknown_console(&before.console_id))?;
+            match before.project_id.as_deref() {
+                Some(id) => {
+                    let project = state
+                        .store
+                        .get_project(id)?
+                        .ok_or_else(|| CodedError::unknown_project(id))?;
+                    project_launch_settings(&project, &console, before.agent).0
+                }
+                None => console.launch(before.agent).0.clone(),
+            }
+        }
+    };
+    LaunchCheck {
+        agent: before.agent,
+        account_id: before.account_id.clone(),
+        model: model.clone().filter(|_| model != before.model).flatten(),
+        effort: effort.clone().filter(|_| effort != before.effort).flatten(),
+        effective_model: fallback,
+    }
+    .run(state)
+    .await?;
+    let current = state.session_record(id)?;
+    if current.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+    if current.status.is_dormant() {
+        if !state
+            .store
+            .set_session_launch_overrides_unless_archived(id, &model, &effort, None)?
+        {
+            return Err(session_archived(id));
+        }
+        state.publish_session_by_id(id);
+        return Ok(ModelChange::Recorded);
+    }
+
+    // The default account has no directory of its own: the snapshot resolves it for the record
+    // read below and for the relaunch, which must agree.
+    let shell_env = if record_needs_shell_env(&current) {
+        Some(tokio::task::spawn_blocking(snapshot).await??)
+    } else {
+        None
+    };
+    let current = state.session_record(id)?;
+    if current.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+    if matches!(asker, ModelAsker::Owner(_))
+        && state.shown_status(&current) == SessionStatus::WaitingUser
+    {
+        return Err(CodedError::raised(
+            error_code::SESSION_WAITING_FOR_USER,
+            "this session is waiting for the user, who alone can answer what it is showing; \
+             restarting it would end that prompt",
+            &[("session", id)],
+        ));
+    }
+    state.mark_model_change(id);
+    let ended_a_process = match state.live_session(id) {
+        Some(live) => stop_process(live).await?,
+        None => false,
+    };
+    if let Err(err) = wait_until_down(state, id).await {
+        let stopped = err
+            .downcast_ref::<CodedError>()
+            .is_some_and(|coded| coded.code == error_code::SESSION_DID_NOT_STOP);
+        return Err(if stopped {
+            CodedError::raised(
+                error_code::MODEL_CHANGE_DID_NOT_STOP,
+                "the session's process did not end in time, so its model was not changed",
+                &[("session", id)],
+            )
+        } else {
+            err
+        });
+    }
+    // Archiving it meanwhile is the user's later word on the matter. Hooks may also have
+    // learned the conversation's identity while validation or the shell snapshot was pending.
+    let stopped = state.session_record(id)?;
+    if stopped.status == SessionStatus::Archived {
+        return Err(session_archived(id));
+    }
+    let reading_state = state.clone();
+    let shell = shell_env.clone();
+    let (carry_on, boundary) = tokio::task::spawn_blocking(move || {
+        let boundary =
+            crate::record_collector::observed_boundary(&reading_state, &stopped, shell.clone());
+        let carry_on = ended_a_process
+            && resumable_agent_session_id(&stopped).is_some_and(|agent_session_id| {
+                let dir = account_dir(stopped.agent, stopped.config_dir.as_deref(), shell.as_ref());
+                relocate::locate(stopped.agent, &dir, &agent_session_id).is_ok_and(|record| {
+                    switch_continue::should_continue(stopped.agent, &dir.join(record))
+                })
+            });
+        (carry_on, boundary)
+    })
+    .await?;
+
+    let checkpoint = serde_json::to_string(&boundary)?;
+    if !state.store.set_session_launch_overrides_unless_archived(
+        id,
+        &model,
+        &effort,
+        Some(&checkpoint),
+    )? {
+        return Err(session_archived(id));
+    }
+    state.publish_session_by_id(id);
+    let put_back = || {
+        if let Err(revert) = state.set_session_launch_overrides(id, &before.model, &before.effort) {
+            tracing::warn!(
+                session = %id,
+                %revert,
+                "putting the session's model and effort back failed"
+            );
+        }
+    };
+    if let Err(err) = relaunch_session_with(
+        state,
+        &claim,
+        id,
+        carry_on.then_some(switch_continue::CONTINUE_PROMPT),
+        false,
+        shell_env,
+        terminal_appearance,
+        launch,
+    )
+    .await
+    {
+        put_back();
+        return Err(err);
+    }
+    if !came_up_under_claim(state, id).await {
+        // Once the exit watcher has recorded it interrupted, so the record put back is the one
+        // every client is left with.
+        if let Err(err) = wait_until_down(state, id).await {
+            tracing::warn!(session = %id, %err, "the relaunched process was not recorded as ended");
+        }
+        put_back();
+        return Err(CodedError::raised(
+            error_code::MODEL_CHANGE_DID_NOT_COME_UP,
+            "the session ended as soon as it was relaunched with the new model, so it keeps the \
+             model and effort it had",
+            &[("session", id)],
+        ));
+    }
+    Ok(ModelChange::Restarted {
+        continued: carry_on,
+    })
 }
 
 /// Refuses, in prose, an operation an owner asked for on a session that is no longer its own. The
@@ -12460,6 +12738,245 @@ mod tests {
                 .switching_account
         );
         drop(claim);
+    }
+
+    /// Clients are shown a session a change of its model restarts as starting for as long as the
+    /// change's claim lasts, and a mark without that claim shows nothing.
+    #[tokio::test]
+    async fn a_session_shows_as_starting_while_a_model_change_restarts_it() {
+        let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-shown");
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .unwrap();
+        let mut events = state.subscribe();
+        let shown = |events: &mut tokio::sync::broadcast::Receiver<Event>| {
+            let mut last = None;
+            while let Ok(event) = events.try_recv() {
+                if let Event::SessionUpserted { session } = event {
+                    last = Some(session.status);
+                }
+            }
+            last
+        };
+
+        state.mark_model_change("s");
+        assert_eq!(shown(&mut events), None, "no claim, no mark");
+        let claim = state.begin_switch("s").unwrap();
+        state.mark_model_change("s");
+        assert_eq!(shown(&mut events), Some(SessionStatus::Starting));
+        drop(claim);
+        assert!(!state.is_changing_model("s"));
+        assert_eq!(shown(&mut events), Some(SessionStatus::Idle));
+    }
+
+    /// A launch that must never run, for a change that records or refuses.
+    fn no_launch(_: term::LaunchRequest) -> Result<term::Launch> {
+        panic!("nothing is launched")
+    }
+
+    /// A model change asks for something to change, and is refused, with nothing written, for an
+    /// archived session, one being started and a value the agent does not offer; an interrupted
+    /// session only has the values recorded, and values it already has change nothing.
+    #[tokio::test]
+    async fn a_model_change_is_checked_and_an_interrupted_session_only_records_it() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-model-change-checks");
+        for (id, status) in [
+            ("archived", SessionStatus::Archived),
+            ("starting", SessionStatus::Starting),
+            ("down", SessionStatus::Interrupted),
+        ] {
+            state
+                .store
+                .insert_session(&Session {
+                    model: Some(Some("sonnet".to_string())),
+                    ..project_session(id, Agent::Claude, status)
+                })
+                .unwrap();
+        }
+        let change = |id: &'static str, model: Option<&str>| {
+            set_session_model_with(
+                &state,
+                id,
+                LaunchEdit {
+                    model: model.map(|model| Some(model.to_string())),
+                    effort: None,
+                },
+                ModelAsker::User,
+                None,
+                shell_env(&dir),
+                no_launch,
+            )
+        };
+
+        let err = change("down", None).await.expect_err("nothing given");
+        assert_eq!(code_of(&err), error_code::FIELD_REQUIRED);
+        let err = change("archived", Some("opus"))
+            .await
+            .expect_err("archived");
+        assert_eq!(code_of(&err), error_code::SESSION_ARCHIVED);
+        let err = change("starting", Some("opus"))
+            .await
+            .expect_err("starting");
+        assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
+        let err = change("down", Some("gpt-9"))
+            .await
+            .expect_err("not offered");
+        assert_eq!(code_of(&err), error_code::INVALID_LAUNCH_SETTING);
+        for id in ["archived", "starting", "down"] {
+            let after = state.store.get_session(id).unwrap().unwrap();
+            assert_eq!(after.model, Some(Some("sonnet".to_string())), "{id}");
+        }
+
+        assert_eq!(
+            change("down", Some("sonnet")).await.unwrap(),
+            ModelChange::Unchanged
+        );
+        assert_eq!(
+            change("down", Some("opus")).await.unwrap(),
+            ModelChange::Recorded
+        );
+        let after = state.store.get_session("down").unwrap().unwrap();
+        assert_eq!(after.model, Some(Some("opus".to_string())));
+        assert_eq!(after.status, SessionStatus::Interrupted);
+    }
+
+    #[tokio::test]
+    async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
+        let (state, dir) = console_with_project_and_accounts("model-unlisted-noop");
+        crate::test_support::offer_models(&state, Agent::Claude, &[("sonnet", &["low"])]);
+        state
+            .store
+            .insert_session(&Session {
+                model: Some(Some("retired-model".to_string())),
+                effort: Some(Some("retired-effort".to_string())),
+                ..project_session("s", Agent::Claude, SessionStatus::Interrupted)
+            })
+            .unwrap();
+        let changed = set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                model: Some(Some(" retired-model ".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            no_launch,
+        )
+        .await
+        .unwrap();
+        assert_eq!(changed, ModelChange::Unchanged);
+        // A changed field is checked without revalidating the unrelated legacy override.
+        let changed = set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                model: Some(Some("sonnet".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            no_launch,
+        )
+        .await
+        .unwrap();
+        assert_eq!(changed, ModelChange::Recorded);
+        let after = state.session_record("s").unwrap();
+        assert_eq!(
+            after.effort.as_ref().and_then(|value| value.as_deref()),
+            Some("retired-effort")
+        );
+    }
+
+    #[tokio::test]
+    async fn an_interrupted_session_archived_during_model_validation_is_not_changed() {
+        let (state, dir) = console_with_project_and_accounts("model-late-archive");
+        crate::test_support::offer_models(&state, Agent::Claude, &[("sonnet", &["low"])]);
+        state
+            .store
+            .insert_session(&project_session(
+                "s",
+                Agent::Claude,
+                SessionStatus::Interrupted,
+            ))
+            .unwrap();
+        let change = set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                model: Some(Some("sonnet".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            no_launch,
+        );
+        // Model validation awaits a blocking catalogue read, even for a seeded catalogue.
+        let (result, ()) = tokio::join!(change, async { archive_record(&state, "s").unwrap() });
+        assert_eq!(code_of(&result.unwrap_err()), error_code::SESSION_ARCHIVED);
+        let after = state.session_record("s").unwrap();
+        assert_eq!(after.status, SessionStatus::Archived);
+        assert!(after.model.is_none());
+    }
+
+    /// A running session whose relaunch ends at once is left interrupted with the model and effort
+    /// it had, on its account, with its earlier process ended; the observed model the records
+    /// showed is to be read afresh.
+    #[tokio::test]
+    async fn a_model_change_whose_relaunch_does_not_come_up_keeps_the_model_it_had() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-model-change-down");
+        let mut project = state.store.get_project("project-1").unwrap().unwrap();
+        project.path = dir.to_string_lossy().into_owned();
+        state.store.update_project(&project).unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                effort: Some(Some("high".to_string())),
+                ..project_session("s", Agent::Claude, SessionStatus::Idle)
+            })
+            .unwrap();
+        let live = idle_stand_in("s");
+        state.register_live(live.clone());
+        state.watch_exit(live.clone());
+        let launch = |request: term::LaunchRequest| {
+            let gone = fake_live_session(&request.session_id, request.agent, 80, 24, "exit 1");
+            Ok(term::Launch {
+                session: (*gone).clone(),
+                agent_session_id: None,
+                notice: None,
+            })
+        };
+
+        let err = set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                model: Some(Some("opus".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            launch,
+        )
+        .await
+        .expect_err("the relaunch ended at once");
+
+        assert_eq!(code_of(&err), error_code::MODEL_CHANGE_DID_NOT_COME_UP);
+        assert!(live.poll_exit(), "its process was ended");
+        let after = state.store.get_session("s").unwrap().unwrap();
+        assert_eq!(after.status, SessionStatus::Interrupted);
+        assert_eq!(
+            (after.model, after.effort),
+            (None, Some(Some("high".to_string())))
+        );
+        assert_eq!((after.account_id, after.config_dir), (None, None));
+        assert!(!state.is_changing_model("s"));
+        assert!(state.store.observed_checkpoint("s").unwrap().is_some());
     }
 
     /// An archive that lands before the relaunch writes anything is not undone by the switch: the

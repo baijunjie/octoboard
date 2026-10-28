@@ -108,6 +108,11 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   `Session.switching_account` over the named sessions of a state, so they open straight in the "Switching account…"
   view. `sessionAccountSwitches` stages what the daemon answers to a switch the steps start: a refusal, or `"pending"`;
   the fixture daemon broadcasts the session as switching while the request is held, as the real one does.
+- Sessions changing their model: `sessionModelChanges` stages what the daemon answers to a `set_session_model` the steps
+  send: `"pending"` (the dialog has closed and the session is shown starting), or an error (an alert over the closed dialog). A running session is
+  broadcast as starting while the request is held, with what its records showed forgotten, as the real daemon does; a
+  `model_change_did_not_come_up` leaves it interrupted, any other error puts it back as it was, and success returns it
+  to idle with the new values. An interrupted session only has the values recorded.
 - Account sign-in in Settings → Agent accounts: `state.accountLogins` holds the logins the daemon already reports when
   the window opens (waiting with its page or device code, signed in, failed, timed out), so a login in progress is
   shown straight away; build them with the `loginOf` helper in `fixtures/settings.ts`. `loginOutcome`
@@ -294,7 +299,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/viewer/` | The read-only file viewer modal: `FileViewer` over the application-owned `ViewerSubject` model, with code, diff and Markdown surfaces; `renderer.tsx` is the only importer of `@pierre/diffs` |
 | `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, and `RailQuotaEntry`, the rail's quota entry and panel |
 | `src/settings/` | The settings modal: `SettingsDialog` and its sections (general, git, agent accounts and the added agents, with each agent's Claude compatibility switch in `AgentClaudeCompatibilitySetting.tsx` and `hasClaudeCompatibility` (`claudeCompatibility.ts`) saying which agents have it, agent behavior, trusted folders, macOS permissions, notifications, shortcuts, configuration, About) |
-| `src/dialogs/` | The console, project, session, rename, confirmation, directory-picker and daemon-question dialogs on the shared `Dialog` frame, `ErrorAlerts` (the acknowledgement host), `useFailureWhenBlocked` (turns a dialog unusable as it stands into a failure modal) and the shared form controls |
+| `src/dialogs/` | The console, project, session, rename, confirmation, directory-picker and daemon-question dialogs on the shared `Dialog` frame, `ErrorAlerts` (the acknowledgement host), `useFailureWhenBlocked` (turns a dialog unusable as it stands into a failure modal) and the shared form controls; `SessionModelDialog.tsx` changes a session's model and effort, using the `LaunchPickers` and `useLaunchModels` shared with the Advanced sections in `LaunchSettingsFields.tsx` |
 | `src/configuration/` | Configuration export and import: `ExportConfigurationDialog`, `ImportConfigurationDialog` and the pure import plan |
 | `src/about/`, `src/updates/` | The third-party licenses dialog and its data (the generated `licenses.generated.json`, with the committed `licenses.fallback.json` standing in until the generator has run; `src/cssDependencies.test.ts` checks that every package a stylesheet names is a production dependency, so it reaches that list); the self-update on the UI side: `createUpdateStore`, `UpdatesProvider`, the persisted channel and `UpdateNotice` |
 

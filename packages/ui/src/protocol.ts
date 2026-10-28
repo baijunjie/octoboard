@@ -1417,6 +1417,19 @@ export type RequestBody =
     /** See `open_session`'s `terminal_appearance`. */
     terminal_appearance?: "light" | "dark";
   }
+  /** Changes the session's model and reasoning effort, which become its own: each absent keeps what
+   * the session has, `null` leaves it to the agent; at least one is sent. A running session is
+   * restarted on its account, resuming its conversation, and is shown `starting` meanwhile; an
+   * interrupted one only has them recorded for its next resume. Answered once the relaunched session
+   * has stayed up, or with the reason it did not. */
+  | {
+    type: "set_session_model";
+    session: string;
+    model?: string | null;
+    effort?: string | null;
+    /** See `open_session`'s `terminal_appearance`. */
+    terminal_appearance?: "light" | "dark";
+  }
   /** Hands a session off to a new session of another agent, which takes its whole place: kind,
    * project or console, role, owner and title, the branches the session is responsible for and the
    * sessions it owns. The new session starts with a handoff package built from the original's

@@ -1527,7 +1527,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Edit a project whose agent cannot list its models",
-    description: "In Advanced, on the Launch settings tab, the project's Model picker offers the stored model alone, which stays readable and is clipped at the field edge, and a warning mark named \"Could not load the models\" stands right after the \"Model\" label, with nothing drawn inside the field, so the Not in the list badge and the clear button are uncovered; the effort picker below is unchanged. The popover is in the next scenario.",
+    description: "In Advanced, on the Launch settings tab, the project's Model picker offers the stored model alone, which stays readable and is clipped at the field edge, and a warning mark named \"Could not load the models\" stands right after the \"Model\" label, with nothing drawn inside the field, so the clear button is uncovered; the stored model carries no Not in the list badge, since with no list nothing is known of whether it is listed. The effort picker below is unchanged. The popover is in the next scenario.",
     agentModels: CLAUDE_NOT_FOUND,
     steps: [
       (ui) => projectActions(ui, configured.name),
@@ -1945,7 +1945,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "exceptional",
     title: "Edit a console whose agent cannot list its models",
-    description: "The daemon found no binary for the agent, so each Model picker in the launch settings table (Console sessions and Project sessions) offers its stored model alone, and one warning mark named \"Could not load the models\" stands beside the Model row's name, outside both fields; the long stored console model stays readable at the field edge with its badge and clear button uncovered. The effort pickers still work over what is stored.",
+    description: "The daemon found no binary for the agent, so each Model picker in the launch settings table (Console sessions and Project sessions) offers its stored model alone, and one warning mark named \"Could not load the models\" stands beside the Model row's name, outside both fields; the long stored console model stays readable at the field edge with its clear button uncovered and no Not in the list badge, since with no list nothing is known of whether it is listed. The effort pickers still work over what is stored, likewise without the badge.",
     state: dialogState,
     agentModels: CLAUDE_NOT_FOUND,
     steps: [

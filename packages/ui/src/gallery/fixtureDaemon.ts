@@ -513,6 +513,39 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           applyDaemonEvent(store, { type: "session_upserted", session: { ...resting, account_id: account?.id, config_dir: account?.config_dir } });
           return { type: "ack" };
         }
+        case "set_session_model": {
+          const current = store.getState();
+          const session = current.sessions.get(body.session);
+          if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+          if (body.model === undefined && body.effort === undefined) return fail({ code: "field_required", params: { field: "model" }, message: "model is required" });
+          if (session.status === "archived") return fail({ code: "session_archived", params: { session: body.session }, message: "An archived session cannot change its model" });
+          if (session.status === "starting" || session.switching_account) return fail({ code: "session_already_starting", params: { session: body.session }, message: "this session is already being started" });
+          refuseIfSharingChanges(session.account_id);
+          // A value left out keeps what the session has; a blank one leaves the choice to the agent.
+          const chosen = (value: string | null | undefined, kept: string | null | undefined) => (value === undefined ? kept : value?.trim() || null);
+          const [model, effort] = [chosen(body.model, session.model), chosen(body.effort, session.effort)];
+          if (model === session.model && effort === session.effort) return { type: "ack" };
+          if (session.status === "interrupted") {
+            applyDaemonEvent(store, { type: "session_upserted", session: { ...session, model, effort } });
+            return { type: "ack" };
+          }
+          // The daemon shows the session starting from the moment the restart is decided; once the process is down the
+          // model and effort its records showed are forgotten.
+          const { observed_model: _model, observed_effort: _effort, ...forgotten } = session;
+          const reply = scenario.sessionModelChanges?.[body.session];
+          if (reply === "pending") {
+            applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "starting" } });
+            return new Promise<Event>(() => {});
+          }
+          if (reply) {
+            // Only a relaunch that ended at once leaves the process down; a process that did not stop is as it was.
+            const interrupted = reply.code === "model_change_did_not_come_up";
+            applyDaemonEvent(store, { type: "session_upserted", session: interrupted ? { ...forgotten, status: "interrupted" } : session });
+            return fail(reply);
+          }
+          applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "idle", model, effort } });
+          return { type: "ack" };
+        }
         case "hand_off_session": {
           const current = store.getState();
           const session = current.sessions.get(body.session);

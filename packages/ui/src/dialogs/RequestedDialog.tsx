@@ -28,6 +28,7 @@ import type { DialogRequest } from "./dialogRequest";
 import { ProjectDialog } from "./ProjectDialog";
 import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
+import { SessionModelDialog, type ModelEdits } from "./SessionModelDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
 import { useBranchCleanup, useProjectRemovalCleanup, type ConsequenceLine } from "./BranchCleanupOptions";
 import { ConfirmOption } from "./ConfirmOption";
@@ -347,6 +348,7 @@ export function RequestedDialog({
   onClose,
   onSessionOpened,
   onSwitchAccounts,
+  onChangeSessionModel,
   onResumeSession,
 }: {
   dialog: DialogRequest;
@@ -355,6 +357,9 @@ export function RequestedDialog({
   /** Starts switching sessions to an account (`null`, the default account; `accountName` its name) in
    * the background, and returns at once; the outcome is reported once the whole batch is done. */
   onSwitchAccounts: (sessionIds: string[], account: string | null, accountName: string) => void;
+  /** Starts changing a session's model and reasoning effort in the background and returns at once; a
+   * failure is reported once it comes. */
+  onChangeSessionModel: (sessionId: string, edits: ModelEdits) => void;
   /** Resumes a session the session dialog found, an archived one (reopening it) or an interrupted one;
    * rejects with the reason when it did not happen. */
   onResumeSession: (sessionId: string) => Promise<void>;
@@ -492,6 +497,8 @@ export function RequestedDialog({
           onSwitchAccounts={onSwitchAccounts}
         />
       );
+    case "session-model":
+      return <SessionModelDialog session={dialog.session} onClose={onClose} onChangeModel={onChangeSessionModel} />;
     case "hand-off":
       return <HandoffDialog session={dialog.session} onClose={onClose} onHandedOff={onSessionOpened} />;
     case "unbind-session":

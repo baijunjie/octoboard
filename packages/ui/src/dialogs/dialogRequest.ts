@@ -26,6 +26,8 @@ export type DialogRequest =
   /** Moves `session` to `account` (`null`, the default account), named `accountName` in the
    * dialog. */
   | { kind: "switch-account"; session: Session; account: string | null; accountName: string }
+  /** Changes the model and reasoning effort `session` runs with. */
+  | { kind: "session-model"; session: Session }
   /** Hands `session` off to a new session of another agent. */
   | { kind: "hand-off"; session: Session }
   /** Releases `session` from its owner. */

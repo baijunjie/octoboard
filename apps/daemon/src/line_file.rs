@@ -63,7 +63,16 @@ impl LineFile {
     }
 
     /// Reads the complete lines after the last read one and settles on the file as checked.
-    pub fn read(&mut self, path: &Path, visit: impl FnMut(&str)) -> std::io::Result<()> {
+    pub fn read(&mut self, path: &Path, mut visit: impl FnMut(&str)) -> std::io::Result<()> {
+        self.read_with_position(path, |_, line| visit(line))
+    }
+
+    /// Reads complete lines with their starting byte offset (decompressed for a zstd file).
+    pub fn read_with_position(
+        &mut self,
+        path: &Path,
+        visit: impl FnMut(u64, &str),
+    ) -> std::io::Result<()> {
         self.offset = scan_lines(path, self.offset, None, visit)?;
         self.settle();
         Ok(())
@@ -77,8 +86,8 @@ impl LineFile {
 
 /// Reads the complete lines of the first `end` bytes of the file at `path` (decompressed ones for
 /// a compressed file), once and without any cursor.
-pub fn read_to(path: &Path, end: u64, visit: impl FnMut(&str)) -> std::io::Result<()> {
-    scan_lines(path, 0, Some(end), visit).map(drop)
+pub fn read_to(path: &Path, end: u64, mut visit: impl FnMut(&str)) -> std::io::Result<()> {
+    scan_lines(path, 0, Some(end), |_, line| visit(line)).map(drop)
 }
 
 /// Opens the file at `path` for reading from byte `offset`, decompressing it first when it is
@@ -103,7 +112,7 @@ fn scan_lines(
     path: &Path,
     offset: u64,
     end: Option<u64>,
-    mut visit: impl FnMut(&str),
+    mut visit: impl FnMut(u64, &str),
 ) -> std::io::Result<u64> {
     let mut reader = open(path, offset)?;
     if let Some(end) = end {
@@ -133,7 +142,7 @@ fn scan_lines(
         if end.is_some() {
             if !oversized {
                 if let Ok(line) = std::str::from_utf8(&line) {
-                    visit(line);
+                    visit(complete, line);
                 }
             }
             complete = position;

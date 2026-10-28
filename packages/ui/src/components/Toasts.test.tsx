@@ -7,8 +7,8 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { daemonMessage } from "../daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
-import { sessionOf } from "../gallery/fixtures/builders";
-import { createStateStore, DaemonProvider, type Daemon } from "../store";
+import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { createStateStore, DaemonProvider, errorToast, type Daemon } from "../store";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
 import { Toasts } from "./Toasts";
@@ -42,6 +42,36 @@ function stubWidth(width: number): void {
 }
 
 afterEach(() => { while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge(); vi.unstubAllGlobals(); });
+
+it.each(["model_change_did_not_stop", "model_change_did_not_come_up"])("names the affected session once in a %s alert and retains the failure metadata", (code) => {
+  vi.useFakeTimers();
+  onTestFinished(() => { vi.useRealTimers(); });
+  stubWidth(1280);
+  let deliver!: (request: import("../store").ToastRequest) => void;
+  const source: Daemon = {
+    ...daemon,
+    store: createStateStore({ sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]) }),
+    onToast: (listener) => { deliver = listener; return () => {}; },
+  };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  try {
+    act(() => root.render(<DaemonProvider value={source}><Toasts focusTerminal={() => {}} /><ErrorAlerts daemon={source} /></DaemonProvider>));
+    const params = { session: "s1" };
+    const error = new DaemonRequestError(daemonMessage("en", code, params, "fallback", source.store.getState()), code, params);
+    act(() => deliver(errorToast(error, "s1", "Could not change the model")));
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    expect(alert.querySelector("h2")?.textContent).toBe("Could not change the model");
+    expect(alert.textContent?.split("Fix login")).toHaveLength(2);
+    expect(alert.textContent).toContain(code === "model_change_did_not_stop" ? "The session did not stop in time" : "The session ended as soon as it was relaunched");
+    expect(errorAlerts.getSnapshot()[0].error).toBe(error);
+    expect(error.params).toEqual({ session: "s1" });
+  } finally {
+    act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
+    act(() => root.unmount());
+    container.remove();
+  }
+});
 
 // The toast region only mounts once a toast is queued, so the placement is read off a shown one.
 it("puts the toasts at the top in a window narrower than 640px and at the bottom end otherwise", () => {
@@ -445,7 +475,12 @@ it("shows the error heading above a structured error's details when the alert ha
   }
 });
 
-it("titles an error alert for what failed and names the session and its project in the body", () => {
+it.each([
+  ["project", "p1", true, "Project: Search API", "Search API"],
+  ["console", undefined, true, "Console: Main", "Main"],
+  ["missing project", "p1", false, "Project: Unknown", undefined],
+  ["missing console", undefined, false, "Console: Unknown", undefined],
+] as const)("labels the session and its %s separately in an error alert", (_case, projectId, known, placeText, placeName) => {
   vi.useFakeTimers();
   onTestFinished(() => { vi.useRealTimers(); });
   stubWidth(1280);
@@ -453,8 +488,9 @@ it("titles an error alert for what failed and names the session and its project 
   const source: Daemon = {
     ...daemon,
     store: createStateStore({
-      sessions: new Map([["s1", sessionOf("s1", "c1", "p1", "Fix login", "idle")]]),
-      projects: new Map([["p1", { id: "p1", name: "Hub" } as unknown as import("../protocol").Project]]),
+      sessions: new Map([["s1", sessionOf("s1", "c1", projectId, "Fix 登录 مراجعة", "idle")]]),
+      projects: new Map(known ? [["p1", projectOf("p1", "c1", "Search API")]] : []),
+      consoles: new Map(known ? [["c1", consoleOf("c1", "Main")]] : []),
     }),
     onToast: (listener) => { deliver = listener; return () => {}; },
   };
@@ -465,8 +501,17 @@ it("titles an error alert for what failed and names the session and its project 
     act(() => deliver({ kind: "error", message: "Not sent.", session: "s1", daemonError: new DaemonRequestError("", "message_not_sent", { agent: "Claude Code" }) }));
     const alert = document.querySelector('[role="alertdialog"]');
     expect(alert?.querySelector("h2")?.textContent).toBe("Message not sent");
-    expect(alert?.textContent).toContain("Fix login");
-    expect(alert?.textContent).toContain("Hub");
+    const sessionLine = [...alert!.querySelectorAll("p")].find((line) => line.textContent === "Session: Fix 登录 مراجعة")!;
+    const context = sessionLine.parentElement!;
+    expect([...context.children].map((line) => line.textContent)).toEqual(["Session: Fix 登录 مراجعة", placeText]);
+    expect(context.children[0].querySelector("[data-inline-reference]")?.textContent).toBe("Fix 登录 مراجعة");
+    expect(context.children[1].querySelector("[data-inline-reference]")?.textContent).toBe(placeName);
+    for (const chip of context.querySelectorAll("[data-inline-reference]")) {
+      expect(chip.getAttribute("dir")).toBe("auto");
+      expect(chip.textContent).not.toMatch(/[\u2066-\u2069]/);
+    }
+    expect(alert?.textContent?.split("Fix 登录 مراجعة")).toHaveLength(2);
+    if (placeName) expect(alert?.textContent?.split(placeName)).toHaveLength(2);
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());
@@ -504,6 +549,10 @@ it("titles a failed launch's alert for the failure, never with the session's nam
     expect(gone?.querySelector("h2")?.textContent).toBe("Could not start the session");
     expect(gone?.querySelector("h2")?.textContent).not.toContain("Fix login");
     expect(gone?.textContent).toContain("Session: Fix login");
+    expect(gone?.textContent).not.toMatch(/Project:|Console:/);
+    act(() => errorAlerts.acknowledge());
+    act(() => deliver(errorToast(new DaemonRequestError("The session is gone.", "session_archived", {}), "unknown")));
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).not.toMatch(/Session:|Project:|Console:/);
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });
     act(() => root.unmount());

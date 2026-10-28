@@ -8,6 +8,7 @@
 //! the records give the model alone.
 
 use std::collections::{HashMap, HashSet};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,10 +38,107 @@ struct Cursor {
     /// segment, with the path it was read from.
     first_prompt: Option<(PathBuf, Option<String>)>,
     observed: Observed,
+    observed_reset: Option<ObservedReset>,
+    observed_checkpoint: Option<String>,
     /// The summary file beside the record, which Grok keeps its titles and configured model in.
     summary: JsonFile,
     /// The signals file beside the record, which Grok keeps its context window in.
     signals: JsonFile,
+}
+
+/// The record boundaries left by the stopped process. Kept across cursor/path resets so an old
+/// segment or unchanged summary cannot restore a model from before the relaunch.
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+pub(crate) struct ObservedReset {
+    files: HashMap<PathBuf, (u64, u64, Signature)>,
+}
+
+impl ObservedReset {
+    fn insert(&mut self, path: PathBuf) {
+        if let Ok(metadata) = std::fs::metadata(&path) {
+            self.files.insert(
+                path,
+                (
+                    metadata.dev(),
+                    metadata.ino(),
+                    (metadata.len(), metadata.modified().ok()),
+                ),
+            );
+        }
+    }
+
+    fn start(&self, path: &Path) -> u64 {
+        // A compressed rollout is immutable, including one compressed since the boundary was
+        // taken. The uncompressed name identifies the same old history in that case.
+        let compressed = path.extension().is_some_and(|ext| ext == "zst");
+        if compressed && self.files.contains_key(&path.with_extension("")) {
+            return u64::MAX;
+        }
+        let Ok(now) = std::fs::metadata(path) else {
+            return 0;
+        };
+        let Some((dev, ino, signature)) = self.files.get(path).or_else(|| {
+            self.files
+                .values()
+                .find(|(dev, ino, _)| (now.dev(), now.ino()) == (*dev, *ino))
+        }) else {
+            return 0;
+        };
+        if (now.dev(), now.ino()) != (*dev, *ino)
+            || now.len() < signature.0
+            || (now.len() == signature.0 && now.modified().ok() != signature.1)
+        {
+            return 0;
+        }
+        if compressed {
+            u64::MAX
+        } else {
+            signature.0
+        }
+    }
+
+    fn unchanged(&self, path: &Path) -> bool {
+        self.files.get(path).is_some_and(|(dev, ino, signature)| {
+            std::fs::metadata(path).is_ok_and(|now| {
+                (now.dev(), now.ino(), (now.len(), now.modified().ok())) == (*dev, *ino, *signature)
+            })
+        })
+    }
+}
+
+/// Captures old observations after the process ended and before its replacement can write. The
+/// caller runs this on the blocking pool with the same shell snapshot used for the relaunch.
+pub(crate) fn observed_boundary(
+    state: &AppState,
+    session: &Session,
+    shell: Option<HashMap<String, String>>,
+) -> ObservedReset {
+    let mut boundary = ObservedReset::default();
+    let mut locator = shell.map(Locator::with_shell).unwrap_or_default();
+    let mut paths = Vec::new();
+    if let Some(path) = state.record_hints.hint(session) {
+        paths.push(path);
+    }
+    if let (Some(root), Some(id)) = (
+        locator.root(session.agent, session.config_dir.as_deref()),
+        session.agent_session_id.as_deref(),
+    ) {
+        if let Some(path) = locator.current_record(session.agent, &root, id) {
+            if session.agent == Agent::Codex {
+                if let Some(stretches) = locator.rollout_stretches(&root, id, &path) {
+                    paths.extend(stretches.into_iter().map(|stretch| stretch.path));
+                }
+            }
+            paths.push(path);
+        }
+    }
+    for path in paths {
+        if let Some(summary) = crate::agent_records::title_files(session.agent).summary {
+            boundary.insert(path.with_file_name(summary));
+        }
+        boundary.insert(path);
+    }
+    boundary
 }
 
 /// A small JSON file read again whenever it changes.
@@ -140,7 +238,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
     let mut updates = Vec::new();
     // Sessions whose default effort changed, to publish unless their record update does.
     let mut republish = Vec::new();
-    for session in sessions {
+    for mut session in sessions {
         let identity = (
             session.agent,
             session.agent_session_id.clone(),
@@ -153,12 +251,38 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 ..Default::default()
             };
         }
+        // A durable checkpoint also gates writes under the store lock: a pass already scanning
+        // when a restart recorded it may still update context/titles, never the old model.
+        let Ok(checkpoint) = state.store.observed_checkpoint(&session.id) else {
+            continue;
+        };
+        if cursor.observed_checkpoint != checkpoint {
+            cursor.observed_reset = checkpoint
+                .as_deref()
+                .and_then(|text| serde_json::from_str(text).ok());
+            cursor.observed_checkpoint = checkpoint;
+            cursor.observed = Observed::default();
+            // A stale pass may have consumed the replacement process's first records before its
+            // write was rejected by the new checkpoint. Replay them through the new boundary.
+            cursor.file = LineFile::default();
+            cursor.dormant = false;
+            cursor.context.forget();
+            cursor.titles.clear();
+            cursor.summary = JsonFile::default();
+            cursor.signals = JsonFile::default();
+            if let Ok(current) = state.session_record(&session.id) {
+                session.observed_model = current.observed_model;
+                session.observed_effort = current.observed_effort;
+            }
+        }
         let live = state.live_session(&session.id).is_some();
         if let Some(hint) = crate::agent_records::hinted_path(&hints, &session) {
             if cursor.path.as_ref() != Some(&hint) {
                 *cursor = Cursor {
                     identity: cursor.identity.clone(),
                     path: Some(hint),
+                    observed_reset: cursor.observed_reset.take(),
+                    observed_checkpoint: cursor.observed_checkpoint.take(),
                     ..Default::default()
                 };
             }
@@ -205,11 +329,18 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 }
             }
             if let Some(summary) = crate::agent_records::title_files(session.agent).summary {
-                if let Some(summary) = cursor.summary.read(&path.with_file_name(summary)) {
+                let summary_path = path.with_file_name(summary);
+                let old = cursor
+                    .observed_reset
+                    .as_ref()
+                    .is_some_and(|reset| reset.unchanged(&summary_path));
+                if let Some(summary) = cursor.summary.read(&summary_path) {
                     cursor
                         .titles
                         .fold_summary(adapter_for(session.agent).as_ref(), &summary);
-                    cursor.observed.fold_grok(&summary);
+                    if !old {
+                        cursor.observed.fold_grok(&summary);
+                    }
                 }
             }
         }
@@ -277,6 +408,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 titles,
                 observed_model,
                 observed_effort,
+                observed_checkpoint: cursor.observed_checkpoint.clone(),
             });
         }
     }
@@ -398,18 +530,26 @@ fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
         cursor.signals = JsonFile::default();
     }
     if change != Change::Unchanged {
+        let start = cursor
+            .observed_reset
+            .as_ref()
+            .map_or(0, |reset| reset.start(&record));
         let adapter = adapter_for(agent);
-        cursor.file.read(&record, |line| {
+        cursor.file.read_with_position(&record, |at, line| {
             match agent {
                 Agent::Codex => {
                     cursor.context.fold_codex(line);
-                    cursor.observed.fold_codex(line);
+                    if at >= start {
+                        cursor.observed.fold_codex(line);
+                    }
                 }
                 Agent::Claude => {
                     if line.contains("\"usage\"") || line.contains("compact_boundary") {
                         if let Ok(value) = serde_json::from_str::<Value>(line) {
                             cursor.context.fold_claude(&value);
-                            cursor.observed.fold_claude(&value);
+                            if at >= start {
+                                cursor.observed.fold_claude(&value);
+                            }
                         }
                     }
                 }
@@ -649,6 +789,212 @@ mod tests {
                 used_percent: Some(1),
             })
         );
+    }
+
+    /// What the records showed is forgotten once a change of the session's model asks for it, and
+    /// not written back from the lines already read; what the agent records afterwards is taken.
+    #[test]
+    fn a_forgotten_observed_model_is_read_afresh_from_what_the_agent_records_next() {
+        const ID: &str = "019a0000-0000-7000-8000-000000000001";
+        let (state, directory) = crate::test_support::app_state("record-collector-forget-observed");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let root = directory.join("account");
+        let rollout = root
+            .join("sessions/2026/10/01")
+            .join(format!("rollout-2026-10-01T00-00-00-{ID}.jsonl"));
+        std::fs::create_dir_all(rollout.parent().unwrap()).unwrap();
+        let named = include_str!("../testdata/observed_codex_0.162.1.jsonl");
+        std::fs::write(&rollout, named).unwrap();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":root.to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let mut cursors = Cursors::default();
+        let observed = || {
+            let record = state.session_record("s").unwrap();
+            (record.observed_model, record.observed_effort)
+        };
+
+        collect(&state, &mut cursors);
+        let shown = observed();
+        assert!(shown.0.is_some(), "the records name a model");
+        // The old process wrote a final turn after the last one-second collector pass.
+        let final_context = codex_count(json!({"last_token_usage":{"total_tokens":123}}));
+        let old = format!("{named}{named}{final_context}\n");
+        std::fs::write(&rollout, &old).unwrap();
+        state
+            .store
+            .reset_observed_model(
+                "s",
+                &serde_json::to_string(&observed_boundary(&state, &session, None)).unwrap(),
+            )
+            .unwrap();
+        collect(&state, &mut cursors);
+        assert_eq!(observed(), (None, None));
+        assert_eq!(
+            state.session_record("s").unwrap().context.unwrap().tokens,
+            123,
+            "the unread tail still updates unrelated context"
+        );
+        collect(&state, &mut cursors);
+        assert_eq!(observed(), (None, None), "nothing already read comes back");
+        std::fs::write(&rollout, format!("{old}{named}")).unwrap();
+        collect(&state, &mut cursors);
+        assert_eq!(observed(), shown, "the next turn is read");
+    }
+
+    #[test]
+    fn a_model_checkpoint_survives_a_fresh_daemon_and_accepts_new_observations() {
+        const ID: &str = "019a0000-0000-7000-8000-000000000001";
+        let (state, directory) = crate::test_support::app_state("model-checkpoint-restart");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let root = directory.join("account");
+        let rollout = root
+            .join("sessions/2026/10/01")
+            .join(format!("rollout-2026-10-01T00-00-00-{ID}.jsonl"));
+        std::fs::create_dir_all(rollout.parent().unwrap()).unwrap();
+        let old = include_str!("../testdata/observed_codex_0.162.1.jsonl");
+        std::fs::write(&rollout, old).unwrap();
+        codex_session(&state, &root, ID);
+        collect(&state, &mut Cursors::default());
+        assert!(state.session_record("s").unwrap().observed_model.is_some());
+        let checkpoint = serde_json::to_string(&observed_boundary(
+            &state,
+            &state.session_record("s").unwrap(),
+            None,
+        ))
+        .unwrap();
+        // The production write checkpoints the old record and new override atomically.
+        let mut session = state.session_record("s").unwrap();
+        session.status = crate::protocol::SessionStatus::Interrupted;
+        state.store.update_session(&session).unwrap();
+        assert!(state
+            .store
+            .set_session_launch_overrides_unless_archived(
+                "s",
+                &Some(Some("gpt-6.1-sol".to_string())),
+                &None,
+                Some(&checkpoint)
+            )
+            .unwrap());
+        drop(state);
+        let state = Arc::new(AppState::new(
+            crate::store::Store::open(&directory.join("octoboard.db")).unwrap(),
+            1234,
+            "/opt/octoboardd".to_string(),
+            directory.join("output"),
+            directory.join("consoles"),
+            directory.join("handoff"),
+        ));
+        let mut cursors = Cursors::default();
+        collect(&state, &mut cursors);
+        let after = state.session_record("s").unwrap();
+        assert_eq!((after.observed_model, after.observed_effort), (None, None));
+        assert_eq!(after.model, Some(Some("gpt-6.1-sol".to_string())));
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        // A real turn context captured from the same fixture, after the restart boundary.
+        let new = old.lines().next().unwrap();
+        std::fs::write(&rollout, format!("{old}{new}\n")).unwrap();
+        // An in-flight pre-checkpoint scan can consume the new line yet have its write rejected.
+        let cursor = cursors.sessions.get_mut("s").unwrap();
+        cursor.observed_checkpoint = None;
+        cursor.observed_reset = None;
+        scan(Agent::Codex, &rollout, cursor).unwrap();
+        state
+            .store
+            .set_record_data(&[RecordUpdate {
+                session: state.session_record("s").unwrap(),
+                context: None,
+                titles: None,
+                observed_model: cursor.observed.model.clone(),
+                observed_effort: cursor.observed.effort.clone().map(Some),
+                observed_checkpoint: None,
+            }])
+            .unwrap();
+        assert!(state.session_record("s").unwrap().observed_model.is_none());
+        collect(&state, &mut cursors);
+        assert_eq!(
+            state.session_record("s").unwrap().observed_model.as_deref(),
+            Some("gpt-6.1-sol")
+        );
+        // A second fresh collector also observes the post-boundary turn, not the old last model.
+        collect(&state, &mut Cursors::default());
+        assert_eq!(
+            state.session_record("s").unwrap().observed_model.as_deref(),
+            Some("gpt-6.1-sol")
+        );
+    }
+
+    #[test]
+    fn an_observation_boundary_survives_renaming_and_compression_but_allows_a_new_file() {
+        let dir = crate::test_support::ScratchDir::new("model-boundary-path");
+        let original = dir.join("original.jsonl");
+        let renamed = dir.join("renamed.jsonl");
+        let capture = include_str!("../testdata/observed_codex_0.162.1.jsonl");
+        std::fs::write(&original, capture).unwrap();
+        let mut boundary = ObservedReset::default();
+        boundary.insert(original.clone());
+        std::fs::rename(&original, &renamed).unwrap();
+        let mut cursor = Cursor {
+            observed_reset: Some(boundary),
+            ..Default::default()
+        };
+        scan(Agent::Codex, &renamed, &mut cursor).unwrap();
+        assert!(
+            cursor.observed.model.is_none(),
+            "a renamed old file stays old"
+        );
+        let rewritten = capture.replace("codex-auto-review", "codex-next-review");
+        assert_eq!(rewritten.len(), capture.len());
+        std::fs::write(&renamed, &rewritten).unwrap();
+        let previous_time = cursor.observed_reset.as_ref().unwrap().files[&original]
+            .2
+             .1
+            .unwrap();
+        std::fs::File::open(&renamed)
+            .unwrap()
+            .set_modified(previous_time + Duration::from_secs(1))
+            .unwrap();
+        scan(Agent::Codex, &renamed, &mut cursor).unwrap();
+        assert_eq!(
+            cursor.observed.model.as_deref(),
+            Some("codex-next-review"),
+            "a same-length in-place rewrite is new output"
+        );
+        std::fs::write(&renamed, capture).unwrap();
+        cursor.observed = Observed::default();
+        let mut boundary = ObservedReset::default();
+        boundary.insert(renamed.clone());
+        cursor.observed_reset = Some(boundary);
+        let compressed = dir.join("renamed.jsonl.zst");
+        std::fs::write(
+            &compressed,
+            zstd::stream::encode_all(capture.as_bytes(), 1).unwrap(),
+        )
+        .unwrap();
+        std::fs::remove_file(&renamed).unwrap();
+        scan(Agent::Codex, &compressed, &mut cursor).unwrap();
+        assert!(
+            cursor.observed.model.is_none(),
+            "compressing old history does not make it new"
+        );
+        // A replacement at the original name is new process output, even at the same length.
+        std::fs::write(&renamed, capture).unwrap();
+        scan(Agent::Codex, &renamed, &mut cursor).unwrap();
+        assert_eq!(cursor.observed.model.as_deref(), Some("codex-auto-review"));
     }
 
     /// A Codex turn that names its model and no effort unsets the effort an earlier turn named,

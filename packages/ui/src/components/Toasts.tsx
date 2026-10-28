@@ -10,7 +10,8 @@ import { errorAlerts } from "../errorAlerts";
 import { hasCodeParams, hasShellTimeoutDetails } from "../errorPresentation";
 import { t } from "../i18n/language";
 import { Message, useT } from "../i18n/react";
-import { sessionLocationContent, sessionWithLocationContent } from "../sessionCopy";
+import { sessionLocationContent } from "../sessionCopy";
+import { sessionDisplayTitle } from "../sessionLabel";
 import { useDaemon, type ToastRequest } from "../store";
 import { TOAST_BREAKPOINT } from "./toastGeometry";
 import { TitledControl } from "./TitledControl";
@@ -56,7 +57,10 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
           // Which session the alert is about goes in the body, since the daemon words its message as "this session"
           // without naming it: from the session's record, or, when it is gone, from the name the request carries.
           const goneName = request.daemonTitle?.params.title;
-          const sessionLine = session ? sessionWithLocationContent(t, session, consoles, projects) : goneName ? <InlineReference dir="auto" wrap>{goneName}</InlineReference> : undefined;
+          const sessionName = session ? sessionDisplayTitle(t, session) : goneName;
+          const sessionLine = sessionName ? <InlineReference dir="auto" wrap>{sessionName}</InlineReference> : undefined;
+          const place = session && (session.project_id ? projects.get(session.project_id) : consoles.get(session.console_id));
+          const placeName = place ? <InlineReference dir="auto" wrap>{place.name}</InlineReference> : t("error.alertLocationUnknown");
           errorAlerts.report({
             message: request.message,
             session: request.session,
@@ -65,7 +69,12 @@ export function Toasts({ focusTerminal }: { focusTerminal: () => void }): React.
             title,
             content: (
               <>
-                {sessionLine && <div dir="auto" className="mb-2"><Message id="error.alertSession" params={{ session: sessionLine }} /></div>}
+                {sessionLine && <div className="mb-2 flex flex-col gap-1">
+                  <p dir="auto"><Message id="error.alertSession" params={{ session: sessionLine }} /></p>
+                  {session && <p dir="auto">{session.project_id
+                    ? <Message id="error.alertProject" params={{ project: placeName }} />
+                    : <Message id="error.alertConsole" params={{ console: placeName }} />}</p>}
+                </div>}
                 {body}
               </>
             ),

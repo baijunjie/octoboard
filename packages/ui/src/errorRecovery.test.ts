@@ -10,7 +10,7 @@ import { hasErrorRemedy } from "./components/errorPartPresence";
 
 it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
-  ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"],
+  ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"], ["model_change_did_not_come_up", "launchSetting"], ["model_change_did_not_stop", "stopProcess"],
   ["connection_closed", "connection"], ["not_a_git_repository", "repository"],
   ["conversation_unresumable", "unresumable"], ["codex_unarchive_failed", "unarchive"],
   ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],

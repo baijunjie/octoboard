@@ -242,6 +242,36 @@ describe("the Hand off entry", () => {
   });
 });
 
+describe("the Change model entry", () => {
+  const item = (session: Session, handlers = {} as SidebarHandlers) =>
+    sessionMenu(t, handlers, session, [], undefined).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Change model") as { disabled?: boolean; reason?: unknown; onClick: () => void } | undefined;
+
+  it.each([
+    ["idle", {}, false],
+    ["working", {}, false],
+    ["waiting_user", {}, false],
+    ["interrupted", {}, false],
+    ["starting", {}, true],
+    ["idle", { switching_account: true }, true],
+  ] as const)("on a %s session (%o) is disabled: %s, with no reason", (status, extra, disabled) => {
+    const entry = item(sessionOf("s", "c", "p", "Title", status, extra));
+    expect(entry?.disabled ?? false).toBe(disabled);
+    expect(entry?.reason).toBeUndefined();
+  });
+
+  it.each(["list", "focused"] as const)("is above Switch account in the %s menu, is absent when archived, and opens its dialog", (placement) => {
+    expect(item(sessionOf("h", "c", undefined, "Hub", "archived"))).toBeUndefined();
+    const hub = sessionOf("h", "c", undefined, "Hub", "idle");
+    const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
+    const menu = sessionMenu(t, handlers, hub, [account("w", "claude")], undefined, { placement });
+    const labels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
+    expect(labels.slice(labels.indexOf("Change model"), labels.indexOf("Hand off") + 1)).toEqual(["Change model", "Switch account", "Hand off"]);
+    const changeModel = menu.find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Change model") as ActionMenuItem;
+    changeModel.onClick();
+    expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "session-model", session: hub });
+  });
+});
+
 describe("a session that is still starting", () => {
   it("offers Archive, never Delete, even when it was never used", () => {
     const starting = sessionOf("s", "c", "p", "Title", "starting");

@@ -40,6 +40,7 @@ pub(crate) mod reads;
 mod resume_request;
 pub mod role;
 mod session_branches;
+mod session_model;
 mod settings;
 pub mod stdio;
 
@@ -198,7 +199,8 @@ macro_rules! session_record_fields {
          `reopen_session` that finds it gone is refused (`resumable` in `get_session`, and in \
          `list_archived` with `check_resumable`, tells beforehand). `model` and `effort`, when \
          present, are the session's own choices, `null` leaving them to the agent's default; \
-         absent, it follows its project's (else console's) setting. `orchestration_role` is \
+         absent, it follows its project's (else console's) setting; \
+         `set_session_model` changes them for a session of yours. `orchestration_role` is \
          `coordinator` (can manage child sessions) or `worker` (cannot); `owner` is the parent \
          session, null when independent, and `owner_kind` its kind. A coordinator may have a \
          parent and no child sessions. `lead` is the compatibility flag for a project \
@@ -508,6 +510,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     HANDOFF_SESSION,
     HANDOVER_BRANCHES,
     SWITCH_SESSION_ACCOUNT,
+    SET_SESSION_MODEL,
     TRANSFER_SESSION,
     RELEASE_SESSION,
     REQUEST_SESSION,
@@ -968,6 +971,53 @@ const SWITCH_SESSION_ACCOUNT: ToolDef = ToolDef {
                 },
             }),
             &["session", "account"],
+        )
+    },
+};
+
+/// How an owner changes the model and reasoning effort of a session of its own, keeping its
+/// conversation and its account, as the user's Change model does, without approval.
+const SET_SESSION_MODEL: ToolDef = ToolDef {
+    name: "set_session_model",
+    description: "Change the model or reasoning effort of one of your sessions (`yours: true`), \
+                  which then become the session's own. It stays on its agent and its account, \
+                  so no approval is needed. A running session is restarted to take them: its \
+                  process is ended and relaunched resuming its conversation, which cuts off a \
+                  turn in progress. It is not sent a message for this: it comes back awaiting \
+                  instructions, so send it the next step with `instruct_session` — except where \
+                  the result's `note` says it was sent a prompt to continue its task (a turn the \
+                  restart cut off or a usage limit had stopped), which you must not repeat. The \
+                  call waits a few seconds for the relaunch to come up. An interrupted session \
+                  is not started: it takes the new values when it is next resumed. A `model` or \
+                  `effort` the agent does not offer under the session's account is refused, \
+                  changing nothing; `list_agent_models` lists them. Refused too for an archived \
+                  session (`reopen_session` takes a model and effort), one that is starting or \
+                  being switched, handed off or otherwise changed, and one waiting for the \
+                  user, which the restart would take its prompt from. Returns the session, \
+                  whether it was `restarted`, and its own `model` and `effort` (`null` is the \
+                  agent's own default; absent where it follows its project's or console's).",
+    schema: || {
+        object_schema(
+            json!({
+                "session": {
+                    "type": "string",
+                    "description": "The id of the session of yours to change.",
+                },
+                "model": {
+                    "type": "string",
+                    "description": "The model it runs with from now on; blank is the agent's \
+                                    own default. `list_agent_models` lists the ones its agent \
+                                    offers under its account. Left out, it keeps the model it \
+                                    has.",
+                },
+                "effort": {
+                    "type": "string",
+                    "description": "The reasoning effort it runs with from now on; blank is the \
+                                    agent's own default. `list_agent_models` lists the levels \
+                                    each model offers. Left out, it keeps the effort it has.",
+                },
+            }),
+            &["session"],
         )
     },
 };
@@ -2068,6 +2118,7 @@ const COORDINATOR_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     HANDOFF_SESSION,
     HANDOVER_BRANCHES,
     SWITCH_SESSION_ACCOUNT,
+    SET_SESSION_MODEL,
     TRANSFER_SESSION,
     RELEASE_SESSION,
     BIND_TO_SESSION,
@@ -2570,6 +2621,7 @@ mod tests {
                 "handoff_session",
                 "handover_branches",
                 "switch_session_account",
+                "set_session_model",
                 "transfer_session",
                 "release_session",
                 "bind_to_session",
@@ -2616,6 +2668,7 @@ mod tests {
                 "handoff_session",
                 "handover_branches",
                 "switch_session_account",
+                "set_session_model",
                 "transfer_session",
                 "release_session",
                 "request_session",

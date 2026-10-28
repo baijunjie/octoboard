@@ -22,6 +22,7 @@ import { quotaGatingScenarios } from "./quotaGating";
 import { railQuotaScenarios } from "./railQuota";
 import { reportScenarios } from "./report";
 import { sessionHistoryScenarios } from "./sessionHistory";
+import { sessionModelScenarios } from "./sessionModel";
 import { settingsScenarios } from "./settings";
 import { shortcutsScenarios } from "./shortcuts";
 import { structuredErrorScenarios } from "./structuredErrors";
@@ -64,6 +65,7 @@ export const SCENARIOS: Scenario[] = [
   ...shortcutsScenarios,
   ...dialogScenarios,
   ...handoffScenarios,
+  ...sessionModelScenarios,
   ...quotaGatingScenarios,
   ...configurationScenarios,
   ...viewerScenarios,

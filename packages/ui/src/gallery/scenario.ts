@@ -296,6 +296,11 @@ export interface Scenario {
   /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;
+  /** Per-session `set_session_model` failures or a request kept pending, ahead of the refusals the fixture
+   * daemon works out from the session itself. A running session is shown starting meanwhile; a failure
+   * with `model_change_did_not_come_up` leaves it interrupted with the values it had, any other puts it
+   * back as it was (the process did not stop). Unlisted sessions take the new values normally. */
+  sessionModelChanges?: Record<string, FixtureError | "pending">;
   /** Per-session handoff failures or a request kept pending, ahead of the refusals the fixture
    * daemon works out from the session itself: for one the window could not have seen coming (the
    * daemon finding a session mid-turn that the window still lists as idle). Unlisted sessions are

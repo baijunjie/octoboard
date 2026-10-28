@@ -377,6 +377,16 @@ fn relationships(agent: Agent, owns: bool) -> String {
             instruct_session = tool("instruct_session"),
         ));
         lines.push(format!(
+            "- `{set_session_model}` changes the model or reasoning effort of a session of yours, \
+             on its own agent and account, so no approval is needed. A running one is restarted, \
+             keeping its conversation, and comes back awaiting instructions (a turn in progress \
+             is cut off), so send it the next step with `{instruct_session}` — unless the \
+             result's `note` says it was sent a prompt to continue, which you must not repeat. A \
+             session waiting for the user is refused.",
+            set_session_model = tool("set_session_model"),
+            instruct_session = tool("instruct_session"),
+        ));
+        lines.push(format!(
             "- `{transfer_session}` hands a session of yours to another parent session — a \
              console session of this console, or a coordinator of this project — to pass its \
              task over. A coordinator transferred to a project session becomes a worker and \

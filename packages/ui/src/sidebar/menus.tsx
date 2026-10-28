@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Copy, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -255,8 +255,8 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
   };
 }
 
-/** A session's actions: pin, lock, rename, colour (a console session's), focus mode, switch account, hand off,
- * unbind (a bound session's, disabled while it is still starting, which the daemon refuses) and archive;
+/** A session's actions: pin, lock, rename, colour (a console session's), focus mode, change model, switch account,
+ * hand off, unbind (a bound session's, disabled while it is still starting, which the daemon refuses) and archive;
  * an archived session (listed in focus mode) and one never used offer deleting instead.
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
  * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
@@ -313,6 +313,8 @@ export function sessionMenu(
     },
     ...(session.role === "console" && !archived ? [colourSubmenu(t, handlers, session)] : []),
     ...(!archived ? ["separator" as const] : []),
+    // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
+    ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), icon: Cpu, disabled: session.status === "starting" || session.switching_account === true, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
     ...(switchAccount ? [switchAccount] : []),
     ...(archived ? [] : [handOffItem(t, handlers, session, canHandOff, sharing?.get(session.account_id ?? "")?.progress !== undefined)]),
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), icon: Unlink, disabled: session.status === "starting" || session.switching_account === true, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),

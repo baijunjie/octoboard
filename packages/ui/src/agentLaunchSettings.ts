@@ -21,13 +21,16 @@ export function effortLevels(models: AgentModel[], model: string | null): { leve
 }
 
 /** The options one of the launch-setting pickers offers: the agent's own list, with a stored
- * value that is no longer in it kept on the end and marked as such, so the dialog never silently
- * changes what it is set to. Unset is the picker's empty state, not an option. */
+ * value that is no longer in it kept on the end, so the dialog never silently changes what it is set
+ * to, and marked as not in the list once `listed` says the list is known: while it is still out, or
+ * when it could not be read, nothing is known of the value's absence. Unset is the picker's empty
+ * state, not an option. */
 export function launchSettingOptions(
   t: Translate,
   known: LaunchSettingOption[],
   current: string | null,
+  listed: boolean,
 ): LaunchSettingOption[] {
   if (!current || known.some((option) => option.value === current)) return known;
-  return [...known, { value: current, label: current, badge: t("dialog.agentSettings.unlisted") }];
+  return [...known, { value: current, label: current, ...(listed && { badge: t("dialog.agentSettings.unlisted") }) }];
 }

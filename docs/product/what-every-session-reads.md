@@ -313,9 +313,9 @@ a call runs nothing while an answer is fresh. The answer is `agent`, `account` (
   is being fetched, and when there is none" there), with `models` empty.
 
 The description of every `model` and `effort` a tool takes — `new_session`, `request_session`, `request_resume_session`,
-`handoff_session`, `reopen_session`, and the `launch` settings of `add_project`, `update_project` and `update_console` —
-points to it: a value given there must be one it lists, under the rules in "The Advanced section" in
-`docs/product/model-and-reasoning-effort.md`.
+`handoff_session`, `reopen_session`, `set_session_model`, and the `launch` settings of `add_project`, `update_project`
+and `update_console` — points to it: a value given there must be one it lists, under the rules in "The Advanced section"
+in `docs/product/model-and-reasoning-effort.md`.
 
 ## Session records
 
@@ -362,13 +362,13 @@ The `status` these records carry is the one the window shows, one of `starting`,
 `interrupted` and `archived` (see `docs/product/session-statuses.md`): a running session reads `waiting_user` while a
 folder-trust confirmation that needs the user, a Codex action title or a screen only the user can answer holds it there,
 whatever its agent last reported (see "What the statuses are derived from" in `docs/product/session-statuses.md`), and
-one that a change of its account's sharing has ended and is about to resume reads `starting` (see "When a change is
-carried out" in `docs/product/sharing-the-default-configuration.md`). Each record also carries `queued_messages` and
-`writes_held`, which say how many messages are waiting to be written into the session — what is kept for an
-interrupted session until its resume included: information, and for an owner the reports and notices (see "Reports
-and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`) — and what keeps them from being
-written whatever its `status` reads (see "Messages held until a session can take them" in
-`docs/product/message-delivery.md`).
+one restarting after a model or effort change (see "Changing a session's model and effort" in
+`docs/product/model-and-reasoning-effort.md`) or a change of its account's sharing reads `starting` (see "When a change
+is carried out" in `docs/product/sharing-the-default-configuration.md`). Each record also carries `queued_messages` and
+`writes_held`, which say how many messages are waiting to be written into the session — what is kept for an interrupted
+session until its resume included: information, and for an owner the reports and notices (see "Reports and notices for
+an interrupted owner" in `docs/product/reporting-to-owners.md`) — and what keeps them from being written whatever its
+`status` reads (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
 
 Each record also carries the facts the tools that act on a session depend on, so a caller can check them beforehand:
 
