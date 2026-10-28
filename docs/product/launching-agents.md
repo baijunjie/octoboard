@@ -110,7 +110,7 @@ besides the variables a project session's agent is given for its git (see "The l
   quota has left, the reads every session has whatever its kind — `get_session`, `read_session_history`,
   `list_consoles`, `list_projects` and `list_archived` — with the rule that a session not its own is to be left alone
   whatever it can read of it, `list_agent_models` to check before naming a model or effort, `list_sessions` and
-  `share_info` for information, and `get_session_branches` for where the branches a session is responsible for are
+  `send_message` for information, and `get_session_branches` for where the branches a session is responsible for are
   checked out. Where its project's effective git workflow settings have sessions develop on a branch or in a worktree of
   their own at the launch, it also carries the development rule (see "The development rule" in
   `docs/product/git-workflow-settings.md`), where **Ask questions as choices** is on at the launch, the guidance on

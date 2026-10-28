@@ -182,13 +182,13 @@ pub(super) async fn transfer_session(
     let to_owner = format!(
         "{NOTICE_PREFIX}: {from} handed its session `{id}` (\"{title}\"){place} over to \
          you. It is yours from now on: it reports to you, and you drive it like any session of \
-         yours, with `{send_message}`, `{archive_session}` and `{reopen_session}`.{lead} The \
+         yours, with `{instruct_session}`, `{archive_session}` and `{reopen_session}`.{lead} The \
          handover note:\n\n{note}\n— end of the handover note —",
         from = sharing::named_session(caller),
         id = moved.id,
         title = sharing::one_line(&moved.title),
         place = sharing::place_of(state, &moved),
-        send_message = owner_tool("send_message"),
+        instruct_session = owner_tool("instruct_session"),
         archive_session = owner_tool("archive_session"),
         reopen_session = owner_tool("reopen_session"),
         note = sharing::quote(&note),
@@ -211,7 +211,7 @@ pub(super) async fn transfer_session(
     if told_owner.is_err() {
         result_note.push_str(&format!(
             " Tell the new owner of the handover yourself with `{}`.",
-            super::qualified_tool_name(caller.agent, "share_info")
+            super::qualified_tool_name(caller.agent, "send_message")
         ));
     }
     Ok(json!({
@@ -261,10 +261,10 @@ pub(crate) async fn tell_former_owner(
         "{NOTICE_PREFIX}: the user released {released} from you. It is no longer yours: it has \
          no owner now and answers only to the user, so you can no longer instruct, drive or \
          archive it, and it does not report to you. You can still tell it something with \
-         `{share_info}`, which it weighs rather than obeys. Do not count on it any more, and \
+         `{send_message}`, which it weighs rather than obeys. Do not count on it any more, and \
          treat any work you handed it as left with the user.",
         released = sharing::named_session(released),
-        share_info = super::qualified_tool_name(owner.agent, "share_info"),
+        send_message = super::qualified_tool_name(owner.agent, "send_message"),
     );
     reporting::write_message_off_runtime(state, owner_id, text, WhenBlocked::Queue)
         .await
@@ -287,11 +287,11 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
          this terminal, and do not call `{report}`, which is refused for a session with no owner. \
          This replaces what you were told of your owner when you were started. You can start and \
          drive sessions of your own with `{new_session}` and the tools that go with it, and you \
-         can still tell your former owner something with `{share_info}`, which it weighs rather \
+         can still tell your former owner something with `{send_message}`, which it weighs rather \
          than obeys; of Octoboard's tools you now have {tools}.{note}",
         report = tool("report"),
         new_session = tool("new_session"),
-        share_info = tool("share_info"),
+        send_message = tool("send_message"),
         tools = project_tools(released.agent, false),
     )
 }
@@ -324,9 +324,9 @@ pub(super) async fn release_session(
         "note": format!(
             "Released: `{id}` has no owner now and is no longer yours. It is the user's own \
              session; you no longer instruct or drive it and it does not report to you, though \
-             `{share_info}` can still tell it something. {told}",
+             `{send_message}` can still tell it something. {told}",
             id = released.id,
-            share_info = super::qualified_tool_name(caller.agent, "share_info"),
+            send_message = super::qualified_tool_name(caller.agent, "send_message"),
             told = told(&delivery, "It"),
         ),
     }))
@@ -474,7 +474,7 @@ mod tests {
         let err = call(
             &state,
             "a",
-            "send_message",
+            "instruct_session",
             &arguments(json!({ "session": "of-a", "text": "hello" })),
         )
         .await
@@ -524,7 +524,7 @@ mod tests {
         assert!(
             note.contains(&super::super::qualified_tool_name(
                 Agent::Claude,
-                "share_info"
+                "send_message"
             )),
             "{note}"
         );
@@ -537,7 +537,7 @@ mod tests {
             "{told}"
         );
         assert!(
-            told.contains("tell your former owner something with `mcp__octoboard__share_info`"),
+            told.contains("tell your former owner something with `mcp__octoboard__send_message`"),
             "{told}"
         );
         // A blank note adds nothing, and the owner that released it is not told what it did.
@@ -547,7 +547,7 @@ mod tests {
         let err = call(
             &state,
             "a",
-            "send_message",
+            "instruct_session",
             &arguments(json!({ "session": "of-a", "text": "hello" })),
         )
         .await

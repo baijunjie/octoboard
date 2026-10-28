@@ -79,7 +79,7 @@ pub struct Interrupted {
 }
 
 const NOTHING_TO_INTERRUPT: &str = "Nothing to interrupt: the session is not in the middle of a \
-     turn. It is awaiting instructions; send it the next step with `send_message`.";
+     turn. It is awaiting instructions; send it the next step with `instruct_session`.";
 
 const NOT_SHOWN_RUNNING: &str = "No key was sent: the session reads as working, but its terminal \
      does not show a turn running (its title shows none, or has stopped changing), so a key could \
@@ -214,7 +214,7 @@ fn draft_note(draft: Draft) -> &'static str {
 fn interrupted_note(agent: Agent, written: usize, draft: Draft, prompt: Restored) -> String {
     let mut note = String::from(
         "Interrupted: the turn was stopped. The session keeps its conversation and is awaiting \
-         instructions; send it the next step with `send_message`.",
+         instructions; send it the next step with `instruct_session`.",
     );
     if written > 0 {
         // Counted by the status read before each write, so a message written just as the turn

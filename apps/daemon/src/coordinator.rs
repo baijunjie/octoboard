@@ -14443,8 +14443,8 @@ mod tests {
             "{told}"
         );
         assert!(told.contains("left with the user"), "{told}");
-        let share_info = mcp::qualified_tool_name(Agent::Claude, "share_info");
-        assert!(told.contains(&format!("`{share_info}`")), "{told}");
+        let send_message = mcp::qualified_tool_name(Agent::Claude, "send_message");
+        assert!(told.contains(&format!("`{send_message}`")), "{told}");
         assert_eq!(
             state.store.get_session("plain").unwrap().unwrap().bound_to,
             None

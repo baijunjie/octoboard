@@ -56,9 +56,10 @@ command-line option; one that is nothing but whitespace once reshaped is dropped
 prompt. Such a prompt is neither queued nor checked as below. For any other session, Claude Code's included when it has
 no conversation to resume, the instruction or prompt is queued and written like any other message.
 
-**A blank message is refused.** A message passed to `send_message` — a client's request or an owner's tool — that is
-nothing but whitespace once its control characters and invisible characters are removed is not written: a client is
-refused with `field_required` (field `text`), an owner's tool with that reason in prose.
+**A blank message is refused.** A message passed to a client's `send_message` request or to an owner's
+`instruct_session` tool that is nothing but whitespace once its control characters and invisible characters are
+removed is not written: a client is refused with `field_required` (field `text`), an owner's tool with that reason in
+prose.
 
 An instruction, a report or information shared by another session, for a session that **cannot** take one right now — it
 is waiting for the user at a permission prompt or a question — is queued rather than dropped, and delivered as soon as
@@ -141,7 +142,7 @@ Every Codex launch keeps its last three screens away as far as it can (see "Code
 screen is up the session reads as *waiting for the user* and raises its hand (see "What the statuses are derived from"
 in `docs/product/session-statuses.md`); the moment its screen no longer shows one, the queue is written, oldest first,
 and the hand comes down. Octoboard never answers such a screen: the user does, in the session's terminal. A client's
-`send_message` meanwhile is queued like any other message, not refused.
+`send_message` request meanwhile is queued like any other message, not refused.
 
 **And while an interrupt is typing into the session.** While `interrupt_session` sends its keys into a Claude Code or
 Grok Build session whose input box it finds on the screen, and clears what the agent puts back in its input box,
@@ -201,9 +202,9 @@ instructions or working in background, not mid-turn — it waits up to about thr
 a prompt sent (`UserPromptSubmit`). This applies to every message Octoboard writes: an owner's instruction, a report,
 shared information, a report panel form submission, the instruction `reopen_session` hands over or the prompt to
 continue after an account switch when it is written rather than given as the launch prompt, the messages of a
-handover or a handoff, and a client's own `send_message`. A message that was queued is checked the same way when it is
-finally written. When several queued messages are written in one go, each is checked on its own, against the agent's
-status at the moment it is written: once the first is sent the agent reads as working, so the rest are written
+handover or a handoff, and a client's own `send_message` request. A message that was queued is checked the same way
+when it is finally written. When several queued messages are written in one go, each is checked on its own, against the
+agent's status at the moment it is written: once the first is sent the agent reads as working, so the rest are written
 unchecked, as mid-turn messages; if the agent is at its prompt again by then — after a very short turn, say — the next
 one is checked too.
 
@@ -236,18 +237,19 @@ but its agent did not send it to the conversation, so the session has not read i
 it must not send it again. The same is said of a message a view of background agents took (see "A message a dialog
 discarded or a view took" below), and the tools' wording names both: the message is in the input box, or went to a view
 of the agent's background agents. How each tool words this, and what follows from it, is with the tool: the owner's
-`send_message` in "The console session's tools" in `docs/product/hub-orchestration.md`, `report` in
-`docs/product/reporting-to-owners.md`, `share_info` in `docs/product/information-between-sessions.md`,
+`instruct_session` in "The console session's tools" in `docs/product/hub-orchestration.md`, `report` in
+`docs/product/reporting-to-owners.md`, the `send_message` tool in `docs/product/information-between-sessions.md`,
 `transfer_session` in "Handing a session to another owner", `release_session` in "Releasing a session from its owner"
 and `bind_to_session` in "Binding an unbound session to an owner", all in `docs/product/changing-session-owners.md`. A
 sender whose message arrives while the session is held behind an unsent one is told it was queued, as for a session that
 cannot take a message. A sender already told its message was queued learns nothing more if that message is later left
 unsent; the notice is what reports it.
 
-**A client's `send_message`** to a Claude Code session at its prompt is answered once the check has ended — the second
-one too, for a message a dialog discarded and that is written again in the same delivery (see "A message a dialog
-discarded or a view took" below) — not as soon as the message is written. A message left unsent is not refused: the
-client is still answered with success, and, like every client, gets the `message_not_sent` notice.
+**A client's `send_message` request** (the daemon's client protocol, not the sessions' tool of that name) to a Claude
+Code session at its prompt is answered once the check has ended — the second one too, for a message a dialog discarded
+and that is written again in the same delivery (see "A message a dialog discarded or a view took" below) — not as soon
+as the message is written. A message left unsent is not refused: the client is still answered with success, and, like
+every client, gets the `message_not_sent` notice.
 
 **What is not checked:**
 

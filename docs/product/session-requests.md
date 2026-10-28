@@ -240,8 +240,8 @@ dialog (see "Approving requests automatically" above):
 4. **The branches the request named are handed to it** once it has started (see "Handing branches over" below).
 5. **The approval does not archive the caller.** It keeps running, and the approval does not count as a report.
    The result tells the caller to follow the user's direction on continuing its own work or ending after the
-   handover. It does not own the new session, so `send_message`, `archive_session`, `reopen_session` and the other
-   tools that act on a session of the caller's own refuse it; `share_info` reaches it (see
+   handover. It does not own the new session, so `instruct_session`, `archive_session`, `reopen_session` and the other
+   tools that act on a session of the caller's own refuse it; `send_message` reaches it (see
    `docs/product/information-between-sessions.md`), and `get_session` reads it, as it reads any session.
 
 The call returns:
@@ -254,7 +254,7 @@ The call returns:
 | `title` | Its title. |
 | `console` | The console it is in. |
 | `project` | The project it is in, or null for a console session. |
-| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `share_info` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
+| `note` | Prose telling the caller that the user approved — or, for an automatic approval, that Octoboard approved the request automatically because the user has chosen to have session requests approved without asking — and which session was started — its kind, id, title, agent and project or console; that it has no owner and reports to the user, not to the caller; that it is not the caller's to drive and the caller should follow the user's direction on continuing its own work or ending after the handover; where the request named branches, what became of them (see "Handing branches over" below); that `send_message` tells it something that touches its work, and, where the caller has `get_session`, that it reads it. Where the caller is unbound, has `bind_to_session`, and could be bound to the new session under the rules a binding keeps, the note adds that `bind_to_session` with the new session as `owner` makes the caller one of its sessions — the way a project session comes to be driven by a console session it asked for (see "Lead sessions" in `docs/product/hub-orchestration.md`). |
 
 **No window follows the new session.** Approving selects nothing and changes no window's view or focus mode.
 

@@ -178,13 +178,13 @@ confirmations, settings and sessions would each need an owner and an authorizati
   on those turns.
 - **Information between sessions is a channel of its own, because "not an instruction" cannot be enforced.** A message
   is text written into the receiving terminal, so any session that can write to another could steer it. Commanding is
-  therefore the only hard-enforced boundary (`send_message`, `archive_session` and `reopen_session` act on the caller's
-  own sessions). Sharing information is a separate tool, offered to every session and reaching any running session in
-  any console or project, and keeping what it is given for an interrupted session until that session is resumed (see
-  "Information for an interrupted session" in `docs/product/information-between-sessions.md`); it is delivered under a
-  header naming the sender and saying the text is information to weigh, role descriptions tell each session whose work
-  it takes, and the receiver's owner is copied so it is never blind to what reaches its sessions. Octoboard makes the
-  distinction plain; whether a model keeps to it is the model's call.
+  therefore the only hard-enforced boundary (`instruct_session`, `archive_session` and `reopen_session` act on the
+  caller's own sessions). Sharing information is a separate tool, offered to every session and reaching any running
+  session in any console or project, and keeping what it is given for an interrupted session until that session is
+  resumed (see "Information for an interrupted session" in `docs/product/information-between-sessions.md`); it is
+  delivered under a header naming the sender and saying the text is information to weigh, role descriptions tell each
+  session whose work it takes, and the receiver's owner is copied so it is never blind to what reaches its sessions.
+  Octoboard makes the distinction plain; whether a model keeps to it is the model's call.
 - **A session whose work needs somewhere it does not reach asks the user for a session rather than being given more
   reach.** Two alternatives were set aside. Letting a project session drive sessions in other projects directly breaks
   the assumption that an owner and its bound sessions share a project — removing a project would leave dangling

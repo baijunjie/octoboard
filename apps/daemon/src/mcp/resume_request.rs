@@ -128,13 +128,13 @@ async fn plan(
         bail!(
             "{named} holds this conversation and is yours, so it needs no approval: reopen it with \
              `reopen_session` while it is archived or interrupted, and instruct it with \
-             `send_message` while it runs"
+             `instruct_session` while it runs"
         );
     }
     if !holder.status.is_dormant() {
         bail!(
             "{named} holds this conversation and is running, so there is nothing to resume. It \
-             reports to {}; `share_info` tells it something",
+             reports to {}; `send_message` tells it something",
             reports_to_words(state, &holder)
         );
     }

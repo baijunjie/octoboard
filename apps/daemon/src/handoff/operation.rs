@@ -382,14 +382,14 @@ pub(super) async fn tell(
             "{NOTICE_PREFIX}: {from}, which reported to you, was handed off to a session \
              of {agent}, because its work moves to another agent. {to}{place} took its place and \
              reports to you from now on: you drive it like any session of yours, with \
-             `{send_message}`, `{archive_session}` and `{reopen_session}`. The original is \
+             `{instruct_session}`, `{archive_session}` and `{reopen_session}`. The original is \
              archived. The new session read a package built from the original's conversation \
              and has its branches and its sessions.",
             from = named_session(original),
             agent = receiving.agent.label(),
             to = named_session(receiving),
             place = place_of(state, receiving),
-            send_message = tool(owner.agent, "send_message"),
+            instruct_session = tool(owner.agent, "instruct_session"),
             archive_session = tool(owner.agent, "archive_session"),
             reopen_session = tool(owner.agent, "reopen_session"),
         );

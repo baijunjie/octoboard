@@ -126,7 +126,7 @@ The session is sent no message about the switch, and neither is the caller, whic
 switch cut a turn off, or the turn had stopped on the plan's usage limit, the session is sent the prompt to continue
 its task (see "Continuing after a switch" below), and the caller must not send it one of its own; otherwise it comes
 back *awaiting instructions* like any resumed session, any turn it was in the middle of cut off, and the caller sends
-it its next step with `send_message`. The result's `note` says which of the two it was. A session with no conversation
+it its next step with `instruct_session`. The result's `note` says which of the two it was. A session with no conversation
 yet (see "Carrying the conversation" below) starts a fresh one on the new account. The call is answered once the
 switch's outcome is known — after the user's answer, where the user is asked — which can take a few seconds (see
 "What a switch does" below).
@@ -140,7 +140,7 @@ The call returns:
 | `account` | The account it is now on: the account's id, or `default` for the default account. |
 | `account_name` | That account's name; for the default account the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). |
 | `model`, `effort` | The session's own choice of model and of reasoning effort (see `docs/product/model-and-reasoning-effort.md`): a value, or `null` for the agent's own default; each absent where the session inherits it. |
-| `note` | Prose naming the account and agent the session is now on and saying either that its turn had been cut off by the switch or stopped on a usage limit, so it was sent a prompt to continue that task and the caller is not to send one itself, or that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `send_message`; and, for a session that had no conversation yet, that it starts fresh there. Where the user chose another account than the one asked for, it says so, and it names each model or reasoning effort the user set — a value, or the agent's own default. |
+| `note` | Prose naming the account and agent the session is now on and saying either that its turn had been cut off by the switch or stopped on a usage limit, so it was sent a prompt to continue that task and the caller is not to send one itself, or that it is back awaiting instructions with any turn in progress cut off and is to be sent its next step with `instruct_session`; and, for a session that had no conversation yet, that it starts fresh there. Where the user chose another account than the one asked for, it says so, and it names each model or reasoning effort the user set — a value, or the agent's own default. |
 
 Refused before the user is asked, with the reason in prose (as a tool error) and nothing changed:
 
