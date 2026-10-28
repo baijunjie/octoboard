@@ -54,8 +54,8 @@ function registerFallback() {
 }
 
 /** A control whose press opens Settings, pressed the way an assistive technology or a script does: it takes no focus. */
-function pressToOpen(hook: () => ReturnType<typeof useSettingsDialog>) {
-  const control = document.body.appendChild(document.createElement("button"));
+function pressToOpen(hook: () => ReturnType<typeof useSettingsDialog>, parent: HTMLElement = document.body) {
+  const control = parent.appendChild(document.createElement("button"));
   control.addEventListener("click", () => hook().openSettingsAt("accounts", { addAgent: true }));
   onTestFinished(() => control.remove());
   act(() => control.click());
@@ -148,6 +148,34 @@ it("hands focus back to a dialog open under Settings, a frame after the modal's 
   await frame();
   expect(focusTerminal).not.toHaveBeenCalled();
   expect(document.activeElement).toBe(dialog);
+});
+
+it("hands focus to the control a dialog under Settings opens on, rather than the dialog, when the restore left it on the body", async () => {
+  const dialog = document.body.appendChild(document.createElement("div"));
+  dialog.setAttribute("role", "dialog");
+  dialog.tabIndex = -1;
+  const field = dialog.appendChild(document.createElement("input"));
+  field.setAttribute("data-opening-focus", "");
+  onTestFinished(() => dialog.remove());
+  const hook = mount(true, () => {});
+  act(() => hook().openSettingsAt("accounts"));
+  act(() => hook().closeSettings());
+  await frame();
+  expect(document.activeElement).toBe(field);
+});
+
+it("hands focus back to the control in the dialog under Settings whose press opened Settings, though the press gave it none", async () => {
+  const dialog = document.body.appendChild(document.createElement("div"));
+  dialog.setAttribute("role", "dialog");
+  dialog.tabIndex = -1;
+  const field = dialog.appendChild(document.createElement("input"));
+  field.setAttribute("data-opening-focus", "");
+  onTestFinished(() => dialog.remove());
+  const hook = mount(true, () => {});
+  const control = pressToOpen(hook, dialog);
+  act(() => hook().closeSettings());
+  await frame();
+  expect(document.activeElement).toBe(control);
 });
 
 it("leaves alone a control the modal's restore has put focus on inside the dialog under Settings", async () => {

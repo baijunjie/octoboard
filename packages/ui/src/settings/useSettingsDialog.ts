@@ -16,7 +16,8 @@ import type { SettingsSectionId } from "./SettingsDialog";
  * About item opens Settings on its About section the same way, and moves an open Settings there unless another modal or
  * an open action menu holds the user's attention. Closing hands keyboard focus to `focusTerminal`, whatever the modal's
  * own focus restore would pick, unless a dialog is open under it (Settings was opened from one): focus then stays with
- * that dialog, which it is handed back to if the restore left it on `<body>`. With no dialog under it and no session's
+ * that dialog, which it is handed back to if the restore left it on `<body>` — to the control in it whose press opened
+ * Settings, else the control it opens on. With no dialog under it and no session's
  * terminal to take focus, it goes back to the control whose press opened Settings while that is still there, else to
  * the window's fallback for focus left on `<body>` (`focusAfterModalCloses`).
  */
@@ -78,10 +79,14 @@ export function useSettingsDialog({
         }
         focusAfterModalCloses();
       } else {
-        // A dialog is open under Settings: React Aria's focus restore (a frame later) puts focus back on the
-        // control that opened Settings, and only a focus it left on `<body>` is handed to that dialog, after it.
+        // A dialog is open under Settings: React Aria's focus restore returns to what had focus as Settings opened,
+        // which is not the control whose press opened it after a press that took no focus. Focus left on `<body>` a
+        // frame later goes to that dialog: to that control while it is still in the dialog, else to the control the
+        // dialog opens on. The restore may come later than this frame, and leaves alone focus no longer on `<body>`.
         requestAnimationFrame(() => {
-          if (!document.activeElement || document.activeElement === document.body) focusOpenDialog();
+          if (!document.activeElement || document.activeElement === document.body) {
+            focusOpenDialog(openedBy, { opening: true });
+          }
         });
       }
     }
