@@ -2,8 +2,8 @@
 //! order of how well each says what the session is about: the title the agent's own records name
 //! the conversation with, else the task in the agent's terminal title once the agent's
 //! decorations are taken off it (each adapter knows its own), else a stand-in from the first
-//! prompt. The terminal title is stored as the agent sent it, so a row written before an
-//! adapter learned to read it is read correctly too.
+//! prompt, except the instructions opening a handoff. The terminal title is stored as the agent
+//! sent it, so a row written before an adapter learned to read it is read correctly too.
 
 use std::path::{Path, PathBuf};
 
@@ -41,7 +41,15 @@ pub fn resolve(
         };
         adapter.task_title(raw, &names)
     })
-    .or_else(|| records.prompt.clone())
+    .or_else(|| {
+        // A handoff's instructions do not name the task. A saved stand-in may already contain
+        // them, so filter when resolving the title rather than only when reading the prompt.
+        records
+            .prompt
+            .as_ref()
+            .filter(|prompt| !prompt.starts_with(crate::handoff::operation::TAKEOVER_OPENING))
+            .cloned()
+    })
 }
 
 /// The names an agent may show the project under: the working directory's own name, that of the
@@ -109,6 +117,26 @@ mod tests {
         );
         assert_eq!(resolve(None, &none).as_deref(), Some("Prompt"));
         assert_eq!(resolve(None, &RecordTitles::default()), None);
+    }
+
+    #[test]
+    fn a_handoff_prompt_never_obscures_the_inherited_name_but_agent_titles_still_apply() {
+        // Match a persisted, truncated prompt, independently of the current handoff wording.
+        let prompt =
+            "You are taking over the work of the project session `original` (\"Fix the build\"), …";
+        for agent in [Agent::Claude, Agent::Codex, Agent::Grok] {
+            let mut titles = records(None, Some(prompt));
+            assert_eq!(resolve(agent, None, &titles, Vec::new), None);
+            assert_eq!(
+                resolve(agent, Some("Fix the build"), &titles, Vec::new).as_deref(),
+                Some("Fix the build")
+            );
+            titles.named = Some("Repair the build pipeline".to_owned());
+            assert_eq!(
+                resolve(agent, None, &titles, Vec::new).as_deref(),
+                Some("Repair the build pipeline")
+            );
+        }
     }
 
     #[test]

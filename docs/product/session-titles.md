@@ -36,6 +36,11 @@ The task title is the first of these that says something:
 3. **The user's first prompt**, for Claude Code and Codex: its first line that is not a markdown heading, on one line
    and cut to about 80 characters with an ellipsis.
 
+The instructions that open a handoff do not count as a prompt title, including one already saved with the session.
+Until the receiving agent names the conversation or puts a task in its terminal title, the receiving session shows
+its created name alone: the original's displayed name, unless the owner supplied another (see "What the receiving
+session takes over" in `docs/product/handing-off-sessions.md`).
+
 For Claude Code the first prompt is the first message in the conversation's transcript that the user sent: plain text
 as typed, or a slash command sent as a prompt, which reads as typed, `/name args`. Lines Claude Code adds itself are not
 prompts: a skill's body, notes about commands run locally, compaction summaries and tool results. Neither are
