@@ -39,12 +39,15 @@ The console session's instructions and every project session's role description 
   and necessary context; `branches` names the branches the caller is responsible for that the peer should take over.
 - A request to leave handover notes and finish, or permission to end without asking for a successor, means leaving
   the notes and ending work, without creating or transferring sessions or continuing work in the background.
-- `new_session`, where offered, is for a recipient the caller should keep directing and receiving reports from.
-  `handoff_session`, where offered, replaces an existing session the caller owns; it does not hand the caller's own
-  work to a peer.
+- `new_session` is for a recipient the caller should keep directing and receiving reports from. `handoff_session`
+  replaces an existing session the caller owns; it does not hand the caller's own work to a peer. Only a session
+  launched with those tools — a console session, or a project session launched unbound, as every launch of a lead
+  session is — is given this rule; a project session launched bound to an owner is not, and its text names neither
+  tool.
 - Instructions to persist until completion, permission to act without approval and earlier permission to delegate
   do not override the user's handover intent or request to end. If the agent cannot distinguish a peer request,
-  notes followed by ending, and a child session it should direct, it must ask the user before acting.
+  notes followed by ending, and — for a session given the rule above — a child session it should direct, it must ask
+  the user before acting.
 
 These are instructions for the agent, not intent detection enforced by Octoboard. The confirmation described above
 still controls whether a `request_session` call starts anything.

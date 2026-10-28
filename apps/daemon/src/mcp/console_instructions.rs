@@ -140,8 +140,9 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            is opened on the agent's own record of it. For when the user asked for that \
            conversation.\n\
          - `list_sessions` / `send_message` — the running sessions everywhere (narrow them with \
-           `console`, `project`, `owner`, `yours`, `kind` or `branch`; `status: interrupted` \
-           lists the interrupted ones), and telling one of them something.\n\
+           `console`, `project`, `owner`, `yours`, `kind` or `branch`; `status` is `live` \
+           (the running ones) by default, `interrupted` for the interrupted ones, or `any` for \
+           both), and telling one of them something.\n\
          - `show_page` — push an HTML page to the report panel beside you, for anything better \
            shown than typed: a table, a rich comparison, many items, a form. It is a static \
            document with native forms: scripts do not run, and a submitted form comes back to \
@@ -285,7 +286,7 @@ fn escape_close_tag(text: &str) -> String {
 pub fn console_session_instructions(user_prompt: Option<&str>, options: &RoleOptions) -> String {
     let mut builtin = format!(
         "{CONSOLE_SESSION_INSTRUCTIONS}\n\n{}",
-        super::role::handover_guidance(None)
+        super::role::handover_guidance(None, true)
     );
     if options.ask_as_choices {
         builtin.push_str("\n\n");
@@ -544,18 +545,21 @@ mod tests {
         assert_eq!(section, custom.rfind("## The user's instructions").unwrap());
     }
 
-    /// The tools section names tools by their bare names, so a tool renamed in the catalogue
-    /// without the text following would send the model looking for one that does not exist.
+    /// The file names tools by their bare names, so a tool renamed in the catalogue without the
+    /// text following would send the model looking for one that does not exist.
     #[test]
     fn every_tool_the_instructions_name_is_in_the_console_catalogue() {
-        let tools = section("## The tools");
+        let text = console_session_instructions(None, &RoleOptions::default());
+        assert_eq!(text.matches('`').count() % 2, 0, "unbalanced backticks");
         let catalogue: Vec<&str> = crate::mcp::tools_for(Role::Console, false)
             .iter()
             .map(|tool| tool.name)
             .collect();
-        // Every console tool's name holds an underscore, and nothing else the section puts in
-        // backticks (argument names, the server's key) does.
-        let named: Vec<&str> = tools
+        // Every console tool's name holds an underscore, and so do the few field names and values
+        // the file puts in backticks; listing them keeps those from being taken for tools missing
+        // from the catalogue.
+        const NON_TOOL_NAMES: [&str; 2] = ["owner_kind", "needs_decision"];
+        let named: Vec<&str> = text
             .split('`')
             .skip(1)
             .step_by(2)
@@ -563,10 +567,27 @@ mod tests {
             .collect();
         assert!(
             named.contains(&"new_session"),
-            "the tools section names no tool"
+            "the instructions name no tool"
         );
         for tool in &named {
-            assert!(catalogue.contains(tool), "`{tool}` is not a console tool");
+            assert!(
+                catalogue.contains(tool) || NON_TOOL_NAMES.contains(tool),
+                "`{tool}` is not a console tool"
+            );
+        }
+    }
+
+    /// The other direction: a console tool the file never names is one the model is not told it
+    /// has.
+    #[test]
+    fn every_console_tool_is_named_in_the_instructions() {
+        let text = console_session_instructions(None, &RoleOptions::default());
+        for tool in crate::mcp::tools_for(Role::Console, false) {
+            assert!(
+                text.contains(&format!("`{}`", tool.name)),
+                "`{}` is not named in the console instructions",
+                tool.name
+            );
         }
     }
 
