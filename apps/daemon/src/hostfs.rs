@@ -129,9 +129,15 @@ impl DirectoryIdentities {
 /// The device and inode of what `path` leads to, following links; `None` where it cannot be read
 /// or the file system reports no inode (0), so there is nothing to tell it apart by.
 fn inode_of(path: &Path) -> Option<(u64, u64)> {
+    let identity = identity(&std::fs::metadata(path).ok()?);
+    (identity.1 != 0).then_some(identity)
+}
+
+/// The device and inode `metadata` gives a file, as they are: the inode is 0 where the file system
+/// reports none, which the caller decides what to make of.
+pub fn identity(metadata: &std::fs::Metadata) -> (u64, u64) {
     use std::os::unix::fs::MetadataExt;
-    let metadata = std::fs::metadata(path).ok()?;
-    (metadata.ino() != 0).then(|| (metadata.dev(), metadata.ino()))
+    (metadata.dev(), metadata.ino())
 }
 
 pub fn is_git_repo(path: &Path) -> bool {

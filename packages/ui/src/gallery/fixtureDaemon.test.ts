@@ -1394,6 +1394,20 @@ describe("the fixture daemon's added agents", () => {
   });
 });
 
+describe("the fixture daemon's trust answers", () => {
+  const refusal = { code: "trust_directory_unreachable", params: { path: "/Users/dev/code/web" }, message: "unreachable" };
+  const daemon = () => createFixtureDaemon({ id: "trust-refused", group: "Trust prompts and toasts", category: "exceptional", title: "", trustParentDirError: refusal, state: snapshotState({}) });
+
+  it("refuses a go-ahead that trusts the parent folder with the error a scenario names", async () => {
+    await expect(daemon().request({ type: "confirm_trust", session: "s", remember: true, trust_parent_dir: true })).rejects.toMatchObject({ code: "trust_directory_unreachable", params: { path: "/Users/dev/code/web" } });
+  });
+
+  it("acknowledges a go-ahead for the project alone", async () => {
+    await expect(daemon().request({ type: "confirm_trust", session: "s", remember: true, trust_parent_dir: false })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "confirm_trust", session: "s", remember: true })).resolves.toEqual({ type: "ack" });
+  });
+});
+
 describe("the fixture daemon's account login and default account name", () => {
   const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, added_agents: ["claude", "grok"] as ("claude" | "grok")[], accounts: [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }] };
   const daemonWith = (outcome?: "succeeded" | "failed" | "timed_out") => createFixtureDaemon({ id: "login", group: "Settings", category: "normal", title: "", state: snapshotState({ settings }), loginOutcome: outcome });

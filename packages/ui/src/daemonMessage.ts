@@ -64,6 +64,7 @@ export const CODE_PARAMS: Record<string, readonly string[]> = {
   grok_home_not_initialized: ["path"],
   grok_sandbox_unsupported: ["source", "profile"],
   trust_directory_too_broad: ["path"],
+  trust_directory_unreachable: ["path"],
   trust_not_carried_over: ["path", "enter"],
   trust_answer_failed: ["enter"],
   clean_filtered: ["path", "filter"],
@@ -366,7 +367,7 @@ export const RECOVERY_CODES = new Set([
   "console_has_running_sessions", "project_has_running_sessions", "project_directory_shared", "path_not_absolute", "directory_unreadable",
   "models_binary_not_found", "quota_binary_not_found", "quota_not_signed_in", "quota_config_dir_missing", "login_codex_busy",
   "config_dir_unreachable", "grok_home_not_initialized", "session_archived", "conversation_to_resume_not_found", "conversation_in_session",
-  "session_waiting_for_user", "session_trust_pending", "queued_messages_lost", "source_changed", "trust_directory_too_broad",
+  "session_waiting_for_user", "session_trust_pending", "queued_messages_lost", "source_changed", "trust_directory_too_broad", "trust_directory_unreachable",
   "agent_not_available", "queued_messages_dropped", "trust_answer_failed", "session_lock_busy", "session_locked", "restore_not_on_branch",
   "session_has_running_sessions",
 ]);

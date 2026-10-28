@@ -380,6 +380,24 @@ export const noticeScenarios: Scenario[] = [
     ],
   },
   {
+    id: "trust-prompt-directory-unreachable",
+    group: TRUST,
+    category: "exceptional",
+    title: "Trust prompt refused for a folder that could not be looked at",
+    description: "The go-ahead with \"Trust every project under ~/code\" checked was refused. An error alert titled \"Could not answer the trust confirmation\" stands over the trust dialog, which is still open behind it with the option still checked and its buttons still there. Its body says the project's path, as a chip, or the folder above it did not respond in time, so that folder could not be checked; the remedy line says to uncheck the folder option to trust this project on its own, or to try again once the volume responds again.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web],
+      sessions: trustSessions.filter((session) => session.project_id === web.id || session.role === "console"),
+      trustPrompts: [{ session: "s-web-1", agent: "claude", project: web.id, path: web.path, trustDir: "/Users/dev/code" }],
+    }),
+    trustParentDirError: { code: "trust_directory_unreachable", params: { path: web.path }, message: `\`${web.path}\` or the folder above it did not respond in time, so that folder could not be checked` },
+    steps: [
+      (ui) => ui.press(ui.t("dialog.trust.parent", { directory: "~/code" })),
+      (ui) => ui.confirm(),
+    ],
+  },
+  {
     id: "session-request-reopen-incomplete",
     group: TRUST,
     category: "exceptional",

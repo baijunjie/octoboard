@@ -3414,13 +3414,16 @@ pub mod error_code {
     /// A directory to trust as a whole cannot be offered: it is the filesystem root, the user's home
     /// directory or one that contains it. Nothing was answered. The dialog the request came from
     /// stays open, because the user can still choose another way to answer, and so it does for the
-    /// two codes below, which are the same refusal for other reasons.
+    /// three codes below, which are the same refusal for other reasons.
     pub const TRUST_DIRECTORY_TOO_BROAD: &str = "trust_directory_too_broad";
     /// [`TRUST_DIRECTORY_TOO_BROAD`], where the project's path is not absolute.
     pub const TRUST_PATH_NOT_ABSOLUTE: &str = "trust_path_not_absolute";
     /// [`TRUST_DIRECTORY_TOO_BROAD`], where the home directory is unknown, so nothing can be
     /// checked against it.
     pub const TRUST_HOME_UNKNOWN: &str = "trust_home_unknown";
+    /// [`TRUST_DIRECTORY_TOO_BROAD`], where the folder above the project at `path` could not be
+    /// checked against the home directory in time, as on a mount that does not answer.
+    pub const TRUST_DIRECTORY_UNREACHABLE: &str = "trust_directory_unreachable";
     /// A go-ahead for a trust confirmation that is no longer waiting for one: pressed already, by
     /// this or another client or in the terminal, gone with its session, or never shown. Nothing is
     /// wrong, so a client shows nothing.

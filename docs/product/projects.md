@@ -58,8 +58,9 @@ timeout, and its scratch directory is removed when it ends.
 A path may be entered by hand or picked with the directory browser. A leading `~` is expanded to the home directory
 of the host the daemon runs on. The path must then be absolute: a relative path is refused, for every source. It is
 recorded lexically normalised — `.` components dropped, each `..` folded into the component before it, no trailing
-slash — without resolving symbolic links, so a path through a link is kept as written. A project's recorded path is
-what a trusted folder is compared against (see "Trusted folders" in `docs/product/folder-trust.md`).
+slash — without resolving symbolic links, so a path through a link is kept as written. Whether a trusted folder covers
+the project is decided by where the recorded path really leads on disk, not by its text (see "Trusted folders" in
+`docs/product/folder-trust.md`).
 
 The console session can associate a project itself, from the same three sources and under all the
 rules in this section, and a stricter one for a repository URL it clones (see "Adding a project with its settings" in

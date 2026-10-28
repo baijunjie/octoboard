@@ -2106,7 +2106,7 @@ async fn identities_within(
 ) -> Result<hostfs::DirectoryIdentities, tokio::task::JoinError> {
     let from_text =
         |paths: &[String]| hostfs::DirectoryIdentities::from_text(paths.iter().map(String::as_str));
-    if state.has_stalled_directory_pass(console_id) {
+    if state.stalled_directory_passes.is_stuck(console_id) {
         return Ok(from_text(&paths));
     }
     let text_only = paths.clone();
@@ -2121,7 +2121,9 @@ async fn identities_within(
         Ok(joined) => joined,
         Err(_) => {
             tracing::warn!(console = %console_id, "looking at the project directories timed out, comparing their paths as text");
-            state.record_stalled_directory_pass(console_id, weak);
+            state
+                .stalled_directory_passes
+                .record(console_id.to_string(), weak);
             Ok(from_text(&text_only))
         }
     }
@@ -7483,8 +7485,8 @@ mod tests {
         .unwrap();
         assert!(identities.contains(Path::new("/work/./project/")));
         assert!(!identities.contains(Path::new("/work/other")));
-        assert!(state.has_stalled_directory_pass("console-1"));
-        assert!(!state.has_stalled_directory_pass("console-2"));
+        assert!(state.stalled_directory_passes.is_stuck("console-1"));
+        assert!(!state.stalled_directory_passes.is_stuck("console-2"));
 
         // A second call neither starts its build nor waits out a deadline.
         let identities =
@@ -7498,7 +7500,7 @@ mod tests {
         // Once the stuck thread ends the console is looked at again.
         release.send(()).unwrap();
         let ended = tokio::time::timeout(crate::test_support::PATIENCE, async {
-            while state.has_stalled_directory_pass("console-1") {
+            while state.stalled_directory_passes.is_stuck("console-1") {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
         })

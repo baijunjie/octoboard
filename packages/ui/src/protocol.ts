@@ -2005,12 +2005,13 @@ export type MessageParams = Record<string, string>;
  * started. A double click produces them and is not worth showing. */
 export const ALREADY_RUNNING_CODES: readonly string[] = ["session_already_running", "session_already_starting"];
 
-/** Codes meaning no parent directory can be offered to trust: nothing was answered, and the dialog
- * stays open. */
+/** Codes meaning no parent directory can be offered to trust, or it could not be checked in time:
+ * nothing was answered, and the dialog stays open. */
 export const TRUST_REFUSED_CODES: readonly string[] = [
   "trust_directory_too_broad",
   "trust_path_not_absolute",
   "trust_home_unknown",
+  "trust_directory_unreachable",
 ];
 
 /** The go-ahead was for a trust confirmation no longer waiting: nothing is wrong, so nothing is

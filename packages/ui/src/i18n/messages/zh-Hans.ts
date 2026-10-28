@@ -276,6 +276,8 @@ export const zhHans: Translation<"other"> = {
   "daemon.trust_directory_too_broad.summary": "{path} 范围过大，无法整体信任。",
   "daemon.trust_directory_too_broad.recovery": "请单独信任此项目，或将其移到更窄的文件夹下，再信任该文件夹。",
   "daemon.trust_directory_too_broad.details": "它是文件系统根目录或你的家目录，或包含它们。",
+  "daemon.trust_directory_unreachable.summary": "{path} 或其上层文件夹未及时响应，因此无法检查该文件夹。",
+  "daemon.trust_directory_unreachable.recovery": "请取消勾选该文件夹选项，单独信任此项目；或等相关的卷恢复响应后重试。",
   "daemon.agent_not_available.summary": "{agent} 在此设备上不可用：其程序未能在登录 shell 的 {pathVar} 中找到。",
   "daemon.agent_not_available.recovery": "{appName} 支持 {claude}、{codex} 和 {grokBuild}；请确保其中一个已配置到 {pathVar} 中，才能打开会话。",
   "daemon.queued_messages_dropped.summary": "{appName} 丢弃了为此会话排队的内容。",
@@ -475,6 +477,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.request_superseded": "此请求已被更新的请求取代。",
   "daemon.trust_directory_too_broad":
     "{path} 范围过大，无法整体信任。它是文件系统根目录或你的家目录，或包含它们。请单独信任此项目，或将其移到更窄的文件夹下，再信任该文件夹。",
+  "daemon.trust_directory_unreachable": "{path} 或其上层文件夹未及时响应，因此无法检查该文件夹。请取消勾选该文件夹选项，单独信任此项目；或等相关的卷恢复响应后重试。",
   "daemon.trust_path_not_absolute": "{path} 不是绝对路径，因此其上没有可信任的文件夹。",
   "daemon.trust_home_unknown": "无法确定家目录，因此无法据此检查任何文件夹。",
   "daemon.trust_not_waiting": "此会话已不再在智能体的信任确认处等待。",

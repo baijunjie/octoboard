@@ -199,7 +199,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Focus and key handling in the UI](memory/focus-and-key-handling-in-the-ui.md) — keeping focus from dropping, Escape
   and key handlers, top layers and the shortcut registry.
 - [Handling paths and files in the daemon](memory/handling-paths-and-files-in-the-daemon.md) — treating hook-reported
-  paths as untrusted, destructive acts, and reading project files safely.
+  paths as untrusted, destructive acts, reading project files safely, and telling directories apart by device and
+  inode.
 - [Isolating agent CLI probes](memory/isolating-agent-cli-probes.md) — keeping a probe of an agent CLI or a live session
   off the user's configuration, accounts and data.
 - [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — avoiding document-wide style

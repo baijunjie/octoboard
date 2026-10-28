@@ -41,7 +41,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   lostMessages: ["handoff_messages_dropped"],
   sharingLostMessages: ["sharing_messages_dropped"],
   unsentMessage: ["message_not_sent"],
-  trust: ["trust_answer_failed", "session_trust_pending", "session_waiting_for_user", "trust_directory_too_broad", "trust_path_not_absolute", "trust_home_unknown"],
+  trust: ["trust_answer_failed", "session_trust_pending", "session_waiting_for_user", "trust_directory_too_broad", "trust_directory_unreachable", "trust_path_not_absolute", "trust_home_unknown"],
   tool: ["binary_not_found", "agent_not_available", "agent_not_installed", "git_unavailable"],
   availability: ["agent_availability_pending", "added_agents_undecided"],
   addedAgents: ["agent_already_added", "agent_order_invalid"],

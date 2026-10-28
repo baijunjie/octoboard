@@ -114,7 +114,9 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   (`"succeeded"`, `"failed"`, `"timed_out"`) is how a login the steps start ends, a moment after it reaches waiting;
   left out, it stays waiting until cancelled. `loginStartError` makes `start_account_login` refuse with that error.
   `agentListError` makes `add_agent`, `remove_agent` and `reorder_agents` refuse with that error, for what the window
-  could not have seen coming; left out, they follow the added list's own rules.
+  could not have seen coming; left out, they follow the added list's own rules. `trustParentDirError` makes a
+  `confirm_trust` that ticks the parent folder (`trust_parent_dir`) refuse with that error; a go-ahead for the project
+  alone is always acknowledged.
 - Account sharing in Settings → Agent accounts and in the account pickers: `state.accountSharing` holds the sharing
   states the daemon reports when the window opens, by account; build it with `accountSharingOf` (`builders.ts`, taken
   by `snapshotState` as `accountSharing`). An entry with `in_use` makes the account's switch unusable, and one with

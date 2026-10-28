@@ -319,6 +319,10 @@ export interface Scenario {
    * (an agent uninstalled since the list was drawn, a second window that changed the order). Left out, they are
    * answered by the added list's own rules. */
   agentListError?: FixtureError;
+  /** A refusal of `confirm_trust` that asks for the project's parent folder to be trusted (`trust_parent_dir`), as the
+   * daemon refuses a folder it cannot vouch for; nothing is answered, so the dialog stays open. A go-ahead for the
+   * project alone is not refused, and without this every go-ahead is acknowledged. */
+  trustParentDirError?: FixtureError;
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;

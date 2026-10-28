@@ -63,3 +63,23 @@ or a `==` on the strings compares bytes, and one such comparison among folded on
 another directory in one place and the same one everywhere else, so state kept for the directory is dropped or
 applied to the wrong one. An exact-text match is right only for asking whether a stored row changed since it was read
 (a guard of the form `WHERE id = ?1 AND config_dir = ?2` with the text just read).
+
+## Decide whether two directories are one, or one lies under another, by device and inode, never by their text
+
+Applies to daemon code that asks whether two paths name one existing directory, or whether one lies inside another —
+an already associated project, a trusted folder covering a project, a folder shared between projects — other than an
+agent configuration directory. Neither normalised text nor `canonicalize` output answers it: a link inside a folder
+can lead out of it, a link or a case-only respelling (macOS's default file system is case-insensitive) can name a
+directory that is inside, whether `canonicalize` folds case is the file system's doing (it does on APFS, not on
+Linux), and a bind mount or a macOS firmlink gives one directory two real paths. So compare the device and inode of
+what each path resolves to, and for containment walk the resolved path's ancestors: `hostfs::DirectoryIdentities`
+answers "is this one of these directories", `trust::place::Place` answers "does this lie in that one" (move it out of
+`trust` rather than write a second).
+
+Decide which way a path that cannot be resolved (nothing there, unreadable, no inode, the look timed out) counts by
+what a match does. Where a match grants something, as trust coverage does, it matches nothing, with no fallback to the
+text. Where a match is what protects, as refusing a second project at one directory does, it falls back to the
+normalised text. The looks read the file system, so they run on blocking threads after the store's lock is released,
+each with a deadline, and one that outran it is left to finish and recorded in a `state::StalledPasses` under its key,
+so later decisions take the fallback at once instead of starting another thread a stuck mount holds the same way;
+`trust::place::looked_within` and `coordinator::identities_within` are the shape.

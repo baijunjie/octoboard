@@ -52,7 +52,8 @@ Octoboard's own record, not any agent's trust record, and it comes in two forms;
   that project, a resume included. It is set only by "Trust and continue" with the dialog's folder checkbox left
   unticked, and cannot be withdrawn from the application; editing the project leaves it as it is, and removing the
   project removes it with the association. A project starts without it.
-- **A trusted folder** covers every project whose directory is that folder or lies anywhere below it, in any console,
+- **A trusted folder** covers every project whose directory, as it really is on disk, is that folder or lies anywhere
+  below it, in any console,
   including projects associated after the folder was trusted — by the user or by a console session. It is set only by
   "Trust and continue" with that checkbox ticked, is stored on its own rather than with any project, and can be
   removed in Settings. Its rules are in "Trusted folders" below.
@@ -101,9 +102,11 @@ Its buttons:
   - *left unticked* — the project's permission is recorded; Octoboard then also presses the confirmations already
     waiting in other sessions of the same project, whichever agent shows them, and their prompts leave the queue;
   - *ticked* — that folder is added to the trusted folders instead, and the project's own permission is not recorded.
-    If the folder can no longer be offered by the time the go-ahead is given (see "Trusted folders" below), it is
-    refused before anything is pressed: an error alert explains why and the trust dialog stays open with the box still
-    ticked, so the user can untick it and go on without the folder.
+    If the folder fails the checks made again at the go-ahead, or cannot be checked in time (see "Which folder" under
+    "Trusted folders" below), it is refused before anything is pressed: an error alert explains why and the trust
+    dialog stays open with the box still ticked, so the user can untick it and go on without the folder. For a folder
+    that could not be checked in time, the alert says that the project or the folder above it did not respond in time,
+    and that the user can untick the folder to trust the project on its own, or try again once the volume responds.
 - **Not now** — also what Escape and the dialog's close button do. Nothing is sent and nothing is
   recorded; the confirmation stays for the user to answer in the session's terminal. The same session is asked about
   again only if the application reloads its state (a reconnect, or catching up after falling behind) while the
@@ -120,18 +123,27 @@ the application reloads its state.
 
 Once the go-ahead has been given the dialog closes, whether or not the confirmation could be pressed — a confirmation is
 pressed at most once, so trying again from the dialog could not succeed. A failure is then shown in an error alert about
-the session. Two outcomes differ: the refusal of a folder that can no longer be offered keeps the dialog open, and a
+the session. Two outcomes differ: the refusal of the folder before anything is pressed keeps the dialog open, and a
 go-ahead for a confirmation that is no longer waiting — already answered, whether from another client, in the terminal
 or by Octoboard itself — closes the dialog without any message when the box was unticked, since nothing went wrong; with
 the box ticked it shows a message saying the folder was not trusted, because that choice was not carried out.
 
-Prompts are shown one at a time, oldest first; closing one brings up the next. A prompt still waiting is dropped,
-without being answered, when its session stops running or is deleted. When a project gains the permission, or a folder
-becomes trusted, the prompts waiting for that project or for projects under that folder are dropped as well, because
-Octoboard presses those confirmations itself; prompts for other projects stay queued. Whenever the application reloads
-its state (a connect, a reconnect, or catching up after falling behind), the daemon asks again about every confirmation
-still waiting, so a prompt the user never saw comes back; with no client connected the confirmation simply waits for the
-user to answer it in the terminal. Once one client has answered, a go-ahead from another changes nothing.
+Prompts are shown one at a time, oldest first; closing one brings up the next. The application shows every prompt the
+daemon sends, unless the project already has its own permission; which projects a trusted folder covers is decided by
+the daemon alone (see "Which projects it covers" below). A prompt still waiting is dropped, without being answered:
+
+- when its session stops running or is deleted;
+- when its session no longer reads as waiting for the user, because its confirmation was answered — in the terminal,
+  from another client, or by Octoboard, which presses it itself once the project gains the permission or a folder
+  covering the project becomes trusted;
+- when its project gains the permission;
+- when Octoboard's attempt to press that session's confirmation failed, since it is then left for the user to answer in
+  the terminal, as the notice about the failure says.
+
+Prompts for other sessions stay queued. Whenever the application reloads its state (a connect, a reconnect, or catching
+up after falling behind), the daemon asks again about every confirmation still waiting, so a prompt the user never saw
+comes back; with no client connected the confirmation simply waits for the user to answer it in the terminal. Once one
+client has answered, a go-ahead from another changes nothing.
 
 ## How a confirmation is pressed
 
@@ -233,31 +245,58 @@ its own. None is offered — and the dialog shows no folder checkbox — when:
   the home directory. This is checked on the paths as written and also on the directories themselves, so a symbolic
   link to the home directory or to a directory above it, or a spelling that differs only in letter case on a volume
   that does not tell case apart, is caught as well;
-- the home directory cannot be determined.
+- the home directory cannot be determined;
+- trusting the parent would not cover the project (see "Which projects it covers" below): the project's path goes
+  through a symbolic link that leads out of its parent, or the project or its parent cannot be resolved, or not within
+  about 5 seconds.
 
-Such a project can still be trusted on its own with "Trust and continue". The same check is made again when a go-ahead
-with the folder ticked arrives, and a folder that fails it then is refused before anything is pressed — with the error
-code `trust_directory_too_broad` when it is the root, the home directory or a directory containing it,
-`trust_path_not_absolute` when the project's path is not absolute, and `trust_home_unknown` when the home directory
-cannot be determined.
+The folder is named as the project's path spells it, not as it resolves. Such a project can still be trusted on its own
+with "Trust and continue".
 
-**Which projects it covers.** A project is under a trusted folder when its directory is that folder or lies below it at
-any depth. Paths are compared component by component after a purely lexical clean-up (`.` dropped, `..` folded into the
-component before it, trailing slashes ignored):
+When a go-ahead with the folder ticked arrives, the checks of the list above other than the last are made again, and a
+folder that fails them then is refused before anything is pressed — with the error code `trust_directory_too_broad`
+when it is the root, the home directory or a directory containing it, `trust_path_not_absolute` when the project's path
+is not absolute, `trust_home_unknown` when the home directory cannot be determined, and `trust_directory_unreachable`
+when the project or its parent did not respond within about 5 seconds, or an earlier look at the project has still not
+finished, so the folder could not be checked. Whether the folder still covers the project is not checked again: a
+folder that no longer does is added all the same, and covers only what really lies in it.
 
-- `/work` covers `/work/app` and `/work/a/b/c`, but not `/work2` or `/workspace/app` — never a text prefix;
-- symbolic links are not resolved: a project is covered when the path it was associated under lies below the folder as
-  written. A project associated through a symbolic link inside a trusted folder is therefore covered wherever that link
-  points, so a link inside a trusted folder extends the trust to its target; a project associated under a path outside
-  the folder is not covered, however it is linked from inside;
-- names are compared exactly, so a spelling of the same folder that differs only in letter case is not covered;
+**Which projects it covers.** A project is under a trusted folder when its directory, as it really is on disk, is that
+folder or lies below it at any depth. The paths' text is never compared: the project's path is resolved with every
+symbolic link on it followed, the trusted folder's path is resolved the same way, and the folder covers the project
+when it is the directory the project's path leads to or one of the directories above that one, each told apart by
+device and inode. So:
+
+- `/work` covers `/work/app` and `/work/a/b/c`, but not `/work2` or `/workspace/app`;
+- a project reached through a symbolic link inside a trusted folder that leads out of it is not covered, wherever the
+  link points, and is asked about like any other project; a project whose path is spelled through a link that leads
+  into a trusted folder is covered;
+- a trusted folder whose path is itself a symbolic link covers what lies in the directory it leads to;
+- a project or trusted folder spelled in another letter case still matches, wherever the file system does not tell
+  case apart;
 - only absolute paths are ever covered: a project recorded with a relative path is never under a trusted folder.
   Octoboard records every project it associates with an absolute path (see "Associating a project" in
   `docs/product/projects.md`).
 
+Whatever cannot be resolved covers nothing and is covered by nothing, with no fall-back to comparing the text: a project
+or a trusted folder with nothing at its path, a symbolic link that leads nowhere, a directory that cannot be read, and a
+path that cannot be looked at within about 5 seconds, such as one on a mount that does not answer. A path whose look
+ran out of time counts as unresolved, without being looked at again, until that look has finished. A trusted folder
+whose real location is the filesystem root, the home directory or a directory above it covers nothing — none can be
+added from the dialog, but a trusted path that is a symbolic link can be pointed there later — and while the home
+directory cannot be looked at within that time, no trusted folder covers anything. A project's own permission is not
+affected by any of this.
+
+Coverage is decided afresh each time it is needed — when a confirmation is recognised, when the prompts still waiting
+are asked about again after the application reloads its state, and when a folder is added — so it follows where a
+symbolic link points at that moment. A mount that does not answer holds each of these up for as long as its looks
+take to run out of time, so a prompt comes up, comes back after a reload, or is pressed under a newly trusted folder
+that many seconds later.
+
 **Trusting a folder presses what is already waiting.** At the moment a folder is added, every trust confirmation still
-waiting in a project under it is pressed, whichever agent shows it, including one the user put off with "Not now";
-confirmations of projects outside it stay as they were and are still asked about. Each of these is pressed under the
+waiting in a project it covers, as "Which projects it covers" above decides, is pressed, whichever agent shows it,
+including one the user put off with "Not now"; confirmations of projects it does not cover stay as they were and are
+still asked about. Each of these is pressed under the
 same checks, and reported the same way when a check fails, as any other confirmation Octoboard presses.
 
 **The list in Settings.** The Trusted folders section of Settings (see `docs/product/settings.md`) opens with a

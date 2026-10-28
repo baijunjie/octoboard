@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::protocol::{Console, Origin, ProjectAccount, ProjectSource, SessionStatus};
 use crate::session::spawn_reader_thread;
-use crate::state::WriteHold;
+use crate::state::{StalledPasses, WriteHold};
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{watched_live_session, ScratchDir, StandIn, PATIENCE};
 
@@ -512,24 +512,31 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
     }
 }
 
-#[test]
-fn a_console_session_is_always_answered_and_a_project_only_with_the_users_consent() {
+#[tokio::test]
+async fn a_console_session_is_always_answered_and_a_project_only_with_the_users_consent() {
+    let (state, dir, work) = state_with_real_project("consented-rule");
     let console_session = session("s", Agent::Claude, Role::Console, None);
     let project_session = session("s", Agent::Claude, Role::Project, Some("project-1"));
-    let none: &[String] = &[];
-    let work = ["/work".to_string()];
-    assert!(consented(&console_session, None, none));
-    assert!(consented(&project_session, Some(&project(true)), none));
-    assert!(!consented(&project_session, Some(&project(false)), none));
-    assert!(!consented(&project_session, None, none));
+    let mut inside = project(false);
+    inside.path = work.join("project").to_string_lossy().into_owned();
+    let mut consenting = inside.clone();
+    consenting.trust_consent = true;
+    let mut elsewhere = project(false);
+    std::fs::create_dir_all(dir.join("elsewhere/project")).expect("elsewhere");
+    elsewhere.path = text(&dir.join("elsewhere/project"));
+    let asks = |session, project| consented(&state, session, project);
+    assert!(asks(&console_session, None).await.unwrap());
+    assert!(asks(&project_session, Some(&consenting)).await.unwrap());
+    assert!(!asks(&project_session, Some(&inside)).await.unwrap());
+    assert!(!asks(&project_session, None).await.unwrap());
     // A trusted directory covers the project under it, one with no consent of its own included.
-    assert!(consented(&project_session, Some(&project(false)), &work));
-    assert!(!consented(
-        &project_session,
-        Some(&project(false)),
-        &["/elsewhere".to_string()]
-    ));
-    assert!(!consented(&project_session, None, &work));
+    state
+        .store
+        .add_trusted_directory(&work.to_string_lossy())
+        .expect("trusted");
+    assert!(asks(&project_session, Some(&inside)).await.unwrap());
+    assert!(!asks(&project_session, Some(&elsewhere)).await.unwrap());
+    assert!(!asks(&project_session, None).await.unwrap());
 }
 
 fn scratch(name: &str) -> ScratchDir {
@@ -778,6 +785,24 @@ fn state_with_project(name: &str) -> (Arc<AppState>, ScratchDir) {
         .insert_project(&project(false))
         .expect("project");
     (state, dir)
+}
+
+/// As [`state_with_project`], with the project at a directory that exists, `project` inside the
+/// returned `work` directory, for what is decided on the file system: which trusted directories
+/// cover it, and which folder its prompt offers.
+fn state_with_real_project(name: &str) -> (Arc<AppState>, ScratchDir, PathBuf) {
+    let (state, dir) = crate::test_support::app_state(&format!("trust-{name}"));
+    state.store.insert_console(&console()).expect("console");
+    let work = dir.join("work");
+    std::fs::create_dir_all(work.join("project")).expect("project directory");
+    let mut real = project(false);
+    real.path = work.join("project").to_string_lossy().into_owned();
+    state.store.insert_project(&real).expect("project");
+    (state, dir, work)
+}
+
+fn text(path: &Path) -> String {
+    path.to_string_lossy().into_owned()
 }
 
 /// Starts a stand-in session of the given kind under a stored record and registers it, as a
@@ -1110,7 +1135,7 @@ async fn an_automatic_answer_that_fails_leaves_a_notice() {
 /// told again about exactly the screens still waiting for a go-ahead.
 #[tokio::test]
 async fn a_snapshot_is_followed_by_the_prompts_still_waiting() {
-    let (state, dir) = state_with_project("replay");
+    let (state, dir, work) = state_with_real_project("replay");
     let waiting = session("waiting-1", Agent::Claude, Role::Project, Some("project-1"));
     let (waiting_live, _) = start(&state, &dir, waiting, "sleep 30");
     let console_session = session("console-session-1", Agent::Claude, Role::Console, None);
@@ -1124,69 +1149,254 @@ async fn a_snapshot_is_followed_by_the_prompts_still_waiting() {
         Some("project-1"),
     );
     let (answered_live, _) = start(&state, &dir, answered, "sleep 30");
+    let also = session("waiting-2", Agent::Codex, Role::Project, Some("project-1"));
+    let (also_live, _) = start(&state, &dir, also, "sleep 30");
     waiting_live.trust.feed(SCREEN, 0, 0);
     console_session_live.trust.feed(SCREEN, 0, 0);
     answered_live.trust.feed(SCREEN, 0, 0);
+    also_live.trust.feed(CODEX_SCREEN, 0, 0);
     assert!(answered_live.trust.claim_answer());
 
-    let prompts = pending_prompts(&state);
-    assert_eq!(prompts.len(), 1, "{prompts:?}");
-    assert!(
-        matches!(&prompts[0], Event::TrustPrompt { session, project, path, trust_dir, .. }
-        if session == "waiting-1" && project == "project-1" && path == "/work/project"
-            && trust_dir.as_deref() == Some("/work"))
-    );
+    let prompts = pending_prompts(&state).await;
+    assert_eq!(prompts.len(), 2, "{prompts:?}");
+    // Each prompt of the project offers its folder, the second as well as the first.
+    for id in ["waiting-1", "waiting-2"] {
+        assert!(
+            prompts.iter().any(|prompt| matches!(prompt,
+                Event::TrustPrompt { session, project, path, trust_dir, .. }
+                if session == id && project == "project-1"
+                    && *path == text(&work.join("project"))
+                    && trust_dir.as_deref() == Some(text(&work).as_str()))),
+            "{id}: {prompts:?}"
+        );
+    }
 
     // Once the project has consented the screen is answered, not asked about.
     state
         .store
         .set_project_trust_consent("project-1", true)
         .expect("consent");
-    assert!(pending_prompts(&state).is_empty());
+    assert!(pending_prompts(&state).await.is_empty());
 }
 
 fn trusted_in_store(state: &AppState) -> Vec<String> {
     state.store.trusted_directories().unwrap()
 }
 
-/// Paths are compared component by component, after a lexical clean-up, and a trusted directory
-/// covers itself and everything below it.
-#[test]
-fn a_trusted_directory_covers_itself_and_what_is_below_it_and_nothing_else() {
-    let work = ["/work".to_string()];
-    assert!(under_a_trusted_directory("/work", &work), "itself");
-    assert!(under_a_trusted_directory("/work/project", &work), "a child");
+/// Whether the `trusted` directory covers the `project` path, as every trust decision asks it.
+async fn covers(state: &AppState, project: &str, trusted: &str) -> bool {
+    let projects = [project.to_string()];
+    covered(state, &projects, &[trusted.to_string()])
+        .await
+        .contains(project)
+}
+
+/// A trusted directory covers what really lies in it, at any depth, judged on the file system:
+/// never a text prefix, never through a link that leads out of it, and never where either side
+/// cannot be resolved — there is no fallback to the text, which would let the link back in.
+#[tokio::test]
+async fn a_trusted_directory_covers_what_really_lies_in_it_and_nothing_else() {
+    let (state, dir) = crate::test_support::app_state("trust-covers");
+    for directory in [
+        "work/project/nested/deep",
+        "workshop/project",
+        "elsewhere/repo",
+    ] {
+        std::fs::create_dir_all(dir.join(directory)).expect("directory");
+    }
+    let at = |relative: &str| text(&dir.join(relative));
+    let work = at("work");
+    std::os::unix::fs::symlink(dir.join("elsewhere/repo"), dir.join("work/link")).expect("link");
+    std::os::unix::fs::symlink(dir.join("work/project"), dir.join("into")).expect("link");
+    std::os::unix::fs::symlink(dir.join("work"), dir.join("work-link")).expect("link");
+
+    assert!(covers(&state, &work, &work).await, "itself");
+    assert!(covers(&state, &at("work/project"), &work).await, "a child");
     assert!(
-        under_a_trusted_directory("/work/a/b/c", &work),
+        covers(&state, &at("work/project/nested/deep"), &work).await,
         "a descendant"
     );
     assert!(
-        under_a_trusted_directory("/work/project/", &work),
-        "a trailing slash"
+        covers(&state, &at("work/./project/nested/../"), &work).await,
+        "spelled with `.`, `..` and a trailing slash"
     );
     assert!(
-        under_a_trusted_directory("/work/./a/../project", &work),
-        "lexical clean-up"
+        covers(&state, &at("work/project"), &at("work/")).await,
+        "a trusted path with a trailing slash"
     );
-    assert!(under_a_trusted_directory(
-        "/work/project",
-        &["/work/".to_string()]
-    ));
-    // Not a string prefix.
-    assert!(!under_a_trusted_directory("/workspace/project", &work));
-    assert!(!under_a_trusted_directory("/work2", &work));
     assert!(
-        !under_a_trusted_directory("/Work/project", &work),
-        "case differs"
+        covers(&state, &at("into"), &work).await,
+        "a link that leads into it"
     );
-    // Not above it, not beside it, not escaping it.
-    assert!(!under_a_trusted_directory("/", &work));
-    assert!(!under_a_trusted_directory("/work/../other", &work));
     assert!(
-        !under_a_trusted_directory("work/project", &work),
-        "relative"
+        covers(&state, &at("work/project"), &at("work-link")).await,
+        "a trusted path that is a link to the directory"
     );
-    assert!(!under_a_trusted_directory("/work/project", &[]));
+
+    assert!(
+        !covers(&state, &at("work/link"), &work).await,
+        "a link inside it that leads out"
+    );
+    assert!(!covers(&state, &at("elsewhere/repo"), &work).await);
+    assert!(
+        !covers(&state, &at("workshop/project"), &work).await,
+        "a sibling sharing its name as a prefix"
+    );
+    assert!(!covers(&state, &text(&dir), &work).await, "above it");
+    assert!(
+        !covers(&state, &at("work/missing"), &work).await,
+        "a project with nothing at it"
+    );
+    assert!(
+        !covers(&state, &at("gone/project"), &at("gone")).await,
+        "nothing at either side, however the text lines up"
+    );
+    assert!(
+        !covers(&state, &at("work/project"), &at("missing")).await,
+        "a trusted directory with nothing at it"
+    );
+    assert!(
+        !covers(&state, "relative/project", "relative").await,
+        "a relative path"
+    );
+    let projects = [at("work/project")];
+    assert!(covered(&state, &projects, &[]).await.is_empty());
+
+    // Another letter case names the same directory where the file system ignores case, on
+    // either side; where it does not, the respelling is not there and covers nothing.
+    let folds_case = dir.join("WORK/PROJECT").exists();
+    assert_eq!(covers(&state, &at("WORK/PROJECT"), &work).await, folds_case);
+    assert_eq!(
+        covers(&state, &at("work/project"), &at("Work")).await,
+        folds_case
+    );
+}
+
+/// A look at a path that does not come back within its deadline counts as unresolved, and while
+/// its thread is still stuck the same path is not looked at again, so a mount that does not
+/// answer neither holds a decision past the deadline nor takes a thread at every one; the other
+/// paths of a pass are looked at all the same.
+#[tokio::test]
+async fn a_look_that_outruns_its_deadline_is_unresolved_and_not_started_again_while_stuck() {
+    let stalled = StalledPasses::default();
+    let stuck = PathBuf::from("/octoboard-test/stuck");
+    let fine = PathBuf::from("/octoboard-test/fine");
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    let held = Mutex::new(held);
+    let found = looked_within(
+        &stalled,
+        vec![stuck.clone()],
+        Duration::from_millis(100),
+        move |_| {
+            held.lock().unwrap().recv().ok();
+            Some(())
+        },
+    )
+    .await;
+    assert!(found.is_empty(), "{:?}", found.keys());
+
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let counted = started.clone();
+    let again = looked_within(
+        &stalled,
+        vec![stuck.clone(), fine.clone()],
+        PATIENCE,
+        move |path| {
+            counted.lock().unwrap().push(path.to_path_buf());
+            Some(())
+        },
+    )
+    .await;
+    assert!(!again.contains_key(&stuck));
+    assert!(again.contains_key(&fine), "another path is still looked at");
+    assert_eq!(
+        *started.lock().unwrap(),
+        std::slice::from_ref(&fine),
+        "no second look at the stuck path is started"
+    );
+
+    // Once the stuck thread ends, the path is looked at again.
+    release.send(()).expect("release");
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        let found = looked_within(&stalled, vec![stuck.clone()], PATIENCE, |_| Some(())).await;
+        if found.contains_key(&stuck) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "the path is looked at again");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+/// However many paths a pass has, no more than the cap are looked at at once.
+#[tokio::test]
+async fn no_more_paths_are_looked_at_at_once_than_the_cap() {
+    use std::sync::atomic::AtomicUsize;
+    LOOKS_AT_ONCE_OVERRIDE.with(|cap| cap.set(Some(2)));
+    let busy = Arc::new(AtomicUsize::new(0));
+    let peak = Arc::new(AtomicUsize::new(0));
+    let (counting, highest) = (busy.clone(), peak.clone());
+    let paths: Vec<PathBuf> = (0..6)
+        .map(|n| PathBuf::from(format!("/octoboard-test/{n}")))
+        .collect();
+    let found = looked_within(&StalledPasses::default(), paths, PATIENCE, move |_| {
+        let now = counting.fetch_add(1, Ordering::SeqCst) + 1;
+        highest.fetch_max(now, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(50));
+        counting.fetch_sub(1, Ordering::SeqCst);
+        Some(())
+    })
+    .await;
+    LOOKS_AT_ONCE_OVERRIDE.with(|cap| cap.set(None));
+    assert_eq!(found.len(), 6, "every path is looked at");
+    let peak = peak.load(Ordering::SeqCst);
+    assert!(peak <= 2, "{peak} at once");
+}
+
+/// A trusted path whose directory is the filesystem root, the home directory or one above it —
+/// as a link that was repointed there would be — covers nothing, while one below the home
+/// directory still covers what lies in it, unless the home directory cannot be looked at.
+#[tokio::test]
+async fn a_trusted_directory_that_is_the_root_or_holds_the_home_directory_covers_nothing() {
+    let (state, dir) = crate::test_support::app_state("trust-broad");
+    let home = dir.join("people/me");
+    std::fs::create_dir_all(home.join("work/project")).expect("home");
+    for (link, target) in [
+        ("to-home", home.clone()),
+        ("to-above", dir.join("people")),
+        ("to-root", PathBuf::from("/")),
+    ] {
+        std::os::unix::fs::symlink(target, dir.join(link)).expect("link");
+    }
+    let project = text(&home.join("work/project"));
+    let covers = |trusted: PathBuf| {
+        let state = &state;
+        let (project, home) = (project.clone(), home.clone());
+        async move {
+            let projects = [project.clone()];
+            covered_with_home(state, &projects, &[text(&trusted)], &home)
+                .await
+                .contains(&project)
+        }
+    };
+    for broad in ["to-home", "to-above", "to-root"] {
+        assert!(!covers(dir.join(broad)).await, "{broad}");
+    }
+    assert!(!covers(home.clone()).await, "the home directory as written");
+    assert!(!covers(PathBuf::from("/")).await, "the root as written");
+    assert!(covers(home.join("work")).await, "a directory below home");
+
+    // While the home directory cannot be looked at, which directories are too broad is not known,
+    // so no trusted directory covers anything.
+    let stuck = Arc::new(());
+    state
+        .trust_looks
+        .record(home.clone(), Arc::downgrade(&stuck));
+    assert!(
+        !covers(home.join("work")).await,
+        "nothing while home is stuck"
+    );
+    drop(stuck);
 }
 
 #[test]
@@ -1219,7 +1429,7 @@ fn the_parent_to_trust_is_never_the_root_the_home_directory_or_above_it() {
 /// records the parent directory — and leaves the project's own consent unset.
 #[tokio::test]
 async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
-    let (state, dir) = state_with_project("confirm-parent");
+    let (state, dir, work) = state_with_real_project("confirm-parent");
     let mut events = state.subscribe();
     let record = session(
         "project-session-1",
@@ -1235,7 +1445,7 @@ async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
         .await
         .expect("confirmed");
     assert_eq!(sent(&received), answer_keys());
-    assert_eq!(trusted_in_store(&state), ["/work"]);
+    assert_eq!(trusted_in_store(&state), [text(&work)]);
     assert!(
         !consented_in_store(&state),
         "the project's own consent is separate"
@@ -1243,7 +1453,7 @@ async fn confirming_for_the_parent_directory_records_it_after_the_answer() {
     let mut told = false;
     while let Ok(event) = events.try_recv() {
         told |= matches!(event, Event::TrustedDirectoriesUpdated { trusted_directories }
-            if trusted_directories == ["/work"]);
+            if trusted_directories == [text(&work)]);
     }
     assert!(told, "clients are told");
 }
@@ -1314,6 +1524,41 @@ async fn a_parent_that_is_the_home_directory_is_refused_before_the_screen_is_ans
     assert!(sent(&received).is_empty());
 }
 
+/// A go-ahead with the folder ticked for a project whose directory cannot be looked at in time —
+/// its look still stuck from before, as on a mount that does not answer — is refused with the
+/// daemon's own reason before anything is pressed, and nothing is recorded.
+#[tokio::test]
+async fn a_folder_go_ahead_for_a_project_that_cannot_be_looked_at_is_refused() {
+    let (state, dir, work) = state_with_real_project("confirm-stalled");
+    let record = session(
+        "project-session-1",
+        Agent::Claude,
+        Role::Project,
+        Some("project-1"),
+    );
+    let (live, received) = start(&state, &dir, record, &full_script(Path::new("%RECEIVED%")));
+    live.trust.feed(SCREEN, 0, 0);
+    screen_printed(&live).await;
+    let stuck = Arc::new(());
+    state
+        .trust_looks
+        .record(work.join("project"), Arc::downgrade(&stuck));
+
+    let err = confirm(&state, "project-session-1", false, true)
+        .await
+        .expect_err("refused");
+    assert_eq!(
+        err.downcast_ref::<CodedError>().map(|coded| coded.code),
+        Some(error_code::TRUST_DIRECTORY_UNREACHABLE)
+    );
+    assert!(err.to_string().contains("did not respond in time"), "{err}");
+    assert!(trusted_in_store(&state).is_empty());
+    assert!(!consented_in_store(&state));
+    assert!(live.trust.waiting(), "the screen is still waiting");
+    assert!(sent(&received).is_empty());
+    drop(stuck);
+}
+
 #[tokio::test]
 async fn a_directory_can_be_removed_again_and_each_projects_own_consent_stays() {
     let (state, _dir) = state_with_project("remove");
@@ -1345,10 +1590,11 @@ async fn a_directory_can_be_removed_again_and_each_projects_own_consent_stays() 
 /// directory answers the screens already waiting under it — and only those.
 #[tokio::test]
 async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others() {
-    let (state, dir) = state_with_project("fan-out");
+    let (state, dir, work) = state_with_real_project("fan-out");
     let mut elsewhere = project(false);
     elsewhere.id = "project-2".to_string();
-    elsewhere.path = "/other/project".to_string();
+    std::fs::create_dir_all(dir.join("other/project")).expect("other project");
+    elsewhere.path = text(&dir.join("other/project"));
     state.store.insert_project(&elsewhere).expect("project");
     let mut events = state.subscribe();
 
@@ -1371,14 +1617,18 @@ async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others
     .await
     .expect("both are asked about");
 
-    add_trusted_directory(&state, Path::new("/work")).expect("trusted");
+    add_trusted_directory(&state, &work).await.expect("trusted");
     answered(&under_live, &under_received).await;
     tokio::time::sleep(Duration::from_millis(600)).await;
     assert!(
         sent(&beside_received).is_empty(),
         "the one beside it is not"
     );
-    assert_eq!(pending_prompts(&state).len(), 1, "and is still asked about");
+    assert_eq!(
+        pending_prompts(&state).await.len(),
+        1,
+        "and is still asked about"
+    );
 
     // A screen that comes up later under the directory is answered with no prompt.
     let later = session("later-1", Agent::Claude, Role::Project, Some("project-1"));
@@ -1386,6 +1636,66 @@ async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others
         start(&state, &dir, later, &full_script(Path::new("%RECEIVED%")));
     supervise(&state, &later_live);
     answered(&later_live, &later_received).await;
+}
+
+/// The folder offered in the prompt for `session`, once it comes.
+async fn offered_in_prompt(
+    events: &mut tokio::sync::broadcast::Receiver<Event>,
+    session: &str,
+) -> Option<String> {
+    tokio::time::timeout(PATIENCE, async {
+        loop {
+            if let Event::TrustPrompt {
+                session: asked,
+                trust_dir,
+                ..
+            } = events.recv().await.expect("event")
+            {
+                if asked == session {
+                    return trust_dir;
+                }
+            }
+        }
+    })
+    .await
+    .expect("the prompt")
+}
+
+/// A project reached through a link inside a trusted directory that leads out of it is not under
+/// that directory, so its screen is asked about rather than pressed: trusting the directory does
+/// not press the one already waiting, and a later one is asked about too, with no folder offered,
+/// since trusting the link's parent would not cover it either.
+#[tokio::test]
+async fn a_project_linked_out_of_a_trusted_directory_is_asked_about_and_not_pressed() {
+    let (state, dir, work) = state_with_real_project("linked-out");
+    std::fs::create_dir_all(dir.join("elsewhere/repo")).expect("elsewhere");
+    std::os::unix::fs::symlink(dir.join("elsewhere/repo"), work.join("link")).expect("link");
+    let mut linked = project(false);
+    linked.id = "project-2".to_string();
+    linked.path = text(&work.join("link"));
+    state.store.insert_project(&linked).expect("project");
+    let mut events = state.subscribe();
+
+    let waiting = session("waiting-1", Agent::Claude, Role::Project, Some("project-2"));
+    let (waiting_live, waiting_received) =
+        start(&state, &dir, waiting, &full_script(Path::new("%RECEIVED%")));
+    supervise(&state, &waiting_live);
+    assert_eq!(
+        offered_in_prompt(&mut events, "waiting-1").await,
+        None,
+        "no folder is offered"
+    );
+
+    add_trusted_directory(&state, &work).await.expect("trusted");
+    let later = session("later-1", Agent::Claude, Role::Project, Some("project-2"));
+    let (later_live, later_received) =
+        start(&state, &dir, later, &full_script(Path::new("%RECEIVED%")));
+    supervise(&state, &later_live);
+    assert_eq!(offered_in_prompt(&mut events, "later-1").await, None);
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    assert!(sent(&waiting_received).is_empty(), "the waiting one");
+    assert!(sent(&later_received).is_empty(), "the later one");
+    assert_eq!(pending_prompts(&state).await.len(), 2);
 }
 
 /// Whether the refusal is one of the codes that leave the dialog open.
@@ -1481,32 +1791,49 @@ fn an_odd_home_directory_or_a_relative_project_path_offers_nothing() {
 }
 
 #[test]
-fn dot_dot_in_a_project_path_is_folded_before_anything_is_compared() {
+fn dot_dot_in_a_project_path_is_folded_before_a_parent_is_offered() {
     let home = Path::new("/Users/me");
     assert_eq!(
         trustable_parent("/work/other/../project", home).unwrap(),
         Path::new("/work")
     );
-    let work = ["/work".to_string()];
-    assert!(under_a_trusted_directory("/work/other/../project", &work));
-    // Climbing out of the directory is not under it.
-    assert!(!under_a_trusted_directory("/work/../etc/project", &work));
-    assert!(!under_a_trusted_directory("/work/../../project", &work));
 }
 
 /// The prompt carries the directory its button would trust, and none when that would be too
-/// broad.
-#[test]
-fn a_prompt_names_the_directory_it_would_trust_unless_that_is_too_broad() {
-    let mut inside = project(false);
-    inside.path = "/work/project".to_string();
+/// broad, or would not cover the project because the project is reached through a link that
+/// leads out of it, or when the project cannot be resolved.
+#[tokio::test]
+async fn a_prompt_offers_the_parent_only_where_trusting_it_would_cover_the_project() {
+    let (state, dir, work) = state_with_real_project("offered");
+    std::fs::create_dir_all(dir.join("elsewhere/repo")).expect("elsewhere");
+    std::os::unix::fs::symlink(dir.join("elsewhere/repo"), work.join("link")).expect("link");
+    let inside = text(&work.join("project"));
+    let through_a_link = text(&work.join("link"));
+    let missing = text(&work.join("missing"));
+    let at_home = text(&paths::home_dir().join("app"));
+
+    let offered = offered(
+        &state,
+        vec![
+            inside.clone(),
+            through_a_link.clone(),
+            missing.clone(),
+            at_home.clone(),
+        ],
+    )
+    .await;
+    assert_eq!(offered.get(&inside), Some(&work));
+    for none in [&through_a_link, &missing, &at_home] {
+        assert!(!offered.contains_key(none), "{none}");
+    }
+
+    let mut project = project(false);
+    project.path = inside;
     let asking = session("s", Agent::Grok, Role::Project, Some("project-1"));
-    assert!(matches!(prompt(&asking, &inside),
-        Event::TrustPrompt { trust_dir, .. } if trust_dir.as_deref() == Some("/work")));
-    let mut at_home = project(false);
-    at_home.path = paths::home_dir().join("app").to_string_lossy().into_owned();
+    assert!(matches!(prompt(&asking, &project, Some(work.clone())),
+        Event::TrustPrompt { trust_dir, .. } if trust_dir == Some(text(&work))));
     assert!(matches!(
-        prompt(&asking, &at_home),
+        prompt(&asking, &project, None),
         Event::TrustPrompt {
             trust_dir: None,
             ..
@@ -1518,18 +1845,21 @@ fn a_prompt_names_the_directory_it_would_trust_unless_that_is_too_broad() {
 /// directory, as it does one whose project has consented.
 #[tokio::test]
 async fn the_replay_leaves_out_a_screen_under_a_trusted_directory() {
-    let (state, dir) = state_with_project("replay-trusted");
+    let (state, dir, work) = state_with_real_project("replay-trusted");
     let record = session("waiting-1", Agent::Claude, Role::Project, Some("project-1"));
     let (live, _) = start(&state, &dir, record, "sleep 30");
     live.trust.feed(SCREEN, 0, 0);
-    assert_eq!(pending_prompts(&state).len(), 1);
+    assert_eq!(pending_prompts(&state).await.len(), 1);
 
-    state.store.add_trusted_directory("/work").expect("trusted");
+    state
+        .store
+        .add_trusted_directory(&text(&work))
+        .expect("trusted");
     assert!(
         live.trust.waiting(),
         "still waiting; only the question is moot"
     );
-    assert!(pending_prompts(&state).is_empty());
+    assert!(pending_prompts(&state).await.is_empty());
 }
 
 /// Trusting the directory from one session's dialog answers every other session's screen
@@ -1537,7 +1867,7 @@ async fn the_replay_leaves_out_a_screen_under_a_trusted_directory() {
 /// again; a console session is left to its own rule.
 #[tokio::test]
 async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() {
-    let (state, dir) = state_with_project("fan-out-end-to-end");
+    let (state, dir, work) = state_with_real_project("fan-out-end-to-end");
     let mut events = state.subscribe();
     let a = session("a-1", Agent::Claude, Role::Project, Some("project-1"));
     let (a_live, a_received) = start(&state, &dir, a, &full_script(Path::new("%RECEIVED%")));
@@ -1584,7 +1914,9 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
     let (c_live, c_received) = start(&state, &dir, c, &full_script(Path::new("%RECEIVED%")));
     c_live.trust.feed(SCREEN, 0, 0);
     screen_printed(&c_live).await;
-    add_trusted_directory(&state, Path::new("/work")).expect("a repeat");
+    add_trusted_directory(&state, &work)
+        .await
+        .expect("a repeat");
     tokio::time::sleep(Duration::from_millis(800)).await;
     assert!(sent(&c_received).is_empty());
     let mut announced = 0;
@@ -1632,7 +1964,7 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
     })
     .await
     .expect("prompt");
-    assert_eq!(pending_prompts(&state).len(), 1);
+    assert_eq!(pending_prompts(&state).await.len(), 1);
     assert_eq!(
         state
             .wire_session(state.session_record(&live.id).unwrap())
@@ -1642,7 +1974,7 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
 
     live.write_input(b"\r").expect("the person's Enter");
 
-    assert!(pending_prompts(&state).is_empty());
+    assert!(pending_prompts(&state).await.is_empty());
     let err = confirm(&state, "codex-1", true, false)
         .await
         .expect_err("stale");
@@ -2050,6 +2382,7 @@ async fn an_owner_is_told_that_its_session_waits_on_a_trust_confirmation() {
             // No trust screen is up to answer, which leaves the person to.
             assert!(answer_off_the_runtime(&state, live.clone()).await.is_err());
         } else {
+            live.trust.feed(SCREEN, 0, 0);
             on_sighting(&state, &live).await.unwrap();
         }
 

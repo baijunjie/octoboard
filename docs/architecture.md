@@ -309,8 +309,9 @@ N+1.
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself
   (`consoles.next_console_session_ordinal`) so deleting the console session that held the highest ordinal does not
   let a later one reuse it.
-- `Project.path` is stored absolute and lexically normalized (a relative path is refused), because trusted-folder
-  entries are compared with it component by component.
+- `Project.path` is stored absolute and lexically normalized (a relative path is refused), as the user gave it.
+  Whether two paths name the same directory, or a trusted folder covers a project, is decided from where they really
+  are on disk (device and inode, links followed), not from the stored text.
 - `Account` is a named config directory of one agent, kept once for the whole application. A console refers to one
   account per agent by id (`claude_account_id` and its two siblings), rather than holding a path directly; `None`
   means that agent's default account, the state of pinning nothing. A project carries the same three fields with one

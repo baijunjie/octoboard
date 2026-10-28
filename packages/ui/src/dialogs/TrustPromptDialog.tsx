@@ -137,8 +137,10 @@ export function useTrustPromptDialogProps(
     // Dismissed whether or not the request worked: the daemon answers a confirmation once, so retrying
     // from this dialog can never succeed. The error is toasted rather than shown inline for the
     // same reason. A failure to answer also reaches the user as the daemon's own session notice,
-    // which covers a dialog closed meanwhile. The one exception is a parent directory that is too
-    // broad: nothing was answered, so the error stays in the dialog and the user picks again.
+    // which covers a dialog closed meanwhile. The exception is a refusal of the folder before anything
+    // was pressed (`TRUST_REFUSED_CODES`): it is too broad, the project's path is not absolute, the home
+    // directory is unknown, or the folder could not be checked in time. Nothing was
+    // answered, so the error stays in the dialog and the user picks again.
     try {
       await request({
         type: "confirm_trust",

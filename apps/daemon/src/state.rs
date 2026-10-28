@@ -252,6 +252,9 @@ pub struct AppState {
     /// The shell terminals running, or exited and not yet closed (`crate::shell_terminal`). Held in
     /// memory only: each is a process of this daemon's.
     pub shell_terminals: crate::shell_terminal::ShellTerminals,
+    /// The paths a trust decision looked at on the file system whose look outran its deadline and
+    /// is still stuck (`crate::trust`). Held in memory only.
+    pub trust_looks: StalledPasses<std::path::PathBuf>,
     /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
@@ -290,9 +293,49 @@ pub struct AppState {
     /// at once cannot send a second interrupt key. Held in memory only.
     interrupts: Mutex<HashSet<String>>,
     /// Per console, the look at its projects' directories that outran its deadline and whose
-    /// blocking thread is still stuck, held weakly: the thread owns the strong reference, so the
-    /// entry reads as gone once the thread has ended.
-    stalled_directory_passes: Mutex<HashMap<String, std::sync::Weak<()>>>,
+    /// blocking thread is still stuck (`crate::coordinator`). Held in memory only.
+    pub stalled_directory_passes: StalledPasses<String>,
+}
+
+/// Blocking work that outran its deadline and whose thread is still stuck, one per key — a console
+/// whose project directories were being looked at, a path a trust decision was looking at. Each
+/// entry is held weakly: the thread owns the strong reference, so the entry reads as gone once the
+/// thread has ended. While it is there, later work for the same key takes its fallback at once
+/// instead of starting another thread that would be stuck the same way.
+pub struct StalledPasses<K>(Mutex<HashMap<K, std::sync::Weak<()>>>);
+
+impl<K> Default for StalledPasses<K> {
+    fn default() -> Self {
+        Self(Mutex::new(HashMap::new()))
+    }
+}
+
+impl<K: Eq + std::hash::Hash> StalledPasses<K> {
+    /// Whether the work recorded for `key` is still stuck on its thread.
+    pub fn is_stuck<Q>(&self, key: &Q) -> bool
+    where
+        K: std::borrow::Borrow<Q>,
+        Q: Eq + std::hash::Hash + ?Sized,
+    {
+        let mut passes = self.0.lock().expect("stalled pass lock poisoned");
+        match passes.get(key).map(|pass| pass.strong_count() > 0) {
+            Some(true) => true,
+            Some(false) => {
+                passes.remove(key);
+                false
+            }
+            None => false,
+        }
+    }
+
+    /// Records that the work for `key` outran its deadline; `pass` is held strongly by the thread
+    /// that is still running it.
+    pub fn record(&self, key: K, pass: std::sync::Weak<()>) {
+        self.0
+            .lock()
+            .expect("stalled pass lock poisoned")
+            .insert(key, pass);
+    }
 }
 
 /// A session's queue paused by [`AppState::pause_outbox`].
@@ -644,6 +687,7 @@ impl AppState {
             account_logins: Default::default(),
             account_sharing: Default::default(),
             shell_terminals: Default::default(),
+            trust_looks: Default::default(),
             events,
             account_writes: Mutex::new(()),
             session_publication: Mutex::new(()),
@@ -651,7 +695,7 @@ impl AppState {
             shutdown: tokio::sync::Notify::new(),
             shutting_down: AtomicBool::new(false),
             interrupts: Mutex::new(HashSet::new()),
-            stalled_directory_passes: Mutex::new(HashMap::new()),
+            stalled_directory_passes: Default::default(),
         }
     }
 
@@ -969,32 +1013,6 @@ impl AppState {
             state: self.clone(),
             id: id.to_string(),
         })
-    }
-
-    /// Whether a look at this console's project directories that outran its deadline is still
-    /// stuck on its blocking thread.
-    pub fn has_stalled_directory_pass(&self, console_id: &str) -> bool {
-        let mut passes = self
-            .stalled_directory_passes
-            .lock()
-            .expect("stalled directory pass lock poisoned");
-        match passes.get(console_id).map(|pass| pass.strong_count() > 0) {
-            Some(true) => true,
-            Some(false) => {
-                passes.remove(console_id);
-                false
-            }
-            None => false,
-        }
-    }
-
-    /// Records that this console's look at its project directories outran its deadline; `pass` is
-    /// held strongly by the thread that is still running it.
-    pub fn record_stalled_directory_pass(&self, console_id: &str, pass: std::sync::Weak<()>) {
-        self.stalled_directory_passes
-            .lock()
-            .expect("stalled directory pass lock poisoned")
-            .insert(console_id.to_string(), pass);
     }
 
     /// Whether the session's claim is held (a launch, resume, switch, handoff, handover of branches or
