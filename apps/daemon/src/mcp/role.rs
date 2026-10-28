@@ -318,10 +318,10 @@ fn relationships(agent: Agent, owns: bool) -> String {
              point says. While `auto_select_account` is on, a left-out account is the one of that \
              agent whose weekly quota resets soonest and that can still open a session. When none \
              does, your own account is used only when it is your own agent and can still open a \
-             session; otherwise the account is the project's, else the console's. Name another \
-             account only when the user asked for it, or when it is the way to reach another \
-             agent. `title` names it in the user's language. No approval \
-             is needed.",
+             session; otherwise the account is the project's, else the console's (`get_project` \
+             gives it in `effective.accounts`). Name another account only when the user asked \
+             for it, or when it is the way to reach another agent. `title` names it in the \
+             user's language. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
         ));
@@ -497,7 +497,8 @@ fn project_session_description(agent: Agent, owner: &Owner) -> String {
            when nothing is left open, `failed` when the task could not be carried out, and \
            `needs_decision` when the {owner_noun} has to choose before you can go on.\n\
          - With `done` and no open items the session is wrapped up and archived once the report \
-           reaches the {owner_noun}, so do not report `done` while anything remains.\n\
+           is delivered to the {owner_noun}, or kept for it while it is interrupted, so do not \
+           report `done` while anything remains.\n\
          - Permission prompts and anything you need to ask a person go to the user directly, in \
            this terminal — not through the {owner_noun} and not through `{report}`. Ask, then \
            wait.\n\
@@ -551,11 +552,15 @@ fn unbound_project_session_description(agent: Agent) -> String {
            have something to say. Returns the new session's id.\n\
          - A session you start reports back to you: its report arrives here as a message, so do \
            not poll for one. A session reporting `done` with nothing open has already been \
-           archived by the time you read it.\n\
+           archived by the time you read it. Reports, and Octoboard's notices about your \
+           sessions, that come while you are interrupted are kept and arrive once you are \
+           resumed, each saying when it dates from: check the session with `{get_session}` before \
+           acting on one. The notice that the user released a session from you is the exception: \
+           it is not kept.\n\
          - `{instruct_session}`, `{get_session}`, `{archive_session}` and `{reopen_session}` act \
            on the sessions you own (`yours: true`). `{get_session}` also reads any other session, \
-           but one with `yours: false` is somebody else's — the user's own, or another \
-           session's, named in `owner` — and is to be left alone.\n\
+           but one with `yours: false` is somebody else's — the user's own, or another session's, \
+           named in `owner` — and is to be left alone.\n\
          - `{interrupt_session}` stops the turn a session you own is in the middle of, when it \
            is working on the wrong thing; it keeps its conversation and awaits your next \
            instruction, which you send with `{instruct_session}`.\n\

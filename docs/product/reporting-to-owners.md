@@ -12,18 +12,29 @@ The report is written into the session the reporting session is **bound to**, it
 or a project session — named by its own binding rather than looked up, since a console may
 hold several console sessions. It arrives as a user message naming the reporting session's id, its title and project,
 the status, the open items, and then the summary. The reporting session is told that it was delivered, that it was
-accepted and will reach its owner as soon as the owner can take a message, or that it was written into the owner's input
-but the owner's agent did not send it to the conversation, so the owner has not read it, the user has been told, and it
-must not be sent again (see "A message written but not sent" and "A message a dialog discarded or a view took" in
-`docs/product/message-delivery.md`). The note calls the owner a console
-session or a project session according to which it is.
+accepted and will reach its owner as soon as the owner can take a message, that it was kept for its owner, which is
+interrupted, and is delivered once the owner is resumed, so it must not be sent again (see "Reports and notices for an
+interrupted owner" below), or that it was written into the owner's input but the owner's agent did not send it to the
+conversation, so the owner has not read it, the user has been told, and it must not be sent again (see "A message
+written but not sent" and "A message a dialog discarded or a view took" in `docs/product/message-delivery.md`). The
+note calls the owner a console session or a project session according to which it is.
 
 Reporting fails, and leaves the session exactly as it was, when:
 
 - the session is unbound, so there is nobody to report to;
 - its owner is no longer on record;
-- its owner has no process running — it is interrupted or archived. The binding names the owner by its id and
-  outlives this, so once the owner is resumed or reopened the session's reports reach it again;
+- its owner is archived. Nothing is kept for it: the reason names the owner and tells the session to tell the user in
+  its terminal what the report says, since the owner will not read it. The binding names the owner by its id and
+  outlives the archive, so once the owner is reopened the session's reports reach it again. A session archived along
+  with its owner is told instead that there is nothing further to report;
+- its owner still has no process running at the end of the wait in "Reports and notices for an interrupted owner"
+  below — it is being started, resumed, switched to another account or handed off, or having its branches handed over
+  or its owner changed. The reason names the owner and tells the session to report again once its owner is running.
+  An owner that is simply interrupted does not fail a report: it has the report kept;
+- a message queued for its owner could not be written in full, so it and everything queued behind it, the report
+  included, were dropped (see "Messages held until a session can take them" in `docs/product/message-delivery.md`).
+  The reason names the owner, says the user has been told, and tells the session to tell the user in its terminal what
+  the report says rather than report again;
 - the session has already been wrapped up — a session archived by its own `done` report cannot
   report a second time;
 - the session is a lead session, the report has `status: done` and no open items, and a session bound to it is not
@@ -62,8 +73,9 @@ arrives that much later. Sessions outside the orchestration are never reported o
 
 Besides reports, Octoboard itself writes a few notices into an owner about a session bound to it, where no report would
 say what happened. Each is written through the delivery every message takes, queued while the owner cannot take one
-(see "Messages held until a session can take them" in `docs/product/message-delivery.md`); an owner with no process
-running is not told, then or later.
+(see "Messages held until a session can take them" in `docs/product/message-delivery.md`), and kept for an owner that
+is interrupted (see "Reports and notices for an interrupted owner" below). An archived owner, or one with no process
+running for another reason once the wait there is over, is not told, then or later.
 
 - **A session ended on its own.** When the process of a bound session ends without anyone having asked for it — it
   crashed, or the user closed it in its terminal — its owner is told that the session ended on its own although nobody
@@ -87,6 +99,54 @@ running is not told, then or later.
 - **Octoboard switched a session's account by itself**, or tried to and could not bring it back up: see "When the
   switch succeeds" and "When the switch fails" in `docs/product/automatic-account-switch.md`.
 
+## Reports and notices for an interrupted owner
+
+An owner that is **interrupted** — its process ended without it being archived — has what comes for it about its
+sessions **kept** for its resume, rather than refused or dropped:
+
+- a session's own report, and the first report of a session binding itself to it (see "Binding an unbound session to an
+  owner" in `docs/product/changing-session-owners.md`);
+- a synthesised report (see "When a session does not report" above);
+- every notice in "Notices to an owner" above;
+- the notice of a handoff of one of its sessions (see "Who is told" in `docs/product/handing-off-sessions.md`) and the
+  notice to the new owner of a session handed to it with `transfer_session` (see "Handing a session to another owner"
+  in `docs/product/changing-session-owners.md`).
+
+The notice that the user released a session from its owner is the exception: an owner with no process running is not
+told it, then or later (see "Releasing a session from its owner" in `docs/product/changing-session-owners.md`).
+
+What is kept is held in the same store, and under the same rules, as information shared with an interrupted session:
+it survives a restart of Octoboard, is written into the owner once its process is next started, in the order it came
+among everything kept for it, shared information included, is dropped when the owner is archived or deleted, is passed
+on when the owner is handed off, and is counted in the owner's `queued_messages` (see "Information for an interrupted
+session" in `docs/product/information-between-sessions.md`).
+
+- **Each kept report and notice is dated.** It carries a line saying it was kept for the owner while it was
+  interrupted, the minute it dates from (in UTC), that what it says of the session may no longer hold, and to check the
+  session with `get_session` before acting on it. In a report the line comes among the lines that open it, before the
+  open items and the summary.
+- **A kept wait gives way to what came after it.** A kept notice that a session is waiting for the user is dropped once
+  any later report or notice about the same session is kept for that owner, another wait included; information shared
+  with the owner does not drop it. At the resume, a kept wait is also dropped when that session no longer reads as
+  waiting for the user.
+- **A `done` report still archives the reporter.** A report kept this way counts as accepted (see "Automatic archiving"
+  below): a `done` report with no open items, with no lock blocking it, archives the reporting session right away, and
+  its answer says the report was kept and that the session is now archived. Any other report leaves the reporting
+  session as it is.
+- **An owner in the middle of an operation is waited for.** An owner with no process running that is being started,
+  resumed, switched to another account or handed off, or having its branches handed over or its owner changed, can
+  neither take a message nor have one kept, so a report or notice for it waits up to **15 seconds** for that to finish
+  and then goes by how the owner stands: written into it once it is running, kept while it is interrupted. One still
+  without a process after the wait is refused, for a report (see the refusals at the top of this document), and not
+  told, for a notice.
+- **A report, or a notice in "Notices to an owner" above, that waited for an owner which a handoff archived
+  meanwhile** goes to the session that took the owner's place (see `docs/product/handing-off-sessions.md`).
+
+An owner is told this in its role description — a console session in its instruction file, an unbound project session
+and a lead session in their own text: reports and Octoboard's notices about its sessions that come while it is
+interrupted are kept and arrive once it is resumed, each saying when it dates from, so it checks the session with
+`get_session` before acting on one, and the notice that the user released a session from it is not kept.
+
 ## Automatic archiving
 
 Locks follow "Locking a session" in `docs/product/sessions.md`. If the reporting session or any session under it
@@ -95,10 +155,10 @@ unfinished-session refusal for a lead session's completion report does not apply
 retroactively archive it; a later qualifying report or an explicit archive must do so.
 
 A report with `status: done` and **no** open items, with no lock blocking it, wraps the session up: once the report
-has been accepted for its owner, the session's process is ended and the session is archived. The git branches it was
-working on, and the linked worktrees that have them checked out, are then removed where git can do so without force,
-and the report's answer names those that will stay (see "Archives made by an agent" in
-`docs/product/branch-and-worktree-cleanup.md`).
+has been accepted for its owner — delivered, queued, or kept for an interrupted owner — the session's process is ended
+and the session is archived. The git branches it was working on, and the linked worktrees that have them checked out,
+are then removed where git can do so without force, and the report's answer names those that will stay (see "Archives
+made by an agent" in `docs/product/branch-and-worktree-cleanup.md`).
 "Accepted" rather than "read" — an owner that is merely busy has the report queued for it,
 and the session is archived anyway rather than being left alive until the owner gets round
 to it.

@@ -40,6 +40,7 @@ fn told(delivery: &Result<Option<Delivery>>, who: &str) -> String {
         Ok(Some(Delivery::Queued)) => {
             format!("{who} will be told as soon as it can take a message.")
         }
+        Ok(Some(Delivery::Kept)) => format!("{who} is not running, and will be told once resumed."),
         Ok(Some(Delivery::Unsent)) => format!(
             "{who} was not told: the message was written into its input, but its agent did not \
              send it to the conversation (it is in the input box, or went to a view of its \
@@ -197,10 +198,9 @@ pub(super) async fn transfer_session(
     // and stops without reporting, the report Octoboard synthesises is the safety net, and it is
     // wanted there.
     let child = tell_now_or_leave(state, &moved.id, to_session, running, None).await;
-    let told_owner =
-        reporting::write_message_off_runtime(state, &owner.id, to_owner, WhenBlocked::Queue)
-            .await
-            .map(Some);
+    let told_owner = reporting::write_notice_to_owner_off_runtime(state, &owner, &moved, to_owner)
+        .await
+        .map(Some);
     let mut result_note = format!(
         "Handed over: `{id}` now reports to {to} and is no longer yours. {child} {owner}",
         id = moved.id,
@@ -286,10 +286,12 @@ fn released_text(released: &Session, note: Option<&str>) -> String {
          reported to, and you are the user's own session: take work only from the user typing in \
          this terminal, and do not call `{report}`, which is refused for a session with no owner. \
          This replaces what you were told of your owner when you were started. You can start and \
-         drive sessions of your own with `{new_session}` and the tools that go with it, and you \
-         can still tell your former owner something with `{send_message}`, which it weighs rather \
-         than obeys; of Octoboard's tools you now have {tools}.{note}",
+         drive sessions of your own with `{new_session}` and the tools that go with it (call \
+         `{get_session}` once with no arguments first, so that your tool list catches up), and \
+         you can still tell your former owner something with `{send_message}`, which it weighs \
+         rather than obeys; of Octoboard's tools you now have {tools}.{note}",
         report = tool("report"),
+        get_session = tool("get_session"),
         new_session = tool("new_session"),
         send_message = tool("send_message"),
         tools = project_tools(released.agent, false),
@@ -384,6 +386,10 @@ pub(super) async fn bind_to_session(
              send it again."
                 .to_string()
         }
+        Ok((_, Delivery::Kept)) => "It is not running, so your summary is kept for it as your \
+                                    first report and delivered once it is resumed; do not send it \
+                                    again."
+            .to_string(),
         Ok(_) => "Your summary was sent to it as your first report.".to_string(),
         Err(err) => format!(
             "Your summary could not be delivered to it ({err:#}), so send it yourself with `{}`.",
@@ -538,6 +544,10 @@ mod tests {
         );
         assert!(
             told.contains("tell your former owner something with `mcp__octoboard__send_message`"),
+            "{told}"
+        );
+        assert!(
+            told.contains("call `mcp__octoboard__get_session` once with no arguments first,"),
             "{told}"
         );
         // A blank note adds nothing, and the owner that released it is not told what it did.

@@ -171,7 +171,7 @@ pub struct Outbox {
     /// many pauses are held on it: like a hold, nothing is written, but it is no handoff and has no
     /// successor.
     paused: Mutex<HashMap<String, usize>>,
-    /// The messages that are also kept in the store (`Store::add_pending_info`), by ticket, and
+    /// The messages that are also kept in the store (`Store::add_kept_message`), by ticket, and
     /// the row each is kept in. A row is deleted only once its message has been written into the
     /// session ([`Self::take_written`]), so a daemon that exits before the queue drains, or a
     /// process that ends first, leaves it for the next resume.

@@ -465,7 +465,8 @@ fn note_to_session(agent: Agent, from: &str, to: &str) -> String {
 }
 
 /// Tells the switched session, when its relaunch did not carry the note, and its owner if it has
-/// one, what became of it. A message to a session that cannot take one now is queued; one that
+/// one, what became of it. A message to a session that cannot take one now is queued, and one for
+/// an owner that is interrupted is kept for its resume (see `reporting::tell_owner`); one that
 /// cannot be delivered at all is logged and goes no further.
 fn tell_sessions(
     state: &Arc<AppState>,
@@ -486,31 +487,25 @@ fn tell_sessions(
             state.clear_turn_credit(&moved.id, NOTICE_PREFIX);
         }
     }
-    let Some(owner_id) = &moved.bound_to else {
-        return;
-    };
-    let owner = match state.store.get_session(owner_id) {
-        Ok(Some(owner)) => owner,
-        _ => return,
-    };
-    let text = format!(
-        "{NOTICE_PREFIX}: {session} reached the usage limit of its {} account `{from}`, so \
-         Octoboard switched it to `{to}` by itself. Its conversation came with it. {}",
-        moved.agent.label(),
-        if continued {
-            "Its turn had stopped on the limit, so it was sent a prompt to continue that task: do \
-             not send it one yourself."
-                .to_string()
-        } else {
-            format!(
-                "It is back awaiting instructions, so send it the next step with `{}` if it has \
-                 one pending.",
-                mcp::qualified_tool_name(owner.agent, "instruct_session")
-            )
-        },
-        session = sharing::named_session(moved),
-    );
-    tell(state, &owner.id, &text);
+    reporting::tell_owner(state, moved, |owner| {
+        format!(
+            "{NOTICE_PREFIX}: {session} reached the usage limit of its {} account `{from}`, so \
+             Octoboard switched it to `{to}` by itself. Its conversation came with it. {}",
+            moved.agent.label(),
+            if continued {
+                "Its turn had stopped on the limit, so it was sent a prompt to continue that task: \
+                 do not send it one yourself."
+                    .to_string()
+            } else {
+                format!(
+                    "It is back awaiting instructions, so send it the next step with `{}` if it \
+                     has one pending.",
+                    mcp::qualified_tool_name(owner.agent, "instruct_session")
+                )
+            },
+            session = sharing::named_session(moved),
+        )
+    });
 }
 
 /// Writes `text` into the session `id`, queued until it can take it. Whether it was accepted.

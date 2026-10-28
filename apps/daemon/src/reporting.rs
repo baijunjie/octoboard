@@ -1,7 +1,9 @@
 //! The channel between an owner — a console session, or a project session that started sessions,
 //! unbound or a lead session — and the project sessions bound to it: the brief a task is handed
 //! over as, the message writing that carries both directions, the report that comes back, and the
-//! report Octoboard synthesises when a session stops without having sent one.
+//! report Octoboard synthesises when a session stops without having sent one. It also owns the
+//! notices Octoboard writes to an owner about its sessions, and keeping them, with the reports,
+//! for an owner that is interrupted until it is resumed.
 //!
 //! That is the one concern the console session's tools, the project session's `report` tool and
 //! the hook callback all share, which is why it sits apart from the control-socket handling in
@@ -16,14 +18,15 @@
 //! `docs/agent-cli-reference.md` and encoded in `crate::hooks`.
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::{bail, Result};
 
 use crate::branch_origin::cleanup;
 use crate::outbox::Drain;
-use crate::protocol::{error_code, CodedError, Session, SessionStatus};
+use crate::protocol::{error_code, now_millis, CodedError, Session, SessionStatus};
 use crate::state::{AppState, TurnClose};
-use crate::{coordinator, hooks, mcp, sharing, term};
+use crate::{coordinator, hooks, mcp, rfc3339, sharing, term};
 
 /// How every notice Octoboard writes into a session begins, worded after it at several places. A
 /// macro so that a constant can be built on it with `concat!`.
@@ -71,7 +74,8 @@ pub fn render_brief(
     prompt
 }
 
-/// What became of a message handed to [`write_message`].
+/// What became of a message handed to [`write_message`], or to a delivery that keeps a message for
+/// a session with no process.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delivery {
     Written,
@@ -83,6 +87,11 @@ pub enum Delivery {
     /// instead. The user has been told. The session has not read it, and it must not be sent
     /// again.
     Unsent,
+    /// Kept in the store for a session that is interrupted, and written into it once it is
+    /// resumed (see [`AppState::keep_message_if_not_running`]). Never what [`write_message`]
+    /// answers: keeping is for the deliveries that have a reason to wait for a resume, shared
+    /// information and what an owner is sent about its sessions.
+    Kept,
 }
 
 /// What a sender is told when a drain it triggered ran into a message the agent only partly took.
@@ -259,10 +268,12 @@ impl ReportStatus {
 ///
 /// Archiving happens once the report has been *accepted* for the owner rather than once the owner
 /// has read it: an owner that is merely busy still has the report queued for it, and leaving a
-/// finished session alive until the owner gets round to it would strand it. An owner that is not
-/// running at all is a different matter — the report fails, and the session stays as it is for the
-/// user to deal with. So is a report written into the owner but left unsent by its agent: the owner
-/// has not read it and nothing guarantees it will, so the session is not archived.
+/// finished session alive until the owner gets round to it would strand it. An interrupted owner
+/// counts as accepting it too: the report is kept for it and written into it once it is resumed
+/// (see [`write_to_owner`]), and the reporter, whose work is done, has nothing to stay up for. An
+/// archived owner takes nothing until it is reopened, so the report fails, and the session stays as
+/// it is. So does a report written into the owner but left unsent by its agent: the owner has not
+/// read it and nothing guarantees it will, so the session is not archived.
 pub fn deliver_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -292,6 +303,26 @@ fn deliver_and_archive(
     // process is on its way out. Refusing is what keeps that race from delivering the same round of
     // work to the owner twice.
     if session.status.is_dormant() {
+        // Archiving an owner archives the sessions bound to it first, so this is the reporter of an
+        // archived owner too, and "wrapped up" would leave it wondering by whom.
+        let owner_archived = session.status == SessionStatus::Archived
+            && state
+                .store
+                .get_session(bound_to)
+                .ok()
+                .flatten()
+                .is_some_and(|owner| owner.status == SessionStatus::Archived);
+        if owner_archived {
+            return Err(CodedError::raised(
+                error_code::SESSION_ARCHIVED,
+                format!(
+                    "your owner `{bound_to}` is archived, and so is this session, whose process is \
+                     on its way out: the report was not delivered, and there is nothing further to \
+                     report"
+                ),
+                &[("session", bound_to.as_str())],
+            ));
+        }
         bail!("this session has already been wrapped up; there is nothing further to report");
     }
     let finished = report.status == ReportStatus::Done
@@ -318,20 +349,56 @@ fn deliver_and_archive(
     // The binding names the owner directly, so this is a plain lookup by id rather than a search
     // for "the" console session of the console — a console may hold any number of them, each with
     // its own sessions.
-    let owner = state
+    let mut owner = state
         .store
         .get_session(bound_to)?
         .ok_or_else(|| anyhow::anyhow!("this session's owner is no longer on record"))?;
-    let owner_kind = format!("{} session", owner.role.kind());
+    // Nothing is kept for an archived owner, as nothing is shared with one: nothing says it will
+    // ever be reopened. Its sessions are archived with it, so this is a reporter left outside that
+    // archive, and the user is the one left to read what it did, unless a handoff has moved the
+    // reporter to the session that took the owner's place since the binding was read.
+    if owner.status == SessionStatus::Archived {
+        match rebound_owner(state, session_id, &owner.id)? {
+            Some(new) => owner = new,
+            None => return Err(archived_owner(&owner)),
+        }
+    }
+    let mut owner_kind = format!("{} session", owner.role.kind());
 
     let project = match &session.project_id {
         Some(id) => state.store.get_project(id)?.map(|project| project.name),
         None => None,
     };
-    let message = render_report(&session, project.as_deref(), &report);
+    let render = |kept: Option<&str>| render_report(&session, project.as_deref(), &report, kept);
     // A lost message propagates rather than being treated as delivered: the session must not be
     // archived on the strength of a report its owner never got.
-    let delivery = write_message(state, &owner.id, &message, WhenBlocked::Queue)?;
+    let deliver_to = |owner: &Session| {
+        write_to_owner(state, owner, &session, &render(None), |kept| {
+            render(Some(kept))
+        })
+        .map_err(|err| from_reporters_side(err, owner))
+    };
+    let mut delivered = deliver_to(&owner);
+    // The wait for the owner's claim can outlast the owner: a handoff archives it after moving
+    // this session to the session that took its place, so an archived owner may not be the
+    // owner any more.
+    if is_archived_refusal(&delivered) {
+        if let Some(new) = rebound_owner(state, session_id, &owner.id)? {
+            owner = new;
+            owner_kind = format!("{} session", owner.role.kind());
+            delivered = deliver_to(&owner);
+        } else if let Some(now) = state
+            .session_record(session_id)?
+            .bound_to
+            .filter(|now| *now != owner.id)
+        {
+            bail!(
+                "your owner changed to `{now}` while the report waited for it; it was not \
+                 delivered, so report again"
+            );
+        }
+    }
+    let delivery = delivered?;
 
     // A report the owner has not read archives nothing: the session would be gone before its
     // owner, or the user, ever saw why.
@@ -356,6 +423,16 @@ fn deliver_and_archive(
         (Delivery::Queued, false) => format!(
             "Report accepted; the {owner_kind} will see it as soon as it can take a message."
         ),
+        (Delivery::Kept, true) => format!(
+            "Report kept for the {owner_kind} `{}`, which is not running: it is delivered once \
+             the {owner_kind} is resumed, so do not send it again. This session is now archived.",
+            owner.id
+        ),
+        (Delivery::Kept, false) => format!(
+            "Report kept for the {owner_kind} `{}`, which is not running: it is delivered once \
+             the {owner_kind} is resumed, so do not send it again.",
+            owner.id
+        ),
         (Delivery::Unsent, _) => format!(
             "Your report was written into the {owner_kind}'s input, but its agent did not send it \
              to the conversation, so the {owner_kind} has not read it; the user has been told. Do \
@@ -374,6 +451,85 @@ fn deliver_and_archive(
         ));
     }
     Ok((note, archived, delivery))
+}
+
+/// A failure to write into `owner`, worded from the reporter's side.
+fn from_reporters_side(err: anyhow::Error, owner: &Session) -> anyhow::Error {
+    let owner_kind = format!("{} session", owner.role.kind());
+    match err.downcast_ref::<CodedError>() {
+        // "This session is not running" would read as the reporter itself.
+        Some(coded) if coded.code == error_code::SESSION_NOT_RUNNING => CodedError::raised(
+            error_code::SESSION_NOT_RUNNING,
+            format!(
+                "your owner, the {owner_kind} `{}`, has no process to take the report right now: \
+                 it is being started, resumed, switched or handed off, or having its owner \
+                 changed. The report was not delivered, and this session was left as it was; \
+                 report again once your owner is running",
+                owner.id
+            ),
+            &[("session", owner.id.as_str())],
+        ),
+        // The same code reads as the reporter's own fate through `lost_message`, which speaks of
+        // "this session"; the drain announced the loss to the user.
+        Some(coded) if coded.code == error_code::QUEUED_MESSAGES_LOST => CodedError::raised(
+            error_code::QUEUED_MESSAGES_LOST,
+            format!(
+                "a message queued for your owner, the {owner_kind} `{}`, could not be written in \
+                 full, so it and everything queued behind it, this report included, were \
+                 dropped; your owner's input line may hold a fragment of it. The report was not \
+                 delivered and this session was left as it was; the user has been told, so tell \
+                 them in this terminal what the report says rather than reporting again",
+                owner.id
+            ),
+            &[("session", owner.id.as_str())],
+        ),
+        // The owner was archived after it was read.
+        Some(coded) if coded.code == error_code::SESSION_ARCHIVED => archived_owner(owner),
+        _ => err,
+    }
+}
+
+/// Whether a delivery to an owner was refused for the owner being archived.
+fn is_archived_refusal(delivered: &Result<Delivery>) -> bool {
+    delivered.as_ref().err().is_some_and(|err| {
+        err.downcast_ref::<CodedError>()
+            .is_some_and(|coded| coded.code == error_code::SESSION_ARCHIVED)
+    })
+}
+
+/// The owner that the session `session_id` is bound to now, when it is not `previous` and is not
+/// archived: the session was handed to another owner while a write waited for `previous`.
+fn rebound_owner(
+    state: &Arc<AppState>,
+    session_id: &str,
+    previous: &str,
+) -> Result<Option<Session>> {
+    let Some(now) = state.session_record(session_id)?.bound_to else {
+        return Ok(None);
+    };
+    if now == previous {
+        return Ok(None);
+    }
+    Ok(state
+        .store
+        .get_session(&now)?
+        .filter(|owner| owner.status != SessionStatus::Archived))
+}
+
+/// The refusal of a report for an archived owner, worded from the reporter's side.
+fn archived_owner(owner: &Session) -> anyhow::Error {
+    CodedError::raised(
+        error_code::SESSION_ARCHIVED,
+        format!(
+            "your owner, the {} session `{}`, is archived, so the report was not delivered and is \
+             not kept for it: an archived session takes nothing until it is reopened. This session \
+             was left as it was; tell the user in this terminal what the report says, since your \
+             owner will not read it",
+            owner.role.kind(),
+            owner.id
+        ),
+        &[("session", owner.id.as_str())],
+    )
 }
 
 /// Closes the session's open turn on `turn` ending it, and has a report synthesised for the owner
@@ -447,8 +603,7 @@ fn synthesise_report(state: &Arc<AppState>, session_id: &str, turn: hooks::TurnE
 }
 
 /// Tells the owner of `session` that its process ended without anyone asking it to, so that the
-/// work it was doing is not waited for. Nothing is written when it has no owner or the owner has
-/// no process to be told in.
+/// work it was doing is not waited for, as [`tell_owner`] does.
 ///
 /// **Blocks** on writing into the owner.
 pub fn tell_owner_it_ended(state: &Arc<AppState>, session: &Session) {
@@ -476,8 +631,7 @@ pub fn spawn_tell_owner_it_waits(state: &Arc<AppState>, id: &str) {
 
 /// Tells the owner of `session` that Octoboard's own switch of it to another account failed after
 /// its process was ended, and that bringing it back up on the account it had failed too, so that it
-/// is interrupted and the work it was doing stopped. Nothing is written when it has no owner or the
-/// owner has no process to be told in.
+/// is interrupted and the work it was doing stopped, as [`tell_owner`] does.
 ///
 /// **Blocks** on writing into the owner.
 pub fn tell_owner_the_switch_failed(state: &Arc<AppState>, session: &Session, reason: &str) {
@@ -517,18 +671,56 @@ pub fn tell_owner_it_waits(state: &Arc<AppState>, id: &str) {
     }
     tell_owner(state, &session, |_| {
         format!(
-            "{NOTICE_PREFIX}: {session} is waiting for the user: it is at a permission prompt or \
-             has asked the user something, and only they can clear it. Do not chase it or send it \
-             anything to get it going: a message to it is held until they are done. Carry on with \
-             the rest of your work.",
-            session = sharing::named_session(&session),
+            "{opening}{title}{WAITING_PHRASE}: it is at a permission prompt or has asked the \
+             user something, and only they can clear it. Do not chase it or send it anything to \
+             get it going: a message to it is held until they are done. Carry on with the rest of \
+             your work.",
+            opening = waiting_opening(&session),
+            title = sharing::one_line(&session.title),
         )
     });
 }
 
-/// Writes the notice `text` builds, for the owner it is given, into the owner of `session`. A
-/// failure is logged and goes no further: an owner that cannot take it now is not owed it later.
-fn tell_owner(state: &Arc<AppState>, session: &Session, text: impl FnOnce(&Session) -> String) {
+/// How the notice of [`tell_owner_it_waits`] about `session` begins, up to its title, which a
+/// rename between two waits changes. [`WAITING_PHRASE`] follows the title.
+fn waiting_opening(session: &Session) -> String {
+    format!(
+        "{NOTICE_PREFIX}: the {} session `{}` (\"",
+        session.role.kind(),
+        session.id
+    )
+}
+
+/// What follows the title in the first line of that notice.
+const WAITING_PHRASE: &str = "\") is waiting for the user";
+
+/// Whether `text`, kept for an owner, is the notice that `session` waits for the user, by which a
+/// kept one is found again to be dropped once it is out of date (see [`write_to_owner`]).
+fn is_waiting_notice(text: &str, session: &Session) -> bool {
+    text.strip_prefix(&waiting_opening(session))
+        .and_then(|rest| rest.lines().next())
+        .is_some_and(|line| line.contains(WAITING_PHRASE))
+}
+
+/// The id of the session that a kept notice says waits for the user, if it is that notice.
+fn waiting_notice_session(text: &str) -> Option<&str> {
+    let rest = text.strip_prefix(NOTICE_PREFIX)?.strip_prefix(": the ")?;
+    let (_, rest) = rest.split_once(" session `")?;
+    let (id, rest) = rest.split_once("` (\"")?;
+    rest.lines().next()?.contains(WAITING_PHRASE).then_some(id)
+}
+
+/// Writes the notice `text` builds, for the owner it is given, into the owner of `session`, or
+/// keeps it for an owner that is interrupted (see [`write_to_owner`]). A failure is logged and
+/// goes no further: an owner that is archived, or cannot be written to for another reason, is not
+/// owed it later.
+///
+/// **Blocks** on writing into the owner.
+pub(crate) fn tell_owner(
+    state: &Arc<AppState>,
+    session: &Session,
+    text: impl Fn(&Session) -> String,
+) {
     let Some(owner_id) = &session.bound_to else {
         return;
     };
@@ -536,9 +728,167 @@ fn tell_owner(state: &Arc<AppState>, session: &Session, text: impl FnOnce(&Sessi
         Ok(Some(owner)) => owner,
         _ => return,
     };
-    if let Err(err) = write_message(state, &owner.id, &text(&owner), WhenBlocked::Queue) {
+    let mut told = write_notice_to_owner(state, &owner, session, &text(&owner));
+    // As a report is: the owner waited for may have been handed off and archived meanwhile.
+    if is_archived_refusal(&told) {
+        if let Ok(Some(new)) = rebound_owner(state, &session.id, &owner.id) {
+            told = write_notice_to_owner(state, &new, session, &text(&new));
+        }
+    }
+    if let Err(err) = told {
         tracing::debug!(session = %session.id, owner = %owner.id, %err, "telling the owner failed");
     }
+}
+
+/// [`write_to_owner`] for the notice `notice` about `about`, kept with the line that says it was.
+///
+/// **Blocks** like [`write_message`].
+fn write_notice_to_owner(
+    state: &Arc<AppState>,
+    owner: &Session,
+    about: &Session,
+    notice: &str,
+) -> Result<Delivery> {
+    write_to_owner(state, owner, about, notice, |kept| {
+        format!("{notice}\n\n{kept}")
+    })
+}
+
+/// [`write_notice_to_owner`] for a caller on the runtime, whose notice is not one of the
+/// `tell_owner_*` ones: a handoff's or a handover's, about the session `about` that moved.
+pub(crate) async fn write_notice_to_owner_off_runtime(
+    state: &Arc<AppState>,
+    owner: &Session,
+    about: &Session,
+    notice: String,
+) -> Result<Delivery> {
+    let (state, owner, about) = (state.clone(), owner.clone(), about.clone());
+    tokio::task::spawn_blocking(move || write_notice_to_owner(&state, &owner, &about, &notice))
+        .await?
+}
+
+/// How long [`write_to_owner`] waits for a claim on the owner to end.
+#[cfg(not(test))]
+const OWNER_CLAIM_WAIT: Duration = Duration::from_secs(15);
+#[cfg(test)]
+const OWNER_CLAIM_WAIT: Duration = Duration::from_secs(1);
+
+/// Waits up to [`OWNER_CLAIM_WAIT`] for the claim on the session `id` to be released.
+///
+/// **Blocks** the thread, which is a blocking one.
+fn wait_out_claim(state: &Arc<AppState>, id: &str) {
+    let deadline = Instant::now() + OWNER_CLAIM_WAIT;
+    while state.is_launching(id) && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Writes `text`, a report or a notice about the session `about`, into `owner`, queued while it
+/// cannot take a message; an owner that is interrupted has it kept instead, built by `kept` around
+/// the line that says so, and written into it once it is resumed, in the order it came with the
+/// rest of what was kept for it, shared information included. An owner that is archived is
+/// refused.
+///
+/// An owner under a claim (a resume, an account switch, a handoff, a handover of branches or a
+/// change of owner) has no process to write into and takes nothing kept either, and what is sent
+/// to it is an event that will not come again, so the write waits out the claim, with a bound
+/// ([`OWNER_CLAIM_WAIT`]), and reads the owner again.
+///
+/// What is kept is read only after the owner is back, when what it says of the session may no
+/// longer hold, so the line dates it and has the owner look at the session before acting on it.
+/// A notice that the session waits for the user goes out of date as soon as anything later about
+/// the session is kept — another wait, a report, a notice of its end — so that one drops it
+/// rather than the owner reading a wait that is long over; the rest are events, each kept.
+///
+/// **Blocks** like [`write_message`], and on the claim, so it is for a blocking thread.
+pub(crate) fn write_to_owner(
+    state: &Arc<AppState>,
+    owner: &Session,
+    about: &Session,
+    text: &str,
+    kept: impl Fn(&str) -> String,
+) -> Result<Delivery> {
+    let mut waited = false;
+    loop {
+        // Read again each time round: the owner may have been archived, or resumed, since.
+        let status = state.session_record(&owner.id)?.status;
+        if status == SessionStatus::Archived {
+            return Err(CodedError::raised(
+                error_code::SESSION_ARCHIVED,
+                "this session is archived, so it takes nothing until it is reopened",
+                &[("session", owner.id.as_str())],
+            ));
+        }
+        if status == SessionStatus::Interrupted {
+            let line = format!(
+                "Kept for you while you were interrupted; it dates from {}. What it says of the \
+                 session may no longer hold, so check the session with `{}` before acting on it.",
+                rfc3339::readable_utc_minute(now_millis()),
+                mcp::qualified_tool_name(owner.agent, "get_session"),
+            );
+            if let Some(row) = state.keep_message_if_not_running(&owner.id, &kept(&line))? {
+                drop_kept_waits(state, &owner.id, about, row);
+                return Ok(Delivery::Kept);
+            }
+        }
+        if !waited && state.live_session(&owner.id).is_none() && state.is_launching(&owner.id) {
+            wait_out_claim(state, &owner.id);
+            waited = true;
+            continue;
+        }
+        return write_message(state, &owner.id, text, WhenBlocked::Queue);
+    }
+}
+
+/// Drops the notices that `about` waits for the user kept for `owner_id` before the row `row`.
+fn drop_kept_waits(state: &Arc<AppState>, owner_id: &str, about: &Session, row: i64) {
+    let superseded: Vec<i64> = match state.store.kept_messages(owner_id) {
+        Ok(kept) => kept
+            .into_iter()
+            .filter(|(kept_row, text)| *kept_row < row && is_waiting_notice(text, about))
+            .map(|(kept_row, _)| kept_row)
+            .collect(),
+        Err(err) => {
+            tracing::warn!(owner = %owner_id, %err, "reading what is kept for an owner failed");
+            return;
+        }
+    };
+    if superseded.is_empty() {
+        return;
+    }
+    if let Err(err) = state.store.delete_kept_messages(&superseded) {
+        tracing::warn!(owner = %owner_id, %err, "dropping a kept wait failed");
+    }
+}
+
+/// What is kept for `owner_id` ([`crate::store::Store::kept_messages`]) without the notices that
+/// a session waits for the user, when it no longer does: nothing superseded them, but the owner
+/// would read a wait that is over. Those rows are deleted. For a resume to queue.
+pub(crate) fn current_kept_messages(
+    state: &Arc<AppState>,
+    owner_id: &str,
+) -> Result<Vec<(i64, String)>> {
+    let mut kept = state.store.kept_messages(owner_id)?;
+    let stale: Vec<i64> = kept
+        .iter()
+        .filter(|(_, text)| {
+            waiting_notice_session(text).is_some_and(|id| {
+                !matches!(
+                    state.store.get_session(id),
+                    Ok(Some(session)) if state.shown_status(&session) == SessionStatus::WaitingUser
+                )
+            })
+        })
+        .map(|(row, _)| *row)
+        .collect();
+    if stale.is_empty() {
+        return Ok(kept);
+    }
+    if let Err(err) = state.store.delete_kept_messages(&stale) {
+        tracing::warn!(owner = %owner_id, %err, "dropping a stale kept wait failed");
+    }
+    kept.retain(|(row, _)| !stale.contains(row));
+    Ok(kept)
 }
 
 /// [`write_message`] for a caller on the runtime. The write blocks on the PTY for as long as the
@@ -600,8 +950,15 @@ pub async fn deliver_own_report(
 
 /// The report as it is written into the owner. Plain prose with the structured fields spelled out:
 /// the owner reads this as a user message, so it has to be readable rather than a payload, and the
-/// session id has to be in it or the owner cannot follow up.
-fn render_report(session: &Session, project: Option<&str>, report: &Report<'_>) -> String {
+/// session id has to be in it or the owner cannot follow up. `kept` is the line that says it was
+/// kept for an owner that was not running, among the header's lines rather than after the summary,
+/// which is the session's own text.
+fn render_report(
+    session: &Session,
+    project: Option<&str>,
+    report: &Report<'_>,
+    kept: Option<&str>,
+) -> String {
     let origin = match project.filter(|project| *project != session.title) {
         Some(project) => format!("{} ({})", session.title, project),
         None => session.title.clone(),
@@ -616,6 +973,10 @@ fn render_report(session: &Session, project: Option<&str>, report: &Report<'_>) 
             "\nThis session stopped without reporting, so the text below is its last message and \
              the status is Octoboard's guess, not its own.",
         );
+    }
+    if let Some(kept) = kept {
+        message.push('\n');
+        message.push_str(kept);
     }
     if !report.open_items.is_empty() {
         message.push_str("\nOpen items:");
@@ -755,6 +1116,7 @@ mod tests {
                 open_items: &["pick a cache".to_string()],
                 synthesised: false,
             },
+            None,
         );
         assert!(rendered.contains("session-7"));
         assert!(rendered.contains("api (backend)"));
@@ -775,6 +1137,7 @@ mod tests {
                 open_items: &[],
                 synthesised: false,
             },
+            None,
         );
         assert!(rendered.contains("— api\n"));
         assert!(!rendered.contains("api (api)"));
@@ -793,6 +1156,7 @@ mod tests {
                 open_items: &[],
                 synthesised: true,
             },
+            None,
         );
         assert!(synthesised.contains("stopped without reporting"));
 
@@ -805,6 +1169,7 @@ mod tests {
                 open_items: &[],
                 synthesised: false,
             },
+            None,
         );
         assert!(!own.contains("stopped without reporting"));
     }
@@ -1616,6 +1981,165 @@ mod tests {
 
         let heard = hub_heard(&state, &hub).await;
         assert!(!heard.contains("is waiting for the user"), "{heard}");
+    }
+
+    /// An owner `hub` that is interrupted with no process, and `worker`, bound to it and waiting
+    /// for the user.
+    fn interrupted_hub_state(label: &str) -> (Arc<AppState>, crate::test_support::ScratchDir) {
+        let (state, dir) = crate::test_support::app_state(label);
+        state.store.insert_console(&console()).unwrap();
+        for (id, owner, status) in [
+            ("hub", None, SessionStatus::Interrupted),
+            ("worker", Some("hub"), SessionStatus::WaitingUser),
+        ] {
+            let session = Session {
+                id: id.to_string(),
+                role: if id == "hub" {
+                    Role::Console
+                } else {
+                    Role::Project
+                },
+                bound_to: owner.map(str::to_string),
+                status,
+                ..project_session(id)
+            };
+            state.store.insert_session(&session).unwrap();
+        }
+        (state, dir)
+    }
+
+    fn kept_texts(state: &Arc<AppState>) -> Vec<String> {
+        let kept = state.store.kept_messages("hub").unwrap();
+        kept.into_iter().map(|(_, text)| text).collect()
+    }
+
+    /// An owner under a claim takes nothing kept and has no process, but what is sent to it is an
+    /// event that will not come again: the notice waits out the claim and is then kept.
+    #[test]
+    fn a_notice_waits_out_a_claim_on_an_interrupted_owner_and_is_kept() {
+        let (state, _dir) = interrupted_hub_state("reporting-notice-under-claim");
+        let claim = state.begin_launch("hub").unwrap();
+        let releasing = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(claim);
+        });
+
+        let worker = state.session_record("worker").unwrap();
+        tell_owner_it_ended(&state, &worker);
+        releasing.join().unwrap();
+
+        let kept = kept_texts(&state);
+        assert_eq!(kept.len(), 1, "{kept:?}");
+        assert!(kept[0].contains("ended on its own"), "{kept:?}");
+    }
+
+    /// A claim that outlasts the wait leaves the report refused with the owner named, from the
+    /// reporter's side, and the reporter as it was.
+    #[test]
+    fn a_report_to_an_owner_under_a_claim_that_outlasts_the_wait_is_refused() {
+        let (state, _dir) = interrupted_hub_state("reporting-report-under-claim");
+        let _claim = state.begin_launch("hub").unwrap();
+        state
+            .store
+            .update_session_lifecycle_if(
+                "worker",
+                SessionStatus::WaitingUser,
+                SessionStatus::Idle,
+                None,
+            )
+            .unwrap();
+
+        let err = deliver_report(&state, "worker", done_report()).expect_err("refused");
+
+        let coded = err.downcast_ref::<CodedError>().expect("coded");
+        assert_eq!(coded.code, error_code::SESSION_NOT_RUNNING, "{err}");
+        assert!(
+            err.to_string()
+                .contains("your owner, the console session `hub`"),
+            "{err}"
+        );
+        assert!(err.to_string().contains("handed off"), "{err}");
+        assert_eq!(
+            state.session_record("worker").unwrap().status,
+            SessionStatus::Idle
+        );
+        assert!(kept_texts(&state).is_empty());
+    }
+
+    /// A report that waits for its owner's claim while a handoff moves the reporter to the session
+    /// that took the owner's place, and archives the owner, goes to the new owner.
+    #[test]
+    fn a_report_waiting_for_an_owner_that_is_replaced_goes_to_the_new_owner() {
+        let (state, _dir) = interrupted_hub_state("reporting-owner-replaced");
+        let heir = Session {
+            id: "heir".to_string(),
+            role: Role::Console,
+            bound_to: None,
+            status: SessionStatus::Interrupted,
+            ..project_session("heir")
+        };
+        state.store.insert_session(&heir).unwrap();
+        let claim = state.begin_launch("hub").unwrap();
+        let handing_off = {
+            let state = state.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(300));
+                state.store.hand_over_binding("hub", "heir", None).unwrap();
+                let mut hub = state.session_record("hub").unwrap();
+                hub.status = SessionStatus::Archived;
+                state.store.update_session(&hub).unwrap();
+                drop(claim);
+            })
+        };
+
+        deliver_report(&state, "worker", done_report()).expect("delivered to the heir");
+        handing_off.join().unwrap();
+
+        assert!(kept_texts(&state).is_empty());
+        assert_eq!(state.store.kept_messages("heir").unwrap().len(), 1);
+    }
+
+    /// An owner archived after the caller read it is refused as archived, not as starting.
+    #[test]
+    fn an_owner_archived_since_it_was_read_is_refused_as_archived() {
+        let (state, _dir) = interrupted_hub_state("reporting-owner-archived-since");
+        let stale = state.session_record("hub").unwrap();
+        let mut archived = stale.clone();
+        archived.status = SessionStatus::Archived;
+        state.store.update_session(&archived).unwrap();
+        let worker = state.session_record("worker").unwrap();
+
+        let err = write_to_owner(&state, &stale, &worker, "text", |kept| kept.to_string())
+            .expect_err("refused");
+
+        let coded = err.downcast_ref::<CodedError>().expect("coded");
+        assert_eq!(coded.code, error_code::SESSION_ARCHIVED, "{err}");
+        assert!(kept_texts(&state).is_empty());
+    }
+
+    /// The kept wait of a session is found again whatever its title was then, so a rename between
+    /// two waits does not leave the older one behind.
+    #[test]
+    fn a_renamed_sessions_second_wait_drops_the_first() {
+        let (state, _dir) = interrupted_hub_state("reporting-wait-renamed");
+
+        tell_owner_it_waits(&state, "worker");
+        let mut worker = state.session_record("worker").unwrap();
+        worker.title = "Renamed".to_string();
+        state.store.update_session(&worker).unwrap();
+        state.turn_started("worker", Some("go on"));
+        tell_owner_it_waits(&state, "worker");
+
+        let kept = kept_texts(&state);
+        assert_eq!(kept.len(), 1, "{kept:?}");
+        assert!(kept[0].contains("(\"Renamed\") is waiting"), "{kept:?}");
+        // What the notice is built of is what the matching looks for.
+        assert!(is_waiting_notice(&kept[0], &worker));
+        assert_eq!(waiting_notice_session(&kept[0]), Some("worker"));
+        assert_eq!(
+            waiting_notice_session("Message from Octoboard: other"),
+            None
+        );
     }
 
     /// Several sessions in one project have to be told apart in the menu, and the goal is the only

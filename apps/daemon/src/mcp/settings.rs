@@ -387,8 +387,13 @@ fn without_credentials_in(text: &str) -> String {
 /// agent as `inherit`, `default` or an account id, and the remote without any credential it
 /// carries, and its git workflow settings as the project's own choices (`null` follows the
 /// application-wide value) beside the values in force, and its git state as last read (see
-/// [`describe_git_status`]).
+/// [`describe_git_status`]). The agent, account and launch settings are given as stored, with what
+/// they resolve to under the console in `effective`: a project session cannot read the console.
 pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Result<Value> {
+    let console = state
+        .store
+        .get_console(&project.console_id)?
+        .ok_or_else(|| CodedError::unknown_console(&project.console_id))?;
     Ok(json!({
         "project": project.id,
         "name": project.name,
@@ -410,6 +415,22 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
             let (model, effort) = project.launch(agent);
             json!({ "model": model, "effort": effort })
         }),
+        // The same resolution a launch makes, so that what an agent reads is what a session
+        // started in this project gets when nothing names otherwise.
+        "effective": {
+            "default_agent": coordinator::session_agent(None, Some(project), &console),
+            "accounts": per_agent_object(|agent| {
+                json!(console
+                    .resolve_project_account(agent, project.account(agent))
+                    .as_deref()
+                    .unwrap_or("default"))
+            }),
+            "launch": per_agent_object(|agent| {
+                let (model, effort) =
+                    coordinator::project_launch_settings(project, &console, agent);
+                json!({ "model": model, "effort": effort })
+            }),
+        },
         "git_workflow": {
             "override": project.git_workflow,
             "effective": git_workflow::effective(&state.store, project)?,

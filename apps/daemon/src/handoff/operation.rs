@@ -374,9 +374,9 @@ pub(super) async fn tell(
         }
     }
 
-    let to_tell = owner
-        .as_ref()
-        .filter(|owner| !owner.status.is_dormant() && asked_by != Some(owner.id.as_str()));
+    let to_tell = owner.as_ref().filter(|owner| {
+        owner.status != SessionStatus::Archived && asked_by != Some(owner.id.as_str())
+    });
     if let Some(owner) = to_tell {
         let text = format!(
             "{NOTICE_PREFIX}: {from}, which reported to you, was handed off to a session \
@@ -393,7 +393,12 @@ pub(super) async fn tell(
             archive_session = tool(owner.agent, "archive_session"),
             reopen_session = tool(owner.agent, "reopen_session"),
         );
-        send(state, &owner.id, text).await;
+        // Kept for an owner that is interrupted, as a session's own report to it would be.
+        if let Err(err) =
+            reporting::write_notice_to_owner_off_runtime(state, owner, original, text).await
+        {
+            tracing::warn!(session = %owner.id, %err, "telling an owner of a handoff failed");
+        }
     }
 
     let mut held = String::new();
@@ -449,7 +454,7 @@ pub(super) async fn tell(
 }
 
 /// Forwards what was queued for the original to the receiving session, in order, through the same
-/// delivery any message takes: its queue, then the information kept in the store for it while it
+/// delivery any message takes: its queue, then the messages kept in the store for it while it
 /// was interrupted that is not in it, which the archive that follows would otherwise drop.
 async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) {
     // The queue in order, then what is kept and was not queued: a kept message is in both once the
@@ -457,7 +462,7 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
     let queued = state.take_queued_with_rows(original);
     let in_queue: Vec<i64> = queued.iter().filter_map(|(_, row)| *row).collect();
     let mut texts: Vec<String> = queued.into_iter().map(|(text, _)| text).collect();
-    match state.store.pending_info(original) {
+    match state.store.kept_messages(original) {
         Ok(kept) => texts.extend(
             kept.into_iter()
                 .filter(|(row, _)| !in_queue.contains(row))
@@ -465,7 +470,7 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
         ),
         Err(err) => tracing::warn!(
             session = %original, %err,
-            "reading the information kept for the original session failed"
+            "reading the messages kept for the original session failed"
         ),
     }
     for text in texts {
@@ -495,10 +500,10 @@ async fn forward_queued(state: &Arc<AppState>, original: &str, receiving: &str) 
         }
     }
     // Forwarded, or announced as dropped: either way not the original's to keep.
-    if let Err(err) = state.store.clear_pending_info(original) {
+    if let Err(err) = state.store.clear_kept_messages(original) {
         tracing::warn!(
             session = %original, %err,
-            "clearing the information kept for the original session failed"
+            "clearing the messages kept for the original session failed"
         );
     }
 }

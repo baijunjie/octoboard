@@ -81,7 +81,7 @@ the request id as if it were a record id.
 | `resume_session` | `session`, `terminal_appearance?` | Relaunches an `interrupted` or `archived` session through the agent's own resume mechanism, re-injecting everything. A session bound to an archived owner (a console session, or a project session that started it) relaunches its archived owners first, level by level from the topmost down — for a session bound to an archived lead session whose console session is archived too, the console session, then the lead session — stopping at the first owner that is not archived; an owner that is only `interrupted` is left alone. Before anything is relaunched, the session and each owner about to be relaunched are looked up in the agent's own records, in the session's own account only (a copy left in another account does not count). A session whose conversation record is proven gone is refused with `conversation_unresumable` and nothing is relaunched; an archived owner whose record is proven gone is relaunched into a fresh conversation instead (a new agent session id, `has_conversation` false until its first turn, what is left of the old conversation's records in the agent's directories moved to the Trash) and the session is resumed as usual. A record that cannot be proven gone is not a refusal (an account directory that cannot be read, or that holds no records directory at all, included): the launch goes on and applies its own refusals, `config_dir_unreachable` for a pinned account directory that is gone. A Codex session whose rollout sits only in the account's `archived_sessions/` has `codex unarchive` run first, under the session's account: the session's own rollout before any owner is relaunched (`codex_unarchive_failed` when it fails, the whole group left as it was), an archived Codex owner's just before its own relaunch (a failure there is that owner's own refusal, below). If an owner cannot be relaunched the whole request fails with that owner's own refusal: owners already relaunched stay up, and the rest, the session included, stay as they were. Resuming an owner relaunches nothing bound to it, and no other session bound to the same owners is relaunched. `terminal_appearance` is as in `open_session`, and applies to this relaunch only; an archived owner relaunched on the way is left to follow the operating system |
 | `archive_session` | `session`, `force_remove?`, `keep?` | Ends the process and archives the session. This user control request also ends and archives every unarchived session under it: those bound directly to it, and those bound to its lead sessions, including manually bound sessions and descendants reached through an archived lead. The deepest descendants are archived first, then their owners. Already archived sessions keep their archive timestamps; unrelated sessions are untouched. All locks are checked before any session is changed; a locked session anywhere in the group refuses the request with `session_locked`. A session still launching is archived immediately and its process ends as soon as it comes up. Agent tools and reports keep their separate safeguard: they refuse an owner archive with `session_has_running_sessions` while a descendant has a process or launch claim. Once the processes of the sessions it archived have ended, the branches and worktrees bound to them are removed as "Branches and worktrees bound to a session" below says, together with the ones `force_remove` (absent means none) names; the reply does not wait for that. Then every client is told, as `session_branches_not_removed`, of what is still there except a branch checked out in a worktree that stays, a project's folder, and what `keep` names in the state it stands in |
 | `switch_session_account` | `session`, `account`, `terminal_appearance?` | Moves the session to another account of its own agent: ends its process the way `archive_session` does (and archives nothing — the session reads `interrupted` while the process is down), copies the session's conversation into the target account's directory, records the account and directory on the session, and relaunches it the way `resume_session` does, with every launch refusal applying unchanged. `account` is required: an id, or an explicit `null` for the default account, whose directory is resolved once from one login-shell snapshot that both the copy and the relaunch use (an absent `account` is `field_required`). The record is found by name under the root where the agent keeps its records (for Codex a rollout compressed to `.jsonl.zst` counts too, and is copied as it is). Once the process is down, what the agent keeps beside the record is added: for Claude Code the conversation's `projects/<slug>/<id>/` directory and `file-history/<id>/`, where they exist; for Codex, every rollout of the thread (its first rollout and, when a turn was reverted, each later history segment; the located record is the chain's head) — a Codex subagent's rollout, named by its own id, is left behind. Each item is copied to the same path relative to the config directory, creating the directories in between and replacing an earlier copy; the originals stay. For Codex, once the items are in place the target's database (`state_<n>.sqlite` in its directory, or where its `config.toml` `sqlite_home` or the launch environment's `CODEX_SQLITE_HOME` puts it) has its `threads` row of the session updated to name the carried head where the row leads to another file (`rollout_path` only: Codex resumes the rollout the row names, and would follow an older one; a `state_<n>.sqlite` that links to a file counts); it is the only write to the agent's own state besides the copy, and it is `relocation_failed` (the conversation is already copied by then, and the message says so) when where the database is cannot be determined (an unreadable or invalid `config.toml`, a relative `CODEX_SQLITE_HOME`, a directory that cannot be listed) or it cannot be written to or stays busy for 5 seconds; a `~` in `sqlite_home` is the launch environment's `HOME`. The items are built and size-checked in a transient `.octoboard-switch` directory at the target's root and put in place together: if one fails, those already placed are removed and the earlier copies put back. The directory is removed again, except when an earlier copy could not be put back, in which case it holds that copy until the daemon next starts or the session is next switched into that account. A session with no conversation (`has_conversation` false) has nothing to copy, and the switch records the account and relaunches into a fresh conversation. Answered once the relaunched process has stayed up for a few seconds; an `error` answer means the session is on the account it had, and the `session_upserted` events that put it back there (recording it interrupted when the relaunch did not come up) were sent before that answer. Refused, with nothing recorded and the process left running: `session_already_starting` / `session_already_running` while a launch, resume or switch of it is under way, `session_archived`, `session_already_on_account`, `unknown_account` for an id that names no account of the session's agent, `grok_home_not_initialized` for a Grok Build target that was never run against (checked before anything is copied into it), `account_sharing_in_progress` while a change of the sharing of the session's account or of the target runs, and `conversation_not_found`. Refused after the process was ended, with nothing copied or recorded: `session_did_not_stop`. The session stays claimed against a resume or another switch until the answer is sent. Once the process has been ended and the conversation is being moved: `relocation_failed` when the copy does not complete, the launch's own refusals (`config_dir_unreachable`, `directory_unreachable`, `binary_not_found`, …) and `switch_did_not_come_up` when the relaunched process ends at once — each leaves the session `interrupted` on its previous `account_id` and `config_dir`, with the conversation in both directories. `terminal_appearance` is as in `open_session` |
-| `hand_off_session` | `session`, `agent`, `account?`, `model?`, `effort?`, `terminal_appearance?` | Hands the session off to a new session of another agent, which takes its whole place: the same kind (project or console), project or console, role (unbound, lead or bound) and owner; its created name is the original's displayed name (task title｜created name, or the created name alone under the rules in "Displayed names" in `docs/product/session-titles.md`); the branches the session is responsible for name the new session instead; every session the original owns, archived ones included, is bound to the new one. The conversation does not move (the agents' records cannot resume one another): the new session starts with an opening prompt that gives the path of a handoff package built from the original's records (`handoff` in `apps/daemon/README.md`) and tells it to read it first; the original's own brief is not kept anywhere, so it is not repeated (the package holds the conversation, whose first user message is that brief). `agent` is required; `account`, `model` and `effort` are as in `open_session`. Order: every refusal first; then the package is written and the new session started, answered with nothing moved if that fails (the package is removed again); then the binding, the branches and the owned sessions move together, and each moved session that has a process, the owner (when it has one and a process) and the new session are told through the ordinary message delivery; the original is archived last, its screen kept as `archive_session` keeps it, and none of the sessions that moved with it. The original's message queue is held from the moment the handoff claims it: messages for it are accepted and queued, none is written; once the new session has taken its place the queue (including what was already in its outbox) is forwarded to it before the original is archived, a handoff that fails before the new session has started writes the queue to the original as usual, and one that fails after the place has moved (the original's archiving failing, say) sends it to the new session. The held queue is kept if the original's process ends meanwhile. The new session also carries over the original's pinned mark. The package is removed when the new session is deleted, and the daemon removes packages (and half-written files) that name no session at startup. Answered with `session_opened` for the new session, `working` with the opening prompt. Refused, with nothing changed: `unknown_session`, `session_already_starting` (a launch, resume or switch of the original is under way), `session_archived`, `session_working` (the session is in the middle of a turn or still starting; waiting for instructions, waiting for the user and interrupted are allowed), `session_locked`, `handoff_to_same_agent` (the refusal points to `switch_session_account`), `agent_not_available`, `agent_not_added`, `unknown_account` for an account that is not of `agent`, `account_disabled`, `invalid_launch_setting`, and what `open_session` refuses for the owner of a bound session. Failing after the new session is running — the lead binding no longer applying, or the original's archiving failing — is answered with an `error` that names the new session, which stays running. `terminal_appearance` is as in `open_session` and applies to the receiving session's launch |
+| `hand_off_session` | `session`, `agent`, `account?`, `model?`, `effort?`, `terminal_appearance?` | Hands the session off to a new session of another agent, which takes its whole place: the same kind (project or console), project or console, role (unbound, lead or bound) and owner; its created name is the original's displayed name (task title｜created name, or the created name alone under the rules in "Displayed names" in `docs/product/session-titles.md`); the branches the session is responsible for name the new session instead; every session the original owns, archived ones included, is bound to the new one. The conversation does not move (the agents' records cannot resume one another): the new session starts with an opening prompt that gives the path of a handoff package built from the original's records (`handoff` in `apps/daemon/README.md`) and tells it to read it first; the original's own brief is not kept anywhere, so it is not repeated (the package holds the conversation, whose first user message is that brief). `agent` is required; `account`, `model` and `effort` are as in `open_session`. Order: every refusal first; then the package is written and the new session started, answered with nothing moved if that fails (the package is removed again); then the binding, the branches and the owned sessions move together, and each moved session that has a process, the owner (when it has one that is not archived; an interrupted one has the message kept for its resume) and the new session are told through the ordinary message delivery; the original is archived last, its screen kept as `archive_session` keeps it, and none of the sessions that moved with it. The original's message queue is held from the moment the handoff claims it: messages for it are accepted and queued, none is written; once the new session has taken its place the queue (including what was already in its outbox) is forwarded to it before the original is archived, a handoff that fails before the new session has started writes the queue to the original as usual, and one that fails after the place has moved (the original's archiving failing, say) sends it to the new session. The held queue is kept if the original's process ends meanwhile. The new session also carries over the original's pinned mark. The package is removed when the new session is deleted, and the daemon removes packages (and half-written files) that name no session at startup. Answered with `session_opened` for the new session, `working` with the opening prompt. Refused, with nothing changed: `unknown_session`, `session_already_starting` (a launch, resume or switch of the original is under way), `session_archived`, `session_working` (the session is in the middle of a turn or still starting; waiting for instructions, waiting for the user and interrupted are allowed), `session_locked`, `handoff_to_same_agent` (the refusal points to `switch_session_account`), `agent_not_available`, `agent_not_added`, `unknown_account` for an account that is not of `agent`, `account_disabled`, `invalid_launch_setting`, and what `open_session` refuses for the owner of a bound session. Failing after the new session is running — the lead binding no longer applying, or the original's archiving failing — is answered with an `error` that names the new session, which stays running. `terminal_appearance` is as in `open_session` and applies to the receiving session's launch |
 | `inspect_session_records` | `sessions` | Inspects exactly these session ids and replies with `session_records_inspected`: aggregate `presence` is `present` when any session has a native record, otherwise `unknown` when an id is missing, a native id or account root cannot be resolved, or a listing is unreadable or linked, otherwise `absent`. An empty list is `absent`. Looks where deletion's Trash scan does (see `delete_session`), the default account only where that scan would take from it; Claude subagent directories and Grok session directories count even without a main transcript or usage ledger. This is a fresh inspection, not a promise about a later deletion |
 | `read_session_history` | `session` | Replies with `session_history`: what the session's own agent record says the conversation was, for the history view of an archived session. An id with no session is `unknown_session`. It is read fresh from the agent's record (found the way the handoff package finds it, in every account that could hold it, and for a Codex thread that `codex archive` moved out of `sessions/`, in the account's `archived_sessions/`) and nothing is stored. A session that has had no conversation has an empty history. A record that is not found or cannot be read is not an error: the reply carries `unavailable`. Grok keeps only a summary of what came before a compaction, so the history of a compacted Grok session shows the turns since the compaction only |
 | `inspect_session_branches` | `sessions` | Replies with `session_branches_inspected`: the branches and linked worktrees bound to exactly these session ids, as "Branches and worktrees bound to a session" below describes, each with where it stands now. An id with no session is skipped. Runs no `git` when none of the sessions is responsible for a branch. This is a fresh inspection, not a promise about a later archive or deletion |
@@ -915,9 +915,9 @@ omits it, which leaves the stored value unchanged.
   yet (the reading's last attempt failed, or none is held). No minimum of quota left is asked. When none qualifies,
   nothing is switched.
 - **Success.** The session is relaunched with one prompt that tells it of the switch and carries on with the stopped
-  turn, so it opens no turn of its own to be reported on; its owner, if it has one, is written a message, and the user
-  is sent a `session_notice` with code `account_switched_automatically`. The session's `switching_account` is set
-  meanwhile, as for any switch.
+  turn, so it opens no turn of its own to be reported on; its owner, if it has one, is written a message (kept for its
+  resume while it is interrupted), and the user is sent a `session_notice` with code `account_switched_automatically`.
+  The session's `switching_account` is set meanwhile, as for any switch.
 - **Failure.** A failure before the session's process was ended, or while a process that did not stop in time may
   still run (`session_did_not_stop`), leaves the session as it was and is only logged. A failure after the daemon had
   stopped the process (a sharing change begun meanwhile, a conversation copy that fails, a relaunch that fails or does
@@ -927,10 +927,10 @@ omits it, which leaves the stored value unchanged.
   one that ends within them is the outcome of that operation, and its owner is not also told that it "ended on its
   own". A switch someone asked for does not watch its process this way: if its relaunch ends on its own, the owner is
   told. Only when the restore fails too is the user sent a `session_notice` with code
-  `account_switch_automatically_failed` and the owner written a message; the session is then `interrupted` on its own
-  account, and there is nothing to retry. A process that had exited by itself before the stop is not the switch's: it
-  is neither restored nor reported. A failure for a session the user archived or deleted meanwhile is neither told nor
-  logged.
+  `account_switch_automatically_failed` and the owner written a message, kept like the one for a success; the session
+  is then `interrupted` on its own account, and there is nothing to retry. A process that had exited by itself before
+  the stop is not the switch's: it is neither restored nor reported. A failure for a session the user archived or
+  deleted meanwhile is neither told nor logged.
 
 ### Agent availability
 
@@ -2324,14 +2324,18 @@ The token in the path is what says which session is calling. It is issued per la
 that process goes away, and never sent by the caller as an argument, so a child that rewrote its
 arguments still cannot act on another session. An unrecognised token is refused without detail.
 
-Request body is `{"tool": "<name>", "arguments": {…}}`. The answer is always `200` with
-`{"ok": true, "result": {…}}` or `{"ok": false, "error": "<prose>"}`: a refused call is an outcome
-the model is meant to read and act on, not a transport failure. Which tools a session may call
-follows from its role and whether it has the role of a bound session as its binding stands now (a lead session, bound
-to a console session while keeping sessions of its own, keeps the tools of an unbound project session), and is checked
-here as well as in the child. A binding changes while a session runs, so every answer also carries `bound`, whether the
-session has the role of a bound one after the call: the `octoboardd mcp` child, started with `--bound`, switches the
-catalogue it announces to match and sends `notifications/tools/list_changed` when it changes.
+Request body is `{"tool": "<name>", "arguments": {…}}`. The answer is always `200` with `{"ok": true, "result": {…}}` or
+`{"ok": false, "error": "<prose>"}`: a refused call is an outcome the model is meant to read and act on, not a transport
+failure. Which tools a session may call follows from its role and whether it has the role of a bound session as its
+binding stands now (a lead session, bound to a console session while keeping sessions of its own, keeps the tools of an
+unbound project session), and is checked here as well as in the child. A binding changes while a session runs, so every
+answer also carries `bound`, whether the session has the role of a bound one after the call: the `octoboardd mcp` child,
+started with `--bound`, switches the catalogue it announces to match and sends `notifications/tools/list_changed` when
+it changes. A call to a tool that is in the role's catalogue for the other binding, but not in the one the child last
+announced, is forwarded rather than refused in the child, so that the daemon decides and its answer brings the child's
+catalogue up to date; a name in neither catalogue is a protocol error in the child. An agent that checks tool names
+against the list it last received can still refuse such a name before the call leaves it, so the notice that releases
+a session from its owner tells it to call `get_session` once with no arguments first, which brings its list up to date.
 
 Every argument named `title` names a session (`new_session`, `request_session`, `request_resume_session`,
 `handoff_session`, `rename_session`), and its description tells the agent to write it in the user's language: the one its
@@ -2441,28 +2445,34 @@ directory.
   console, writes stay in the caller's own. For the caller's own console it answers the same shape a console session
   gets, `yours` and `owner` worked out against the caller, each project with `project`, `name`, `host`, `path`,
   `source`, `remote_url`, `default_agent`, `pinned`, `tags`, `description`, `trust_consent`, `accounts`, `launch`,
-  `git_workflow`, `git_status` and `sessions`. `get_project`, `update_project` and `add_project` answer with the same
-  entries without `sessions`. A `remote_url` is always given without the credentials it carries, as
-  `https://example.com/r.git` for `https://user:token@example.com/r.git`. A project's `git_workflow` is `{ "override":
-  GitWorkflowOverride, "effective": GitWorkflowSettings }`: the project's own choices (`null` for an item that follows
-  the application-wide value) beside the resolved values, each item taking the project's own choice else the current
-  application-wide value. `rebase_before_merge` and `delivery` apply only while the resolved `development` is not
-  `in_place`. A project's `git_status` is its `GitStatus` as the daemon holds it in memory (see `GitStatus` above), read
-  without going to the remote or running `git`: `null` while the daemon holds none for the project (nothing has checked
-  it since the daemon started, or its console has not been the current one), else `{ repository, branch, detached,
-  upstream, ahead, behind, activity, error, checked_seconds_ago }`, `activity` including `pushing` while a push runs.
-  `error` has any credential in a URL it names removed, as `remote_url` has. `checked_seconds_ago` is how long ago the
-  last check completed (a project with no repository or no remote has checks too), counted on the wall clock so a sleep
-  of the machine is part of it, `null` when none has completed since the daemon started: the branch and counts are then
-  only what the local re-reads gave, and in any case they may be stale by that age. A call starts a check only with
-  `refresh`, an optional boolean of `list_projects` and `get_project` (default false) that runs what
-  `refresh_git_status` runs for the projects the answer lists — the same one-minute floor and in-flight claim, so a
-  project checked within the last minute, or being checked, is not started again, and with `auto_pull_repositories` on a
-  branch that is behind and has not diverged is fast-forwarded as in any check — and waits up to 30 seconds for each of
-  them to complete (one the floor skipped counts as complete) before reading the statuses. The answer then carries
-  `git_refresh`, at the top for `list_projects` and in the project's entry for `get_project`: `{ finished: true }`, or
-  `{ finished: false, unfinished, note }` with the ids of the projects whose check had not completed, which go on
-  running. `refresh` is refused for another console's projects, which carry no status.
+  `effective`, `git_workflow`, `git_status` and `sessions`. `get_project`, `update_project` and `add_project` answer
+  with the same entries without `sessions`. `default_agent`, `accounts` and `launch` are the project's own settings as
+  stored (`null`, `inherit`); `effective` is what they resolve to under the project's console, by the code a launch
+  uses: `{ default_agent, accounts, launch }`, the agent a session opens on when nothing names one (a session a project
+  session starts runs on the starting session's own agent instead), per agent the account id (`default` for the agent's
+  default account) and `{ model, effort }` (`null` is the agent's own default). A session's own choice, and the account
+  `auto_select_account` or the starting session's account takes instead, come before it at a launch. A `remote_url` is
+  always given without the credentials it carries, as `https://example.com/r.git` for
+  `https://user:token@example.com/r.git`. A project's `git_workflow` is `{ "override": GitWorkflowOverride, "effective":
+  GitWorkflowSettings }`: the project's own choices (`null` for an item that follows the application-wide value) beside
+  the resolved values, each item taking the project's own choice else the current application-wide value.
+  `rebase_before_merge` and `delivery` apply only while the resolved `development` is not `in_place`. A project's
+  `git_status` is its `GitStatus` as the daemon holds it in memory (see `GitStatus` above), read without going to the
+  remote or running `git`: `null` while the daemon holds none for the project (nothing has checked it since the daemon
+  started, or its console has not been the current one), else `{ repository, branch, detached, upstream, ahead, behind,
+  activity, error, checked_seconds_ago }`, `activity` including `pushing` while a push runs. `error` has any credential
+  in a URL it names removed, as `remote_url` has. `checked_seconds_ago` is how long ago the last check completed (a
+  project with no repository or no remote has checks too), counted on the wall clock so a sleep of the machine is part
+  of it, `null` when none has completed since the daemon started: the branch and counts are then only what the local
+  re-reads gave, and in any case they may be stale by that age. A call starts a check only with `refresh`, an optional
+  boolean of `list_projects` and `get_project` (default false) that runs what `refresh_git_status` runs for the projects
+  the answer lists — the same one-minute floor and in-flight claim, so a project checked within the last minute, or
+  being checked, is not started again, and with `auto_pull_repositories` on a branch that is behind and has not diverged
+  is fast-forwarded as in any check — and waits up to 30 seconds for each of them to complete (one the floor skipped
+  counts as complete) before reading the statuses. The answer then carries `git_refresh`, at the top for `list_projects`
+  and in the project's entry for `get_project`: `{ finished: true }`, or `{ finished: false, unfinished, note }` with
+  the ids of the projects whose check had not completed, which go on running. `refresh` is refused for another console's
+  projects, which carry no status.
 - `add_project` takes `tags`, `description`, `accounts`, `launch`, `pinned` and `git_workflow` besides its location
   (`git_workflow` as in `update_project`, except that an item absent or `null` follows the application-wide value, there
   being nothing to leave alone; every project a `parent` source adds takes the same values). A `git`
@@ -2642,6 +2652,22 @@ directory.
   is not the control request of that name: it delivers information, marked as such and copied to the session's owner
   when it has one, while the control request writes the user's own message into the session. See
   `docs/product/information-between-sessions.md`.
+- `report` to an owner that is interrupted keeps the report in the same store, written into the owner once it is
+  resumed, in the order it came among everything else kept for it, shared information included; its answer says it was
+  kept, and a `done` report with no open items archives the reporter all the same. A report that waited for an owner
+  that was handed off and archived meanwhile goes to the session that took its place. The daemon's notices follow the
+  replacement the same way. A report to an archived owner is refused and nothing is kept, and so is one to an owner with
+  no process that is not interrupted. An owner under a claim (a resume, an account switch, a handoff, a handover of
+  branches or a change of owner) is waited for, up to 15 seconds, before the report is judged; one still without a
+  process then is refused as having none, and the refusal names the owner. What the daemon sends an owner of its own
+  accord — a synthesised report, and the notices that a session ended on its own, waits for the user, or had its account
+  switched automatically, or that the switch failed, and the notice of a handoff — is kept for an interrupted owner the
+  same way and waits out a claim alike. The notice that the user released a session from its owner is the exception: an
+  owner with no process is not told, and is not owed it. Each kept report and notice carries a line dating it and
+  telling the owner to check the session before acting on it. A kept notice that a session waits for the user is dropped
+  once any later report or notice about the same session is kept for that owner (shared information does not drop it),
+  and at the resume it is dropped if the session no longer waits for the user. See
+  `docs/product/reporting-to-owners.md`.
 - `get_account_quotas` takes an optional `agent` (`claude`, `codex` or `grok`), listing only that agent's accounts
   (every agent's when it is left out), and an optional `refresh`: the accounts it lists are read again first where
   their last attempt is at least 60 seconds old, as are those of an agent that is installed but not added, which the
@@ -2679,17 +2705,17 @@ directory.
   `null` for the agent's own default), `lead` and `owned_sessions` (the sessions bound to it in any status, archived
   ones included, as the rules of `transfer_session` count them). Reading them runs no process: `branches` comes from the
   store and the reflog files, once per repository for a listing.
-- Every session a tool describes also carries
-  `queued_messages`, the number of messages queued for it and not yet written (information kept for it while it is
-  interrupted included), and `writes_held`: `null`, or for a
-  running session whose writes are held whatever its `status` reads, `{ reason, explanation }` with `reason` one of
-  `starting` (its agent has not sent the signal that it is past its startup screens), `trust_confirmation`,
-  `agent_dialog` (its agent is showing a dialog only the user can answer, such as Claude Code's "Resume this
-  conversation?"; the object then also carries `dialog`, the dialog's code), `agent_action`, `agent_error` (its agent
-  stopped on an error and may be showing a prompt only the user can answer; held for a couple of seconds or until a
-  prompt is sent there, whichever is first), `handoff`, `sharing_change` (it is being restarted for a change of its
-  account's sharing of the default configuration, and is resumed afterwards) and `unsent_message`, and `explanation` in
-  prose. See "Messages held until a session can take them" in `docs/product/message-delivery.md`.
+- Every session a tool describes also carries `queued_messages`, the number of messages queued for it and not yet
+  written (the messages kept for it while it is interrupted included: shared information, and the reports and notices
+  for an owner), and `writes_held`: `null`, or for a running session whose writes are held whatever its `status` reads,
+  `{ reason, explanation }` with `reason` one of `starting` (its agent has not sent the signal that it is past its
+  startup screens), `trust_confirmation`, `agent_dialog` (its agent is showing a dialog only the user can answer, such
+  as Claude Code's "Resume this conversation?"; the object then also carries `dialog`, the dialog's code),
+  `agent_action`, `agent_error` (its agent stopped on an error and may be showing a prompt only the user can answer;
+  held for a couple of seconds or until a prompt is sent there, whichever is first), `handoff`, `sharing_change` (it is
+  being restarted for a change of its account's sharing of the default configuration, and is resumed afterwards) and
+  `unsent_message`, and `explanation` in prose. See "Messages held until a session can take them" in
+  `docs/product/message-delivery.md`.
 - `list_agent_models` takes `agent` and an optional `account` (an account's id or name, or `default`; absent is the
   default account) and answers `{ agent, account, models, unavailable }`, `account` being the id or `default`, each
   model `{ id, name, efforts }` and `unavailable` `null` or `{ code, message }` with `models` empty. It runs what

@@ -472,11 +472,40 @@ async fn instruct_session(
     let target = resolve_owned_session(state, caller, required_str(arguments, "session")?)?;
     let text = required_str(arguments, "text")?.to_string();
     let delivery =
-        reporting::write_message_off_runtime(state, &target.id, text, WhenBlocked::Queue).await?;
+        reporting::write_message_off_runtime(state, &target.id, text, WhenBlocked::Queue)
+            .await
+            .map_err(|err| point_to_reopen(err, &target))?;
     Ok(json!({
         "delivered": delivery == Delivery::Written,
         "note": delivery_note(delivery),
     }))
+}
+
+/// A refusal for a session with no process, said with what the caller can do about it: the
+/// session is the caller's, so `reopen_session` relaunches it with the message. The code and the
+/// params stay the refusal's own.
+fn point_to_reopen(err: anyhow::Error, target: &Session) -> anyhow::Error {
+    match err.downcast_ref::<CodedError>() {
+        Some(coded)
+            if coded.code == error_code::SESSION_NOT_RUNNING && target.status.is_dormant() =>
+        {
+            anyhow::Error::new(CodedError {
+                code: coded.code,
+                message: format!(
+                    "{}: it is {}. `reopen_session` relaunches it, and its `text` delivers this \
+                     message once it is running",
+                    coded.message,
+                    if target.status == SessionStatus::Archived {
+                        "archived"
+                    } else {
+                        "interrupted"
+                    },
+                ),
+                params: coded.params.clone(),
+            })
+        }
+        _ => err,
+    }
 }
 
 /// Stops the turn a session of the caller's is running, through the same function the control
@@ -510,6 +539,10 @@ fn delivery_note(delivery: Delivery) -> &'static str {
              send it to the conversation (it is in the input box, or went to a view of its \
              background agents), so the session has not read it. The user has been told to check \
              the session; do not send it again."
+        }
+        Delivery::Kept => {
+            "Queued: this session is interrupted, with no process running. It is kept, and \
+             delivered once the session is resumed, so do not send it again."
         }
     }
 }
@@ -834,27 +867,15 @@ async fn send_message(
         sharing::deliver_info(&owned_state, &caller_id, &target_id, &text)
     })
     .await??;
-    let mut note = if target.status == SessionStatus::Interrupted && delivery == Delivery::Queued {
-        "Queued: this session is interrupted, with no process running. It is kept, and delivered \
-         once the session is resumed, so do not send it again."
-            .to_string()
-    } else {
-        delivery_note(delivery).to_string()
-    };
+    let mut note = delivery_note(delivery).to_string();
     match copy {
         OwnerCopy::NotNeeded => {}
         OwnerCopy::Sent(Delivery::Written) => note.push_str(" Its owner was sent a copy."),
-        OwnerCopy::Sent(Delivery::Queued) => {
-            let owner_interrupted = target
-                .bound_to
-                .as_deref()
-                .and_then(|owner| state.store.get_session(owner).ok().flatten())
-                .is_some_and(|owner| owner.status == SessionStatus::Interrupted);
-            note.push_str(if owner_interrupted {
-                " Its owner's copy is kept, and will arrive once the owner is resumed."
-            } else {
-                " Its owner's copy is queued, and will arrive as soon as the owner can take it."
-            })
+        OwnerCopy::Sent(Delivery::Queued) => note.push_str(
+            " Its owner's copy is queued, and will arrive as soon as the owner can take it.",
+        ),
+        OwnerCopy::Sent(Delivery::Kept) => {
+            note.push_str(" Its owner's copy is kept, and will arrive once the owner is resumed.")
         }
         OwnerCopy::Sent(Delivery::Unsent) => note.push_str(
             " Its owner's copy was written into the owner's input but not sent to its \
@@ -2788,7 +2809,7 @@ pub(super) mod tests {
             "{note}"
         );
         assert!(note.contains("sent a copy"), "{note}");
-        assert_eq!(state.store.pending_info("of-a").unwrap().len(), 1);
+        assert_eq!(state.store.kept_messages("of-a").unwrap().len(), 1);
         assert!(output_containing(&console_a, "the port moved").contains("Copy of information"));
 
         // `get_session` counts it among the messages waiting for the session.
@@ -2805,22 +2826,22 @@ pub(super) mod tests {
         // Archived while information is kept for it: nothing is kept for a later reopen.
         with_status(&state, "of-b", SessionStatus::Interrupted);
         share("of-b").await.unwrap();
-        assert_eq!(state.store.pending_info("of-b").unwrap().len(), 1);
+        assert_eq!(state.store.kept_messages("of-b").unwrap().len(), 1);
         coordinator::archive_session(&state, "of-b").unwrap();
-        assert!(state.store.pending_info("of-b").unwrap().is_empty());
+        assert!(state.store.kept_messages("of-b").unwrap().is_empty());
 
         let err = share("archived-of-a").await.expect_err("archived");
         assert!(err.to_string().contains("archived"), "{err}");
         assert!(state
             .store
-            .pending_info("archived-of-a")
+            .kept_messages("archived-of-a")
             .unwrap()
             .is_empty());
     }
 
     /// The copy for an interrupted owner is kept like the information itself.
     #[tokio::test]
-    async fn the_copy_for_an_interrupted_owner_is_queued() {
+    async fn the_copy_for_an_interrupted_owner_is_kept() {
         let (state, _dir) = peer_state("peer-share-interrupted-owner");
         let _of_a = running(&state, "of-a");
         with_status(&state, "a", SessionStatus::Interrupted);
@@ -2837,7 +2858,7 @@ pub(super) mod tests {
             .as_str()
             .unwrap()
             .contains("copy is kept, and will arrive once the owner is resumed"));
-        assert_eq!(state.store.pending_info("a").unwrap().len(), 1);
+        assert_eq!(state.store.kept_messages("a").unwrap().len(), 1);
     }
 
     /// A resumed session whose kept information is on its queue counts each message once, not
@@ -2846,7 +2867,7 @@ pub(super) mod tests {
     async fn kept_information_that_is_queued_is_counted_once() {
         let (state, _dir) = shared_console_state("tool-surface-kept-count");
         let _live = running(&state, "of-a");
-        let row = state.store.add_pending_info("of-a", "kept").unwrap();
+        let row = state.store.add_kept_message("of-a", "kept").unwrap();
         state.queue_kept_message("of-a", "kept", row);
         let described = call(
             &state,
@@ -3323,6 +3344,53 @@ pub(super) mod tests {
         .unwrap();
         let archived = state.store.get_session("of-a").unwrap().unwrap();
         assert_eq!(archived.status, SessionStatus::Archived);
+    }
+
+    /// A message for an interrupted session of the caller's is refused as before, and the refusal
+    /// points at `reopen_session`, whose `text` delivers it on relaunch.
+    #[tokio::test]
+    async fn a_message_for_an_interrupted_session_points_at_reopen_session() {
+        let (state, _dir) = shared_console_state("send-to-interrupted");
+        with_status(&state, "of-a", SessionStatus::Interrupted);
+        let err = call(
+            &state,
+            "a",
+            "instruct_session",
+            &arguments(json!({ "session": "of-a", "text": "go on" })),
+        )
+        .await
+        .expect_err("refused");
+        assert_eq!(
+            err.downcast_ref::<CodedError>().map(|err| err.code),
+            Some(error_code::SESSION_NOT_RUNNING),
+            "{err}"
+        );
+        let message = err.to_string();
+        assert!(message.contains("interrupted"), "{message}");
+        assert!(message.contains("`reopen_session`"), "{message}");
+    }
+
+    /// The same pointer, said for an archived session.
+    #[tokio::test]
+    async fn a_message_for_an_archived_session_points_at_reopen_session() {
+        let (state, _dir) = shared_console_state("send-to-archived");
+        with_status(&state, "of-a", SessionStatus::Archived);
+        let err = call(
+            &state,
+            "a",
+            "instruct_session",
+            &arguments(json!({ "session": "of-a", "text": "go on" })),
+        )
+        .await
+        .expect_err("refused");
+        assert_eq!(
+            err.downcast_ref::<CodedError>().map(|err| err.code),
+            Some(error_code::SESSION_NOT_RUNNING),
+            "{err}"
+        );
+        let message = err.to_string();
+        assert!(message.contains("archived"), "{message}");
+        assert!(message.contains("`reopen_session`"), "{message}");
     }
 
     /// A refusal to drive a session that is not the caller's says why and what the caller can still
@@ -4384,6 +4452,40 @@ pub(super) mod tests {
         assert!(refused(&state, "of-a", "update_settings", json!({}))
             .await
             .contains("not a tool"));
+    }
+
+    /// `get_project` resolves what a project leaves unset against its console, since a project
+    /// session cannot read the console: the project's own value wins, the console's project
+    /// session value fills in the rest, and the raw settings stay as stored.
+    #[tokio::test]
+    async fn get_project_gives_the_settings_resolved_against_the_console() {
+        let (state, _dir) = shared_console_state("get-project-effective");
+        let mut console = state.store.get_console("console-1").unwrap().unwrap();
+        console.project_session_agent = Some(Agent::Codex);
+        console.claude_project_session_model = Some("console-model".to_string());
+        console.claude_project_session_effort = Some("console-effort".to_string());
+        state.store.update_console(&console).unwrap();
+        let mut project = state.store.get_project("project-1").unwrap().unwrap();
+        project.default_agent = None;
+        *project.launch_mut(Agent::Claude).0 = Some("project-model".to_string());
+        state.store.update_project(&project).unwrap();
+
+        let own = call(&state, "of-a", "get_project", &Map::new())
+            .await
+            .unwrap();
+        assert!(own["default_agent"].is_null());
+        assert_eq!(own["accounts"]["claude"], "inherit");
+        assert_eq!(own["effective"]["default_agent"], "codex");
+        assert_eq!(own["effective"]["accounts"]["claude"], "default");
+        assert_eq!(
+            own["effective"]["launch"]["claude"]["model"],
+            "project-model"
+        );
+        assert_eq!(
+            own["effective"]["launch"]["claude"]["effort"],
+            "console-effort"
+        );
+        assert!(own["effective"]["launch"]["codex"]["model"].is_null());
     }
 
     /// A session is retitled and pinned only by the session it reports to: not one bound to
