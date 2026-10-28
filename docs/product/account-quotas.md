@@ -282,16 +282,17 @@ they are opened.
 
 In the rail's account quota panel (see "What the panel shows" in `docs/product/account-quota-panel.md`) a used-up
 account stays listed in its place and recedes, so that the accounts still usable stand out: its name is in the muted
-text colour, a neutral **Limit reached** badge follows its plan badge on the name line, its windows' lines are in the
-muted text colour, and its bars are a neutral grey instead of the agent's colour. A usable account looks as usual.
-Assistive technology reads the badge as part of the account's name line, like the plan badge; the panel adds no full
-sentence, and each bar's value still gives the window's countdown (see "How an account's quota is shown" above).
+text colour, a warning-coloured **Limit reached** badge follows its neutral, bordered plan badge on the name line, its
+windows' lines are in the muted text colour, and its bars are a neutral grey instead of the agent's colour. A usable
+account looks as usual. Assistive technology reads the badge as part of the account's name line, like the plan badge;
+the panel adds no full sentence, and each bar's value still gives the window's countdown (see "How an account's quota is
+shown" above).
 
 In Settings' accounts table (see "The accounts table" in `docs/product/agent-accounts.md`) a used-up account's row
 recedes the same way: its name in the **Account** column is in the muted text colour, and its **Usage** cell draws the
-usage bar in the same neutral grey, followed by a neutral **Limit reached** badge (and by the out-of-date mark when the
-windows are out of date). There assistive technology does not read the badge: in place of what remains, the cell's
-words say which limit the account has reached and, when known, when it resets ("Reached session limit · resets in
+usage bar in the same neutral grey, followed by a warning-coloured **Limit reached** badge (and by the out-of-date mark
+when the windows are out of date). There assistive technology does not read the badge: in place of what remains, the
+cell's words say which limit the account has reached and, when known, when it resets ("Reached session limit · resets in
 42m"). The account settings dialog does not mark a used-up account.
 
 In the macOS menu bar icon's quota submenus a used-up account's bars are drawn in the same neutral grey (see "The

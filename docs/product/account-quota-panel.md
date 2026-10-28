@@ -19,19 +19,18 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   view, clear of the list's top fade, as far as the list can scroll; the row is not marked in any other way. Otherwise a
   list opens at its top.
 - **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
-  default account" in `docs/product/agent-accounts.md`), then the accounts the user owns, leaving out every account
-  the user turned off (see "Turning an account off" in `docs/product/agent-accounts.md`). The one exception is the
-  account the selected session is running on — starting, working, waiting for the user or awaiting instructions: while
-  it does, that account is listed even when it is turned off, with a neutral **Disabled** badge after its plan badge,
-  and its agent keeps its tab for it. When the session stops running there, the row goes, and the tab with it when it
-  was the agent's only row; keyboard focus on that tab, or inside the panel, moves to the tab now selected, or, with no
-  tab left, to the panel's first button. Each shows its name, its plan
-  badge and its quota beneath, in the states of "Quota states" in `docs/product/account-quotas.md`, as "How an account's
-  quota is shown" in `docs/product/account-quotas.md` describes; a used-up account recedes, with a **Limit reached**
-  badge after its plan badge (see "A used-up account" in `docs/product/account-quotas.md`). The name and its plan badge
-  keep to one line, and a name too long for its space fades before the plan badge, as in "Names too long for their
-  space" in `docs/product/labels-and-tooltips.md`; what follows them on the name line — the Disabled and Limit reached
-  badges, a
+  default account" in `docs/product/agent-accounts.md`), then the accounts the user owns, leaving out every account the
+  user turned off (see "Turning an account off" in `docs/product/agent-accounts.md`). The one exception is the account
+  the selected session is running on — starting, working, waiting for the user or awaiting instructions: while it does,
+  that account is listed even when it is turned off, with a warning-coloured **Disabled** badge after its neutral,
+  bordered plan badge, and its agent keeps its tab for it. When the session stops running there, the row goes, and the
+  tab with it when it was the agent's only row; keyboard focus on that tab, or inside the panel, moves to the tab now
+  selected, or, with no tab left, to the panel's first button. Each shows its name, its plan badge and its quota
+  beneath, in the states of "Quota states" in `docs/product/account-quotas.md`, as "How an account's quota is shown" in
+  `docs/product/account-quotas.md` describes; a used-up account recedes, with a **Limit reached** badge after its plan
+  badge (see "A used-up account" in `docs/product/account-quotas.md`). The name and its plan badge keep to one line, and
+  a name too long for its space fades before the plan badge, as in "Names too long for their space" in
+  `docs/product/labels-and-tooltips.md`; what follows them on the name line — the Disabled and Limit reached badges, a
   failure mark, how long ago the reading was taken — moves to the next line when it does not fit beside them. The panel
   shows no directories and offers nothing to edit.
 - The list of accounts is at most 384 px high, or 60% of the window's height where that is less, and the panel is as
