@@ -1,5 +1,6 @@
 import React, { useId, useMemo, useState } from "react";
 
+import { orderedAccounts } from "../accountOrder";
 import { Button } from "../components/Button";
 import { accountDisabled, consoleAccount, resolveProjectAccount, settledProjectAccount } from "../accountChoices";
 import { changedAgentFields, changedProjectAccounts, readAgentFields, readProjectAccounts } from "../agentFields";
@@ -88,6 +89,7 @@ export function ProjectDialog({
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const accounts = useDaemonStore((s) => s.settings.accounts);
+  const accountOrder = useDaemonStore((s) => s.settings.account_order);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
@@ -386,10 +388,11 @@ export function ProjectDialog({
                   },
                   // A turned-off account is hidden, but for the one the project pinned when the dialog opened (or
                   // pins now), which stays, marked.
-                  ...[
-                    { choice: { kind: "default" } as const, label: defaultAccountName(t, defaultNames, agent), off: accountDisabled(accounts, disabledDefaults, agent, null) },
-                    ...ownAccounts.map((account) => ({ choice: { kind: "account", id: account.id } as const, label: account.name, off: account.disabled === true })),
-                  ]
+                  ...orderedAccounts(agent, accounts, accountOrder).map((account) => ({
+                    choice: account ? { kind: "account", id: account.id } as const : { kind: "default" } as const,
+                    label: account?.name ?? defaultAccountName(t, defaultNames, agent),
+                    off: accountDisabled(accounts, disabledDefaults, agent, account?.id ?? null),
+                  }))
                     .filter(({ choice, off }) => !off || accountValue(choice) === accountValue(picked) || accountValue(choice) === accountValue(saved))
                     .map(({ choice, label, off }) => markDisabledPickable(t, { value: accountValue(choice), label }, off)),
                 ],

@@ -1,5 +1,6 @@
+import { orderedAccounts } from "../accountOrder";
 import { accountDisabled, consoleAccount } from "../accountChoices";
-import { AGENT_SHORT_NAME, accountsByAgent, defaultAccountName, listedAgents } from "../agents";
+import { AGENT_SHORT_NAME, defaultAccountName, listedAgents } from "../agents";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
@@ -32,6 +33,7 @@ export interface StatusItemQuotaSource {
    * whether a window's reset has passed (so that it is drawn full) are decided at. */
   now: number;
   accounts: Account[];
+  accountOrder?: Settings["account_order"];
   /** The agents the user added, `null` while the daemon has not decided them. */
   addedAgents: Agent[] | null;
   /** The names the user gave the default accounts, by agent. */
@@ -112,16 +114,15 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
 }
 
 /** One submenu per added agent that is available, in the order they were added — "Claude quota ▸" —
- * listing its default account, then the accounts the user owns, each set off by a separator, leaving out an
+ * listing its accounts in the saved account order, each set off by a separator, leaving out an
  * account that is turned off, except the one `inUse` names (the account the selected running session is on), which
  * is listed and marked "Disabled". Nothing for an agent that is not added, not available or not yet determined, or
  * whose accounts are all turned off: unlike the rail's panel, which lists an undetermined agent, a submenu
  * without readings to fill it would be empty. */
 export function buildQuotaSubmenus(t: Translate, source: StatusItemQuotaSource, currentConsole?: Console, inUse?: { agent: Agent; account: string | null }): StatusItemSubmenu[] {
-  const owned = new Map(accountsByAgent(source.accounts).map(({ agent, accounts }) => [agent, accounts]));
   return listedAgents(source.addedAgents).flatMap((agent): StatusItemSubmenu[] => {
     if (source.agentAvailability.get(agent)?.availability !== "available") return [];
-    const accounts = [null, ...(owned.get(agent) ?? [])].filter((account) => {
+    const accounts = orderedAccounts(agent, source.accounts, source.accountOrder).filter((account) => {
       const id = account?.id ?? null;
       return !accountDisabled(source.accounts, source.disabledDefaultAccounts, agent, id) || (inUse?.agent === agent && inUse.account === id);
     });

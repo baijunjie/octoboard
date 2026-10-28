@@ -116,7 +116,8 @@ From top to bottom:
    - each account is a header line, at the small size of a section header, regular weight, in the secondary text
      colour, with its name — for the agent's default account the name the user gave it, else **Default** (see "The
      default account" in `docs/product/agent-accounts.md`) — and its plan after a dot where the agent names one
-     ("Default · Max"), the default account first and then the accounts the user owns, each set off by a separator.
+     ("Default · Max"), in the saved display order (see "Reordering accounts" in `docs/product/agent-accounts.md`),
+     each set off by a separator.
      For an account with windows to show, how long ago they were read is right-aligned on the header line in the same
      small secondary text ("Updated 3 minutes ago", "Updated just now" under a minute), also when they are kept after a
      newer reading failed, and assistive technology reads the line as one phrase ("Default · Max · Available ·

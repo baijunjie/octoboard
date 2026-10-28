@@ -18,9 +18,10 @@ behaves" in `docs/product/labels-and-tooltips.md`), at its own width, with its c
   scrolled so that the session's account — the default account for a session that names none — is the first whole row in
   view, clear of the list's top fade, as far as the list can scroll; the row is not marked in any other way. Otherwise a
   list opens at its top.
-- **The selected agent's accounts**: its default account, under the name the user gave it or else "Default" (see "The
-  default account" in `docs/product/agent-accounts.md`), then the accounts the user owns, leaving out every account the
-  user turned off (see "Turning an account off" in `docs/product/agent-accounts.md`). The one exception is the account
+- **The selected agent's accounts**, in the saved display order (see "Reordering accounts" in
+  `docs/product/agent-accounts.md`), the default account under the name the user gave it or else "Default" (see "The
+  default account" there), leaving out every account the user turned off (see "Turning an account off" in
+  `docs/product/agent-accounts.md`). The one exception is the account
   the selected session is running on — starting, working, waiting for the user or awaiting instructions: while it does,
   that account is listed even when it is turned off, with a warning-coloured **Disabled** badge after its neutral,
   bordered plan badge, and its agent keeps its tab for it. When the session stops running there, the row goes, and the

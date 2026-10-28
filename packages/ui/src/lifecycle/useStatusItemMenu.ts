@@ -80,7 +80,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         projectMap: projects,
         byStatus: ordersByStatus(settings),
         // Countdowns and ages are as of this push, which the clock alone also causes (`nextQuotaTick`).
-        quota: { language, now, accounts: settings.accounts, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas },
+        quota: { language, now, accounts: settings.accounts, accountOrder: settings.account_order, addedAgents: settings.added_agents, defaultAccountNames: settings.default_account_names, disabledDefaultAccounts: settings.disabled_default_accounts, agentAvailability, accountQuotas },
       });
       // Re-armed on every push, so it follows the quotas held now; the one pending is replaced.
       clearTimeout(tickTimer);
@@ -105,6 +105,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
         state.projects !== previous.projects ||
         state.sessions !== previous.sessions ||
         state.settings.accounts !== previous.settings.accounts ||
+        state.settings.account_order !== previous.settings.account_order ||
         state.settings.sidebar_order_by_status !== previous.settings.sidebar_order_by_status ||
         state.settings.added_agents !== previous.settings.added_agents ||
         state.settings.default_account_names !== previous.settings.default_account_names ||

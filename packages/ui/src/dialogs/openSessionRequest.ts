@@ -35,7 +35,7 @@ export function openSessionRequest(t: Translate, { console: parentConsole, proje
 
 /** What a session-creating control reads from the store to settle the choice a session opens on. */
 export interface QuickCreateState {
-  settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account" | "disabled_default_accounts" | "default_account_names">;
+  settings: Pick<Settings, "accounts" | "added_agents" | "auto_select_account" | "disabled_default_accounts" | "default_account_names" | "account_order">;
   agentAvailability: Map<Agent, AgentAvailability>;
   accountQuotas: AccountQuota[];
   accountSharing?: Map<string, AccountSharing>;
@@ -46,7 +46,7 @@ export interface QuickCreateState {
  * `auto_select_account` is on, that account is the one whose weekly quota resets soonest. */
 function settledQuickChoice(parentConsole: Console, project: Project | undefined, state: QuickCreateState, now: number) {
   const { accounts, added_agents, auto_select_account } = state.settings;
-  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now }, state.accountSharing, state.settings.disabled_default_accounts);
+  const groups = choiceGroups(accounts, state.agentAvailability, added_agents, () => "", { quotas: state.accountQuotas, now }, state.accountSharing, state.settings.disabled_default_accounts, state.settings.account_order);
   return settledInitialChoice(
     parentConsole,
     project,

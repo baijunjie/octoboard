@@ -861,6 +861,18 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           store.setState({ consoles, projects, settings: { ...current.settings, accounts: current.settings.accounts.filter((account) => account.id !== body.account) } });
           return { type: "ack" };
         }
+        case "reorder_accounts": {
+          const current = store.getState();
+          const expected: (string | null)[] = [null, ...current.settings.accounts.filter((account) => account.agent === body.agent).map((account) => account.id)];
+          if (body.accounts.length !== expected.length || !expected.every((id) => body.accounts.filter((given) => given === id).length === 1)) {
+            return fail({ code: "account_order_invalid", params: {}, message: "the new order must name each account of the agent and its default exactly once" });
+          }
+          const held = current.settings.account_order?.[body.agent];
+          if (!held || held.length !== body.accounts.length || held.some((id, index) => body.accounts[index] !== id)) {
+            applyDaemonEvent(store, { type: "settings_updated", settings: { ...current.settings, account_order: { ...current.settings.account_order, [body.agent]: body.accounts } } });
+          }
+          return { type: "ack" };
+        }
         case "add_agent": {
           if (scenario.agentListError) return fail(scenario.agentListError);
           const current = store.getState();

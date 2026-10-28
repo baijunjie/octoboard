@@ -1,6 +1,8 @@
+import { GripVertical } from "lucide-react";
 import React, { useLayoutEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL } from "../agents";
+import { useListMotion } from "../components/useListMotion";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { HelpTip } from "../components/HelpTip";
@@ -34,6 +36,7 @@ const HEADER = "px-2 pb-2 text-start text-xs font-medium whitespace-nowrap text-
 export function AccountsTable({ agent, children }: { agent: Agent; children: React.ReactNode }): React.ReactElement {
   const t = useT();
   const region = useFadeRegion({ label: t("settings.accounts.table.scrollLabel", { agent: AGENT_LABEL[agent] }) });
+  const motion = useListMotion<HTMLTableSectionElement>();
   const pinned = useRef<HTMLTableCellElement>(null);
   const [pinnedWidth, setPinnedWidth] = useState(0);
   useLayoutEffect(() => {
@@ -66,7 +69,7 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
               </th>
             </tr>
           </thead>
-          <tbody>{children}</tbody>
+          <tbody ref={motion}>{children}</tbody>
         </table>
       </FadedScroller>
     </div>
@@ -87,12 +90,14 @@ const CELL = "px-2 py-3 align-middle groove-b group-last/row:border-b-0";
  * switch, and the actions `menu`, whose first entry opens the details. A turned-off account's row looks like any other
  * but for its switch. The hidden status region that says a login succeeded is the row's, which also clears that login
  * once it has been shown. */
-export function AccountTableRow({ agent, account, name, menu, onLogin }: {
+export function AccountTableRow({ agent, account, name, menu, onLogin, onDragStart, dragDisabled }: {
   agent: Agent;
   account: Account | null;
   name: string;
   menu: ActionMenuEntry[];
   onLogin: (returnFocus: ReturnLoginFocus) => void;
+  onDragStart?: (event: React.PointerEvent<HTMLSpanElement>) => void;
+  dragDisabled?: boolean;
 }): React.ReactElement {
   const t = useT();
   const id = account?.id ?? null;
@@ -103,11 +108,18 @@ export function AccountTableRow({ agent, account, name, menu, onLogin }: {
   useClearSucceededLogin(succeeded);
   const actions = useRef<HTMLDivElement>(null);
   return (
-    <tr data-account-row={id ?? `default:${agent}`} className="group/row">
+    <tr data-account-row={id ?? `default:${agent}`} data-list-motion={id ?? `default:${agent}`} className="group/row bg-overlay">
       <th scope="row" className={`${CELL} text-start font-normal`}>
-        <div className="max-w-56 min-w-28">
-          <AccountNameLine name={<FadeOverflow dir="auto" titleWhenClipped={name}>{name}</FadeOverflow>} quota={quota} usedUp={exhausted !== undefined} showUpdated={false} showFailure={false} showUsedUp={false} />
-          <AccountLoginAnnouncer login={succeeded} name={name} />
+        <div className="flex items-center gap-1">
+          {onDragStart && (
+            <span aria-hidden="true" data-account-grip="" className={`flex size-7 shrink-0 items-center justify-center ${dragDisabled ? "text-app-muted/50" : "cursor-grab text-app-muted active:cursor-grabbing"}`} onPointerDown={onDragStart}>
+              <GripVertical className="size-4" />
+            </span>
+          )}
+          <div className="max-w-56 min-w-28">
+            <AccountNameLine name={<FadeOverflow dir="auto" titleWhenClipped={name}>{name}</FadeOverflow>} quota={quota} usedUp={exhausted !== undefined} showUpdated={false} showFailure={false} showUsedUp={false} />
+            <AccountLoginAnnouncer login={succeeded} name={name} />
+          </div>
         </div>
       </th>
       <td className={`${CELL} whitespace-nowrap`}>

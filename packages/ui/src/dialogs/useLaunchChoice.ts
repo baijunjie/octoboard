@@ -25,8 +25,9 @@ export function useChoiceGroups(): ChoiceGroup[] {
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const sharing = useDaemonStore((s) => s.accountSharing);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
+  const accountOrder = useDaemonStore((s) => s.settings.account_order);
   const now = useNow();
-  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing, disabledDefaults);
+  return choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), { quotas, now }, sharing, disabledDefaults, accountOrder);
 }
 
 /**

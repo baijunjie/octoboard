@@ -913,6 +913,9 @@ pub struct Settings {
     /// Every account of every agent, application-wide. The default account of each agent is not
     /// among these — it is the state of pinning nothing, not a row (see `Account`).
     pub accounts: Vec<Account>,
+    /// Display order by agent wire name; null entries represent the default account. Missing
+    /// accounts are appended by clients and stale IDs are ignored. Kept local to this machine.
+    pub account_order: std::collections::BTreeMap<String, Vec<Option<String>>>,
     /// The agents the user has added, in the order the user set; a newly added agent goes last. Only these are offered for a
     /// new choice; removing one leaves its accounts here. `null` while the daemon has not yet
     /// decided the list (it waits for the agents' availability), which is not the same as the
@@ -953,6 +956,7 @@ impl Default for Settings {
             auto_start_quota_windows: false,
             default_clone_dir: String::new(),
             accounts: Vec::new(),
+            account_order: Default::default(),
             added_agents: None,
             codex_approval_reviewer: None,
             claude_approval_mode: None,
@@ -2098,6 +2102,13 @@ pub enum RequestBody {
     /// `settings_updated` of its own; otherwise broadcasts `settings_updated`.
     ReorderAgents {
         agents: Vec<Agent>,
+    },
+    /// Sets the display order of all accounts of the agent, including its default (null), each
+    /// exactly once. Refused with `account_order_invalid` for stale or mismatched lists.
+    /// Broadcasts `settings_updated` only when the stored order changed.
+    ReorderAccounts {
+        agent: Agent,
+        accounts: Vec<Option<String>>,
     },
     /// Names an agent's default account, or with a blank `name`, or `Default` in any letter case,
     /// clears the name back to the client's own word for it. The name is trimmed and compared like an account's: refused with
@@ -3606,6 +3617,8 @@ pub mod error_code {
     /// for this reason; a run whose snapshot failed refuses until the next start. `params` names
     /// `agent`.
     pub const AGENT_AVAILABILITY_PENDING: &str = "agent_availability_pending";
+    /// A `reorder_accounts` did not name every account of the agent and its default exactly once.
+    pub const ACCOUNT_ORDER_INVALID: &str = "account_order_invalid";
     /// A `reorder_agents` named agents that are not exactly those on the list, each once. No `params`.
     pub const AGENT_ORDER_INVALID: &str = "agent_order_invalid";
     /// A `reorder_agents` or `remove_agent` asked before the list is decided, which waits for availability. No

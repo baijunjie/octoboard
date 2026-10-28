@@ -2,6 +2,7 @@ import { Tabs } from "@heroui/react";
 import { Bot, Gauge, KeyRound } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { orderedAccounts } from "../accountOrder";
 import { accountDisabled } from "../accountChoices";
 import { Button } from "../components/Button";
 import { useFocusHandoff } from "../components/useFocusHandoff";
@@ -15,7 +16,7 @@ import { EmptyPanel } from "../components/EmptyPanel";
 import { FADE_SIZE, FadedScroller, type FadeRegion, useFadeRegion } from "../components/scrollFade";
 import { useListMotion } from "../components/useListMotion";
 import { Message, useT } from "../i18n/react";
-import type { Account, Agent, QuotaWindow } from "../protocol";
+import type { Account, Agent, QuotaWindow, Settings } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { INACTIVE_VEIL_CLASS } from "../components/inactiveVeil";
 import { useDaemon, useDaemonStore } from "../store";
@@ -107,19 +108,19 @@ interface QuotaRow {
   disabled: boolean;
 }
 
-/** The rows the panel lists for `agent`, the default account first: not an account the user turned off, unless it is
+/** The rows the panel lists for `agent`, in the saved account order: not an account the user turned off, unless it is
  * `inUse`, the account the selected running session is still on (`null` for the default account, `undefined` for none). */
-function listedRows(owned: Account[], disabledDefaults: readonly Agent[] | undefined, agent: Agent, inUse: string | null | undefined): QuotaRow[] {
-  return [null, ...owned].map((account) => ({ account, disabled: accountDisabled(owned, disabledDefaults, agent, account?.id ?? null) }))
+function listedRows(owned: Account[], disabledDefaults: readonly Agent[] | undefined, agent: Agent, inUse: string | null | undefined, order: Settings["account_order"]): QuotaRow[] {
+  return orderedAccounts(agent, owned, order).map((account) => ({ account, disabled: accountDisabled(owned, disabledDefaults, agent, account?.id ?? null) }))
     .filter(({ account, disabled }) => !disabled || (account?.id ?? null) === inUse);
 }
 
-/** The rail's quota button and the floating panel it anchors, which lists the accounts of each agent that is added and
- * installed, in the order they were added, bar the ones the user turned off, with their plan and quota (see "Opening the
- * panel" in `docs/product/account-quota-panel.md`). The panel is a `Hint` of kind `popover`, the same behaviour as a status
- * mark's popover: resting the mouse on the button opens it without moving focus; a mouse click opens nothing; a tap, a
- * pen, assistive technology and the keyboard open it with focus in it. Each opening asks the daemon to refresh the
- * quotas that are due. */
+/** The rail's quota button and the floating panel it anchors, which lists each added and installed agent's accounts
+ * in the saved display order, bar the ones the user turned off, with their plan and quota (see "Opening the panel" in
+ * `docs/product/account-quota-panel.md`). The panel is a `Hint` of kind `popover`, the same behaviour as a status mark's
+ * popover: resting the mouse on the button opens it without moving focus; a mouse click opens nothing; a tap, a pen,
+ * assistive technology and the keyboard open it with focus in it. Each opening asks the daemon to refresh the quotas
+ * that are due. */
 export function RailQuotaEntry({ selectedSessionId, onOpenSettingsAt }: {
   selectedSessionId?: string;
   onOpenSettingsAt: (section: SettingsSectionId, options?: { addAgent?: boolean }) => void;
@@ -248,6 +249,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const availability = useDaemonStore((s) => s.agentAvailability);
+  const accountOrder = useDaemonStore((s) => s.settings.account_order);
   const [chosen, setChosen] = useState<Agent | undefined>(shownAgent);
   // The tab elements exist only after the tabs have built their collection, so focus is given as
   // the selected one mounts, once.
@@ -255,7 +257,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
   // An agent whose accounts are all turned off has no tab, as it has no submenu in the menu bar, unless the selected running session is on one.
   const listed = accountsByAgent(accounts, pickableAgents(availability, addedAgents))
-    .map(({ agent, accounts: owned }) => ({ agent, rows: listedRows(owned, disabledDefaults, agent, inUse?.agent === agent ? inUse.account : undefined) }))
+    .map(({ agent, accounts: owned }) => ({ agent, rows: listedRows(owned, disabledDefaults, agent, inUse?.agent === agent ? inUse.account : undefined, accountOrder) }))
     .filter(({ rows }) => rows.length > 0);
   const selected = listed.find(({ agent }) => agent === chosen)?.agent ?? listed[0]?.agent;
   const focusOnce = (tab: HTMLElement | null) => {
@@ -322,7 +324,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
   );
 }
 
-/** An agent's tab panel: its accounts, the default one first, in a faded scroller that is a region of
+/** An agent's tab panel: its accounts in the saved account order, in a faded scroller that is a region of
  * its own while it overflows. Each panel keeps its own region, since the scroller reports its overflow
  * only when it changes, so one shared by the panels would follow whichever panel last reported, not the
  * selected one.

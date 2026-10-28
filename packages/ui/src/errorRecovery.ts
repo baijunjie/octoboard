@@ -78,7 +78,7 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   sessionBranches: ["session_branches_not_removed"],
   projectBranches: ["project_branches_not_determined"],
   branch: ["not_on_a_branch", "restore_not_on_branch", "invalid_branch_name", "unknown_branch", "worktree_unavailable"],
-  refresh: ["source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "queued_messages_lost", "queued_messages_dropped"],
+  refresh: ["account_order_invalid", "source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "queued_messages_lost", "queued_messages_dropped"],
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],
   limit: ["limit_exceeded"],
   // One group per application the host opens, so each remedy names only the one that failed. `openExternal` is the

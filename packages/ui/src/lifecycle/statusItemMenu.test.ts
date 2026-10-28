@@ -153,6 +153,12 @@ describe("buildStatusItemMenu quota submenus", () => {
     expect(submenu!.quota_weekly_remaining).toBeUndefined();
   });
 
+  it("lists quota accounts in the saved order with the default account movable", () => {
+    const work: Account = { id: "work", agent: "claude", name: "Work", config_dir: "/work" };
+    const [submenu] = buildQuotaSubmenus(t, source({ accounts: [work], accountOrder: { claude: ["work", null] }, agentAvailability: available("claude") }));
+    expect(submenu.items.filter((item) => item.kind === "header").map((item) => item.title.replace(/[\u2068\u2069]/g, ""))).toEqual(["Work", "Default"]);
+  });
+
   it("has no submenu for an agent that is not available", () => {
     expect(menuOf([], source({ agentAvailability: new Map([["codex", { agent: "codex", availability: "unavailable" } as never]]) })).submenus).toEqual([]);
     expect(menuOf([]).submenus).toEqual([]);

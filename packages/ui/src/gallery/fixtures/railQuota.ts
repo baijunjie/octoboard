@@ -241,9 +241,10 @@ export const railQuotaScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Rail usage button and panel, selected session's named account",
-    description: "Hub uses Codex's Personal account: the compact indicator on the usage button is two outlined capsules, the 5h window's (88% remaining) over a slightly thinner one for the week (60%), and the button's accessible name identifies Codex, Personal and both remainders. The button has no tooltip. The panel floated in beside it opens on Codex's tab, the second tab, because the button shows Codex's usage; Personal's bar in the panel matches the button's. While the pointer is on the button every other account's row, Default and Automation, is dimmed by the same veil the sidebar puts over inactive projects, so Personal stands out as the button's account; moving the pointer into the panel takes the veil off. Select a Claude Code session to see the indicator and the open tab follow that session's agent instead.",
+    description: "Codex lists Automation, Personal and Default in the saved account order. Hub uses Codex's Personal account: the compact indicator on the usage button is two outlined capsules, the 5h window's (88% remaining) over a slightly thinner one for the week (60%), and the button's accessible name identifies Codex, Personal and both remainders. The button has no tooltip. The panel floated in beside it opens on Codex's tab, the second tab, because the button shows Codex's usage; Personal's bar in the panel matches the button's. While the pointer is on the button every other account's row, Default and Automation, is dimmed by the same veil the sidebar puts over inactive projects, so Personal stands out as the button's account; moving the pointer into the panel takes the veil off. Select a Claude Code session to see the indicator and the open tab follow that session's agent instead.",
     state: {
       ...readState,
+      settings: { ...readState.settings!, account_order: { codex: ["a-codex-auto", "a-codex", null] } },
       sessions: new Map(sessions.map((session) => [session.id, session.id === "s-console" ? { ...session, agent: "codex", account_id: "a-codex" } : session])),
     },
     steps: [

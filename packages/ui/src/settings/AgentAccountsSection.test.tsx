@@ -188,14 +188,19 @@ it("replaces a panel on a tab switch without any list motion", async () => {
 
 it("drops the row of an account removed and adds the row of one added within the panel in view", async () => {
   const { container, render } = mount();
-  const rows = () => [...container.querySelectorAll("tbody tr")].map((row) => row.getAttribute("data-account-row"));
+  const rows = () => [...container.querySelectorAll("tbody > tr")].map((row) => row.getAttribute("data-account-row"));
   expect(rows()).toEqual(["default:claude", "claude-work"]);
+  const removed = rowOf(container, "claude-work");
   const work = settings.accounts[0]!;
   settings.accounts = settings.accounts.filter((a) => a !== work);
-  render();
+  await act(async () => render());
   expect(rows()).toEqual(["default:claude"]);
+  expect(removed.isConnected).toBe(false);
+  const visual = container.querySelector('[data-list-motion-ghost][data-account-row="claude-work"]')!;
+  expect(visual.getAttribute("aria-hidden")).toBe("true");
+  expect(visual.hasAttribute("inert")).toBe(true);
   settings.accounts = [...settings.accounts, account("claude-home", "claude")];
-  render();
+  await act(async () => render());
   expect(rows()).toEqual(["default:claude", "claude-home"]);
 });
 

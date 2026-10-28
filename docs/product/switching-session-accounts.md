@@ -178,7 +178,7 @@ before confirming. The sentence on continuing is a general one: it lists neither
 stopped on a usage limit included, nor the exceptions (see "Continuing after a switch" below). A form follows:
 
 - **Switch to** — the accounts of the session's own agent, by the rules of the row's Switch account submenu (see
-  "Session rows" in `docs/product/sidebar-session-rows.md`): the default account first, the account the session is on
+  "Session rows" in `docs/product/sidebar-session-rows.md`): in the saved display order, the account the session is on
   marked as current and not offered, an account whose quota is used up listed with its usage but not offered, an account
   that is not logged in listed with "Not logged in" under its name and not offered, an account the user turned off left
   out, unless it is the one chosen, when it is listed with its reason and not offered (the call is refused before the

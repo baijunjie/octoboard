@@ -62,7 +62,7 @@ pub enum ReorderOutcome {
 /// has been released, the change also adds the step from that version to `settle_existing_file`,
 /// keyed on `user_version` rather than on probing for columns, with a test that opens a database
 /// at the old version; without the step, a released user's database is moved aside.
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 /// Every table, index and trigger of the current schema.
 const SCHEMA: &str = r#"
@@ -318,6 +318,7 @@ CREATE TABLE settings (
     interface_language     TEXT,
     -- NULL until the list is first decided; see `Store::added_agents`.
     added_agents           TEXT,
+    account_order          TEXT,
     -- NULL until the user names a default account; see `Store::default_account_names`.
     default_account_names  TEXT,
     -- NULL until a default account is turned off; see `Store::disabled_default_accounts`.
@@ -912,6 +913,7 @@ impl Store {
     // -- settings --------------------------------------------------------------
 
     pub fn get_settings(&self) -> Result<Settings> {
+        let account_order = read_account_order(&self.lock())?;
         Ok(Settings {
             auto_pull_repositories: self.auto_pull_repositories()?,
             auto_delete_unresumable_archives: self.auto_delete_unresumable_archives()?,
@@ -927,6 +929,7 @@ impl Store {
             auto_start_quota_windows: self.auto_start_quota_windows()?,
             default_clone_dir: self.default_clone_dir()?,
             accounts: self.list_accounts()?,
+            account_order,
             added_agents: self.added_agents()?,
             codex_approval_reviewer: self.codex_approval_reviewer()?,
             claude_approval_mode: self.claude_approval_mode()?,
@@ -1405,6 +1408,42 @@ impl Store {
         }
         write_added_agents(&conn, order)?;
         Ok(ReorderOutcome::Reordered)
+    }
+
+    /// Validates and saves an agent's display order under one lock, so an account edit cannot
+    /// race the validation. Other agents' orders and the accounts' storage order stay untouched.
+    pub fn reorder_accounts(&self, agent: Agent, order: &[Option<String>]) -> Result<bool> {
+        let conn = self.lock();
+        let mut current_accounts = conn
+            .prepare("SELECT id FROM accounts WHERE agent = ?1")?
+            .query_map(params![enum_to_text(&agent)], |row| row.get::<_, String>(0))?
+            .map(|id| id.map(Some))
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        current_accounts.push(None);
+        current_accounts.sort();
+        let mut sorted_order = order.to_vec();
+        sorted_order.sort();
+        if current_accounts != sorted_order {
+            return Err(CodedError::raised(
+                error_code::ACCOUNT_ORDER_INVALID,
+                "the new order must name each account of the agent and its default exactly once"
+                    .to_string(),
+                &[],
+            ));
+        }
+        let mut orders = read_account_order(&conn)?;
+        if orders
+            .get(agent.wire_name())
+            .is_some_and(|current| current == order)
+        {
+            return Ok(false);
+        }
+        orders.insert(agent.wire_name().to_string(), order.to_vec());
+        conn.execute(
+            "UPDATE settings SET account_order = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, serde_json::to_string(&orders)?],
+        )?;
+        Ok(true)
     }
 
     /// Takes the agent off the list, leaving its accounts alone. Whether it was on it. Refused with
@@ -2437,12 +2476,12 @@ fn user_version(conn: &Connection) -> Result<i64> {
 ///
 /// - at [`SCHEMA_VERSION`], or holding no tables at all (an empty file, which `open` initializes):
 ///   left as it is;
-/// - at an older version with tables in it, which includes every database from before versions
-///   were recorded: moved aside, so `open` starts a fresh one. There is no step from such a
-///   database to the current schema. The old file is renamed rather than deleted, so a user who
-///   needs what was in it still has it on disk; see "Files Octoboard owns" in
-///   `docs/product/application-lifecycle.md`. A step from a recorded older version to the current
-///   one belongs here, ahead of this case;
+/// - at version 1: upgraded in place by adding the account display order;
+/// - at an older version without an upgrade step, which includes every database from before
+///   versions were recorded: moved aside, so `open` starts a fresh one. The old file is renamed
+///   rather than deleted, so a user who needs what was in it still has it on disk; see "Files
+///   Octoboard owns" in `docs/product/application-lifecycle.md`. A step from a recorded older
+///   version to the current one belongs here, ahead of this case;
 /// - at a newer version: refused. It was written by a newer build, whose data moving it aside
 ///   would lose, and this build cannot read it.
 fn settle_existing_file(path: &Path) -> Result<()> {
@@ -2451,6 +2490,13 @@ fn settle_existing_file(path: &Path) -> Result<()> {
         let version = user_version(&conn)
             .with_context(|| format!("reading the schema version of {}", path.display()))?;
         if version == SCHEMA_VERSION {
+            return Ok(());
+        }
+        if version == 1 {
+            let tx = conn.unchecked_transaction()?;
+            tx.execute_batch("ALTER TABLE settings ADD COLUMN account_order TEXT")?;
+            tx.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            tx.commit()?;
             return Ok(());
         }
         if version > SCHEMA_VERSION {
@@ -2803,6 +2849,19 @@ fn added_agents_to_text(agents: &[Agent]) -> String {
     serde_json::to_string(agents).expect("a list of agents serializes to JSON")
 }
 
+fn read_account_order(
+    conn: &Connection,
+) -> Result<std::collections::BTreeMap<String, Vec<Option<String>>>> {
+    let text: Option<String> = conn.query_row(
+        "SELECT account_order FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| row.get(0),
+    )?;
+    Ok(text
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_default())
+}
+
 /// The stored default account names; a value that is not a JSON object of strings reads as none.
 fn read_default_account_names(
     conn: &Connection,
@@ -3009,6 +3068,100 @@ mod tests {
         assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
         assert!(store.get_console("console-1").unwrap().is_some());
         assert!(moved_aside(&path).is_empty());
+    }
+
+    #[test]
+    fn account_order_upgrade_keeps_existing_data() {
+        let path = temp_db("account-order-upgrade");
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(&SCHEMA.replace("    account_order          TEXT,\n", ""))
+                .unwrap();
+            conn.pragma_update(None, "user_version", 1).unwrap();
+            conn.execute(
+                "INSERT INTO settings (id, auto_select_account) VALUES (?1, 1)",
+                params![SETTINGS_ID],
+            )
+            .unwrap();
+            conn.execute_batch(
+                "INSERT INTO accounts (id, agent, name, config_dir, created_at)
+                 VALUES ('kept', 'claude', 'Work', '/accounts/work', 1)",
+            )
+            .unwrap();
+        }
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.list_accounts().unwrap()[0].id, "kept");
+        assert!(store.get_settings().unwrap().auto_select_account);
+        assert!(store.get_settings().unwrap().account_order.is_empty());
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
+        assert!(moved_aside(&path).is_empty());
+    }
+
+    #[test]
+    fn account_order_validates_current_membership_and_persists_per_agent() {
+        let path = temp_db("account-order");
+        let store = Store::open(&path).unwrap();
+        assert!(store.get_settings().unwrap().account_order.is_empty());
+        for (id, agent) in [
+            ("one", Agent::Claude),
+            ("two", Agent::Claude),
+            ("other", Agent::Codex),
+        ] {
+            store
+                .insert_account(&account(id, agent, &format!("/accounts/{id}")))
+                .unwrap();
+        }
+        let stored_ids = || {
+            store
+                .list_accounts()
+                .unwrap()
+                .into_iter()
+                .map(|account| account.id)
+                .collect::<Vec<_>>()
+        };
+        let original_ids = stored_ids();
+        let order = vec![Some("two".to_string()), None, Some("one".to_string())];
+        assert!(store.reorder_accounts(Agent::Claude, &order).unwrap());
+        assert!(!store.reorder_accounts(Agent::Claude, &order).unwrap());
+        assert!(store
+            .reorder_accounts(Agent::Codex, &[None, Some("other".to_string())])
+            .unwrap());
+        assert_eq!(stored_ids(), original_ids);
+        let before = store.get_settings().unwrap().account_order;
+        for invalid in [
+            vec![None, Some("one".to_string())],
+            vec![Some("one".to_string()), Some("two".to_string())],
+            vec![None, None, Some("one".to_string())],
+            vec![None, Some("one".to_string()), Some("one".to_string())],
+            vec![None, Some("one".to_string()), Some("unknown".to_string())],
+            vec![None, Some("one".to_string()), Some("other".to_string())],
+            vec![],
+        ] {
+            let err = store.reorder_accounts(Agent::Claude, &invalid).unwrap_err();
+            assert_eq!(
+                crate::protocol::error_parts(&err).0,
+                error_code::ACCOUNT_ORDER_INVALID
+            );
+            assert_eq!(store.get_settings().unwrap().account_order, before);
+        }
+        drop(store);
+        let store = Store::open(&path).unwrap();
+        assert_eq!(store.get_settings().unwrap().account_order, before);
+        store.delete_account("one").unwrap();
+        assert!(store.reorder_accounts(Agent::Claude, &order).is_err());
+        assert!(store
+            .reorder_accounts(Agent::Claude, &[Some("two".to_string()), None])
+            .unwrap());
+        store
+            .insert_account(&account("new", Agent::Claude, "/accounts/new"))
+            .unwrap();
+        assert!(store
+            .reorder_accounts(Agent::Claude, &[Some("two".to_string()), None])
+            .is_err());
+        assert_eq!(
+            store.get_settings().unwrap().account_order["codex"],
+            before["codex"]
+        );
     }
 
     /// A database from before versions were recorded (version 0, with tables in it) is moved

@@ -154,6 +154,46 @@ describe("the fixture daemon's session handoff", () => {
   });
 });
 
+describe("the fixture daemon's account order", () => {
+  const setup = () => createFixtureDaemon({ id: "account-order", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: {
+    auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
+    accounts: [
+      { id: "work", agent: "claude", name: "Work", config_dir: "/work" },
+      { id: "personal", agent: "claude", name: "Personal", config_dir: "/personal" },
+      { id: "codex", agent: "codex", name: "Codex", config_dir: "/codex" },
+    ], account_order: { claude: ["removed", "work", null], codex: ["codex", null] },
+  } }) });
+
+  it("saves a complete order including Default and preserves other agents", async () => {
+    const daemon = setup();
+    await expect(daemon.request({ type: "reorder_accounts", agent: "claude", accounts: ["personal", null, "work"] })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().settings.account_order).toEqual({ claude: ["personal", null, "work"], codex: ["codex", null] });
+  });
+
+  it("replaces stale saved references and broadcasts only when the saved order changes", async () => {
+    const daemon = setup();
+    const before = daemon.store.getState().settings;
+    const request = { type: "reorder_accounts", agent: "claude", accounts: ["work", null, "personal"] } as const;
+    await daemon.request({ ...request, accounts: [...request.accounts] });
+    const settings = daemon.store.getState().settings;
+    expect(settings).not.toBe(before);
+    expect(settings.account_order?.claude).toEqual(request.accounts);
+    await daemon.request({ ...request, accounts: [...request.accounts] });
+    expect(daemon.store.getState().settings).toBe(settings);
+    await daemon.request({ type: "reorder_accounts", agent: "grok", accounts: [null] });
+    expect(daemon.store.getState().settings.account_order?.grok).toEqual([null]);
+  });
+
+  it("refuses missing, duplicate, foreign and stale IDs without changing settings", async () => {
+    const daemon = setup();
+    const settings = daemon.store.getState().settings;
+    for (const accounts of [["work", "personal"], [null, "work"], [null, "work", "work"], [null, "work", "codex"], [null, "work", "removed"], [null, null, "work", "personal"]]) {
+      await expect(daemon.request({ type: "reorder_accounts", agent: "claude", accounts })).rejects.toMatchObject({ code: "account_order_invalid" });
+      expect(daemon.store.getState().settings).toBe(settings);
+    }
+  });
+});
+
 describe("the fixture daemon's added agents", () => {
   const lead = sessionOf("lead", "c", "p", "Lead", "idle");
   const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [projectOf("p", "c", "Website")], sessions: [lead] });

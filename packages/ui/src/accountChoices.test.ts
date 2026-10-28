@@ -18,6 +18,15 @@ const account = (id: string, agent: Agent, name: string): Account => ({ id, agen
 const accounts = [account("w", "claude", "Work"), account("c", "codex", "Codex work")];
 
 describe("choiceGroups", () => {
+  it("uses the saved order in pickers and switch lists, including the default account", () => {
+    const order = { claude: ["w", null] };
+    const groups = choiceGroups(accounts, availability({}), null, () => "Default", undefined, undefined, undefined, order);
+    expect(groups.find((group) => group.agent === "claude")!.entries.map((entry) => entry.account)).toEqual(["w", null]);
+    const session = sessionOf("s", "console", "project", "Session", "idle", { agent: "claude" });
+    expect(switchEntries(session, accounts, ((key: string) => key) as Translate, undefined, undefined, undefined, undefined, order).map((entry) => entry.account)).toEqual(["w", null]);
+    expect(avoidUnavailableAccount({ agent: "claude", account: null }, groups)).toEqual({ agent: "claude", account: null });
+  });
+
   it("puts the default account first in every agent's group, the stored accounts after it", () => {
     const groups = choiceGroups(accounts, availability({}), null, () => "Default");
     expect(groups.map((g) => [g.agent, g.entries.map((e) => e.name)])).toEqual([
@@ -372,6 +381,15 @@ describe("settledInitialChoice with automatic account selection", () => {
     reading("soon", [windowOf({ used_percent: 99, resets_at: NOW + HOUR })]),
   ];
   const groups = (listed: AccountQuota[] = quotas) => choiceGroups(stored, availability({}), null, () => "", { quotas: listed, now: NOW });
+
+  it("keeps automatic selection ties in stored order when the default account is displayed last", () => {
+    const readings = [reading(null, [windowOf()]), reading("w", [windowOf()]), reading("soon", [windowOf()])];
+    const reordered = choiceGroups(stored, availability({}), null, () => "", { quotas: readings, now: NOW }, undefined, undefined, { claude: ["soon", "w", null] });
+    expect(reordered.find((group) => group.agent === "claude")!.entries.map((entry) => entry.account)).toEqual(["soon", "w", null]);
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, reordered, { now: NOW }).choice).toEqual({ agent: "claude", account: null });
+    const noDefaultReading = choiceGroups(stored, availability({}), null, () => "", { quotas: readings.slice(1), now: NOW }, undefined, undefined, { claude: ["soon", "w", null] });
+    expect(settledInitialChoice(owner, undefined, stored, availability({}), null, noDefaultReading, { now: NOW }).choice).toEqual({ agent: "claude", account: "w" });
+  });
 
   it("keeps the inherited account when automatic selection is not asked for", () => {
     expect(settledInitialChoice(owner, undefined, stored, availability({}), null, groups()).choice).toEqual({ agent: "claude", account: "w" });

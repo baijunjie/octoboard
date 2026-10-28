@@ -298,6 +298,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | Path | Role |
 |---|---|
 | `src/agents.ts`, `src/agentLaunchSettings.ts`, `src/agentFields.ts`, `src/accountChoices.ts` | The agents' names, listed agents and install pages, model and effort picker rules, per-agent dialog fields and the pure account-picker rules |
+| `src/accountOrder.ts` | `orderedAccounts`: the shared saved display order of an agent's accounts for settings, pickers and quota surfaces |
 | `src/sessionLabel.ts`, `src/sessionColours.ts`, `src/gitStatusLabel.ts`, `src/projectFiltering.ts`, `src/sessionCopy.tsx`, `src/gitStatusCopy.tsx`, `src/sessionModel.ts`, `src/repositoryLink.ts` | Plain and rich session and git-badge wording, session colours, the sidebar filter's rules, a session's model and effort for display, and the repository host link |
 | `src/useWindowShortcut.ts`, `src/useQuickCreateModifier.ts`, `src/useNow.ts`, `src/focusGuard.ts`, `src/contextMenuGuard.ts`, `src/touchInput.ts` | Window-wide shortcut and modifier hooks, a shared clock, a react-aria focus workaround, native context menu suppression and touch-input queries |
 | `src/pathDisplay.ts`, `src/wirePath.ts`, `src/relativeTime.ts`, `src/conversationId.ts`, `src/reducedMotion.ts`, `src/imeKey.ts`, `src/avatarImage.ts`, `src/cssColour.ts` | Small pure helpers for path display, wire paths, relative time, conversation ids, motion preference, input-method keys, avatar images and resolving a CSS colour |
