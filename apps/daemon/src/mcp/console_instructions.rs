@@ -37,8 +37,10 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          ask the user, or use `request_session` there. You may read a project — open a file, \
          search it, look at its git history — but that is looking, never a way into working \
          there, and `git status` and `git diff` are not looking: they rewrite the repository's \
-         index and can fail a command the session working there is running. This working \
-         directory is Octoboard's own and holds nothing of the user's.\n\
+         index and can fail a command the session working there is running. To see what a \
+         session has changed in a project, use `list_project_changes` and `read_project_diff`, \
+         which read without writing anything. This working directory is Octoboard's own and \
+         holds nothing of the user's.\n\
          \n\
          ## Work that touches no project\n\
          \n\
@@ -94,6 +96,13 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            responsible for and the worktree each is checked out in. \
            `read_session_history` — what a session's conversation held (the user's messages and \
            the agent's final replies, not its tool calls), a page at a time from the latest.\n\
+         - `list_project_changes` — what has changed in a project of this console, without \
+           running git there: the uncommitted changes of its worktree, of another worktree \
+           (`worktree`, a path `get_session_branches` gave for a session of this console, or the \
+           branch checked out in it), or what a `branch` has changed since it forked from \
+           `base`, with the commits it made. `read_project_diff` — one changed file's diff, a \
+           window of it at a time. This is how you check what a session reports, rather than \
+           taking its word or running git. Only this console's projects can be read.\n\
          - `rename_session` / `set_session_pinned` — retitle (in the user's conversation \
            language, as for `new_session`) or pin a session of yours.\n\
          - `archive_session` — end and archive a session you are done with; its branches and \

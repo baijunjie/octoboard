@@ -8,11 +8,12 @@
 //! daemon, at most [`budget::MAX_CONCURRENT_READS`] reads run at a time, and the bytes held for
 //! browse replies — a read's own buffers while it runs, a finished reply until its frame is on the
 //! socket — stay within [`budget::MAX_RETAINED_BYTES`], of which one connection may hold at most
-//! [`budget::MAX_RETAINED_PER_CONNECTION`]: each read reserves its worst case from both before it
-//! starts, gives back what its serialized reply did not need, and gives back the rest when the
-//! frame has been written. Replies leave on a queue of their own, which the connection's writer
-//! drains only while no control event is waiting, so a burst of file bodies never holds a status
-//! change behind it.
+//! [`budget::MAX_RETAINED_PER_CONNECTION`], as do the reads of the agents' MCP tools all together
+//! (see [`Gate::admit`]): each read reserves its worst case from both before it starts, gives back
+//! what its serialized reply did not need, and gives back the rest when the frame has been
+//! written. Replies leave on a queue of their own, which the connection's writer drains only
+//! while no control event is waiting, so a burst of file bodies never holds a status change behind
+//! it.
 //!
 //! A request may name a slot, per connection. A newer request in the same slot cancels the older
 //! one — its file read stops at the next chunk, its `git` is killed — and the older one is answered
@@ -34,6 +35,10 @@ pub struct Gate {
     reads: Arc<Semaphore>,
     retained: Arc<Semaphore>,
     retained_max: usize,
+    /// The share of the retained bytes that all the reads of the agents' MCP tools hold together,
+    /// as a connection's lane holds its own.
+    tools: Arc<Semaphore>,
+    tools_max: usize,
 }
 
 impl Gate {
@@ -43,7 +48,16 @@ impl Gate {
             reads: Arc::new(Semaphore::new(reads)),
             retained: Arc::new(Semaphore::new(retained)),
             retained_max: retained,
+            tools: Arc::new(Semaphore::new(retained)),
+            tools_max: retained,
         }
+    }
+
+    /// The same gate with the agents' MCP tools held to `tools` retained bytes together.
+    pub fn with_tools_share(mut self, tools: usize) -> Self {
+        self.tools = Arc::new(Semaphore::new(tools));
+        self.tools_max = tools;
+        self
     }
 
     /// The retained bytes not reserved by any read or reply right now.
@@ -52,9 +66,50 @@ impl Gate {
         self.retained.available_permits()
     }
 
+    /// Waits for a place in the agents' share, a read slot and `reservation` retained bytes, for
+    /// a read that comes from inside the daemon rather than over a connection (an MCP tool's), so
+    /// it is held to the same daemon-wide bounds as a window's, and all such reads together to one
+    /// connection's share: a window still gets its own share beside them. All three are given
+    /// back when the admission drops.
+    pub async fn admit(&self, reservation: usize) -> Admission {
+        let reservation = reservation.min(self.retained_max).min(self.tools_max);
+        let tools = self
+            .tools
+            .clone()
+            .acquire_many_owned(reservation as u32)
+            .await
+            .expect("the gate's semaphores are never closed");
+        let retained = self
+            .retained
+            .clone()
+            .acquire_many_owned(reservation as u32)
+            .await
+            .expect("the gate's semaphores are never closed");
+        let reading = self
+            .reads
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("the gate's semaphores are never closed");
+        Admission {
+            _reading: reading,
+            _retained: retained,
+            _tools: tools,
+        }
+    }
+
     pub fn with_budget() -> Self {
         Self::new(budget::MAX_CONCURRENT_READS, budget::MAX_RETAINED_BYTES)
+            .with_tools_share(budget::MAX_RETAINED_PER_CONNECTION)
     }
+}
+
+/// A read slot and a share of the retained bytes, held while one read runs; see [`Gate::admit`].
+#[derive(Debug)]
+pub struct Admission {
+    _reading: OwnedSemaphorePermit,
+    _retained: OwnedSemaphorePermit,
+    _tools: OwnedSemaphorePermit,
 }
 
 /// A finished reply waiting for the socket. It holds its request's place among the connection's
@@ -570,5 +625,22 @@ mod tests {
             );
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
+    }
+
+    #[tokio::test]
+    async fn the_mcp_tools_share_one_connections_worth_of_the_retained_bytes() {
+        let gate = Gate::new(4, 3000).with_tools_share(1000);
+        let first = gate.admit(600).await;
+        // A second tool read does not fit the share although the gate has room for it...
+        let blocked = tokio::time::timeout(Duration::from_millis(50), gate.admit(600)).await;
+        assert!(blocked.is_err());
+        assert_eq!(gate.retained_available(), 2400);
+        // ...and a window's read still gets the rest of the gate.
+        let window = gate.retained.clone().try_acquire_many_owned(2400);
+        assert!(window.is_ok());
+        drop(window);
+        drop(first);
+        let second = tokio::time::timeout(PATIENCE, gate.admit(600)).await;
+        assert!(second.is_ok());
     }
 }
