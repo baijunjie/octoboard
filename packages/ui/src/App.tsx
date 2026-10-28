@@ -37,6 +37,7 @@ import { ConfirmDialog } from "./dialogs/ConfirmDialog";
 import type { DialogRequest } from "./dialogs/dialogRequest";
 import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQuestionDialog";
 import { RequestedDialog } from "./dialogs/RequestedDialog";
+import type { ModelEdits } from "./dialogs/SessionModelDialog";
 import { useConfirmIncompleteLaunch } from "./dialogs/useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
@@ -549,6 +550,14 @@ export function App(): React.ReactElement {
         switchAnnouncementTimer.current = setTimeout(() => setSwitchAnnouncement(undefined), SWITCH_ANNOUNCEMENT_MS);
       },
     });
+  };
+
+  /** Changes a session's model and reasoning effort in the background, the dialog that asked being gone
+   * by then. The daemon shows the session as starting while it restarts; a refusal or a failure,
+   * which can come seconds later, is an error alert. */
+  const changeSessionModel = (sessionId: string, edits: ModelEdits): void => {
+    request({ type: "set_session_model", session: sessionId, ...edits, terminal_appearance: appearance })
+      .catch((err: unknown) => toastError(errorPresentation(err as Error), sessionId, t("dialog.sessionModel.failedTitle")));
   };
 
   const openConsoleSession = (console_: Console) => openDialog({ kind: "new-console-session", console: console_ });
@@ -1268,6 +1277,7 @@ export function App(): React.ReactElement {
           onClose={closeDialog}
           onSessionOpened={showOpenedSession}
           onSwitchAccounts={switchAccounts}
+          onChangeSessionModel={changeSessionModel}
           onResumeSession={resumeFromDialog}
         />
       )}

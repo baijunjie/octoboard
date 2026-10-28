@@ -134,6 +134,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            yours to another, naming both as `from` and `to`; no session is replaced.\n\
          - `switch_session_account` — move a session of yours to another account of its own \
            agent, keeping its conversation.\n\
+         - `set_session_model` — change the model or reasoning effort of a session of yours, \
+           keeping its conversation and its account.\n\
          - `transfer_session` — hand a session of yours to another parent session, with a note \
          on where it stands.\n\
          - `release_session` — let a session of yours go: it becomes an independent \
@@ -231,6 +233,14 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            next step with `instruct_session` — unless the result's `note` says it was sent a \
            prompt to continue, which you must not repeat. Use it rather than a handoff when the \
            same agent can go on. `get_account_quotas` shows which accounts still have quota.\n\
+         - `set_session_model` changes the model or reasoning effort of a session of yours, on \
+           its own agent and account, without asking the user. A running session is restarted to \
+           take them: its process is ended and relaunched resuming its conversation, and it is \
+           sent no message for it. It comes back awaiting instructions and a turn in progress is \
+           cut off, so send it the next step with `instruct_session` — unless the result's `note` \
+           says it was sent a prompt to continue, which you must not repeat. An interrupted \
+           session takes them when it is next resumed. A session waiting for the user is \
+           refused: the restart would end the prompt only they can answer.\n\
          - `transfer_session` passes a session of yours to another parent session — another \
          console session of this console, or a project session of that session's project that \
          can own sessions — without asking the user. A coordinator with child sessions, \

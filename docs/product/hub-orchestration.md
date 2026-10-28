@@ -134,6 +134,7 @@ Besides the reads in `docs/product/what-every-session-reads.md`:
 | `handoff_session` | `session`, `agent`, `account?`, `title?`, `model?`, `effort?`, `note?` | Hands one of the caller's sessions off to a new session of another agent, which takes its place and stays the caller's, and archives the original, once the user approves, unless they have chosen to have handoffs approved without asking. See "Handing off from an owner's tool" in `docs/product/handing-off-sessions.md`. |
 | `handover_branches` | `branches`, `from?`, `to?` | Moves the responsibility for git branches from one session of the caller's own to another, without the user and without replacing any session. A console session is responsible for no branch, so it names both `from` and `to`. See "Handing branches between sessions of an owner" in `docs/product/branch-responsible-session.md`. |
 | `switch_session_account` | `session`, `account` | Moves one of the caller's sessions to another account of its own agent, keeping its conversation, once the user approves, unless they have chosen to have switches approved without asking. The session comes back awaiting its next step from the caller, unless its `note` says it was sent a prompt to continue a turn the switch cut off or a usage limit had stopped, which the caller does not repeat. See "Switching from an owner's tool" and "Continuing after a switch" in `docs/product/switching-session-accounts.md`. |
+| `set_session_model` | `session`, `model?`, `effort?` | Changes the model or reasoning effort of a session of the caller's on the same agent and account, without approval. See "Changing a session's model and effort" in `docs/product/model-and-reasoning-effort.md`. |
 | `transfer_session` | `session`, `to`, `note` | Hands one of the caller's sessions to another owner, without the user. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
 | `release_session` | `session`, `note?` | Releases one of the caller's sessions from its binding, without the user: it becomes the user's own, independent session, and is passed the optional `note` as its former owner's parting note. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
 | `request_session` | `kind`, `project?`, `console?`, `brief`, `title?`, `agent?`, `account?`, `model?`, `effort?`, `branches?` | Asks the user to start a session that is nobody's. See `docs/product/session-requests.md`. |
@@ -149,12 +150,12 @@ console; an ambiguous name is refused and asks for the id. A project of another 
 `list_archived` (see `docs/product/what-every-session-reads.md`).
 
 **Writes are the caller's own.** `instruct_session`, `interrupt_session`, `rename_session`, `set_session_pinned`,
-`archive_session`, `reopen_session`, `handoff_session`, `switch_session_account`, `transfer_session` and
-`release_session` act only on a session bound to the caller; for any other — independent, bound to another console
-session or to a project session, a console session, or the caller itself — they refuse, with a reason naming who owns
-it, and change nothing. The reason says why it is not the caller's to do — only its owner instructs or drives it, or it
-is the user's — and, unless the session is archived, that the caller can still tell it something with `send_message`,
-which it weighs rather than obeys, adding for a reporting session that its owner is sent a copy (see
+`archive_session`, `reopen_session`, `handoff_session`, `switch_session_account`, `set_session_model`,
+`transfer_session` and `release_session` act only on a session bound to the caller; for any other — independent, bound
+to another console session or to a project session, a console session, or the caller itself — they refuse, with a reason
+naming who owns it, and change nothing. The reason says why it is not the caller's to do — only its owner instructs or
+drives it, or it is the user's — and, unless the session is archived, that the caller can still tell it something with
+`send_message`, which it weighs rather than obeys, adding for a reporting session that its owner is sent a copy (see
 `docs/product/information-between-sessions.md`); for the caller itself it says to say it to the user instead.
 `archive_session` aimed at the caller itself is refused pointing to `archive_self` instead. `new_session` always binds
 the new session to the caller, so a console session cannot start one on another's behalf: it can hand one over
@@ -184,6 +185,7 @@ a console session. Besides the reads in `docs/product/what-every-session-reads.m
 | `handoff_session` | `session`, `agent`, `account?`, `title?`, `model?`, `effort?`, `note?` | As the console session's. |
 | `handover_branches` | `branches`, `from?`, `to?` | As the console session's, except that the caller can be responsible for branches itself: `from` or `to` left out is the caller, so it can also give its own branches to a session of its own or take one of theirs. |
 | `switch_session_account` | `session`, `account` | As the console session's. |
+| `set_session_model` | `session`, `model?`, `effort?` | As the console session's. |
 | `transfer_session` | `session`, `to`, `note` | As the console session's. See "Handing a session to another owner" in `docs/product/changing-session-owners.md`. |
 | `release_session` | `session`, `note?` | As the console session's. See "Releasing a session from its owner" in `docs/product/changing-session-owners.md`. |
 | `bind_to_session` | `owner`, `summary` | Binds the caller, while it is independent, to an owner, without the user. Refused for a coordinator with a parent, which is bound already. See "Setting a parent for an independent session" in `docs/product/changing-session-owners.md`. |
@@ -199,10 +201,10 @@ It has no `add_project`, and none of the tools that change a setting: `update_pr
 
 **Writes are the caller's own** — the console session's rule. `instruct_session`, `interrupt_session`, `rename_session`,
 `set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session`, `switch_session_account`,
-`transfer_session` and `release_session` act only on a session bound to the caller, and refuse, with a reason naming who
-owns it, and change nothing, for any other: an independent session, one bound to a console session or to another project
-session, the caller itself, or a console session. For an independent project session, `archive_session` aimed at itself
-is refused pointing to `archive_self` instead.
+`set_session_model`, `transfer_session` and `release_session` act only on a session bound to the caller, and refuse,
+with a reason naming who owns it, and change nothing, for any other: an independent session, one bound to a console
+session or to another project session, the caller itself, or a console session. For an independent project session,
+`archive_session` aimed at itself is refused pointing to `archive_self` instead.
 
 A child session created with `new_session` is a worker: it is offered `report`, the reads in
 `docs/product/what-every-session-reads.md`, `send_message`, `get_project`, `request_session` and
@@ -247,9 +249,9 @@ it. Archiving, reopening and deleting follow both reporting edges; see "Archivin
 `console`; its children read `project`, with the coordinator as their `owner`. They appear in the console session's
 `list_projects`, `get_session` and `list_sessions`, with `yours: false`. `instruct_session`, `interrupt_session`,
 `rename_session`, `set_session_pinned`, `archive_session`, `reopen_session`, `handoff_session`,
-`switch_session_account`, `transfer_session` and `release_session` aimed at one are refused, naming the coordinator
-as its parent (see "Which sessions an owner drives" below). The console session manages the coordinator itself as
-its direct child.
+`switch_session_account`, `set_session_model`, `transfer_session` and `release_session` aimed at one are refused, naming
+the coordinator as its parent (see "Which sessions an owner drives" below). The console session manages the coordinator
+itself as its direct child.
 
 ## Handing out a task: the brief
 

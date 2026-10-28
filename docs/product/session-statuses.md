@@ -56,6 +56,10 @@ Transitions:
   *interrupted* while the process is down and comes back in *awaiting instructions* — working again where it is sent the
   prompt to continue its turn (see "Continuing after a switch" in `docs/product/switching-session-accounts.md`) — and a
   switch that fails leaves it *interrupted* on the account it had (see `docs/product/switching-session-accounts.md`).
+- Changing a running session's model or reasoning effort shows it as *starting* until its restart finishes, then as
+  *awaiting instructions*, or *working* when it receives a prompt to continue. A failed relaunch leaves it
+  *interrupted* with its earlier launch choices; changing an interrupted session's choices leaves it interrupted (see
+  "Changing a session's model and effort" in `docs/product/model-and-reasoning-effort.md`).
 - An agent's report never moves a session out of *interrupted* or *archived*: whether a stopped session is one or the
   other is Octoboard's own record, not the agent's.
 

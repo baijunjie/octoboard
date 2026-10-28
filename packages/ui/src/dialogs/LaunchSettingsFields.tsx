@@ -28,7 +28,8 @@ function modelName(t: Translate, model: AgentModel): string {
  * the daemon while `enabled` (see `useAgentModels`). While the answer is out the pickers are locked,
  * showing what is stored; when the daemon has no list the model picker offers the stored value alone
  * and `modelFailure` says why, which the picker draws as a warning mark after the field's label (the
- * dialog goes on without the list). `modelText` is what the status region speaks: the loading note, or the failure's
+ * dialog goes on without the list). `listed` is whether the list is known, which is when a stored value
+ * missing from it is marked "Not in the list": not while it loads, and not when it could not be read. `modelText` is what the status region speaks: the loading note, or the failure's
  * sentence alone as plain text. */
 export function useLaunchModels(agent: Agent, account: string | null, enabled: boolean) {
   const t = useT();
@@ -49,7 +50,8 @@ export function useLaunchModels(agent: Agent, account: string | null, enabled: b
   const modelText = loading ? t("dialog.agentSettings.modelsLoading") : reasonText;
   const modelDescription = loading ? modelText : undefined;
   const modelFailure = loading ? undefined : reason;
-  return { loading, models, modelText, modelDescription, modelFailure };
+  const listed = status === "ready" && !unavailable;
+  return { loading, listed, models, modelText, modelDescription, modelFailure };
 }
 
 export type LaunchModels = ReturnType<typeof useLaunchModels>;
@@ -121,6 +123,7 @@ export function ModelPicker({
         t,
         launch.models.map((listed) => ({ value: listed.id, label: modelName(t, listed) })),
         model,
+        launch.listed,
       )}
       value={model}
       onChange={onChange}
@@ -157,7 +160,7 @@ export function EffortPicker({
       label={t("dialog.agentSettings.effort")}
       hideLabel={hideLabel}
       labelledBy={labelledBy}
-      options={launchSettingOptions(t, levels.map((level) => ({ value: level, label: level })), effort)}
+      options={launchSettingOptions(t, levels.map((level) => ({ value: level, label: level })), effort, launch.listed)}
       value={effort}
       onChange={onChange}
       placeholder={inheritedText?.placeholder ?? t("dialog.agentSettings.placeholder")}
@@ -170,7 +173,7 @@ export function EffortPicker({
 }
 
 /** The Model and Reasoning effort pickers of one pair of settings. */
-function LaunchPickers({
+export function LaunchPickers({
   launch,
   model,
   effort,

@@ -120,7 +120,7 @@ it.each([
   expect(Array.from(document.querySelectorAll("[data-status-mark-popover] pre")).map((node) => node.textContent)).toEqual(detail ? [detail] : []);
   act(() => void document.querySelector("[data-status-mark-popover]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await click(pickerNamed("Model"));
-  expect(optionTexts()).toEqual(["alpha, Not in the list"]);
+  expect(optionTexts()).toEqual(["alpha"]);
   await click(pickerNamed("Model"));
   expect(locked("Reasoning effort")).toBe(false);
   await click(clearButton("Reasoning effort"));

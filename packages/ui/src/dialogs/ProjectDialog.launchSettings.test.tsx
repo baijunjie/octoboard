@@ -422,7 +422,7 @@ it("offers the stored model alone and the reason when the agent cannot list its 
   expect(status).toBe(`${isolate("claude")} took too long to list its models.`);
   act(() => void document.querySelector("[data-status-mark-popover]")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   await click(pickerNamed("Model"));
-  expect(optionTexts()).toEqual(["retired, Not in the list"]);
+  expect(optionTexts()).toEqual(["retired"]);
 });
 
 it("names the console's project session value on the unset launch pickers, each value on its own", async () => {

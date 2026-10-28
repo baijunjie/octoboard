@@ -90,17 +90,20 @@ unexpectedly", "Could not quit", "Could not restart" (see "Starting up", "Quitti
 "Unexpected error" when it is unexpected, and "Error" when its cause is a known one. A title of its own does not change
 how a failure is classified: the daemon exiting, and a quit or a restart that did not happen, are still unexpected
 failures (see "Recovery and unexpected errors" below). When the failure is
-about a session, the first line of its body, "Session: …", names that session and where it is (its project or
-console), since the daemon's message says only "this session"; a session whose record is already gone, as after a
-failed launch, is named there by the name the failure carried, with no place. The rest of the body is in Octoboard's
-own words — what happened, the next step, any further explanation — and holds no raw text: that is only under the
-collapsed **Error details** disclosure at the body's end (see "Names and diagnostic details" below). The body's opening
-sentence (after any "Session: …" line) is optional: it is there only for what the title leaves unexplained, such as a
-cause or what the failure left as it was, and never says the title again in other words; when the title says it all,
-the body starts with the next step. It has one acknowledgement button. Escape, a click outside and a close button
-cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the failed operation. The originating
-dialog remains available for correcting inputs or retrying unless that operation's own contract closes it, or a recovery
-action navigates Settings and closes its account or agent forms (see "Opening and closing Settings" in `docs/product/settings.md`).
+about a session, the first line of its body, labelled Session, holds only the session's displayed name. A separate line
+below it identifies its location, labelled Project for a project session or Console for a console session. The session
+name and a known location's name are inline name chips. If the session's project or console record is missing, the
+location line says Unknown in the interface language, without inventing a name or exposing its ID. A session whose
+record is already gone, as after a failed launch, is named by the name the failure carried, with no location line. The
+rest of the body is in Octoboard's own words — what happened, the next step, any further explanation — and holds no raw
+text: that is only under the collapsed **Error details** disclosure at the body's end (see "Names and diagnostic
+details" below). The body's opening sentence (after any session and location lines) is optional: it is there only for
+what the title leaves unexplained, such as a cause or what the failure left as it was, and never says the title again in
+other words; when the title says it all, the body starts with the next step. It has one acknowledgement button. Escape,
+a click outside and a close button cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the
+failed operation. The originating dialog remains available for correcting inputs or retrying unless that operation's own
+contract closes it, or a recovery action navigates Settings and closes its account or agent forms (see "Opening and
+closing Settings" in `docs/product/settings.md`).
 
 Errors are queued and normally shown one at a time in arrival order. An identical failure already waiting for
 acknowledgement is not queued again: its message, affected session, original diagnostic message, recovery category

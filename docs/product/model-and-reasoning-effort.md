@@ -11,9 +11,9 @@ names and effort levels are each agent's own. These are the defaults for a sessi
 The console session pair never reaches a project session, and the project session pair never reaches a console
 session.
 
-Each session can override **each value independently** when it is opened, and an owner's switch of its account that
-the user approves can change either (see "The user's approval of an owner's switch" in
-`docs/product/switching-session-accounts.md`):
+Each session can override **each value independently** when it is opened or through "Changing a session's model and
+effort" below. An owner's switch of its account that the user approves can change either too (see "The user's approval
+of an owner's switch" in `docs/product/switching-session-accounts.md`):
 
 - **Inherited** — no session choice is recorded, and the value the defaults above give at that moment is read on
   every launch, including a resume. Sessions with no recorded override follow this rule.
@@ -85,18 +85,19 @@ the session dialog explicitly chooses the agent's own default for that value.
 
 What is stored is what was given, trimmed, with a blank value treated as the agent's own default. A value is checked
 when it is saved for a console or a project, or given to a session as it is opened or as its owner reopens it with
-`reopen_session` (see "The console session's tools" in `docs/product/hub-orchestration.md`): a model must be one the
-list in "The models offered" holds, and an effort one of the levels "The reasoning effort offered" gives for the model
-the console, project or session ends up with, both read for the account that agent's sessions would run under there.
-Where a project or a session sets an effort but no model of its own, the model it ends up with is the one it inherits —
-for a project, its console's project session model for that agent; for a session, as in the defaults above — and the
-effort is checked against that. Only the given values are checked: in a pair with one value given and the other
+`reopen_session`, or changed with `set_session_model` (see "Changing a session's model and effort" below): a model must
+be one the list in "The models offered" holds, and an effort one of the levels "The reasoning effort offered" gives for
+the model the console, project or session ends up with, both read for the account that agent's sessions would run under
+there. Where a project or a session sets an effort but no model of its own, the model it ends up with is the one it
+inherits — for a project, its console's project session model for that agent; for a session, as in the defaults above —
+and the effort is checked against that. Only the given values are checked: in a pair with one value given and the other
 inherited, the inherited one is not. A value the agent does not offer is refused, with a message naming it, whether it
 came from a dialog or from a session's tool (see `docs/product/agent-settings-tools.md`). Only a value being changed is
 checked: one left as it is is never checked again, so a stored value the current list does not hold is kept, offered
-last and marked as not in the list, and the dialog never silently changes a setting. A list that could not be read (see
-the last section) checks nothing. Nothing is checked at launch, and a configuration import stores its document's values
-unchecked.
+last and marked as not in the list once the list is known, and the dialog never silently changes a setting. The mark is
+absent while the list is being fetched or could not be read. A list that could not be read (see "While the list is being
+fetched, and when there is none") checks nothing. Nothing is checked at launch, and a configuration import stores its
+document's values unchecked.
 
 ## The models offered
 
@@ -109,20 +110,22 @@ lag behind the agent's releases:
 | Codex | Codex's own catalogue, by the name each entry carries, in the order Codex itself ranks them; entries it marks as not for listing are left out. |
 | Grok Build | The models Grok offers, in the order Grok itself lists them, by the display names Grok records in its own home and by their ids where it records none; models Grok marks as hidden are left out. |
 
-What is stored, and passed to the agent, is the identifier behind the entry — Claude Code's alias, or the Codex or
-Grok Build catalogue's own id — not the name shown.
+What is stored, and passed to the agent, is the identifier behind the entry — Claude Code's alias, or the Codex or Grok
+Build catalogue's own id — not the name shown.
 
 A catalogue belongs to an account, so the list is asked for the account that agent's sessions would run under: in the
 console dialog the account the dialog is currently set to for the agent whose tab is shown, and in the project dialog
 the project's own account for that agent — the agent's default account included — else the one its console resolves to;
-in the session dialog the account currently selected for that session (see "The project's account, model and reasoning
-effort" in `docs/product/projects.md` and "Which account a session uses" in `docs/product/opening-sessions.md`).
+in the session dialog the account currently selected for that session, and in the Change model dialog the session's own
+account (see "The project's account, model and reasoning effort" in `docs/product/projects.md` and "Which account a
+session uses" in `docs/product/opening-sessions.md`).
 
-Nothing is asked of the agent until the Advanced section is opened for the first time, and it is asked again whenever
-the agent or that account changes; an answer to a question the dialog has since moved off is dropped. An answer is
-reused for ten minutes, and a reason there is none for thirty seconds, so opening the section again does not run the
-agent's command each time. Sessions read the same list, from the same answers, with `list_agent_models` (see "Reading
-the models an agent offers" in `docs/product/what-every-session-reads.md`).
+The Change model dialog asks as soon as it opens; elsewhere nothing is asked until the Advanced section is opened for
+the first time. It is asked again whenever the agent or that account changes; an answer to a question the dialog has
+since moved off is dropped. An answer is reused for ten minutes, and a reason there is none for thirty seconds, so
+opening the section again does not run the agent's command each time. Sessions read the same list, from the same
+answers, with `list_agent_models` (see "Reading the models an agent offers" in
+`docs/product/what-every-session-reads.md`).
 
 ## The reasoning effort offered
 
@@ -143,21 +146,62 @@ sessions and Project sessions, each carry this note. Asking the agent is bounded
 
 The agent cannot always be asked: its binary does not resolve on the user's login shell `PATH`, the shell environment
 could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), the command failed or did
-not finish in time, or what it printed held no model that could be read. None of those stops the dialog, and it is
-about the whole field rather than the value it holds, so the reason is said by an amber warning mark right after the
-Model field's label, named that the models could not be loaded. In the console dialog's table of console-session and
+not finish in time, or what it printed held no model that could be read. None of those stops the dialog, and it is about
+the whole field rather than the value it holds, so the reason is said by an amber warning mark right after the Model
+field's label, named that the models could not be loaded. In the console dialog's table of console-session and
 project-session settings, the mark follows the Model row's name, once; where the table is stacked, with the setting's
-name over each picker, it follows each Model name.
-Its popover says which of them it was, what to do about it, and any raw diagnostic output, as "Names and diagnostic
-details" in `docs/product/error-alerts.md` describes; it has no **Try again**. It opens as any mark does and opens no
-error alert (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). The field
-offers the stored value alone, marked as not in the list, or nothing at all when there is none; the effort picker has
-no list to offer but stays operable, so a stored level can still be cleared. A refusal of the model-list request is
-shown the same way, with its actual reason, including named records or technical values supplied with it. When the
-mark goes while it or its popover holds keyboard focus, focus goes to the Model field. For assistive technology, the
-Advanced section announces the popover's first sentence once, alone (the generic sentence for a failure Octoboard has
-no words for) — never what to do about it, and never the raw diagnostic output. Neither a missing list nor one still
-being fetched stops the dialog from being saved.
+name over each picker, it follows each Model name. Its popover says which of them it was, what to do about it, and any
+raw diagnostic output, as "Names and diagnostic details" in `docs/product/error-alerts.md` describes; it has no **Try
+again**. It opens as any mark does and opens no error alert (see "Failures, warnings and notes marked at their point" in
+`docs/product/error-alerts.md`). The field offers the stored value alone, without marking it as not in the list, or
+nothing at all when there is none; the effort picker has no list to offer but stays operable, so a stored level can
+still be cleared. A refusal of the model-list request is shown the same way, with its actual reason, including named
+records or technical values supplied with it. When the mark goes while it or its popover holds keyboard focus, focus
+goes to the Model field. For assistive technology, the Advanced section announces the popover's first sentence once,
+alone (the generic sentence for a failure Octoboard has no words for) — never what to do about it, and never the raw
+diagnostic output. Neither a missing list nor one still being fetched stops the dialog from being saved.
+
+## Changing a session's model and effort
+
+**Change model** in a session's action menu opens a dialog for that session's model and reasoning effort. It precedes
+Switch account, is absent for archived sessions, and is disabled while the session is starting or switching accounts.
+The dialog shows the Model and Reasoning effort pickers directly, with the same choices, loading and unavailable-list
+rules described above. They start on the session's launch choices, taking inherited values where the session has no
+choice of its own; they do not start on the model last observed in the agent's records. Clearing either chooses the
+agent's own default for it. Confirm requires at least one value to differ from what the dialog opened on, and waits if
+the session becomes archived, starting or switching accounts while the dialog is open. Changing a value and changing it
+back leaves it untouched. Only changed values are sent, so the other value keeps its choice or inheritance. Confirm
+closes the dialog immediately and the change runs in the background. A refusal or failure opens an error alert
+identifying the session and the failed model change.
+
+The agent and account stay the same. A running session is restarted, keeping its conversation; one with no conversation
+yet starts fresh. It shows as starting throughout the restart in every window and in session reads. A turn the restart
+cuts off, or one stopped by a usage limit, receives a prompt to continue its task; otherwise the session returns
+awaiting instructions. An interrupted session is not started: the choices are recorded for its next resume. The changed
+values become the session's own choices, persisting as described at the top of this document. The user can change a
+session waiting for the user too; restarting it ends the prompt it was showing.
+
+A console session or project coordinator changes a session bound to it with **`set_session_model`**, without asking for
+approval. Workers have no such tool, and an owner cannot change an independent session or another owner's session. The
+call takes `session` and at least one of `model` and `effort`. Each omitted value keeps the session's current choice or
+inheritance; a blank string chooses the agent's own default, and another string is trimmed and becomes the session's own
+value. Only values actually being changed are checked against what the agent offers under the session's account, under
+"The Advanced section" above. Giving the choices it already has succeeds without restarting or checking them again, even
+when the current list no longer offers them. Giving an inherited value explicitly makes it the session's own choice,
+even if it resolves to the same value.
+
+The call waits for the restart to come up and answers with `session`, `agent`, `restarted` and a `note`, plus the
+session's own `model` and `effort`: each absent when inherited, `null` for the agent's own default, or its chosen
+string. `restarted` is false for an interrupted session or unchanged choices. The note says whether it was sent a prompt
+to continue its task, which the owner must not repeat; otherwise the owner sends its next step with `instruct_session`.
+No separate message about the change is sent to the session.
+
+A change is refused for an archived session (reopen it with the desired values instead), a session starting or already
+being changed, or while its account's sharing of the default configuration is being changed. An owner's call is also
+refused while the session is waiting for the user, so it cannot end a prompt only the user can answer. A changed value
+the agent does not offer is refused before the process is stopped or any choices are recorded. If the process cannot be
+stopped in time, the choices stay as they were (`model_change_did_not_stop`). If the restart is refused, fails to launch
+or ends immediately (`model_change_did_not_come_up`), the session is left interrupted with its earlier choices.
 
 ## The model and effort a session is shown running with
 
@@ -171,7 +215,7 @@ on its own, taking the first of these that gives a value:
 1. what the agent's own records show the session running with (below);
 2. for the effort only, where the records show the model the session runs but no effort, the level the agent runs that
    model at by itself, where Octoboard can tell it (below, under "The agent's own default level");
-3. a value the session chose when it was opened;
+3. a value the session chose when it was opened or subsequently changed;
 4. for a value the session inherits, what the defaults at the top of this doc give at that moment — a project
    session's project, else its console's project session pair; a console session's console session pair.
 
@@ -203,7 +247,11 @@ leaves it out when none sets one, so a turn context that names a model and no ef
 named. They are collected alongside the context size and as often (see "When the context size refreshes" in
 `docs/product/session-context.md`), kept through archiving and restarting Octoboard, and cleared when the session moves
 to a different native conversation, until the new one shows its own. They are reported on the session as
-`observed_model` and `observed_effort`, separate from the session's launch choices `model` and `effort`.
+`observed_model` and `observed_effort`, separate from the session's launch choices `model` and `effort`. A model-change
+restart clears the earlier observations once the old process has stopped. Until the restarted agent records its new
+model and effort, the display falls back to its launch choices as above: older records, including an unread tail of the
+previous process's conversation, cannot restore the earlier model or effort. This remains true across a daemon restart
+before the agent records the new values.
 
 **The agent's own default level.** Where the records name the model a session runs but no effort, the level that model
 runs at by itself is worked out per agent:

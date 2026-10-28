@@ -1894,6 +1894,22 @@ pub enum RequestBody {
         #[serde(default)]
         terminal_appearance: Option<TerminalAppearance>,
     },
+    /// Changes the model and reasoning effort of a session that is not archived, as its own
+    /// choice: each absent keeps what the session has, an explicit `null` (or blank) leaves it to
+    /// the agent, a string pins it; at least one is given. A running session is restarted on its account,
+    /// resuming its conversation with them, as an account switch does without moving it; an
+    /// interrupted one only has them recorded for its next resume. See
+    /// `coordinator::set_session_model`.
+    SetSessionModel {
+        session: String,
+        #[serde(default, deserialize_with = "present_option")]
+        model: Option<Option<String>>,
+        #[serde(default, deserialize_with = "present_option")]
+        effort: Option<Option<String>>,
+        /// See `OpenSession::terminal_appearance`.
+        #[serde(default)]
+        terminal_appearance: Option<TerminalAppearance>,
+    },
     /// Hands a session off to a new session of another agent, which takes its whole place: kind,
     /// project or console, role, owner, the branches it is responsible for and the sessions it
     /// owns. `agent` is required and must differ from the session's own (moving to another account
@@ -3770,6 +3786,13 @@ pub mod error_code {
     /// A switch relaunched the session and its process ended at once, so it is back on the
     /// account it had. `params` names the `session`.
     pub const SWITCH_DID_NOT_COME_UP: &str = "switch_did_not_come_up";
+    /// A change of a running session's model ended its process to restart it and still did not see
+    /// it gone after a generous wait, so the change stopped there: the session's model and effort
+    /// were not changed, and the process may still be running. `params` names the `session`.
+    pub const MODEL_CHANGE_DID_NOT_STOP: &str = "model_change_did_not_stop";
+    /// A change of a session's model relaunched it and its process ended at once, so the session
+    /// keeps the model and effort it had and is left interrupted. `params` names the `session`.
+    pub const MODEL_CHANGE_DID_NOT_COME_UP: &str = "model_change_did_not_come_up";
     /// The daemon has begun to shut down, so no session is launched, resumed, switched or handed
     /// off, and no claim on one is granted.
     pub const DAEMON_SHUTTING_DOWN: &str = "daemon_shutting_down";
@@ -4189,6 +4212,13 @@ mod tests {
                 r#"{"type":"switch_session_account","id":"request-1","session":"session-7","account":null}"#,
                 |body| match body {
                     RequestBody::SwitchSessionAccount { session, .. } => Some(session),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"set_session_model","id":"request-1","session":"session-7","model":null}"#,
+                |body| match body {
+                    RequestBody::SetSessionModel { session, .. } => Some(session),
                     _ => None,
                 },
             ),

@@ -13,33 +13,38 @@ const plain = ["low", "medium", "high"].map((value) => ({ value, label: value })
 
 describe("launchSettingOptions", () => {
   it("offers the list as it is, with no entry for unset, when nothing is stored", () => {
-    expect(launchSettingOptions(t, plain, null)).toEqual(plain);
+    expect(launchSettingOptions(t, plain, null, true)).toEqual(plain);
   });
 
   it("adds nothing when the stored value is already in the list", () => {
-    expect(launchSettingOptions(t, plain, "medium")).toEqual(plain);
+    expect(launchSettingOptions(t, plain, "medium", true)).toEqual(plain);
   });
 
   it("keeps a stored value that is no longer in the list, last and marked", () => {
-    expect(launchSettingOptions(t, plain, "ultra")).toEqual([
+    expect(launchSettingOptions(t, plain, "ultra", true)).toEqual([
       ...plain,
       { value: "ultra", label: "ultra", badge: "Not in the list" },
     ]);
   });
 
-  it("offers the stored value alone when there is no list", () => {
-    expect(launchSettingOptions(t, [], "ultra")).toEqual([{ value: "ultra", label: "ultra", badge: "Not in the list" }]);
+  it("offers the stored value alone, unmarked, while the list is not known", () => {
+    expect(launchSettingOptions(t, [], "ultra", false)).toEqual([{ value: "ultra", label: "ultra" }]);
+    expect(launchSettingOptions(t, plain, "ultra", false).at(-1)).toEqual({ value: "ultra", label: "ultra" });
+  });
+
+  it("marks the stored value of a list that is known and empty", () => {
+    expect(launchSettingOptions(t, [], "ultra", true)).toEqual([{ value: "ultra", label: "ultra", badge: "Not in the list" }]);
   });
 
   it("marks mixed-script missing values without rewriting them or mutating the live list", () => {
     const current = "vendor/中文-مراجعة (custom)";
     const known = [{ value: "listed", label: "Listed model" }];
-    const options = launchSettingOptions(t, known, current);
+    const options = launchSettingOptions(t, known, current, true);
     expect(options.at(-1)).toEqual({ value: current, label: current, badge: "Not in the list" });
     expect(known).toEqual([{ value: "listed", label: "Listed model" }]);
     expect(options[0]).toBe(known[0]);
     expect(options.at(-1)?.value).not.toMatch(/[\u2066-\u2069]/);
-    expect(launchSettingOptions(t, options, current)).toBe(options);
+    expect(launchSettingOptions(t, options, current, true)).toBe(options);
   });
 });
 

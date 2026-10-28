@@ -23,11 +23,12 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   sourceGone: ["source_unavailable"],
   repository: ["not_a_git_repository"],
   trash: ["project_directory_trash_failed", "project_directory_shared", "project_directory_protected"],
-  stopProcess: ["session_did_not_stop"],
+  stopProcess: ["session_did_not_stop", "model_change_did_not_stop"],
   existingProject: ["all_projects_already_added"],
   pathExists: ["path_already_exists"],
   uniqueName: ["account_name_taken"],
-  launchSetting: ["invalid_launch_setting"],
+  // A relaunch that ends at once with a new model most likely does not take that model.
+  launchSetting: ["invalid_launch_setting", "model_change_did_not_come_up"],
   accountDirectory: ["config_dir_taken"],
   access: ["directory_unreadable"],
   // A read of the project's files the system denied, where there is no folder to choose instead and nothing is written.

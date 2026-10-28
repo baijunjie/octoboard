@@ -36,7 +36,7 @@ impl Hints {
         hints.clone()
     }
 
-    fn hint(&self, session: &Session) -> Option<PathBuf> {
+    pub(crate) fn hint(&self, session: &Session) -> Option<PathBuf> {
         let hints = self.hints.lock().expect("record hint lock poisoned");
         hinted_path(&hints, session)
     }

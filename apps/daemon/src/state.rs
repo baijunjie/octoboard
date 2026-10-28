@@ -880,13 +880,33 @@ impl AppState {
         live.account_switches.contains(id)
     }
 
+    /// Marks a session whose claim from [`Self::begin_switch`] the caller holds as restarted for a
+    /// change of its model: until the claim is released every client is shown it `starting` (see
+    /// [`Self::shown_status`]), so nothing offers to resume it while its process is down.
+    pub fn mark_model_change(&self, id: &str) {
+        let marked = {
+            let mut live = self.live.write().expect("live sessions lock poisoned");
+            live.switching.contains(id) && live.model_changes.insert(id.to_string())
+        };
+        if marked {
+            self.publish_session_by_id(id);
+        }
+    }
+
+    /// Whether a change of its model is restarting the session (see [`Self::mark_model_change`]).
+    pub fn is_changing_model(&self, id: &str) -> bool {
+        let live = self.live.read().expect("live sessions lock poisoned");
+        live.model_changes.contains(id)
+    }
+
     fn release_launch(&self, id: &str) {
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.launching.remove(id);
         live.switching.remove(id);
         let was_switching_account = live.account_switches.remove(id);
+        let was_changing_model = live.model_changes.remove(id);
         drop(live);
-        if was_switching_account {
+        if was_switching_account || was_changing_model {
             self.publish_session_by_id(id);
         }
         crate::shared_config::publish(self);
@@ -1211,7 +1231,8 @@ impl AppState {
 
     /// The status a client is shown for a session: the stored one, or waiting for the user while
     /// its running process is held up by something only the user can answer that no hook reports,
-    /// or starting while a change of its account's sharing has it ended and is to resume it.
+    /// or starting while a change of its account's sharing has it ended and is to resume it, or
+    /// while a change of its model restarts it.
     pub(crate) fn shown_status(&self, session: &Session) -> SessionStatus {
         self.status_when(session, LiveSession::waits_for_user)
     }
@@ -1223,6 +1244,9 @@ impl AppState {
     }
 
     fn status_when(&self, session: &Session, waits: fn(&LiveSession) -> bool) -> SessionStatus {
+        if session.status != SessionStatus::Archived && self.is_changing_model(&session.id) {
+            return SessionStatus::Starting;
+        }
         let waiting = !session.status.is_dormant()
             && self
                 .live_session(&session.id)
@@ -1244,7 +1268,12 @@ impl AppState {
         session.status = self.shown_status(&session);
         session.background_tasks = self.shown_background_tasks(&session);
         session.switching_account = self.is_switching_account(&session.id);
-        session.default_effort = self.default_effort_of(&session.id);
+        session.default_effort =
+            if session.observed_model.is_some() && session.observed_effort.is_none() {
+                self.default_effort_of(&session.id)
+            } else {
+                None
+            };
         session.terminal_title = self.resolved_title(&session, &std::cell::OnceCell::new());
         session
     }
@@ -3029,6 +3058,9 @@ struct LiveSessions {
     /// The sessions in `switching` held by an account switch, which clients are shown
     /// (`Session::switching_account`).
     account_switches: HashSet<String>,
+    /// The sessions in `switching` that a change of their model is restarting, which clients are
+    /// shown starting ([`AppState::mark_model_change`]).
+    model_changes: HashSet<String>,
     /// The accounts locked for a change of their sharing, by id.
     sharing_locks: HashMap<String, SharingLockEntry>,
 }

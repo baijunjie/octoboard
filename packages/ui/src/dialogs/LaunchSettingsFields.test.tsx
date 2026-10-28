@@ -128,7 +128,7 @@ it("retains request-refusal metadata for rich model descriptions in the mark's p
 it("directs inherited model and effort badges without selecting or submitting their display values", () => {
   const inherited = { model: "model/中文-مراجعة", effort: "effort/مراجعة-中文" };
   const changed = vi.fn();
-  const launch: LaunchModels = { loading: false, models: [], modelText: undefined, modelDescription: undefined, modelFailure: undefined };
+  const launch: LaunchModels = { loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure: undefined };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -147,7 +147,7 @@ it("directs inherited model and effort badges without selecting or submitting th
 });
 
 it("hands focus to the Model trigger when the mark that holds it goes, and leaves other focus alone", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ loading: false, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -170,7 +170,7 @@ it("hands focus to the Model trigger when the mark that holds it goes, and leave
 });
 
 it("hands focus to the console's Model trigger when the console matrix's mark that holds it goes", async () => {
-  const launchOf = (modelFailure?: string): LaunchModels => ({ loading: false, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
+  const launchOf = (modelFailure?: string): LaunchModels => ({ loading: false, listed: true, models: [], modelText: undefined, modelDescription: undefined, modelFailure });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -252,7 +252,7 @@ it.each([
 });
 
 it("keeps the mark clear of the Model field's own press: pressing it neither opens the list nor clears the value", () => {
-  const launch: LaunchModels = { loading: false, models: [{ id: "alpha", name: "alpha" }] as LaunchModels["models"], modelText: undefined, modelDescription: undefined, modelFailure: "Why" };
+  const launch: LaunchModels = { loading: false, listed: true, models: [{ id: "alpha", name: "alpha" }] as LaunchModels["models"], modelText: undefined, modelDescription: undefined, modelFailure: "Why" };
   const changed = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

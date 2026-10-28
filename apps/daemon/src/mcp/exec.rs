@@ -60,6 +60,7 @@ use super::project_changes;
 use super::quotas;
 use super::reads;
 use super::session_branches as session_branches_tool;
+use super::session_model;
 use super::settings::{
     self, describe_project, git_workflow_argument, launch_argument, project_accounts_argument,
     resolve_account,
@@ -112,6 +113,16 @@ pub async fn call(
         }
         "switch_session_account" => {
             account_switch::switch_session_account(
+                state,
+                &session,
+                arguments,
+                crate::env_shell::launch_snapshot,
+                crate::term::launch,
+            )
+            .await
+        }
+        "set_session_model" => {
+            session_model::set_session_model(
                 state,
                 &session,
                 arguments,
@@ -3588,6 +3599,7 @@ pub(super) mod tests {
             ("mine", "release_session"),
             ("mine", "handoff_session"),
             ("mine", "switch_session_account"),
+            ("mine", "set_session_model"),
             ("mine", "bind_to_session"),
             ("a", "bind_to_session"),
         ] {

@@ -60,6 +60,8 @@ A session row's action menu offers:
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
+- **Change model** — opens the dialog described in "Changing a session's model and effort" in
+  `docs/product/model-and-reasoning-effort.md`.
 - **Switch account** — a submenu of the accounts of the session's agent, in the saved display order (see "Reordering
   accounts" in `docs/product/agent-accounts.md`), with the one the session is on checked and doing nothing; picking
   another asks for confirmation, then moves the session to it (see

@@ -182,6 +182,9 @@ export const en = {
   "error.details": "Details",
   "error.title": "Error",
   "error.alertSession": "Session: {session}",
+  "error.alertProject": "Project: {project}",
+  "error.alertConsole": "Console: {console}",
+  "error.alertLocationUnknown": "Unknown",
   "error.acknowledge": "OK",
   "error.crashed": "{appName} hit an error it could not recover from.",
   "error.crashed.markLabel": "Why {appName} stopped",
@@ -477,6 +480,10 @@ export const en = {
   "daemon.sharing_session_did_not_stop": "{session} did not stop in time, so sharing for account {name} was not changed.",
   "daemon.switch_did_not_come_up":
     "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
+  "daemon.model_change_did_not_stop":
+    "The session did not stop in time, so its model was not changed. It may still be running.",
+  "daemon.model_change_did_not_come_up":
+    "The session ended as soon as it was relaunched with the new model, so it keeps the model and reasoning effort it had.",
   "daemon.session_not_running": "This session is not running.",
   "daemon.console_session_never_bound": "A console session is never bound, so it has no owner to be released from.",
   "daemon.session_not_bound": "This session is not bound to an owner, so there is nothing to release.",
@@ -875,6 +882,7 @@ export const en = {
   "sidebar.session.delete": "Delete",
   "sidebar.session.switchAccount": "Switch account",
   "sidebar.session.manageAccounts": "Manage accounts…",
+  "sidebar.session.changeModel": "Change model",
   "sidebar.session.handOff": "Hand off",
   "sidebar.session.handOffNoTarget": "No other agent is available to take this session over.",
   "sidebar.session.handOffNoTarget.reason": "No other agent",
@@ -1518,6 +1526,14 @@ export const en = {
   "dialog.incompleteLaunch.message": "The last sharing change of {account} did not finish, so its configuration and conversations may be incomplete.",
   "dialog.incompleteLaunch.confirm": "Start anyway",
   "dialog.incompleteLaunch.viewSettings": "View in Settings",
+  "dialog.sessionModel.title": "Change model",
+  "dialog.sessionModel.subject": "The session {title} will run with the model and reasoning effort chosen here.",
+  "dialog.sessionModel.restart":
+    "It restarts to take them and keeps its conversation. A turn in progress is cut off, and continued automatically where that is safe.",
+  "dialog.sessionModel.nextResume": "It is not running, so it takes them the next time it is resumed.",
+  "dialog.sessionModel.note": "A model or reasoning effort you change is kept for this session from now on.",
+  "dialog.sessionModel.confirm": "Change model",
+  "dialog.sessionModel.failedTitle": "Could not change the model",
   "dialog.handOff.title": "Hand off session",
   "dialog.handOff.subject": "The session {title} will be handed off.",
   "dialog.handOff.message":

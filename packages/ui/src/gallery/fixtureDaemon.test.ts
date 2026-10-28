@@ -756,6 +756,53 @@ describe("the fixture daemon's account switches", () => {
   });
 });
 
+describe("the fixture daemon's model changes", () => {
+  const running = sessionOf("s", "c", "p", "Release", "idle", { model: "sonnet", effort: "medium", observed_model: "claude-sonnet-5-5", observed_effort: "medium" });
+  const interrupted = sessionOf("down", "c", "p", "Interrupted", "interrupted", { model: "sonnet" });
+  const state = snapshotState({ sessions: [running, interrupted, { ...running, id: "archived", status: "archived" }, { ...running, id: "starting", status: "starting" }] });
+  const scenario = { id: "model", title: "", group: "Sidebar sessions" as const, category: "normal" as const, state };
+  const { observed_model: _model, observed_effort: _effort, ...forgotten } = running;
+
+  it("records the values on a running session and forgets what its records showed", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "set_session_model", session: "s", model: "opus" })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().sessions.get("s")).toEqual({ ...forgotten, model: "opus", effort: "medium" });
+    await daemon.request({ type: "set_session_model", session: "s", effort: " " });
+    expect(daemon.store.getState().sessions.get("s")).toMatchObject({ model: "opus", effort: null });
+  });
+
+  it("only records the values of an interrupted session, and leaves one that already has them alone", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await daemon.request({ type: "set_session_model", session: "down", model: "opus", effort: "high" });
+    expect(daemon.store.getState().sessions.get("down")).toEqual({ ...interrupted, model: "opus", effort: "high" });
+    const before = daemon.store.getState().sessions;
+    await daemon.request({ type: "set_session_model", session: "s", model: "sonnet", effort: "medium" });
+    expect(daemon.store.getState().sessions).toBe(before);
+  });
+
+  it("shows the session starting while the change is held, and as it was or interrupted when the change fails", async () => {
+    const pending = createFixtureDaemon({ ...scenario, sessionModelChanges: { s: "pending" } });
+    void pending.request({ type: "set_session_model", session: "s", model: "opus" });
+    expect(pending.store.getState().sessions.get("s")).toEqual({ ...forgotten, status: "starting" });
+    const didNotStop = { code: "model_change_did_not_stop", params: { session: "s" }, message: "x" };
+    const stuck = createFixtureDaemon({ ...scenario, sessionModelChanges: { s: didNotStop } });
+    await expect(stuck.request({ type: "set_session_model", session: "s", model: "opus" })).rejects.toMatchObject({ code: didNotStop.code });
+    expect(stuck.store.getState().sessions.get("s")).toEqual(running);
+    const didNotComeUp = { code: "model_change_did_not_come_up", params: { session: "s" }, message: "x" };
+    const ended = createFixtureDaemon({ ...scenario, sessionModelChanges: { s: didNotComeUp } });
+    await expect(ended.request({ type: "set_session_model", session: "s", model: "opus" })).rejects.toMatchObject({ code: didNotComeUp.code });
+    expect(ended.store.getState().sessions.get("s")).toEqual({ ...forgotten, status: "interrupted" });
+  });
+
+  it("refuses what the daemon refuses", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "set_session_model", session: "missing", model: "opus" })).rejects.toMatchObject({ code: "unknown_session" });
+    await expect(daemon.request({ type: "set_session_model", session: "s" })).rejects.toMatchObject({ code: "field_required", params: { field: "model" } });
+    await expect(daemon.request({ type: "set_session_model", session: "archived", model: "opus" })).rejects.toMatchObject({ code: "session_archived" });
+    await expect(daemon.request({ type: "set_session_model", session: "starting", model: "opus" })).rejects.toMatchObject({ code: "session_already_starting" });
+  });
+});
+
 describe("the fixture daemon's project restore", () => {
   const project = projectOf("restore", "c", "Search API");
   const other = projectOf("other", "c", "Other project");

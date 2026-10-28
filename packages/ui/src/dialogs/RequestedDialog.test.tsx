@@ -42,7 +42,7 @@ function mount(
     terminalUrl: () => "",
   };
   const content = <DaemonProvider value={daemon}>
-    <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onResumeSession={async () => {}} onSwitchAccounts={callbacks.onSwitchAccounts ?? (() => {})} />
+    <RequestedDialog dialog={dialog} onClose={callbacks.onClose ?? (() => {})} onSessionOpened={() => {}} onResumeSession={async () => {}} onSwitchAccounts={callbacks.onSwitchAccounts ?? (() => {})} onChangeSessionModel={() => {}} />
   </DaemonProvider>;
   const container = mountForTooltip(callbacks.strict ? <StrictMode>{content}</StrictMode> : content);
   return { container, daemon };
