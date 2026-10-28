@@ -89,7 +89,20 @@ unless a value is picked for it (see "Reading and changing them" in `docs/produc
 
 A directory that is already associated with the same console is skipped rather than associated twice. Associating a
 parent directory again after new repositories have appeared beneath it therefore adds only the new ones. If every
-directory found is already associated, the request is refused and says so.
+directory found is already associated, the request is refused and says so. This holds for every way a project is
+associated: a single directory, a parent directory, a clone, and an import.
+
+"Already associated" means the same directory on the file system, however its path is written: a path through a
+symbolic link and the path it leads to, or two spellings that differ only in letter case on a file system that does
+not tell case apart, name one directory (compared by device and inode). A path with nothing at it, one that cannot be
+read, or one on a file system that reports no usable inode is compared by its lexically normalised form instead, and
+two paths of the same normalised form always count as the same directory. Looking at the console's existing projects
+on the file system is bounded at **10 seconds** a request, so a project on a mount that does not answer cannot hold the
+request; past that, the request compares those projects by their normalised paths alone, and so does every later
+request for the same console until that look has finished. The new project's path is recorded as
+given (see above), not as the directory it leads to. Two entries beneath one parent directory that are the same
+directory, such as a repository and a symbolic link to it, become one project, under the entry whose name sorts first
+(byte by byte).
 
 ## Project names
 

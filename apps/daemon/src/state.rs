@@ -289,6 +289,10 @@ pub struct AppState {
     /// The sessions an `interrupt_session` is sending keys into now (`crate::interrupt`), so two
     /// at once cannot send a second interrupt key. Held in memory only.
     interrupts: Mutex<HashSet<String>>,
+    /// Per console, the look at its projects' directories that outran its deadline and whose
+    /// blocking thread is still stuck, held weakly: the thread owns the strong reference, so the
+    /// entry reads as gone once the thread has ended.
+    stalled_directory_passes: Mutex<HashMap<String, std::sync::Weak<()>>>,
 }
 
 /// A session's queue paused by [`AppState::pause_outbox`].
@@ -647,6 +651,7 @@ impl AppState {
             shutdown: tokio::sync::Notify::new(),
             shutting_down: AtomicBool::new(false),
             interrupts: Mutex::new(HashSet::new()),
+            stalled_directory_passes: Mutex::new(HashMap::new()),
         }
     }
 
@@ -964,6 +969,32 @@ impl AppState {
             state: self.clone(),
             id: id.to_string(),
         })
+    }
+
+    /// Whether a look at this console's project directories that outran its deadline is still
+    /// stuck on its blocking thread.
+    pub fn has_stalled_directory_pass(&self, console_id: &str) -> bool {
+        let mut passes = self
+            .stalled_directory_passes
+            .lock()
+            .expect("stalled directory pass lock poisoned");
+        match passes.get(console_id).map(|pass| pass.strong_count() > 0) {
+            Some(true) => true,
+            Some(false) => {
+                passes.remove(console_id);
+                false
+            }
+            None => false,
+        }
+    }
+
+    /// Records that this console's look at its project directories outran its deadline; `pass` is
+    /// held strongly by the thread that is still running it.
+    pub fn record_stalled_directory_pass(&self, console_id: &str, pass: std::sync::Weak<()>) {
+        self.stalled_directory_passes
+            .lock()
+            .expect("stalled directory pass lock poisoned")
+            .insert(console_id.to_string(), pass);
     }
 
     /// Whether the session's claim is held (a launch, resume, switch, handoff, handover of branches or

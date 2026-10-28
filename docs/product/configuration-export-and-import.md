@@ -390,8 +390,9 @@ is already there — console names are not unique, so two of a name stand side b
 
 Each project then goes through **exactly the association a project added by hand goes through** (see "Associating a
 project" in `docs/product/projects.md`): its directory has to exist, its name, tags and launch settings are normalized
-the same way, and a directory already associated with the console being imported into is not associated a second time,
-which is what two projects of one console resolving to the same directory runs into — the second of them is reported as
+the same way, and a directory already associated with the console being imported into (by the same rule, so the same
+directory under another path counts) is not associated a second time, which is what two projects of one console
+resolving to the same directory runs into — the second of them is reported as
 failed. What the document says about a project — its pin, its tags, its default agent (none stays none, and nothing is
 detected from the directory), its account references, its models and efforts, its own git workflow settings — is applied
 as it stands. How the project was associated on the exporting machine does not carry over: what is recorded is how the

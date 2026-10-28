@@ -856,19 +856,14 @@ impl Store {
         Ok(project)
     }
 
-    /// Whether this console already has a project pointing at `path`. Associating a parent
-    /// directory discovers repositories in bulk and is expected to be re-run as new ones appear,
-    /// so the duplicates it would otherwise create are filtered on this.
-    pub fn project_exists_at(&self, console_id: &str, path: &str) -> Result<bool> {
-        // Stored paths are lexically normalised, so `path` is compared written the same way.
-        let wanted = crate::hostfs::lexically_normalise(Path::new(path));
+    /// The paths of this console's projects, as stored: absolute and lexically normalised.
+    pub fn project_paths(&self, console_id: &str) -> Result<Vec<String>> {
         let conn = self.lock();
-        let exists = conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM projects WHERE console_id = ?1 AND path = ?2)",
-            params![console_id, wanted.to_string_lossy()],
-            |row| row.get(0),
-        )?;
-        Ok(exists)
+        let mut stmt = conn.prepare("SELECT path FROM projects WHERE console_id = ?1")?;
+        let paths = stmt
+            .query_map(params![console_id], |row| row.get(0))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+        Ok(paths)
     }
 
     pub fn list_projects(&self) -> Result<Vec<Project>> {
@@ -3765,11 +3760,10 @@ mod tests {
         assert!(!consented(&store));
     }
 
-    /// A project is found by its path written any lexically equivalent way, and only in its own
-    /// console.
+    /// A console's project paths are listed as stored, and only its own.
     #[test]
-    fn a_project_is_found_by_any_spelling_of_its_path() {
-        let path = temp_db("project-exists");
+    fn a_console_lists_only_its_own_project_paths() {
+        let path = temp_db("project-paths");
         let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
@@ -3778,18 +3772,11 @@ mod tests {
         stored.path = "/work/project".to_string();
         store.insert_project(&stored).expect("project");
 
-        assert!(store
-            .project_exists_at("console-1", "/work/project")
-            .unwrap());
-        assert!(store
-            .project_exists_at("console-1", "/work/./x/../project/")
-            .unwrap());
-        assert!(!store
-            .project_exists_at("console-1", "/work/project2")
-            .unwrap());
-        assert!(!store
-            .project_exists_at("console-2", "/work/project")
-            .unwrap());
+        assert_eq!(
+            store.project_paths("console-1").unwrap(),
+            vec!["/work/project".to_string()]
+        );
+        assert!(store.project_paths("console-2").unwrap().is_empty());
     }
 
     /// A fresh database starts with no trusted directories, and what is added survives opening it
