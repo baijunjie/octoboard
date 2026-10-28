@@ -369,7 +369,7 @@ export const RECOVERY_CODES = new Set([
   "config_dir_unreachable", "grok_home_not_initialized", "session_archived", "conversation_to_resume_not_found", "conversation_in_session",
   "session_waiting_for_user", "session_trust_pending", "queued_messages_lost", "source_changed", "trust_directory_too_broad", "trust_directory_unreachable",
   "agent_not_available", "queued_messages_dropped", "trust_answer_failed", "session_lock_busy", "session_locked", "restore_not_on_branch",
-  "session_has_running_sessions",
+  "session_has_running_sessions", "project_directory_trash_failed",
 ]);
 
 /** Codes with no `daemon.<code>.summary`: each is raised only by an action whose alert is titled for what failed, and
@@ -442,7 +442,9 @@ export const UI_PARAMS: Record<string, MessageParams> = {
  * with a `resets_at` time, worded as `daemon.account_quota_exhausted.resets`; `account_in_use` while the
  * account is being signed in, worded as `daemon.account_in_use.signingIn`, or `.both` with sessions too; a refused
  * avatar of an imported console, which names it, worded as `daemon.icon_too_large.import`; `path_link_refused` by its
- * `cause`, worded as `daemon.path_link_refused.<cause>`, an unknown one as `other`; `outside_scope` of a refused link click, with `action` `open`, worded as `daemon.outside_scope.open`). */
+ * `cause`, worded as `daemon.path_link_refused.<cause>`, an unknown one as `other`; `project_directory_trash_failed`
+ * with `cause` `unanswered`, where a folder it depends on did not respond in time, or `unreadable`, where the folder
+ * itself could not be read, worded as `daemon.project_directory_trash_failed.<cause>`; `outside_scope` of a refused link click, with `action` `open`, worded as `daemon.outside_scope.open`). */
 export function messageCode(code: string, params: MessageParams): string {
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
@@ -450,6 +452,7 @@ export function messageCode(code: string, params: MessageParams): string {
   if (code === "relocation_failed" && (params.stage === "thread_record" || params.stage === "kept_staging")) return `${code}.${params.stage}`;
   if (code === "outside_scope" && params.action === "open") return "outside_scope.open";
   if (code === "path_link_refused") return `${code}.${pathLinkRefusedCause(params.cause)}`;
+  if (code === "project_directory_trash_failed" && (params.cause === "unanswered" || params.cause === "unreadable")) return `${code}.${params.cause}`;
   if ((code === "icon_not_an_image" || code === "icon_too_large") && params.console_name) return `${code}.import`;
   if (code === "account_in_use" && params.signing_in === "true") return /^[1-9]\d*$/.test(params.sessions ?? "") ? "account_in_use.both" : "account_in_use.signingIn";
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;

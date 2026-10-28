@@ -252,9 +252,9 @@ pub struct AppState {
     /// The shell terminals running, or exited and not yet closed (`crate::shell_terminal`). Held in
     /// memory only: each is a process of this daemon's.
     pub shell_terminals: crate::shell_terminal::ShellTerminals,
-    /// The paths a trust decision looked at on the file system whose look outran its deadline and
-    /// is still stuck (`crate::trust`). Held in memory only.
-    pub trust_looks: StalledPasses<std::path::PathBuf>,
+    /// The paths looked at on the file system whose look outran its deadline and is still stuck
+    /// (`crate::hostfs::place::looked_within`). Held in memory only.
+    pub directory_looks: StalledPasses<std::path::PathBuf>,
     /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
     /// decisions about the agent (can a message be written, did a turn end) keep reading the agent
@@ -295,13 +295,16 @@ pub struct AppState {
     /// Per console, the look at its projects' directories that outran its deadline and whose
     /// blocking thread is still stuck (`crate::coordinator`). Held in memory only.
     pub stalled_directory_passes: StalledPasses<String>,
+    /// The removal inspections' refusals that a path that could not be resolved decided, by token
+    /// (`crate::project_trash`). Held in memory only. Dropped with their project.
+    pub unresolved_removals: crate::project_trash::UnresolvedRemovals,
 }
 
 /// Blocking work that outran its deadline and whose thread is still stuck, one per key — a console
-/// whose project directories were being looked at, a path a trust decision was looking at. Each
-/// entry is held weakly: the thread owns the strong reference, so the entry reads as gone once the
-/// thread has ended. While it is there, later work for the same key takes its fallback at once
-/// instead of starting another thread that would be stuck the same way.
+/// whose project directories were being looked at, a path being looked at. Each entry is held
+/// weakly: the thread owns the strong reference, so the entry reads as gone once the thread has
+/// ended. While it is there, later work for the same key takes its fallback at once instead of
+/// starting another thread that would be stuck the same way.
 pub struct StalledPasses<K>(Mutex<HashMap<K, std::sync::Weak<()>>>);
 
 impl<K> Default for StalledPasses<K> {
@@ -687,7 +690,7 @@ impl AppState {
             account_logins: Default::default(),
             account_sharing: Default::default(),
             shell_terminals: Default::default(),
-            trust_looks: Default::default(),
+            directory_looks: Default::default(),
             events,
             account_writes: Mutex::new(()),
             session_publication: Mutex::new(()),
@@ -696,6 +699,7 @@ impl AppState {
             shutting_down: AtomicBool::new(false),
             interrupts: Mutex::new(HashSet::new()),
             stalled_directory_passes: Default::default(),
+            unresolved_removals: Default::default(),
         }
     }
 

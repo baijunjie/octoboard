@@ -1717,6 +1717,10 @@ pub enum RequestBody {
         /// `inspect_project_removal`); absent means none.
         #[serde(default)]
         force_remove: Vec<SessionBranchTarget>,
+        /// With `trash_directory`, the `inspection` token of the `inspect_project_removal`
+        /// refusal this removal was confirmed after, which it then repeats; absent means none.
+        #[serde(default)]
+        inspection: Option<String>,
     },
     ListDir {
         path: String,

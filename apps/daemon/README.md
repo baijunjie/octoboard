@@ -111,6 +111,7 @@ screens, terminal titles and session records the tests replay.
 | `src/git_status.rs`, `src/git_push.rs`, `src/git_switch.rs`, `src/git_restore.rs`, `src/git_remote.rs`, `src/git_watch.rs` | Per-project git: status against the remote and fast-forward, push, switch to a local branch, restore of tracked changes, the recorded remote URL, and the ref watch that republishes the branch header |
 | `src/browse/` | Project-browsing reads, over the control socket and for the MCP tools that look at a project's changes (below) |
 | `src/hostfs.rs`, `src/open_directory.rs`, `src/open_terminal.rs`, `src/path_links.rs`, `src/host_tools.rs` | Host filesystem work (browsing, Trash, repository discovery, clone, remote probing, agent detection), launching the system terminal, file manager or default application, probing and opening the file paths a terminal shows, and `HostTools`, the seam a test substitutes stand-ins behind |
+| `src/project_trash.rs` | Which folder removing a project may move to the Trash: refused for a drastic loss, or while it would take another project's files along, told apart by device and inode; an inspection's refusal that a path that could not be resolved decided is kept under a token, for the removal confirmed after it to repeat |
 | `src/subprocess.rs`, `src/process_session.rs` | Running a spawned process to completion within bounds, and starting, observing and ending a process as the leader of a session of its own |
 | `src/env_shell/` | The user's real shell environment every agent is launched with, and resolving a binary on it |
 

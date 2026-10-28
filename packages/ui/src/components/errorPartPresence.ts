@@ -1,5 +1,5 @@
 import { ActionableError } from "../actionableError";
-import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasRichMessage, hasTrustDiagnostic, leftBranchItems, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../daemonMessage";
+import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasRichMessage, hasTrustDiagnostic, leftBranchItems, messageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, unwordedReason } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { isMessageKey } from "../i18n/catalog";
@@ -50,7 +50,7 @@ export function hasErrorRemedy(error: { code: string; params: MessageParams; mes
   if (isUncataloguedFailure(error)) return false;
   if (hasShellTimeoutDetails(error)) return true;
   if (!hasCodeParams(error) || !hasRichMessage(error.code, error.params)) return false;
-  if (RECOVERY_CODES.has(error.code) && isMessageKey(`daemon.${error.code}.recovery`)) return true;
+  if (RECOVERY_CODES.has(error.code) && isMessageKey(`daemon.${messageCode(error.code, error.params)}.recovery`)) return true;
   const nested = nestedFailure(error);
   return nested !== undefined && NESTED_REMEDY_CODES.has(error.code) && hasErrorRemedy(nested);
 }

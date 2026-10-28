@@ -217,13 +217,15 @@ otherwise be left without its folder:
   folder, so one whose move fails keeps its lock. A branch a locked worktree has checked out goes only with it.
 - **Never touched**: the main worktree, and a worktree that is another project's folder or holds one.
 
-**The confirmation** looks up what goes along each time its option to move the folder to the Trash is ticked; its
-Confirm button is pending until the answer arrives. Under the option, a **What goes with it (n)** disclosure, collapsed
-by default, groups the items, named and set out as in "The confirmation" above, as moved to the Trash with the folder
-(the outside worktrees) and deleted permanently (the branches). Locked worktrees come after it as a plain block of their
-own, as in "The confirmation" above: the checkbox **Also move the locked worktrees to the Trash (n)**, its hint, saying
-they go despite their locks and can be recovered from the Trash, and a Details disclosure over them. A branch a locked
-worktree has checked out is counted among what goes only while that box is checked.
+**The confirmation** looks up what goes along each time its option to move the folder to the Trash is ticked, and
+again, still open, after a removal with that option ticked is refused as protected, as shared or as a failed move;
+its Confirm button is pending until the answer arrives, so a retry carries out what is shown then. Under the option, a
+**What goes with it (n)** disclosure, collapsed by default, groups the items, named and set out as in "The
+confirmation" above, as moved to the Trash with the folder (the outside worktrees) and deleted permanently (the
+branches). Locked worktrees come after it as a plain block of their own, as in "The confirmation" above: the checkbox
+**Also move the locked worktrees to the Trash (n)**, its hint, saying they go despite their locks and can be recovered
+from the Trash, and a Details disclosure over them. A branch a locked worktree has checked out is counted among what
+goes only while that box is checked.
 
 In the confirmation's consequences, after the options (see `docs/product/removing-projects.md` for the running
 sessions listed there, and "The confirmation" above for how the consequences hold their list and lines), a line appears
@@ -233,8 +235,9 @@ locked box is checked, that it also moves that many locked worktrees to the Tras
 the lookup fails, no line is added: an amber warning mark named that the other worktrees are unknown follows the Trash
 option's label instead, its popover saying that worktrees of the repository outside the project folder may be moved to
 the Trash with it, and its branches deleted permanently; it appears without being announced. A removal that would be
-refused (see "Moving the project folder to the Trash" in `docs/product/removing-projects.md`) lists nothing and adds no
-line; confirming it shows the refusal.
+refused (see "Moving the project folder to the Trash" in `docs/product/removing-projects.md`), whether as protected,
+as shared, or as a failed move because a folder it depends on could not be looked at or did not answer in time, lists
+nothing, adds no line and shows no unknown mark; confirming it shows the refusal.
 
 **What goes is worked out again when the removal is made**, while the folder is still there, so what changed after the
 confirmation listed it is taken into account. It runs after the project has been removed and its sessions' processes

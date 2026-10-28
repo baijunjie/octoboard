@@ -33,6 +33,7 @@ import { useBranchCleanup, useProjectRemovalCleanup, type ConsequenceLine } from
 import { ConfirmOption } from "./ConfirmOption";
 import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
+import { isRemovalRefusal } from "./useSessionBranches";
 import { PROJECT_NAME_LIMIT } from "./textLength";
 
 /** What a confirmation says it is about to take along or take away, as body text under its options:
@@ -99,13 +100,19 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
       extraControl={cleanup.extraControl}
       onCancel={onClose}
       onConfirm={async () => {
-        await request({
-          type: "delete_project",
-          project: project.id,
-          stop_sessions: running.length > 0,
-          trash_directory: trash,
-          ...cleanup.choices,
-        });
+        try {
+          await request({
+            type: "delete_project",
+            project: project.id,
+            stop_sessions: running.length > 0,
+            trash_directory: trash,
+            ...cleanup.choices,
+          });
+        } catch (err) {
+          // What goes along is asked again, and Confirm waits on it, so a retry carries out what is shown then.
+          if (trash && isRemovalRefusal(err)) cleanup.reinspect();
+          throw err;
+        }
         onClose();
       }}
     />

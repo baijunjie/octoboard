@@ -675,6 +675,44 @@ it("takes a locked worktree, and the branch it has checked out, along with a pro
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
 });
 
+it("asks again what goes along once a project's removal with its folder is refused, holding Confirm for it, so that a retry carries out what is shown", async () => {
+  const refusal = { path: "/work/p", detail: "it did not respond in time", cause: "unanswered" };
+  const second = deferred();
+  let inspections = 0;
+  const { daemon } = mount({ kind: "delete-project", project }, [], [], {
+    request: async (body) => {
+      if (body.type === "inspect_project_removal") {
+        inspections += 1;
+        if (inspections === 1) throw new DaemonRequestError("refused", "project_directory_trash_failed", { ...refusal, inspection: "token-1" });
+        await second.promise;
+        return { type: "project_removal_inspected", items: [UNCOMMITTED] };
+      }
+      if (body.type === "delete_project" && body.inspection) throw new DaemonRequestError("refused", "project_directory_trash_failed", refusal);
+      return { type: "ack" };
+    },
+  });
+  try {
+    checkAll();
+    await act(async () => {});
+    expect(listed()).toEqual([]);
+    await submitDialog();
+    expect(sent(daemon, "delete_project")).toEqual([expect.objectContaining({ trash_directory: true, inspection: "token-1" })]);
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+    expect(sent(daemon, "inspect_project_removal")).toHaveLength(2);
+    // Confirm waits on the new answer.
+    await submitDialog();
+    expect(sent(daemon, "delete_project")).toHaveLength(1);
+    await act(async () => second.resolve());
+    expect(listed()).toEqual(["/r-feature on branch feature"]);
+    await submitDialog();
+    const deletes = sent(daemon, "delete_project");
+    expect(deletes).toHaveLength(2);
+    expect(deletes[1]).toEqual({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: true });
+  } finally {
+    while (errorAlerts.getSnapshot().length) errorAlerts.acknowledge();
+  }
+});
+
 /** The mark after the Trash option's label that says what else may go, when the lookup failed. */
 const unknownMark = () => document.querySelector<HTMLElement>("[role=alertdialog] button[data-status-mark][aria-label='Other worktrees unknown']");
 /** The list of sessions the confirmation says it takes along. */
@@ -774,10 +812,14 @@ it("forces no locked worktree once the Trash option is unticked after the locked
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false });
 });
 
-it("warns of nothing going along with a project whose removal would be refused", async () => {
+it.each([
+  ["project_directory_shared", { project: "p-2" }],
+  ["project_directory_protected", { path: "/work/p" }],
+  ["project_directory_trash_failed", { path: "/work/p", detail: "it could not be looked at" }],
+])("warns of nothing going along with a project whose removal would be refused with %s", async (code, params) => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
-      if (body.type === "inspect_project_removal") throw new DaemonRequestError("shared", "project_directory_shared", { project: "p-2" });
+      if (body.type === "inspect_project_removal") throw new DaemonRequestError("refused", code, params);
       return { type: "ack" };
     },
   });
@@ -785,6 +827,7 @@ it("warns of nothing going along with a project whose removal would be refused",
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog]")?.textContent).not.toContain("deleted permanently");
   expect(listed()).toEqual([]);
+  expect(unknownMark()).toBeNull();
   await submitDialog();
   expect(sent(daemon, "delete_project")).toHaveLength(1);
 });

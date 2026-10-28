@@ -56,12 +56,56 @@ in an error alert over the confirmation and names the reason; nothing is ended, 
   (which ones depends on whether the repository goes with the folder); a failure there
   does not undo the removal and is reported (see "With a project's folder moved to the Trash" in
   `docs/product/branch-and-worktree-cleanup.md`).
-- A folder that no longer exists is skipped, and the project is removed as usual.
-- A project directory that is a symbolic link is moved to the Trash as the link, not as the folder it points to.
+- A folder that no longer exists is skipped: nothing is moved, and the project is removed as usual.
+- A project directory that is a symbolic link is moved to the Trash as the link, not as the folder it points to. A
+  project path that is a file, a link to a file, or a link that leads nowhere is moved as itself. It holds nothing, so
+  the protected folders below never apply to it; it is refused only when another project's directory holds it, when
+  another project is at that same file or at a link to it, or when another project could not be looked at.
 - It is refused, before any session is ended and with the project kept, for:
   - the home directory, the root of a disk (`/` or a mount point, such as a mounted volume), or a folder that holds
-    Octoboard's own data;
+    Octoboard's own data (`project_directory_protected`);
   - a folder shared with another project: another project's directory is the same folder, lies inside it or holds
     it, or another project's Git repository lies inside it, as a linked worktree's does when its main repository is
-    this folder. The refusal names that other project, which has to be removed first. Symbolic links are resolved for
-    this comparison, so two spellings of one folder count as the same folder.
+    this folder (`project_directory_shared`). The refusal names that other project, which has to be removed first.
+- **Folders are compared by what they are on disk** (device and inode), not by how their paths are written, both for
+  the reasons above and for telling whether another project is in the way: a symbolic link, a spelling that differs
+  only in letter case, a bind mount, or a macOS firmlink (`/System/Volumes/Data/Users/...` for `/Users/...`) naming
+  one folder makes no difference.
+  - Another project's path, the home directory's or Octoboard's data folder's, that has nothing at it or cannot be
+    read (no permission), is compared by its path's text instead, as written and, where it resolves, as resolved.
+    This fallback is only for those paths: the project's own path that cannot be read refuses the move, as below.
+  - Another project whose path is a file rather than a folder is in the way only when the folder holding that file,
+    or holding the file a link at that path leads to, is this folder or lies inside it.
+  - Where both projects' paths are files, they are compared by the file's identity on disk: another project at the
+    same file, or at a link to it, is in the way. Only where the file system reports no identity for them are their
+    paths' text compared.
+- **A path that cannot be looked at refuses the move** at the same point, with the project kept, since what the move
+  would take along cannot be told: the project's own path when it cannot be read, any path that fails with another
+  error or lies on a file system that reports no inode, and any path that does not answer within about 5 seconds (as
+  on a mount that hangs) or is still not answering an earlier look.
+  - For the project's own folder, the home directory or Octoboard's data folder, it is refused as a failed move
+    (`project_directory_trash_failed`), with the daemon's own text under **Error details** and in no sentence:
+    - where one of them did not answer in time, the alert says that the folder, the home folder or Octoboard's data
+      folder did not respond in time, so the folder could not be checked and the project was kept, and advises trying
+      again once the volume responds again, or removing the project without moving its folder to the Trash;
+    - where the project's own folder, or what a link there leads to, could not be read for want of permission, the
+      alert says that the folder could not be read, so whether another project's files are in it could not be
+      checked, and the project was kept, and advises checking the folder's permissions and granting Octoboard access
+      in the system's privacy settings if needed, then trying again, or removing the project without moving its
+      folder to the Trash;
+    - any other case (another error, no inode) is worded as any failed move.
+  - For another project, it is refused as shared with that project (`project_directory_shared`). A project known to
+    be in the way is named before one that only could not be looked at.
+  - The root of a disk is refused as protected ahead of any refusal over the home directory, the data folder or another
+    project that could not be looked at.
+- **A refusal over a path that could not be looked at is repeated by the removal confirmed after that lookup.** The
+  confirmation looks up what goes along with the folder (see "With a project's folder moved to the Trash" in
+  `docs/product/branch-and-worktree-cleanup.md`). Where a lookup is refused because a path could not be looked at
+  (either refusal above), confirming the removal with the Trash option ticked is refused the same way, even if the
+  path can be looked at by then, so the removal takes along nothing the confirmation did not show.
+  - The repeated refusal belongs to that one lookup, not to the project: the confirmation sends back the token the
+    lookup's refusal carried (the `inspection` param), and the daemon repeats that refusal once and then drops it. The
+    confirmation sends the token of its latest lookup; a lookup in another window does not affect it.
+  - A removal with no such token, or with one the daemon no longer keeps — already used, its project or console
+    removed, pushed out once four newer such refusals of the same project are kept, or a restart of the daemon in
+    between — looks for itself when it is confirmed.

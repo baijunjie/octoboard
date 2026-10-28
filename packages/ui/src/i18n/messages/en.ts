@@ -348,6 +348,17 @@ export const en = {
   "daemon.project_directory_protected": "This is your home folder, the root of a disk, or holds {appName}’s own data, so it cannot be moved to the Trash.",
   "daemon.project_directory_trash_failed": "The folder could not be moved to the Trash, so the project was kept: {detail}",
   "daemon.project_directory_trash_failed.summary": "The folder could not be moved to the Trash, so the project was kept.",
+  "daemon.project_directory_trash_failed.unanswered":
+    "The folder, your home folder or {appName}’s data folder did not respond in time, so the folder could not be checked and the project was kept. Try again once the volume responds again, or remove the project without moving its folder to the Trash.",
+  "daemon.project_directory_trash_failed.unanswered.summary":
+    "The folder, your home folder or {appName}’s data folder did not respond in time, so the folder could not be checked and the project was kept.",
+  "daemon.project_directory_trash_failed.unanswered.recovery": "Try again once the volume responds again, or remove the project without moving its folder to the Trash.",
+  "daemon.project_directory_trash_failed.unreadable":
+    "The folder could not be read, so it could not be checked for another project’s files, and the project was kept. Check the folder’s file permissions and grant {appName} access in system privacy settings if needed, then try again, or remove the project without moving its folder to the Trash.",
+  "daemon.project_directory_trash_failed.unreadable.summary":
+    "The folder could not be read, so it could not be checked for another project’s files, and the project was kept.",
+  "daemon.project_directory_trash_failed.unreadable.recovery":
+    "Check the folder’s file permissions and grant {appName} access in system privacy settings if needed, then try again, or remove the project without moving its folder to the Trash.",
   "daemon.path_not_absolute": "{path} is not an absolute path. Give the full path, or start it with {tilde}.",
   "daemon.path_not_found": "{path} does not exist.",
   "daemon.path_not_a_directory": "{path} is not a directory.",

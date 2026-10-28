@@ -10,6 +10,8 @@ use anyhow::{Context, Result};
 
 use crate::protocol::{error_code, Agent, CodedError, DirEntry};
 
+pub mod place;
+
 /// Expands a leading `~` and makes the path absolute. The UI sends whatever the user typed.
 pub fn expand(path: &str) -> PathBuf {
     let trimmed = path.trim();

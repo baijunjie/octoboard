@@ -243,6 +243,18 @@ const editTextProject = (project: typeof nearLimitProject) => [
   (ui: Ui) => ui.press(ui.t("sidebar.project.edit")),
 ];
 
+/** The removal of `tagged[0]` with its folder refused because the daemon could not tell what the folder holds: the
+ * inspection and the removal after it both refuse with `project_directory_trash_failed` and the cause, and the
+ * inspection's refusal carries the token the removal sends back to have it repeated, as the daemon's does. */
+const folderUnchecked = (cause: "unanswered" | "unreadable", detail: string) => {
+  const refusal = { code: "project_directory_trash_failed", message: `could not move ${tagged[0].path} to the Trash: ${detail}` };
+  const params = { path: tagged[0].path, detail, cause };
+  return {
+    projectDeleteError: { ...refusal, params },
+    projectRemovalBranches: { [tagged[0].id]: { ...refusal, params: { ...params, inspection: `inspection-${cause}` } } },
+  } satisfies Partial<Scenario>;
+};
+
 const removeDocsSite = [
   (ui: Ui) => projectActions(ui, tagged[0].name),
   (ui: Ui) => ui.press(ui.t("sidebar.project.remove")),
@@ -1220,6 +1232,26 @@ export const dialogScenarios: Scenario[] = [
     category: "exceptional",
     title: "Project folder could not be moved to the Trash",
     description: "The move to the Trash failed; a separate error alert requires acknowledgement and the project is kept. It says only that the folder could not be moved and what to check; the system's own text (Operation not permitted, os error 1) is in its Error details disclosure, closed here, and in no sentence.",
+    steps: [...removeDocsSite, (ui) => ui.confirm()],
+  },
+  {
+    ...dialogFixture,
+    ...folderUnchecked("unanswered", "it did not respond in time, so whether another project's files are in it could not be told"),
+    id: "dialog-remove-project-folder-unanswered",
+    group: "Projects",
+    category: "exceptional",
+    title: "Project folder did not respond in time",
+    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not look at the folder, the home folder or its data folder in time, so it refuses to move the folder to the Trash; a separate error alert says the folder could not be checked and the project was kept, then advises trying again once the volume responds or removing the project without moving its folder to the Trash. The daemon's own text (it did not respond in time) is in the Error details disclosure, closed here, and in no sentence.",
+    steps: [...removeDocsSite, (ui) => ui.confirm()],
+  },
+  {
+    ...dialogFixture,
+    ...folderUnchecked("unreadable", "it could not be read, so whether another project's files are in it could not be told"),
+    id: "dialog-remove-project-folder-unreadable",
+    group: "Projects",
+    category: "exceptional",
+    title: "Project folder could not be read",
+    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not read the project's own folder, so it refuses to move it to the Trash; a separate error alert says the folder could not be read and the project was kept, then advises checking the folder's permissions and granting access in the system's privacy settings, or removing the project without moving its folder to the Trash. The daemon's own text (it could not be read) is in the Error details disclosure, closed here, and in no sentence.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   archiveConsoleSession,

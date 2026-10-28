@@ -1,7 +1,7 @@
 import React, { useId } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
-import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, type LeftBranchItem } from "../daemonMessage";
+import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { ActionableError } from "../actionableError";
@@ -149,7 +149,7 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const sharingRaw = sharing || (sharingFailure && rawReason) ? <SharingDetails items={sharing ?? []} detail={rawReason} /> : null;
   const diagnostic = !sharingFailure && (DETAIL_BLOCK_CODES.has(error.code) || trustDiagnostic) && error.params.detail ? <DiagnosticBlock>{error.params.detail}</DiagnosticBlock> : null;
   const unwordedRaw = unworded ? <DiagnosticBlock>{unworded}</DiagnosticBlock> : null;
-  const recoveryId = `daemon.${error.code}.recovery`;
+  const recoveryId = `daemon.${messageCode(error.code, error.params)}.recovery`;
   const recovery = RECOVERY_CODES.has(error.code) && isMessageKey(recoveryId) ? <span className="block"><Message id={recoveryId} params={params as never} /></span> : null;
   // The application's own further explanation, which leads Details, ahead of the raw text.
   const furtherId = `daemon.${error.code}.details`;

@@ -343,6 +343,21 @@ it.each(["unreadable_request", "project_directory_trash_failed", "configuration_
   expect(raw.querySelector("pre")?.textContent).toBe(detail);
 });
 
+it.each([
+  ["unanswered", "the home folder did not respond in time, so whether this is it could not be told"],
+  ["unreadable", "it could not be read, so whether another project's files are in it could not be told"],
+])("says a project_directory_trash_failed with cause %s in its own words, with its own remedy, the daemon's text only in the raw part", (cause, detail) => {
+  const error = new DaemonRequestError("fallback", "project_directory_trash_failed", { path: "/work/p", detail, cause });
+  const { body, raw } = mountApart(error);
+  const words = (language: "en" | "zh-Hans") => ["summary", "recovery"].map((part) => format(language, `daemon.project_directory_trash_failed.${cause}.${part}` as never)).join("");
+  expect(body.textContent).toBe(words("en"));
+  expect(body.textContent).not.toContain(format("en", "daemon.project_directory_trash_failed.summary" as never));
+  expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  expect(hasErrorRemedy(error)).toBe(true);
+  act(() => setLanguage("zh-Hans"));
+  expect(body.textContent).toBe(words("zh-Hans"));
+});
+
 it.each([...NO_SUMMARY_CODES])("gives %s no first line, its title saying what failed, and keeps the system's text only in the raw part", (code) => {
   const detail = "Operation not permitted (os error 1)";
   const error = new DaemonRequestError("fallback", code, { detail });
