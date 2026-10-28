@@ -2,7 +2,8 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { Session } from "../protocol";
 import { useDaemonStore } from "../store";
-import { type Activity, consoleActivity } from "../sidebar/order";
+import { consoleStatus } from "../sidebar/order";
+import type { ShownStatusKind } from "../sessionLabel";
 import { countWaitingInTree } from "../waiting";
 import { indexSessions, sessionsOf } from "./sessionIndex";
 
@@ -33,9 +34,9 @@ export function useArchivedOwnerSessions(consoleId: string): Session[] {
   );
 }
 
-/** What is going on in a console, from its most pressing session (`consoleActivity`). */
-export function useConsoleActivity(consoleId: string): Activity {
-  return useDaemonStore((s) => consoleActivity(sessionsOf(indexSessions(s.sessions).byConsole, consoleId)));
+/** The avatar status selected from all sessions belonging to this console. */
+export function useConsoleStatus(consoleId: string): ShownStatusKind | undefined {
+  return useDaemonStore((s) => consoleStatus(sessionsOf(indexSessions(s.sessions).byConsole, consoleId)));
 }
 
 /** Whether any session, in any status, is bound to the session `ownerId`. */

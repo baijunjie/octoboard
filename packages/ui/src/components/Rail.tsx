@@ -4,15 +4,16 @@ import React, { memo, useRef } from "react";
 
 import { Button } from "./Button";
 import { isolate } from "../i18n/isolate";
+import { joinPhrases } from "../i18n/joinPhrases";
 import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { PHONE_SLIDE_AWAY } from "../layout/paneOverlay";
 import type { Console } from "../protocol";
-import { activityLabelKey } from "../sessionLabel";
+import { statusLabel } from "../sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 import { RailQuotaEntry } from "../quota/RailQuotaEntry";
-import { useArchivedOwnerSessions, useConsoleActivity } from "../sessions/useSessions";
+import { useArchivedOwnerSessions, useConsoleStatus } from "../sessions/useSessions";
 import { ActionMenu } from "./ActionMenu";
 import { ActivityBadge } from "./ActivityMarker";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
@@ -72,9 +73,9 @@ const COUNT_CUT_OUT =
 const COUNT_OVERFLOW_PILL = "w-7";
 const COUNT_OVERFLOW_CUT_OUT =
   "[mask-image:radial-gradient(circle_at_10px_-8px,transparent_9.5px,black_10px),radial-gradient(circle_at_22px_-8px,transparent_9.5px,black_10px)] [mask-composite:intersect] rtl:[mask-image:radial-gradient(circle_at_6px_-8px,transparent_9.5px,black_10px),radial-gradient(circle_at_-6px_-8px,transparent_9.5px,black_10px)]";
-/** The activity badge on a 28px avatar: 14px, at the avatar's bottom end corner and 3px past it,
- * so it stays inside the current console's tile, leaving a 2px ring. Under right-to-left the
- * corner, and so the hole, is on the left. */
+
+/** The activity badge on a 28px avatar: 14px at the bottom end corner, leaving a 2px ring.
+ * Under right-to-left the corner, and so the hole, is on the left. */
 const AVATAR_CUT_OUT =
   "[mask-image:radial-gradient(circle_at_24px_24px,transparent_9px,black_9.5px)] rtl:[mask-image:radial-gradient(circle_at_4px_24px,transparent_9px,black_9.5px)]";
 
@@ -105,11 +106,11 @@ const ConsoleTile = memo(function ConsoleTile({
 }): React.ReactElement {
   const t = useT();
   // Read here rather than handed down, so an event about a session renders only its console's tile.
-  const activity = useConsoleActivity(thisConsole.id);
+  const status = useConsoleStatus(thisConsole.id);
+  const language = useCurrentLanguage();
   const sessions = useArchivedOwnerSessions(thisConsole.id);
   const tileRef = useRef<HTMLDivElement>(null);
-  const activityKey = activityLabelKey(activity);
-  const label = activityKey ? t(activityKey, { name: isolate(thisConsole.name) }) : thisConsole.name;
+  const label = status ? joinPhrases(language, [isolate(thisConsole.name), statusLabel(t, status)]) : thisConsole.name;
   return (
     <div ref={tileRef} data-list-motion={thisConsole.id} className="flex">
       <TitledControl title={label} placement="end" focusOnly={hoverOpensSidebar}>
@@ -130,8 +131,8 @@ const ConsoleTile = memo(function ConsoleTile({
           className={`size-9 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
         >
           <span className="relative flex">
-            <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className={`size-7 ${activity ? AVATAR_CUT_OUT : ""}`} />
-            <ActivityBadge activity={activity} className="absolute -end-0.75 -bottom-0.75" />
+            <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className={`size-7 ${status ? AVATAR_CUT_OUT : ""}`} />
+            <ActivityBadge status={status} className="absolute -end-0.75 -bottom-0.75" />
           </span>
         </Button>
       </TitledControl>

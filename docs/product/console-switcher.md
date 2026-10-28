@@ -12,24 +12,33 @@ pressing it with the mouse leaves keyboard focus where it was. A console created
 console or the welcome screen's (see `docs/product/welcome-screen.md`) — becomes the current one as soon as it appears;
 one created from another client is only added to the rail.
 
-An avatar carries a badge at its bottom corner while something is going on in its console, taken from all its
-sessions, its console sessions included, so a raised hand in a console that is not shown is in sight too:
+An avatar carries a **14 px circular badge** at its bottom end corner for one session chosen from all the console's
+sessions, its console sessions included. The status priority is **waiting for the user, awaiting instructions, working
+in background, then working**, with the most recently started session breaking a tie. Pinning, project grouping and
+the sidebar's choice to order by status or date do not affect that choice. Starting, interrupted and archived sessions
+are excluded, so a console with only starting sessions has no badge. Session rows still place starting alongside
+awaiting instructions (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`).
 
-| Badge | Shown when |
+| Chosen session's status | Badge |
 |---|---|
-| A waving hand | at least one session is waiting for the user |
-| A disc filled with the theme background, with a green rim and a blue centre sending a fading ripple outward | otherwise, at least one session is working |
-| A green speech bubble | otherwise, at least one session is running and awaiting instructions, or still starting |
-| none | no session has a running process or is starting |
+| Waiting for the user | A contrasting waving hand on a yellow disc |
+| Awaiting instructions | A contrasting speech bubble on a green disc |
+| Working in background | A green disc with a contrasting hollow centre, 8 px across |
+| Working | A blue disc with a contrasting solid centre, 6 px across |
 
-A session *working in background* counts as working here (see "Working in background" in
-`docs/product/session-statuses.md`). The centre and ripple use the same blue as a working session's glyph. The ripple
-stands still where the system asks for reduced motion, leaving the theme background disc, green rim and blue centre.
+If the chosen session is switching account, the badge instead shows a turning arc on a neutral disc, and its status
+text says it is switching account. The choice still goes by the session's underlying status, as session ordering does
+(see "Session statuses" in `docs/product/session-statuses.md`).
 
-The name assistive technology announces for an avatar is the console's name together with what its badge means, and
-**the avatar's tooltip is that same text** — the bare console name while nothing is going on. When that tooltip opens,
-and why a mouse user with the docked sidebar hidden does not get to read it, is in "Tooltips on icon-only controls" in
-`docs/product/labels-and-tooltips.md`.
+Only the centre of a working or working-in-background badge breathes: its opacity eases from 100% to 90% and back over
+2.4 seconds, repeating while the disc and centre keep their size. There is no outward ripple. Where the system asks
+for reduced motion, the centres remain fully opaque, the hand does not wave and the switching arc does not turn.
+
+The badge is decorative and has no tooltip or accessible name of its own. **The avatar's tooltip and accessible name
+are the same text**: the console's name joined with the chosen session's exact localized status wording, or the bare
+console name when no session qualifies. The joining punctuation or words follow the chosen language and may vary with
+the runtime's locale data. When that tooltip opens, and why a mouse user with the docked sidebar hidden does not get
+to read it, is in "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`.
 
 **Right-clicking** (or Control-clicking) an avatar opens that console's action menu at the pointer, the same menu as
 the sidebar's header carries (see "The console header" in `docs/product/sidebar.md`). It does not switch to the console.

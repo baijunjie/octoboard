@@ -1013,6 +1013,16 @@ html.pane-resizing * {
   text-align: match-parent;
 }
 
+@keyframes status-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
 /* The raised hand's motion, wherever one is drawn (`statusGlyphs.tsx`, and the hands the rail's
    avatar badge and waiting count draw themselves): it waves now and then (a working session's dot
    uses Tailwind's own `animate-ping`). Applied through `motion-safe:` only, so both stand still
@@ -1059,6 +1069,7 @@ html.pane-resizing * {
      `animate-spin` is a shorthand that resets any duration set beside it. */
   --animate-spin-slow: spin 2s linear infinite;
   --animate-status-wave: status-wave 2.4s ease-in-out infinite;
+  --animate-status-breathe: status-breathe 2.4s ease-in-out infinite;
   --animate-pull-scroll: pull-scroll 1.2s linear infinite;
   --animate-push-scroll: push-scroll 1.2s linear infinite;
   --animate-copy-icon-in: copy-icon-in 200ms ease;
