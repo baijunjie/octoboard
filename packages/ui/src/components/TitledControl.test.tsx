@@ -2,7 +2,7 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { CloseButton } from "@heroui/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, onTestFinished } from "vitest";
 
 import { Button } from "./Button";
 import { TitledControl } from "./TitledControl";
@@ -73,4 +73,17 @@ it("opens no popover on a touch press: the tap is the control's action", () => {
   press(button, "touch");
   expect(pressed).toBe(1);
   expect(openPopover()).toBeNull();
+});
+
+it("closes its tooltip once a modal opening over the page makes the control inert, and not for another inert region", async () => {
+  const button = openTooltip("Refresh", <Button aria-label="Refresh">R</Button>);
+  // jsdom has no `inert`, so react-aria hides with `aria-hidden` there; the attribute is set as a browser's modal does.
+  const sibling = document.body.appendChild(document.createElement("div"));
+  onTestFinished(() => { sibling.remove(); });
+  act(() => sibling.setAttribute("inert", ""));
+  await act(() => Promise.resolve());
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("Refresh");
+  act(() => button.parentElement!.setAttribute("inert", ""));
+  await act(() => Promise.resolve());
+  expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });

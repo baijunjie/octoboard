@@ -70,7 +70,8 @@ changes shows that it is restoring, and switching a session's account that it is
 ## Where keyboard focus starts in a form dialog
 
 A form dialog opens with keyboard focus in its first text field, so the user can type at once and Enter submits the
-form: the Name field of a console, session or account dialog and of editing a project, the Directory field of adding a
+form, however it was opened — by the mouse, the keyboard, or a press without a pointer such as one from assistive
+technology: the Name field of a console, session or account dialog and of editing a project, the Directory field of adding a
 project, the field of a rename dialog, and the path field of the directory browser, where Enter lists the path typed. A
 field that appears only after a choice in the dialog does not take focus when it appears: switching a project session's
 dialog between its **New conversation** and **Resume conversation** tabs leaves focus on the tab, and switching **Add

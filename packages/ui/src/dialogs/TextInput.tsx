@@ -2,6 +2,7 @@ import { FieldError, Input, InputGroup, Label, TextField } from "@heroui/react";
 import React from "react";
 
 import { CodeToneContext } from "../components/codeTone";
+import { openingFocus } from "../components/regionFocus";
 import { useTrimmedField } from "./useTrimmedField";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 
@@ -57,11 +58,11 @@ export function TextInput({
   const input = endAdornment !== undefined ? (
     // The direction is the group's, so the affix stays on the input's side whatever the UI's direction.
     <InputGroup variant="secondary" fullWidth dir={dir} className={trailing ? "min-w-0 flex-1" : undefined}>
-      <InputGroup.Input data-1p-ignore placeholder={placeholder} />
+      <InputGroup.Input data-1p-ignore {...openingFocus(autoFocus)} placeholder={placeholder} />
       <InputGroup.Suffix>{endAdornment}</InputGroup.Suffix>
     </InputGroup>
   ) : (
-    <Input data-1p-ignore dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />
+    <Input data-1p-ignore {...openingFocus(autoFocus)} dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />
   );
   return (
     <TextField

@@ -1,19 +1,21 @@
 // @vitest-environment jsdom
-import { act, StrictMode, useState } from "react";
+import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { setInteractionModality } from "react-aria";
 import { reportError } from "../reportError";
 import { appConfig } from "../appConfig";
 import { DaemonRequestError } from "../daemon-client";
 import { ActionableError } from "../actionableError";
 import { PlatformProvider } from "../platform/react";
 import type { PlatformAdapter } from "../platform";
+import { focusAfterLoss } from "../components/regionFocus";
 import { errorAlerts } from "../errorAlerts";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
+import { framesAsTimers, openable, settleFrames } from "./dialogTestSupport";
 import { ErrorAlerts, issueUrl } from "./ErrorAlerts";
+import { TextInput } from "./TextInput";
 import { createStateStore, type Daemon } from "../store";
 import { reportDaemonExit } from "../lifecycle/exitFailure";
 import { issueReportUrl, recordNames } from "../issueReport";
@@ -285,31 +287,13 @@ it("hands focus to the window's fallback when acknowledging the last alert leave
  * effect a second time on mount. With `deferred`, the dialog is not opened but the function that opens it is
  * returned, for a test to call in one update with raising an alert, the way a press that fails at once does. */
 function mountOverVirtuallyOpenedDialog(strict: boolean, deferred = false): () => void {
-  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => Number(setTimeout(() => callback(performance.now()), 0)));
-  vi.stubGlobal("cancelAnimationFrame", (handle: number) => clearTimeout(handle));
-  onTestFinished(() => { vi.unstubAllGlobals(); });
-  act(() => setInteractionModality("virtual"));
-  onTestFinished(() => { act(() => setInteractionModality("pointer")); });
+  framesAsTimers();
   const opener = document.body.appendChild(document.createElement("button"));
   onTestFinished(() => { opener.remove(); });
   opener.focus();
-  const dialog = <Dialog title="Edit project" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" /></Dialog>;
-  let open = (): void => {};
-  function Opener() {
-    const [shown, setShown] = useState(!deferred);
-    open = () => setShown(true);
-    return shown ? dialog : null;
-  }
-  mount(<Opener />, undefined, undefined, strict);
-  return () => open();
-}
-
-/** Runs every frame and timer pending, and those they set in turn. Timers of one delay run in the order they were set,
- * so each round runs every frame asked for before it; ten rounds outlast the longest chain of frames that moves focus
- * here (the dialog's opening focus, its containment taking focus back on a blur a frame later, and that focus put off
- * a frame more). */
-async function settleFrames(): Promise<void> {
-  for (let round = 0; round < 10; round += 1) await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+  const { element, open } = openable(<Dialog title="Edit project" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" /></Dialog>, deferred);
+  mount(element, undefined, undefined, strict);
+  return open;
 }
 
 const alertHoldsFocus = (message: string) => {
@@ -355,8 +339,8 @@ describe.each([{ strict: false }, { strict: true }])("over a dialog opened witho
   });
 
   // react-aria's dialog takes focus off itself half a second after it opens, when focus was not inside it as it
-  // mounted, and puts it back once no transition is running on the page. A transition that never reports its end (one
-  // in a collapsed disclosure, whose content the browser skips) leaves focus on the page body for good.
+  // mounted, and puts it back once no transition is running on the page. A transition that never reports its end (in
+  // Chrome, one still running inside a disclosure as it folds away) leaves focus on the page body until it ends.
   it("keeps focus on the alert while a transition underneath never ends", async () => {
     mountOverVirtuallyOpenedDialog(strict);
     const name = document.querySelector('input[aria-label="Name"]')!;
@@ -366,6 +350,78 @@ describe.each([{ strict: false }, { strict: true }])("over a dialog opened witho
     await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
     await settleFrames();
     alertHoldsFocus("Refused");
+  });
+});
+
+// An alert raised in the same task as a press without a pointer that opens a dialog takes focus before the dialog's own
+// opening focus, which react-aria puts off a frame and then drops, so acknowledging it gives focus back to nothing: the
+// press left it on `<body>`. The window's fallback then puts it where that dialog's opening focus would have gone.
+describe.each([{ strict: false }, { strict: true }])("acknowledged over a dialog its own press opened in the same task (StrictMode: $strict)", ({ strict }) => {
+  const alertdialogWith = (text: string) => Array.from(document.querySelectorAll('[role="alertdialog"]')).find((dialog) => dialog.textContent?.includes(text)) ?? null;
+  const cases: [string, () => React.ReactElement, () => Element | null][] = [
+    [
+      "a form dialog, on its first text field",
+      () => <Dialog title="Open session" onClose={() => {}} submitLabel="Open" onSubmit={() => {}}><TextInput label="Name" value="" onChange={() => {}} autoFocus /></Dialog>,
+      () => document.querySelector('[role="dialog"] input'),
+    ],
+    [
+      "a dialog with no text field, on its submit button",
+      () => <Dialog title="Export" onClose={() => {}} submitLabel="Export" autoFocusSubmit onSubmit={() => {}}><p>Everything is exported.</p></Dialog>,
+      () => document.querySelector('[role="dialog"] button[type="submit"]'),
+    ],
+    [
+      "a confirmation, on its confirm button",
+      () => <ConfirmDialog title="Save project" message="Save it?" confirmLabel="Save" errorTitle="Could not save" onConfirm={async () => {}} onCancel={() => {}} />,
+      () => alertdialogWith("Save it?")?.querySelector('button[type="submit"]') ?? null,
+    ],
+    [
+      "a destructive confirmation, on the confirmation itself",
+      () => <ConfirmDialog title="Delete project" message="Delete it?" confirmLabel="Delete" destructive errorTitle="Could not delete" onConfirm={async () => {}} onCancel={() => {}} />,
+      () => alertdialogWith("Delete it?"),
+    ],
+    [
+      "a confirmation asking for a typed word, on that field",
+      () => <ConfirmDialog title="Delete project" message="Delete it?" confirmLabel="Delete" destructive typeToConfirm="delete" errorTitle="Could not delete" onConfirm={async () => {}} onCancel={() => {}} />,
+      () => alertdialogWith("Delete it?")?.querySelector("input") ?? null,
+    ],
+  ];
+
+  it.each(cases)("returns focus to %s", async (_case, dialog, landing) => {
+    framesAsTimers();
+    onTestFinished(errorAlerts.setFocusFallback(() => focusAfterLoss(() => {})));
+    (document.activeElement as HTMLElement | null)?.blur();
+    const { element, open } = openable(dialog(), true);
+    mount(element, undefined, undefined, strict);
+    act(() => {
+      open();
+      errorAlerts.report({ message: "Refused" });
+    });
+    await settleFrames();
+    expect(document.activeElement).toBe(alertdialogWith("Refused"));
+    // A person reads the alert before acknowledging it. Acknowledging within half a second of the dialog's mount would
+    // race react-aria's `useDialog`, which then focuses the dialog itself if it finds focus on `<body>`, as it is in the
+    // moment between the alert closing and the fallback running.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+    act(() => errorAlerts.acknowledge());
+    await settleFrames();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+    await settleFrames();
+    expect(landing()).not.toBeNull();
+    expect(document.activeElement).toBe(landing());
+  });
+
+  it("returns focus to the control that had it when the alert came after the dialog settled", async () => {
+    onTestFinished(errorAlerts.setFocusFallback(() => focusAfterLoss(() => {})));
+    mount(<Dialog title="Open session" onClose={() => {}} submitLabel="Open" onSubmit={() => {}}><TextInput label="Name" value="" onChange={() => {}} autoFocus /></Dialog>, undefined, undefined, strict);
+    await settleFrames();
+    const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent === "Cancel")!;
+    act(() => cancel.focus());
+    act(() => errorAlerts.report({ message: "Refused" }));
+    await settleFrames();
+    act(() => errorAlerts.acknowledge());
+    await settleFrames();
+    await act(() => new Promise((resolve) => setTimeout(resolve, 450)));
+    expect(document.activeElement).toBe(cancel);
   });
 });
 

@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
-import { SettingRow } from "./SettingRow";
+import { SettingRow, SettingSwitch } from "./SettingRow";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -30,4 +30,11 @@ it("renders no description line when it has none", () => {
   const container = mount(<SettingRow label="Appearance" help={<button>About appearance</button>} />);
   const line = container.querySelector("button")!.parentElement!;
   expect(line.nextElementSibling).toBeNull();
+});
+
+it("marks a switch the dialog around it opens on, and no other switch", () => {
+  const container = mount(<SettingSwitch label="Share" isSelected={false} onChange={() => {}} opensFocused />);
+  const input = container.querySelector("input")!;
+  expect(input.hasAttribute("data-opening-focus")).toBe(true);
+  expect(mount(<SettingSwitch label="Share" isSelected={false} onChange={() => {}} />).querySelector("input")!.hasAttribute("data-opening-focus")).toBe(false);
 });

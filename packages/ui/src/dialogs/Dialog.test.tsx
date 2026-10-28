@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
@@ -7,6 +7,8 @@ import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { errorAlerts, type AcknowledgementView } from "../errorAlerts";
 import { ActionableError } from "../actionableError";
 import { Dialog, useDialogAction } from "./Dialog";
+import { framesAsTimers, settleFrames } from "./dialogTestSupport";
+import { TextInput } from "./TextInput";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -124,6 +126,37 @@ it("opens on Cancel rather than on a submit button that has nothing to submit", 
   });
   withFooter({ autoFocusSubmit: true }, ({ submit }) => expect(document.activeElement).toBe(submit));
 });
+
+// A press without a pointer (an assistive technology's, a script's `click()`) on a control that takes no focus when
+// pressed leaves focus on the page body as the dialog opens, and react-aria puts the field's `autoFocus` off to a
+// frame, dropping it if focus has moved by then. Each frame comes as a 0 ms timer, so it runs ahead of any timer set
+// after it, as a browser may render one before the next timer task. StrictMode, as the app runs, mounts every effect a
+// second time.
+it.each([{ strict: false }, { strict: true }])(
+  "opens with focus in its first text field when a press without a pointer opened it (StrictMode: $strict)",
+  async ({ strict }) => {
+    framesAsTimers();
+    (document.activeElement as HTMLElement | null)?.blur();
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    const dialog = (
+      <DaemonProvider value={fakeDaemon()}>
+        <Dialog title="Rename" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}>
+          <TextInput label="Name" value="" onChange={() => {}} autoFocus />
+        </Dialog>
+      </DaemonProvider>
+    );
+    act(() => root.render(strict ? <StrictMode>{dialog}</StrictMode> : dialog));
+    await settleFrames();
+    const field = document.querySelector('[role="dialog"] input');
+    expect(field).not.toBeNull();
+    expect(document.activeElement).toBe(field);
+  },
+);
 
 it("moves focus from the submit button to Cancel when the submit becomes disabled under it", () => {
   withTogglableSubmit(({ show, named }) => {

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
@@ -262,4 +263,36 @@ it("keeps an example on the populated and cleared required edited project name",
   expect(input("Name").placeholder).toBe("Ex. Website");
   type(input("Name"), "");
   expect(input("Name").placeholder).toBe("Ex. Website");
+});
+
+// The directory browser opens over this dialog, whose focus containment stays on: a path field focused before the
+// browser's focus scope is set up reads to it as focus escaping, is pulled back to Browse, and the browser's dialog then
+// takes focus itself. A press without a pointer leaves the move back to a frame later, by when this dialog is inert.
+it.each(["keyboard", "mouse"] as const)("opens the directory browser on its path field after a %s press, and Escape closes only the browser", async (device) => {
+  // As the dialog was opened, by the same device, so its own opening focus is not put off a frame.
+  act(() => setInteractionModality(device === "keyboard" ? "keyboard" : "pointer"));
+  render();
+  const browse = buttonText("Browse")!;
+  act(() => browse.focus());
+  act(() => {
+    if (device === "keyboard") {
+      browse.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      browse.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true, cancelable: true }));
+    } else {
+      // A pointer event of no size reads as a virtual one to react-aria.
+      const pointer = { bubbles: true, cancelable: true, pointerType: "mouse", pointerId: 1, isPrimary: true, button: 0, width: 1, height: 1, detail: 1 };
+      browse.dispatchEvent(new PointerEvent("pointerdown", pointer));
+      browse.dispatchEvent(new PointerEvent("pointerup", pointer));
+      browse.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, detail: 1 }));
+    }
+  });
+  expect(getInteractionModality()).toBe(device === "keyboard" ? "keyboard" : "pointer");
+  const path = document.body.querySelector<HTMLInputElement>('input[aria-label="Directory path"]');
+  expect(path).not.toBeNull();
+  expect(document.activeElement).toBe(path);
+  act(() => void path!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+  await settle(50);
+  expect(document.body.querySelector('input[aria-label="Directory path"]')).toBeNull();
+  expect(input("Directory")).toBeDefined();
+  expect(document.activeElement).toBe(browse);
 });

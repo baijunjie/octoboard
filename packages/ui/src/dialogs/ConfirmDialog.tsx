@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { InlineReference } from "../components/InlineReference";
+import { openingFocus } from "../components/regionFocus";
 import type { AcknowledgementView } from "../errorAlerts";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { Dialog, useDialogAction, useFocusLeavingWhenDisabled } from "./Dialog";
@@ -121,9 +122,11 @@ export function ConfirmDialog({
   useFocusLeavingWhenDisabled(confirmRef, !confirmed, fallbackRef);
   const opensOnConfirm = !destructive && !unprompted && word === undefined;
   // The `autoFocus` below is react-aria's, which for a press without a pointer (assistive technology,
-  // a script) waits for transitions to end and is dropped if focus has moved by then. Opened over
-  // another dialog (the question a first dialog's Confirm raised), the dialog's own refocus of a lost
-  // focus moves it first, so Confirm takes focus here, after the effects of everything inside.
+  // a script) waits until no transition is running anywhere on the page, and never comes while one
+  // never reports its end (in Chrome, one still running inside a disclosure as it folds away): focus
+  // would stay on the page body, with the dialog's Escape and Tab containment gone. So Confirm, or
+  // what stands in for it, takes focus here as well, after the effects of everything inside, and the
+  // dialog's own deferred focus finds it moved and leaves it.
   useEffect(() => {
     if (opensOnConfirm) (confirmed ? confirmRef : fallbackRef).current?.focus();
   }, []);
@@ -178,7 +181,7 @@ export function ConfirmDialog({
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}
-          <Input dir="ltr" placeholder={t("dialog.typeToConfirm.example", { word })} className="uppercase" autoComplete="off" spellCheck={false} />
+          <Input {...openingFocus(true)} dir="ltr" placeholder={t("dialog.typeToConfirm.example", { word })} className="uppercase" autoComplete="off" spellCheck={false} />
         </TextField>
       )}
     </Dialog>

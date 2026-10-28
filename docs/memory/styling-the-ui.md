@@ -85,24 +85,33 @@ surface colour over it instead: an `after:` pseudo-element with `after:pointer-e
 after:inset-0` and a translucent fill such as `bg-surface/55` on a `relative` container, as the sidebar's inactive
 projects in `packages/ui/src/sidebar/Sidebar.tsx` do.
 
-## Nothing may start a transition inside a collapsed disclosure: Chrome never ends it, and focus waits on it
+## Nothing may start a transition inside a collapsed disclosure: the browser never ends it, and focus waits on it
 
 Applies to `packages/ui`, to any element with a CSS transition that sits in the body of a react-aria / HeroUI
 `Disclosure` (the dialogs' Advanced section, an error-details disclosure). react-aria holds several focus moves until
 no transition is running anywhere on the page, counting them from `transitionrun` against `transitionend` /
 `transitioncancel` (`runAfterTransition`): `focusSafely` under virtual interaction modality (a screen reader, a
 scripted press) and `useDialog`'s half-second take-back among them. A collapsed body carries `hidden="until-found"`,
-content Chrome skips, and Chrome sends neither end event for a transition started there until the content is revealed
-(`getAnimations()` calls it finished all the same). One such transition stalls those focus moves for as long as the
-section stays folded; a mouse never shows it.
+content the browser skips, and neither Chrome nor WebKit sends an end event for a transition started there until the
+content is revealed. One such transition stalls those focus
+moves for as long as the section stays folded; a mouse never shows it.
 
 A transitioned property changing while folded is enough: state that changes under a collapsed section, or a library
 writing inline styles at mount — the shared-element transition behind HeroUI's `Tabs.Indicator` slides a newly
 mounted indicator from where the previous one was, which React StrictMode's double mount (dev and the gallery) does on
-every open. So give such an element `transition-property: none` under `[hidden="until-found"]`, in a rule on its own
-class that beats the library's transition, as `packages/ui/src/style.css` does for `.tabs__indicator`; revealing the
-content then changes no value and starts nothing. A transition already running when the section collapses is not a
-concern: react-aria sets `hidden` only after the panel's own collapse animation.
+every open. So one unlayered rule in `packages/ui/src/style.css` sets `transition-property: none` on everything under
+`[hidden="until-found"]`, which beats HeroUI's and Tailwind's layered transitions; revealing the content then changes no
+value and starts nothing. A new element in a disclosure needs nothing of its own, unless its transition is set by
+something the rule cannot beat: an inline style, an `!important` declaration, or a more specific unlayered rule in
+`style.css`. The rule is a longhand so that a jsdom test can read it (see below).
+
+The rule cannot stop a transition already running when the section collapses. react-aria sets `hidden` once the
+panel's own collapse animation (200 ms, none under reduced motion) has finished, without waiting for the content's
+transitions, so one with longer left to run is still running then. WebKit cancels it under the rule; Chrome, after
+the animated collapse, sends no end for it until the section is revealed again (seen in both by starting a 1 s
+transition in the Advanced body just before folding it in the gallery). So where a focus move must not wait on
+`runAfterTransition` while a section may just have folded, the code places focus itself, as `ConfirmDialog`'s mount
+effect and the callers of `Dialog`'s `focusesItselfOnOpen` do.
 
 When a deferred focus move never lands under virtual modality, find the stuck transition in a browser by logging
 `transitionrun` / `transitionend` / `transitioncancel` document-wide against the gallery. jsdom runs no transitions,

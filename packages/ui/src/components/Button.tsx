@@ -1,6 +1,8 @@
 import { Button as HeroButton } from "@heroui/react";
 import React from "react";
 
+import { openingFocus } from "./regionFocus";
+
 export type ButtonProps = Omit<React.ComponentProps<typeof HeroButton>, "size"> & {
   size?: "xs" | "sm" | "md" | "lg";
 };
@@ -11,6 +13,7 @@ export function Button({ size, className, ...props }: ButtonProps): React.ReactE
   return (
     <HeroButton
       {...props}
+      {...openingFocus(props.autoFocus)}
       size={size === "xs" ? "sm" : size}
       data-size={size}
       className={typeof className === "function"

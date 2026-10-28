@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Button } from "../components/Button";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
+import { openingFocus } from "../components/regionFocus";
 import { TitledControl } from "../components/TitledControl";
 import { useListMotion } from "../components/useListMotion";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
@@ -145,6 +146,7 @@ export function ProjectFilterButton({
                 <SearchField.Group>
                   <SearchField.SearchIcon />
                   <SearchField.Input
+                    {...openingFocus(true)}
                     placeholder={t("sidebar.filter.placeholder")}
                   />
                   {/* HeroUI's close button hardcodes an English `aria-label` ahead of its spread
