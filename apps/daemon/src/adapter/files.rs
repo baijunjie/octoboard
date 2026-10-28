@@ -1,4 +1,4 @@
-//! Bounded reads of the configuration files an adapter looks at but does not own.
+//! Bounded reads of project configuration and agent-owned configuration, caches and manifests.
 
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -65,12 +65,12 @@ pub(super) fn read_bounded_text(
     utf8(bytes)
 }
 
-/// The text of a configuration file the project does not own (an agent's configuration directory,
+/// The text of a file the project does not own (an agent's configuration, cache or install,
 /// the home directory, a system-wide directory), read within `limit` bytes. Links are followed, as
 /// the agent follows them, even where the file lies under the project's directory, as a home
 /// directory opened as a project holds the agent's own; the target must be a regular file, opened
-/// without blocking so that a FIFO cannot hold the launch.
-pub(super) fn read_regular_text(path: &Path, limit: usize) -> std::io::Result<String> {
+/// without blocking so that a FIFO cannot hold the caller.
+pub(crate) fn read_regular_text(path: &Path, limit: usize) -> std::io::Result<String> {
     use std::io::{Error, ErrorKind, Read};
     use std::os::unix::fs::OpenOptionsExt;
 

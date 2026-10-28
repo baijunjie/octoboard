@@ -223,4 +223,4 @@ injected when a session starts, along with the agent's approval override where t
 | `codex.rs` | Codex, and `unarchive`, which brings an archived rollout back before a resume |
 | `grok.rs` | Grok Build |
 | `claude_mcp.rs`, `claude_compatibility.md` | The per-agent Claude compatibility setting for Codex and Grok Build: `claude_mcp.rs` reads the MCP servers Claude Code would load and turns them into Codex `-c mcp_servers.*` overrides, secrets carried in the environment; `claude_compatibility.md` is the text appended to Codex's developer instructions |
-| `files.rs` | `read_bounded_text`, the bounded, non-blocking, project-scoped text-file reader the adapters use for configuration files they do not own |
+| `files.rs` | Bounded, non-blocking text-file readers: `read_bounded_text` for project-scoped adapter configuration, and `read_regular_text` shared across the daemon for agent-owned configuration, caches and install manifests |

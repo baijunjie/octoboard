@@ -48,8 +48,9 @@ use crate::subprocess::{run_bounded, BoundedFailure, Bounds, Reach};
 /// (compare the ten seconds the login-shell snapshot gets).
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// The most a catalogue command may print. Codex's runs to about 600 KB because it carries every
-/// model's full instructions; this is far above that and far below anything that would hurt.
+/// The most a catalogue command may print or its cache may hold. Codex's runs to about 600 KB
+/// because it carries every model's full instructions; this is far above that and far below
+/// anything that would hurt.
 const OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
 
 /// How long a list that was read is reused. A catalogue changes when the agent is updated or the
@@ -193,7 +194,9 @@ fn list(
                     .map(Path::to_path_buf)
                     .unwrap_or_else(|| adapter::default_account_dir(agent, shell_env));
                 // Read after the command, which is what refreshes it.
-                let cache = std::fs::read_to_string(home.join(GROK_CACHE_FILE)).ok();
+                let cache =
+                    adapter::files::read_regular_text(&home.join(GROK_CACHE_FILE), OUTPUT_LIMIT)
+                        .ok();
                 // The cache can drop every printed id as hidden; an empty list needs its reason.
                 let models = decorate_grok(&ids, cache.as_deref());
                 if models.is_empty() {
@@ -827,5 +830,26 @@ mod tests {
             let hit = cache.get_or_load_at(now, agent, dir, || panic!("must be cached"));
             assert_eq!(hit.models[0].id, id);
         }
+    }
+
+    #[test]
+    fn bounded_agent_files_leave_grok_models_available() {
+        use crate::adapter::tests::{agent_file, bounded_file_cases};
+        bounded_file_cases(
+            "agent_models::tests::bounded_agent_files_leave_grok_models_available",
+            &["regular", "linked", "fifo", "oversized"],
+            |case| {
+                let home = ScratchDir::new("bounded-model-cache");
+                agent_file(&home.join(GROK_CACHE_FILE), case, GROK_CACHE, OUTPUT_LIMIT);
+                let env = fake_agent(&home, "grok", &format!("printf '%s' '{}'", GROK_LIST));
+                let listing = list(Agent::Grok, &env, Some(&home), COMMAND_TIMEOUT);
+                let readable = matches!(case, "regular" | "linked");
+                assert_eq!(listing.unavailable, None);
+                assert_eq!(
+                    listing.models,
+                    decorate_grok(&parse_grok_list(GROK_LIST), readable.then_some(GROK_CACHE))
+                );
+            },
+        );
     }
 }
