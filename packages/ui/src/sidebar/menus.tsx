@@ -164,8 +164,9 @@ function switchAccountSubmenu(
   readings: QuotaReadings | undefined,
   sharing: Map<string, AccountSharing> | undefined,
   disabledDefaults: Agent[] | undefined,
+  accountOrder: Settings["account_order"],
 ): ActionMenuSubmenu | undefined {
-  const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing, disabledDefaults)
+  const entries = switchEntries(session, accounts, t, defaultNames, readings, sharing, disabledDefaults, accountOrder)
     .filter((entry) => entry.current || !entry.disabled);
   if (entries.length < 2) return undefined;
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
@@ -271,19 +272,20 @@ export function sessionMenu(
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { placement = "list", hasBoundSessions = false, canHandOff = true, quota, sharing, disabledDefaults }: {
+  { placement = "list", hasBoundSessions = false, canHandOff = true, quota, sharing, disabledDefaults, accountOrder }: {
     placement?: MenuPlacement;
     hasBoundSessions?: boolean;
     canHandOff?: boolean;
     quota?: QuotaReadings;
     sharing?: Map<string, AccountSharing>;
     disabledDefaults?: Agent[];
+    accountOrder?: Settings["account_order"];
   } = {},
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
   // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults);
+  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, sharing, disabledDefaults, accountOrder);
   const focusable = session.role === "console" && !archived && !focused;
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, end: <ShortcutKbd command="lock" />, onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),

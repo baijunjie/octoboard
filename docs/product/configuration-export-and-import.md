@@ -247,9 +247,10 @@ to choose, and an import places what it clones under it (see "Default clone dire
 No console and no project carries its stored id. Codex's and Claude Code's permission approval settings also stay
 local: exports omit them and imports leave the importing machine's choices unchanged, since importing them could
 silently turn on **Approve everything**, which on its own machine is saved only after a confirmation (see "Approval
-modes" in `docs/product/agent-accounts.md`). So do the list of added agents, the names the user gave the default
-accounts and which accounts are turned off (see "Added agents", "The default account" and "Turning an account off" in
-`docs/product/agent-accounts.md`). Account quota readings are not stored at all and are in no document either (see
+modes" in `docs/product/agent-accounts.md`). So do the list of added agents, each agent's account display order, the
+names the user gave the default accounts and which accounts are turned off (see "Added agents", "Reordering accounts",
+"The default account" and "Turning an account off" in `docs/product/agent-accounts.md`). Account quota readings are not
+stored at all and are in no document either (see
 "How a quota is read" in `docs/product/account-quotas.md`).
 
 ### The application settings a full export carries

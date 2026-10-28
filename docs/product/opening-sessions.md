@@ -30,9 +30,10 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   that can be picked, in the order of the added agents, with their icons and names, and otherwise only the one it holds
   (see "Which agents the agent pickers list" in `docs/product/consoles.md`). The field opens on the default resolved in
   "Which agent a session uses" below when that agent can be picked, otherwise on the first agent that can, whenever
-  there is one. The account picker offers only that agent's accounts, with its default account first, and is shown even
-  when the default account is the agent's only one, offering that account alone. It opens on the account "Which account
-  a session uses" below describes. There is no inheritance entry: both pickers settle concrete choices for this session.
+  there is one. The account picker offers only that agent's accounts, in the saved display order (see "Reordering
+  accounts" in `docs/product/agent-accounts.md`), and is shown even when the default account is the agent's only one,
+  offering that account alone. It opens on the account "Which account a session uses" below describes. There is no
+  inheritance entry: both pickers settle concrete choices for this session.
   Each account in the picker carries a compact usage bar (see "In an account picker" in
   `docs/product/account-quotas.md`). A used-up account (see "A used-up account" in `docs/product/account-quotas.md`) is
   listed but cannot be picked, with a short note under its name saying it is used up and when it resets. When the

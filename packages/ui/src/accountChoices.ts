@@ -1,3 +1,4 @@
+import { orderedAccounts } from "./accountOrder";
 import { accountsByAgent, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
@@ -36,7 +37,7 @@ export interface ChoiceEntry {
   disabled: boolean;
 }
 
-/** One agent's entries, the default account first. `selectable` is false only once the agent is
+/** One agent's entries in the saved account order. `selectable` is false only once the agent is
  * determined to be missing or is not added; before that nothing is known to be wrong with any of its entries. */
 export interface ChoiceGroup {
   agent: Agent;
@@ -112,14 +113,12 @@ export function choiceGroups(
   readings?: QuotaReadings,
   sharing?: Map<string, AccountSharing>,
   disabledDefaults?: readonly Agent[],
+  order?: Settings["account_order"],
 ): ChoiceGroup[] {
-  return accountsByAgent(accounts).map(({ agent, accounts: owned }) => ({
+  return accountsByAgent(accounts).map(({ agent }) => ({
     agent,
     selectable: isAgentPickable(agentAvailability, added, agent),
-    entries: [
-      { account: null, name: defaultName(agent) },
-      ...owned.map((account) => ({ account: account.id, name: account.name })),
-    ].map((entry) => {
+    entries: orderedAccounts(agent, accounts, order).map((account) => ({ account: account?.id ?? null, name: account?.name ?? defaultName(agent) })).map((entry) => {
       const quota = readings && accountQuotaOf(readings.quotas, agent, entry.account);
       return { ...entry, agent, key: choiceKey({ agent, account: entry.account }), quota, exhaustedBy: readings && exhaustedQuotaWindow(quota, readings.now), changingSharing: sharingChangeRuns(sharing, entry.account), signedOut: quotaSignedOut(quota), disabled: accountDisabled(accounts, disabledDefaults, agent, entry.account) };
     }),
@@ -226,7 +225,7 @@ export function expiringWeekly(quota: AccountQuota | undefined, now: number): { 
 
 /** The entry whose weekly quota resets soonest, among entries that are not used up.
  * Soonest reset wins over a larger remainder. Equal reset and remainder keep `entries` order
- * (the default account is first). No rankable window returns undefined. */
+ * supplied by the caller. No rankable window returns undefined. */
 export function preferExpiringWeekly(entries: ChoiceEntry[], now: number): ChoiceEntry | undefined {
   let best: ChoiceEntry | undefined;
   let bestSignal: { resetsAt: number; remaining: number } | undefined;
@@ -243,7 +242,8 @@ export function preferExpiringWeekly(entries: ChoiceEntry[], now: number): Choic
 }
 
 /** The account a new session of `agent` opens on. With `autoSelect`, the one whose weekly quota resets
- * soonest when one ranks; otherwise the account the project or console resolves to. */
+ * soonest when one ranks; otherwise the account the project or console resolves to. Equal weekly readings keep
+ * the daemon's selection order: default account first, then named accounts in stored order. */
 export function accountOpenedOn(
   owner: Console,
   project: Project | undefined,
@@ -253,14 +253,20 @@ export function accountOpenedOn(
   autoSelect?: { now: number },
 ): string | null {
   if (autoSelect) {
-    const preferred = preferExpiringWeekly(groups.find((candidate) => candidate.agent === agent)?.entries ?? [], autoSelect.now);
+    const entries = groups.find((candidate) => candidate.agent === agent)?.entries ?? [];
+    const byAccount = new Map(entries.map((entry) => [entry.account, entry]));
+    const selectionEntries = orderedAccounts(agent, accounts, undefined).flatMap((account) => {
+      const entry = byAccount.get(account?.id ?? null);
+      return entry ? [entry] : [];
+    });
+    const preferred = preferExpiringWeekly(selectionEntries, autoSelect.now);
     if (preferred) return preferred.account;
   }
   return inheritedAccount(owner, project, agent, accounts);
 }
 
 /** `choice`, or when its account is disabled, used up, not logged in or its sharing change runs, and its agent may be picked, the first
- * account of the same agent that is none of these, in the order of the agent's group (the default account first). With
+ * account of the same agent that is none of these, in the saved order of the agent's group. With
  * every account of the agent unavailable `choice` stays, for the caller to refuse. */
 export function avoidUnavailableAccount(choice: AccountChoice, groups: ChoiceGroup[]): AccountChoice {
   const group = groups.find((candidate) => candidate.agent === choice.agent);
@@ -365,7 +371,7 @@ export function handoffBlock(
   return undefined;
 }
 
-/** The accounts of the session's own agent, the default account first, with the one the session is
+/** The accounts of the session's own agent in the saved account order, with the one the session is
  * on marked current. Another agent's accounts never appear: a switch stays within one agent. A
  * session on an account that has since been removed keeps it as its current entry, named as
  * everywhere else a session's account is (`sessionAccountName`: the directory the session
@@ -383,12 +389,10 @@ export function switchEntries(
   readings?: QuotaReadings,
   sharing?: Map<string, AccountSharing>,
   disabledDefaults?: readonly Agent[],
+  order?: Settings["account_order"],
 ): SwitchEntry[] {
   const owned = accountsByAgent(accounts).find((group) => group.agent === session.agent)?.accounts ?? [];
-  const entries = [
-    { account: null, name: defaultAccountName(t, defaultNames, session.agent), isPath: false },
-    ...owned.map((account) => ({ account: account.id, name: account.name, isPath: false })),
-  ];
+  const entries = orderedAccounts(session.agent, accounts, order).map((account) => ({ account: account?.id ?? null, name: account?.name ?? defaultAccountName(t, defaultNames, session.agent), isPath: false }));
   const removed = session.account_id && !owned.some((account) => account.id === session.account_id);
   const removedName = removed ? sessionAccountName(t, session, accounts, defaultNames) : undefined;
   if (session.account_id && removedName !== undefined) {

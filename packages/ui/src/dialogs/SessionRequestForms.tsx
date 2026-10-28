@@ -106,11 +106,12 @@ export function SwitchRequestForm({ request, onReport, isDisabled }: { request: 
   const quotas = useDaemonStore((s) => s.accountQuotas);
   const sharing = useDaemonStore((s) => s.accountSharing);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
+  const accountOrder = useDaemonStore((s) => s.settings.account_order);
   const now = useNow();
   const [account, setAccount] = useState<string | null>(request.account);
   const [changed, setChanged] = useState<{ model?: string | null; effort?: string | null }>({});
 
-  const entries = session ? switchEntries(session, accounts, t, defaultNames, { quotas, now }, sharing, disabledDefaults) : [];
+  const entries = session ? switchEntries(session, accounts, t, defaultNames, { quotas, now }, sharing, disabledDefaults, accountOrder) : [];
   const ownChanging = entries.some((entry) => entry.current && entry.changingSharing);
   const turnedOff = (entry: (typeof entries)[number]) => entry.disabled && !entry.current;
   const blockOf = (entry: (typeof entries)[number]) =>

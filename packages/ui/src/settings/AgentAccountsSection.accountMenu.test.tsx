@@ -53,13 +53,13 @@ describe("an account's actions menu", () => {
     const { container } = mount();
     expect(buttonNamed(container, "Edit")).toBeUndefined();
     await openAccountMenu(container, 1);
-    expect(items()).toEqual(["Settings", "Edit", "Log in", "Remove"]);
+    expect(items()).toEqual(["Settings", "Edit", "Log in", "Move earlier", "Move later", "Remove"]);
   });
 
   it("holds Settings, Rename and Log in for the default account, which has no directory or removal to offer", async () => {
     const { container } = mount();
     await openAccountMenu(container, 0);
-    expect(items()).toEqual(["Settings", "Rename", "Log in"]);
+    expect(items()).toEqual(["Settings", "Rename", "Log in", "Move earlier", "Move later"]);
   });
 
   it("is offered by the default account and each owned account", () => {

@@ -681,6 +681,9 @@ export interface Settings {
   /** Every account of every agent, application-wide. The default account of each agent is not
    * among these — it is the state of pinning nothing, not a row. */
   accounts: Account[];
+  /** Display order per agent, including null for its default account. Missing IDs are appended
+   * and stale IDs ignored. Optional for clients with settings from an older daemon. */
+  account_order?: Partial<Record<Agent, (string | null)[]>>;
   /** The agents the user has added, in the order the user set; a newly added agent goes last. `null` while the daemon has not
    * yet decided the list (it waits for the agents' availability, and a failed shell snapshot
    * leaves it so for the run); an empty array is a user who removed them all. */
@@ -1547,6 +1550,9 @@ export type RequestBody =
    * with `added_agents_undecided` while it stays undecided. Broadcasts no `settings_updated` of its
    * own unless the order changed. */
   | { type: "reorder_agents"; agents: Agent[] }
+  /** Names every account of the agent, including null for its default, exactly once. Refused
+   * with `account_order_invalid` otherwise. Broadcasts settings only when the order changed. */
+  | { type: "reorder_accounts"; agent: Agent; accounts: (string | null)[] }
   /** Takes an agent off `Settings.added_agents`; its accounts are kept. An undecided list is first
    * filled, and refused with `added_agents_undecided` while it stays undecided. Broadcasts no
    * `settings_updated` of its own unless the list changed. */

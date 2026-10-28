@@ -147,8 +147,9 @@ rows sit on the same two columns as the Default agent group's two fields above: 
 sessions field is, its account picker where the Project sessions field is, spanning that column's width; in a window
 narrower than 768 px each name sits above its picker.
 
-- Every agent's row has a picker of its accounts, the default account first. An agent with no account of its own still
-  has the picker, with the default account as its one option, and so does one whose other accounts are all turned off
+- Every agent's row has a picker of its accounts, in the saved display order (see "Reordering accounts" in
+  `docs/product/agent-accounts.md`). An agent with no account of its own still has the picker, with the default account
+  as its one option, and so does one whose other accounts are all turned off
   and not held (below):
   under the name the user gave the default account (see "The default account" in `docs/product/agent-accounts.md`),
   else as "Default account".

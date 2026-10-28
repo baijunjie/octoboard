@@ -67,7 +67,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandOff, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { placement, hasBoundSessions, canHandOff, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
     </>
   );
 }

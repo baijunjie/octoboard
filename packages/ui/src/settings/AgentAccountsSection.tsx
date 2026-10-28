@@ -1,6 +1,6 @@
 import { Button } from "../components/Button";
 import { Tabs } from "@heroui/react";
-import { Bot, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
+import { ArrowUp, ArrowDown, Bot, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
@@ -28,6 +28,7 @@ import { AddAgentDialog } from "./AddAgentDialog";
 import { AgentApprovalSetting } from "./AgentApprovalSetting";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentTabActions, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
+import { useAccountOrder } from "./useAccountOrder";
 import { StartQuotaWindowsSetting } from "./StartQuotaWindowsSetting";
 import { SettingsFocusContext, useSectionRefocus } from "./useSectionRefocus";
 
@@ -62,9 +63,9 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
 
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open). A tab holds
  * the agent's Permission approval row (not for Grok), which applies to all its accounts, and a table with the agent's
- * default account first, each a row (name and plan, status, usage, the Disable switch) with an actions menu whose first
- * entry opens the account's details in a modal. The section also has the means to add, edit and remove the accounts the
- * user owns, to rename the default account, and to add, remove and reorder the agents (see
+ * accounts in their saved order, each a row (name and plan, status, usage, the Disable switch) with an actions menu
+ * whose first entry opens the account's details in a modal. The section also has the means to add, edit and remove
+ * the accounts the user owns, to rename the default account, and to add, remove and reorder the agents (see
  * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The three switches, one that
  * picks a new session's account by the weekly quota resetting soonest, one that switches a session stopped at its
  * account's usage limit to another account, and one that starts a usage window that has not begun counting, sit above
@@ -308,8 +309,17 @@ export function AgentAccountsSection(): React.ReactElement {
 }
 
 /** One agent's tab panel: its Permission approval row (not for Grok), which applies to every account of the agent, and
- * the table of the agent's accounts, the default account first. */
-function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, onDetails, onLogin }: {
+ * the table of the agent's accounts in their saved order. */
+function AgentAccountsPanel(props: AgentAccountsPanelProps): React.ReactElement {
+  const order = useAccountOrder(props.agent, props.owned);
+  return (
+    <Tabs.Panel id={props.agent} className="px-0 pt-0">
+      <AgentAccountsPanelContent {...props} order={order} />
+    </Tabs.Panel>
+  );
+}
+
+interface AgentAccountsPanelProps {
   agent: Agent;
   owned: Account[];
   onEdit: (account: Account) => void;
@@ -317,11 +327,16 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
   onRenameDefault: (agent: Agent) => void;
   onDetails: (account: string | null) => void;
   onLogin: (agent: Agent, account: string | null, returnFocus?: ReturnLoginFocus) => void;
-}): React.ReactElement {
+}
+
+/** Pending writes stay with the tab's wrapper; drag cleanup follows the panel's mounted content instead. */
+function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, onDetails, onLogin, order }: AgentAccountsPanelProps & { order: ReturnType<typeof useAccountOrder> }): React.ReactElement {
   const t = useT();
   const logins = useDaemonStore((s) => s.accountLogins);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const defaultName = defaultAccountName(t, defaultNames, agent);
+  const { stopDrag } = order;
+  useEffect(() => stopDrag, [stopDrag]);
   // What an account's menu holds. The default account is not a record: it can be named, not edited or removed. A
   // further action is one more entry here.
   const accountMenu = (account: Account | null): ActionMenuEntry[] => {
@@ -329,30 +344,39 @@ function AgentAccountsPanel({ agent, owned, onEdit, onRemove, onRenameDefault, o
     // Whatever the login state, so an account that is logged in can log in again; focus goes back to the menu's button.
     const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => returnToRowActions(row)) };
     const details = { label: t("settings.accounts.settingsItem"), icon: Settings, onClick: () => onDetails(account?.id ?? null) };
-    if (!account) return [details, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login];
+    const index = order.ids.indexOf(account?.id ?? null);
+    const moves: ActionMenuEntry[] = [
+      "separator",
+      { label: t("settings.accounts.moveEarlier"), icon: ArrowUp, disabled: order.busy || index <= 0, onClick: () => order.move(account?.id ?? null, -1) },
+      { label: t("settings.accounts.moveLater"), icon: ArrowDown, disabled: order.busy || index >= order.ids.length - 1, onClick: () => order.move(account?.id ?? null, 1) },
+    ];
+    if (!account) return [details, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login, ...moves];
     return [
       details,
       { label: t("common.edit"), icon: Pencil, onClick: () => onEdit(account) },
       login,
+      ...moves,
       "separator",
       { label: t("common.remove"), icon: Trash2, destructive: true, onClick: () => onRemove(account) },
     ];
   };
   return (
-    <Tabs.Panel id={agent} className="px-0 pt-0">
+    <>
       <AgentApprovalSetting agent={agent} />
       <AccountsTable agent={agent}>
-        {[null, ...owned].map((account) => (
+        {order.rows.map((account) => (
           <AccountTableRow
             key={account?.id ?? `default:${agent}`}
             agent={agent}
             account={account}
             name={account?.name ?? defaultName}
             menu={accountMenu(account)}
+            dragDisabled={order.busy || order.ids.length < 2}
+            onDragStart={(event) => order.drag(account?.id ?? null, event)}
             onLogin={(returnFocus) => onLogin(agent, account?.id ?? null, returnFocus)}
           />
         ))}
       </AccountsTable>
-    </Tabs.Panel>
+    </>
   );
 }

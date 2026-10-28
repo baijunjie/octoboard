@@ -1491,10 +1491,11 @@ export const dialogScenarios: Scenario[] = [
   {
     ...dialogFixture,
     id: "dialog-edit-project-account-choices",
+    state: { ...dialogState, settings: { ...dialogState.settings!, account_order: { claude: ["a-personal", "a-work", null] } } },
     group: "Projects",
     category: "normal",
     title: "Project account choices",
-    description: "Same as console, default and long named accounts coexist. The first option's grey badge names the console's account and is too long for the list: it fades out with the label at the clipped edge. Hover a clipped account option to reveal its text as a marquee.",
+    description: "Same as console stays first, followed by Personal, Work and Default in the saved account order. The first option's grey badge names the console's account and is too long for the list: it fades out with the label at the clipped edge. Hover a clipped account option to reveal its text as a marquee.",
     steps: [
       (ui) => projectActions(ui, onDefault.name),
       (ui) => ui.press(ui.t("sidebar.project.edit")),

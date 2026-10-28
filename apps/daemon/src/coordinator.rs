@@ -1273,6 +1273,13 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::ReorderAccounts { agent, accounts } => {
+            if state.store.reorder_accounts(agent, &accounts)? {
+                broadcast_settings(state)?;
+            }
+            Ok(None)
+        }
+
         RequestBody::RemoveAgent { agent } => {
             remove_agent(state, agent)?;
             Ok(None)
@@ -9002,6 +9009,32 @@ mod tests {
             state.store.added_agents().unwrap(),
             Some(vec![Agent::Grok, Agent::Claude])
         );
+    }
+
+    #[tokio::test]
+    async fn account_order_broadcasts_only_a_changed_valid_order() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-reorder-accounts");
+        let mut events = state.subscribe();
+        let reorder = |accounts| {
+            handle(
+                &state,
+                None,
+                RequestBody::ReorderAccounts {
+                    agent: Agent::Claude,
+                    accounts,
+                },
+            )
+        };
+        reorder(vec![None]).await.unwrap();
+        assert!(
+            matches!(events.try_recv(), Ok(Event::SettingsUpdated { settings })
+            if settings.account_order["claude"] == vec![None])
+        );
+        reorder(vec![None]).await.unwrap();
+        assert!(events.try_recv().is_err());
+        let err = reorder(vec![]).await.unwrap_err();
+        assert_eq!(error_parts(&err).0, error_code::ACCOUNT_ORDER_INVALID);
+        assert!(events.try_recv().is_err());
     }
 
     /// An undecided list is filled first when availability is known, and refused otherwise.

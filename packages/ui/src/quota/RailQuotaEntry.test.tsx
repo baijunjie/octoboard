@@ -328,6 +328,17 @@ it("does not let Escape reach anything else while the panel is open", () => {
   document.body.removeEventListener("keydown", seen);
 });
 
+it("follows saved account order and updates it while the quota panel is open", () => {
+  withFakeTimers();
+  const { button, store } = mount();
+  act(() => store.setState({ settings: { ...store.getState().settings, account_order: { claude: ["claude-work", null] } } }));
+  openPanel(button);
+  const names = () => Array.from(document.querySelectorAll<HTMLElement>('[role="tabpanel"]:not([data-inert="true"]) .groove-b')).map((row) => row.textContent!.startsWith("Work") ? "Work" : "Default");
+  expect(names()).toEqual(["Work", "Default"]);
+  act(() => store.setState({ settings: { ...store.getState().settings, account_order: { claude: [null, "claude-work"] } } }));
+  expect(names()).toEqual(["Default", "Work"]);
+});
+
 it("has one tab per added agent and lists each agent's accounts with plan and quota", () => {
   withFakeTimers();
   const { button } = mount();

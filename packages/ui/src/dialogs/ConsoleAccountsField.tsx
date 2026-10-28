@@ -48,10 +48,11 @@ export function ConsoleAccountsField({
   const addedAgents = useDaemonStore((s) => s.settings.added_agents);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
+  const accountOrder = useDaemonStore((s) => s.settings.account_order);
   // What the console pinned when the field opened: a turned-off account kept in the list from then on, so the user can
   // pick it back after choosing another.
   const [saved] = useState(values);
-  const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), undefined, undefined, disabledDefaults);
+  const groups = choiceGroups(accounts, agentAvailability, addedAgents, (agent) => defaultAccountName(t, defaultNames, agent), undefined, undefined, disabledDefaults, accountOrder);
   const pinned = (agent: Agent) => storedAccount(values[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
   const rows = listedPickerAgents(agentAvailability, addedAgents, (agent) => pinned(agent) !== null).map((agent) => ({
     agent,

@@ -131,14 +131,14 @@ usage limit** and **Start usage windows automatically**, stay above it.
 
 ## The default account
 
-Each agent's accounts table starts with the agent's **default account**; its account settings dialog shows the directory
-it currently resolves to. A "?" follows that directory there and says in its popover (see "The help tip" in
-`docs/product/labels-and-tooltips.md`) that this is the agent's own default configuration directory, which new
-sessions use when no account is chosen and whose configuration other accounts can share. Its directory cannot be edited,
-and the default account cannot be removed, but it can be turned off like any other account (see "Turning an account off"
-below). It has no sharing switch: its directory is the one other accounts share. Its actions menu holds **Settings**,
-**Rename** and **Log in**; where else **Log in** appears is in "Where Log in appears" in
-`docs/product/logging-accounts-in.md`.
+Each agent has a **default account**, which can occupy any place in its accounts table (see "Reordering accounts"
+below); its account settings dialog shows the directory it currently resolves to. A "?" follows that directory there and
+says in its popover (see "The help tip" in `docs/product/labels-and-tooltips.md`) that this is the agent's own default
+configuration directory, which new sessions use when no account is chosen and whose configuration other accounts can
+share. Its directory cannot be edited, and the default account cannot be removed, but it can be turned off like any
+other account (see "Turning an account off" below). It has no sharing switch: its directory is the one other accounts
+share. Its actions menu holds **Settings**, **Rename**, **Log in**, **Move earlier** and **Move later**; where else
+**Log in** appears is in "Where Log in appears" in `docs/product/logging-accounts-in.md`.
 
 **Rename** opens a dialog, titled for the default account of that agent, with a single name field holding the name the
 user gave it, empty when there is none, and a note that leaving it empty uses the standard name. The name is stored
@@ -159,20 +159,20 @@ settings tools answer (see "Application settings: `get_settings` and `update_set
 
 ## The accounts the user owns
 
-The accounts the user owns follow the default account, each with its name, its directory and an actions menu holding
-**Settings**, **Edit** and **Log in** and, set apart, **Remove**; where else **Log in** appears is in "Where Log in
-appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths are shown" in
-`docs/product/settings.md`.
+The accounts the user owns each have their name, directory and an actions menu holding **Settings**, **Edit**,
+**Log in**, **Move earlier** and **Move later** and, set apart, **Remove**; where else **Log in** appears is in
+"Where Log in appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths
+are shown" in `docs/product/settings.md`.
 
 ## The accounts table
 
 Each agent's tab panel holds, for Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes"
-below), then one table of the agent's accounts, named for the agent ("Claude Code accounts"): a row per account, the
-default account first, then the accounts the user owns in the order they are kept. Its columns:
+below), then one table of the agent's accounts, named for the agent ("Claude Code accounts"): a row per account, in the
+saved order (see "Reordering accounts" below). Its columns:
 
 | Column | What a row shows |
 |---|---|
-| **Account** | The account's name and, when the agent names one, its plan as a badge. A name too long for its space fades as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
+| **Account** | A drag grip, followed by the account's name and, when the agent names one, its plan as a badge. A name too long for its space fades as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
 | **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`). |
 | **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says usage is being read. Out-of-date windows, the dash that stands in when there is no window to draw, and the marks that follow them are as in "How an account's quota is shown" and "Quota states" in `docs/product/account-quotas.md`; a dash with no mark after it is read by assistive technology as "No usage reading". A used-up account's bar is grey and followed by a **Limit reached** badge (see "A used-up account" in `docs/product/account-quotas.md`). Model-specific windows are left to the account settings dialog. |
 | **Disable** | The account's Disable switch (see "Turning an account off" below). The column's heading carries a "?" help tip. |
@@ -193,6 +193,31 @@ clear of it. The table draws no fade at its sideways edges.
 
 Opening the section asks for a fresh reading of the quotas, covering the accounts of every agent and not only of the
 tab in view; the readings already held are shown at once.
+
+## Reordering accounts
+
+Each agent has its own account display order, including its default account. Until the user sets an order, the default
+account comes first, followed by the accounts the user owns in the order they are kept. A newly added account follows
+those already ordered; removing an account leaves the others in their places. The order is kept by the daemon for all
+windows on that machine and does not travel in configuration exports.
+
+In Settings, drag a row by the grip before its name with a mouse or a pen: once the pointer moves far enough, the row
+follows it and the other rows make room. Releasing drops it in the new place. Touch keeps its native scrolling. Escape,
+a cancelled pointer, the window losing focus, leaving the agent's tab or closing the panel cancels the drag without
+saving. Moving rows settle immediately when the system requests reduced motion.
+
+Every account's actions menu also offers **Move earlier** and **Move later**, moving it one row up or down. Move earlier
+is unavailable for the first row and Move later for the last. While an order is being saved, further moves and drags for
+that agent are unavailable. A move or drop shows the new order at once and retains keyboard focus. If saving is refused,
+the order goes back and an error alert explains the refusal; a changed set of accounts requires trying again with the
+current list.
+
+The console, project, new-session and handoff dialogs, session request and account-switch forms, a session's Switch
+account submenu, the rail's quota panel and the menu bar's quota submenus all use this display order. An inheritance
+choice, such as **Same as console**, stays ahead of the accounts. A removed account still recorded by a session is
+appended after its agent's current accounts. When a dialog passes over an unavailable account, it follows this display
+order; automatic weekly-quota selection keeps its separate tie order (see "Which account a session uses" in
+`docs/product/opening-sessions.md`).
 
 ## The account settings dialog
 

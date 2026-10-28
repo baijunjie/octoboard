@@ -60,8 +60,9 @@ A session row's action menu offers:
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
-- **Switch account** — a submenu of the accounts of the session's agent, the default account first, with the one the
-  session is on checked and doing nothing; picking another asks for confirmation, then moves the session to it (see
+- **Switch account** — a submenu of the accounts of the session's agent, in the saved display order (see "Reordering
+  accounts" in `docs/product/agent-accounts.md`), with the one the session is on checked and doing nothing; picking
+  another asks for confirmation, then moves the session to it (see
   `docs/product/switching-session-accounts.md`). A session whose account has since been removed still shows it, checked
   and named by the directory the session recorded. The entry is present for a console session's row as well as a project
   session's, and only when the session's agent has more than one account to be on; with just the default account it is
