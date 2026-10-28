@@ -1,5 +1,5 @@
 import { type Console, type Project, type Session, type Settings } from "../protocol";
-import { sessionStatusKind, type StatusKind } from "../sessionLabel";
+import { sessionShownStatusKind, sessionStatusKind, type ShownStatusKind, type StatusKind } from "../sessionLabel";
 
 /** How urgently a session asks for attention: a raised hand, a prompt, background work,
  * foreground work, then no process. Archived sessions are listed separately. */
@@ -326,11 +326,24 @@ export function focusGroupRows(sessions: Session[], project: Project, consoleSes
   return liveSessionRows(liveInProject(focusListed(sessions, consoleSessionId), project), byStatus);
 }
 
+/** The avatar represents the most urgent live session by the sidebar's status rank, independent
+ * of pins or the user's choice to sort rows by date. Starting sessions have no avatar indicator.
+ * Ties take the newest session, as rows do. */
+export function consoleStatus(sessions: Session[]): ShownStatusKind | undefined {
+  let selected: Session | undefined;
+  for (const session of sessions) {
+    if (session.status === "starting" || session.status === "archived" || session.status === "interrupted") continue;
+    if (!selected || rankOf(session) < rankOf(selected)
+      || (rankOf(session) === rankOf(selected) && session.started_at > selected.started_at)) selected = session;
+  }
+  return selected ? sessionShownStatusKind(selected) : undefined;
+}
+
 /** Every activity there is, most pressing first. The type is derived from the list rather than
  * written beside it, so whoever covers them all cannot be left behind by a new one. */
 export const ACTIVITIES = ["waiting", "working", "running"] as const;
 
-/** What a console on the rail or a project row shows: the most pressing activity among its sessions. */
+/** What a collapsed project or focus-mode switch chip shows: the most pressing activity beneath it. */
 export type Activity = (typeof ACTIVITIES)[number] | undefined;
 
 export function consoleActivity(sessions: Session[]): Activity {

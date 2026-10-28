@@ -1,15 +1,15 @@
-import { Hand, MessageCircleMore } from "lucide-react";
+import { Hand, LoaderCircle, MessageCircleMore } from "lucide-react";
 import React from "react";
 
 import { useT } from "../i18n/react";
-import { activityLabel } from "../sessionLabel";
+import { activityLabel, type ShownStatusKind } from "../sessionLabel";
 import type { Activity } from "../sidebar/order";
 import { IndicatorTooltip } from "./IndicatorTooltip";
 import { WavingHand, WorkingDot } from "./statusGlyphs";
 
 /** The marker a collapsed project row shows for the sessions beneath it, and focus mode's
- * console-switch chip for the sessions of that console session (the rail's consoles show the same
- * as an `ActivityBadge`): a waving hand when one is waiting for the user, a ringing dot when one is
+ * console-switch chip for the sessions of that console session: a waving hand when one is waiting
+ * for the user, a ringing dot when one is
  * at work, a speech bubble when one is merely running, awaiting instructions.
  *
  * It carries the indicator tooltip that puts the activity into words for a sighted user, who has
@@ -59,37 +59,43 @@ function activityMarker(activity: Activity): React.ReactElement | null {
   }
 }
 
-/** `ActivityMarker` as a badge on a console's avatar (the rail): a small disc carrying the activity's
- * glyph, so it reads against the disc whatever the disc sits on. Work keeps the session glyph's
- * blue over the opaque theme background with a green rim, so the window material cannot change
- * their contrast. The waiting hand still waves and the working dot still pings, as in the sidebar.
- * Decorative, and with no tooltip of its own, unlike `ActivityMarker`: the avatar carries the
- * tooltip, which says the activity (the rail's `ConsoleTile`), and the console's accessible name
- * says it too. */
-export function ActivityBadge({ activity, className = "" }: { activity: Activity; className?: string }): React.ReactElement | null {
-  if (!activity) return null;
+/** Inverted status glyphs stay legible over arbitrary avatar colours. Working and background work
+ * differ by both fill colour and centre shape; only the centre breathes, keeping the badge steady.
+ * The avatar supplies its tooltip and accessible name, so the badge is decorative. */
+export function ActivityBadge({ status, className = "" }: { status: ShownStatusKind | undefined; className?: string }): React.ReactElement | null {
   const disc = `flex size-3.5 items-center justify-center rounded-full ${className}`;
-  switch (activity) {
-    case "waiting":
+  switch (status) {
+    case "waiting_user":
       return (
         <span aria-hidden="true" className={`${disc} bg-warning text-warning-foreground`}>
           <Hand strokeWidth={2.5} className="size-2.5 origin-[70%_90%] motion-safe:animate-status-wave" />
         </span>
       );
-    case "working":
-      return (
-        <span aria-hidden="true" className={`${disc} border-2 border-success-soft-foreground bg-background`}>
-          <span className="relative flex size-1.5 contain-layout">
-            <span className="absolute inline-flex size-full rounded-full bg-accent-soft-foreground opacity-75 motion-safe:animate-ping" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-accent-soft-foreground" />
-          </span>
-        </span>
-      );
-    case "running":
+    case "idle":
       return (
         <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
           <MessageCircleMore strokeWidth={2.5} className="size-2.5" />
         </span>
       );
+    case "working":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-accent text-accent-foreground`}>
+          <span className="size-1.5 rounded-full bg-current motion-safe:animate-status-breathe" />
+        </span>
+      );
+    case "background":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-success text-success-foreground`}>
+          <span className="size-2 rounded-full border-[1.5px] border-current motion-safe:animate-status-breathe" />
+        </span>
+      );
+    case "switching":
+      return (
+        <span aria-hidden="true" className={`${disc} bg-default text-default-foreground`}>
+          <LoaderCircle className="size-2.5 motion-safe:animate-spin" />
+        </span>
+      );
+    default:
+      return null;
   }
 }

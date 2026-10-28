@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { consoleOf } from "../gallery/fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
+import { archiveNeedsConfirmation, countsAsWorking, isUnusedSession, consoleActivity, consoleStatus, INACTIVE_PROJECT_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, ordersByStatus, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
 const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to?: string): Session => ({
@@ -82,6 +82,38 @@ describe("liveSessions", () => {
   it("does not offer a console session that is still starting as an owner", () => {
     const owners = ["starting", "idle", "archived"].map((status) => ({ ...session(status, status as SessionStatus, 1), role: "console" as const }));
     expect(liveConsoleSessions(owners, "c").map((s) => s.id)).toEqual(["idle"]);
+  });
+});
+
+describe("consoleStatus", () => {
+  it("uses the same priority as rows, regardless of pins, input order or recency", () => {
+    const ordered = [
+      session("waiting", "waiting_user", 1),
+      session("idle", "idle", 2),
+      { ...session("background", "idle", 3), background_tasks: [{ id: "watcher" }] },
+      session("working", "working", 4, true),
+    ];
+    const kinds = ["waiting_user", "idle", "background", "working"];
+    for (let index = 0; index < ordered.length; index++) {
+      expect(consoleStatus(ordered.slice(index).reverse())).toBe(kinds[index]);
+    }
+    expect(liveSessions(ordered.map((s) => ({ ...s, pinned: false }))).map((s) => s.id))
+      .toEqual(["waiting", "idle", "background", "working"]);
+  });
+
+  it("omits starting from the avatar while keeping it next to idle in session order", () => {
+    const starting = session("starting", "starting", 3);
+    const idle = session("idle", "idle", 2);
+    const working = session("working", "working", 1);
+    expect(consoleStatus([starting])).toBeUndefined();
+    expect(consoleStatus([starting, working])).toBe("working");
+    expect(liveSessions([working, starting, idle]).map((s) => s.id)).toEqual(["starting", "idle", "working"]);
+  });
+
+  it("omits inactive sessions and preserves the selected session's account-switch presentation", () => {
+    expect(consoleStatus([])).toBeUndefined();
+    expect(consoleStatus([session("paused", "interrupted", 1), session("archived", "archived", 2)])).toBeUndefined();
+    expect(consoleStatus([{ ...session("switching", "idle", 3), switching_account: true }])).toBe("switching");
   });
 });
 

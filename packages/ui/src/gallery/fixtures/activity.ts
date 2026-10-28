@@ -11,12 +11,13 @@ const docs = projectOf("p-docs", console_.id, "Docs");
 const archived = projectOf("p-archived", console_.id, "Archived only", { pinned: true });
 const empty = projectOf("p-empty", console_.id, "No sessions yet", { pinned: true });
 const mobile = projectOf("p-mobile", console_.id, "Mobile app");
-// A second console whose only session is idle with a watcher still running: work under way, not just a
-// session waiting at its prompt.
+// These consoles expose each avatar status glyph and the priority between neighboring statuses.
 const staging = consoleOf("c-staging", "Staging");
 const preview = projectOf("p-preview", staging.id, "Preview site");
 const build = consoleOf("c-build", "Build");
 const release = projectOf("p-release", build.id, "Release");
+const ready = consoleOf("c-ready", "Ready");
+const starting = consoleOf("c-starting", "Starting");
 const watching = { background_tasks: [{ id: "task-watch", type: "shell", description: "pnpm dev" }] };
 
 // One project per activity a collapsed row can show. Website has sessions in all three states and
@@ -34,10 +35,15 @@ const sessions = [
   sessionOf("s-docs-1", console_.id, docs.id, "Old draft", "interrupted"),
   sessionOf("s-archived-1", console_.id, archived.id, "Completed draft", "archived"),
   sessionOf("s-preview-1", staging.id, preview.id, "Serve the preview", "idle", watching),
+  sessionOf("s-preview-2", staging.id, preview.id, "Update the preview", "working"),
   sessionOf("s-release-1", build.id, release.id, "Prepare the release", "working"),
+  sessionOf("s-release-2", build.id, release.id, "Launch the release check", "starting"),
+  sessionOf("s-ready-1", ready.id, undefined, "Await the next instruction", "idle"),
+  sessionOf("s-ready-2", ready.id, undefined, "Compile the bundle", "working"),
+  sessionOf("s-starting-1", starting.id, undefined, "Launch the agent", "starting"),
 ];
 
-const state = snapshotState({ consoles: [console_, staging, build], projects: [archived, empty, website, api, mobile, billing, docs, preview, release], sessions });
+const state = snapshotState({ consoles: [console_, ready, staging, build, starting], projects: [archived, empty, website, api, mobile, billing, docs, preview, release], sessions });
 
 export const activityScenarios: Scenario[] = [
   {
@@ -53,7 +59,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Collapsed project rows, by what is going on beneath them",
-    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging accent dot for Mobile app and Search API, a speech bubble for Billing and none for Docs. Project order follows session status: Website, Billing, Mobile app, Search API, then Docs. Mobile app's only session is idle with a dev server still running, so its background work sorts after Billing's Awaiting instructions and before Search API's Working, even though Mobile app and Search API share the working marker. In the rail, Staging (background work only) and Build (a working session) share a green rim around the theme background (light or dark) with a centre and outward ripple in the same accent colour as the working session dot; Main keeps its waiting hand. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the five active projects open, and those two stay folded.",
+    description: "Each collapsed row's marker shows the most pressing activity beneath it: a waving hand for Website (waiting beats working), a pinging accent dot for Mobile app and Search API, a speech bubble for Billing and none for Docs. Project order follows session status: Website, Billing, Mobile app, Search API, then Docs. Mobile app's only session is idle with a dev server still running, so its background work sorts after Billing's Awaiting instructions and before Search API's Working, even though Mobile app and Search API share the working marker. The rail keeps the original inverted waiting hand on yellow and idle speech bubble on green, with 14px circular badges separated from the avatars by the original cutouts. Main shows the waving hand and Ready the speech bubble despite a working session. Staging shows a hollow center on a green background-work badge despite a working session; Build shows a filled center on a blue working badge despite a starting session. Both work indicators breathe gently over 2.4 seconds without expanding and stay still with reduced motion. Avatar priority is Waiting for you, Awaiting instructions, Working in background, then Working. Starting has only a launching session and no avatar badge; starting sessions keep their usual position alongside idle sessions in the sidebar. Hover a marker to read its tooltip. Docs, whose only session is interrupted, stays undimmed. The pinned Archived only and No sessions yet projects sort after the active ones, dimmed together. Expand from the Projects heading: only the five active projects open, and those two stay folded.",
     state,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),

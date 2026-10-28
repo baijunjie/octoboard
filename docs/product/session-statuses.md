@@ -14,14 +14,14 @@
 *Working*, *waiting for the user*, *awaiting instructions* and *working in background* mean a process is running, and
 *starting* means one is about to be; the last two mean none is, and both can be resumed.
 
-The glyph stands for the status wherever one is shown — the sidebar's rows, focus mode's cards, the top bar's breadcrumb
-and a confirmation's list of the sessions it affects. In a confirmation, archived sessions omit the status glyph; the
-warning identifies them as archived. The waving hand and the outward pulse stand still where the system asks for reduced
-motion, leaving the working glyph a plain accent-coloured dot and the *working in background* glyph a plain hollow green
-ring; working and awaiting instructions still differ by shape as well as by colour. The starting arc, which *switching
-account* shares, stands still there too and differs from the rest by shape. *Working in background* is the *working*
-glyph drawn as a hollow ring in *awaiting instructions*' green: it is told apart from *working*'s filled dot by shape as
-well as by colour, and from *awaiting instructions* by shape.
+The glyph stands for the status on the sidebar's rows, focus mode's cards, the top bar's breadcrumb and a confirmation's
+list of the sessions it affects. In a confirmation, archived sessions omit the status glyph; the warning identifies them
+as archived. The waving hand and the outward pulse stand still where the system asks for reduced motion, leaving the
+working glyph a plain accent-coloured dot and the *working in background* glyph a plain hollow green ring; working and
+awaiting instructions still differ by shape as well as by colour. The starting arc, which *switching account* shares,
+stands still there too and differs from the rest by shape. *Working in background* is the *working* glyph drawn as a
+hollow ring in *awaiting instructions*' green: it is told apart from *working*'s filled dot by shape as well as by
+colour, and from *awaiting instructions* by shape.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 
@@ -159,13 +159,13 @@ it asks for confirmation first (see "Archiving, interruption and resuming" in
 session does not report" in `docs/product/reporting-to-owners.md`).
 
 **It has its own glyph and name** wherever a session's status is shown or said — its row, focus mode's card, the top
-bar's breadcrumb, a confirmation's list of sessions, the row's accessible name and the glyph's tooltip. **For activity
-summaries, it counts as working**: a console's badge on the rail and a collapsed project's activity marker (see "The
-console switcher" in `docs/product/console-switcher.md` and "Project rows" in `docs/product/sidebar-project-rows.md`),
-and a switch strip chip (see "The switch strip" in `docs/product/focus-mode.md`). Project and session lists ranked by
-status give it a separate place, following "Order of projects and sessions" in
-`docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu lists it in a group of its own (see
-"The icon's menu" in `docs/product/menu-bar-icon.md`).
+bar's breadcrumb, a confirmation's list of sessions, the row's accessible name and the glyph's tooltip. A console's
+avatar distinguishes it from working too, using the badge and selection rules in "The console switcher" in
+`docs/product/console-switcher.md`. **For activity summaries, it counts as working**: a collapsed project's activity
+marker (see "Project rows" in `docs/product/sidebar-project-rows.md`) and a switch strip chip (see "The switch strip"
+in `docs/product/focus-mode.md`). Project and session lists ranked by status give it a separate place, following
+"Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`. The menu bar icon's menu lists it
+in a group of its own (see "The icon's menu" in `docs/product/menu-bar-icon.md`).
 
 Every session record the session tools give carries the list (see "Session records" in
 `docs/product/what-every-session-reads.md`).
@@ -175,11 +175,11 @@ Every session record the session tools give carries the list (see "Session recor
 *Waiting for the user* is the raised hand, and it is made findable rather than left on the session's own row:
 
 - The session's row shows the raised hand. Its project row shows one while the project is collapsed, and its console's
-  avatar on the rail carries one, the rail showing every console at once, so a waiting session can be found whatever the
-  sidebar is showing (see "The console switcher" in `docs/product/console-switcher.md` and "Project rows" in
-  `docs/product/sidebar-project-rows.md`). In a console session's focus mode, a console session's chip in the switch
-  strip shows one too while it or a session bound to it is waiting (see "The switch strip" in
-  `docs/product/focus-mode.md`).
+  avatar on the rail carries one unless the session chosen for the badge is switching account. The rail shows every
+  console at once, so a waiting session can be found whatever the sidebar is showing (see "The console switcher" in
+  `docs/product/console-switcher.md` and "Project rows" in `docs/product/sidebar-project-rows.md`). In a console
+  session's focus mode, a console session's chip in the switch strip shows one too while it or a session bound to it is
+  waiting (see "The switch strip" in `docs/product/focus-mode.md`).
 - A system notification fires once as a session enters that state, naming the session by its title and the project it
   runs in — or the console whose console session it is. A session that is answered and later waits again notifies again.
   The macOS application asks for no notification permission, and macOS showed no prompt for one. The banner has been

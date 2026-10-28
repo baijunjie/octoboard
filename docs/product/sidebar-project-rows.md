@@ -24,11 +24,13 @@ its last check failed (see "The branch badge" in `docs/product/project-git-statu
 stop of its own on the row, and pressing it does not fold the project; the row's own name adds that the Git check failed
 while it shows.
 
-A collapsed project shows an activity marker with the same meanings as a console's badge on the rail (see "The console
-switcher" in `docs/product/console-switcher.md`), taken from its sessions that are not archived, so a waiting session
-can be found with its project collapsed. The three glyphs being alike in size, **the marker carries a tooltip** saying
-which activity it stands for, in the same words the row's own name folds in beside the project's name (see "Tooltips on
-indicators" in `docs/product/labels-and-tooltips.md`).
+A collapsed project shows an activity marker taken from its sessions that are not archived, so a waiting session can
+be found with its project collapsed. It shows a waving hand while any session is waiting for the user; otherwise the
+working glyph while any is working or working in background; otherwise a green speech bubble while any is awaiting
+instructions or starting; otherwise nothing. The glyphs follow "Session statuses" in `docs/product/session-statuses.md`,
+with background work counted as working. **The marker carries a tooltip** saying which activity it stands for, in the
+same words the row's own name folds in beside the project's name (see "Tooltips on indicators" in
+`docs/product/labels-and-tooltips.md`).
 
 At the row's end are its pin button while the project is pinned (see "Pinning" in
 `docs/product/order-of-projects-and-sessions.md`), then a **+** button, **New session**, which opens the new-session

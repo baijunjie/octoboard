@@ -284,10 +284,9 @@ These are:
   "The switch strip" in `docs/product/focus-mode.md`), whose tooltip says which activity it stands for, in the same
   words the name of the row or chip around it folds in beside the project's or console session's own name. Beneath a
   collapsed project's row that is one of three — a session waiting for the user, one working, one merely running — while
-  a chip only ever shows the first two of them. The same activity shown as a badge on a console's avatar in the rail
-  adds no tooltip of its own: the badge is decorative, and the avatar's own tooltip already says the activity, folded in
-  beside the console's name (see "The console switcher" in `docs/product/console-switcher.md`). So one activity is
-  worded two ways — on its own in the marker's tooltip, folded into the name in the avatar's;
+  a chip only ever shows the first two of them. Background work counts as working in both summaries. The rail's
+  console avatar has its own status selection and badge rules (see "The console switcher" in
+  `docs/product/console-switcher.md`); that decorative badge has no tooltip of its own;
 - the binding badge, the coloured dot on a project session's row bound to a console session, whose tooltip names that
   console session (see "The binding badge" in `docs/product/sidebar-session-rows.md`);
 - a session's agent icon on its row, on a focus mode's card or archived row, on the archive view's row and on each
