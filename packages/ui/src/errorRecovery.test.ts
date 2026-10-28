@@ -19,7 +19,9 @@ it.each([
   ["grok_sandbox_unsupported", "grokSandbox"],
   ["default_account_not_shareable", "accountNotShareable"], ["account_sharing_failed", "accountSharing"], ["account_still_sharing", "accountBusy"],
   ["account_in_use", "accountBusy"], ["sharing_session_did_not_stop", "sharingStop"], ["account_sharing_in_progress", "accountChanging"], ["account_disabled", "accountDisabled"], ["account_not_signed_in", "accountNotSignedIn"], ["daemon_shutting_down", "none"],
-  ["git_failed", "gitFailure"], ["git_clone_failed", "gitFailure"],
+  ["git_failed", "gitFailure"], ["git_clone_failed", "gitFailure"], ["git_push_failed", "gitFailure"],
+  ["git_switch_failed", "gitSwitchFailure"], ["git_restore_failed", "gitRestoreFailure"], ["git_operation_in_progress", "none"],
+  ["terminal_unavailable", "openTerminal"], ["directory_unavailable", "openFileManager"], ["path_open_failed", "openDefaultApplication"],
   ["sharing_resume_failed", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
@@ -133,4 +135,9 @@ it.each([
 ])("gives a failed automatic switch whose cause is %s a remedy without the operation to retry", (_name, detail, recovery) => {
   const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { agent: "Claude Code", from: "A", account: "B", reason: detail, reason_code: "internal_error", detail });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+});
+
+it("keeps a missing path's remedy and an operating-system cause over the remedy of the application that failed to open", () => {
+  expect(classifyError(new DaemonRequestError("gone", "path_open_failed", {}), "hostPathGone")).toEqual({ kind: "actionable", recovery: "hostPathGone" });
+  expect(classifyError(new DaemonRequestError("denied", "directory_unavailable", { detail: "Permission denied (os error 13)" }))).toEqual({ kind: "actionable", recovery: "access" });
 });

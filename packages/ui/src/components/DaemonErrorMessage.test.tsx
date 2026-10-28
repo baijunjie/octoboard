@@ -373,7 +373,7 @@ it("raises git_switch_failed as an alert titled for what failed, its body starti
   expect(alert.querySelector("h2")?.textContent).toBe("Could not switch branches");
   const body = alert.querySelector("[class*='empty:hidden']")!;
   expect(body.childNodes).toHaveLength(0);
-  expect(body.nextElementSibling?.textContent).toBe(format("en", "error.recovery.gitFailure", { terminal: "Terminal", git: "Git" }));
+  expect(body.nextElementSibling?.textContent).toBe(format("en", "error.recovery.gitSwitchFailure", { terminal: "Terminal", git: "Git" }));
   expect(alert.querySelector("pre")?.textContent).toBe(detail);
   expect(alert.textContent).not.toContain("could not switch");
 });
@@ -520,7 +520,7 @@ it.each([
   ["sessionBranches", ["Terminal", "Git"]],
   ["repository", ["Git", "Git", "Terminal"]],
   ["noCommits", ["Terminal"]], ["shell", ["Terminal"]],
-  ["gitFailure", ["Terminal", "Git", "Git"]], ["gitHistory", ["Terminal"]],
+  ["gitFailure", ["Terminal", "Git", "Git"]], ["gitSwitchFailure", ["Terminal", "Git", "Git"]], ["gitRestoreFailure", ["Terminal", "Git"]], ["gitHistory", ["Terminal"]],
   ["unsentMessage", ["Enter"]],
 ] as const)("marks %s recovery references while preserving a matching plain companion", (recovery, englishValues) => {
   const container = mount(<RecoveryGuidance recovery={recovery} />);

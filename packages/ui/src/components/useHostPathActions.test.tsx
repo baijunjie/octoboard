@@ -45,7 +45,7 @@ it.each(["file_not_found", "path_not_found"])("gives a %s its own remedy, findin
   expect(recovery).toBe("hostPathGone");
 });
 
-it("leaves any other refusal to the remedy of its kind", async () => {
+it("leaves any other refusal to the remedy of its code", async () => {
   const [, , title, recovery] = await refused("open_project_path", new DaemonRequestError("no", "path_open_failed", { path: "src/a.ts" }));
   expect(title).toBe("Could not open in the default application");
   expect(recovery).toBeUndefined();

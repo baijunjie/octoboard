@@ -6,8 +6,8 @@ import { isUncataloguedFailure } from "./uncataloguedFailure";
 export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
-  | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitHistory" | "branch"
-  | "refresh" | "scope" | "limit" | "openExternal" | "issueAddress"
+  | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
+  | "refresh" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "quotaUsedUpAgent" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
@@ -69,7 +69,11 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   avatarSize: ["icon_too_large"],
   remote: ["invalid_remote_url"],
   noCommits: ["no_commits_to_push", "no_commits_to_restore"],
-  gitFailure: ["git_failed", "git_clone_failed", "git_push_failed", "git_switch_failed", "git_restore_failed", "git_operation_in_progress", "no_push_remote", "upstream_not_a_remote"],
+  // Switching a branch and restoring files are local: their remedies do not point at remote access. A restore discards
+  // uncommitted changes by design, so its remedy names what can really refuse it.
+  gitSwitchFailure: ["git_switch_failed"],
+  gitRestoreFailure: ["git_restore_failed"],
+  gitFailure: ["git_failed", "git_clone_failed", "git_push_failed", "no_push_remote", "upstream_not_a_remote"],
   gitHistory: ["no_merge_base", "no_merge_base_shallow"],
   sessionBranches: ["session_branches_not_removed"],
   projectBranches: ["project_branches_not_determined"],
@@ -77,13 +81,18 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   refresh: ["source_changed", "unknown_commit", "page_not_current", "unknown_page", "unknown_project", "unknown_console", "queued_messages_lost", "queued_messages_dropped"],
   scope: ["outside_scope", "unsupported_file_type", "clean_filtered"],
   limit: ["limit_exceeded"],
-  openExternal: ["terminal_unavailable", "directory_unavailable", "path_open_failed"],
+  // One group per application the host opens, so each remedy names only the one that failed. `openExternal` is the
+  // browser link the UI itself fails to open, raised as an explicit recovery, so no code maps to it.
+  openTerminal: ["terminal_unavailable"],
+  openFileManager: ["directory_unavailable"],
+  openDefaultApplication: ["path_open_failed"],
   // Expected failures whose sentence already says what follows and what to do, with no remedy of their kind to add.
+  // `git_operation_in_progress` is only a restore refused before it starts, and says to finish or abort the operation.
   // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
   // release_session without an owner, and offers Unbind only on a bound project session. `path_link_refused` is a path
   // link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is none for the
   // causes whose sentence says it all.
-  none: ["daemon_shutting_down", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
+  none: ["daemon_shutting_down", "git_operation_in_progress", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
 };
 const DOMAIN_RECOVERY = new Map(Object.entries(GROUPS).flatMap(([recovery, codes]) => codes.map((code) => [code, recovery as ErrorRecovery] as const)));
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
