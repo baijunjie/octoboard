@@ -548,7 +548,9 @@ covers Settings), ring it as focus the user did not aim, and take it back once i
 (`handFocusOnceClosed` in `packages/ui/src/settings/AgentAccountsSection.tsx`). Settings itself, closing with no dialog
 under it, goes to the selected session's terminal, else to the control that opened it while that is still there, even
 one that never took focus (the press it ended on is recorded by `usePressedControl` in `packages/ui/src/components/`),
-else to the window's fallback (`focusAfterModalCloses` in `packages/ui/src/components/regionFocus.ts`). A return to the
+else to the window's fallback (`focusAfterModalCloses` in `packages/ui/src/components/regionFocus.ts`). Closing over
+another dialog, focus the restore left on `<body>` goes to the control in that dialog that opened Settings, else the
+control that dialog opens on. A return to the
 control that opened a dialog is a restore, not a hand-off: its ring follows the input that closed the dialog.
 
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not

@@ -81,8 +81,10 @@ login dialog keeps its lifecycle (see `docs/product/logging-accounts-in.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal, unless a dialog is open beneath it: focus then stays in that
-dialog, on the control that opened Settings — the console dialog's Manage accounts button, say — or on the dialog
-itself when that control is gone. Opened from the rail while the sidebar's drawer is open, it gives focus back to the
+dialog. It goes to the control in that dialog that opened Settings — the console dialog's Manage accounts button,
+say — while that control is still there, even when the press gave it no focus; else to the control that dialog opens
+on (see "Where keyboard focus starts in a form dialog" in `docs/product/dialogs.md`); and only else to the dialog
+itself. Opened from the rail while the sidebar's drawer is open, it gives focus back to the
 rail instead (see "Below 1168 px: the sidebar becomes a drawer" in `docs/product/sidebar-drawer.md`).
 
 With no dialog beneath it and no session's terminal to take focus — no session is selected, or Settings was opened
