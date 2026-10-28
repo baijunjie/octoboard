@@ -31,8 +31,14 @@ describe("the accounts table", () => {
     const { container } = mount("Codex");
     const table = container.querySelector("table")!;
     expect(table.getAttribute("aria-label")).toBe("Codex accounts");
-    expect([...table.querySelectorAll("thead th")].map((th) => th.textContent)).toEqual(["Account", "Status", "Usage", "Disable", "Actions"]);
+    expect([...table.querySelectorAll("thead th")].map((th) => th.textContent)).toEqual(["", "Account", "Status", "Usage", "Disable", "Actions"]);
     expect([...table.querySelectorAll("tbody tr")].map((row) => row.getAttribute("data-account-row"))).toEqual(["default:codex", "codex-work"]);
+    for (const row of table.querySelectorAll("tbody tr")) {
+      expect(row.firstElementChild?.tagName).toBe("TD");
+      expect(row.firstElementChild?.querySelector("[data-account-grip]")).not.toBeNull();
+      expect(row.children[1]?.getAttribute("scope")).toBe("row");
+      expect(row.children[1]?.querySelector("[data-account-grip]")).toBeNull();
+    }
     // No row repeats a column's name or its help: the sharing switch is in the details and the approval select above the table.
     expect(table.querySelector("tbody")!.textContent).not.toContain("Permission approval");
     expect(table.querySelector("tbody select")).toBeNull();
@@ -62,7 +68,7 @@ describe("the accounts table", () => {
     expect(name("claude-work").textContent).not.toContain("Limit reached");
     expect(name("claude-work").querySelector("div.min-w-0.text-app-muted")).not.toBeNull();
     expect(name("default:claude").querySelector("div.min-w-0.text-app-muted")).toBeNull();
-    const usage = (id: string) => rowOf(container, id).querySelectorAll("td")[1]!;
+    const usage = (id: string) => rowOf(container, id).querySelectorAll("td")[2]!;
     expect(usage("claude-work").querySelector(".quota-meter--used-up")).not.toBeNull();
     expect(usage("claude-work").querySelector(".quota-meter--claude")).toBeNull();
     const badge = [...usage("claude-work").querySelectorAll('[aria-hidden="true"]')].find((node) => node.textContent === "Limit reached");
@@ -81,7 +87,7 @@ describe("the accounts table", () => {
     used.windows = [{ ...used.windows[0]!, used_percent: 100 }, ...used.windows.slice(1)];
     accountQuotas.push(quotaOf("claude", null), used);
     const { container } = mount("Claude Code");
-    const usage = rowOf(container, "claude-work").querySelectorAll("td")[1]!;
+    const usage = rowOf(container, "claude-work").querySelectorAll("td")[2]!;
     expect(usage.querySelector(".quota-meter--used-up .quota-bar-track > span")).not.toBeNull();
     const badge = [...usage.querySelectorAll("span")].find((node) => node.textContent === "Limit reached")!;
     const mark = usage.querySelector('button[aria-label^="Out of date"]')!;
@@ -95,7 +101,7 @@ describe("the accounts table", () => {
       quotaOf("claude", null, { unavailable: failure }),
     );
     const { container } = mount("Claude Code");
-    const usage = (id: string) => rowOf(container, id).querySelectorAll("td")[1]!;
+    const usage = (id: string) => rowOf(container, id).querySelectorAll("td")[2]!;
     expect(usage("claude-work").querySelector('button[aria-label="Usage unavailable"]')).not.toBeNull();
     expect(rowOf(container, "claude-work").querySelector("th button")).toBeNull();
     expect(usage("claude-work").textContent).not.toContain("No usage reading");

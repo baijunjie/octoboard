@@ -66,7 +66,7 @@ describe("turning an account off", () => {
     const row = rowOf(container, "codex-work");
     expect(row.textContent).not.toContain("Skipped by automatic account selection");
     expect(row.textContent).not.toContain("Disabled");
-    expect(row.querySelector("td:nth-child(3)")!.classList.contains("text-app-muted")).toBe(false);
+    expect(row.querySelector("td:nth-child(4)")!.classList.contains("text-app-muted")).toBe(false);
     expect(disableSwitch(row).checked).toBe(true);
     // The usage and the actions stay.
     expect(row.querySelector(".quota-bar-track")).not.toBeNull();
