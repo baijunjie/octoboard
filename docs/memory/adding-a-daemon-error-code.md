@@ -45,7 +45,14 @@ adds, in `packages/ui`:
   that key missing the alert shows the daemon's own English message, which no type check or test catches. So where
   `messageCode` words the code by a param such as `cause`, give a `.summary` key to every variant that could ever arrive
   with `detail`, the one the normaliser maps an unknown `cause` to included (a newer daemon's cause with `detail` lands
-  there), not only the variants today's daemon sends `detail` with; never drop such a key as unused.
+  there), not only the variants today's daemon sends `detail` with; never drop such a key as unused, except for a code in
+  `NO_SUMMARY_CODES`, which has none (next bullet).
+- The `.summary` is the alert body's optional opening sentence, and it must add what the alert's title does not say (a
+  cause, what the failure left as it was). Where the code is raised only by actions whose alert is titled for what
+  failed, and the summary would say that again ("Git could not push this branch" under "Could not push the branch"),
+  write none: add the code to `NO_SUMMARY_CODES` (`packages/ui/src/daemonMessage.ts`) and the body starts with the
+  remedy. Keep the summary where the code is also shown with no title, in a pane's failure, a mark's popover or
+  beside a field, as `models_command_failed` and `quota_command_failed` are.
 - Where the remedy is done in Settings' Agent accounts section, a case in `recoveryAction`
   (`packages/ui/src/components/ErrorGuidance.tsx`). The alert then offers the button, and the recovery text says only
   what to do there, without naming the path to it. See `docs/product/error-alerts.md`, section "Recovery and unexpected

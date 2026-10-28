@@ -1,5 +1,5 @@
 import { ActionableError } from "../actionableError";
-import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchItems, richMessageCode, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../daemonMessage";
+import { DETAIL_BLOCK_CODES, RECOVERY_CODES, hasRichMessage, hasTrustDiagnostic, leftBranchItems, sharingFailureItems, sharingRawReason, sharingReasonKey } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, unwordedReason } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { isMessageKey } from "../i18n/catalog";
@@ -18,7 +18,7 @@ export function hasErrorDetails(error: { code: string; params: MessageParams; me
   if (hasRawDetails(error)) return true;
   if (isUncataloguedFailure(error)) return false;
   if (hasShellTimeoutDetails(error)) return true;
-  if (!hasCodeParams(error) || !isMessageKey(`daemon.${richMessageCode(error.code, error.params)}`)) return false;
+  if (!hasCodeParams(error) || !hasRichMessage(error.code, error.params)) return false;
   if (leftBranchItems(error.code, error.params)) return true;
   if (isMessageKey(`daemon.${error.code}.details`)) return true;
   if (sharingRawReason(error) && sharingReasonKey(error.params.cause)) return true;
@@ -33,7 +33,7 @@ export function hasRawDetails(error: { code: string; params: MessageParams; mess
   if (isUncataloguedFailure(error)) return error.message !== "";
   if (error instanceof ActionableError && error.detail) return true;
   if (hasShellTimeoutDetails(error)) return false;
-  if (!hasCodeParams(error) || !isMessageKey(`daemon.${richMessageCode(error.code, error.params)}`)) return false;
+  if (!hasCodeParams(error) || !hasRichMessage(error.code, error.params)) return false;
   const left = leftBranchItems(error.code, error.params);
   if (left) return left.some((item) => !!item.detail);
   const sharing = sharingRawReason(error);
@@ -49,7 +49,7 @@ export function hasRawDetails(error: { code: string; params: MessageParams; mess
 export function hasErrorRemedy(error: { code: string; params: MessageParams; message: string }): boolean {
   if (isUncataloguedFailure(error)) return false;
   if (hasShellTimeoutDetails(error)) return true;
-  if (!hasCodeParams(error) || !isMessageKey(`daemon.${richMessageCode(error.code, error.params)}`)) return false;
+  if (!hasCodeParams(error) || !hasRichMessage(error.code, error.params)) return false;
   if (RECOVERY_CODES.has(error.code) && isMessageKey(`daemon.${error.code}.recovery`)) return true;
   const nested = nestedFailure(error);
   return nested !== undefined && NESTED_REMEDY_CODES.has(error.code) && hasErrorRemedy(nested);

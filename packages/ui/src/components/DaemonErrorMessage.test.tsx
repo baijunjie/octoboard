@@ -6,11 +6,12 @@ import { describe, expect, it, onTestFinished } from "vitest";
 
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
 import { errorAlerts } from "../errorAlerts";
-import { daemonMessage } from "../daemonMessage";
+import { reportError } from "../reportError";
+import { daemonMessage, NO_SUMMARY_CODES } from "../daemonMessage";
 import { DaemonRequestError } from "../daemon-client";
-import { format } from "../i18n/catalog";
+import { format, isMessageKey } from "../i18n/catalog";
 import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
-import { errorPresentation } from "../errorPresentation";
+import { errorPresentation, hasCodeParams } from "../errorPresentation";
 import { ActionableError } from "../actionableError";
 import { useDialogAction } from "../dialogs/Dialog";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -305,7 +306,7 @@ it.each([
 
 it.each([
   "project_branches_not_determined", "git_failed", "git_clone_failed", "git_remote_unreachable",
-  "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
+  "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed",
   "codex_unarchive_failed", "login_failed",
 ])("keeps %s diagnostics byte-for-byte once outside rich summaries and in plain text", (code) => {
@@ -334,12 +335,47 @@ it("keeps a complete nested diagnostic outside its launch sentence and translate
   expect(raw.querySelector("pre")?.textContent).toBe("raw\n    quota failure");
 });
 
-it.each(["unreadable_request", "project_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable"])("says %s in its own sentence, the system's text only in the raw part", (code) => {
+it.each(["unreadable_request", "project_directory_trash_failed", "configuration_unreadable"])("says %s in its own sentence, the system's text only in the raw part", (code) => {
   const detail = "Operation not permitted (os error 1)";
   const { body, raw } = mountApart(new DaemonRequestError("fallback", code, { detail }));
   expect(body.textContent).toBe(format("en", `daemon.${code}.summary` as never));
   expect(body.textContent).not.toContain(detail);
   expect(raw.querySelector("pre")?.textContent).toBe(detail);
+});
+
+it.each([...NO_SUMMARY_CODES])("gives %s no first line, its title saying what failed, and keeps the system's text only in the raw part", (code) => {
+  const detail = "Operation not permitted (os error 1)";
+  const error = new DaemonRequestError("fallback", code, { detail });
+  const { body, raw } = mountApart(error);
+  expect(isMessageKey(`daemon.${code}.summary`)).toBe(false);
+  expect(mount(<DaemonErrorMessage error={error} part="summary" />).textContent).toBe("");
+  expect(body.textContent).toBe("");
+  expect(raw.querySelector("pre")?.textContent).toBe(detail);
+  expect(daemonMessage("en", code, { detail }, "fallback", createStateStore({}).getState())).toContain(detail);
+  expect(daemonMessage("en", code, { detail }, "fallback", createStateStore({}).getState(), true)).toBe("");
+});
+
+it.each(["git_restore_failed", "terminal_unavailable"])("shows %s with no detail as nothing of its own: no first line, no dangling colon, no Error details", (code) => {
+  const error = new DaemonRequestError(`plain message for ${code}: `, code, { detail: "" });
+  const { body, raw } = mountApart(error);
+  expect(hasCodeParams(error)).toBe(true);
+  expect(body.textContent).toBe("");
+  expect(raw.textContent).toBe("");
+  expect(hasErrorDetails(error)).toBe(false);
+  expect(hasErrorRemedy(error)).toBe(false);
+});
+
+it("raises git_switch_failed as an alert titled for what failed, its body starting with the remedy and the text only under Error details", () => {
+  const detail = "error: Your local changes would be overwritten by checkout";
+  reportError(new DaemonRequestError("fallback", "git_switch_failed", { detail }), undefined, undefined, undefined, "Could not switch branches");
+  mount(<ErrorAlerts />);
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  expect(alert.querySelector("h2")?.textContent).toBe("Could not switch branches");
+  const body = alert.querySelector("[class*='empty:hidden']")!;
+  expect(body.childNodes).toHaveLength(0);
+  expect(body.nextElementSibling?.textContent).toBe(format("en", "error.recovery.gitFailure", { terminal: "Terminal", git: "Git" }));
+  expect(alert.querySelector("pre")?.textContent).toBe(detail);
+  expect(alert.textContent).not.toContain("could not switch");
 });
 
 it.each([

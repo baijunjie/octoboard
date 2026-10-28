@@ -1,12 +1,12 @@
 import React, { useId } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
-import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, type LeftBranchItem } from "../daemonMessage";
+import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, type LeftBranchItem } from "../daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { ActionableError } from "../actionableError";
 import { errorText, unexpectedFailureDiagnostic } from "../errorText";
-import { globalParam, isMessageKey } from "../i18n/catalog";
+import { globalParam, isMessageKey, type MessageKey } from "../i18n/catalog";
 import { joinNodes } from "../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import { NESTED_FAILURE_CODES, NESTED_REMEDY_CODES, type MessageParams } from "../protocol";
@@ -26,7 +26,8 @@ export function DaemonErrorTitle(): React.ReactElement {
 const NO_RECORDS = new Map<string, never>();
 
 /** The three layers of a failure: `summary` is what happened and `remedy` the one main thing to do about
- * it, both in the application's own words and always visible; `details` is what the Details button
+ * it, both in the application's own words and always visible (a code in `NO_SUMMARY_CODES` has no summary, as its
+ * alert's title says what happened); `details` is what the Details button
  * holds: first any further explanation in the application's own words (the catalog's `.details` line, a reason per cause with its
  * fix, the lead lines of several groups), then the raw text that was not written for the reader (a
  * diagnostic block, the system's own message, raw entries). `further` and `raw` are those two halves of
@@ -94,7 +95,8 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   const id = `daemon.${richMessageCode(error.code, error.params)}`;
   // An `ActionableError`'s `detail` is raw text of its own, whatever the catalog says of its code.
   const actionableRaw = error instanceof ActionableError && error.detail ? <DiagnosticBlock>{error.detail}</DiagnosticBlock> : null;
-  if (!isMessageKey(id)) return part === undefined || part === "summary" ? <>{error.message}</> : part === "details" || part === "raw" ? actionableRaw : null;
+  const summaryless = lacksSummary(error.code);
+  if (!summaryless && !isMessageKey(id)) return part === undefined || part === "summary" ? <>{error.message}</> : part === "details" || part === "raw" ? actionableRaw : null;
   const left = leftBranchItems(error.code, error.params);
   if (left) return <LeftBranches count={left.length} items={left} part={part} />;
   const params = daemonParams<React.ReactNode>(language, error.code, error.params, { consoles, projects, sessions, shellTerminals, accounts }, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
@@ -164,11 +166,15 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   if (part === "remedy") return remedy;
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
-  const sentence = <span><Message id={id} params={params as never} /></span>;
+  // A code with no opening sentence (`NO_SUMMARY_CODES`) has no sentence: the body starts with the remedy.
+  const sentence = summaryless ? null : <span><Message id={id as MessageKey} params={params as never} /></span>;
   // A failed automatic switch says what happened in its sentence and why on a line of its own, which is
   // the nested failure's summary (or the generic sentence of one the application has no words for).
   const reasonLine = error.code === "account_switch_automatically_failed" && params.reason !== undefined ? <span className="block">{params.reason}</span> : null;
   if (part === "summary" || (!reasonLine && !hasErrorRemedy(error) && !hasErrorDetails(error))) return sentence;
+  // With no opening sentence and nothing else of the application's own, the body is empty rather than an empty column, so the
+  // alert lays out the remedy it adds as its first line.
+  if (summaryless && !remedy && !further && !reasonLines && !nestedFurther) return null;
   // The whole message is the application's own words; the raw text is the `raw` part, kept behind a disclosure.
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -192,10 +198,11 @@ export function ShellTimeoutCommand({ params: { shell, command, timeout } }: { p
   );
 }
 
-/** Structured failures retain their metadata; `summary` is inline-safe for Alert.Description, `remedy`
+/** Structured failures retain their metadata; `summary` is inline-safe for Alert.Description (empty for a code in `NO_SUMMARY_CODES`), `remedy`
  * holds the one main thing to do (also inline-safe) and `details` the further explanation, then the raw blocks
  * (`further` and `raw` apart). Omitting `part` renders the complete message in the application's own words: the
- * sentence, the remedy and the further explanation, never the raw text. A failure the application has no words for
+ * sentence, the remedy and the further explanation, never the raw text; a code in `NO_SUMMARY_CODES` has no sentence, and
+ * its whole message is empty where nothing else of the application's own remains. A failure the application has no words for
  * shows its generic sentence, and its raw message is its `details` and its `raw` (with a script error's stack). */
 export function DaemonErrorMessage({ error, showTitle = true, part }: { error: ErrorPresentation; showTitle?: boolean; part?: DaemonErrorPart }): React.ReactElement | null {
   const t = useT();

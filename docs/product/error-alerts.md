@@ -88,11 +88,13 @@ about a session, the first line of its body, "Session: …", names that session 
 console), since the daemon's message says only "this session"; a session whose record is already gone, as after a
 failed launch, is named there by the name the failure carried, with no place. The rest of the body is in Octoboard's
 own words — what happened, the next step, any further explanation — and holds no raw text: that is only under the
-collapsed **Error details** disclosure at the body's end (see "Names and diagnostic details" below). It has one
-acknowledgement button. Escape, a click outside and a close button cannot dismiss it, and it never dismisses itself.
-Acknowledgement does not retry the failed operation. The originating dialog remains available for correcting inputs or
-retrying unless that operation's own contract closes it, or a recovery action navigates Settings and closes its account
-or agent forms (see "Opening and closing Settings" in `docs/product/settings.md`).
+collapsed **Error details** disclosure at the body's end (see "Names and diagnostic details" below). The body's opening
+sentence (after any "Session: …" line) is optional: it is there only for what the title leaves unexplained, such as a
+cause or what the failure left as it was, and never says the title again in other words; when the title says it all,
+the body starts with the next step. It has one acknowledgement button. Escape, a click outside and a close button
+cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the failed operation. The originating
+dialog remains available for correcting inputs or retrying unless that operation's own contract closes it, or a recovery
+action navigates Settings and closes its account or agent forms (see "Opening and closing Settings" in `docs/product/settings.md`).
 
 Errors are queued and normally shown one at a time in arrival order. An identical failure already waiting for
 acknowledgement is not queued again: its message, affected session, original diagnostic message, recovery category

@@ -322,6 +322,11 @@ export interface Scenario {
   /** A refused request to open a project's directory in the host's file manager. The fixture
    * otherwise acknowledges the request without opening any host application. */
   projectDirectoryOpenError?: FixtureError;
+  /** A refused request to open a project's directory in the host's system terminal (`open_project_terminal`), acknowledged
+   * otherwise without opening any host application. */
+  projectTerminalOpenError?: FixtureError;
+  /** A refused push of a project's current branch (`push_project_branch`), acknowledged otherwise. */
+  projectPushError?: FixtureError;
   /** A refusal of `open_project_path` and `reveal_project_path`, which a row of the project pane and the file viewer's
    * header ask for to open a file or folder in the default application or the file manager; acknowledged otherwise. */
   projectPathActionError?: FixtureError;

@@ -1,5 +1,5 @@
 import { DaemonRequestError } from "./daemon-client";
-import { CODE_PARAMS, DETAIL_BLOCK_CODES, hasTrustDiagnostic, RECOVERY_CODES, referenceNameParams, leftBranchItems, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
+import { CODE_PARAMS, DETAIL_BLOCK_CODES, lacksSummary, hasTrustDiagnostic, RECOVERY_CODES, referenceNameParams, leftBranchItems, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
 import { classifyError } from "./errorRecovery";
 import { globalParam, isMessageKey, type PlainMessageKey } from "./i18n/catalog";
 import { NESTED_FAILURE_CODES, type MessageParams } from "./protocol";
@@ -45,8 +45,10 @@ export function unwordedReason(code: string, params: MessageParams): string | un
   return params.reason && !isMessageKey(`daemon.trust_reason.${params.reason_code}`) ? params.reason : undefined;
 }
 
-/** Whether `error` has every param its message shows as a chip, the UI's own included. */
+/** Whether `error` has every param its message shows as a chip, the UI's own included. A code with no opening sentence
+ * (`NO_SUMMARY_CODES`) always has them, having no message to show, so it stays structured with no `detail` too. */
 export function hasCodeParams(error: { code: string; params: MessageParams }): boolean {
+  if (lacksSummary(error.code)) return true;
   if (error.code === "shell_environment_timeout") return !hasShellTimeoutDetails(error) && !!error.params.detail;
   if (error.code === "session_has_running_sessions") return !!runningSessionIds(error.params);
   if (leftBranchItems(error.code, error.params)) return true;

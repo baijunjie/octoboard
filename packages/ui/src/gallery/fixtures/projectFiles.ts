@@ -187,6 +187,16 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.press(ui.t("viewer.openInFileManager")), (ui) => ui.wait(300)],
   },
   {
+    id: "files-viewer-error-default-application",
+    group: "File viewer",
+    category: "exceptional",
+    title: "File viewer with an error alert, the default application refused",
+    description: "Default application is pressed on a file the host cannot hand to any application, so the error alert opens over the viewer, titled \"Could not open in the default application\"; its body goes straight to what to do, with the system's reason only in the Error details disclosure, closed here.",
+    state,
+    projectPathActionError: { code: "path_open_failed", params: { detail: "open exited with status 1: No application knows how to open /Users/dev/code/website/src/main.ts" }, message: "The file or folder could not be opened" },
+    steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.press(ui.t("viewer.openInDefaultApplication")), (ui) => ui.wait(300)],
+  },
+  {
     id: "files-tree",
     group: GROUP,
     category: "normal",
