@@ -85,7 +85,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde_json::json;
 
+use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
 use super::{AgentAdapter, LaunchPlan, LaunchSpec, HOOK_TIMEOUT_SECS};
+use crate::line_file::JSON_FILE_LIMIT;
 use crate::mcp;
 use crate::protocol::{error_code, Agent, CodedError, TerminalAppearance};
 use crate::trust::CarriedTrust;
@@ -398,10 +400,10 @@ fn sandbox_setting(
     .and_then(|(source, profile)| on(source, profile))
 }
 
-/// `[sandbox] profile` of a Grok TOML file; `None` when the file is absent, unreadable, or does
-/// not set a non-empty one.
+/// `[sandbox] profile` of a Grok TOML file; `None` when the file is absent, unreadable within its
+/// size bound, or does not set a non-empty one.
 fn toml_sandbox_profile(file: &Path) -> Option<String> {
-    let table = std::fs::read_to_string(file)
+    let table = read_regular_text(file, SMALL_FILE_LIMIT)
         .ok()?
         .parse::<toml::Table>()
         .ok()?;
@@ -424,7 +426,7 @@ fn saved_sandbox_profile(source_home: &Path, id: &str) -> Option<(String, String
         if !std::fs::symlink_metadata(&summary).is_ok_and(|meta| meta.is_file()) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&summary) else {
+        let Ok(text) = read_regular_text(&summary, JSON_FILE_LIMIT as usize) else {
             continue;
         };
         let document: serde_json::Value = serde_json::from_str(&text).ok()?;
@@ -489,12 +491,28 @@ fn default_grok_home(spec: &LaunchSpec<'_>) -> PathBuf {
 
 /// Appends Octoboard's MCP server to the farm's own `config.toml`. Appended rather than written
 /// fresh, because this copy carries the user's whole Grok configuration and replacing it would be
-/// the "do not override the user's configuration" failure in another form.
+/// the "do not override the user's configuration" failure in another form. Only the copy's last
+/// byte is read, so a file of any size is kept whole without being read into memory.
 fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
+    use std::io::{Read, Seek, SeekFrom, Write};
+
     let (command, args) = super::mcp_server_command(spec);
-    let mut content = std::fs::read_to_string(config).unwrap_or_default();
-    if !content.is_empty() && !content.ends_with('\n') {
-        content.push('\n');
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .append(true)
+        .create(true)
+        .open(config)
+        .with_context(|| format!("opening {}", config.display()))?;
+    let mut content = String::new();
+    let reading = || format!("reading {}", config.display());
+    if file.metadata().with_context(reading)?.len() > 0 {
+        let mut last = [0u8];
+        file.seek(SeekFrom::End(-1))
+            .and_then(|_| file.read_exact(&mut last))
+            .with_context(reading)?;
+        if last[0] != b'\n' {
+            content.push('\n');
+        }
     }
     // Grok abandons a tool call at a limit of its own, and tells the server with a
     // `notifications/cancelled` — which withdraws a waiting session request, ending
@@ -517,7 +535,8 @@ fn append_mcp_server(config: &Path, spec: &LaunchSpec<'_>) -> Result<()> {
             .collect::<Vec<_>>()
             .join(", "),
     ));
-    std::fs::write(config, content).with_context(|| format!("writing {}", config.display()))?;
+    file.write_all(content.as_bytes())
+        .with_context(|| format!("writing {}", config.display()))?;
     Ok(())
 }
 
@@ -564,10 +583,7 @@ fn copy_tree(from: &Path, to: &Path) -> Result<()> {
 /// The folder Grok records its trust for: the working directory as Grok resolves it, canonical
 /// (`/private/tmp/…`, not `/tmp/…`).
 fn canonical_cwd(cwd: &Path) -> String {
-    std::fs::canonicalize(cwd)
-        .unwrap_or_else(|_| cwd.to_path_buf())
-        .to_string_lossy()
-        .into_owned()
+    canonical_project(cwd).to_string_lossy().into_owned()
 }
 
 /// Writes Octoboard's hooks into the farm. Hooks placed in `$GROK_HOME/hooks/*.json` load at
@@ -655,7 +671,8 @@ fn writeback_lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 /// `Some` when `account_config`'s source entry is a symlink to a file that exists. A plain file is
-/// the account's own, and a dangling link has no shared file to write.
+/// the account's own, and a dangling link has no shared file to write. A session copy above its
+/// size bound has no baseline to compare with, so it is not written back either.
 fn shared_config_writeback(
     source_home: &Path,
     grok_home: &Path,
@@ -668,7 +685,7 @@ fn shared_config_writeback(
     }
     let shared_target = std::fs::canonicalize(&account_config).ok()?;
     let session_config = grok_home.join("config.toml");
-    let text = std::fs::read_to_string(&session_config).ok()?;
+    let text = read_regular_text(&session_config, SMALL_FILE_LIMIT).ok()?;
     let table: toml::Table = text.parse().ok()?;
     Some(SharedConfigWriteback {
         session_config,
@@ -1610,6 +1627,50 @@ mod tests {
         assert_eq!(refused_profile(&fixture, None), None);
     }
 
+    /// A FIFO at the user's or a system-wide config path counts as unreadable instead of holding the
+    /// launch until a writer appears.
+    #[test]
+    fn a_fifo_at_a_config_path_does_not_hold_the_launch() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        let system = fixture.scratch.join("etc-grok");
+        std::fs::create_dir_all(&system).expect("system directory");
+        std::fs::remove_file(home.join("config.toml")).expect("config removed");
+        for path in [
+            home.join("config.toml"),
+            system.join("requirements.toml"),
+            system.join("managed_config.toml"),
+        ] {
+            let c = std::ffi::CString::new(path.into_os_string().into_encoded_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+        }
+        let (done, finished) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send(plan_isolated(&fixture.spec()).is_ok());
+        });
+        assert_eq!(
+            finished.recv_timeout(std::time::Duration::from_secs(10)),
+            Ok(true),
+            "the launch was held by a FIFO or did not plan"
+        );
+    }
+
+    /// A config above its size bound counts as unreadable, so its sandbox profile is not read.
+    #[test]
+    fn an_oversized_config_is_ignored() {
+        let mut fixture = spec_fixture();
+        let home = with_default_home(&mut fixture);
+        std::fs::write(
+            home.join("config.toml"),
+            format!(
+                "[sandbox]\nprofile = \"strict\"\n# {}\n",
+                "x".repeat(SMALL_FILE_LIMIT)
+            ),
+        )
+        .expect("config");
+        assert_eq!(refused_profile(&fixture, None), None);
+    }
+
     #[test]
     fn a_config_that_is_not_toml_is_ignored() {
         let mut fixture = spec_fixture();
@@ -1856,6 +1917,20 @@ mark = 'stay'
 
     fn session_config(plan: &LaunchPlan) -> PathBuf {
         PathBuf::from(&plan.env[0].1).join("config.toml")
+    }
+
+    /// A linked config above its size bound is not read back for a writeback, and its copy keeps the
+    /// user's text whole with the server appended on a line of its own.
+    #[test]
+    fn an_oversized_linked_config_is_kept_whole_and_not_written_back() {
+        let mut fixture = spec_fixture();
+        let text = format!("default_model = \"x\"\n# {}", "x".repeat(SMALL_FILE_LIMIT));
+        link_config(&mut fixture, &text);
+        let plan = plan_isolated(&fixture.spec()).expect("plan");
+        assert!(plan.shared_config_writeback.is_none());
+        let copy = std::fs::read_to_string(session_config(&plan)).expect("copy");
+        let appended = copy.strip_prefix(&text).expect("the user's text first");
+        assert!(appended.starts_with("\n\n[mcp_servers."), "{appended}");
     }
 
     #[test]

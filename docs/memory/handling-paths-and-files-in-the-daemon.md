@@ -41,10 +41,10 @@ holding none of the agent's record directories has never shown a record to be mi
 answers, and unknown never destroys anything; `agent_records::Resumability` is the shape for a session's
 conversation.
 
-## Read a file inside a project only through `browse::live`, and one a launch reads outside it without blocking
+## Read a project's files only through `browse::live`, and the agent's own configuration without blocking
 
 Applies to daemon code that reads a file's content from a project's directory or worktree — to count it, sniff it,
-hash it, send it, or to read an agent's configuration there while launching a session (`.mcp.json`,
+hash it, send it, or to read the configuration the project keeps while launching a session (`.mcp.json`,
 `.claude/settings.local.json`, `.codex/config.toml`). Go through `live::read_file` (from a path relative to the scope)
 or `live::read_resolved` (once the path has been resolved inside it), never `File::open`, `fs::read` or
 `fs::read_to_string`. What sits in a project is whatever the user or an agent put there: a link leading out of the
@@ -53,10 +53,21 @@ the launch itself, with no deadline — a device that reads forever, a file swap
 these and honours the request's cancel; a direct open does none of it, and a fixture of plain files cannot tell the
 two apart.
 
-A configuration file a launch reads outside the project (a directory above it, the home directory) cannot go through
-`live`, but still must not block: open it with `O_NONBLOCK`, refuse anything but a regular file, and bound the bytes
-read. In an adapter, `read_bounded_text` in `apps/daemon/src/adapter/files.rs` does both cases, picking by whether the
-path is inside the project.
+Which reader a launch uses goes by who owns the file, not by where it lies. A file the project keeps in a directory
+above it cannot go through `live`; a file the project does not own (in the agent's configuration directory, the home
+directory, a system-wide directory, Octoboard's own data, a session's records) is read as the agent reads it, following
+links. Neither may block: open with `O_NONBLOCK`, take only a regular file, and bound the bytes read. The second holds
+even under the project's directory: a home directory opened as the project holds `~/.claude`, `~/.claude.json` and
+`~/.codex`, which dotfile managers often link out of it, so `live` would refuse files the agent does read; and where the
+project's `.claude` or `.codex` is the agent configuration directory in effect, the project-side files in it count as
+the agent's too. In an adapter, `read_bounded_text` in `apps/daemon/src/adapter/files.rs` reads a file the project
+keeps (through `live` inside the canonical project, as a regular file above it), `read_regular_text` a file it does not
+own, and `files::is_agent_config_dir` tells whether a directory in the project's tree is the agent's configuration
+directory.
+
+A refusal from these readers does not mean the agent cannot read the file. Where taking an unreadable file as absent is
+the unsafe answer (an allowlist it may hold would be skipped), a regular file that is there but refused takes the safe
+side.
 
 ## Decide whether two account directories are one by `account_dir_key`, never by comparing their text
 

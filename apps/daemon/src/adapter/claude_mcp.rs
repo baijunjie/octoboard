@@ -53,7 +53,10 @@ use serde_json::Value;
 
 use super::claude::settings::{global_config_file, project_entry};
 use super::codex::toml_string;
-use super::files::{read_bounded_text, LARGE_FILE_LIMIT, SMALL_FILE_LIMIT};
+use super::files::{
+    canonical_project, is_agent_config_dir, read_bounded_text, read_regular_text, LARGE_FILE_LIMIT,
+    SMALL_FILE_LIMIT,
+};
 use crate::protocol::Agent;
 
 /// Prefix of the variables set on the Codex process to carry header values.
@@ -432,12 +435,8 @@ fn expand(text: &str, env: &HashMap<String, String>) -> Result<(String, bool), S
 /// The servers Claude Code would load, by name, the later scope replacing the earlier.
 fn load(shell_env: &HashMap<String, String>, cwd: &Path) -> BTreeMap<String, Value> {
     let config_dir = super::default_account_dir(Agent::Claude, shell_env);
-    let project = cwd.canonicalize().unwrap_or_else(|_| cwd.to_path_buf());
-    let global = read_json(
-        &global_config_file(shell_env, None),
-        &project,
-        LARGE_FILE_LIMIT,
-    );
+    let project = canonical_project(cwd);
+    let global = read_json(&global_config_file(shell_env, None), None, LARGE_FILE_LIMIT);
     let entry = global
         .as_ref()
         .and_then(|global| project_entry(global, cwd).or_else(|| project_entry(global, &project)));
@@ -462,7 +461,7 @@ fn load(shell_env: &HashMap<String, String>, cwd: &Path) -> BTreeMap<String, Val
 
     let approval = Approval::read(&config_dir, &project, entry);
     for dir in project.ancestors().collect::<Vec<_>>().into_iter().rev() {
-        let file = read_json(&dir.join(".mcp.json"), &project, SMALL_FILE_LIMIT);
+        let file = read_json(&dir.join(".mcp.json"), Some(&project), SMALL_FILE_LIMIT);
         merge(
             file.as_ref().and_then(|file| file.get("mcpServers")),
             &|name| on(name) && approval.allows(name),
@@ -483,13 +482,12 @@ struct Approval {
 impl Approval {
     fn read(config_dir: &Path, project: &Path, entry: Option<&Value>) -> Self {
         let mut approval = Self::default();
+        // The project's `.claude` is Claude Code's own directory in a home opened as the project.
+        let dir = project.join(".claude");
+        let owner = (!is_agent_config_dir(&dir, config_dir)).then_some(project);
         let files = [
-            read_json(&config_dir.join("settings.json"), project, SMALL_FILE_LIMIT),
-            read_json(
-                &project.join(".claude").join("settings.local.json"),
-                project,
-                SMALL_FILE_LIMIT,
-            ),
+            read_json(&config_dir.join("settings.json"), None, SMALL_FILE_LIMIT),
+            read_json(&dir.join("settings.local.json"), owner, SMALL_FILE_LIMIT),
             entry.cloned(),
         ];
         for file in files.iter().flatten() {
@@ -525,9 +523,14 @@ fn names(value: Option<&Value>) -> BTreeSet<String> {
 }
 
 /// A JSON file's value; an absent file is `None` quietly, an unreadable or malformed one with a
-/// log.
-fn read_json(path: &Path, project: &Path, limit: usize) -> Option<Value> {
-    let text = match read_bounded_text(path, project, limit) {
+/// log. A file in the tree of `project` (canonical) is read as the project's, one Claude Code's own
+/// configuration holds (`None`) as a regular file wherever it lies.
+fn read_json(path: &Path, project: Option<&Path>, limit: usize) -> Option<Value> {
+    let read = match project {
+        Some(project) => read_bounded_text(path, project, limit),
+        None => read_regular_text(path, limit),
+    };
+    let text = match read {
         Ok(text) => text,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return None,
         Err(err) => {
@@ -696,15 +699,46 @@ mod tests {
         assert!(load(&env, &cwd).is_empty());
 
         std::fs::write(root.join(".claude.json"), vec![b' '; SMALL_FILE_LIMIT + 1]).unwrap();
-        assert!(read_json(&root.join(".claude.json"), &cwd, SMALL_FILE_LIMIT).is_none());
+        assert!(read_json(&root.join(".claude.json"), None, SMALL_FILE_LIMIT).is_none());
         // The global config file may be larger.
         std::fs::write(
             root.join(".claude.json"),
             format!("{{\"pad\":\"{}\"}}", "x".repeat(SMALL_FILE_LIMIT)),
         )
         .unwrap();
-        assert!(read_json(&root.join(".claude.json"), &cwd, SMALL_FILE_LIMIT).is_none());
-        assert!(read_json(&root.join(".claude.json"), &cwd, LARGE_FILE_LIMIT).is_some());
+        assert!(read_json(&root.join(".claude.json"), None, SMALL_FILE_LIMIT).is_none());
+        assert!(read_json(&root.join(".claude.json"), None, LARGE_FILE_LIMIT).is_some());
+    }
+
+    /// A home directory opened as the project holds Claude Code's own configuration, which a
+    /// dotfiles manager may link elsewhere: it is read as Claude Code reads it, not refused as a link
+    /// out of the project.
+    #[test]
+    fn claude_codes_own_files_under_a_home_opened_as_the_project_are_read_through_their_links() {
+        let (root, _, _) = world();
+        // Canonical, as the project is, so that the files lie inside it.
+        let home = canonical_project(&root);
+        let env = HashMap::from([("HOME".to_string(), home.to_string_lossy().into_owned())]);
+        let dotfiles = ScratchDir::new("claude-mcp-dotfiles");
+        std::fs::create_dir(dotfiles.join("claude")).unwrap();
+        write(
+            &dotfiles.join(".claude.json"),
+            json!({"mcpServers": {"s": {"command": "linked"}}}),
+        );
+        write(
+            &dotfiles.join("claude/settings.local.json"),
+            json!({"enableAllProjectMcpServers": true}),
+        );
+        write(
+            &home.join(".mcp.json"),
+            json!({"mcpServers": {"p": {"command": "approved"}}}),
+        );
+        std::os::unix::fs::symlink(dotfiles.join(".claude.json"), home.join(".claude.json"))
+            .unwrap();
+        std::os::unix::fs::symlink(dotfiles.join("claude"), home.join(".claude")).unwrap();
+        let servers = load(&env, &home);
+        assert_eq!(servers["s"]["command"], "linked");
+        assert_eq!(servers["p"]["command"], "approved");
     }
 
     #[test]
