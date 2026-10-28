@@ -997,7 +997,8 @@ export function App(): React.ReactElement {
   const stableSetPinned = useStableHandler(setPinned);
   const stableOpenSettingsAt = useStableHandler(openSettingsAt);
   useEffect(() => registerSettingsLauncher(stableOpenSettingsAt), [stableOpenSettingsAt]);
-  // Where focus goes once the last alert or pending question closes with nothing to give it back to.
+  // Where focus goes once the last alert or pending question, or Settings with no dialog under it, closes with nothing to
+  // give it back to.
   const focusAfterModal = useStableHandler(() => focusAfterLoss(focusTerminal));
   useEffect(() => setFocusAfterModalLoss(focusAfterModal), [focusAfterModal]);
   const stableBack = useStableHandler(navigation.back);

@@ -539,6 +539,18 @@ the dialog put it back, ringed or not as the press was. All three wait at least 
 leave a restore that landed right alone; they act where focus is on `<body>`, and the login hand-off also where it is on
 its going button.
 
+A dialog that the Agent accounts section opens by itself as Settings opens (the account settings dialog for View in
+Settings, a login found running, Add agent) saves its restore target before Settings' tabs exist, so on closing it hands
+focus on itself rather than leave it to React Aria: to the section's tab, or for Add agent to the strip's Add agent
+button, else the empty panel's own. A row's account dialog goes back to the row's actions button, else the section's
+tab. These run ahead of React Aria's restore, wait until the target can take focus (the dialog has gone and nothing
+covers Settings), ring it as focus the user did not aim, and take it back once if a give-back lands after them
+(`handFocusOnceClosed` in `packages/ui/src/settings/AgentAccountsSection.tsx`). Settings itself, closing with no dialog
+under it, goes to the selected session's terminal, else to the control that opened it while that is still there, even
+one that never took focus (the press it ended on is recorded by `usePressedControl` in `packages/ui/src/components/`),
+else to the window's fallback (`focusAfterModalCloses` in `packages/ui/src/components/regionFocus.ts`). A return to the
+control that opened a dialog is a restore, not a hand-off: its ring follows the input that closed the dialog.
+
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
 control the press ended on (a menu's trigger, for a dialog opened from its menu) and focuses it as the dialog opens, so
@@ -1023,7 +1035,8 @@ the press that opened it), focus goes where that dialog's own opening focus goes
 alert" in `docs/product/error-alerts.md` for the full order). The control a dialog opens
 on is marked for this with `openingFocus` (`packages/ui/src/components/regionFocus.ts`), which `Button` and `TextInput`
 set from their `autoFocus`; a dialog that puts its opening focus anywhere else by hand marks that control itself. A
-pending question (a trust prompt, a session request) that closes with nowhere to return focus to lands the same way.
+pending question (a trust prompt, a session request) that closes with nowhere to return focus to lands the same way, and
+so does Settings closing with no opener left to return to.
 
 The alert, and a pending question, stay usable whatever comes up with them. One that comes up in the same moment as
 another modal — a dialog that a dialog opens as it mounts, or the alert and a question together — is on top and holds
