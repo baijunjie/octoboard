@@ -851,6 +851,12 @@ describe("the fixture daemon's bound branches and worktrees", () => {
     await expect(daemon.request({ type: "inspect_project_removal", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
   });
 
+  it("hands a project inspection's refusal over with all its params, the token the removal sends back among them", async () => {
+    const refusal = { code: "project_directory_trash_failed", params: { path: "/work/p", detail: "it did not respond in time", cause: "unanswered", inspection: "token-1" }, message: "refused" };
+    const daemon = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: refusal } });
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).rejects.toMatchObject({ code: refusal.code, params: refusal.params });
+  });
+
   it("can fail a project's inspection, and leave a session inspection unanswered", async () => {
     const error = { code: "internal_error", params: { detail: "no git" }, message: "no git" };
     const failing = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: error } });

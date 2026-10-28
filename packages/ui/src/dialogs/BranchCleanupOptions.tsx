@@ -178,10 +178,13 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
  * own. `consequences` are the lines the confirmation's consequence text adds while the options are ticked. A
  * lookup that failed, so that the daemon could not say what else goes, is a mark after the Trash
  * option's label instead. A branch a locked worktree has checked
- * out goes only with it. `pending` holds Confirm while the answer is on its way. */
+ * out goes only with it. `pending` holds Confirm while the answer is on its way. `choices` carries the token of a
+ * refusal that a path that could not be resolved decided, for the removal to repeat it. */
 export function useProjectRemovalCleanup(projectId: string, trash: boolean, setTrash: (trash: boolean) => void): {
-  choices: ReturnType<typeof branchChoices>;
+  choices: ReturnType<typeof branchChoices> & { inspection?: string };
   pending: boolean;
+  /** Asks again what goes along, as after a refused removal, so that a retry carries out what is shown. */
+  reinspect: () => void;
   consequences: ConsequenceLine[];
   extraControl: (busy: boolean) => React.ReactNode;
 } {
@@ -196,8 +199,9 @@ export function useProjectRemovalCleanup(projectId: string, trash: boolean, setT
   const deleted = found.items.filter((item) => item.kind === "branch" && !keptBranches.has(`${item.repository}:${item.branch}`));
   const along = [...trashed, ...deleted];
   return {
-    choices: branchChoices(trash && removeLocked ? locked : []),
+    choices: { ...branchChoices(trash && removeLocked ? locked : []), ...(trash && found.inspection ? { inspection: found.inspection } : {}) },
     pending: found.pending,
+    reinspect: found.reinspect,
     consequences: trash
       ? [
         ...(trashed.length > 0 ? [{ key: "trashed", text: t("branchCleanup.consequence.trashed", { count: trashed.length }) }] : []),

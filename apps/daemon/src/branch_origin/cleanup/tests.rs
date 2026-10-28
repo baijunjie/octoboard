@@ -656,6 +656,7 @@ async fn removing_a_project_takes_its_outside_worktrees_only_with_its_folder() {
                 stop_sessions: true,
                 trash_directory: trash,
                 force_remove: Vec::new(),
+                inspection: None,
             },
         )
         .await
@@ -689,6 +690,7 @@ async fn a_project_removal_that_cannot_find_out_what_goes_along_says_so_and_leav
             stop_sessions: true,
             trash_directory: true,
             force_remove: Vec::new(),
+            inspection: None,
         },
     )
     .await
@@ -729,6 +731,98 @@ async fn a_removal_that_would_be_refused_lists_nothing() {
     .unwrap_err();
     let coded = err.downcast_ref::<crate::protocol::CodedError>().unwrap();
     assert_eq!(coded.code, error_code::PROJECT_DIRECTORY_SHARED);
+}
+
+/// The removal confirmed after an inspection refused over another project's folder that did not
+/// respond, given that inspection's token, is refused the same way once the folder responds; one
+/// confirmed after an inspection that resolved, which carries no token, goes ahead. Removing the
+/// project, or its console, drops what was kept for it.
+#[tokio::test]
+async fn a_removal_after_an_unresolved_inspection_repeats_its_refusal() {
+    let fixture = Fixture::new("cleanup-refused-kept");
+    let state = &fixture.state;
+    let elsewhere = fixture.worktrees.join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let mut other = state.store.get_project("p1").unwrap().unwrap();
+    other.id = "p2".to_string();
+    other.path = elsewhere.to_string_lossy().into_owned();
+    state.store.insert_project(&other).unwrap();
+    let elsewhere = &elsewhere;
+    let inspect = |stalled: bool| async move {
+        let stuck = Arc::new(());
+        if stalled {
+            state.directory_looks.record(
+                crate::hostfs::lexically_normalise(elsewhere),
+                Arc::downgrade(&stuck),
+            );
+        }
+        crate::coordinator::handle(
+            state,
+            None,
+            RequestBody::InspectProjectRemoval {
+                project: "p1".to_string(),
+            },
+        )
+        .await
+    };
+    let delete = |inspection: Option<String>| {
+        crate::coordinator::handle(
+            state,
+            None,
+            RequestBody::DeleteProject {
+                project: "p1".to_string(),
+                stop_sessions: true,
+                trash_directory: true,
+                force_remove: Vec::new(),
+                inspection,
+            },
+        )
+    };
+    let coded = |err: anyhow::Error| err.downcast::<crate::protocol::CodedError>().unwrap();
+
+    let inspection = coded(inspect(true).await.unwrap_err());
+    assert_eq!(inspection.code, error_code::PROJECT_DIRECTORY_SHARED);
+    let token = inspection.params["inspection"].clone();
+    let repeated = coded(delete(Some(token)).await.unwrap_err());
+    assert_eq!(
+        (repeated.code, &repeated.message),
+        (inspection.code, &inspection.message)
+    );
+    assert!(state.store.get_project("p1").unwrap().is_some());
+    assert_eq!(state.unresolved_removals.len(), 0, "the token is used up");
+
+    coded(inspect(true).await.unwrap_err());
+    assert!(matches!(
+        inspect(false).await.unwrap(),
+        Some(Event::ProjectRemovalInspected { .. })
+    ));
+    delete(None).await.unwrap();
+    assert!(state.store.get_project("p1").unwrap().is_none());
+    assert_eq!(
+        state.unresolved_removals.len(),
+        0,
+        "dropped with the project"
+    );
+
+    let again = fixture.worktrees.join("again");
+    std::fs::create_dir_all(&again).unwrap();
+    insert_project(state, &again);
+    coded(inspect(true).await.unwrap_err());
+    assert_eq!(state.unresolved_removals.len(), 1);
+    crate::coordinator::handle(
+        state,
+        None,
+        RequestBody::DeleteConsole {
+            console: "console-1".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        state.unresolved_removals.len(),
+        0,
+        "dropped with the console"
+    );
 }
 
 // -- what an agent is told ---------------------------------------------------------------

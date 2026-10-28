@@ -73,13 +73,17 @@ can lead out of it, a link or a case-only respelling (macOS's default file syste
 directory that is inside, whether `canonicalize` folds case is the file system's doing (it does on APFS, not on
 Linux), and a bind mount or a macOS firmlink gives one directory two real paths. So compare the device and inode of
 what each path resolves to, and for containment walk the resolved path's ancestors: `hostfs::DirectoryIdentities`
-answers "is this one of these directories", `trust::place::Place` answers "does this lie in that one" (move it out of
-`trust` rather than write a second).
+answers "is this one of these directories", `hostfs::place::Place` answers "does this lie in that one".
 
 Decide which way a path that cannot be resolved (nothing there, unreadable, no inode, the look timed out) counts by
 what a match does. Where a match grants something, as trust coverage does, it matches nothing, with no fallback to the
 text. Where a match is what protects, as refusing a second project at one directory does, it falls back to the
-normalised text. The looks read the file system, so they run on blocking threads after the store's lock is released,
-each with a deadline, and one that outran it is left to finish and recorded in a `state::StalledPasses` under its key,
-so later decisions take the fallback at once instead of starting another thread a stuck mount holds the same way;
-`trust::place::looked_within` and `coordinator::identities_within` are the shape.
+normalised text. Where a missed match destroys something, as moving a folder to the Trash with another project's
+files in it would (`project_trash::directory_to_trash`), a path that cannot be resolved (an I/O error other than a
+refused permission, no inode, a look that timed out) counts as a match. Only a path compared against the folder —
+another project's, the home directory's, the data directory's — with nothing at it or refused for want of permission
+falls back to the text, as written and as resolved; the folder to be moved itself, when it cannot be read, refuses.
+The looks read the file system, so they run on blocking threads after the store's lock is released, each with a
+deadline, and one that outran it is left to finish and recorded in a `state::StalledPasses` under its key, so later
+decisions take the fallback at once instead of starting another thread a stuck mount holds the same way;
+`hostfs::place::looked_within` and `coordinator::identities_within` are the shape.

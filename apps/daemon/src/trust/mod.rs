@@ -113,6 +113,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Context, Result};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 
+use crate::hostfs::place::{looked_within, Place};
 use crate::hostfs::{self, lexically_normalise};
 use crate::paths;
 use crate::protocol::{
@@ -206,9 +207,9 @@ async fn covered_with_home(
     let paths = projects.iter().chain(trusted).map(PathBuf::from).collect();
     let home = home.to_path_buf();
     let (places, broad) = tokio::join!(
-        looked_within(&state.trust_looks, paths, LOOK_DEADLINE, Place::of),
+        looked_within(&state.directory_looks, paths, LOOK_DEADLINE, Place::of),
         looked_within(
-            &state.trust_looks,
+            &state.directory_looks,
             vec![home.clone()],
             LOOK_DEADLINE,
             |home| Some(too_broad_to_trust(home))
@@ -240,7 +241,7 @@ async fn covered_with_home(
 async fn offered(state: &AppState, projects: Vec<String>) -> HashMap<String, PathBuf> {
     let home = paths::home_dir();
     looked_within(
-        &state.trust_looks,
+        &state.directory_looks,
         projects.into_iter().map(PathBuf::from).collect(),
         LOOK_DEADLINE,
         move |project| {
@@ -264,7 +265,7 @@ async fn parent_to_trust(state: &AppState, project_path: &str) -> Result<PathBuf
     let home = paths::home_dir();
     let path = PathBuf::from(project_path);
     let mut found = looked_within(
-        &state.trust_looks,
+        &state.directory_looks,
         vec![path.clone()],
         LOOK_DEADLINE,
         move |project| Some(trustable_parent(&project.to_string_lossy(), &home)),

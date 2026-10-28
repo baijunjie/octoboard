@@ -42,6 +42,7 @@ use crate::launch_settings::{
 use crate::mcp;
 use crate::open_directory;
 use crate::open_terminal;
+use crate::project_trash;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
     Availability, ClaudeApprovalMode, CodedError, Console, ConsoleSessionColour,
@@ -263,6 +264,7 @@ async fn handle_inner(
             state.store.delete_console(&id)?;
             for project in &projects {
                 state.remove_git_status(&project.id);
+                state.unresolved_removals.forget(&project.id);
                 crate::git_watch::remove(state, &project.id);
                 crate::branch_origin::project_deleted(state, &project.path);
             }
@@ -393,6 +395,7 @@ async fn handle_inner(
             stop_sessions,
             trash_directory,
             force_remove,
+            inspection,
         } => {
             let _removal = state.claim_session_removal();
             let deleted = state
@@ -416,7 +419,13 @@ async fn handle_inner(
             }
             // Checked before any session is stopped, so a refusal leaves everything as it was.
             let to_trash = if trash_directory {
-                directory_to_trash(&deleted, &state.store.list_projects()?)?
+                project_trash::directory_to_trash(
+                    state,
+                    &deleted,
+                    &state.store.list_projects()?,
+                    inspection.as_deref(),
+                )
+                .await?
             } else {
                 None
             };
@@ -470,6 +479,7 @@ async fn handle_inner(
             let session_ids = session_ids_where(state, in_project)?;
             state.store.delete_project(&id)?;
             state.remove_git_status(&id);
+            state.unresolved_removals.forget(&id);
             crate::git_watch::remove(state, &id);
             crate::shell_terminal::close_project(state, &id).await;
             crate::branch_origin::project_deleted_in(state, repository);
@@ -510,15 +520,16 @@ async fn handle_inner(
         }
 
         RequestBody::InspectProjectRemoval { project } => {
+            let project = state
+                .store
+                .get_project(&project)?
+                .ok_or_else(|| CodedError::unknown_project(&project))?;
+            // A removal that would be refused takes nothing along: its refusal is the answer, and
+            // a client lists nothing for it. One a path that could not be resolved decided is kept
+            // for the removal to repeat, so it takes nothing along either.
+            project_trash::inspected(state, &project, &state.store.list_projects()?).await?;
             let state = Arc::clone(state);
             let items = tokio::task::spawn_blocking(move || {
-                let project = state
-                    .store
-                    .get_project(&project)?
-                    .ok_or_else(|| CodedError::unknown_project(&project))?;
-                // A removal that would be refused takes nothing along: its refusal is the answer,
-                // and a client lists nothing for it.
-                directory_to_trash(&project, &state.store.list_projects()?)?;
                 Ok::<_, anyhow::Error>(
                     branch_origin::cleanup::project::plan(
                         &state,
@@ -4427,67 +4438,6 @@ fn stop_project_sessions(
     Ok(())
 }
 
-/// Whether `directory` is the root of a disk: `/`, or a mount point such as `/Volumes/Backup`,
-/// which sits on a different device from its parent.
-fn is_disk_root(directory: &Path) -> bool {
-    use std::os::unix::fs::MetadataExt;
-    let Some(parent) = directory.parent() else {
-        return true;
-    };
-    match (std::fs::metadata(directory), std::fs::metadata(parent)) {
-        (Ok(this), Ok(above)) => this.dev() != above.dev(),
-        _ => false,
-    }
-}
-
-/// The directory to move to the Trash for `deleted`, or `None` when it is already gone. Refused
-/// for a directory whose loss would be drastic (see [`PROJECT_DIRECTORY_PROTECTED`]), and while
-/// another project's directory is the same, inside it or holds it, or another project's Git
-/// repository lies inside it, as a linked worktree's does: trashing would take that project's
-/// files too. Symlinks are resolved where the path exists, so two spellings of one directory are
-/// one.
-///
-/// [`PROJECT_DIRECTORY_PROTECTED`]: error_code::PROJECT_DIRECTORY_PROTECTED
-fn directory_to_trash(deleted: &Project, projects: &[Project]) -> Result<Option<PathBuf>> {
-    let resolve = hostfs::resolve;
-    let directory = resolve(Path::new(&deleted.path));
-    let home = crate::paths::known_home_dir().map(|home| resolve(&home));
-    if is_disk_root(&directory)
-        || home.as_deref() == Some(directory.as_path())
-        || resolve(&crate::paths::data_dir()).starts_with(&directory)
-    {
-        return Err(CodedError::raised(
-            error_code::PROJECT_DIRECTORY_PROTECTED,
-            "this folder is too important to move to the Trash from here",
-            &[("path", &deleted.path)],
-        ));
-    }
-    if let Some(other) = projects
-        .iter()
-        .filter(|other| other.id != deleted.id)
-        .find(|other| {
-            let theirs = resolve(Path::new(&other.path));
-            theirs.starts_with(&directory)
-                || directory.starts_with(&theirs)
-                || crate::branch_origin::repository_of(&theirs)
-                    .is_some_and(|repository| repository.starts_with(&directory))
-        })
-    {
-        return Err(CodedError::raised(
-            error_code::PROJECT_DIRECTORY_SHARED,
-            format!(
-                "the folder is shared with project \"{}\"; remove that project first",
-                other.name
-            ),
-            &[("project", &other.name)],
-        ));
-    }
-    // A symlink is trashed as itself, not as what it points to.
-    Ok(std::fs::symlink_metadata(&deleted.path)
-        .is_ok()
-        .then(|| PathBuf::from(&deleted.path)))
-}
-
 /// How many owners up `session`'s bindings go: 0 for an unbound session, 1 for one bound to an
 /// owner that is itself unbound, 2 for one bound to a lead session.
 fn binding_depth(state: &Arc<AppState>, session: &Session) -> Result<usize> {
@@ -7142,6 +7092,7 @@ mod tests {
             stop_sessions: true,
             trash_directory: false,
             force_remove: Vec::new(),
+            inspection: None,
         };
 
         let claim = state.begin_launch("project").unwrap();
@@ -7172,6 +7123,7 @@ mod tests {
                 stop_sessions: false,
                 trash_directory: false,
                 force_remove: Vec::new(),
+                inspection: None,
             },
             RequestBody::DeleteConsole {
                 console: "console-1".to_string(),
@@ -14847,6 +14799,7 @@ mod tests {
                 stop_sessions: true,
                 trash_directory: false,
                 force_remove: Vec::new(),
+                inspection: None,
             },
         )
         .await
@@ -14855,69 +14808,6 @@ mod tests {
         assert_eq!(session_ids(&state), ["hub"]);
         assert_eq!(status_of(&state, "hub"), Some(Idle));
         assert!(!live[0].poll_exit(), "the console session keeps running");
-    }
-
-    /// Trashing is refused for a protected directory, and over any other project's directory
-    /// that is the same, inside or holding this one, or whose repository is inside it, as a
-    /// linked worktree's is; a sibling whose name merely starts the same is not in the way, and a
-    /// directory already gone is skipped.
-    #[test]
-    fn trashing_a_directory_leaves_every_other_projects_files_alone() {
-        let dir = crate::test_support::ScratchDir::new("coordinator-trash-guard");
-        let outer = dir.join("outer");
-        let inner = outer.join("inner");
-        let sibling = dir.join("outer-2");
-        for path in [&inner, &sibling] {
-            std::fs::create_dir_all(path).unwrap();
-        }
-        let at = |id: &str, path: &Path| Project {
-            path: path.to_string_lossy().into_owned(),
-            ..project_of("console-1", id)
-        };
-        let refused = |deleted: &Project, others: &[Project]| {
-            let err = directory_to_trash(deleted, others).unwrap_err();
-            err.downcast::<CodedError>().unwrap().code
-        };
-        let outer_project = at("outer", &outer);
-        let inner_project = at("inner", &inner);
-        for (deleted, other) in [
-            (&outer_project, inner_project.clone()),
-            (&inner_project, outer_project.clone()),
-            (&outer_project, at("twin", &outer)),
-        ] {
-            assert_eq!(
-                refused(deleted, &[deleted.clone(), other]),
-                error_code::PROJECT_DIRECTORY_SHARED
-            );
-        }
-
-        // A linked worktree elsewhere keeps its repository in the folder.
-        let repo = crate::test_support::repo_with("coordinator-trash-repo", &[(b"a", b"a")]);
-        let worktree = dir.join("worktree");
-        crate::test_support::git(
-            &repo,
-            &["worktree", "add", "-b", "other", worktree.to_str().unwrap()],
-        );
-        assert_eq!(
-            refused(&at("repo", &repo), &[at("worktree", &worktree)]),
-            error_code::PROJECT_DIRECTORY_SHARED
-        );
-
-        let home = crate::paths::home_dir();
-        for protected in [Path::new("/"), home.as_path()] {
-            assert_eq!(
-                refused(&at("protected", protected), &[]),
-                error_code::PROJECT_DIRECTORY_PROTECTED
-            );
-        }
-
-        let others = [at("sibling", &sibling)];
-        assert_eq!(
-            directory_to_trash(&outer_project, &others).unwrap(),
-            Some(outer.clone())
-        );
-        let gone = at("gone", &dir.join("gone"));
-        assert_eq!(directory_to_trash(&gone, &others).unwrap(), None);
     }
 
     fn page_of(id: &str, console_session_id: &str, created_at: i64) -> crate::protocol::Page {

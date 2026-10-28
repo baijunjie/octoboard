@@ -1307,8 +1307,9 @@ export type RequestBody =
    * of being refused with `project_has_running_sessions`; default false. `trash_directory` moves
    * the project's folder to the system Trash first, and keeps the project when that fails or
    * the folder is shared with another project; default false. With it, `force_remove` names the
-   * locked worktrees `inspect_project_removal` listed that go too. */
-  | { type: "delete_project"; project: string; stop_sessions?: boolean; trash_directory?: boolean; force_remove?: SessionBranchTarget[] }
+   * locked worktrees `inspect_project_removal` listed that go too, and `inspection` the token its refusal carried
+   * where a path that could not be resolved decided it, so that the removal repeats that refusal. */
+  | { type: "delete_project"; project: string; stop_sessions?: boolean; trash_directory?: boolean; force_remove?: SessionBranchTarget[]; inspection?: string }
   | { type: "list_dir"; path: string }
   /** Answered with `agent_detected`, or an error when `path` is not an existing directory. */
   | { type: "detect_directory_agent"; path: string }

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use super::*;
 use crate::protocol::{Console, Origin, ProjectAccount, ProjectSource, SessionStatus};
 use crate::session::spawn_reader_thread;
-use crate::state::{StalledPasses, WriteHold};
+use crate::state::WriteHold;
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{watched_live_session, ScratchDir, StandIn, PATIENCE};
 
@@ -1272,87 +1272,6 @@ async fn a_trusted_directory_covers_what_really_lies_in_it_and_nothing_else() {
     );
 }
 
-/// A look at a path that does not come back within its deadline counts as unresolved, and while
-/// its thread is still stuck the same path is not looked at again, so a mount that does not
-/// answer neither holds a decision past the deadline nor takes a thread at every one; the other
-/// paths of a pass are looked at all the same.
-#[tokio::test]
-async fn a_look_that_outruns_its_deadline_is_unresolved_and_not_started_again_while_stuck() {
-    let stalled = StalledPasses::default();
-    let stuck = PathBuf::from("/octoboard-test/stuck");
-    let fine = PathBuf::from("/octoboard-test/fine");
-    let (release, held) = std::sync::mpsc::channel::<()>();
-    let held = Mutex::new(held);
-    let found = looked_within(
-        &stalled,
-        vec![stuck.clone()],
-        Duration::from_millis(100),
-        move |_| {
-            held.lock().unwrap().recv().ok();
-            Some(())
-        },
-    )
-    .await;
-    assert!(found.is_empty(), "{:?}", found.keys());
-
-    let started = Arc::new(Mutex::new(Vec::new()));
-    let counted = started.clone();
-    let again = looked_within(
-        &stalled,
-        vec![stuck.clone(), fine.clone()],
-        PATIENCE,
-        move |path| {
-            counted.lock().unwrap().push(path.to_path_buf());
-            Some(())
-        },
-    )
-    .await;
-    assert!(!again.contains_key(&stuck));
-    assert!(again.contains_key(&fine), "another path is still looked at");
-    assert_eq!(
-        *started.lock().unwrap(),
-        std::slice::from_ref(&fine),
-        "no second look at the stuck path is started"
-    );
-
-    // Once the stuck thread ends, the path is looked at again.
-    release.send(()).expect("release");
-    let deadline = Instant::now() + PATIENCE;
-    loop {
-        let found = looked_within(&stalled, vec![stuck.clone()], PATIENCE, |_| Some(())).await;
-        if found.contains_key(&stuck) {
-            break;
-        }
-        assert!(Instant::now() < deadline, "the path is looked at again");
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
-}
-
-/// However many paths a pass has, no more than the cap are looked at at once.
-#[tokio::test]
-async fn no_more_paths_are_looked_at_at_once_than_the_cap() {
-    use std::sync::atomic::AtomicUsize;
-    LOOKS_AT_ONCE_OVERRIDE.with(|cap| cap.set(Some(2)));
-    let busy = Arc::new(AtomicUsize::new(0));
-    let peak = Arc::new(AtomicUsize::new(0));
-    let (counting, highest) = (busy.clone(), peak.clone());
-    let paths: Vec<PathBuf> = (0..6)
-        .map(|n| PathBuf::from(format!("/octoboard-test/{n}")))
-        .collect();
-    let found = looked_within(&StalledPasses::default(), paths, PATIENCE, move |_| {
-        let now = counting.fetch_add(1, Ordering::SeqCst) + 1;
-        highest.fetch_max(now, Ordering::SeqCst);
-        std::thread::sleep(Duration::from_millis(50));
-        counting.fetch_sub(1, Ordering::SeqCst);
-        Some(())
-    })
-    .await;
-    LOOKS_AT_ONCE_OVERRIDE.with(|cap| cap.set(None));
-    assert_eq!(found.len(), 6, "every path is looked at");
-    let peak = peak.load(Ordering::SeqCst);
-    assert!(peak <= 2, "{peak} at once");
-}
-
 /// A trusted path whose directory is the filesystem root, the home directory or one above it —
 /// as a link that was repointed there would be — covers nothing, while one below the home
 /// directory still covers what lies in it, unless the home directory cannot be looked at.
@@ -1390,7 +1309,7 @@ async fn a_trusted_directory_that_is_the_root_or_holds_the_home_directory_covers
     // so no trusted directory covers anything.
     let stuck = Arc::new(());
     state
-        .trust_looks
+        .directory_looks
         .record(home.clone(), Arc::downgrade(&stuck));
     assert!(
         !covers(home.join("work")).await,
@@ -1541,7 +1460,7 @@ async fn a_folder_go_ahead_for_a_project_that_cannot_be_looked_at_is_refused() {
     screen_printed(&live).await;
     let stuck = Arc::new(());
     state
-        .trust_looks
+        .directory_looks
         .record(work.join("project"), Arc::downgrade(&stuck));
 
     let err = confirm(&state, "project-session-1", false, true)

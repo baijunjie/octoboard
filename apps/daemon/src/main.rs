@@ -52,6 +52,7 @@ mod outbox;
 mod path_links;
 mod paths;
 mod process_session;
+mod project_trash;
 mod protocol;
 mod pty;
 mod ptyio;

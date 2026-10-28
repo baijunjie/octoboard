@@ -69,18 +69,26 @@ export function useSessionBranches(sessionIds: string[], initial?: SessionBranch
   return { items: latest?.items ?? [], pending: !known };
 }
 
-/** The refusals of a project's removal with its folder, which its inspection answers with too: such
- * a removal takes nothing along, and the removal itself says why it is refused. */
-const REMOVAL_REFUSALS = new Set(["project_directory_protected", "project_directory_shared"]);
+/** The refusals of a project's removal with its folder, which its inspection answers with too: the removal confirmed
+ * after it says why it is refused itself, and takes nothing along. A refusal decided by a path that could not be
+ * resolved, such as a folder that did not respond in time, carries an `inspection` token, which the removal sends back
+ * to have that refusal repeated even once the path resolves (`delete_project` in `apps/daemon/PROTOCOL.md`). */
+const REMOVAL_REFUSALS = new Set(["project_directory_protected", "project_directory_shared", "project_directory_trash_failed"]);
+
+/** Whether `err` is a refusal of a project's removal with its folder (`REMOVAL_REFUSALS`). */
+export function isRemovalRefusal(err: unknown): err is DaemonRequestError {
+  return err instanceof DaemonRequestError && REMOVAL_REFUSALS.has(err.code);
+}
 
 /** What removing project `projectId` with its folder moved to the Trash would also remove, asked
- * afresh each time `asking` turns on (the Trash option ticked); `failed` when the daemon could not
- * say, in which case anything may go. A removal that would be refused lists nothing and has not
- * failed. */
-export function useProjectRemovalBranches(projectId: string, asking: boolean): Inspected & { failed: boolean } {
+ * afresh each time `asking` turns on (the Trash option ticked) and each time `reinspect` is called;
+ * `failed` when the daemon could not say, in which case anything may go. A removal that would be
+ * refused lists nothing and has not failed; `inspection` is the token its refusal carried, for the
+ * removal to send back. */
+export function useProjectRemovalBranches(projectId: string, asking: boolean): Inspected & { failed: boolean; inspection: string | undefined; reinspect: () => void } {
   const { request } = useDaemon();
   const [round, setRound] = useState(0);
-  const [latest, setLatest] = useState<{ round: number; items: SessionBranchItem[]; failed: boolean }>();
+  const [latest, setLatest] = useState<{ round: number; items: SessionBranchItem[]; failed: boolean; inspection?: string }>();
   // Each turn of `asking` on is a question of its own, so what changed while the option was off is
   // found.
   const [asked, setAsked] = useState(false);
@@ -94,18 +102,27 @@ export function useProjectRemovalBranches(projectId: string, asking: boolean): I
     void (async () => {
       let items: SessionBranchItem[] = [];
       let failed = false;
+      let inspection: string | undefined;
       try {
         const result = await request({ type: "inspect_project_removal", project: projectId });
         if (result.type === "project_removal_inspected") items = result.items;
         else failed = true;
       } catch (err) {
-        failed = !(err instanceof DaemonRequestError && REMOVAL_REFUSALS.has(err.code));
+        if (isRemovalRefusal(err)) inspection = err.params.inspection || undefined;
+        else failed = true;
       }
-      if (active) setLatest({ round, items, failed });
+      if (active) setLatest({ round, items, failed, inspection });
     })();
     return () => { active = false; };
   }, [projectId, request, asking, round]);
-  return { items: latest?.items ?? [], pending: asking && latest?.round !== round, failed: !!latest?.failed };
+  const current = asking && latest?.round === round ? latest : undefined;
+  return {
+    items: latest?.items ?? [],
+    pending: asking && !current,
+    failed: !!latest?.failed,
+    inspection: current?.inspection,
+    reinspect: () => { if (asking) setRound((value) => value + 1); },
+  };
 }
 
 /** The branches `sessionId` is responsible for, as the daemon finds them now, asked once while
