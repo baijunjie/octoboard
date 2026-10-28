@@ -208,10 +208,46 @@ async fn wait_until_stopped(state: &Arc<AppState>, ids: &[String]) {
     }
 }
 
+/// Every item bound to `sessions` as an archive that forces nothing would find it: as [`inspect`]
+/// finds it for a confirmation, but for an unmerged branch that a worktree git refuses has checked
+/// out, which the confirmation offers to force along with that worktree. With nothing forced the
+/// worktree stays, and the branch with it, as checked out there. Blocking.
+pub fn inspect_unforced(state: &AppState, sessions: &[Session]) -> Result<Vec<SessionBranchItem>> {
+    let mut items = inspect(state, sessions)?;
+    let refused: Vec<(String, String)> = items
+        .iter()
+        .filter(|item| item.kind == SessionBranchKind::Worktree && refused_by_git(item.state))
+        .filter_map(|item| Some((item.repository.clone(), item.branch.clone()?)))
+        .collect();
+    for item in &mut items {
+        if item.kind == SessionBranchKind::Branch
+            && item.state == SessionBranchState::Unmerged
+            && item.branch.as_deref().is_some_and(|branch| {
+                refused
+                    .iter()
+                    .any(|(repository, name)| *repository == item.repository && name == branch)
+            })
+        {
+            item.state = SessionBranchState::CheckedOut;
+        }
+    }
+    Ok(items)
+}
+
+/// Whether a worktree in `state` is one `git worktree remove` keeps unless forced.
+fn refused_by_git(state: SessionBranchState) -> bool {
+    matches!(
+        state,
+        SessionBranchState::UncommittedChanges
+            | SessionBranchState::Submodules
+            | SessionBranchState::Locked
+    )
+}
+
 /// What an agent's own archive of `sessions` will leave, judged before anything is removed: every
 /// bound item that cannot go without forcing. A failure is logged and judges nothing. Blocking.
 pub fn will_be_left(state: &AppState, sessions: &[Session]) -> Vec<SessionBranchItem> {
-    match inspect(state, sessions) {
+    match inspect_unforced(state, sessions) {
         Ok(items) => items
             .into_iter()
             .filter(|item| item.state != SessionBranchState::Removable)
@@ -317,8 +353,8 @@ pub fn for_agent(items: &[SessionBranchItem]) -> Value {
 }
 
 /// What an agent's own archive would do with the branch `wire` (a wire path) and the worktree that
-/// has it checked out, from `items` as [`inspect`] found them: `branch` and `worktree` each as
-/// `{state, reason}`, `null` for a worktree it has none and for an item [`inspect`] did not find,
+/// has it checked out, from `items` as [`inspect_unforced`] found them: `branch` and `worktree`
+/// each as `{state, reason}`, `null` for a worktree it has none and for an item it did not find,
 /// and `removed`, whether archiving takes all it has. `null` when `items` hold neither.
 pub fn archive_outlook(items: &[SessionBranchItem], wire: &str) -> Value {
     let named = |kind| {
@@ -826,16 +862,7 @@ fn survey(
             .collect();
         // A holder that is not a bound worktree this cleanup could remove keeps the branch
         // whatever is asked; one git refuses keeps it unless it is forced.
-        let refused = |state: &Option<SessionBranchState>| {
-            matches!(
-                state,
-                Some(
-                    SessionBranchState::UncommittedChanges
-                        | SessionBranchState::Submodules
-                        | SessionBranchState::Locked
-                )
-            )
-        };
+        let refused = |state: &Option<SessionBranchState>| state.is_some_and(refused_by_git);
         let stays = holder_states
             .iter()
             .any(|state| *state != Some(SessionBranchState::Removable) && !refused(state));

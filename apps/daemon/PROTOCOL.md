@@ -2917,11 +2917,14 @@ directory.
   merge it into, `null` when it was created from something that is none; `fork_point` the commit it was created at;
   `responsible_since` the milliseconds since the epoch at which the session became responsible, by creating it or by a
   handover. `archive` is what an agent's own archive of the session would do with the branch, from the same judgement as
-  `inspect_session_branches`: `{ removed, branch, worktree }`, `removed` whether the branch and its worktree both go,
-  and `branch` and `worktree` (`worktree` is `null` when no linked worktree has the branch: the main working copy is
+  `inspect_session_branches` but for what forces nothing: `{ removed, branch, worktree }`, `removed` whether the
+  branch and its worktree both go, and `branch` and `worktree` (`worktree` is `null` when no linked worktree has the
+  branch: the main working copy is
   never removed, so a branch checked out there has `worktree_status` `checked_out` and a `null` `archive.worktree`) each
   `{ state, reason }`, `state` one of `removable`, `uncommitted_changes`, `submodules`, `unmerged`, `checked_out`,
   `locked`, `project_folder` and `failed` and `reason` in prose; everything but `removable` stays, since an agent's
-  archive never forces. `archive` is `null` when it could not be judged. The judgement is a second look at the
+  archive never forces. An unmerged branch that a worktree `git worktree remove` keeps unless forced has checked out
+  stays `checked_out` with it, where `inspect_session_branches` lists it as `unmerged`, to be forced along with that
+  worktree. `archive` is `null` when it could not be judged. The judgement is a second look at the
   repository's worktrees, made only when the session is responsible for a branch. `handover_branches` reports each
   branch it moved in the worktree part of that shape, without `project`, the origin fields and `archive`.

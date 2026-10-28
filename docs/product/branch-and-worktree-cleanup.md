@@ -211,8 +211,10 @@ only written to the daemon's log.
 session's tools" and "A session archiving itself" in `docs/product/hub-orchestration.md`, and "Automatic archiving" in
 `docs/product/reporting-to-owners.md`)
 remove what is bound to the sessions archived the same way, and **never force anything**: an agent's archive removes
-no worktree with changes or submodules, no unmerged branch and no locked worktree. No error alert is shown for what
-an agent's archive leaves; the agent is told instead:
+no worktree with changes or submodules, no unmerged branch and no locked worktree. An unmerged branch that a worktree
+kept for its uncommitted changes, initialized submodules or lock has checked out is left, and judged beforehand, as
+checked out in a worktree that stays, where the user's confirmation lists it among the unmerged branches it can force
+along with that worktree. No error alert is shown for what an agent's archive leaves; the agent is told instead:
 
 - **`archive_session`** waits for the removal and answers with `branches_left`, one entry per item left — its `kind`,
   `branch`, `path` where it is a worktree, and the `reason` in plain text — and a `note` saying how to clean them up
@@ -247,7 +249,7 @@ Example of an `archive_session` answer with something left:
   "status": "archived",
   "branches_left": [
     { "kind": "worktree", "branch": "feat/x", "path": "/work/repo-x", "reason": "it has uncommitted changes" },
-    { "kind": "branch", "branch": "feat/x", "reason": "it is not merged" }
+    { "kind": "branch", "branch": "feat/x", "reason": "it is checked out in a worktree that stays" }
   ],
   "note": "…"
 }

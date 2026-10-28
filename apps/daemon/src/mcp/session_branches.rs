@@ -39,7 +39,7 @@ pub(super) async fn get_session_branches(
             let inspected = if read.is_empty() {
                 None
             } else {
-                cleanup::inspect(&state, std::slice::from_ref(&target))
+                cleanup::inspect_unforced(&state, std::slice::from_ref(&target))
                     .map_err(
                         |err| tracing::warn!(%err, "judging what archiving would remove failed"),
                     )
@@ -230,6 +230,10 @@ mod tests {
             repo,
             &["worktree", "add", "-q", dirty.to_str().unwrap(), "dirty"],
         );
+        // Unmerged as well: the worktree that stays keeps it, not its own commits.
+        std::fs::write(dirty.join("mine.txt"), "mine").unwrap();
+        git(&dirty, &["add", "mine.txt"]);
+        git(&dirty, &["commit", "-q", "-m", "mine"]);
         std::fs::write(dirty.join("new.txt"), "unsaved").unwrap();
         let temporary = checkouts.join("unmerged-checkout");
         git(
@@ -275,6 +279,10 @@ mod tests {
         assert_eq!(dirty["removed"], false);
         assert_eq!(dirty["worktree"]["state"], "uncommitted_changes");
         assert_eq!(dirty["branch"]["state"], "checked_out");
+        assert_eq!(
+            dirty["branch"]["reason"],
+            "it is checked out in a worktree that stays"
+        );
         assert_eq!(dirty["worktree"]["reason"], "it has uncommitted changes");
 
         let unmerged = &entry(&own, "unmerged")["archive"];
