@@ -67,10 +67,10 @@ collapsed by default and left as the user sets it while it is shown, over the it
 them, each group led by one line saying so (that these worktrees have uncommitted changes, say) over the names.
 Expanded, those groups sit together on a light grey panel, set apart from the option's label and hint. A worktree is
 named by its path, with the home directory written as `~`, and the branch it has checked out (or that its `HEAD` is
-detached); a branch by its name. Paths and branch names are plain monospace text. A worktree's branch — its branch
-glyph and name, or the detached `HEAD` note — is kept together: where it does not fit on the line after the path, it
-moves to the next line whole rather than breaking at a `/`; a branch name wraps within itself only when it is wider
-than the list on its own.
+detached); a branch by its name. Paths and branch names are plain monospace text. Each worktree shows a folder glyph
+before its path, then a branch glyph and branch name on a separate line below it. The glyphs share a column, as do the
+path and branch text; wrapped paths and branch names keep their text indentation. A detached `HEAD` note occupies the
+line below the path, aligned with the path text.
 
 - **What git cannot remove safely** — worktrees with uncommitted changes, worktrees with initialized submodules, and
   unmerged branches, one group each — comes under **Also force-remove the worktrees and branches Git keeps (n)**. Its

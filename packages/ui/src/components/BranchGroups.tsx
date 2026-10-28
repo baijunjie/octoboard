@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { Folder, GitBranch } from "lucide-react";
 import React, { useId } from "react";
 
 import { isolate } from "../i18n/isolate";
@@ -29,38 +29,31 @@ function code(value: string): React.ReactElement {
   return <span dir="ltr" className="font-mono [overflow-wrap:anywhere]">{value}</span>;
 }
 
-/** A branch name with its icon in front, one unit: it moves to the next line whole when it does
- * not fit after the path, and wraps inside its own box only when it alone is wider than the list. */
-function BranchName({ branch }: { branch: string }): React.ReactElement {
-  return (
-    <span className="inline-block max-w-full">
-      <GitBranch className="me-1 inline size-3 align-[-0.125em]" />
-      {branch}
-    </span>
-  );
-}
-
-/** A worktree by its path with, after it, the branch it has checked out marked by a branch icon, or
- * "detached HEAD" kept on one line; a branch by its name. The branch is announced as one phrase of the
- * catalog's ("on branch ..."), which speaks for the icon and the name together, so the drawn name is
+/** A worktree's path and branch occupy separate lines with a shared icon column so wrapped names
+ * keep their text indentation. A branch on its own is named without a path. The branch is announced
+ * as one phrase of the catalog's ("on branch ..."), which speaks for the icon and name together, so the drawn name is
  * hidden from it rather than read a second time. */
 function RowName({ row }: { row: BranchRow }): React.ReactElement {
   const t = useT();
   if (!row.worktree) return code(row.branch ?? row.path);
   return (
-    <>
-      {code(row.path)}{" "}
+    <span className="inline-flex max-w-full flex-col align-top">
+      <span className="flex min-w-0 items-start gap-1">
+        <Folder aria-hidden="true" className="mt-1 size-3 shrink-0" />
+        <span className="min-w-0">{code(row.path)}</span>
+      </span>
       {row.branch === null
-        ? <span className="whitespace-nowrap">{t("branchCleanup.detached")}</span>
+        ? <span className="ps-4">{" "}{t("branchCleanup.detached")}</span>
         : (
           <>
-            <span className="sr-only select-none">{t("branchCleanup.onBranch", { branch: isolate(row.branch) })}</span>
-            <span aria-hidden="true">
-              <span dir="ltr" className="font-mono [overflow-wrap:anywhere]"><BranchName branch={row.branch} /></span>
+            <span className="sr-only select-none">{" "}{t("branchCleanup.onBranch", { branch: isolate(row.branch) })}</span>
+            <span aria-hidden="true" className="flex min-w-0 items-start gap-1">
+              <GitBranch className="mt-1 size-3 shrink-0" />
+              <span className="min-w-0">{code(row.branch)}</span>
             </span>
           </>
         )}
-    </>
+    </span>
   );
 }
 
