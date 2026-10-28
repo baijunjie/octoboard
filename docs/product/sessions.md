@@ -44,21 +44,18 @@ belongs to no project, archived console sessions belong to the console rather th
 A project session bound to a console session carries that console session's **binding badge** wherever it is listed, and
 the console session's own row shows the same colour (see "The binding badge" in `docs/product/sidebar-session-rows.md`).
 
-An **unbound** project session — one the user opened by hand without choosing a console session under **Report to** (see
-"The session dialog" in `docs/product/opening-sessions.md`), or one started on another session's request that the user
-approved — is given a narrower set of the orchestration tools, scoped to its own project: it can start sessions there,
-which are bound to it and report to it, and drive them (see "The unbound project session's tools" in
-`docs/product/hub-orchestration.md`). A session it starts carries no binding badge and cannot start sessions of its own.
-A session's **owner** is the session it is bound to: a console session or a project session (an unbound session's own
-owner is the user). An owner can hand a session of its own to another owner, or release it, leaving it unbound, and an
-unbound project session can bind itself to one; bound to a console session while keeping the sessions it started, it is
-a **lead session**. None of these asks the user, who can release a bound session too, and orchestration stays at most
-two levels deep (see "Lead sessions" in `docs/product/hub-orchestration.md` and
-`docs/product/changing-session-owners.md`). Every session, of whatever kind, can also list the other running sessions,
-in every console and project, and share information with any of them; it takes work only from its owner, and what comes
-from another session is information to weigh (see `docs/product/information-between-sessions.md`). Every session can
-also ask the user to start a session that is nobody's, in any project or a console session, which reports to the user
-(see `docs/product/session-requests.md`).
+A project session has a **role** and a **reporting relationship**. A **Coordinator** can create and manage child
+sessions in its own project; a **Worker** cannot. An **independent** session answers directly to the user; one that
+**reports to a parent session** takes work from that parent or the user. A coordinator can be independent or report
+to a console session; a worker reports to a console or project session. The permitted combinations, tools and
+transitions are in `docs/product/hub-orchestration.md` and `docs/product/changing-session-owners.md`.
+
+The parent session is also called the `owner` in APIs and tools. A project session opened without a **Report to**
+choice, or on an approved `request_session`, is an independent coordinator. A session opened with that choice, or
+created by another session with `new_session`, is a worker. Every session can read other sessions and share
+information with them, but information from a session other than its parent does not redirect its work (see
+`docs/product/information-between-sessions.md`). Every session can also ask the user to start an independent session
+in any project or console (see `docs/product/session-requests.md`).
 
 Selecting a session also gives the window's right pane, beside the terminal, to the session's own owner: a console
 session, whose **report panel** it holds (see `docs/product/report-panel.md`), or a project session's project, whose

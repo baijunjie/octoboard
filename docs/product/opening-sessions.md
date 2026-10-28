@@ -70,16 +70,17 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   sessions that are neither archived nor still *starting*, the most recently started first, each shown beside its
   colour, the same one the session's binding badge will carry (see "The binding badge" in
   `docs/product/sidebar-session-rows.md`), or none. A chosen console session receives this session's reports, instead of
-  the session staying outside the orchestration. A console with no such console session shows no choice at all, and the
-  session is unbound. A session still starting is not offered because its launch may yet fail and remove it;
-  `open_session` refuses one named as the owner (`unknown_session`). A binding can change afterwards — the owner hands
-  the session to another, an unbound session binds itself to one, or the owner or the user releases the session, leaving
-  it unbound; see `docs/product/changing-session-owners.md`. A session the console session itself starts is always bound
-  to it, and one a project session starts is bound to that project session; one started on another session's request is
-  bound to nobody; see "Which sessions an owner drives" in `docs/product/hub-orchestration.md`. The choice is offered
-  from the project list and the terminal's **New session** offer outside focus mode. Opened from a project's focus mode
-  the dialog has no such field and the session is always unbound; opened from a console session's focus mode it has none
-  either, and shows a line saying the session reports to that console session instead, which is the binding it gets (see
+  the session answering directly to the user. A console with no such console session shows no choice at all, and the
+  session is an independent project coordinator. A session still starting is not offered because its launch may yet fail
+  and remove it; `open_session` refuses one named as the owner (`unknown_session`). A binding can change afterwards —
+  the owner hands the session to another, an independent project coordinator sets one as its parent, or the owner or the
+  user releases the session, leaving it independent; see `docs/product/changing-session-owners.md`. A session the
+  console session itself starts is always bound to it, and one a project session starts is bound to that project
+  session; one started on another session's request is bound to nobody; see "Which sessions an owner drives" in
+  `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session**
+  offer outside focus mode. Opened from a project's focus mode the dialog has no such field and the session is always an
+  independent project coordinator; opened from a console session's focus mode it has none either, and shows a line
+  saying the session reports to that console session instead, which is the binding it gets (see
   `docs/product/focus-mode.md`). Should that fixed console session become unavailable — archived or gone — no session is
   opened, and the dialog turns into a failure modal titled that a session cannot be opened, which identifies the
   unavailable owner, with its name set apart as a chip, and offers only its acknowledgement, which closes the dialog
@@ -274,8 +275,9 @@ The session opened is the one the dialog would open if submitted untouched:
   sent as the session's own choice;
 - no model or reasoning effort of its own, so both follow the parent;
 - a new conversation, never a resumed one;
-- **unbound** — from the project list too, where the dialog's **Report to** starts on no console session — except in a
-  console session's focus mode, where it is bound to that console session, as the dialog opened there binds it.
+- **an independent project coordinator** — from the project list too, where the dialog's **Report to** starts on no
+  console session — except in a console session's focus mode, where it is bound to that console session, as the dialog
+  opened there binds it.
 
 It is listed as *starting* and selected, as a session opened from the dialog is, and a launch failure is reported the
 same way (see above). A refusal is shown in an error alert titled "Could not open a session". When the console session

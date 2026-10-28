@@ -242,10 +242,10 @@ of the agent's background agents. How each tool words this, and what follows fro
 `instruct_session` in "The console session's tools" in `docs/product/hub-orchestration.md`, `report` in
 `docs/product/reporting-to-owners.md`, the `send_message` tool in `docs/product/information-between-sessions.md`,
 `transfer_session` in "Handing a session to another owner", `release_session` in "Releasing a session from its owner"
-and `bind_to_session` in "Binding an unbound session to an owner", all in `docs/product/changing-session-owners.md`. A
-sender whose message arrives while the session is held behind an unsent one is told it was queued, as for a session that
-cannot take a message. A sender already told its message was queued learns nothing more if that message is later left
-unsent; the notice is what reports it.
+and `bind_to_session` in "Setting a parent for an independent session", all in
+`docs/product/changing-session-owners.md`. A sender whose message arrives while the session is held behind an unsent one
+is told it was queued, as for a session that cannot take a message. A sender already told its message was queued learns
+nothing more if that message is later left unsent; the notice is what reports it.
 
 **A client's `send_message` request** (the daemon's client protocol, not the sessions' tool of that name) to a Claude
 Code session at its prompt is answered once the check has ended — the second one too, for a message a dialog discarded

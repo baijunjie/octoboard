@@ -1240,6 +1240,7 @@ impl AppState {
     /// The session as a client receives it, with its resolved title and live user interactions.
     /// These leave the stored agent status intact so answering restores it even before a hook.
     pub(crate) fn wire_session(&self, mut session: Session) -> Session {
+        session.orchestration_role = Some(session.orchestration_role());
         session.status = self.shown_status(&session);
         session.background_tasks = self.shown_background_tasks(&session);
         session.switching_account = self.is_switching_account(&session.id);
@@ -3393,6 +3394,7 @@ mod tests {
             background_tasks: Vec::new(),
             switching_account: false,
             default_effort: None,
+            orchestration_role: None,
             context: None,
             observed_model: None,
             observed_effort: None,

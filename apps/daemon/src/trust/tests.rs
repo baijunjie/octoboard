@@ -493,6 +493,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
+        orchestration_role: None,
         context: None,
         observed_model: None,
         observed_effort: None,

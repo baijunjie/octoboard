@@ -4,9 +4,10 @@ A project's, a console session's or a console's full archive opens in the archiv
 
 **View all** — in a project's or console's "View archive" submenu, or in a focus mode's archived list — opens the
 archive view: **every** archived session of that project, every archived session under that console session (bound to
-it, or bound to an archived lead session that is bound to it), or every archived console session of that console. A lead
-session's own archived sessions are in that console session's archive only while the lead session is archived too; while
-the lead session is still live they are in its project's archive alone. A project's heading in a console session's focus
+it, or bound to an archived coordinator that is bound to it), or every archived console session of that console. A
+coordinator's own archived sessions are in that console session's archive only while the coordinator is archived too;
+while
+the coordinator is still live they are in its project's archive alone. A project's heading in a console session's focus
 mode is the exception to "that project": its View all opens that console session's archive (see "A console session's
 focus mode" in `docs/product/focus-mode.md`). The submenus offer View all whenever their archive is nonempty, so the
 archive's reopen and deletion controls remain reachable even when every session fits in the submenu. Focus mode's
@@ -16,7 +17,7 @@ preview offers View all whenever it omits any archived session (see "What both v
 **Archive previews** — the submenus above and focus mode's archived list — list the sessions the archive view lists
 as rows of their own, most recently archived first, at most ten. A session inset there under its archived owner (see
 below) is left out of the preview and reached through View all; every other archived session is a preview row,
-including one bound to a project session that is not archived, such as a session of a lead session that is still
+including one bound to a project session that is not archived, such as a session of a coordinator that is still
 live, and one whose owner is no longer known. A submenu item shows the session's agent's icon, its title and, at the
 item's end edge, how long ago it was archived, in muted text; these previews show no context-size chip. Relative
 times are worded in the current language, read as now for anything under a minute, and keep up with the clock while
@@ -33,7 +34,7 @@ submenu. Focus mode's preview rows are described in "What both views show" in `d
 - It **covers the terminal's area only**: the sidebar and the right pane stay as they are.
   The terminal goes on running beneath it and is not resized.
 - Its header says how many archived sessions there are, over the title "Archived sessions" (for console sessions,
-  "Archived console sessions"; for a console session's bound sessions, "Archived bound sessions"), with **Delete all**
+  "Archived console sessions"; for sessions under a console session, "Archived bound sessions"), with **Delete all**
   while there is at least one, and a **Close** button. Which project, console session or console it is for is shown in
   the top bar's breadcrumb (see "The top bar" in `docs/product/window-layout.md`).
 - The list is in the order the sessions were archived, most recent first. It shows 30 rows and adds 30 more each time
@@ -57,7 +58,7 @@ submenu. Focus mode's preview rows are described in "What both views show" in `d
   it there, so such a row grows by a line when its buttons appear. On a device whose primary input cannot hover — a
   phone, or a tablet's touch screen — they always show. Reopen and Delete have filled backgrounds distinct from the
   hovered row; Delete uses a soft danger fill.
-- A session whose owner is **a project session listed here too** — an archived session of an archived lead session, or
+- A session whose owner is **a project session listed here too** — an archived session of an archived coordinator, or
   of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
   as in "Project rows" in `docs/product/sidebar-project-rows.md`, and follows it instead of being ranked against the
   rows beside it; one whose owner is not in the list is listed on its own. The row's accessible name also names the

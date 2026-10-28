@@ -15,15 +15,14 @@ archived session under a console session, or every archived console session of a
 asks for confirmation. Deleting one also asks, except for an unused session (see "Deleting an unused session"
 below); a used session still asks even when its agent records are absent.
 
-**Deleting an archived owner deletes the archived sessions bound to it, at both levels**: an archived lead session
-among them takes its own archived sessions along, so deleting an archived console session or an archived lead session
-leaves no archived session under it. Left behind, reopening one of them would have no owner to come back with, and its
-binding would point at nothing. The confirmation says how many that is, counting both levels, before anything is
-deleted. Deleting every archived console session of a console, and deleting every archived session under a console
-session, take the archived sessions under them in the same way, and the confirmation says how many. A lead session that
-is not archived keeps its own sessions. Deleting an archived bound session on its own leaves its owner alone, and
-neither deleting a project's archived sessions nor deleting the archived sessions under a console session touches a
-console session.
+**Deleting an archived owner deletes the archived sessions bound to it, at both levels**: an archived coordinator among
+them takes its own archived sessions along, so deleting an archived console session or an archived coordinator leaves no
+archived session under it. Left behind, reopening one of them would have no owner to come back with, and its binding
+would point at nothing. The confirmation says how many that is, counting both levels, before anything is deleted.
+Deleting every archived console session of a console, and deleting every archived session under a console session, take
+the archived sessions under them in the same way, and the confirmation says how many. A coordinator that is not archived
+keeps its own sessions. Deleting an archived reporting session on its own leaves its owner alone, and neither deleting a
+project's archived sessions nor deleting the archived sessions under a console session touches a console session.
 
 - **Deleting removes Octoboard's record of the session**, for good, the last output Octoboard kept for it, the report
   panel pages it pushed (see `docs/product/report-panel.md`), and, for a session that received a handoff, its handoff
@@ -60,7 +59,7 @@ resumable or unknown (see "When a conversation can no longer be resumed" in
   one of them is unresumable.** If any member of that group is resumable or unknown, pinned, locked, still being
   launched or with a process still exiting, or if any session bound to the owner at either level is not archived, the
   whole group is kept for the user. An unresumable archived session whose owner is not archived is deleted on its own.
-- A session that changed while it was being checked — reopened, pinned, locked, bound or unbound — is kept, with its
+- A session that changed while it was being checked — reopened, pinned, locked, bound or independent — is kept, with its
   group, until a later check.
 - **A deletion is the same as the user's** (see "Deleting archived sessions" above): the session disappears from every
   client, and its bound branches and worktrees are removed with nothing forced. In addition, what is left of its

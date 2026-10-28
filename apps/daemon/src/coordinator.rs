@@ -2245,7 +2245,7 @@ fn resolve_bound_to(
                 && match target.role {
                     Role::Console => true,
                     Role::Project => {
-                        !target.has_bound_role()
+                        !target.is_worker()
                             && target.project_id.is_some()
                             && target.project_id.as_deref() == project_id
                     }
@@ -2867,6 +2867,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
+        orchestration_role: None,
         context: None,
         observed_model: None,
         observed_effort: None,
@@ -3212,7 +3213,7 @@ pub(crate) fn owner_refusal(
                 named(owner)
             )));
         }
-        if owner.has_bound_role() {
+        if owner.is_worker() {
             return Ok(Some(format!(
                 "{} reports to a session and cannot own sessions of its own: orchestration is at \
                  most two levels deep",
@@ -3338,7 +3339,7 @@ pub fn bind_session(
 /// their form. The binding is written by now, so a failure is logged and leaves the pages for
 /// [`submit_page`] to refuse.
 fn withdraw_pages_if_bound(state: &Arc<AppState>, before: &Session, after: &Session) {
-    if !before.has_bound_role() && after.has_bound_role() {
+    if !before.is_worker() && after.is_worker() {
         if let Err(err) = mcp::withdraw_pages(state, &after.id) {
             tracing::warn!(
                 session = %after.id, %err, "withdrawing the pages of a bound session failed"
@@ -3485,11 +3486,7 @@ pub fn release_session(
 /// every launch, as at its first. An owner that is no longer on record reads as a console session:
 /// the text is the generic one, and a report to it fails on its own.
 fn owner_of(state: &Arc<AppState>, session: &Session) -> Result<Option<mcp::Owner>> {
-    let Some(owner_id) = session
-        .bound_to
-        .as_ref()
-        .filter(|_| session.has_bound_role())
-    else {
+    let Some(owner_id) = session.bound_to.as_ref().filter(|_| session.is_worker()) else {
         return Ok(None);
     };
     Ok(Some(match state.store.get_session(owner_id)? {
@@ -4366,7 +4363,7 @@ pub(crate) fn ensure_unlocked(sessions: impl IntoIterator<Item = Session>) -> Re
 /// one owns none, so it has none. Walks that build an owner's team or group go through it, so
 /// they agree on what is bound to what.
 fn bound_in<'a>(sessions: &'a [Session], owner: &Session) -> impl Iterator<Item = &'a Session> {
-    let owns = !owner.has_bound_role();
+    let owns = !owner.is_worker();
     let owner_id = owner.id.clone();
     sessions
         .iter()
@@ -4391,7 +4388,7 @@ pub(crate) fn group_in<'a>(sessions: &'a [Session], root: &'a Session) -> Vec<&'
 pub(crate) fn owned_counts(sessions: &[Session]) -> HashMap<String, usize> {
     let owns_none: HashSet<&str> = sessions
         .iter()
-        .filter(|session| session.has_bound_role())
+        .filter(|session| session.is_worker())
         .map(|session| session.id.as_str())
         .collect();
     let mut counts = HashMap::new();
@@ -4414,7 +4411,7 @@ pub(crate) fn owned_count_of(
     owner: &Session,
 ) -> Result<HashMap<String, usize>> {
     let mut counts = HashMap::new();
-    if !owner.has_bound_role() {
+    if !owner.is_worker() {
         let owned = state.store.count_bound_to(&owner.id)?;
         if owned > 0 {
             counts.insert(owner.id.clone(), owned);
@@ -5524,7 +5521,7 @@ async fn submit_page(state: &Arc<AppState>, page_id: &str, data: serde_json::Val
     // becomes one, so this holds for one left behind by a failed withdrawal, until the daemon's
     // next start sweeps it.
     let pusher = state.store.get_session(&page.console_session_id)?;
-    if pusher.is_some_and(|pusher| pusher.has_bound_role()) {
+    if pusher.is_some_and(|pusher| pusher.is_worker()) {
         return Err(CodedError::raised(
             error_code::UNKNOWN_PAGE,
             format!(
@@ -7007,6 +7004,7 @@ mod tests {
                     background_tasks: Vec::new(),
                     switching_account: false,
                     default_effort: None,
+                    orchestration_role: None,
                     context: None,
                     observed_model: None,
                     observed_effort: None,
@@ -7137,6 +7135,7 @@ mod tests {
                 background_tasks: Vec::new(),
                 switching_account: false,
                 default_effort: None,
+                orchestration_role: None,
                 context: None,
                 observed_model: None,
                 observed_effort: None,
@@ -13903,7 +13902,7 @@ mod tests {
 
         let (lead, _) = bind_session(&state, "starter", "hub").unwrap();
         assert_eq!((lead.bound_to.as_deref(), lead.lead), (Some("hub"), true));
-        assert!(!lead.has_bound_role());
+        assert!(!lead.is_worker());
         let mine = state.store.get_session("mine").unwrap().unwrap();
         assert_eq!(mine.bound_to.as_deref(), Some("starter"));
 
@@ -13912,7 +13911,7 @@ mod tests {
             (joined.bound_to.as_deref(), joined.lead),
             (Some("other-starter"), false)
         );
-        assert!(joined.has_bound_role());
+        assert!(joined.is_worker());
         let again = bind_session(&state, "loner", "hub").expect_err("bound already");
         assert!(again.to_string().contains("already bound"), "{again}");
     }
@@ -13999,7 +13998,7 @@ mod tests {
             (spare.bound_to.as_deref(), spare.lead),
             (Some("peer"), false)
         );
-        assert!(spare.has_bound_role());
+        assert!(spare.is_worker());
         assert_eq!(owner.id, "peer");
         assert!(state.store.list_pages("spare-lead").unwrap().is_empty());
     }
@@ -14124,7 +14123,7 @@ mod tests {
         let lead = release_session(&state, "lead", Some("hub"), None)
             .unwrap()
             .session;
-        assert!(!lead.has_bound_role());
+        assert!(!lead.is_worker());
         assert_eq!((lead.bound_to, lead.lead), (None, false));
         let child = state.store.get_session("child").unwrap().unwrap();
         assert_eq!(child.bound_to.as_deref(), Some("lead"));
@@ -14214,7 +14213,7 @@ mod tests {
             .is_none());
         assert_eq!(state.store.owner_notice_pending("released").unwrap(), 1);
         let (prompt, _) = relaunch_stand_in(&state, "released", false).await.unwrap();
-        assert!(prompt.unwrap().contains("you have no owner now"));
+        assert!(prompt.unwrap().contains("you have no parent session now"));
         assert_eq!(state.store.owner_notice_pending("released").unwrap(), 0);
 
         // A transfer, which a session with no process takes.
@@ -14231,7 +14230,10 @@ mod tests {
         );
         let (prompt, _) = relaunch_stand_in(&state, "handed", false).await.unwrap();
         let prompt = prompt.unwrap();
-        assert!(prompt.contains("your owner has changed"), "{prompt}");
+        assert!(
+            prompt.contains("your parent session has changed"),
+            "{prompt}"
+        );
         assert!(prompt.contains("`hub-2`"), "{prompt}");
         assert_eq!(state.store.owner_notice_pending("handed").unwrap(), 0);
 
@@ -14246,7 +14248,10 @@ mod tests {
         let (prompt, _) = relaunch_stand_in(&state, "replaced", false).await.unwrap();
         let prompt = prompt.unwrap();
         assert!(prompt.contains("`hub-2`"), "{prompt}");
-        assert!(!prompt.contains("you have no owner now"), "{prompt}");
+        assert!(
+            !prompt.contains("you have no parent session now"),
+            "{prompt}"
+        );
         assert_eq!(state.store.owner_notice_pending("replaced").unwrap(), 0);
     }
 
@@ -14278,12 +14283,15 @@ mod tests {
             SessionStatus::Interrupted
         );
         let (prompt, _) = relaunch_stand_in(&state, "claude", false).await.unwrap();
-        assert!(prompt.unwrap().contains("you have no owner now"));
+        assert!(prompt.unwrap().contains("you have no parent session now"));
 
         let (prompt, queued) = relaunch_stand_in(&state, "codex", false).await.unwrap();
         assert!(prompt.is_none());
         assert_eq!(queued.len(), 1);
-        assert!(queued[0].contains("you have no owner now"), "{queued:?}");
+        assert!(
+            queued[0].contains("you have no parent session now"),
+            "{queued:?}"
+        );
         assert_eq!(state.store.owner_notice_pending("codex").unwrap(), 0);
     }
 
@@ -14644,9 +14652,12 @@ mod tests {
         );
         let (prompt, _) = relaunch_stand_in(&state, "noted", false).await.unwrap();
         let prompt = prompt.unwrap();
-        assert!(prompt.contains("you have no owner now"), "{prompt}");
         assert!(
-            prompt.contains("Your former owner left this note:"),
+            prompt.contains("you have no parent session now"),
+            "{prompt}"
+        );
+        assert!(
+            prompt.contains("Your former parent session left this note:"),
             "{prompt}"
         );
         assert!(prompt.contains("> Pick up at step 3."), "{prompt}");
@@ -14661,8 +14672,11 @@ mod tests {
         assert_eq!(state.store.owner_notice_note("blank").unwrap(), None);
         let (prompt, _) = relaunch_stand_in(&state, "blank", false).await.unwrap();
         let prompt = prompt.unwrap();
-        assert!(prompt.contains("you have no owner now"), "{prompt}");
-        assert!(!prompt.contains("former owner left"), "{prompt}");
+        assert!(
+            prompt.contains("you have no parent session now"),
+            "{prompt}"
+        );
+        assert!(!prompt.contains("former parent session left"), "{prompt}");
 
         // A transfer or a bind after the release makes the note stale, so it is dropped.
         release_session(&state, "moved", Some("hub"), Some("Pick up at step 3.")).unwrap();

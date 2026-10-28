@@ -7,8 +7,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 
 ### Sessions
 
-- [Sessions](product/sessions.md) — what a session is, console versus project sessions, where they are listed, locking
-  and renaming.
+- [Sessions](product/sessions.md) — console versus project sessions, coordinator and worker roles, reporting
+  relationships, where sessions are listed, locking and renaming.
 - [Opening a session](product/opening-sessions.md) — the session dialog and how the agent, account, model and effort of
   a new session are chosen.
 - [Session statuses](product/session-statuses.md) — what each status glyph means, what it is derived from, and the
@@ -29,21 +29,21 @@ Development plan docs and bug tickets are temporary and are not listed here.
   account's usage limit to another account by itself, and restoring it when that fails.
 - [Handing a session off to another agent](product/handing-off-sessions.md) — moving a session's work to a new session
   of a different agent.
-- [Changing a session's owner](product/changing-session-owners.md) — handing, releasing, unbinding and binding a
-  session's owner.
-- [Interrupting a session's turn](product/interrupting-turns.md) — how an owner stops a session's running turn.
+- [Changing a session's parent](product/changing-session-owners.md) — transferring to a parent, working independently
+  and setting a parent, and how those transitions affect the role.
+- [Interrupting a session's turn](product/interrupting-turns.md) — how a parent stops a child session's running turn.
 - [Message delivery](product/message-delivery.md) — how messages are written into a running session and held when it
   cannot take them.
 
 ### Orchestration and agent tools
 
-- [Orchestration](product/hub-orchestration.md) — one session starting, directing and following other sessions: the
-  tools, leads, briefs and routing.
-- [Session requests](product/session-requests.md) — a session asking the user to start an ownerless session.
+- [Orchestration](product/hub-orchestration.md) — coordinator and worker capabilities, parent and child relationships,
+  tools, briefs and routing.
+- [Session requests](product/session-requests.md) — a session asking the user to start an independent session.
 - [Requests to resume a conversation](product/requests-to-resume-a-conversation.md) — a session asking the user to
   resume a conversation by its ID.
-- [Reporting to an owner](product/reporting-to-owners.md) — how a bound project session reports a round of work, when
-  it archives itself, and what is kept for an owner that is interrupted.
+- [Reporting to a parent session](product/reporting-to-owners.md) — how a project session with a parent reports a round
+  of work, when it archives itself, and what is kept for a parent that is interrupted.
 - [Information between sessions](product/information-between-sessions.md) — what a session can see of the other running
   sessions, how it tells them something, and what is kept for an interrupted session.
 - [What every session reads](product/what-every-session-reads.md) — the read-only MCP tools open to all sessions.

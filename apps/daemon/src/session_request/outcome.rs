@@ -175,7 +175,7 @@ pub(super) fn resume_result(
 /// where the caller could.
 fn reach_note(state: &Arc<AppState>, caller: &Session, session: &Session) -> String {
     let tool = |name: &str| qualified_tool_name(caller.agent, name);
-    let has = |name: &str| tool_by_name(caller.role, caller.has_bound_role(), name).is_some();
+    let has = |name: &str| tool_by_name(caller.role, caller.is_worker(), name).is_some();
     let reads = if has("get_session") {
         format!(", and `{}` reads it", tool("get_session"))
     } else {

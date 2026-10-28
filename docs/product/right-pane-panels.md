@@ -257,9 +257,8 @@ Whether the Terminal panel is maximized is not remembered: a reload shows it in 
 ## A project session's Report panel
 
 While a project owns the right pane and one of its project sessions is selected, the project's stack can carry that
-session's **Report panel**, showing the pages it pushed (see `docs/product/report-panel.md`); only an unbound project
-session or a lead session pushes pages. With no project session of that project selected, the stack has no Report
-panel.
+session's **Report panel**, showing the pages it pushed (see `docs/product/report-panel.md`); only a project coordinator
+pushes pages. With no project session of that project selected, the stack has no Report panel.
 
 - **It is offered only while the session has pages**, or while listing them failed, so that its failure card can say
   why and offer Try again (see "Paging through the history" in `docs/product/report-panel.md`). Its pages are listed

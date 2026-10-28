@@ -958,7 +958,7 @@ async fn mcp_call(
     // binding changing while it runs can have changed: the child announces the catalogue this
     // names, and tells the agent when it differs from the one it announced.
     if let Ok(session) = state.session_record(&session_id) {
-        answer["bound"] = serde_json::json!(session.has_bound_role());
+        answer["bound"] = serde_json::json!(session.is_worker());
     }
     axum::Json(answer)
 }

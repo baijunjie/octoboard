@@ -18,15 +18,15 @@ this request it resumed nothing. What follows is what differs.
 
 ## Who is offered the tool
 
-Every session that is offered `request_session` is offered `request_resume_session`: a console session, an unbound
-project session, a lead session, and a project session bound to an owner. The console session's instruction file and
-every project session's role description describe it: it resumes a conversation by its agent conversation id, bringing
-back the session that holds it or opening a session that is nobody's on the agent's record of it; it is to be used only
-when the user asked for that conversation to be resumed; it can resume any session, not only the caller's (where the
-caller has `reopen_session`, that one is for its own and needs no approval); what it resumes is not the caller's to
-drive; and the call waits for the user's answer. The tool's description adds that it may also be used when the agent
-was told to carry on work whose conversation the user named, and that the agent asks the user first when their intent
-is unclear. These are instructions for the agent; the user's approval is what Octoboard enforces.
+Every session that is offered `request_session` is offered `request_resume_session`: a console session or a project
+coordinator or worker, regardless of reporting relationship. The console session's instruction file and every project
+session's role description describe it: it resumes a conversation by its agent conversation id, bringing back the
+session that holds it or opening a session that is nobody's on the agent's record of it; it is to be used only when the
+user asked for that conversation to be resumed; it can resume any session, not only the caller's (where the caller has
+`reopen_session`, that one is for its own and needs no approval); what it resumes is not the caller's to drive; and the
+call waits for the user's answer. The tool's description adds that it may also be used when the agent was told to carry
+on work whose conversation the user named, and that the agent asks the user first when their intent is unclear. These
+are instructions for the agent; the user's approval is what Octoboard enforces.
 
 ## The call
 

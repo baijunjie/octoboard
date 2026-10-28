@@ -70,14 +70,13 @@ A branch has at most one responsible session at a time; a session can be respons
 
 ## Handing branches to a session the caller starts
 
-A project session that can own sessions — an unbound project session or a lead session (see "The unbound project
-session's tools" in `docs/product/hub-orchestration.md`) — can pass `branches` to `new_session`: local branches of its
-own project's repository that **the caller itself** is responsible for. The rules are `request_session`'s (see
-"Handing branches over" in `docs/product/session-requests.md`): the same input checks; the same refusal for a branch
-the caller is not responsible for, made before anything is started, so a refused call starts no session; the move made
-right after the new session has started, and only for a branch the caller is still responsible for at that moment;
-and a move that cannot be recorded does not fail the call, leaving the caller responsible for every branch it named.
-What differs is that the new session is owned by the caller and no user approval is involved.
+A project coordinator (see "Project coordinators' tools" in `docs/product/hub-orchestration.md`) can pass `branches` to
+`new_session`: local branches of its own project's repository that **the caller itself** is responsible for. The rules
+are `request_session`'s (see "Handing branches over" in `docs/product/session-requests.md`): the same input checks; the
+same refusal for a branch the caller is not responsible for, made before anything is started, so a refused call starts
+no session; the move made right after the new session has started, and only for a branch the caller is still responsible
+for at that moment; and a move that cannot be recorded does not fail the call, leaving the caller responsible for every
+branch it named. What differs is that the new session is owned by the caller and no user approval is involved.
 
 - **The opening prompt says so.** The brief is preceded by a paragraph naming the caller by id and title, saying that
   it started the new session and handed it those branches, naming each, with its target branch where one is recorded
@@ -143,11 +142,10 @@ the caller itself, and the two must differ. No approval is asked: the caller own
 
 ## Reading the branches a session is responsible for
 
-Every session, whatever its kind — a console session, an unbound or a lead project session, or one with the role of a
-bound one — has the read-only `get_session_branches` tool. It shows beforehand what `handover_branches`, and the
-`branches` of `new_session` and `request_session`, can take — each branch they name must be one the giving session is
-responsible for — and which branches and worktrees archiving the session would try to remove (see
-`docs/product/branch-and-worktree-cleanup.md`). Nothing in git or on disk changes.
+Every session — a console session or a project coordinator or worker — has the read-only `get_session_branches` tool. It
+shows beforehand what `handover_branches`, and the `branches` of `new_session` and `request_session`, can take — each
+branch they name must be one the giving session is responsible for — and which branches and worktrees archiving the
+session would try to remove (see `docs/product/branch-and-worktree-cleanup.md`). Nothing in git or on disk changes.
 
 - **Any session can be read.** `session` is optional and names any session on record, of any console or project,
   archived ones included; left out, it is the caller. A session that does not exist is refused.

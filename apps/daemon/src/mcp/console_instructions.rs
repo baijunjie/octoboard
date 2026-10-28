@@ -129,16 +129,15 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            yours to another, naming both as `from` and `to`; no session is replaced.\n\
          - `switch_session_account` — move a session of yours to another account of its own \
            agent, keeping its conversation.\n\
-         - `transfer_session` — hand a session of yours to another owner, with a note on where it \
-           stands.\n\
-         - `release_session` — let a session of yours go: it has no owner afterwards and is the \
-           user's own.\n\
-         - `request_session` — ask the user to start a session that is nobody's: in any project, \
-           or a console session.\n\
+         - `transfer_session` — hand a session of yours to another parent session, with a note \
+         on where it stands.\n\
+         - `release_session` — let a session of yours go: it becomes an independent \
+         coordinator, answering directly to the user.\n\
+         - `request_session` — ask the user to start an independent session: in any project, or \
+         a console session.\n\
          - `request_resume_session` — ask the user to resume a conversation by its agent \
-           conversation id: the session that holds it comes back, or a session that is nobody's \
-           is opened on the agent's own record of it. For when the user asked for that \
-           conversation.\n\
+         conversation id: the session that holds it comes back, or an independent session is \
+         opened on the agent's own record of it. For when the user asked for that conversation.\n\
          - `list_sessions` / `send_message` — the running sessions everywhere (narrow them with \
            `console`, `project`, `owner`, `yours`, `kind` or `branch`; `status` is `live` \
            (the running ones) by default, `interrupted` for the interrupted ones, or `any` for \
@@ -185,12 +184,18 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
          \n\
          ## How sessions relate\n\
          \n\
-         - A session `new_session` starts is yours: you drive its whole life — instruct it, \
-           archive it when it is done, reopen it when it has another task. No approval is \
-           needed.\n\
-         - `request_session` is for a session that should be nobody's: it reports to the user, \
-           and you can only share information with it. The user approves it first; the call \
-           waits for their answer.\n\
+         A project's session role and reporting relationship are separate. A coordinator can \
+         manage child sessions; a worker cannot. An independent coordinator answers directly to \
+         the user; a session with a parent reports to it. Session records give the capability \
+         in `orchestration_role` and the parent in `owner` (`owner_kind` says console or \
+         project).\n\
+         \n\
+         - A session `new_session` starts is a worker reporting to you: you drive its whole \
+         life — instruct it, archive it when it is done, reopen it when it has another task. No \
+         approval is needed.\n\
+         - `request_session` is for a session that should be independent: it reports to the \
+         user, and you can only share information with it. The user approves it first; the call \
+         waits for their answer.\n\
          - `request_resume_session` resumes a conversation the user named, as the new-session \
            dialog's Resume tab does, and it can resume any session of a project, not only yours \
            (`reopen_session` is for yours, and needs no approval). What it resumes keeps its \
@@ -221,17 +226,18 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            next step with `instruct_session` — unless the result's `note` says it was sent a \
            prompt to continue, which you must not repeat. Use it rather than a handoff when the \
            same agent can go on. `get_account_quotas` shows which accounts still have quota.\n\
-         - `transfer_session` passes a session of yours to another owner — another console \
-           session of this console, or a project session of that session's project that can own \
-           sessions — without asking the user. A session with sessions of its own (a lead \
-           session) can only go to a console session. It is no longer yours afterwards.\n\
-         - `release_session` unbinds a session of yours without asking the user: it is told it has \
-           no owner and becomes the user's own session, which no session drives, and it is no \
-           longer yours afterwards. Its branches stay with it.\n\
-         - A project session nobody owns can bind itself to you and become yours. Its first \
-           report says so; drive it like any session of yours. A session that comes with \
-           sessions of its own keeps them and drives them itself: you can read those, not \
-           drive them.\n\
+         - `transfer_session` passes a session of yours to another parent session — another \
+         console session of this console, or a project session of that session's project that \
+         can own sessions — without asking the user. A coordinator with child sessions, \
+         archived ones included, can only go to a console session. It is no longer yours \
+         afterwards.\n\
+         - `release_session` makes a child session independent without asking the user: it is \
+         told it has no parent session and becomes an independent coordinator, answering to the \
+         user, and it is no longer yours afterwards. Its branches stay with it.\n\
+         - An independent project coordinator can set you as its parent session. Its first \
+         report says so; it stays a coordinator, even with no children. Drive it like any child \
+         session of yours. A session that comes with sessions of its own keeps them and drives \
+         them itself: you can read those, not drive them.\n\
          - `send_message` needs no relationship: it reaches any running session, in any console or \
            project, as information rather than instruction. An interrupted session has it kept \
            and takes it once resumed; an archived one is refused.\n\
@@ -558,7 +564,7 @@ mod tests {
         // Every console tool's name holds an underscore, and so do the few field names and values
         // the file puts in backticks; listing them keeps those from being taken for tools missing
         // from the catalogue.
-        const NON_TOOL_NAMES: [&str; 2] = ["owner_kind", "needs_decision"];
+        const NON_TOOL_NAMES: [&str; 3] = ["owner_kind", "needs_decision", "orchestration_role"];
         let named: Vec<&str> = text
             .split('`')
             .skip(1)

@@ -20,8 +20,8 @@ switched to. It asks which sessions to switch, as two options of a radio group; 
 
 - **This session and its sub-sessions** — the session and every session under it: those bound to it, those bound to
   them, and so on to any depth, reached through archived sessions as well.
-- **Every session in this console** — every session of the same agent in that console: console sessions,
-  project sessions and bound sessions, across all projects in the console.
+- **Every session in this console** — every session of the same agent in that console: console sessions, project
+  sessions, whether independent or reporting to a parent, across all projects in the console.
 
 In both, only sessions of the session's own agent are switched, and archived sessions, sessions already on the target
 account and sessions already being switched (see "While a session is switching" below) are left out. Each option shows
@@ -109,13 +109,12 @@ While a session is shown as switching:
 
 ## Switching from an owner's tool
 
-`switch_session_account` is offered to every session that can own sessions — a console session, an unbound project
-session and a lead session — and not to a session with the role of a bound one (see "The console session's tools" and
-"The unbound project session's tools" in `docs/product/hub-orchestration.md`). The user is asked to approve the switch
-first (see "The user's approval of an owner's switch" below), unless **Automatically approve account switches** is on,
-in which case the switch is made at once (see "Approving requests automatically" in
-`docs/product/session-requests.md`). It switches the one session it names; it has no counterpart of the confirmation's
-choices of several sessions.
+`switch_session_account` is offered to every session that can own sessions — a console session, a project coordinator —
+and not to a session with the worker role (see "The console session's tools" and "Project coordinators' tools" in
+`docs/product/hub-orchestration.md`). The user is asked to approve the switch first (see "The user's approval of an
+owner's switch" below), unless **Automatically approve account switches** is on, in which case the switch is made at
+once (see "Approving requests automatically" in `docs/product/session-requests.md`). It switches the one session it
+names; it has no counterpart of the confirmation's choices of several sessions.
 
 | Argument | Required | Contents |
 |---|---|---|
@@ -144,8 +143,8 @@ The call returns:
 
 Refused before the user is asked, with the reason in prose (as a tool error) and nothing changed:
 
-- a session that is not the caller's — an unbound one, one bound to another session, a console session, or the caller
-  itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
+- a session that is not the caller's — an independent one, one bound to another session, a console session, or the
+  caller itself — with a reason naming who owns it, as for the other tools that act on a session of the caller's;
 - an `account` that is not one of the session's agent's, an account of another agent included;
 - an `account` the user turned off (`account_disabled`);
 - an archived session, and the account the session is on already.

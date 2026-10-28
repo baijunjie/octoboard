@@ -1,14 +1,14 @@
 # What every session reads
 
 The read-only tools of Octoboard's MCP server (see `docs/product/hub-orchestration.md`). Every session — a console
-session, a project session that can own sessions and a project session with the role of a bound one alike — is offered
-the same ones, and each reads the same for every caller: any session, of any project or console, and the projects and
-archives of any console — except the reads of a project's repository, its changes and its branches, which reach only
-the caller's own console's projects (see "Reading a project's changes" and "Listing a project's branches" below).
+session or project coordinator or worker — is offered the same ones, and each reads the same for every caller: any
+session, of any project or console, and the projects and archives of any console — except the reads of a project's
+repository, its changes and its branches, which reach only the caller's own console's projects (see "Reading a project's
+changes" and "Listing a project's branches" below).
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `get_session` | `session?`, `output_bytes?` | The record of any session, of any console, or with `session` left out of the caller itself, which is how a session learns its own id — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is unbound), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, the names of the branches it is responsible for, and the rest of "Session records" below — plus a tail of what it has printed, and, for an interrupted or archived session, whether its conversation can still be resumed. |
+| `get_session` | `session?`, `output_bytes?` | The record of any session, of any console, or with `session` left out of the caller itself, which is how a session learns its own id — status, title, agent, whether it is a console session, its console and project, which session owns it and whether that owner is a console session or a project session (or that it is independent), whether it is the caller's, timestamps, its account, the model and effort it is seen running with, whether it is pinned or locked, the names of the branches it is responsible for, and the rest of "Session records" below — plus a tail of what it has printed, and, for an interrupted or archived session, whether its conversation can still be resumed. |
 | `list_sessions` | `console?`, `project?`, `owner?`, `yours?`, `kind?`, `branch?`, `status?` | The running sessions other than the caller — or with `status` the interrupted ones, or both — in every console and project, optionally narrowed. See `docs/product/information-between-sessions.md`. |
 | `read_session_history` | `session?`, `limit?`, `before?` | What any session's conversation held, or with `session` left out the caller's own, a page at a time from the latest. See "Reading a session's history" below. |
 | `get_session_branches` | `session?` | The git branches any session is responsible for, each with its project, worktree, target branch and fork point, since when the session is responsible for it, and what archiving the session would do with it. See "Reading the branches a session is responsible for" in `docs/product/branch-responsible-session.md`. |
@@ -23,17 +23,17 @@ the caller's own console's projects (see "Reading a project's changes" and "List
 
 The reads are not narrowed by role because sessions of any kind can work in the same project, and so the same working
 directory, at once — two console sessions can dispatch into it, say — and one that could not see the others' sessions
-would collide with them. That holds for a bound session as much as for one that can own sessions, so a bound session
-is offered every read too, at the cost of a few more tool descriptions in its context. What stays narrower is the
-reach of the reads of a project's repository, held to the caller's own console (see "Reading a project's changes"
-below), a read of settings — `get_project` is a project session's read of its own project (see
-`docs/product/agent-settings-tools.md`), and `get_console` and `get_settings` are the console session's (see "The
-console session's tools" in `docs/product/hub-orchestration.md`) — and `list_pages`, the read of the report panel pages
-the caller pushed itself, offered with the other report panel tools to a console session and to an unbound project
-session or a lead session (see "Reading back the pages pushed" in `docs/product/report-panel.md`). What a session may do
-to another is narrower too (see "Which sessions an owner drives" in `docs/product/hub-orchestration.md`). The tool
-descriptions, the console session's instructions and every project session's role description tell it that a session it
-does not own is somebody else's and is to be left alone, whatever it can read of it.
+would collide with them. That holds for a worker as much as for a coordinator, so a worker is offered every read too, at
+the cost of a few more tool descriptions in its context. What stays narrower is the reach of the reads of a project's
+repository, held to the caller's own console (see "Reading a project's changes" below), a read of settings —
+`get_project` is a project session's read of its own project (see `docs/product/agent-settings-tools.md`), and
+`get_console` and `get_settings` are the console session's (see "The console session's tools" in
+`docs/product/hub-orchestration.md`) — and `list_pages`, the read of the report panel pages the caller pushed itself,
+offered with the other report panel tools to a console session and to a project coordinator (see "Reading back the pages
+pushed" in `docs/product/report-panel.md`). What a session may do to another is narrower too (see "Which sessions an
+owner drives" in `docs/product/hub-orchestration.md`). The tool descriptions, the console session's instructions and
+every project session's role description tell it that a session it does not own is somebody else's and is to be left
+alone, whatever it can read of it.
 
 ## Listing a console's projects
 
@@ -332,9 +332,16 @@ session that is waiting for the user carries a note saying so.
 
 Every session record the session tools give — `list_projects`' sessions, `get_session`, `list_sessions`,
 `list_archived`, and the record `rename_session` and `set_session_pinned` answer with — carries `owner` (the id of the
-session it is bound to, or null when it is unbound — always null for a console session, which is never bound),
-`owner_kind` (`console` or `project`, the kind of session that owner is; null when it is unbound) and `yours` (whether
-that owner is the caller).
+session it is bound to, or null when it is independent — always null for a console session, which is never bound),
+`owner_kind` (`console` or `project`, the kind of session that parent is; null when independent) and `yours` (whether
+that parent is the caller). `orchestration_role` is `coordinator` or `worker`: it describes the ability to create and
+manage child sessions, separately from the parent relationship. Console sessions read `coordinator`; project sessions
+use the roles described in `docs/product/hub-orchestration.md`. A coordinator can have a parent and no children.
+
+Session records sent to windows also expose `orchestration_role`; their parent field remains `bound_to`. Tool names,
+arguments such as `owner`, the `owner_kind` field and the compatibility flag `lead` keep their existing names.
+Clients reading an older record without `orchestration_role` cannot infer a project session's role from a non-null
+parent alone: a coordinator can also have a parent.
 
 Each record also carries `background_tasks`: for a Claude Code session working in background, the work it left running,
 each entry with `id` and, where Claude Code gives them, `type` and `description`; an empty list for every other session.
@@ -408,6 +415,7 @@ And each record carries what tells sessions apart and what an owner decides on:
   absent when the session follows its project's, else its console's, setting, and `null` when the session leaves the
   value to the agent's own default. They differ from `observed_model` and `observed_effort`, which say what the agent's
   records show.
-- `lead`, whether the session is a lead session (see "Lead sessions" in `docs/product/hub-orchestration.md`), and
-  `owned_sessions`, how many sessions are bound to it in any status, archived ones included — the count that decides
-  whom it can be bound to (see "Who can own a session" in `docs/product/changing-session-owners.md`).
+- `lead`, a compatibility flag that is true for a project coordinator with a console parent (see "Coordinators with a
+  parent session" in `docs/product/hub-orchestration.md`), and `owned_sessions`, how many sessions are bound to it in
+  any status, archived ones included — the count that decides whom it can be bound to (see "Who can own a session" in
+  `docs/product/changing-session-owners.md`).

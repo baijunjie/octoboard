@@ -102,23 +102,26 @@ plain text. These lists do not carry a separate empty-state heading or button.
 
 ## A project's focus mode
 
-The switch at the trailing end of the **Sessions (n)** heading chooses whether all of the project's sessions are
-listed together. It has no visible text label: its tooltip explains the choice on pointer hover and keyboard focus,
-and its accessible name carries the same explanation. It appears only
-while the project has live sessions under a console session that is not archived, including a lead session and the
-sessions under it; archived bound sessions alone do not make it appear. It is **off by default**: sessions under
-console sessions are shown separately as summary chips. Turning it on lists all of the project's live sessions as
-cards and hides the summary chips. The choice applies to every project's focus mode in this client and survives
-reloading, including while the switch is hidden; it is not a shared application setting and is not exported with
-configuration. If client storage is unavailable, the choice lasts for the current page load only.
+The switch at the trailing end of the **Sessions (n)** heading chooses whether all of the project's sessions are listed
+together. It has no visible text label: its tooltip explains the choice on pointer hover and keyboard focus, and its
+accessible name carries the same explanation. It appears only while the project has live sessions under a console
+session that is not archived, including a coordinator and the sessions under it; archived sessions with a parent alone
+do not make it appear. It is **off by default**: sessions under console sessions are shown separately as summary chips.
+Turning it on lists all of the project's live sessions as cards and hides the summary chips. The choice applies to every
+project's focus mode in this client and survives reloading, including while the switch is hidden; it is not a shared
+application setting and is not exported with configuration. If client storage is unavailable, the choice lasts for the
+current page load only.
 
 From the top, below the header:
 
 - **Sessions (n)**: with the switch off, the project's sessions that are not archived and have **no console session
-  above them** (see "Lead sessions" in `docs/product/hub-orchestration.md`) — the unbound ones, each with the sessions
-  bound to it inset under it. A **lead session and the sessions under it** are left out of the list together, as is
+  above them** (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`) — the independent
+  project coordinators,
+  each with the sessions
+  bound to it inset under it. A **coordinator reporting to a console session and the sessions under it** are left out of
+  the list together, as is
   any session bound to a console session. With the switch on, every live session of the project is listed, with the
-  same order and nesting. Each card under a console session, directly or through a lead session, carries that console
+  same order and nesting. Each card under a console session, directly or through a coordinator, carries that console
   session's colour dot before its title in reading order, staying visible when the title is too long for its space,
   and a tooltip naming it; its accessible name names that console session as well as its immediate project-session
   owner, where it has one. The count is every card listed, the inset ones included. With
@@ -129,18 +132,18 @@ From the top, below the header:
   many lines as it needs — one chip per console session they are under, in the order the console sessions section lists
   them. A chip shows the console session's colour, its title (faded out when too long, the full title then its tooltip)
   and an inline count badge in the neutral grey tint the neutral badges and chips share, the same on every chip. Both
-  the total and each chip's count include a lead session **and** the sessions under it, since the lead session's team is
+  the total and each chip's count include a coordinator **and** the sessions under it, since the coordinator's team is
   listed with it in that console session's focus mode. Pressing a chip enters that console session's focus mode;
   assistive technology hears it as entering that focus mode, with the count.
-- **Archived (n)** counts all of the project's archived sessions, including those under a lead session that is
+- **Archived (n)** counts all of the project's archived sessions, including those under a coordinator that is
   still live. The switch changes only the live list; the archive's count, preview and View all
   scope stay the same.
 
 **New session** (the header's **+** and the empty row) opens the new-session dialog with no "Report to" choice: the
-session is always unbound. With the primary modifier held, the header's **+** opens the session at once without the
-dialog, unbound as well (see "Opening a session with defaults" in `docs/product/opening-sessions.md`). With no agent
-both added and installed, the header's **+** is disabled and the empty row is plain text (see "When no agent can open a
-session" in `docs/product/opening-sessions.md`).
+session is always an independent project coordinator. With the primary modifier held, the header's **+** opens the
+session at once without the dialog, also as an independent project coordinator (see "Opening a session with defaults" in
+`docs/product/opening-sessions.md`). With no agent both added and installed, the header's **+** is disabled and the
+empty row is plain text (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
 
 ## A console session's focus mode
 
@@ -157,9 +160,10 @@ session" in `docs/product/opening-sessions.md`).
   for; right-clicking it opens its action menu. It is not counted in **Sessions (n)**.
 - **Sessions (n)**: the projects of the console that have a session bound to this console session which is not archived,
   in the order of the project list, and under each project's name the sessions bound to this console session as cards,
-  each **lead session** among them carrying the sessions bound to it inset under it — they run in the lead session's own
+  each **coordinator** among them carrying the sessions bound to it inset under it — they run in the coordinator's own
   project, so they fall under the same project's name. The count includes them, so it covers sessions this console
-  session sees but cannot drive (see "Lead sessions" in `docs/product/hub-orchestration.md`). A session bound to another
+  session sees but cannot drive (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). A
+  session bound to another
   console session, to a project session that is not under this one, or to none, is not shown, and neither is a project
   with nothing under this console session. With none, a compact row saying there are no bound sessions takes their
   place, carrying no action of its own — the header's **+** below is the way to open one. Each project's name carries
@@ -167,9 +171,9 @@ session" in `docs/product/opening-sessions.md`).
   which opens a new session in that project, and its action menu, which is the project row's without its Focus mode item
   — a project has no focus mode to be entered from here — and keeps **Pin** / **Unpin**. That menu's **View archive**
   covers only the project's share of this console session's archive: the project's archived sessions bound to this
-  console session, or bound to an archived lead session that is bound to it, previewed as any archive preview is (see
+  console session, or bound to an archived coordinator that is bound to it, previewed as any archive preview is (see
   "The archive view" in `docs/product/archive-view.md`). The project's sessions bound to another console session or to
-  none, and those of a lead session that is still live, are not in it; with none in the share, the submenu shows only
+  none, and those of a coordinator that is still live, are not in it; with none in the share, the submenu shows only
   the disabled item saying there are none. Its **View all**, offered whenever the share is nonempty, opens this console
   session's archive view — the one **View all** under **Archived (n)** below opens — not the project's. The project's
   row in the full sidebar keeps the project's whole archive in its menu. The project list's filter is not part of this
@@ -183,11 +187,12 @@ session" in `docs/product/opening-sessions.md`).
   `docs/product/opening-sessions.md`).
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
   in place of the sessions a compact row says the console has no projects yet; clicking it opens **Add project**.
-- **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived lead
-  session that is bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — and **View all** opens
-  the archive view scoped to them, including the sessions of archived lead sessions, which the preview leaves out
-  (see "The archive view" in `docs/product/archive-view.md`). An archived session of a lead session that is still live
-  is not here: it is in the lead session's project's archive alone.
+- **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived
+  coordinator that is bound to it (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`) —
+  and **View all** opens
+  the archive view scoped to them, including the sessions of archived coordinators, which the preview leaves out
+  (see "The archive view" in `docs/product/archive-view.md`). An archived session of a coordinator that is still live
+  is not here: it is in the coordinator's project's archive alone.
 
 ## The switch strip
 
@@ -245,17 +250,17 @@ deleted or, as it has no row any more, archived. An archived console session is 
 reopening it does not put the sidebar back into its focus mode. A remembered focus mode on something that is not in the
 console shown is ignored.
 
-**What belongs to what.** Every session of a project belongs to **that project's focus mode**, regardless of its
-status, binding or whether its card is shown. The combined-view switch changes only what the list shows: turning
-it off keeps project focus mode and the selected session's terminal, even when that session is represented only by
-the summary chips. Selecting another session of the same project, reopening a bound session, or its owner becoming
-a lead session also keeps project focus mode. Back and Forward use this same project membership rule, independently
-of the switch. A session belongs to **a console session's focus mode**
-when it is that console session itself, when it is live and under it — bound to it, or bound to a lead session bound to
-it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — or when it is archived and that console session's
-archive reaches it: bound to it, or bound to a lead session that is archived too. For archived sessions the rule is the
-narrower one, so an archived session of a lead session that is **still live** belongs to its project's focus mode only,
-and selecting it from the console session's focus mode leaves that focus mode.
+**What belongs to what.** Every session of a project belongs to **that project's focus mode**, regardless of its status,
+binding or whether its card is shown. The combined-view switch changes only what the list shows: turning it off keeps
+project focus mode and the selected session's terminal, even when that session is represented only by the summary chips.
+Selecting another session of the same project, reopening a session with a parent, or its owner starting to report to a
+console session also keeps project focus mode. Back and Forward use this same project membership rule, independently of
+the switch. A session belongs to **a console session's focus mode** when it is that console session itself, when it is
+live and under it — bound to it, or bound to a coordinator bound to it (see "Coordinators with a parent session" in
+`docs/product/hub-orchestration.md`) — or when it is archived and that console session's archive reaches it: bound to
+it, or bound to a coordinator that is archived too. For archived sessions the rule is the narrower one, so an archived
+session of a coordinator that is **still live** belongs to its project's focus mode only, and selecting it from the
+console session's focus mode leaves that focus mode.
 
 ## Creating sessions from the keyboard
 
@@ -267,10 +272,10 @@ tooltip shows New session's shortcut, or New session with defaults' while the pr
 shortcuts are available only in focus mode.
 
 In a project's focus mode, the normal shortcut opens its new-session dialog and the quick shortcut creates an
-unbound session in that project. In a console session's focus mode, either shortcut opens the header's project menu;
-choosing a project opens its dialog or creates with defaults, bound to the console session in focus. Releasing the
-shortcut keys before choosing the project does not change which action was requested. A menu opened with the pointer
-continues to follow the held modifier instead.
+independent project coordinator in that project. In a console session's focus mode, either shortcut opens the header's
+project menu; choosing a project opens its dialog or creates with defaults, bound to the console session in focus.
+Releasing the shortcut keys before choosing the project does not change which action was requested. A menu opened with
+the pointer continues to follow the held modifier instead.
 
 The shortcuts match the physical key whatever the keyboard layout, work across the window including the terminal,
 and do nothing while a dialog or menu is open or during input-method composition. Holding the keys does not repeat

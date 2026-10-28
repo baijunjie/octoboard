@@ -92,11 +92,12 @@ A session row's action menu offers:
   its name, "Session locked", "Session busy" and "No other agent", with a full sentence as its description for
   assistive technology; the others show none. When several hold, the first in that order is the one shown, so one that
   shows a reason always wins over one that does not.
-- **Unbind** — asks for confirmation, then releases the session from its owner, leaving it the user's own, unbound
-  session (see "Unbinding a session from the window" in `docs/product/changing-session-owners.md`); its row then shows
-  it as unbound (see "Project rows" in `docs/product/sidebar-project-rows.md` and "The binding badge" below). Present
-  only for a bound session's row — a project session bound to a console session or to a project session; an archived
-  session has no such entry. Disabled while the session is *starting* and while it is shown as switching its account.
+- **Unbind** — asks for confirmation, then releases the session from its owner, making it an independent project
+  coordinator (see "Unbinding a session from the window" in `docs/product/changing-session-owners.md`); its row then
+  shows it without a parent (see "Project rows" in `docs/product/sidebar-project-rows.md` and "The binding badge"
+  below). Present only for a project session with a parent — a project session bound to a console session or to a
+  project session; an archived session has no such entry. Disabled while the session is *starting* and while it is shown
+  as switching its account.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`). A session at its prompt or interrupted, with no unarchived session
   under it, is archived at once, unless a branch or worktree bound to it needs the user's word (see "The confirmation"
@@ -104,7 +105,8 @@ A session row's action menu offers:
   resumed or shown as switching its account. When the archived row takes keyboard focus with it, focus goes to the
   terminal. The console session can also archive itself once nothing under it is unarchived (see "A session archiving
   itself" in `docs/product/hub-orchestration.md`); its confirmation lists the interrupted sessions under it — bound to
-  it, or to a lead session bound to it (see "Lead sessions" in `docs/product/hub-orchestration.md`) — in its
+  it, or to a coordinator bound to it (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`)
+  — in its
   consequences, under a line giving their number as the ones archived with it, and the archive is refused, with the
   sessions named, while any session under it has a process running. A project session that has started sessions is
   archived under the same rule, with the same confirmation while any of them is unarchived.
@@ -167,20 +169,19 @@ combinations are withheld from the terminal even when the action is unavailable.
 
 A project session **bound to a console session** — one carrying the id of the console session it reports to (see
 "Console sessions and project sessions" in `docs/product/sessions.md`) — carries a small dot in that console session's
-colour on its sidebar row. A **lead session** carries it like any other session
-bound to a console session (see "Lead sessions" in `docs/product/hub-orchestration.md`). On sidebar rows an unbound
-session carries no badge, and neither does a session bound to a project session, which is listed under its owner
-instead (see "Project
-rows" in `docs/product/sidebar-project-rows.md`). The badge's tooltip names the owning console session; the badge is no
-tab stop, so the tooltip shows on pointer hover only. The row's own accessible name carries the same fact in words for
-assistive technology ("Bound to …"), in the same wording for a project session's owner as for a console session's, which
-is the only place the nesting is put into words. The badge itself still carries no information its tooltip does not, so
-colour alone never distinguishes two owners for a user who cannot tell the colours apart. A console session's own row
-shows the same colour, decoratively, since the row's own label already names it, as do its own card in its focus mode,
-its chip in a project's focus mode and its chip in the switch strip. Cards in a project's combined focus view carry the
-dot for the console session above them, including cards inset under a lead session; the tooltip and accessible name
-identify that console session. The other focus views carry no binding badge on their cards. See "A project's focus mode"
-in `docs/product/focus-mode.md` for the switch and the card labels.
+colour on its sidebar row. A **coordinator reporting to a console session** carries it like any other session bound to a
+console session (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`). On sidebar rows an
+independent project coordinator carries no badge, and neither does a session bound to a project session, which is listed
+under its owner instead (see "Project rows" in `docs/product/sidebar-project-rows.md`). The badge's tooltip names the
+owning console session; the badge is no tab stop, so the tooltip shows on pointer hover only. The row's own accessible
+name carries the same fact in words for assistive technology ("Bound to …"), in the same wording for a project session's
+owner as for a console session's, which is the only place the nesting is put into words. The badge itself still carries
+no information its tooltip does not, so colour alone never distinguishes two owners for a user who cannot tell the
+colours apart. A console session's own row shows the same colour, decoratively, since the row's own label already names
+it, as do its own card in its focus mode, its chip in a project's focus mode and its chip in the switch strip. Cards in
+a project's combined focus view carry the dot for the console session above them, including cards inset under a
+coordinator; the tooltip and accessible name identify that console session. The other focus views carry no binding badge
+on their cards. See "A project's focus mode" in `docs/product/focus-mode.md` for the switch and the card labels.
 
 **Where the colour comes from.** A console session's colour is one of a fixed palette of 16, one colour per family —
 red, orange, amber, yellow, lime, green, teal, cyan, sky, blue, indigo, violet, fuchsia, pink, brown and gray — each a
@@ -193,7 +194,8 @@ every one is held; an archived console session's colour is free for others. Afte
 later console session's colour as an assigned one does. A console session keeps its colour, assigned or chosen, when
 it is archived and when it is resumed, so with more than 16 at once, with one resumed after its colour has gone to
 another, or with a colour chosen that another already has, two console sessions of one console can share a colour,
-which is the other reason nothing is ever told apart by colour alone. Each colour has its own light and dark value (see "What follows the choice" in
+which is the other reason nothing is ever told apart by colour alone. Each colour has its own light and dark value (see
+"What follows the choice" in
 `docs/product/appearance.md`).
 
 **Choosing the colour.** **Colour** in a console session's action menu — wherever that menu is offered, its sidebar row

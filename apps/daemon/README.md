@@ -61,19 +61,19 @@ screens, terminal titles and session records the tests replay.
 | `build.rs` | Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` |
 | `src/main.rs` | CLI entry point: parses the seven modes, opens the store, binds the port, prints the handshake line the application waits for, runs the server |
 | `src/server.rs`, `src/access.rs` | The HTTP/WebSocket router described in `PROTOCOL.md` (the control, terminal, MCP, hook, git-ref, revert-gate and context-window routes), and the middleware refusing with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's |
-| `src/protocol.rs` | Rust types for the wire protocol (kept in sync by hand with `PROTOCOL.md` and `packages/ui/src/protocol.ts`), the console session colours, and the one mapping from a failure to an `error` reply |
+| `src/protocol.rs` | Rust types for the wire protocol (kept in sync by hand with `PROTOCOL.md` and `packages/ui/src/protocol.ts`), the console session colours, `Session::orchestration_role` and `Session::is_worker` (derived coordinator or worker capability), and the one mapping from a failure to an `error` reply |
 | `src/git_ref_mode.rs`, `src/gate_hook_mode.rs`, `src/status_line_mode.rs`, `src/hook_mode.rs`, `src/loopback.rs` | The `git-ref`, `gate-hook`, `status-line` and `hook` CLI modes, and the minimal HTTP client for the daemon's own loopback address they share (`mcp` is `src/mcp/stdio.rs`, `revert-gate` is `src/revert_gate/`) |
 
 ### Coordinator role
 
 | Path | Role |
 |---|---|
-| `src/coordinator.rs` | What each control-socket request does to the stored consoles, projects, sessions, pages and accounts, and which host-role work it triggers: session open, launch, resume, binding, transfer, release, archive and delete cascades, account resolution, agent list and account edits, launch settings, and the shell terminal requests; `check_can_resume` (also what `request_resume_session` refuses with) and `locate_conversation` (where a conversation is held, for the Resume tab and `request_resume_session`) are the entry points the resume paths share |
+| `src/coordinator.rs` | What each control-socket request does to the stored consoles, projects, sessions, pages and accounts, and which host-role work it triggers: session open, launch, resume, parent assignment, transfer, release, archive and delete cascades, account resolution, agent list and account edits, launch settings, and the shell terminal requests; `check_can_resume` (also what `request_resume_session` refuses with) and `locate_conversation` (where a conversation is held, for the Resume tab and `request_resume_session`) are the entry points the resume paths share |
 | `src/session_request/` | A session asking the user to approve something: `request_session`, `request_resume_session`, and the `switch_session_account` and `handoff_session` calls the user is asked to approve; keeps the pending requests, the wait for the answer and the carrying out of an approval |
-| `src/reporting.rs`, `src/sharing.rs` | The channel between an owner and the sessions bound to it (briefs, messages into a running session, reports, automatic archiving, report-panel form submissions, the notices to an owner when a session it owns ends on its own, waits for the user, fails an account switch or is moved by a handoff or handover, and keeping reports and notices for an owner that is interrupted until it resumes), and information one session shares with another |
-| `src/handoff/` | The handoff package built by program alone for a session another is to take over (identity, the conversation read from the agent's own record, branches and owned sessions, written under the data directory), and the `hand_off_session` operation that carries a handoff out |
+| `src/reporting.rs`, `src/sharing.rs` | The channel between a parent session and its child sessions (briefs, messages into a running session, reports, automatic archiving, report-panel form submissions, the notices to a parent when a child session ends on its own, waits for the user, fails an account switch or is moved by a handoff or handover, and keeping reports and notices for a parent session that is interrupted until it resumes), and information one session shares with another |
+| `src/handoff/` | The handoff package built by program alone for a session another is to take over (identity, the conversation read from the agent's own record, branches and child sessions, written under the data directory), and the `hand_off_session` operation that carries a handoff out |
 | `src/switch_continue.rs` | `should_continue`: whether a session an account switch relaunches is sent `CONTINUE_PROMPT` to carry on with its turn; `stopped_on_usage_limit`: whether a conversation's last turn stopped on the plan's usage limit |
-| `src/auto_switch.rs` | The account switch Octoboard makes by itself while the setting `auto_switch_on_usage_limit` is on: `after_failed_turn`, called when a turn ends in failure, moves a session whose turn stopped on its account's usage limit to another usable account through the coordinator's switch, restores the original account when the switch fails, and notices the owner and the user |
+| `src/auto_switch.rs` | The account switch Octoboard makes by itself while the setting `auto_switch_on_usage_limit` is on: `after_failed_turn`, called when a turn ends in failure, moves a session whose turn stopped on its account's usage limit to another usable account through the coordinator's switch, restores the original account when the switch fails, and notices the parent session and the user |
 | `src/session_history.rs` | `read_session_history`: a session's history for the UI's history view and the MCP tool of the same name, read from the agent's own record |
 | `src/archive_cleanup.rs` | The daemon task (`spawn`) that deletes archived sessions whose conversation the agent can no longer resume |
 | `src/branch_origin/` | Which session is responsible for a git branch: recording created branches and their target branch and fork point, handing responsibility over, cleaning up the branches and worktrees of archived or deleted sessions, and the git hook dispatchers (`git_hooks.rs`, `dispatcher.sh`) that report created branches and start `octoboardd gate-hook`; `revert_gate_inputs.rs` is the daemon side of `POST /revert-gate/:session` |
@@ -85,7 +85,7 @@ screens, terminal titles and session records the tests replay.
 
 | Path | Role |
 |---|---|
-| `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts and their choices, the added agents list, owed owner-change notices, messages kept for interrupted sessions (shared information, and the reports and notices for an owner; table `pending_info`), branch origins, trusted folders, user settings and the host table |
+| `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts and their choices, the added agents list, owed parent-change notices, messages kept for interrupted sessions (shared information, and the reports and notices for a parent session; table `pending_info`), branch origins, trusted folders, user settings and the host table |
 | `src/state.rs` | Shared daemon state (`AppState`): session status and turn bookkeeping, the shell terminal registry, each project's live git status, pending session requests, launch claims, agent availability, the model cache, account quotas and logins, and the hook queues; `shown_status` is the status a client is shown |
 | `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through, and what a drain does when a dialog of the agent's is up |
 | `src/config_export.rs`, `src/config_import.rs`, `src/config_upgrade.rs` | Building the configuration document `export_configuration` answers with, reading one back (`inspect` and `apply`), and upgrading an older document before an import reads it |
@@ -177,21 +177,22 @@ Internals, by file:
 ### `src/mcp/`
 
 The tool surface a session drives Octoboard with. Every session has the same reads (sessions, histories, branches,
-consoles, projects, archives, models, plan quotas, and a project's changes and branches); console sessions add orchestration and
-settings tools, project sessions that can own sessions a narrower orchestration set, bound sessions the reporting tool,
-and every session has information sharing, `request_session` and `request_resume_session`. Which tools a session sees follows its role and
-binding, which the daemon checks on every call. The wire contract is in [`PROTOCOL.md`](PROTOCOL.md).
+consoles, projects, archives, models, plan quotas, and a project's changes and branches); console sessions add
+orchestration and settings tools, project coordinators a narrower orchestration set, and project sessions with a
+parent the reporting tool. Every session has information sharing, `request_session` and `request_resume_session`.
+Which tools a session sees follows its kind, coordinator or worker capability, and parent relationship, which the
+daemon checks on every call. The wire contract is in [`PROTOCOL.md`](PROTOCOL.md).
 
 | File | Role |
 |---|---|
-| `mod.rs` | The tool catalogue, and which tools a session may see by role and binding |
+| `mod.rs` | The tool catalogue, and which tools a session may see by kind, coordinator or worker capability, and parent relationship |
 | `role.rs`, `console_instructions.rs` | The role description injected at launch, and the console session's instruction file |
 | `exec.rs`, `args.rs` | Dispatching one tool call through the same coordinator and reporting functions the control socket uses, and reading a call's arguments |
 | `reads.rs`, `models.rs`, `history.rs`, `quotas.rs`, `session_branches.rs` | The read-only tools every role has: `get_session`, `list_sessions`, `list_projects`, `list_consoles`, `list_archived`, `list_agent_models`, `read_session_history`, `get_account_quotas`, `get_session_branches` |
 | `project_changes.rs`, `project_branches.rs`, `project_browse.rs` | The read-only tools every role has for looking at a project's repository: `list_project_changes` (a worktree's uncommitted changes, a branch against a base, by default its recorded target branch, with its commits, or one commit) and `read_project_diff` (one file's diff, in windows) in `project_changes.rs`, `list_project_branches` (a repository's branches with the session recorded as responsible for each) in `project_branches.rs`; `project_browse.rs` is what they share, one `browse::serve` request run under the daemon-wide gate with the requests the window sends |
-| `handoff.rs`, `handover.rs`, `bindings.rs`, `account_switch.rs` | The owner tools: `handoff_session`, `handover_branches`, `transfer_session`, `release_session` and `bind_to_session`, `switch_session_account`; `handover.rs` also holds the branch checks (`branch_names`, `held_by`) that `new_session` and `request_session` use, and `bindings.rs` the owner-notice helpers the owner tools share (`running_or_leave`, `tell_now_or_leave`, `owner_notice`) |
+| `handoff.rs`, `handover.rs`, `bindings.rs`, `account_switch.rs` | The parent-relationship and child-session management tools: `handoff_session`, `handover_branches`, `transfer_session`, `release_session` and `bind_to_session`, `switch_session_account`; `handover.rs` also holds the branch checks (`branch_names`, `held_by`) that `new_session` and `request_session` use, and `bindings.rs` the parent-change notice helpers these tools share (`running_or_leave`, `tell_now_or_leave`, `owner_notice`) |
 | `resume_request.rs` | `request_resume_session` |
-| `pages.rs`, `settings.rs` | A session's report panel pages (`show_page`, `list_pages`, `delete_pages`), for a console session and a project session that faces the user, with `withdraw_pages` for the coordinator to call when a session becomes a bound one and again at daemon start for any page a bound session still has, and the settings tools (a project is described with its stored settings and what they resolve to, `effective`) |
+| `pages.rs`, `settings.rs` | A session's report panel pages (`show_page`, `list_pages`, `delete_pages`), for console sessions and project coordinators, with `withdraw_pages` for the daemon coordinator to call when a session becomes a worker and again at daemon start for any page a worker still has, and the settings tools (a project is described with its stored settings and what they resolve to, `effective`) |
 | `stdio.rs` | `octoboardd mcp` itself: the stdio child forwarding calls to the daemon over loopback, including a tool of the role's other binding catalogue, which the daemon then answers or refuses |
 
 ### `src/browse/`

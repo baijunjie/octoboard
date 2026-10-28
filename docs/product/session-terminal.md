@@ -254,9 +254,9 @@ With nothing selected, the terminal's full empty panel offers the next action fo
 scope:
 
 - **In a project's focus mode**, when its live session list is empty, it offers **New session** for that project. The
-  dialog has no "Report to" choice and creates an unbound session, just as the focus view's header and compact empty row
-  do. Archived sessions and live sessions under console sessions do not fill this list, so neither prevents the offer
-  (see "A project's focus mode" in `docs/product/focus-mode.md`).
+  dialog has no "Report to" choice and creates an independent project coordinator, just as the focus view's header and
+  compact empty row do. Archived sessions and live sessions under console sessions do not fill this list, so neither
+  prevents the offer (see "A project's focus mode" in `docs/product/focus-mode.md`).
 - **Outside focus mode**, the offer depends on whether the current console has a console session that is not archived,
   and on its number of projects:
   - With **no console session that is not archived**, it offers **New console session**, regardless of the number of
@@ -279,7 +279,7 @@ scope:
   offer. The **Add project** offer and the panel asking for a session to be selected do not depend on the agents.
 - In a project's focus mode with a session that is not archived in its applicable list, or in a console session's focus
   mode, the panel asks for a session to be selected instead. A console session in focus is itself selectable even with
-  no bound sessions.
+  no child sessions.
 
 The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in `docs/product/sidebar.md`).
 

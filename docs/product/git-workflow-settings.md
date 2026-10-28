@@ -83,10 +83,10 @@ judges what they set out better than a keyword match would, and this works alike
    Git in a worktree is run as `git -C <worktree>` rather than after a `cd`: Claude Code asks for approval of any
    command that changes directory before running git, even a git command that is allowed.
 3. **Delivery.** When done, the session reports the branch and its changes, and merges, pushes or opens a pull request
-   as the user says — or, for a session whose role description names an owner, as the user or its owner says. A
-   session given the unbound project session's text, a lead session included, takes it only from the user. Where
-   nobody has said, the delivery setting decides: `ask` — it asks the user which; `merge` — it merges the branch into
-   its target branch locally; `pull_request` — it pushes the branch and opens a pull request.
+   as the user says — or, for a session whose role description names an owner, as the user or its owner says. A session
+   given the independent project session's text, a coordinator with a parent included, takes it only from the user.
+   Where nobody has said, the delivery setting decides: `ask` — it asks the user which; `merge` — it merges the branch
+   into its target branch locally; `pull_request` — it pushes the branch and opens a pull request.
 4. **Merging.** With rebase before merging on, the branch is rebased onto its target branch and the target branch
    fast-forwarded to it, and a pushed branch that is not the session's alone is never rebased. With it off, the branch
    is merged into its target branch without being rebased first.

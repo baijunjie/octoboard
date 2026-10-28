@@ -86,38 +86,37 @@ besides the variables a project session's agent is given for its git (see "The l
   the agent, started fresh per session, and each session's tools are reachable only by that session. The agent's own and
   the project's own MCP servers keep working alongside it. Claude Code and Codex are told to run its tools without
   asking (see "Claude Code" and "Codex" in `docs/product/per-agent-launch-specifics.md`).
-- **A role description** — whether this session is a console session or a project session, and the reporting conventions
-  that go with that. A console session's is short: it is the console session, it decomposes requests on its console's
-  projects, dispatches them, follows up and summarizes, does itself any work that touches no project, and does not
-  change a project itself, and the rest is in its instruction file, which may end with the user's own instructions,
-  which take precedence over the rest of the file wherever they disagree but never let it change a project itself (see
-  "The console session's instruction file" below). A project session bound to a console session is told that console
-  session is waiting on its result and how to `report` to it; one bound to a project session is told which project
-  session, by its id, dispatched it and that it reports there; either is told that its owner can hand it to another
-  session, which Octoboard then tells it in a message. One nobody owns — opened by hand without a console session to
-  report to, or started on another session's request — is told that no session dispatched it, that nobody but the user
-  owns it, and not to call `report`; that it may start sessions in its own project and drive them, which report back to
-  it; and that if it binds itself to an owner, that call's result tells it what changes. A lead session, bound to a
-  console session only after it was opened, is given that same unbound project session's text on every launch, as at its
-  first (see "Lead sessions" in `docs/product/hub-orchestration.md`). A bound session's text also tells it how to find
-  its own account and to report when its quota runs low (see "Reading quotas from a session" in
-  `docs/product/account-quotas.md`). Every project session's text also sets out how it
-  relates to other sessions: `new_session` for a session of its own where it has it, together with when to start one and
-  how to choose the session a task goes to (see "Choosing the session a task goes to" in
-  `docs/product/hub-orchestration.md`), `handoff_session`, `switch_session_account`, `transfer_session`,
+- **A role description** — whether this is a console or project session, and, for a project session, its coordinator or
+  worker role and separate reporting relationship. It includes the reporting conventions that go with them. A console
+  session's is short: it is the console session, it decomposes requests on its console's projects, dispatches them,
+  follows up and summarizes, does itself any work that touches no project, and does not change a project itself, and the
+  rest is in its instruction file, which may end with the user's own instructions, which take precedence over the rest
+  of the file wherever they disagree but never let it change a project itself (see "The console session's instruction
+  file" below). A worker with a console parent is told that console session is waiting on its result and how to `report`
+  to it; one bound to a project session is told which project session, by its id, dispatched it and that it reports
+  there; either is told that its owner can hand it to another session, which Octoboard then tells it in a message. One
+  nobody owns — opened by hand without a console session to report to, or started on another session's request — is told
+  that no session dispatched it, that nobody but the user owns it, and not to call `report`; that it may start sessions
+  in its own project and drive them, which report back to it; and that if it binds itself to an owner, that call's
+  result tells it what changes. A coordinator with a parent, bound to a console session only after it was opened, is
+  given that same independent project session's text on every launch, as at its first (see "Coordinators with a parent
+  session" in `docs/product/hub-orchestration.md`). A worker's text also tells it how to find its own account
+  and to report when its quota runs low (see "Reading quotas from a session" in `docs/product/account-quotas.md`). Every
+  project session's text also sets out how it relates to other sessions: `new_session` for a session of its own where it
+  has it, together with when to start one and how to choose the session a task goes to (see "Choosing the session a task
+  goes to" in `docs/product/hub-orchestration.md`), `handoff_session`, `switch_session_account`, `transfer_session`,
   `release_session` and `bind_to_session` where it has them, `request_session` for a session that is nobody's,
   `request_resume_session` for resuming a conversation the user asked for, `get_account_quotas` for what each account's
   quota has left, the reads every session has whatever its kind — `get_session`, `read_session_history`,
   `list_consoles`, `list_projects` and `list_archived` — with the rule that a session not its own is to be left alone
   whatever it can read of it, `list_agent_models` to check before naming a model or effort, `list_sessions` and
-  `send_message` for information, `get_session_branches` for where the branches a session is responsible for are
-  checked out and which branch each is to be merged into, `list_project_branches` for a project's branches with the
-  session responsible for each, and `list_project_changes` and `read_project_diff` for what has changed in a project
-  of its console —
-  to be used, rather than `git status` or `git diff`, for another session's worktree or branch and for the project's
-  folder, which another session may be working in, while in its own worktree it runs `git` as usual (see "Reading a
-  project's changes" in `docs/product/what-every-session-reads.md`). Where its project's effective git workflow
-  settings have sessions develop on a branch or in a worktree of their own at the launch, it also carries the
+  `send_message` for information, `get_session_branches` for where the branches a session is responsible for are checked
+  out and which branch each is to be merged into, `list_project_branches` for a project's branches with the session
+  responsible for each, and `list_project_changes` and `read_project_diff` for what has changed in a project of its
+  console — to be used, rather than `git status` or `git diff`, for another session's worktree or branch and for the
+  project's folder, which another session may be working in, while in its own worktree it runs `git` as usual (see
+  "Reading a project's changes" in `docs/product/what-every-session-reads.md`). Where its project's effective git
+  workflow settings have sessions develop on a branch or in a worktree of their own at the launch, it also carries the
   development rule (see "The development rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as
   choices** is on at the launch, the guidance on asking the user after it (see "The guidance on asking the user" below),
   and where the language the daemon holds is not English, the guidance on the user's language after that (see "The
@@ -127,9 +126,9 @@ besides the variables a project session's agent is given for its git (see "The l
   what it says (see "When a binding changes while a session runs" in `docs/product/changing-session-owners.md`); a
   change made while the session was not running is told at its next launch, ahead of that launch's own instruction (see
   "A change of owner told at the next launch" in `docs/product/changing-session-owners.md`). The role and the session's
-  binding as it stands decide which tools the session is offered, so an unbound project session still has `report`, and
-  calling it is refused while it is unbound (see `docs/product/reporting-to-owners.md` and "The unbound project
-  session's tools" in `docs/product/hub-orchestration.md`).
+  binding as it stands decide which tools the session is offered, so an independent project session still has `report`,
+  and calling it is refused while it is independent (see `docs/product/reporting-to-owners.md` and "Project
+  coordinators' tools" in `docs/product/hub-orchestration.md`).
 
 The arguments and files through which each agent is given these are in "How each agent is given the injection" in
 `docs/product/per-agent-launch-specifics.md`.
@@ -145,10 +144,11 @@ those files is not seen. The one exception to printing nothing is the address fo
 or does not answer in time: Claude Code shows its own non-blocking notice about the failed hook, where the command form
 stays silent.
 
-**A session's role is fixed for its lifetime.** Two of the three agents record the injected role text into the
-conversation on its first turn and replay it on every resume afterwards, so changing a session's role later is not
-possible: a session that belongs on the other side of the orchestration is a new session. For the same reason, a session
-opened to resume a conversation started outside Octoboard (see
+**The launch description can remain in the conversation after the role changes.** Two of the three agents record that
+text on the first turn and replay it on every resume. The coordinator or worker role and reporting relationship can
+still change: Octoboard's notices supersede the earlier description, and tools follow the current relationship (see
+"When a binding changes while a session runs" in `docs/product/changing-session-owners.md`). For the same reason, a
+session opened to resume a conversation started outside Octoboard (see
 `docs/product/resuming-a-conversation-by-its-session-id.md`) may not take up its role description with Claude Code or
 Grok Build, which keep what that conversation recorded; the status hooks and Octoboard's MCP server are injected as on
 any resume.
