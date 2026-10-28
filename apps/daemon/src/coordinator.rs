@@ -1846,9 +1846,9 @@ pub async fn add_project(
         None
     };
 
+    let mut associated = associated_directories(state, &console_id).await?;
     let remote_urls = directory_remote_urls(
-        state,
-        &console_id,
+        &associated,
         source,
         &directories,
         git_remote::read_remote_url,
@@ -1858,7 +1858,7 @@ pub async fn add_project(
     let mut added = Vec::new();
     for directory in directories {
         let path_text = directory.to_string_lossy().into_owned();
-        if state.store.project_exists_at(&console_id, &path_text)? {
+        if associated.contains(&directory) {
             continue;
         }
         // A clone keeps the URL it was given; the other sources take the one read above.
@@ -1907,6 +1907,7 @@ pub async fn add_project(
             git_workflow: settings.git_workflow,
         };
         state.store.insert_project(&project)?;
+        associated.insert(&directory);
         crate::git_watch::add(state, &project);
         state.broadcast(Event::ProjectUpserted {
             project: project.clone(),
@@ -2067,6 +2068,65 @@ pub async fn update_project(
     }
 }
 
+/// The directories this console already has a project at, told apart by what they are on the file
+/// system rather than by their paths' spelling: a project added through a link, or in another
+/// case on a case-insensitive file system, is the same project as one added by the real path.
+/// The stored paths are read under the store's lock and looked at on the file system after it is
+/// released, on a blocking thread, so a directory on a stalled mount never holds the store.
+async fn associated_directories(
+    state: &AppState,
+    console_id: &str,
+) -> Result<hostfs::DirectoryIdentities> {
+    let paths = state.store.project_paths(console_id)?;
+    Ok(identities_within(
+        state,
+        console_id,
+        paths,
+        ASSOCIATED_STAT_DEADLINE,
+        |paths| hostfs::DirectoryIdentities::from_paths(paths.iter().map(String::as_str)),
+    )
+    .await?)
+}
+
+/// How long looking at the stored project paths on the file system may take. Past it a project on
+/// a mount that does not answer would hold every association to the console, so the set falls
+/// back to the paths' text.
+const ASSOCIATED_STAT_DEADLINE: Duration = Duration::from_secs(10);
+
+/// The set `build` makes from `paths` on a blocking thread, or, once `deadline` passes, one made
+/// from their text alone. The thread is left to finish on its own, and is recorded on the state
+/// until it does: while it runs, later calls for the console take the text alone at once instead
+/// of starting another thread that would be stuck the same way.
+async fn identities_within(
+    state: &AppState,
+    console_id: &str,
+    paths: Vec<String>,
+    deadline: Duration,
+    build: impl FnOnce(&[String]) -> hostfs::DirectoryIdentities + Send + 'static,
+) -> Result<hostfs::DirectoryIdentities, tokio::task::JoinError> {
+    let from_text =
+        |paths: &[String]| hostfs::DirectoryIdentities::from_text(paths.iter().map(String::as_str));
+    if state.has_stalled_directory_pass(console_id) {
+        return Ok(from_text(&paths));
+    }
+    let text_only = paths.clone();
+    let alive = Arc::new(());
+    let weak = Arc::downgrade(&alive);
+    let built = tokio::task::spawn_blocking(move || {
+        let identities = build(&paths);
+        drop(alive);
+        identities
+    });
+    match tokio::time::timeout(deadline, built).await {
+        Ok(joined) => joined,
+        Err(_) => {
+            tracing::warn!(console = %console_id, "looking at the project directories timed out, comparing their paths as text");
+            state.record_stalled_directory_pass(console_id, weak);
+            Ok(from_text(&text_only))
+        }
+    }
+}
+
 /// The remote URL `read` finds for each of `directories` that has one, for the sources whose
 /// projects take it from their directory; a clone has the URL it was given and reads nothing.
 ///
@@ -2078,8 +2138,7 @@ pub async fn update_project(
 /// does not take over the blocking pool. A directory whose read did not come back, because its
 /// thread panicked, is simply absent: a project stored without a URL, not a failed association.
 async fn directory_remote_urls(
-    state: &AppState,
-    console_id: &str,
+    associated: &hostfs::DirectoryIdentities,
     source: ProjectSource,
     directories: &[PathBuf],
     read: impl Fn(&Path) -> Option<String> + Send + Sync + 'static,
@@ -2087,15 +2146,11 @@ async fn directory_remote_urls(
     if source == ProjectSource::Git {
         return Ok(HashMap::new());
     }
-    let mut unassociated = Vec::new();
-    for directory in directories {
-        if !state
-            .store
-            .project_exists_at(console_id, &directory.to_string_lossy())?
-        {
-            unassociated.push(directory.clone());
-        }
-    }
+    let unassociated: Vec<PathBuf> = directories
+        .iter()
+        .filter(|directory| !associated.contains(directory))
+        .cloned()
+        .collect();
     let urls = git_remote::read_bounded(unassociated, move |directory| {
         let url = read(&directory);
         (directory, url)
@@ -7192,9 +7247,9 @@ mod tests {
             }
         };
 
+        let associated = associated_directories(&state, "console-1").await.unwrap();
         let urls = directory_remote_urls(
-            &state,
-            "console-1",
+            &associated,
             ProjectSource::Git,
             &directories,
             reader(&reads),
@@ -7205,10 +7260,9 @@ mod tests {
 
         for source in [ProjectSource::Local, ProjectSource::Parent] {
             reads.lock().unwrap().clear();
-            let urls =
-                directory_remote_urls(&state, "console-1", source, &directories, reader(&reads))
-                    .await
-                    .unwrap();
+            let urls = directory_remote_urls(&associated, source, &directories, reader(&reads))
+                .await
+                .unwrap();
             let mut read = reads.lock().unwrap().clone();
             read.sort();
             assert_eq!(read, vec![bare.clone(), fresh.clone()]);
@@ -7319,6 +7373,137 @@ mod tests {
         let added = add(ProjectSource::Parent, &parent).await.unwrap();
         assert_eq!(added.len(), 2);
         assert!(added.iter().all(|project| project.description.is_none()));
+    }
+
+    /// A directory already associated is refused when written through a link or, where the file
+    /// system folds case, in another case; another console's project does not count.
+    #[tokio::test]
+    async fn add_project_refuses_a_directory_spelled_another_way() {
+        let (state, dir) = crate::test_support::app_state("coordinator-add-project-spellings");
+        let workdir = console_workdir(&dir);
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &workdir))
+            .unwrap();
+        let mut other = console(Agent::Claude, &workdir);
+        other.id = "console-2".to_string();
+        other.name = "Other".to_string();
+        state.store.insert_console(&other).unwrap();
+        let add = |console_id: &str, path: &Path| {
+            add_project(
+                &state,
+                AddProjectRequest {
+                    console_id: console_id.to_string(),
+                    source: ProjectSource::Local,
+                    path: Some(path.to_string_lossy().into_owned()),
+                    remote_url: None,
+                    name: None,
+                    default_agent: None,
+                    settings: NewProjectSettings::default(),
+                    detect_default_agent: false,
+                    tags: None,
+                    description: None,
+                    check_launch: true,
+                    check_text_limits: true,
+                },
+            )
+        };
+        let is_already_added = |err: anyhow::Error| {
+            err.downcast_ref::<CodedError>().map(|coded| coded.code)
+                == Some(error_code::ALL_PROJECTS_ALREADY_ADDED)
+        };
+
+        let real = dir.join("Real");
+        std::fs::create_dir(&real).unwrap();
+        let link = dir.join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        add("console-1", &link).await.unwrap();
+        assert!(is_already_added(add("console-1", &real).await.unwrap_err()));
+        // The path is stored as it was given.
+        assert_eq!(
+            state.store.project_paths("console-1").unwrap(),
+            vec![link.to_string_lossy().into_owned()]
+        );
+        assert_eq!(add("console-2", &real).await.unwrap().len(), 1);
+    }
+
+    /// Two directories of one parent that are the same directory become one project.
+    #[tokio::test]
+    async fn add_project_associates_a_linked_repository_of_a_parent_once() {
+        let (state, dir) = crate::test_support::app_state("coordinator-add-project-parent-link");
+        state
+            .store
+            .insert_console(&console(Agent::Claude, &console_workdir(&dir)))
+            .unwrap();
+        let parent = dir.join("parent");
+        std::fs::create_dir_all(parent.join("repo").join(".git")).unwrap();
+        std::os::unix::fs::symlink(parent.join("repo"), parent.join("repo-link")).unwrap();
+
+        let added = add_project(
+            &state,
+            AddProjectRequest {
+                console_id: "console-1".to_string(),
+                source: ProjectSource::Parent,
+                path: Some(parent.to_string_lossy().into_owned()),
+                remote_url: None,
+                name: None,
+                default_agent: None,
+                settings: NewProjectSettings::default(),
+                detect_default_agent: false,
+                tags: None,
+                description: None,
+                check_launch: true,
+                check_text_limits: true,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(added.len(), 1);
+    }
+
+    /// Paths whose look at the file system outlasts the deadline are compared by their text, and
+    /// while that look is stuck no second thread is started for the console.
+    #[tokio::test]
+    async fn a_stalled_look_at_the_file_system_falls_back_to_the_paths_text() {
+        let (state, _dir) = crate::test_support::app_state("coordinator-stalled-identities");
+        let (release, stuck) = std::sync::mpsc::channel::<()>();
+        let paths = vec!["/work/project".to_string()];
+        let identities = identities_within(
+            &state,
+            "console-1",
+            paths.clone(),
+            Duration::from_millis(50),
+            move |_| {
+                stuck.recv().ok();
+                hostfs::DirectoryIdentities::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert!(identities.contains(Path::new("/work/./project/")));
+        assert!(!identities.contains(Path::new("/work/other")));
+        assert!(state.has_stalled_directory_pass("console-1"));
+        assert!(!state.has_stalled_directory_pass("console-2"));
+
+        // A second call neither starts its build nor waits out a deadline.
+        let identities =
+            identities_within(&state, "console-1", paths, Duration::from_secs(60), |_| {
+                panic!("a second look was started while one is stuck")
+            })
+            .await
+            .unwrap();
+        assert!(identities.contains(Path::new("/work/project")));
+
+        // Once the stuck thread ends the console is looked at again.
+        release.send(()).unwrap();
+        let ended = tokio::time::timeout(crate::test_support::PATIENCE, async {
+            while state.has_stalled_directory_pass("console-1") {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        assert!(ended.is_ok(), "the stalled pass was never cleared");
     }
 
     #[tokio::test]
