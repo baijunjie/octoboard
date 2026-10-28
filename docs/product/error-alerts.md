@@ -452,9 +452,19 @@ For example:
 - An account name already in use asks for an unused name for that agent; an occupied destination asks for a different
   destination while preserving the existing folder.
 - A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.
-- A failure of Git — Git could not read something (`git_failed`), or a clone, push, branch switch or file restore
-  failed — asks the user to open the project's terminal from its action menu, resolve the Git error, including remote
-  access or an unfinished Git operation, then retry. It offers no **Report issue**.
+- A failure of Git — Git could not read something (`git_failed`), or a clone or push failed — asks the user to open the
+  project's terminal from its action menu, resolve the Git error, including remote access or an unfinished Git
+  operation, then retry. A branch switch that failed is local, so its remedy is the same without remote access: it
+  names uncommitted changes or an unfinished Git operation instead. A file restore that failed names what can really
+  refuse it, such as a file or folder in the way of a tracked file (a restore discards uncommitted changes by design).
+  A restore refused because a Git operation is unfinished (`git_operation_in_progress`) has no remedy: its sentence
+  already says to finish or abort the operation. None of these offers **Report issue**.
+- A system application that would not open — the terminal (`terminal_unavailable`), the file manager
+  (`directory_unavailable`) or the default application (`path_open_failed`), whether from a project's action menu, the
+  project pane's row menu, the file viewer or a terminal's path link — gets a remedy of its own that names only that
+  application and asks the user to check that it is installed (for the default application, that one is set for that
+  kind of file or folder) and can be opened, then retry. None points at an address or path, which the alert's body does
+  not show. Only a link that fails to open in the browser says the displayed address can be opened manually.
 
 Known domain failures, the causes the daemon names for some of them (such as why a session's conversation could not be
 moved to another account, see "When a switch fails" in `docs/product/switching-session-accounts.md`; or why a folder a
