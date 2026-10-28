@@ -497,6 +497,12 @@ fn the_user_is_told_of_what_was_not_kept_on_purpose() {
             vec![],
             false,
         ),
+        (
+            item(SessionBranchState::ProjectFolder, false),
+            vec![kept.clone()],
+            vec![],
+            true,
+        ),
     ] {
         let state = left.state;
         assert_eq!(
