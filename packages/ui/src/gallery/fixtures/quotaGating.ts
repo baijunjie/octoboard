@@ -249,6 +249,30 @@ export const quotaGatingScenarios: Scenario[] = [
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
   {
+    id: "dialog-new-session-disabled-agents",
+    group: GROUP,
+    category: "normal",
+    title: "New session, agents with every account turned off are hidden",
+    description: "Chat Bot would run on Grok Build, whose only account is turned off. Codex's Default and Team accounts are also off. The dialog falls back to Claude Code, with no alert, and the open Agent list offers only Claude Code: both agents with no enabled account are absent.",
+    state: {
+      ...launchState([chat], []),
+      settings: { ...codexTurnedOff, disabled_default_accounts: ["codex", "grok"] },
+    },
+    steps: [openSessionDialog, (ui) => ui.press(ui.t("dialog.session.agent"))],
+  },
+  {
+    id: "dialog-new-session-all-accounts-disabled",
+    group: GROUP,
+    category: "exceptional",
+    title: "New session, every agent's accounts are turned off",
+    description: "Every added agent has all its accounts turned off. Opening a new session shows a failure modal saying no agent is available to open a session, with OK as its only button, instead of offering a disabled account.",
+    state: {
+      ...launchState([website], []),
+      settings: { ...settings, disabled_default_accounts: ALL_AGENTS, accounts: accounts.map((account) => ({ ...account, disabled: true })) },
+    },
+    steps: [openSessionDialog],
+  },
+  {
     id: "dialog-new-session-signed-out-picker",
     group: GROUP,
     category: "normal",
@@ -324,13 +348,14 @@ export const quotaGatingScenarios: Scenario[] = [
   {
     id: "dialog-hand-off-all-disabled",
     group: GROUP,
-    category: "exceptional",
-    title: "Hand off, every Codex account is turned off",
-    description: "Hub hands off to Codex, whose two accounts, Default and Team, are both turned off, so none can be preselected: Hand off is disabled and the Hand off to field is marked invalid, with its own error under the agent and account pair saying that Default, the account the field holds and shown as a chip, is disabled and advising to choose another account or enable it again in Settings. No Alert stands above the lines about what moves.",
+    category: "normal",
+    title: "Hand off, skip the agent whose accounts are all turned off",
+    description: "Codex's Default and Team accounts are both turned off, so handing off Hub falls back to Grok Build. The open Hand off to list offers only Grok Build: Codex is absent, and Hub's own agent, Claude Code, is excluded as usual. Hand off is enabled and no account error appears.",
     state: { ...launchState([], []), settings: codexTurnedOff },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
       (ui) => ui.press(ui.t("sidebar.session.handOff")),
+      (ui) => ui.press(ui.t("dialog.handOff.agent")),
     ],
   },
   {

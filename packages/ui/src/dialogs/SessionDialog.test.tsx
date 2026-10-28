@@ -219,7 +219,7 @@ it("opens on the account whose weekly quota resets soonest when automatic select
   container.remove();
 });
 
-it("hides a turned-off account from the account picker, and keeps the one it ends on, marked, when every account is off", async () => {
+it("hides turned-off accounts and hides their agent when every account is off", async () => {
   const settings = {
     auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, disabled_default_accounts: ["codex" as const],
     accounts: [
@@ -235,10 +235,38 @@ it("hides a turned-off account from the account picker, and keeps the one it end
   first.container.remove();
 
   const second = renderDialog([], { settings: { ...settings, accounts: settings.accounts.map((account) => ({ ...account, disabled: true })) } }, { default_agent: "codex" });
-  await act(async () => pickerNamed("Codex account").click());
-  expect(optionElements().map((option) => option.textContent)).toEqual([expect.stringContaining("Disabled")]);
+  expect(pickerNamed("Agent").textContent).toContain("Claude Code");
+  await act(async () => pickerNamed("Agent").click());
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Grok Build"]);
   act(() => second.root.unmount());
   second.container.remove();
+});
+
+it("drops an agent whose last enabled account is turned off while the dialog is open, and offers it again when enabled", async () => {
+  const view = renderDialog([], {}, { default_agent: "codex" });
+  onTestFinished(() => {
+    act(() => view.root.unmount());
+    view.container.remove();
+  });
+  expect(pickerNamed("Agent").textContent).toContain("Codex");
+  act(() => view.daemon.store.setState((state) => ({ settings: { ...state.settings, disabled_default_accounts: ["codex"] } })));
+  expect(pickerNamed("Agent").textContent).toContain("Claude Code");
+  await act(async () => pickerNamed("Agent").click());
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Grok Build"]);
+  act(() => view.daemon.store.setState((state) => ({ settings: { ...state.settings, disabled_default_accounts: [] } })));
+  expect(optionElements().map((option) => option.textContent)).toEqual(["Claude Code", "Codex", "Grok Build"]);
+});
+
+it("refuses opening a session when every agent's accounts are turned off", () => {
+  const view = renderDialog([]);
+  onTestFinished(() => {
+    act(() => view.root.unmount());
+    view.container.remove();
+  });
+  act(() => view.daemon.store.setState((state) => ({ settings: { ...state.settings, disabled_default_accounts: ["claude", "codex", "grok"] } })));
+  expect(document.body.querySelector('[role="alertdialog"]')?.textContent).toContain("No agent is available to open a session.");
+  expect(pickerNamed("Agent")).toBeUndefined();
+  expect(view.daemon.request).not.toHaveBeenCalled();
 });
 
 it("opens a project session on the console's project session agent when the project names none", () => {

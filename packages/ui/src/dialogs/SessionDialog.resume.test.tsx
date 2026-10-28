@@ -214,6 +214,23 @@ it("opens a new session on the agent and account of a record, which are shown di
   expect(sentOpenSession(daemon)).toMatchObject({ agent: "claude", account: "a-work", resume_agent_session_id: UUID });
 });
 
+it("refuses a resumed record on an agent whose accounts are all turned off instead of using another agent", async () => {
+  const { daemon } = renderForResume({ default_agent: "codex" }, record("claude", "a-work"), {
+    settings: {
+      ...claudeAccounts.settings!,
+      disabled_default_accounts: ["claude"],
+      accounts: claudeAccounts.settings!.accounts.map((account) => ({ ...account, disabled: true })),
+    },
+  });
+  await chooseResume();
+  typeResumeId(UUID);
+  await settle();
+  expect(agentTriggers().slice(0, 2).map((trigger) => trigger.textContent)).toEqual(["Claude Code", "Work"]);
+  expect(document.body.textContent).toContain("Account Work is disabled");
+  expect(openDisabled()).toBe(true);
+  expect(requestsOf(daemon, "open_session")).toEqual([]);
+});
+
 it("keeps a resumed record's account when automatic selection would pick another", async () => {
   const now = Date.now();
   const weekly = (used_percent: number, resets_at: number) => ({ kind: "weekly" as const, label: null, used_percent, resets_at, window_minutes: 7 * 24 * 60 });

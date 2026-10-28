@@ -97,8 +97,10 @@ Then come the fields:
   opens on the agent a new session of the project (or, for a console session, of the console) would use by default (see
   "Which agent a session uses" in `docs/product/opening-sessions.md`) when that is another agent and can be picked (see
   "Which agents the agent pickers list" in `docs/product/consoles.md`), otherwise on the first other agent that can, in
-  the order of the added agents. The account it opens on for that agent — and for any other agent the user switches to
-  without having picked one of its accounts — is the one the new-session dialog would open on: while **Automatically
+  the order of the added agents. The session dialog's rule leaving out an agent whose accounts are all turned off,
+  including its fallback when the selected agent's last enabled account is turned off, applies here too. The account
+  it opens on for that agent — and for any other agent the user switches to without having picked one of its accounts
+  — is the one the new-session dialog would open on: while **Automatically
   select an account** is on, the agent's account whose weekly quota resets soonest; otherwise, or when none ranks, the
   account the project or console resolves (see "Which account a session uses" in `docs/product/opening-sessions.md`).
   The account the field shows is sent as the receiving session's own account choice. Used-up accounts are treated as in
@@ -113,8 +115,9 @@ Then come the fields:
   left for the daemon to resolve.
 
 If, while the dialog is open, no agent other than the session's own can be picked any more — the last one removed or
-found unavailable meanwhile — nothing is sent, and the dialog turns into a failure modal titled that the session
-cannot be handed off, saying that no other agent is available to take the session over, with nothing but its
+found unavailable meanwhile, or every other agent's accounts all turned off — nothing is sent, and the dialog turns
+into a failure modal titled that the session cannot be handed off, saying that no other agent is available to take
+the session over, with nothing but its
 acknowledgement, which closes the dialog (see "The failure modal" in `docs/product/error-alerts.md`).
 
 Pressing **Hand off** sends `hand_off_session`, once the user has confirmed starting on the chosen account when its

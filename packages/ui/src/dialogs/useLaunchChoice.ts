@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { accountOpenedOn, avoidUnavailableAccount, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, choiceSignedOut, choiceKey, currentChoice, findEntry, type AccountChoice, type ChoiceGroup } from "../accountChoices";
-import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent, selectableAgent } from "../agents";
+import { AGENT_LABEL, agentsInListingOrder, defaultAccountName, inheritedSessionLaunch, launchWithOverrides, pickableAgents, projectSessionAgent } from "../agents";
 import { agentIconPickerOptions } from "../components/AgentIcon";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -39,7 +39,8 @@ export function useChoiceGroups(): ChoiceGroup[] {
  * in place of the pickers' (ignored while that pair may not be picked). `overrides` holds only what the
  * user changed, for the request.
  *
- * An account that is turned off is not listed; one whose quota is used up, whose sharing change runs or that is not logged in
+ * Agents whose accounts are all turned off and accounts that are turned off are not listed. An account whose
+ * quota is used up, whose sharing change runs or that is not logged in
  * is listed disabled with why. The choice opens on another account of the agent when the one it would inherit is unavailable, and
  * `unavailable`, when even the account the choice ends on is (every account of the agent is, or it is the
  * agent's only one), says why it cannot be used, for the dialog to refuse its submit with.
@@ -71,7 +72,11 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
       : {},
   );
 
-  const groups = useChoiceGroups().filter((group) => group.agent !== exclude);
+  const allGroups = useChoiceGroups().filter((group) => group.agent !== exclude);
+  const groups = allGroups.map((group) => ({
+    ...group,
+    selectable: group.selectable && group.entries.some((entry) => !entry.disabled),
+  }));
   const presetGroup = preset && groups.find((group) => group.agent === preset.choice.agent);
   const presetGone = preset !== undefined && !touched
     && (!presetGroup?.selectable || !presetGroup.entries.some((entry) => entry.account === preset.choice.account));
@@ -89,18 +94,15 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
       : avoidUnavailableAccount({ agent: pickedAgent, account: openingAccount(pickedAgent) }, groups)
     : undefined;
 
-  const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => agent !== exclude);
+  const selectable = pickableAgents(agentAvailability, addedAgents).filter((agent) => groups.some((group) => group.agent === agent && group.selectable));
   const wanted = project ? project.default_agent ?? projectSessionAgent(parentConsole) : parentConsole.default_agent;
-  const initialAgent = exclude === undefined
-    ? selectableAgent(agentAvailability, addedAgents, wanted)
-    // With nothing to pick, the first other agent in listing order, so the picker shows a held,
-    // marked value and never the excluded agent itself; submitting stays blocked.
-    : selectable.includes(wanted) ? wanted : selectable[0] ?? agentsInListingOrder(addedAgents).find((other) => other !== exclude)!;
+  // Keep a value for the refusal when no agent can be chosen, without returning the excluded agent.
+  const initialAgent = selectable.includes(wanted) ? wanted : selectable[0]
+    ?? agentsInListingOrder(addedAgents).find((agent) => agent !== exclude)!;
   const initial = avoidUnavailableAccount({ agent: initialAgent, account: openingAccount(initialAgent) }, groups);
-  const forcedEntry = forced && findEntry(groups, choiceKey(forced));
+  const forcedEntry = forced && findEntry(allGroups, choiceKey(forced));
   const choice = forced && forcedEntry?.selectable ? forced : currentChoice(picked, initial, groups);
-  // A turned-off account is not offered; it stays listed, marked, only as the value the choice ends on (every account
-  // of the agent is off, or it is the agent's only one), so the field is not blank while `unavailable` says why.
+  // A fixed conversation can still name a turned-off account; keep its value so the refusal names it.
   const accountEntries = (groups.find((group) => group.agent === choice.agent)?.entries ?? []).filter((entry) => !entry.disabled || entry.key === choiceKey(choice));
   const overrides = launchSettings[choice.agent];
   const { model, effort } = launchWithOverrides(inheritedSessionLaunch(parentConsole, project, choice.agent), overrides);
@@ -132,7 +134,7 @@ export function useLaunchChoice(parentConsole: Console, project: Project | undef
             ? t("accountChoice.sharingChange.description", { name: isolate(chosenEntry.name) })
             : undefined,
     overrides,
-    agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude),
+    agentOptions: agentIconPickerOptions(t, agentAvailability, addedAgents, choice.agent).filter((option) => option.value !== exclude && groups.some((group) => group.agent === option.value && group.entries.some((entry) => !entry.disabled))),
     setPickedAgent,
     /** The account half of the joined agent and account field, shown even for one account: every agent
      * has its default account. */

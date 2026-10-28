@@ -54,6 +54,11 @@ chosen that cannot be picked stays shown and selected, after the agents that can
 is not installed and otherwise as not added, and cannot be picked again; it drops out of the list as soon as the picker
 moves to another entry.
 
+The session and handoff dialogs further leave out agents whose accounts are all turned off; their fallback and
+unavailable states are in "The session dialog" in `docs/product/opening-sessions.md` and "Handing off from the window"
+in `docs/product/handing-off-sessions.md`. The console and project dialogs keep the rules above for choosing lasting
+defaults.
+
 The mark is a small grey badge after the agent's name, reading **Not installed** or **Not added**, both in the picker's
 list and on the picker while it holds that agent. The badge never shrinks: when room runs short, the name gives way
 first. Where an agent picker is joined to an account picker, each takes half of the pair's width; a long name gives way
