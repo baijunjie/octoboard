@@ -6,6 +6,10 @@ import { dialogAround } from "./dialogElement";
 /** The custom property `style.css` lifts the toast region by, from the window's bottom edge. */
 const PROPERTY = "--dialog-footer-clearance";
 
+const REGION = '[data-slot="toast-region"]';
+const TOAST = '[data-slot="toast"]';
+const STRIPS = ["--connection-banner-height", "--update-notice-height"];
+
 const FOOTER = '[data-slot="modal-footer"], [data-slot="alert-dialog-footer"]';
 
 type Entry = { measure: () => void };
@@ -14,24 +18,29 @@ type Entry = { measure: () => void };
  * and when it goes the one beneath it measures again. */
 const stack: Entry[] = [];
 
-/** Whether `footer` reaches into the bottom end corner the toasts occupy: its inline-end side is
- * past the region's inline-start side (the right side in a left-to-right document, the left side in
- * a right-to-left one). Never in a narrow window, where the toasts are at the top. */
-function overlapsToastCorner(footer: DOMRect): boolean {
-  if (window.innerWidth < TOAST_BREAKPOINT) return false;
+/** Reserves the full expanded stack at its ordinary bottom position, without dialog clearance.
+ * HeroUI's children are absolute (the region has no height), so its settled layout variables
+ * supply their bounds. Reserving expansion even while collapsed keeps a hover from moving the
+ * stack off the pointer, collapsing it, and bringing it back under the pointer repeatedly. */
+function overlapsToasts(footer: DOMRect, region: HTMLElement | null): boolean {
+  if (window.innerWidth < TOAST_BREAKPOINT || !region) return false;
   const rtl = getComputedStyle(document.documentElement).direction === "rtl";
-  return rtl ? footer.left < TOAST_MARGIN + TOAST_WIDTH : footer.right > window.innerWidth - TOAST_MARGIN - TOAST_WIDTH;
+  const left = rtl ? TOAST_MARGIN : window.innerWidth - TOAST_MARGIN - TOAST_WIDTH;
+  if (footer.right <= left || footer.left >= left + TOAST_WIDTH) return false;
+  const chrome = STRIPS.reduce((height, name) => height + (parseFloat(document.documentElement.style.getPropertyValue(name)) || 0), 0);
+  const bottom = window.innerHeight - TOAST_MARGIN - chrome;
+  return [...region.querySelectorAll<HTMLElement>(TOAST)].some((toast) => {
+    if (toast.dataset.hidden === "true" || toast.dataset.exiting === "true") return false;
+    const value = (name: string) => parseFloat(toast.style.getPropertyValue(name));
+    const height = value("--toast-height") || toast.offsetHeight;
+    const offset = value("--offset-expanded") || 0;
+    return height > 0 && bottom - offset > footer.top && bottom - offset - height < footer.bottom;
+  });
 }
 
-/**
- * Keeps the toasts clear of the footer of the dialog `inside` sits in, for as long as it is open and
- * only when the footer reaches the bottom end corner where the stack sits (in a window wide enough
- * for it to be there, see `Toasts`): a large dialog's footer
- * action buttons would sit under a toast there, while a small centred
- * dialog's are clear of it. The clearance is the distance from the footer's top edge to the window's
- * bottom, measured again as the dialog settles from its entrance animation, resizes, or the window
- * does. A dialog without a footer sets none, and with dialogs nested the innermost one decides.
- */
+/** Keeps the toast stack's expanded footprint clear of the innermost dialog's footer only when
+ * it would overlap at its ordinary bottom position. Dialog and toast resizes, stack additions
+ * and removals, and the bottom strips can each change that intersection. */
 export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFooter: boolean): void {
   useLayoutEffect(() => {
     const dialog = dialogAround(inside);
@@ -41,12 +50,18 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
     let frame = 0;
     let waiting = false;
     let disposed = false;
+    let region: HTMLElement | null = null;
+    const setClearance = (value: string) => {
+      if (root.style.getPropertyValue(PROPERTY) === value) return;
+      if (value) root.style.setProperty(PROPERTY, value);
+      else root.style.removeProperty(PROPERTY);
+    };
     const apply = () => {
       const rect = footer.getBoundingClientRect();
-      if (overlapsToastCorner(rect)) {
-        root.style.setProperty(PROPERTY, `${Math.round(Math.max(0, window.innerHeight - rect.top))}px`);
+      if (overlapsToasts(rect, region)) {
+        setClearance(`${Math.round(Math.max(0, window.innerHeight - rect.top))}px`);
       } else {
-        root.style.removeProperty(PROPERTY);
+        setClearance("");
       }
     };
     const entry: Entry = {
@@ -80,6 +95,48 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
     const resize = new ResizeObserver(entry.measure);
     resize.observe(footer);
     resize.observe(dialog);
+    // Observe the absolute toast children themselves, and rebind when the provider is mounted
+    // or replaced. Only the region's mutations matter; the rest of the app changes frequently.
+    const toastChanges = new MutationObserver(() => {
+      observeToasts();
+      entry.measure();
+    });
+    let observedToasts: HTMLElement[] = [];
+    const observeToasts = () => {
+      const next = [...(region?.querySelectorAll<HTMLElement>(TOAST) ?? [])];
+      for (const toast of observedToasts) if (!next.includes(toast)) resize.unobserve(toast);
+      for (const toast of next) if (!observedToasts.includes(toast)) resize.observe(toast);
+      observedToasts = next;
+    };
+    const findRegion = () => {
+      const next = document.querySelector<HTMLElement>(REGION);
+      if (next === region) return;
+      region = next;
+      toastChanges.disconnect();
+      if (region) toastChanges.observe(region, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["style", "data-hidden", "data-exiting"],
+      });
+      observeToasts();
+      entry.measure();
+    };
+    const providers = new MutationObserver((records) => {
+      if (records.some((record) => [...record.addedNodes, ...record.removedNodes].some((node) =>
+        node instanceof Element && (node.matches(REGION) || node.querySelector(REGION)),
+      ))) findRegion();
+    });
+    providers.observe(document.body, { childList: true, subtree: true });
+    findRegion();
+    let stripHeights = STRIPS.map((name) => root.style.getPropertyValue(name)).join(";");
+    const strips = new MutationObserver(() => {
+      const next = STRIPS.map((name) => root.style.getPropertyValue(name)).join(";");
+      if (next === stripHeights) return;
+      stripHeights = next;
+      entry.measure();
+    });
+    strips.observe(root, { attributes: true, attributeFilter: ["style"] });
     window.addEventListener("resize", entry.measure);
     // The entrance animates the dialog's container, not the dialog, so its end is listened for on
     // the document.
@@ -89,6 +146,9 @@ export function useToastClearance(inside: RefObject<HTMLElement | null>, hasFoot
       disposed = true;
       cancelAnimationFrame(frame);
       resize.disconnect();
+      toastChanges.disconnect();
+      providers.disconnect();
+      strips.disconnect();
       window.removeEventListener("resize", entry.measure);
       document.removeEventListener("animationend", entry.measure, true);
       document.removeEventListener("transitionend", entry.measure, true);

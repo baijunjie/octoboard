@@ -9,9 +9,10 @@ Notices that need no answer are shown as **toasts**. Failures never are; where e
   whatever is there, on the main screen and on the screen shown while connecting to the daemon alike, whether or not
   Settings or another dialog is open. They never move the layout; at the bottom the stack rides above the connection
   banner and the update notice while they are shown (see "The update notice" in `docs/product/in-app-updates.md`), and
-  above the buttons along the foot of a dialog while one is open and its footer reaches that corner, such as the file
-  viewer's Previous file and Next file; a small centred dialog leaves them where they are. A toast slides in from the
-  edge it sits at, and the newest is at the front.
+  above the innermost dialog's footer only when the toast stack would overlap it at its ordinary bottom position.
+  A centred dialog leaves the stack there when it fits below the footer. Space for the stack fully expanded is
+  reserved even while it is collapsed, so hovering to expand it does not shift its position. A toast slides in from
+  the edge it sits at, and the newest is at the front.
 - A toast about a particular session is titled with where that session is — the project it runs in, or the console
   whose console session it is — with the message under it; any other toast is just the message.
 - **A toast dismisses itself**: after about 5 seconds. The countdown pauses while
