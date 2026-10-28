@@ -23,7 +23,8 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
   const diagnostics = [alert.error, ...(alert.failures?.map((failure) => failure.error) ?? [])].map(diagnosticText).filter((detail): detail is string => !!detail && detail !== alert.message);
   return (
     <>
-      <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{alert.content ?? alert.message}</div>
+      {/* Hidden when empty, as for a code with no opening sentence (`NO_SUMMARY_CODES`), so it adds no gap above the remedy. */}
+      <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] empty:hidden">{alert.content ?? alert.message}</div>
       {alert.classification.kind === "unexpected"
         ? <>
           {issueGuidance && <p>{issueGuidance}</p>}

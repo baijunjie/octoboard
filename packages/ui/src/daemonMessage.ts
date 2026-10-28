@@ -371,10 +371,32 @@ export const RECOVERY_CODES = new Set([
   "session_has_running_sessions",
 ]);
 
+/** Codes with no `daemon.<code>.summary`: each is raised only by an action whose alert is titled for what failed, and
+ * its summary could only have said that again. Its alert has no opening sentence, and the body starts with the remedy, ahead of
+ * the raw text under Error details. A code that is also shown where no title says what failed (a pane's failure, a mark's
+ * popover, a field's message) needs its summary and does not belong here. The plain `daemon.<code>` message, with its
+ * `{detail}`, stays for text-only consumers; `daemonMessage` with `summary` says nothing for such a code, as there is
+ * no summary to say and the plain message would restate the title and show the raw text. */
+export const NO_SUMMARY_CODES = new Set([
+  "git_switch_failed", "git_push_failed", "git_restore_failed", "terminal_unavailable", "path_open_failed", "directory_unavailable",
+]);
+
 /** The rich sentence omits a raw diagnostic that is rendered separately. Plain messages keep the
  * complete catalog sentence for native notifications and other text-only consumers. */
 export function richMessageCode(code: string, params: MessageParams): string {
   return RECOVERY_CODES.has(code) || (DETAIL_BLOCK_CODES.has(code) && code !== "project_branches_not_determined" && code !== "account_sharing_failed" && params.detail) ? `${messageCode(code, params)}.summary` : messageCode(code, params);
+}
+
+/** Whether the failure is worded with no opening sentence of its own (`NO_SUMMARY_CODES`), whatever its `detail`: with none
+ * the plain sentence would end on a dangling colon and still say the title again. */
+export function lacksSummary(code: string): boolean {
+  return NO_SUMMARY_CODES.has(code);
+}
+
+/** Whether the catalog words the failure's rich sentence: its `.summary`, or the plain message where the code has no
+ * diagnostic to leave out; a code without an opening sentence has none to look up. */
+export function hasRichMessage(code: string, params: MessageParams): boolean {
+  return lacksSummary(code) || isMessageKey(`daemon.${richMessageCode(code, params)}`);
 }
 
 /** Every referenced agent and product uses the same name treatment, including messages whose only
@@ -568,7 +590,8 @@ export function daemonParams<V = never>(
  * when the record is unknown). A code the catalog does not have — a daemon newer than this client —
  * shows the daemon's own English `fallback`. The params are shaped by `daemonParams`. With `summary`
  * a code whose rich sentence leaves out a raw diagnostic (`richMessageCode`) is worded as that sentence
- * alone, for a plain-text line that has no Details behind it for the raw text. */
+ * alone, for a plain-text line that has no Details behind it for the raw text; a code with no summary
+ * (`NO_SUMMARY_CODES`) then says nothing, its plain message being the title again with the raw text. */
 export function daemonMessage(
   language: Language,
   code: string,
@@ -577,6 +600,7 @@ export function daemonMessage(
   records: RecordNames,
   summary = false,
 ): string {
+  if (summary && lacksSummary(code)) return "";
   const summaryKey = `daemon.${richMessageCode(code, params)}`;
   const key = summary && isMessageKey(summaryKey) ? summaryKey : `daemon.${messageCode(code, params)}`;
   if (!isMessageKey(key)) return fallback;

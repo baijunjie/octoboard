@@ -157,6 +157,9 @@ const switchFixture = {
 };
 const openSwitch = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.switchBranch")), (ui: Ui) => ui.wait(300)];
 
+const hostState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { ahead: 2 })] });
+const openIn = (item: "common.terminal" | "common.fileManager") => [openProjectMenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("common.openIn")), (ui: Ui) => ui.wait(300), (ui: Ui) => ui.press(ui.t(item)), (ui: Ui) => ui.wait(300)];
+
 export const gitScenarios: Scenario[] = [
   ...[
     { id: "github", host: "GitHub", remote: "https://github.com/octoboard/search-api" },
@@ -253,7 +256,7 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch-error", group: "Projects", category: "exceptional",
     title: "Branch switch failed",
-    description: "A refused switch is reported in the error alert dialog, which requires OK: it says only that Git could not switch branches and what to do, and Git's own message sits only in the Error details disclosure, closed here. The branch badge stays on main.",
+    description: "A refused switch is reported in the error alert dialog, which requires OK: its title says the switch failed and its body goes straight to what to do, and Git's own message sits only in the Error details disclosure, closed here. The branch badge stays on main.",
     ...switchFixture,
     projectBranchSwitches: { [restoreProject.id]: { [switchBranch]: { code: "git_switch_failed", params: { detail: "error: Your local changes to README.md would be overwritten by checkout. Please commit your changes or stash them before you switch branches." }, message: "Git switch failed" } } },
     steps: [...openSwitch, (ui) => ui.press(switchBranch), (ui) => ui.wait(300)],
@@ -273,10 +276,40 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Restore file changes failed",
-    description: "A failed restore is the error alert dialog's, raised over the confirmation; it says only that Git could not restore the file changes and what to do, with Git's own message only in its Error details disclosure, closed here. Nothing is written into the confirmation, which stays behind it with retry and cancel enabled once OK is pressed.",
+    description: "A failed restore is the error alert dialog's, raised over the confirmation; its title says the restore failed and its body goes straight to what to do, with Git's own message only in its Error details disclosure, closed here. Nothing is written into the confirmation, which stays behind it with retry and cancel enabled once OK is pressed.",
     ...restoreFixture,
     projectRestores: { [restoreProject.id]: { code: "git_restore_failed", params: { detail: "fatal: Unable to create .git/index.lock: File exists" }, message: "Git restore failed" } },
     steps: [...openRestore, (ui) => ui.confirm(), (ui) => ui.wait(300)],
+  },
+  {
+    id: "git-push-error",
+    group: "Projects",
+    category: "exceptional",
+    title: "Push failed",
+    description: "A refused push is reported in the error alert dialog, which requires OK: its title says the branch could not be pushed and its body goes straight to what to do, with Git's own message only in the Error details disclosure, closed here.",
+    state: hostState,
+    projectPushError: { code: "git_push_failed", params: { detail: "To https://github.com/octoboard/search-api.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/octoboard/search-api.git'" }, message: "Git push failed" },
+    steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300)],
+  },
+  {
+    id: "project-open-terminal-error",
+    group: "Projects",
+    category: "exceptional",
+    title: "Open in Terminal failed",
+    description: "A refused launch of the system terminal is reported in the error alert dialog, titled \"Could not open in Terminal\"; its body goes straight to what to do, with the system's reason only in the Error details disclosure, closed here.",
+    state: hostState,
+    projectTerminalOpenError: { code: "terminal_unavailable", params: { detail: "The project directory does not exist: /Users/dev/code/search-api" }, message: "The system terminal could not be opened" },
+    steps: openIn("common.terminal"),
+  },
+  {
+    id: "project-open-file-manager-error",
+    group: "Projects",
+    category: "exceptional",
+    title: "Open in file manager failed",
+    description: "A refused launch of the system file manager is reported in the error alert dialog, titled \"Could not open in the file manager\"; its body goes straight to what to do, with the system's reason only in the Error details disclosure, closed here.",
+    state: hostState,
+    projectDirectoryOpenError: { code: "directory_unavailable", params: { detail: "open exited with status 1: The file /Users/dev/code/search-api does not exist." }, message: "The system file manager could not be opened" },
+    steps: openIn("common.fileManager"),
   },
   {
     id: "git-badges",

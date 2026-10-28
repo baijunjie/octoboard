@@ -18,6 +18,14 @@ titled with the generic "Error" (or "Unexpected error"), which says nothing abou
 failure usually carries a code with a `daemon.<code>.alertTitle` of its own: that title wins only where it applies, and
 the call site's covers every other failure the action can return.
 
+## The body's opening sentence adds to the title, or there is none
+
+The title and the opening sentence of the body (a daemon code's `.summary`, an `ActionableError`'s message) are both the
+application's own copy. The opening sentence is optional: it says only what the title leaves unexplained, never the
+title again in other words. When the title says it all, the body has no opening sentence and starts with the remedy. So when a
+new action's title names what failed, do not write a `.summary` that repeats it for the code it raises: put the code in
+`NO_SUMMARY_CODES` (`packages/ui/src/daemonMessage.ts`) if it is raised only under such titles.
+
 ## A failure the UI itself detects is raised as an `ActionableError`, or the alert calls it a bug
 
 Applies wherever code in `packages/ui` raises an error alert for a failure it detects or words itself — a lazy chunk

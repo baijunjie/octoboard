@@ -193,6 +193,28 @@ describe("the fixture daemon's system directory action", () => {
   });
 });
 
+describe("the fixture daemon's system terminal and push actions", () => {
+  const project = projectOf("p", "c", "Website");
+  const scenario = { id: "host", group: "Projects" as const, category: "exceptional" as const, title: "", state: snapshotState({ projects: [project] }) };
+  const actions = [
+    { type: "open_project_terminal" as const, field: "projectTerminalOpenError" as const, code: "terminal_unavailable" },
+    { type: "push_project_branch" as const, field: "projectPushError" as const, code: "git_push_failed" },
+  ];
+
+  it.each(actions)("acknowledges $type for a known project and refuses an unknown one", async ({ type }) => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type, project: project.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type, project: "missing" })).rejects.toMatchObject({ code: "unknown_project", params: { project: "missing" } });
+  });
+
+  it.each(actions)("returns the configured $type failure, after checking project ownership", async ({ type, field, code }) => {
+    const error = { code, params: { detail: "refused" }, message: "refused" };
+    const daemon = createFixtureDaemon({ ...scenario, [field]: error });
+    await expect(daemon.request({ type, project: project.id })).rejects.toMatchObject({ code, params: error.params });
+    await expect(daemon.request({ type, project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+});
+
 describe("the fixture daemon's project removal", () => {
   const project = projectOf("p", "c", "Website");
   const error = { code: "project_directory_shared", params: { project: "Billing" }, message: "shared" };

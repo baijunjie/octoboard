@@ -593,6 +593,16 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if (scenario.projectDirectoryOpenError) return fail(scenario.projectDirectoryOpenError);
           return { type: "ack" };
         }
+        case "open_project_terminal": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          if (scenario.projectTerminalOpenError) return fail(scenario.projectTerminalOpenError);
+          return { type: "ack" };
+        }
+        case "push_project_branch": {
+          if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
+          if (scenario.projectPushError) return fail(scenario.projectPushError);
+          return { type: "ack" };
+        }
         case "delete_project": {
           if (!store.getState().projects.has(body.project)) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           refuseLocked([...store.getState().sessions.values()].filter((session) => session.project_id === body.project));
