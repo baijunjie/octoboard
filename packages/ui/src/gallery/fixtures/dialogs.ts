@@ -575,7 +575,7 @@ const archiveConsoleSession: Scenario = {
   sessionBranches: [
     worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
     worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),
-    worktreeItemOf(api, hubSessions.api, "feat/vendored-parser", "/Users/dev/worktrees/search-api-vendored-parser", "submodules"),
+    worktreeItemOf(api, hubSessions.api, "feat/replace-the-vendored-parser-and-preserve-backwards-compatible-search-index-migrations", "/Users/dev/Documents/Work/Projects/search-platform/.worktrees/replace-the-vendored-parser-and-preserve-search-index-migrations", "submodules"),
     worktreeItemOf(api, hubSessions.api, null, "/Users/dev/worktrees/search-api-fixtures", "submodules"),
     branchItemOf(api, hubSessions.api, "fix/rename-index"),
     worktreeItemOf(api, hubSessions.review, "feat/migration-review", "/Users/dev/worktrees/search-api-migration-review", "locked", true),
@@ -1158,7 +1158,7 @@ export const dialogScenarios: Scenario[] = [
     ...removeProjectTrash,
     id: "dialog-remove-project-trash-expanded",
     title: "Remove project to the Trash, lists opened",
-    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The consequence lines under the options include one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The consequence lines under the options include one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. Wrapped paths stay indented to the text column, and detached HEAD notes start in that same column.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
   },
   {
@@ -1227,7 +1227,7 @@ export const dialogScenarios: Scenario[] = [
     ...archiveConsoleSession,
     id: "dialog-archive-console-session-expanded",
     title: "Archive console session, lists opened",
-    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (each named by its path as plain monospace text, with its branch after a branch icon, or plain detached HEAD text) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. Under the options the affected sessions are listed first and, under them, a consequence line as plain text for each ticked option says it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked. The opened lists sit on a light grey panel, and a worktree's branch (icon and name) moves to the next line as a whole rather than breaking at a slash.",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (including one on a detached HEAD) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. Under the options the affected sessions are listed first and, under them, a consequence line as plain text for each ticked option says it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. The initialized-submodule worktree has a long path and branch name: both wrap within the text column, where detached HEAD notes also start.",
     steps: [
       ...archiveConsoleSession.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
