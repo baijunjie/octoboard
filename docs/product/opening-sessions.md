@@ -28,10 +28,13 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   before either kind of created name, as described in "Displayed names" in `docs/product/session-titles.md`.
 - **Agent** — an agent picker joined to an account picker, as in the project dialog. The agent picker lists the agents
   that can be picked, in the order of the added agents, with their icons and names, and otherwise only the one it holds
-  (see "Which agents the agent pickers list" in `docs/product/consoles.md`). The field opens on the default resolved in
+  (see "Which agents the agent pickers list" in `docs/product/consoles.md`). An agent whose default account and every
+  named account are turned off is left out altogether, even while selected. The field opens on the default resolved in
   "Which agent a session uses" below when that agent can be picked, otherwise on the first agent that can, whenever
-  there is one. The account picker offers only that agent's accounts, in the saved display order (see "Reordering
-  accounts" in `docs/product/agent-accounts.md`), and is shown even when the default account is the agent's only one,
+  there is one; if the selected agent's last enabled account is turned off while the dialog is open, the field falls
+  back by that same rule. Quota exhaustion, being logged out or a sharing change alone does not hide an agent. The
+  account picker offers only that agent's accounts, in the saved display order (see "Reordering accounts" in
+  `docs/product/agent-accounts.md`), and is shown even when the default account is the agent's only one,
   offering that account alone. It opens on the account "Which account a session uses" below describes. There is no
   inheritance entry: both pickers settle concrete choices for this session.
   Each account in the picker carries a compact usage bar (see "In an account picker" in
@@ -55,12 +58,15 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   the account is not logged in, so a session cannot use it, and to choose another account or log in to it. A turned-off
   account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the field passes over it
   as it passes over a used-up account. Only when the account the field ends on is turned off all the same — every
-  account of the agent is unavailable, the account was turned off while the dialog is open, or the **Resume
-  conversation** tab settles on it — is it listed, and then it cannot be picked: its usage bar stays and a short note
+  account of the agent is unavailable but at least one is still enabled, the account was turned off while the dialog
+  is open and another remains enabled, or the **Resume conversation** tab settles on it — is it listed, and then it
+  cannot be picked: its usage bar stays and a short note
   under its name reads "Disabled", with the full reason as its description for assistive technology; the field says
   under its pickers that the account is turned off, to choose another account or turn it back on in Settings, and the
-  dialog cannot be submitted until then. An account that is turned off is described as turned off, whatever its quota or
-  its sharing, or whether it is logged in. An account whose last change of sharing is incomplete can be picked, and
+  dialog cannot be submitted until then. The **Resume conversation** tab keeps the conversation's own agent and account
+  even when every account of that agent is turned off; it never substitutes another agent or account. An account that
+  is turned off is described as turned off, whatever its quota or its sharing, or whether it is logged in. An account
+  whose last change of sharing is incomplete can be picked, and
   submitting on it asks the user first (see "Starting a session on an account whose last change is incomplete" in
   `docs/product/sharing-the-default-configuration.md`). Switching agents retains each agent's account choice separately.
   If a remembered account is removed while the dialog is open, that agent stays selected and its account falls back to
@@ -166,6 +172,10 @@ If this state comes about while the session dialog is open — the last such age
 — nothing is opened, and the dialog turns into a failure modal titled that a session cannot be opened, saying that no
 agent is available to open a session, with nothing but its acknowledgement, which closes the dialog (see "The failure
 modal" in `docs/product/error-alerts.md`).
+
+The dialog shows the same failure modal when every added, installed agent has all its accounts turned off, whether
+that is already true when it opens or becomes true while it is open. This does not disable the entry points above or
+change the agent selected for opening a session with defaults.
 
 ## When the agent or the account cannot open a session
 
