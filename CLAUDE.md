@@ -170,19 +170,34 @@ the earlier steps do not run them separately (the related tests a step runs to c
 - Within "Documentation update": `docs/ui-accessibility.md`, the UI's accessibility standard, has no writer subagent
   of its own — you maintain it yourself, from what the change turned up and from what a writer subagent hands back as
   belonging to it. Skip it when this round's changes touch nothing it states.
-- "Formatting and checks", and anywhere else a step asks for the checks by the scope of the change (the pre-merge
-  verification, the change-check loop's re-runs, the gallery writer's baseline): run `pnpm verify` instead of choosing
-  the checks by hand. It applies the scope rule above to the changes since the branch's current merge base with its
-  target branch, so code a rebase or merge brought in from the target branch is out of the scope (the target branch
-  counts as already checked) while the branch's own changes and conflict resolutions are in it; rewrites the formatting
-  first, runs format check, lint and type checks before the tests, stops at the first failure, skips steps that already
-  passed on the same content and toolchain, re-runs a failed UI test step on just its failed and changed test files
-  while nothing but test files nothing imports changed since (that pass counts for the whole step), and makes heavy
-  steps (UI tests, Rust tests) queue for a machine-wide slot across worktrees. `pnpm verify --full` runs the full set
-  whatever changed; `--dry-run` prints the plan; `--base <ref>` names the base on a branch with no recorded target
-  branch (without one it runs the full set). What it does not run: `pnpm build`, which a change to build configuration
-  or build scripts, or to the inputs of the preview build `apps/web` takes from `packages/ui`, also calls for (it prints
-  a note); and the gallery quick check, which stays with `agent-gallery`. The full set, the per-package checks and the
-  cross-package relations it encodes are in `scripts/verify/`.
+- Timing override for "Formatting and checks", including the pre-merge flow and other skills' verification
+  baselines: by the user's explicit workflow choice, routine development completion and local merges do not run
+  format checks, lint, type checks, builds or test suites. Checks used specifically to establish a changed rule
+  while implementing it remain appropriate; they do not replace push verification.
+- Before committing, the `pre-commit` hook runs `scripts/format-staged.mjs` (the same as `pnpm format:staged`):
+  format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
+  refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)
+  gets a warning and the stage is skipped; a missing `node_modules` fails it with a hint to run `pnpm install`. Do not
+  run a whole-repository formatter as a delivery step. Enable or refresh this clone's hooks with `pnpm hooks:install`
+  after hook changes have landed in the target branch.
+- Before pushing, the `pre-push` hook runs the revert gate, then the checks through `scripts/pre-push.mjs` and
+  `pnpm verify`. It measures from each actual destination's advertised remote commit to the exact pushed commit,
+  including all unpushed local changes; a newly created branch is measured from its merge base with the live remote
+  target branch (or remote HEAD), falling back to all checks when no baseline can be established. Tag pushes are not
+  verified here, since release CI verifies the tag, and a checkout without `scripts/pre-push.mjs` skips this stage
+  with a warning. It selects all affected consumers without adding unrelated packages merely because several
+  packages changed: shared inputs select their consumers, and an unknown input selects the full set. Rust changes
+  always run the Rust checks of both crates together. Checks are read-only and require the pushed commit in a clean
+  checkout. `scripts/verify/` owns the scope and commands. `pnpm verify --dry-run` prints the plan; `--base <ref>`
+  selects an explicit baseline; `--full` checks all packages; `--fresh` ignores earlier successful results for
+  identical content.
+- Within "Gallery" and "UI preview": continue gallery maintenance and previews at their existing steps, but defer
+  the automated gallery quick check and sweep to before pushing, when the UI changes call for them; do not run
+  them again at routine development completion or local merge. The agent runs them via the `agent-gallery` skill
+  before pushing when the UI changed; the pre-push hook does not.
+- Release verification is unconditional in CI: `quality.yml` runs `pnpm verify --release --fresh` before
+  `release.yml` builds the app. It covers application lint, production UI type checks, application UI and desktop
+  script tests, Rust formatting and tests of both Rust crates. Website and gallery-only checks are excluded;
+  application tests may still consume their shared fixtures.
 
 <!-- setup-agent:workflow:end -->

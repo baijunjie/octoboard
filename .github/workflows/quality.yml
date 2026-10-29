@@ -1,7 +1,7 @@
 name: Code quality
 
-# The full set of checks `pnpm verify --full` runs, without its formatting rewrite. It runs before every release
-# (`release.yml` calls it) and on request, not on every push.
+# Application checks run unconditionally before releases and on request. Website and gallery-only
+# checks belong to local scoped push verification, not the desktop release gate.
 on:
   workflow_call:
   workflow_dispatch:
@@ -23,9 +23,4 @@ jobs:
       # rustup is preinstalled; this installs the toolchain `rust-toolchain.toml` pins.
       - run: rustup toolchain install
       - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
-      - run: pnpm typecheck
-      - run: pnpm --filter @octoboard/web check:locales
-      - run: node --test scripts/verify/*.test.mjs
-      - run: pnpm -r test
-      - run: pnpm test:rust
+      - run: pnpm verify --release --fresh

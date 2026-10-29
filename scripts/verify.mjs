@@ -1,46 +1,27 @@
 #!/usr/bin/env node
-// Verifies the working copy: runs the checks the branch's changes can affect, cheap ones first, and
-// stops at the first failure. `CLAUDE.md` "Before delivery" decides which checks a change calls for;
-// `scripts/verify/scope.mjs` implements that rule so no one applies it by hand, and `steps.mjs` lists
-// the checks.
-//
-//   pnpm verify                 the checks for the branch's changes since its merge base with its
-//                               target branch
-//   pnpm verify --full          the full set, whatever changed
-//   pnpm verify --fresh         ignore earlier passes of the same content
-//   pnpm verify --dry-run       print the plan and run nothing
-//   pnpm verify --base <ref>    take the changes since <ref> (a branch with no recorded target branch)
-//
-// The changes are those since the current merge base of HEAD and the branch's recorded target branch
-// (`branch.<name>.targetBranch`): the target branch is taken as already checked, so what a rebase or
-// merge brought in from it is not in the scope, while the branch's own changes and its conflict
-// resolutions are. A branch with no recorded target branch cannot be judged and runs the full set.
-//
-// Steps that passed on the same content (tree and toolchain) are skipped, and a UI test step that
-// failed is re-run on its failed and changed test files alone while nothing else changed but test
-// files nothing imports (`scripts/verify/rerun.mjs`). Heavy steps wait for a machine-wide slot
-// (`scripts/verify/lock.mjs`), and consecutive ones hold it together; light ones never wait. The UI
-// gallery's quick check is not run here: it belongs to what is written to the gallery or previewed
-// (`agent-gallery`), not to a change of code.
+// Read-only push verification. --base names the live destination tip, --head pins the pushed commit;
+// --full checks every consumer, --release checks the shipping app only, --dry-run prints the plan,
+// and --fresh ignores earlier passes. Formatting belongs to the pre-commit hook.
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { changedFiles, resolveBase } from "./verify/changes.mjs";
+import { changedFiles, requirePushedTree, resolveBase } from "./verify/changes.mjs";
 import { acquireSlot, describeWait } from "./verify/lock.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
 import { contentKey, readStamp, recordPass, stampDirectory, stepKey } from "./verify/stamp.mjs";
-import { checkSteps, formatSteps } from "./verify/steps.mjs";
+import { checkSteps } from "./verify/steps.mjs";
 import { workingTree } from "./verify/tree.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
 const baseArg = args.includes("--base") ? args[args.indexOf("--base") + 1] : undefined;
-const known = new Set(["--full", "--fresh", "--dry-run", "--base", baseArg]);
+const headArg = args.includes("--head") ? args[args.indexOf("--head") + 1] : undefined;
+const known = new Set(["--full", "--release", "--fresh", "--dry-run", "--base", "--head", baseArg, headArg]);
 const unknown = args.filter((arg) => !known.has(arg));
-if (unknown.length > 0 || (flag("--base") && !baseArg)) {
-  console.error(`verify: unknown or incomplete argument: ${unknown.join(" ") || "--base needs a ref"}`);
+if (unknown.length > 0 || (flag("--base") && (!baseArg || baseArg.startsWith("--"))) || (flag("--head") && (!headArg || headArg.startsWith("--")))) {
+  console.error(`verify: unknown or incomplete argument: ${unknown.join(" ") || "--base / --head needs a ref"}`);
   process.exit(2);
 }
 
@@ -73,20 +54,23 @@ function changesMenuKeys(base, tree) {
 function plan(base) {
   const tree = workingTree(root);
   if (!tree) throw new Error("could not take the tree of the working copy");
-  let files = [];
+  if (headArg) requirePushedTree(git, headArg, tree);
   let scope;
-  if (flag("--full")) {
-    scope = { mode: "full", reason: "--full", packages: [], advice: [] };
+  if (flag("--release")) {
+    scope = { mode: "release", reason: "shipping application", packages: [] };
+  } else if (flag("--full")) {
+    scope = { mode: "full", reason: "--full", packages: [] };
   } else if (!base.commit) {
     // Only this command takes --base, so the hint is added here.
     const reason = base.noTarget ? `${base.reason} (pass --base <ref>)` : base.reason;
-    scope = { mode: "full", reason, packages: [], advice: [] };
+    scope = { mode: "full", reason, packages: [] };
   } else {
-    files = changedFiles(git, base.commit, tree) ?? [];
+    const files = changedFiles(git, base.commit, tree);
+    if (!files) throw new Error("could not read changed files; refusing to skip checks");
     const fullFiles = files.includes(MENU_KEYS_FILE) && changesMenuKeys(base.commit, tree) ? [MENU_KEYS_FILE] : [];
     scope = planScope(files, { fullFiles });
   }
-  return { tree, files, scope, checks: checkSteps(scope, files), formats: formatSteps(scope, files) };
+  return { tree, scope, checks: checkSteps(scope) };
 }
 
 function exec(cmd, env = process.env) {
@@ -154,17 +138,16 @@ async function runStep(step, key, tree) {
   console.log(`verify: passed ${step.label} in ${Math.round((Date.now() - started) / 1000)}s`);
 }
 
-const base = resolveBase(git, baseArg);
-let current = plan(base);
+const base = flag("--full") || flag("--release") ? {} : resolveBase(git, baseArg);
+const current = plan(base);
 const describe = (scope) => `verify: scope ${scope.mode} (${scope.reason})`;
 console.log(describe(current.scope));
-for (const note of current.scope.advice) console.log(`verify: note: ${note}`);
 if (current.scope.mode === "unread") {
   console.log("verify: nothing to run: no format check or lint covers these files");
   process.exit(0);
 }
 if (flag("--dry-run")) {
-  for (const step of [...current.formats, ...current.checks]) console.log(`verify: would run${step.heavy ? " (heavy)" : ""}: ${step.cmd.join(" ")}`);
+  for (const step of current.checks) console.log(`verify: would run${step.heavy ? " (heavy)" : ""}: ${step.cmd.join(" ")}`);
   process.exit(0);
 }
 
@@ -174,16 +157,6 @@ if (current.checks.every((step) => passedOn(current.tree, step))) {
   process.exit(0);
 }
 
-for (const step of current.formats) {
-  console.log(`verify: ${step.label}: ${step.cmd.join(" ")}`);
-  const code = await exec(step.cmd);
-  if (code !== 0) {
-    console.error(`verify: FAILED ${step.label} (exit ${code})`);
-    process.exit(code);
-  }
-}
-// Formatting may have rewritten files, so the plan and the content the stamp names are taken again.
-if (current.formats.length > 0) current = plan(base);
 const key = contentKey(current.tree, toolchain);
 const pending = current.checks.filter((step) => !passedOn(current.tree, step));
 for (const step of current.checks) {

@@ -1,22 +1,12 @@
-// Maps the paths a branch changed to the checks that cover them, by the scope rule of `CLAUDE.md`
-// "Before delivery", "Formatting and checks": the full set, only files no check reads, or one
-// package's checks (with the UI's, for the module the gallery sweep shares), and the full set for a
-// shared layer, configuration, dependency versions, a change spanning packages, or anything that
-// cannot be judged. Anything not recognised here is the last of these.
+// Maps changed inputs to their consumers: the packages whose checks read them. Every changed file is
+// matched against every rule of `RULES` and the results are unioned, so a file that several packages
+// read selects each of them without pulling in unrelated ones. A file no rule matches is unknown and
+// selects every package; only when none does, a Markdown file is read by no check and selects nothing
+// (a rule can therefore make a Markdown file count, as the wire protocol document does).
 //
-// Every changed path is one of: `unread` (no build, type check or test reads it), a package's own
-// path, or `full`. One cross-package relation is narrower than the full set: the module
-// `packages/ui/scripts/gallery-sweep.mjs` imports from `scripts/verify/` (`SWEEP_SHARED`) is the
-// `verify` package's, used outside it only by the UI's gallery sweep, which the UI's tests run, so
-// a change to it runs the `verify` checks and the `ui` checks. The cross-package relations that
-// make a path `full` are:
-//   - what `apps/web` imports from `packages/ui/src`, and the inputs of the preview build it takes
-//     from there;
-//   - the wire protocol: `apps/daemon/PROTOCOL.md`, `apps/daemon/src/protocol.rs` and
-//     `packages/ui/src/protocol.ts`, kept in step by hand and consumed by the UI and the desktop shell;
-//   - the contract between `apps/desktop` and `packages/ui`: the Tauri commands and events, the
-//     window URL's parameters, the menu message keys and the status item icons. `apps/desktop` itself
-//     has no package entry, so every change to it is already `full`.
+// Packages: `verify` is this command's own code, hook scripts and the tests of the scripts directory;
+// `daemon` and `native` are the two Rust crates, which the Rust steps always check together (one
+// `cargo test --workspace`, one feature set), so selecting either selects both Rust steps.
 
 // What `apps/web` imports from `packages/ui/src`: `i18n/matchLanguage.ts` and what it imports.
 export const WEB_IMPORTS_FROM_UI = [
@@ -29,19 +19,6 @@ export const WEB_PREVIEW_INPUTS = [
   "packages/ui/vite.preview.config.ts",
   "packages/ui/website-preview.html",
   "packages/ui/src/website-preview/",
-];
-
-// Paths that are part of a build configuration or a build script, for the advice to run `pnpm build`.
-const BUILD_CONFIG = [
-  /^packages\/ui\/vite[^/]*\.config\.ts$/,
-  /^packages\/ui\/[^/]*\.html$/,
-  /^packages\/ui\/scripts\//,
-  /^packages\/ui\/src\/website-preview\//,
-  /^apps\/web\/(nuxt\.config\.ts|scripts\/)/,
-  /^apps\/desktop\/(scripts\/|package\.json$|src-tauri\/(tauri\.conf\.json|build\.rs)$)/,
-  /^apps\/daemon\/build\.rs$/,
-  /^scripts\/(?!verify)/,
-  /^package\.json$/,
 ];
 
 // The UI side of the desktop contract: the Tauri bridge, the window URL's parameters, the native
@@ -64,59 +41,86 @@ export const SWEEP_SHARED = ["scripts/verify/lock.mjs"];
 
 export const WIRE_PROTOCOL = ["apps/daemon/PROTOCOL.md", "apps/daemon/src/protocol.rs", "packages/ui/src/protocol.ts"];
 
-const UNREAD_PREFIXES = ["docs/", ".claude/", ".agents/", ".codex/", ".githooks/"];
-const UNREAD_FILES = ["CLAUDE.md", "AGENTS.md", "LICENSE"];
+// Files a test of another package reads from disk. Found by searching for `include_str!`,
+// `readFileSync(new URL(...))` and relative paths that leave a package root; `scope.test.mjs` fails
+// when a new read of that kind is not named here.
+// A daemon test (`interface_language.rs`) parses the UI's language list.
+export const DAEMON_READS_UI = ["packages/ui/src/i18n/languages.ts"];
+// A UI test (`bundleLocalizations.test.ts`) compares the bundle's languages with the shell's `Info.plist`.
+export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.plist"];
+// A UI test (`appConfig.test.ts`) holds `config/app.json` to the license and the default website address.
+export const UI_READS_ELSEWHERE = ["LICENSE", "apps/web/site.config.ts"];
+// A verify test (`rerun.test.mjs`) reads the reporter that shares `REPORT_ENV` with `rerun.mjs`.
+export const VERIFY_READS_UI = ["packages/ui/src/test/failedFilesReporter.ts"];
 
-// The packages that have checks of their own, by the paths they own. `verify` is this command's own
-// code, which only the gallery sweep depends on (`SWEEP_SHARED`); its checks are its tests and lint.
-export const PACKAGE_ROOTS = {
-  verify: ["scripts/verify/", "scripts/verify.mjs"],
-  ui: ["packages/ui/"],
-  web: ["apps/web/"],
-  daemon: ["apps/daemon/"],
-};
+export const ALL_PACKAGES = ["verify", "ui", "web", "desktop", "daemon", "native"];
+const JS_PACKAGES = ["verify", "ui", "web", "desktop"];
+const RUST_PACKAGES = ["daemon", "native"];
 
-export const belongsTo = (pkg, file) => PACKAGE_ROOTS[pkg].some((root) => file.startsWith(root));
+// `match` entries are a prefix (ending in "/"), an exact path or a RegExp. A source rule names its own
+// directory with a pattern that leaves Markdown out, since documentation is read by no check.
+const notMarkdown = (prefix) => new RegExp(`^${prefix.replaceAll("/", "\\/")}(?!.*\\.md$)`);
 
-// Manifests and the configuration of type checking, building and testing are what the full-set rule
-// calls configuration and dependency versions, whichever package they sit in: a Cargo manifest's
-// features, for one, unify across the whole Cargo workspace.
-const CONFIGURATION = /(^|\/)(package\.json|Cargo\.toml|build\.rs|tsconfig[^/]*\.json|(vite|vitest|nuxt)[^/]*\.config\.[cm]?[jt]s)$/;
+export const RULES = [
+  { match: ["scripts/verify/", "scripts/verify.mjs", "scripts/format-staged.mjs", "scripts/pre-push.mjs"], consumers: ["verify"], why: "the verification command, the hook scripts and their tests" },
+  { match: [notMarkdown("packages/ui/")], consumers: ["ui"], why: "the UI package" },
+  { match: [notMarkdown("apps/web/")], consumers: ["web"], why: "the website" },
+  { match: [notMarkdown("apps/daemon/")], consumers: ["daemon"], why: "the daemon crate" },
+  { match: [notMarkdown("apps/desktop/src-tauri/")], consumers: ["native"], why: "the desktop shell crate" },
+  { match: ["apps/desktop/scripts/"], consumers: ["desktop"], why: "the desktop build and release scripts and their tests" },
+  { match: ["apps/desktop/package.json"], consumers: ["desktop", "native"], why: "its scripts are the desktop scripts' commands, and `tauri.conf.json` runs them as the shell's build commands" },
 
-export function classify(file) {
-  if (WIRE_PROTOCOL.includes(file) || DESKTOP_CONTRACT.includes(file)) return "full";
-  if (WEB_IMPORTS_FROM_UI.includes(file)) return "full";
-  if (WEB_PREVIEW_INPUTS.some((input) => file.startsWith(input))) return "full";
-  if (CONFIGURATION.test(file)) return "full";
-  if (UNREAD_FILES.includes(file) || UNREAD_PREFIXES.some((prefix) => file.startsWith(prefix))) return "unread";
-  if (file.endsWith(".md")) return "unread";
-  return Object.keys(PACKAGE_ROOTS).find((pkg) => belongsTo(pkg, file)) ?? "full";
-}
+  // Cargo features unify across workspace members, so a manifest of either crate changes how both build.
+  { match: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "rustfmt.toml", ".cargo/", /\/Cargo\.toml$/], consumers: RUST_PACKAGES, why: "the Cargo workspace, its feature set and toolchain are shared by both crates" },
+  { match: ["pnpm-lock.yaml", "pnpm-workspace.yaml", "patches/", "eslint.config.mjs"], consumers: JS_PACKAGES, why: "dependency versions and the lint rules apply to every JavaScript package" },
+  { match: ["package.json"], consumers: ALL_PACKAGES, why: "holds the scripts of every package, including `test:rust`, and the shared dev dependencies" },
+  { match: ["scripts/env.mjs", "scripts/env.d.mts"], consumers: ["verify", "ui", "desktop"], why: "imported by `scripts/verify/lock.mjs`, `packages/ui/vite.config.ts` (its declaration types that import) and the desktop release scripts" },
+  { match: ["scripts/test-rust.mjs"], consumers: ["verify", ...RUST_PACKAGES], why: "the command the Rust test step runs, linted with the scripts" },
+  { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },
+  { match: [".gitignore"], consumers: ["verify"], why: "decides which files the working-tree snapshot (`tree.mjs`) counts; no other check reads it" },
+  { match: ["config/"], consumers: ALL_PACKAGES, builds: ["ui"], why: "`config/app.json` is the product identity every package reads, and `vite.config.ts` bakes it into the UI build" },
 
-// `files` are the changed paths; `fullFiles` are those among them that a look at the change itself
-// showed to touch a cross-package relation (see `MENU_KEYS_FILE`).
+  // Nothing local reads these. Listed so that they do not fall through to "unknown".
+  { match: ["docs/", ".claude/", ".agents/", ".codex/", "assets/branding/", ".github/", "CLAUDE.md", "AGENTS.md"], consumers: [], why: "documentation, agent files, brand assets and CI definitions are read by no local check" },
+
+  // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
+  { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS], consumers: ["verify", "ui", "web"], why: "the website imports these modules, or builds its preview from them" },
+  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step by hand across the daemon, the UI and the desktop shell" },
+  { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
+  { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
+  { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },
+  { match: UI_READS_NATIVE, consumers: ["verify", "ui", "native"], why: "a UI test reads it" },
+  { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
+  { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
+  { match: ["apps/daemon/src/adapter/claude_compatibility.md"], consumers: ["daemon"], why: "compiled into the daemon with `include_str!`" },
+
+  // The UI build runs only for changes to what it reads besides `src/`. The gallery and benchmark
+  // scripts and pages are not among them, and the website's preview build has no step of its own.
+  { match: ["packages/ui/vite.config.ts", "packages/ui/index.html", "packages/ui/typography.mjs", "packages/ui/scripts/generate-licenses.mjs", "packages/ui/package.json", "packages/ui/tsconfig.json", "packages/ui/tsconfig.app.json", "Cargo.lock", "pnpm-lock.yaml", "scripts/env.mjs"], consumers: [], builds: ["ui"], why: "the inputs of `pnpm build` of the UI: the bundler configuration, the page, and the lock files and manifests the license generator reads" },
+];
+
+const matches = (matcher, file) => matcher instanceof RegExp ? matcher.test(file) : matcher.endsWith("/") ? file.startsWith(matcher) : file === matcher;
+
+export const matchingRules = (file) => RULES.filter((rule) => rule.match.some((matcher) => matches(matcher, file)));
+
 export function planScope(files, { fullFiles = [] } = {}) {
   const packages = new Set();
-  const full = [];
+  const builds = new Set();
   for (const file of files) {
-    const kind = fullFiles.includes(file) ? "full" : classify(file);
-    if (kind === "full") full.push(file);
-    else if (kind !== "unread") packages.add(kind);
+    const hits = matchingRules(file);
+    for (const rule of hits) {
+      rule.consumers.forEach((name) => packages.add(name));
+      rule.builds?.forEach((name) => builds.add(name));
+    }
+    if (hits.length === 0 && !file.endsWith(".md")) ALL_PACKAGES.forEach((name) => packages.add(name));
+    // The message catalog's `menu.*` keys are read by the desktop shell's menu, but only a change to
+    // one of those lines counts (the caller decides, from the diff).
+    if (fullFiles.includes(file)) ["verify", "ui", "native"].forEach((name) => packages.add(name));
   }
-  const sweepShared = files.filter((file) => SWEEP_SHARED.includes(file));
-  const advice = [];
-  if (files.some((file) => BUILD_CONFIG.some((pattern) => pattern.test(file)))) {
-    advice.push("a build configuration or build script changed: also run `pnpm build`, which this command does not");
-  }
-  if (full.length > 0) return { mode: "full", reason: `shared or unrecognised: ${preview(full)}`, packages: [], advice };
-  if (packages.size > 1) return { mode: "full", reason: `spans packages: ${[...packages].join(", ")}`, packages: [], advice };
-  if (packages.size === 1 && sweepShared.length > 0) {
-    return { mode: "package", reason: `only verify, and the ui tests for the gallery sweep's use of ${preview(sweepShared)}`, packages: ["verify", "ui"], advice };
-  }
-  if (packages.size === 1) return { mode: "package", reason: `only ${[...packages][0]}`, packages: [...packages], advice };
-  return { mode: "unread", reason: "only files no build, type check or test reads", packages: [], advice };
-}
-
-function preview(files) {
-  return files.length <= 3 ? files.join(", ") : `${files.slice(0, 3).join(", ")} and ${files.length - 3} more`;
+  const selected = ALL_PACKAGES.filter((name) => packages.has(name));
+  return {
+    mode: selected.length === 0 && builds.size === 0 ? "unread" : "package",
+    reason: selected.length === 0 && builds.size === 0 ? "no checked input changed" : `affected: ${selected.join(", ")}`,
+    packages: selected, builds: [...builds],
+  };
 }

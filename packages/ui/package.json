@@ -10,10 +10,12 @@
     "gallery:sweep": "node scripts/gallery-sweep.mjs",
     "bench:wkwebview": "node scripts/wkbench/run.mjs",
     "licenses:generate": "node scripts/generate-licenses.mjs",
-    "build": "node scripts/generate-licenses.mjs && tsc --noEmit && vitest run src/i18n && vite build",
+    "build": "node scripts/generate-licenses.mjs && pnpm typecheck:app && vitest run src/i18n && vite build",
     "build:preview": "vite build --config vite.preview.config.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
+    "test:app": "vitest run --exclude 'src/gallery/**' --exclude 'src/website-preview/**' --exclude 'scripts/gallery*' --exclude 'scripts/wkbench/**'"
   },
   "dependencies": {
     "@heroui/react": "^3.2.6",

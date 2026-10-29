@@ -21,10 +21,12 @@ the scripts from this directory.
 - `pnpm gallery` — the same dev server on port 5175, opening the UI state gallery (below).
 - `pnpm gallery:sweep` — loads gallery scenarios in a headless browser and fails on any gallery failure (see
   "Sweeping the gallery").
-- `pnpm typecheck` — `tsc --noEmit`.
+- `pnpm typecheck` — `tsc --noEmit`, including gallery, website-preview and test sources.
+- `pnpm typecheck:app` — typechecks the production application through `tsconfig.app.json`.
 - `pnpm test` — `vitest run`: the unit tests beside the code, plus jsdom tests for stateful classes and components.
-- `pnpm build` — typechecks, runs the i18n catalog check (`vitest run src/i18n`), then writes `dist/` with relative
-  asset paths.
+- `pnpm test:app` — application tests, excluding the gallery, website preview and WKWebView benchmark tests.
+- `pnpm build` — generates third-party license data, runs `typecheck:app` and the i18n catalog check
+  (`vitest run src/i18n`), then writes `dist/` with relative asset paths.
 - `pnpm build:preview` — builds the website demonstration into `apps/web/public/preview/` with
   `vite.preview.config.ts`.
 - `pnpm bench:wkwebview` — a latency benchmark of the production bundle in the system WKWebView (macOS only); see
@@ -45,7 +47,8 @@ Both variables can also be set in the repo-root `.env.local` (gitignored; templa
 A dev-only page, needing no daemon, that shows UI states hard to reach against a live daemon: the real `App` over a
 fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on port 5175; under `pnpm dev` it is at
 `http://localhost:5174/gallery.html` (which resets the dev app's `octoboard.*` preferences, hence port 5175 for
-`pnpm gallery`). `pnpm build` does not bundle it but does type-check `src/gallery/`.
+`pnpm gallery`). `pnpm build` does not bundle it, and its type check (`typecheck:app`) leaves `src/gallery/` out except for
+`src/gallery/fixtures/builders.ts`, which the dialogs' `*TestSupport.tsx` helpers pull in; `pnpm typecheck` covers all of it.
 
 - Scenarios are listed by functional area, Normal previews first and Exceptional second. Theme, language, window
   width and height, and whether the shortcut modifier is held are controls above the window, all kept in the URL. The

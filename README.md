@@ -58,31 +58,48 @@ then start Tauri.
 
 ### Code quality
 
-Run these commands from the repository root after installing the workspace:
+Install the workspace and enable the repository hooks once per clone (repeat after hook changes):
 
 ```sh
-pnpm format       # Apply ESLint layout fixes and format both Rust crates.
-pnpm lint         # Check JavaScript, TypeScript, TSX and Vue; warnings fail the check.
-pnpm format:check # Check ESLint rules and Rust formatting without changing files.
-pnpm typecheck
-pnpm test:rust    # Run the Rust tests of both crates in one invocation, with no daemon build needed.
+pnpm install
+pnpm hooks:install
 ```
 
-ESLint checks source code and scripts across the workspace. ESLint Stylistic uses two-space indentation,
-double quotes and semicolons; Vue template rules handle the website's single-file components. Rust formatting
-uses the root `rustfmt.toml`; CI runs rustfmt from the Rust version pinned in `rust-toolchain.toml`. Generated
-files, dependencies and build output are excluded. CSS, JSON, Markdown and other file types are outside the ESLint formatting scope.
+Before each commit, the hook formats only staged JavaScript, TypeScript, TSX, Vue and Rust files. It formats
+staged content and preserves separate unstaged edits; conflicts stop the commit without changing either version.
+CSS, JSON, Markdown and other file types are outside this formatting scope. ESLint fixes layout only;
+non-formatting lint, type checks, builds and tests run before pushing, not after routine development or local merges.
 
-Use `pnpm lint:fix` separately to apply available lint fixes, then inspect the changes and run the relevant
-tests. For routine edits, format only the files or Rust packages involved in the task:
+Before each push, the hook runs read-only checks for every affected package, using the destination's advertised
+remote commit and the exact commit being pushed. This includes all unpushed local merges and commits. A new branch
+is measured from its merge base with the live remote target branch (or remote HEAD); an unavailable baseline
+selects the full set. Rust changes run the Rust checks of both crates; tag pushes are not verified (release CI
+checks the tag); a checkout that predates the hook scripts skips that stage with a warning. Multiple affected
+packages are combined: an ordinary UI change does not run Rust or website checks. Shared protocols, imported code,
+configuration and dependency inputs also select their consumers; unknown inputs conservatively select everything.
+Checks require the pushed commit checked out in a clean working tree, so a different checkout cannot certify it.
+
+Manual entry points:
 
 ```sh
-pnpm exec eslint path/to/file.tsx --fix --fix-type layout
-cargo fmt -p octoboardd
+pnpm format:staged          # The same staged formatter the commit hook runs.
+pnpm verify --dry-run      # Show checks for changes from the freshly fetched upstream/remote target.
+pnpm verify                # Run those checks without rewriting files.
+pnpm verify --base <ref>   # Use an explicit remote baseline, including non-ancestor force-push tips.
+pnpm verify --full         # Check every package.
+pnpm verify --release      # Check the shipping application, without website or gallery-only suites.
 ```
 
-The Code quality workflow runs the full set of checks before every release, and on request. Formatting does not
-replace type checking, tests or code review.
+Verification stops at the first failure and reuses successful checks for identical content and toolchain versions;
+`--fresh` forces them to run again. UI tests and Rust tests queue for a machine-wide slot across worktrees. Website
+checks build the site before its SEO tests read the generated output. Build configuration changes also select the
+relevant UI build. Broad manual commands (`pnpm format`, `pnpm format:check`, `pnpm typecheck`) remain available,
+but are not routine development steps.
+
+The Code quality workflow runs application lint, production UI type checks, application UI tests, desktop script
+tests, Rust formatting and both Rust crates' tests unconditionally before a release and on request. It excludes
+website checks and standalone gallery/website-preview tests; application tests may still use their shared fixtures.
+The release job then builds, signs and notarizes the application. Formatting does not replace code review.
 
 The desktop shell is [Tauri 2](https://github.com/tauri-apps/tauri) around a
 [React](https://github.com/facebook/react) and [HeroUI](https://github.com/heroui-inc/heroui) interface. A
