@@ -108,6 +108,8 @@ export interface ActionMenuItem {
 export interface ActionMenuSubmenu {
   label: string;
   icon: LucideIcon | React.ReactElement;
+  /** Added to a lucide glyph's own classes, as an item's `iconClassName`. */
+  iconClassName?: string;
   items: ActionMenuEntry[];
   /** Loads fresh items when this submenu opens. */
   loadItems?: () => Promise<ActionMenuEntry[]>;
@@ -131,6 +133,8 @@ export interface ActionMenuPanelContext {
 export interface ActionMenuPanel {
   label: string;
   icon: LucideIcon | React.ReactElement;
+  /** Added to a lucide glyph's own classes, as an item's `iconClassName`. */
+  iconClassName?: string;
   panel: (context: ActionMenuPanelContext) => React.ReactNode;
 }
 
@@ -329,7 +333,7 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
       nodes.push(
         <Dropdown.SubmenuTrigger key={index}>
           <Dropdown.Item id={itemId(index)} textValue={entry.label} data-marquee-scope>
-            <ItemIcon icon={entry.icon} />
+            <ItemIcon icon={entry.icon} className={entry.iconClassName} />
             <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
               <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
             </Label>

@@ -1039,6 +1039,16 @@ const reviewScenarios: Scenario[] = [
     steps: [...openGit, (ui) => ui.scrollCollection(ui.t("git.changes.list.label"), 180)],
   },
   {
+    id: "git-changes-tree-folder-menu",
+    group: GROUP,
+    category: "normal",
+    title: "A grouping folder’s actions menu",
+    description: "In the folder-grouped list a folder row carries the same actions button as a change row, at the end of the row: here it is pressed on the first src folder, under Staged, and the menu shows Copy path and Open in, whose submenu is open with File manager and Terminal and no Default application. Commit rows have no actions.",
+    state,
+    preferences: gitMode({ layout: "tree" }),
+    steps: [...openGit, (ui) => ui.press(ui.t("browser.directory.actions", { name: "src" })), (ui) => ui.press(ui.t("common.openIn"))],
+  },
+  {
     id: "git-changes-tree-sticky",
     group: GROUP,
     category: "normal",

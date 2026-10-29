@@ -190,6 +190,18 @@ it("draws a shell at its prompt and leaves the socket open", async () => {
   socket.close();
 });
 
+it("draws a fresh prompt in the folder a shell was started in, with the home directory abbreviated", async () => {
+  vi.useFakeTimers();
+  installFakeTerminal();
+  const socket = new WebSocket(terminalFixtureUrl("shell", "shell-1", "/Users/dev/code/website/src/ui"));
+  let output = "";
+  socket.addEventListener("message", (event) => { output = new TextDecoder().decode(event.data); });
+  await vi.runAllTimersAsync();
+  expect(output).toContain("~/code/website/src/ui");
+  expect(output).not.toContain("git status");
+  socket.close();
+});
+
 it("leaves a session the supplied output declines to the sample of its URL's behaviour", async () => {
   vi.useFakeTimers();
   installFakeTerminal({ output: (session) => (session === "known" ? "supplied" : undefined) });

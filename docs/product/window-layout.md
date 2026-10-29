@@ -308,20 +308,20 @@ and Terminal panels and, while it has pages, its own report panel (see "A projec
   session of the project that owns the pane leaves the project's panels as they are; only the report panel follows the
   selection, showing the newly selected session's pages, or going when it has none. Whether the pane is then on screen
   is up to which of that owner's panels are open (see "What is remembered" in `docs/product/right-pane-panels.md`).
-- **Browse files**, when offered in a project's action menu (see "Opening a project's files" in
-  `docs/product/project-pane.md`), gives the right pane to that project and opens its Files panel (see "Opening and
-  closing panels" in `docs/product/right-pane-panels.md`), which puts the pane on screen — below 782 px it floats the
-  Files panel over the terminal instead (see "Below 782 px: one panel floats over the terminal" in
+- **Open panel** in a project's action menu (see "Opening a panel from a project's action menu" in
+  `docs/product/right-pane-panels.md`) gives the right pane to that project and opens the chosen panel (see "Opening
+  and closing panels" in `docs/product/right-pane-panels.md`), which puts the pane on screen — below 782 px it floats
+  the panel over the terminal instead (see "Below 782 px: one panel floats over the terminal" in
   `docs/product/right-pane-panels.md`); below 1168 px it also closes the sidebar's drawer. It selects, starts and
-  resumes nothing: the selected session's terminal stays, and the breadcrumb still names it.
-- **Browse files while a console session's report panel is shown** puts the project's Files panel in its place.
+  resumes no session: the selected session's terminal stays, and the breadcrumb still names it.
+- **Open panel while a console session's report panel is shown** puts the project's chosen panel in its place.
   Selecting the console session again brings the report panel back, on its newest page; anything typed into a page's
   form and not submitted is gone (see "Paging through the history" in `docs/product/report-panel.md`).
 - **Making another console the current one** — pressing its avatar on the rail, pressing inside the floating sidebar
   while it previews that console, or a console created from this window appearing — gives the right pane to the own
   owner of the session the switch shows, the one last selected in that console; with no session shown there is no
   right pane (see "What switching console shows" in `docs/product/console-switcher.md`). A press inside the floating
-  sidebar that gives the right pane to something itself, as Browse files does, keeps what it gave it. Only previewing a
+  sidebar that gives the right pane to something itself, as Open panel does, keeps what it gave it. Only previewing a
   console changes nothing here.
 - **Back and Forward** do not record the owner, which is not part of a place (see "What counts as a place" in
   `docs/product/navigation-history.md`). A move to another session gives the right pane to that session's own owner,

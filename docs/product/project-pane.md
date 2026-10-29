@@ -14,8 +14,8 @@ pane is and how it floats in is in `docs/product/window-layout.md`, how the File
 `docs/product/right-pane-panels.md`, and where `F6` lands in it in `docs/product/moving-focus-between-regions.md`.
 
 The Files panel itself is read-only: there is no editing, saving, creating, renaming or deleting of files, and
-nothing is staged, committed or checked out. A row can open its live file or folder in an external application
-(see "A row's actions" below).
+nothing is staged, committed or checked out. A row can open its live file or folder in an external application, and a
+folder's row can start a shell terminal in that folder (see "A row's actions" below).
 
 Failures to load the pane, list the project's directory or search its files are shown in the pane alone, each as an
 empty-state failure in place of what could not be loaded, with **Try again**, and a folder that could not be listed is
@@ -24,21 +24,18 @@ notes marked at their point" in `docs/product/error-alerts.md`).
 
 ## Opening a project's files
 
-- **Browse files**, in a project's action menu — on its row and by right-clicking it (see "Project rows" in
-  `docs/product/sidebar-project-rows.md`), in its focus mode's header, and on its heading in a console session's focus
-  mode (see `docs/product/focus-mode.md`) — shows that project's project pane in Files mode, selecting, starting and
-  resuming no session; it opens the Files panel (see "Opening and closing panels" in
-  `docs/product/right-pane-panels.md`). It is omitted while that project's Files panel is on screen, docked, floating in
-  or floating over the terminal, and offered otherwise: while the right pane belongs to another owner or while the Files
-  panel is closed. This applies in Git mode too; choose the Files tab to return to the tree while the panel is already
-  on screen.
+- **Files** under **Open panel** in a project's action menu shows that project's project pane in Files mode,
+  selecting, starting and resuming no session; it opens the Files panel. When it is offered — not while that project's
+  Files panel is on screen or floating in — is in "Opening a panel from a project's action menu" in
+  `docs/product/right-pane-panels.md`. This applies in Git mode too; choose the Files tab to return to the tree while
+  the panel is already on screen.
 - **Selecting a project session** gives the right pane to its project, whose Files panel shows while it is open.
 
 Moving between sessions of one project leaves its pane as it was: its mode, its expanded folders and selected file, and
 in Git its selected change — except that the Git mode's branch is set from the session moved to, which clears the
 selected change when the branch moves (see "Following the selected session" in
 `docs/product/project-pane-git-mode.md`). Another project's session, or
-another project's Browse files, shows that project's own pane.
+another project's Open panel, shows that project's own pane.
 
 When the right pane passes to another project while the Files panel is on screen, its header and content fade in
 where they stand
@@ -61,7 +58,7 @@ Refresh or Collapse all folders with the mouse leaves keyboard focus where it wa
 The **Files** and **Changes** tabs in the header switch directly between the project's directory and its Git review (see
 "The Changes view" in `docs/product/project-pane-git-mode.md`): Changes is the Git mode. A project's pane first opens in
 Files. The mode is remembered per project (see "What is remembered" below), so selecting a session shows a project in
-the mode it was last left in. Browse files explicitly chooses Files. Both tabs remain available while content is
+the mode it was last left in. Files under Open panel explicitly chooses Files. Both tabs remain available while content is
 loading, has failed, or has no repository.
 
 Only the mode on screen is kept up to date on its own: the Files tree as "Keeping the tree up to date" below says, a
@@ -319,25 +316,37 @@ afresh.
 
 Every file and folder row in Files ends with an icon button that opens a **menu of what can be done with that
 entry**, whether the folder is collapsed or expanded, filtered or not. Every file's row in the Git mode's change list
-has the same button, uncommitted and committed alike, flat or grouped by folder. **Right-clicking a row opens the same
-menu at the pointer** (Control-click also works in the desktop app).
+has the same button, uncommitted and committed alike, flat or grouped by folder, and so does every folder row the list
+groups its changes under. **Right-clicking a row opens the same menu at the pointer** (Control-click also works in the
+desktop app).
 
-- The menu's order is **Copy path**, then the **Open in** submenu, omitting unavailable actions. Open in holds
-  **File manager**, then **Default application**.
-- **File manager** opens the containing folder and selects that entry, including when the entry is a folder.
-  **Default application** opens the live file or folder with the operating system's default application.
-  Both act on the machine running the daemon, including when the client is a browser on another machine. Files uses
-  the project directory; a change, uncommitted or committed, uses the worktree the chosen branch is checked out in
-  and the project's directory within it. When the branch is checked out nowhere, a committed change uses the project's
-  registered directory, which can itself be in a linked worktree. They act on what is on disk now, including for a
-  staged change or a change under an individual commit; they do not open a historical version, and the current file
-  can differ from the change shown in the viewer. Neither says anything when it succeeds. A refusal or a failure raises
-  an error alert titled for the action — that it could not open in the file manager, or in the default application —
+- The menu's order is **Copy path**, then the **Open in** submenu, omitting unavailable actions. On a file's row Open
+  in holds **File manager**, then **Default application**; on a folder's row — a symbolic link listed as a folder
+  included — **File manager**, then **Terminal**.
+- **File manager** shows the entry in the file manager: a file, or a symbolic link whatever it leads to, is selected
+  in its containing folder, and a folder is opened. On macOS a folder that macOS treats as a package, such as an `.app`
+  or an `.xcodeproj`, which opening would launch, is selected in its containing folder instead, and so is a folder whose
+  name has an extension when Spotlight cannot tell its type. **Default application** opens the live file with the
+  operating system's default application. Both act on the machine running the daemon, including when the client is a
+  browser on another machine. Files uses the project directory; a change, uncommitted or committed, uses the worktree
+  the chosen branch is checked out in and the project's directory within it. When the branch is checked out nowhere, a
+  committed change uses the project's registered directory, which can itself be in a linked worktree. A folder row of
+  the change list uses the same place as the changes under it. They act on what is on disk now, including for a staged
+  change or a change under an individual commit; they do not open a historical version, and the current file can differ
+  from the change shown in the viewer. Neither says anything when it succeeds. A refusal or a failure raises an error
+  alert titled for the action — that it could not open in the file manager, or in the default application —
   with the reason. When the file or folder is no longer there, its remedy says it may have been moved, renamed or
   deleted, and that one moved or renamed can be found in the project's files and the action tried again from there; a
   project directory or worktree place that itself cannot be read gets the remedy of a folder a request is scoped to,
   worded by why it cannot be read (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The
   viewer's own header actions follow "The header" in `docs/product/file-viewer.md`.
+- **Terminal** starts a new shell terminal in that folder, in the same place File manager would use, opens the
+  project's Terminal panel — floating it over the terminal below 782 px — and shows the new terminal as its tab, which
+  takes keyboard focus (see "Starting a terminal" in `docs/product/terminal-panel.md`). It always starts another shell,
+  however many the project has. A symbolic link listed as a folder starts the shell in the folder it leads to. A start
+  the daemon refuses raises an error alert titled that the terminal could not be created, and adds no tab; when the
+  folder is no longer there or is no longer a folder, its remedy is the one File manager gives for an entry no longer
+  there, and other refusals get theirs as in "Starting a shell terminal" in `docs/product/shell-terminals.md`.
 - **Copy path** puts the file or folder's path on the clipboard, slash separated, as a path within the project. For a
   change it is the path the row names, which for a rename is its new path — the old one only where the new side is
   absent (a deletion) or outside the project (see "What is listed" in `docs/product/project-pane-git-change-list.md`).
@@ -346,8 +355,8 @@ menu at the pointer** (Control-click also works in the desktop app).
   the path was copied; where neither the clipboard nor the browser's selection copy allows it, an error alert says it
   could not be copied (see "Error alerts" in `docs/product/error-alerts.md`). The file viewer's header offers the same
   action, and File manager and Default application too (see "The header" in `docs/product/file-viewer.md`).
-- **The Git mode's grouping folders and commit rows have no button**, and neither does a row that says something about a
-  folder instead of listing an entry (loading, empty; see "Rows and the keyboard" above).
+- **The Git mode's commit rows have no button**, and neither does a row that says something about a folder instead of
+  listing an entry (loading, empty; see "Rows and the keyboard" above).
 - **The button shows while its row is hovered, holds keyboard focus, is the selected file or change, or has its menu
   open**, and always on a device whose primary input cannot hover — a phone, or a tablet's touch screen. It is
   reachable from the keyboard either way. In Files it fades and opens out as it appears, as the
@@ -378,12 +387,13 @@ symbolic-link target outside the project's directory in the worktree acted on is
 worktree that no longer exists is refused with `worktree_unavailable`. Revealing a symbolic link selects the
 link itself.
 
-On macOS the system opener handles Default application and asks Finder to reveal the entry for File manager. When the
-system opener fails because no application claims the file's type (an unregistered extension such as `.env.secret`), a
-regular file whose first 8 KiB contain no NUL byte and are valid UTF-8 is opened in the user's default text editor
-instead, as Finder does; any other file, or any other failure, is still reported. On Linux Default application uses
-`xdg-open`; File manager requires `gdbus` and a desktop file manager providing `org.freedesktop.FileManager1.ShowItems`.
-The Linux tools are looked up in the user's login-shell environment. On macOS, and for Linux File manager, the request
+On macOS the system opener handles Default application; for File manager it asks Finder to reveal the entry, or, for a
+folder that is opened, to open it in Finder. When the system opener fails because no application claims the file's type
+(an unregistered extension such as `.env.secret`), a regular file whose first 8 KiB contain no NUL byte and are valid
+UTF-8 is opened in the user's default text editor instead, as Finder does; any other file, or any other failure, is
+still reported. On Linux Default application uses `xdg-open`; File manager requires `gdbus` and a desktop file manager
+providing `org.freedesktop.FileManager1`, whose `ShowItems` selects an entry and `ShowFolders` opens a folder. The Linux
+tools are looked up in the user's login-shell environment. On macOS, and for Linux File manager, the request
 waits for the launcher to finish, at most **15 seconds** with at most **16 KiB** each of output and error, rather than
 waiting for the application window to close. Linux Default application succeeds once its launcher starts; a later
 launcher failure is not reported. Unsupported operating systems, unavailable launchers or desktop services, and launcher

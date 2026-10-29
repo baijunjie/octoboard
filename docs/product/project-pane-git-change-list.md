@@ -348,8 +348,11 @@ folders — with Group by commit on, the committed changes under the folders ins
   listed" above).
 - A chain of folders that each hold nothing but the next is one row, named by the whole chain — `tools/release`.
 - A folder's row has an expand arrow before its folder icon, open or closed with the folder, and its name. The arrow
-  points right while collapsed (left in a right-to-left language), and down while expanded. A change's row is as it is
-  in the flat list, less the folder its parent row now carries.
+  points right while collapsed (left in a right-to-left language), and down while expanded. At its end is the button
+  of its own actions, which keeps its room while hidden and only fades in, as on a change's row; its Copy path copies
+  the folder's path within the project, a chain's whole path, and its Open in offers File manager and Terminal (see
+  "A row's actions" in `docs/product/project-pane.md`). A change's row is as it is in the flat list, less the folder
+  its parent row now carries.
 - Folders start open, and which ones the user folded away is kept per project for as long as the window is open: a
   reload or a restart opens them all again. A fold survives switching to Files and back, and belongs to the section,
   or the commit, it was made in, so the same folder under another section or another commit stays open.

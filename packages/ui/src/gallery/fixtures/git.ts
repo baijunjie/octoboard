@@ -1,7 +1,7 @@
 import { type Ui } from "../interact";
 import type { Scenario } from "../scenario";
 import type { FixtureGit } from "./changeFixtures";
-import { consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { SAMPLE, consoleOf, gitStatusOf, projectOf, sessionOf, snapshotState } from "./builders";
 import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./restore";
 
 const GROUP = "Branch badges";
@@ -160,7 +160,7 @@ const switchFixture = {
 const openSwitch = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.switchBranch")), (ui: Ui) => ui.wait(300)];
 
 const hostState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { ahead: 2 })] });
-const openIn = (item: "common.terminal" | "common.fileManager") => [openProjectMenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("common.openIn")), (ui: Ui) => ui.wait(300), (ui: Ui) => ui.press(ui.t(item)), (ui: Ui) => ui.wait(300)];
+const openIn = (item: "sidebar.project.systemTerminal" | "common.fileManager") => [openProjectMenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("common.openIn")), (ui: Ui) => ui.wait(300), (ui: Ui) => ui.press(ui.t(item)), (ui: Ui) => ui.wait(300)];
 
 export const gitScenarios: Scenario[] = [
   ...[
@@ -173,7 +173,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: `Open a project in ${host}`,
-    description: `Open in groups File manager, Terminal and ${host}. The repository destination uses ${id === "custom-host" ? "the hostname and a globe icon" : `the ${host} brand icon`}.`,
+    description: `Open in groups File manager, System terminal and ${host}, the system terminal with the plain terminal icon. The repository destination uses ${id === "custom-host" ? "the hostname and a globe icon" : `the ${host} brand icon`}.`,
     state: snapshotState({
       consoles: [console_], projects: [{ ...restoreProject, remote_url: remote }],
       gitStatuses: [gitStatusOf(restoreProject.id)],
@@ -304,14 +304,32 @@ export const gitScenarios: Scenario[] = [
     steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300)],
   },
   {
+    id: "project-open-panel-menu",
+    group: "Projects",
+    category: "normal",
+    title: "A project's Open panel menu",
+    description: "Website's menu with no project panel on screen: below the separator, Open panel sits directly above Open in, and its submenu is open with Files and Terminal, each beside its own icon (the Terminal's is the framed one the Terminal toggle uses). There is no Report item and no Browse files.",
+    state: snapshotState({ consoles: [SAMPLE.console], projects: [SAMPLE.web, SAMPLE.api], sessions: SAMPLE.sessions }),
+    steps: [openProjectMenu(SAMPLE.web.name), (ui) => ui.press(ui.t("sidebar.project.openPanel"))],
+  },
+  {
+    id: "project-open-panel-terminal",
+    group: "Projects",
+    category: "normal",
+    title: "A project's Terminal panel opened from its menu",
+    description: "Open panel, then Terminal, chosen from Website's menu with no session open and no shell running: the project's Files and Terminal panels fill the right pane, and the Terminal has started one shell, at a prompt in the project's folder, ~/code/website. A project that already has shells only gets its panel opened, with no new tab.",
+    state: snapshotState({ consoles: [SAMPLE.console], projects: [SAMPLE.web, SAMPLE.api], sessions: SAMPLE.sessions }),
+    steps: [openProjectMenu(SAMPLE.web.name), (ui) => ui.press(ui.t("sidebar.project.openPanel")), (ui) => ui.wait(300), (ui) => ui.press(ui.t("panel.terminal.name")), (ui) => ui.wait(600)],
+  },
+  {
     id: "project-open-terminal-error",
     group: "Projects",
     category: "exceptional",
-    title: "Open in Terminal failed",
-    description: "A refused launch of the system terminal is reported in the error alert dialog, titled \"Could not open in Terminal\"; its body goes straight to what to do, with the system's reason only in the Error details disclosure, closed here.",
+    title: "Open in System terminal failed",
+    description: "A refused launch of the system terminal is reported in the error alert dialog, titled \"Could not open in the system terminal\"; its body goes straight to what to do, with the system's reason only in the Error details disclosure, closed here.",
     state: hostState,
     projectTerminalOpenError: { code: "terminal_unavailable", params: { detail: "The project directory does not exist: /Users/dev/code/search-api" }, message: "The system terminal could not be opened" },
-    steps: openIn("common.terminal"),
+    steps: openIn("sidebar.project.systemTerminal"),
   },
   {
     id: "project-open-file-manager-error",

@@ -1,6 +1,7 @@
 //! Opening project directories and live paths with the daemon host's system applications, or
-//! revealing an entry in its file manager. macOS open and Linux ShowItems return once accepted;
-//! Linux xdg-open is detached and reaped because it may live as long as the application it opens.
+//! revealing an entry in its file manager. macOS open and Linux ShowItems/ShowFolders return once
+//! accepted; Linux xdg-open is detached and reaped because it may live as long as the application
+//! it opens.
 
 use std::path::Path;
 use std::process::Command;
@@ -28,16 +29,35 @@ pub fn open(directory: &Path) -> Result<(), anyhow::Error> {
     start(std::env::consts::OS == "linux", command).map_err(|detail| unavailable(&detail))
 }
 
-/// Opens a resolved live path, either with its default application or selected in its folder.
+/// What the host is asked to do with a resolved live path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PathAction {
+    /// Open it with its default application, or a folder in the file manager.
+    Open,
+    /// Select it in its containing folder.
+    Select,
+    /// Show a folder's own contents.
+    ShowFolder,
+}
+
+/// Opens a resolved live path, either with its default application or revealed in the file
+/// manager: a folder is shown, anything else is selected in its folder.
 pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
-    let command = path_launch_for(std::env::consts::OS, path, reveal, |binary| {
+    let action = if !reveal {
+        PathAction::Open
+    } else if shows_as_folder(std::env::consts::OS, path) {
+        PathAction::ShowFolder
+    } else {
+        PathAction::Select
+    };
+    let command = path_launch_for(std::env::consts::OS, path, action, |binary| {
         let env = crate::env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
         crate::env_shell::resolve_binary(binary, &env)
             .map_err(|_| format!("{binary} was not found"))
     })
     .map_err(|detail| path_unavailable(reveal, &detail))?;
-    // ShowItems is a short D-Bus call whose failure must reach the client; xdg-open may instead
-    // live as long as the application it opens.
+    // ShowItems and ShowFolders are short D-Bus calls whose failure must reach the client;
+    // xdg-open may instead live as long as the application it opens.
     let detached = std::env::consts::OS == "linux" && !reveal;
     start(detached, command)
         .or_else(
@@ -47,6 +67,40 @@ pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
             },
         )
         .map_err(|detail| path_unavailable(reveal, &detail))
+}
+
+/// Whether revealing `path` shows the folder itself rather than selecting it in its parent. A
+/// symbolic link is judged by its own entry, so it stays selected whatever it points at. On
+/// macOS a folder Finder treats as a package (`Foo.app`, `Foo.xcodeproj`) is selected too:
+/// `open -a Finder` on one launches it instead of showing it.
+fn shows_as_folder(os: &str, path: &Path) -> bool {
+    if !std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) {
+        return false;
+    }
+    os != "macos" || !is_macos_package(path)
+}
+
+/// Whether macOS types the folder as a package. A package is always named with an extension, so a
+/// folder without one is skipped without asking. Spotlight's content type tree is what Finder
+/// itself goes by (a bundle `Info.plist` check misses `.xcodeproj` and the like); when it cannot
+/// be read the folder counts as a package, since selecting it is harmless where opening it may
+/// launch something.
+fn is_macos_package(path: &Path) -> bool {
+    if path.extension().is_none() {
+        return false;
+    }
+    let mut command = Command::new("/usr/bin/mdls");
+    command.args(["-raw", "-name", "kMDItemContentTypeTree", "--"]);
+    command.arg(path);
+    command.stdin(std::process::Stdio::null());
+    match run_bounded(&mut command, &OPEN_BOUNDS, &AtomicBool::new(false)) {
+        Ok(output) if output.status.success() => {
+            let tree = String::from_utf8_lossy(&output.stdout);
+            // A tree without `public.directory` (Spotlight's "(null)") says nothing about it.
+            tree.contains("com.apple.package") || !tree.contains("public.directory")
+        }
+        _ => true,
+    }
 }
 
 /// How many leading bytes of an unclaimed file are sniffed for text: judging a large file needs
@@ -117,20 +171,27 @@ fn path_unavailable(reveal: bool, detail: &str) -> anyhow::Error {
 fn path_launch_for(
     os: &str,
     path: &Path,
-    reveal: bool,
+    action: PathAction,
     resolve: impl FnOnce(&str) -> Result<String, String>,
 ) -> Result<Command, String> {
     let mut command = match os {
         "macos" => {
             let mut command = Command::new("/usr/bin/open");
-            if reveal {
-                command.arg("-R");
+            match action {
+                PathAction::Open => {}
+                PathAction::Select => {
+                    command.arg("-R");
+                }
+                // Without -a, open hands a folder to the application that claims it.
+                PathAction::ShowFolder => {
+                    command.args(["-a", "Finder"]);
+                }
             }
             command.arg("--");
             command.arg(path);
             command
         }
-        "linux" if reveal => {
+        "linux" if action != PathAction::Open => {
             let mut command = Command::new(resolve("gdbus")?);
             command.args([
                 "call",
@@ -140,8 +201,12 @@ fn path_launch_for(
                 "--object-path",
                 "/org/freedesktop/FileManager1",
                 "--method",
-                "org.freedesktop.FileManager1.ShowItems",
             ]);
+            command.arg(if action == PathAction::ShowFolder {
+                "org.freedesktop.FileManager1.ShowFolders"
+            } else {
+                "org.freedesktop.FileManager1.ShowItems"
+            });
             command.arg(format!("['{}']", file_uri(path)));
             command.arg("");
             command
@@ -294,38 +359,101 @@ mod tests {
     }
 
     #[test]
-    fn path_actions_keep_paths_literal_and_reveal_selects_the_item() {
+    fn path_actions_keep_paths_literal_per_action() {
         let path = Path::new("/work/a '$(file)%é");
-        for reveal in [false, true] {
-            let command = path_launch_for("macos", path, reveal, |_| panic!("no lookup")).unwrap();
+        for action in [PathAction::Open, PathAction::Select, PathAction::ShowFolder] {
+            let command = path_launch_for("macos", path, action, |_| panic!("no lookup")).unwrap();
             assert_eq!(command.get_program(), "/usr/bin/open");
-            let expected = if reveal {
-                vec![
+            let expected = match action {
+                PathAction::Open => vec![std::ffi::OsStr::new("--"), path.as_os_str()],
+                PathAction::Select => vec![
                     std::ffi::OsStr::new("-R"),
                     std::ffi::OsStr::new("--"),
                     path.as_os_str(),
-                ]
-            } else {
-                vec![std::ffi::OsStr::new("--"), path.as_os_str()]
+                ],
+                PathAction::ShowFolder => vec![
+                    std::ffi::OsStr::new("-a"),
+                    std::ffi::OsStr::new("Finder"),
+                    std::ffi::OsStr::new("--"),
+                    path.as_os_str(),
+                ],
             };
             assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
         }
-        let command = path_launch_for("linux", path, true, |binary| {
-            assert_eq!(binary, "gdbus");
-            Ok("/usr/bin/gdbus".into())
-        })
-        .unwrap();
-        let args = command.get_args().collect::<Vec<_>>();
-        assert_eq!(args[7], "org.freedesktop.FileManager1.ShowItems");
-        assert_eq!(args[8], "['file:///work/a%20%27%24%28file%29%25%C3%A9']");
-        assert_eq!(args[9], "");
-        let command = path_launch_for("linux", path, false, |binary| {
+        for (action, method) in [
+            (PathAction::Select, "org.freedesktop.FileManager1.ShowItems"),
+            (
+                PathAction::ShowFolder,
+                "org.freedesktop.FileManager1.ShowFolders",
+            ),
+        ] {
+            let command = path_launch_for("linux", path, action, |binary| {
+                assert_eq!(binary, "gdbus");
+                Ok("/usr/bin/gdbus".into())
+            })
+            .unwrap();
+            let args = command.get_args().collect::<Vec<_>>();
+            assert_eq!(args[7], method);
+            assert_eq!(args[8], "['file:///work/a%20%27%24%28file%29%25%C3%A9']");
+            assert_eq!(args[9], "");
+        }
+        let command = path_launch_for("linux", path, PathAction::Open, |binary| {
             assert_eq!(binary, "xdg-open");
             Ok("/usr/bin/xdg-open".into())
         })
         .unwrap();
         assert_eq!(command.get_args().collect::<Vec<_>>(), [path.as_os_str()]);
-        assert!(path_launch_for("linux", path, true, |_| Err("missing gdbus".into())).is_err());
+        for action in [PathAction::Select, PathAction::ShowFolder] {
+            assert!(
+                path_launch_for("linux", path, action, |_| Err("missing gdbus".into())).is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn revealing_shows_a_folder_but_selects_files_and_links() {
+        let dir = ScratchDir::new("reveal-kind");
+        let folder = dir.join("folder");
+        let file = dir.join("file");
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(&file, "content").unwrap();
+        let to_folder = dir.join("to-folder");
+        std::os::unix::fs::symlink(&folder, &to_folder).unwrap();
+        for os in ["linux", "macos"] {
+            assert!(shows_as_folder(os, &folder), "{os}");
+            assert!(!shows_as_folder(os, &file), "{os}");
+            assert!(!shows_as_folder(os, &to_folder), "{os}");
+            assert!(!shows_as_folder(os, &dir.join("missing")), "{os}");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_selects_a_package_instead_of_launching_it() {
+        let dir = ScratchDir::new("reveal-package");
+        let package = dir.join("Test.app");
+        std::fs::create_dir_all(package.join("Contents")).unwrap();
+        std::fs::write(
+            package.join("Contents/Info.plist"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict><key>CFBundlePackageType</key><string>APPL</string></dict></plist>"#,
+        )
+        .unwrap();
+        let project = dir.join("Foo.xcodeproj");
+        let dotted = dir.join("v1.2");
+        std::fs::create_dir(&project).unwrap();
+        std::fs::create_dir(&dotted).unwrap();
+        assert!(!shows_as_folder("macos", &package));
+        assert!(!shows_as_folder("macos", &project));
+        // Where Spotlight does not type the folder (indexing off) it is selected, by design.
+        let typed = Command::new("/usr/bin/mdls")
+            .args(["-raw", "-name", "kMDItemContentTypeTree", "--"])
+            .arg(&dotted)
+            .output()
+            .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains("public.directory"));
+        if typed {
+            assert!(shows_as_folder("macos", &dotted));
+        }
     }
 
     #[test]

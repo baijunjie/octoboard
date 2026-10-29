@@ -17,8 +17,12 @@ terminals.
 - **opening the Terminal panel with its toggle** in the top bar while the project has no terminal, a floating Terminal
   card docked by pressing its toggle included (see "The panel toggles in the top bar" in
   `docs/product/right-pane-panels.md`);
+- **Terminal under Open panel** in a project's action menu while the project has no terminal, which opens the panel as
+  its toggle does (see "Opening a panel from a project's action menu" in `docs/product/right-pane-panels.md`);
 - **New terminal**, the "+" button in the panel's header;
-- **New terminal** in the panel's empty state.
+- **New terminal** in the panel's empty state;
+- **Terminal under Open in on a folder's row** in the project pane (see "A row's actions" in
+  `docs/product/project-pane.md`), which opens the project's Terminal panel too, as Open panel would.
 
 Nothing else starts one. While the project has no terminal and none is being started, the panel shows the empty state
 "No terminals", with a line saying a terminal runs the user's own shell for the project and a **New terminal** button.
@@ -28,19 +32,23 @@ open, and stays maximized if it was (see "Maximizing the Terminal panel" in `doc
 
 **While the first terminal of the project is being started**, the panel shows a spinner with "Starting terminal…" in
 place of the empty state, and assistive technology is told so. Opening the panel or pressing New terminal meanwhile
-joins that start rather than starting a second shell. Once the project has a terminal, every press of New terminal
-starts another; a project may have any number.
+joins that start rather than starting a second shell; a folder row's Terminal never joins one, and always starts a
+shell of its own. Once the project has a terminal, every press of New terminal starts another; a project may have any
+number.
 
-**A new terminal becomes the shown tab.** Started from the panel's own New terminal buttons, it also takes keyboard
-focus; started by the toggle, focus stays where it was, as with any top-bar toggle. A start the daemon refuses raises
-an error alert (see `docs/product/error-alerts.md`) and adds no tab.
+**A new terminal becomes the shown tab.** Started from the panel's own New terminal buttons, or from a folder's row, it
+also takes keyboard focus once the panel shows it; started by the toggle or by Open panel, it takes no focus of its
+own, and focus is wherever opening the panel leaves it (see "The panel toggles in the top bar" in
+`docs/product/right-pane-panels.md`). A start the daemon refuses raises an error alert (see
+`docs/product/error-alerts.md`) and adds no tab.
 
 **Where a new shell starts**: in the project's place in the worktree whose uncommitted changes the project's Files
 panel shows in its Git mode (see "The repository and its worktrees" in `docs/product/project-pane-git-mode.md`), while
 that panel is in its Git mode; otherwise, and when no worktree has the Git mode's branch checked out, in the project's
 own directory. What counts is how this window's Files panel last showed the project: it holds after the Files panel is
-closed, until the window is reloaded. What refuses a start, and the shell's directory afterwards, is in "Starting a
-shell terminal" in `docs/product/shell-terminals.md`.
+closed, until the window is reloaded. A folder row's Terminal starts the shell in that folder instead, in the place the
+row's actions use (see "A row's actions" in `docs/product/project-pane.md`). What refuses a start, and the shell's
+directory afterwards, is in "Starting a shell terminal" in `docs/product/shell-terminals.md`.
 
 ## Tabs
 

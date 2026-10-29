@@ -30,6 +30,8 @@ vi.mock("./browser/LazyProjectBrowser", () => ({
     return <div data-browser={project.id} data-mode={state.mode} />;
   },
 }));
+// The terminal view needs a real browser; a project's shells are only listed as tabs here.
+vi.mock("./terminal/ShellTerminalView", () => ({ ShellTerminalView: () => null }));
 vi.mock("./terminal/TerminalController", () => ({
   TerminalController: class {
     mount() {}
@@ -92,21 +94,27 @@ async function press(label: string) {
 
 const menuHas = (label: string) => Array.from(document.querySelectorAll("[role=menuitem]")).some((item) => controlName(item) === label);
 const openProjectMenu = (name: string) => press(`Actions for project ${isolate(name)}`);
+const openPanel = async (label: string) => {
+  await press("Open panel");
+  await press(label);
+};
 
 it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", async (narrow) => {
   const { container, project } = mountApp(narrow);
   if (narrow) await press("Show sessions");
   await openProjectMenu(project.name);
-  await press("Browse files");
+  await openPanel("Files");
   expect(container.querySelector(`[data-browser="${project.id}"]`)?.getAttribute("data-mode")).toBe("files");
   expect(container.querySelector('[data-region="topbar"] [aria-label="Hide files panel"]')).not.toBeNull();
   if (!narrow) {
     await openProjectMenu(project.name);
-    expect(menuHas("Browse files")).toBe(false);
+    await press("Open panel");
+    expect(menuHas("Files")).toBe(false);
     await press("Open in");
     await press("File manager");
     await openProjectMenu("API");
-    expect(menuHas("Browse files")).toBe(true);
+    await press("Open panel");
+    expect(menuHas("Files")).toBe(true);
     await press("Open in");
     await press("File manager");
   }
@@ -114,8 +122,9 @@ it.each([false, true])("reopens a hidden project's Files pane when narrow=%s", a
   if (narrow) await press("Show sessions");
   await act(async () => setProjectBrowserMode(project.id, "git"));
   await openProjectMenu(project.name);
-  expect(menuHas("Browse files")).toBe(true);
-  await press("Browse files");
+  await press("Open panel");
+  expect(menuHas("Files")).toBe(true);
+  await press("Files");
   expect(container.querySelector(`[data-browser="${project.id}"]`)?.getAttribute("data-mode")).toBe("files");
   expect(container.querySelector('[data-region="topbar"] [aria-label="Hide files panel"]')).not.toBeNull();
 });
@@ -127,7 +136,7 @@ it.each([false, true])("has no toggle for the pane itself, only a panel's, which
   const { project } = mountApp(narrow);
   if (narrow) await press("Show sessions");
   await openProjectMenu(project.name);
-  await press("Browse files");
+  await openPanel("Files");
   expect(document.querySelector('[data-region="topbar"] [aria-label$="project pane"]')).toBeNull();
   expect(toggle("Hide files panel")!.getAttribute("aria-expanded")).toBe("true");
   // Not the fixed float of a hover: docked as a row sibling, or, in a window too narrow to dock it,
@@ -151,7 +160,7 @@ it("floats the hidden pane in while the pointer rests on a toggle, and docks it 
   });
   const { container, project } = mountApp();
   await openProjectMenu(project.name);
-  await press("Browse files");
+  await openPanel("Files");
   await press("Hide files panel");
   // It goes at once, with no ease out.
   expect(container.querySelector("[data-browser]")).toBeNull();
@@ -172,7 +181,7 @@ it("floats the hidden pane in while the pointer rests on a toggle, and docks it 
 it("hands focus on the pane's width handle to the terminal when the pane goes", async () => {
   const { project } = mountApp();
   await openProjectMenu(project.name);
-  await press("Browse files");
+  await openPanel("Files");
   const handle = document.querySelector<HTMLElement>("[role=separator][data-pane=aside]")!;
   handle.focus();
   expect(document.activeElement).toBe(handle);
@@ -189,6 +198,36 @@ it("sends the project directory request and reports a failure through the shared
   await press("File manager");
   expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_directory", project: project.id });
   expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "The system file manager could not be opened." }), undefined, "Could not open in the file manager");
+});
+
+it.each([false, true])("opens the project's Terminal panel from Open panel, starting a shell only while it has none; narrow=%s", async (narrow) => {
+  const { daemon, project } = mountApp(narrow);
+  if (narrow) await press("Show sessions");
+  await openProjectMenu(project.name);
+  await openPanel("Terminal");
+  const creates = () => vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === "create_shell_terminal");
+  expect(creates()).toEqual([[{ type: "create_shell_terminal", project: project.id }]]);
+  expect(toggle("Hide terminal panel")).not.toBeNull();
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "open_project_terminal" }));
+});
+
+it("starts no shell from Open panel when the project already has one", async () => {
+  const { daemon, project } = mountApp();
+  await act(async () => daemon.store.setState({ shellTerminals: new Map([["t1", { id: "t1", project_id: project.id, worktree: null, cwd: "/p", title: "zsh", renamed: false, state: "running", busy: false, created_at: 1 }]]) }));
+  await openProjectMenu(project.name);
+  await openPanel("Terminal");
+  expect(vi.mocked(daemon.request).mock.calls.filter(([body]) => body.type === "create_shell_terminal")).toEqual([]);
+  expect(toggle("Hide terminal panel")).not.toBeNull();
+});
+
+it("sends the system terminal request and reports a failure through the shared error channel", async () => {
+  const { daemon, project } = mountApp();
+  vi.mocked(daemon.request).mockRejectedValueOnce(new Error("The system terminal could not be opened."));
+  await openProjectMenu(project.name);
+  await press("Open in");
+  await press("System terminal");
+  expect(daemon.request).toHaveBeenCalledWith({ type: "open_project_terminal", project: project.id });
+  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ message: "The system terminal could not be opened." }), undefined, "Could not open in the system terminal");
 });
 
 it("copies the project name unchanged and reports success", async () => {

@@ -80,8 +80,8 @@ floats over the terminal" below.
   Terminal.
 - **Close panel** takes a panel out of the stack. Its height goes to the panels that remain, in proportion to theirs.
 - **Closing the last panel hides the right pane**, at once; the terminal takes its width back.
-- **Browse files** opens the Files panel in the project's stack, and so puts the pane on screen (see "Opening a
-  project's files" in `docs/product/project-pane.md`); a maximized Terminal panel stays maximized.
+- **Open panel** in a project's action menu opens the chosen panel in the project's stack, and so puts the pane on
+  screen; a maximized Terminal panel stays maximized (see "Opening a panel from a project's action menu" below).
 - A panel that opens takes an even share of the stack's height — a third of it when it makes three — taken from the
   others in proportion to their heights.
 
@@ -123,6 +123,27 @@ Below 782 px pressing a toggle floats its panel over the terminal, or closes it 
 Pressing a panel toggle leaves keyboard focus where it was, as every control in the top bar does (see "Pressing the
 chrome's controls" in `docs/product/window-layout.md`), except that below 782 px a panel it opens takes focus.
 
+## Opening a panel from a project's action menu
+
+**Open panel** is a submenu of a project's action menu — on its row and by right-clicking it (see "Project rows" in
+`docs/product/sidebar-project-rows.md`), in its focus mode's header, and on its heading in a console session's focus
+mode (see `docs/product/focus-mode.md`). It holds **Files**, then **Terminal**, each drawn with its toggle's icon; the
+Report panel is not offered there. The submenu's own icon, a window with a panel at its side, is mirrored under a
+right-to-left language (see "What is mirrored" in `docs/product/right-to-left-layout.md`).
+
+- **An entry is left out while its panel of that project is on screen** (see "The panel toggles in the top bar" above)
+  **or floating in** on hover (see "Floating a panel in" below), and offered otherwise — in particular whenever the right
+  pane belongs to another owner, or that panel is closed. With both entries left out, the submenu is left out.
+- **Choosing an entry** gives the right pane to the project (see "What the right pane shows" in
+  `docs/product/window-layout.md`) and opens that panel in the project's stack, as pressing its toggle while the panel
+  is not open does: docking the pane at once if no panel was open, with a maximized Terminal panel staying maximized;
+  below 782 px it floats the panel over the terminal instead (see "Below 782 px: one panel floats over the terminal"
+  below). It selects, starts and resumes no session.
+- **Files** shows the Files panel in its Files mode (see "Opening a project's files" in
+  `docs/product/project-pane.md`).
+- **Terminal** starts a shell only when the project has none, as the toggle does (see "Starting a terminal" in
+  `docs/product/terminal-panel.md`).
+
 ## Floating a panel in
 
 While the right pane has an owner and none of its panels is open, **resting the mouse on a panel toggle floats that
@@ -149,8 +170,9 @@ with the Terminal panel side by side — cannot dock the right pane (see "Pane w
 `docs/product/window-layout.md`). There the right pane's open panel **floats over the terminal**, the agent
 terminal taking the content panel's whole width under it. The threshold is the same whichever panels are open.
 
-- **One panel at a time.** Opening a panel — its toggle, Browse files (see "Opening a project's files" in
-  `docs/product/project-pane.md`) — closes the one floating before it. The toggle of the floating panel is drawn
+- **One panel at a time.** Opening a panel — its toggle, Open panel in a project's action menu (see "Opening a panel
+  from a project's action menu" above), a folder row's Terminal (see "Starting a terminal" in
+  `docs/product/terminal-panel.md`) — closes the one floating before it. The toggle of the floating panel is drawn
   pressed and reads "Hide …"; every other toggle reads "Show …". Pressing the floating panel's toggle closes it.
   Opening the Terminal panel on a project with no shell starts one, as it does docked (see "Starting a terminal" in
   `docs/product/terminal-panel.md`).
@@ -229,7 +251,8 @@ stands in its place, the archive view included — and nothing else:
   pane's width handle stays with the column.
 - **With no other panel open, the column folds away**: the terminal's area, and the maximized card over it, reach the
   window's end edge, and the pane's width handle goes with the column. Opening or closing another panel meanwhile — its
-  toggle, Browse files — brings the column back or folds it again, and leaves the Terminal panel maximized.
+  toggle, Open panel in a project's action menu — brings the column back or folds it again, and leaves the Terminal
+  panel maximized.
 - **Floating another panel in**: with the column folded away, resting the mouse on another panel's toggle floats its
   card in over the maximized Terminal panel, as in "Floating a panel in" above; pressing the toggle docks it in the
   column beside the maximized card.

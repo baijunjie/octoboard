@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderOpen, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
+import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { handoffBlock, switchEntries, switchEntryBlock, type QuotaReadings } from "../accountChoices";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanel, ActionMenuSubmenu } from "../components/ActionMenu";
@@ -11,12 +11,18 @@ import { AgentIcon } from "../components/AgentIcon";
 import { PathText } from "../components/PathText";
 import type { Translate } from "../i18n/catalog";
 import type { Account, AccountSharing, Agent, Console, Project, Session, Settings } from "../protocol";
+import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionChoiceTitle, sessionDisplayTitle } from "../sessionLabel";
 import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
 import { archivePreviewSessions, isUnusedSession } from "./order";
 import { SessionColourSwatches } from "./SessionColourSwatches";
-import type { ArchiveScope, SidebarHandlers } from "./types";
+import type { ArchiveScope, ProjectPanelKind, SidebarHandlers } from "./types";
+
+/** The project panels the Open panel submenu offers, as the top bar's toggles draw them. The Report
+ * panel is not among them: whether it exists depends on the selected session's pages, which the
+ * menu cannot tell for a project that does not yet own the pane. */
+const PROJECT_PANELS: readonly ProjectPanelKind[] = ["files", "terminal"];
 
 /** "View archive": the archive's preview (`archivePreviewSessions`), each item selecting its session
  * and showing its archive time, then "View all", which opens the full archive. */
@@ -85,7 +91,7 @@ export type MenuPlacement = "list" | "focused" | "nested";
 /** The project's actions, in the project row and in a focus mode (the project's own header, and a
  * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
  * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
- * files, archive), opening it in outside tools, managing the project itself, and removing it.
+ * archive), opening its panels (Open panel), opening it in outside tools (Open in), managing the project itself, and removing it.
  * "View archive" previews `archived` and its "View all" opens `archiveScope`. By default both are the
  * project's archive; a console session's focus mode passes the project's share of that console
  * session's archive and opens the whole of it.
@@ -104,21 +110,24 @@ export function projectMenu(
   }: { placement?: MenuPlacement; gitRepository?: boolean; archiveScope?: ArchiveScope } = {},
 ): ActionMenuEntry[] {
   const repository = repositoryLink(project.remote_url);
+  const onScreen = handlers.visibleProjectPanels?.project === project.id ? handlers.visibleProjectPanels.kinds : [];
+  const panels = PROJECT_PANELS.filter((kind) => !onScreen.includes(kind));
   return [
     ...(placement === "focused" ? [] : [pinItem(t, project.pinned, () => handlers.onSetPinned({ project }, !project.pinned))]),
     ...(placement === "list" ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, onClick: () => handlers.onFocus({ project }) }] : []),
-    ...(handlers.visibleBrowserProjectId === project.id
-      ? []
-      : [{ label: t("sidebar.project.browse"), icon: FolderOpen, onClick: () => handlers.onBrowseProject(project) }]),
     ...(placement === "focused"
       ? []
       : [archiveSubmenu(t, t("sidebar.project.archive"), archived, handlers.onSelectSession, () => handlers.onOpenArchive(archiveScope))]),
     "separator",
+    ...(panels.length > 0 ? [{
+      label: t("sidebar.project.openPanel"), icon: PanelRight, iconClassName: "rtl:-scale-x-100",
+      items: panels.map((kind) => ({ label: t(PANEL_META[kind].name), icon: PANEL_META[kind].icon, onClick: () => handlers.onOpenProjectPanel(project, kind) })),
+    }] : []),
     {
       label: t("common.openIn"), icon: SquareArrowOutUpRight,
       items: [
         { label: t("common.fileManager"), icon: Folder, onClick: () => handlers.onOpenProjectDirectory(project) },
-        { label: t("common.terminal"), icon: Terminal, onClick: () => handlers.onOpenProjectTerminal(project) },
+        { label: t("sidebar.project.systemTerminal"), icon: Terminal, onClick: () => handlers.onOpenSystemTerminal(project) },
         ...(repository && handlers.onOpenRepository ? [{
           label: repository.host, icon: <RepositoryIcon brand={repository.brand} />, end: <ExternalLinkIcon />,
           onClick: () => handlers.onOpenRepository!(repository.url),

@@ -1925,7 +1925,8 @@ plain announcement isolates the branch name where it enters the sentence.
 
 **An icon mirrors only when its meaning is a direction.** Back and Forward, a disclosure or submenu chevron, a pane
 toggle, a glyph whose rows hang off the leading side (the fold control, the list and folder-tree layout toggles):
-`rtl:-scale-x-100` on the icon. A glyph standing for a physical thing — pause, a rotation, a camera — and a checkmark
+`rtl:-scale-x-100` on the icon; an `ActionMenu` entry's icon, a submenu's included, takes it through the entry's
+`iconClassName`. A glyph standing for a physical thing — pause, a rotation, a camera — and a checkmark
 keep their shape. A component library's own indicator is worth checking rather than trusting: HeroUI's submenu
 indicator is a fixed right-pointing chevron, while react-aria opens the submenu towards the inline start, so
 `ActionMenu` flips it itself.

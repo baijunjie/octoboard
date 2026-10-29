@@ -13,8 +13,16 @@ const FIXTURE_ORIGIN = "ws://gallery.invalid/";
 
 export type TerminalBehaviour = "output" | "mouse" | "fullscreen" | "paths" | "shell" | "exited" | "refuse";
 
-export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string): string {
-  return `${FIXTURE_ORIGIN}${behaviour}/${session}`;
+/** The URL of a fixture socket. A `shell` given the folder it was started in (`cwd`) draws a fresh prompt there, as
+ * a shell started a moment ago does, instead of the sample of one that has been used. */
+export function terminalFixtureUrl(behaviour: TerminalBehaviour, session: string, cwd?: string): string {
+  return `${FIXTURE_ORIGIN}${behaviour}/${session}${cwd === undefined ? "" : `?cwd=${encodeURIComponent(cwd)}`}`;
+}
+
+/** The folder a fixture URL names a shell to have been started in, if it names one. */
+function shellFolder(url: string): string | undefined {
+  const query = url.split("?")[1];
+  return query === undefined ? undefined : new URLSearchParams(query).get("cwd") ?? undefined;
 }
 
 const ESC = "\x1b[";
@@ -245,6 +253,13 @@ const shellSample = () => [
   `${ESC}32m~/code/website${ESC}0m ${ESC}1m%${ESC}0m `,
 ].join("\r\n");
 
+/** The home directory the sample shells' prompts abbreviate to `~`, as the gallery's mock daemon has it. */
+const SHELL_HOME = "/Users/dev";
+
+/** A shell started a moment ago in `folder`: its prompt and nothing else. */
+const freshShell = (folder: string) =>
+  `${ESC}32m${folder === SHELL_HOME || folder.startsWith(`${SHELL_HOME}/`) ? `~${folder.slice(SHELL_HOME.length)}` : folder}${ESC}0m ${ESC}1m%${ESC}0m `;
+
 /** The last screen of a shell that ended on its own: what it printed, up to the command that
  * ended it. The daemon adds nothing of its own to a shell's output. */
 const exitedSample = () => [
@@ -281,6 +296,8 @@ class FakeTerminalSocket extends EventTarget {
    * Other text is written once and left to the terminal's own resize behavior. */
   private sized = false;
   private readonly behaviour: TerminalBehaviour;
+  /** The folder a shell was started in, which a fresh shell's prompt names. */
+  private readonly folder?: string;
   /** The supplied script, once it has been asked for, and the ticks it has had. */
   private script?: TerminalScript;
   private step = 0;
@@ -290,6 +307,7 @@ class FakeTerminalSocket extends EventTarget {
     super();
     const behaviour = url.slice(FIXTURE_ORIGIN.length).split("/")[0] as TerminalBehaviour;
     this.behaviour = behaviour;
+    this.folder = shellFolder(url);
     // A refusal takes a moment, as a real one does: closing in the same frame as the attempt would
     // batch the "connecting" and the failure into one render and the pane would never see either.
     setTimeout(() => {
@@ -318,7 +336,7 @@ class FakeTerminalSocket extends EventTarget {
     this.sized = this.script !== undefined || (supplied === undefined && (this.behaviour === "output" || this.behaviour === "mouse"));
     const text = typeof supplied === "string"
       ? supplied
-      : this.script?.screen(this.cols, this.step) ?? SAMPLES[this.behaviour](this.cols);
+      : this.script?.screen(this.cols, this.step) ?? (this.behaviour === "shell" && this.folder !== undefined ? freshShell(this.folder) : SAMPLES[this.behaviour](this.cols));
     this.write(clear + text);
   }
 
@@ -378,7 +396,7 @@ export function installFakeTerminal(options: FakeTerminalOptions = {}): void {
     construct(target, args: [string | URL, (string | string[])?]) {
       const url = String(args[0]);
       if (url.startsWith(FIXTURE_ORIGIN)) {
-        const session = url.slice(FIXTURE_ORIGIN.length).split("/").slice(1).join("/");
+        const session = url.slice(FIXTURE_ORIGIN.length).split("?")[0]!.split("/").slice(1).join("/");
         const { output } = options;
         return new FakeTerminalSocket(url, output && (() => output(session)));
       }

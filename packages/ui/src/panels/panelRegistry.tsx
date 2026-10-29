@@ -1,4 +1,4 @@
-import { FileText, FolderClosed, SquareTerminal, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import type React from "react";
 
 import { LazyProjectBrowser } from "../browser/LazyProjectBrowser";
@@ -10,6 +10,7 @@ import type { PanePeek } from "../layout/usePaneToggles";
 import type { Project } from "../protocol";
 import { ReportPanel } from "../report/ReportPanel";
 import { ShellTerminalPanel } from "../terminal/ShellTerminalPanel";
+import { PANEL_META } from "./panelMeta";
 import type { PanelKind } from "./stackState";
 
 /** What a panel's content is given: who owns the pane, which the stack follows the way the file
@@ -84,23 +85,20 @@ function ReportContent({ reportSessionId, peek, frameKeys }: PanelContentProps):
  * `PANEL_KINDS`. */
 export const PANEL_ENTRIES: Record<PanelKind, PanelEntry> = {
   files: {
-    icon: FolderClosed,
-    name: "panel.files.name",
+    ...PANEL_META.files,
     toggle: { show: "titleBar.files.show", hide: "titleBar.files.hide" },
     label: (t, project) => t("browser.label", { project: isolate(project?.name ?? "") }),
     Content: FilesContent,
   },
   terminal: {
-    icon: SquareTerminal,
-    name: "panel.terminal.name",
+    ...PANEL_META.terminal,
     toggle: { show: "titleBar.terminal.show", hide: "titleBar.terminal.hide" },
     label: (t, project) => t("panel.terminal.label", { project: isolate(project?.name ?? "") }),
     maximizable: true,
     Content: TerminalContent,
   },
   report: {
-    icon: FileText,
-    name: "panel.report.name",
+    ...PANEL_META.report,
     toggle: { show: "titleBar.report.show", hide: "titleBar.report.hide" },
     label: (t) => t("panel.report.name"),
     Content: ReportContent,

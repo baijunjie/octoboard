@@ -34,9 +34,9 @@ the right pane share the content panel (their widths are in "Pane widths below 1
 - It is opened and closed with the same toggle that hides and shows the sidebar at 1168 px and wider, at the top
   bar's start (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`), and below 782 px
   with a touch swipe too (see `docs/product/touch-swipes.md`).
-- It closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`; Browse files and a right
-  pane floating in close it too (see "What the right pane shows" in `docs/product/window-layout.md`), and so does a
-  panel opened below 782 px. Opening the drawer closes a panel floating over the terminal (see "Below 782 px: one panel
+- It closes on its toggle, on a press anywhere in the dimmed area beside it, or on `Escape`; Open panel in a project's
+  action menu and a right pane floating in close it too (see "What the right pane shows" in
+  `docs/product/window-layout.md`), and so does a panel opened below 782 px. Opening the drawer closes a panel floating over the terminal (see "Below 782 px: one panel
   floats over the terminal" in `docs/product/right-pane-panels.md`).
   While it is open `Escape` closes it and **does not reach the running agent**; in a field in the drawer that holds
   text it only clears the field, and the next one closes the drawer.

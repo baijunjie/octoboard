@@ -1099,11 +1099,16 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::CreateShellTerminal { project, worktree } => {
+        RequestBody::CreateShellTerminal {
+            project,
+            worktree,
+            path,
+        } => {
             let shell_terminal = crate::shell_terminal::create(
                 state,
                 project,
                 worktree,
+                path,
                 crate::browse::git::GitEnv::from_shell,
             )
             .await?;

@@ -1,8 +1,8 @@
 # Shell terminals
 
 A shell terminal is a plain shell the daemon runs for a project, beside the project's agent sessions: the user's own
-login shell on a terminal of its own, with no agent behind it. It is not the system terminal that "Open in" opens
-(see `docs/product/project-terminal.md`), and it is not a session.
+login shell on a terminal of its own, with no agent behind it. It is not the system terminal that System terminal
+under "Open in" opens (see `docs/product/project-terminal.md`), and it is not a session.
 
 Octoboard's window shows a project's shell terminals as tabs in the Terminal panel (see
 `docs/product/terminal-panel.md`). They exist in the daemon, and any client of the daemon can start one, type into it,
@@ -24,7 +24,12 @@ A project may have any number of shell terminals. Each belongs to one project; a
 ## Starting a shell terminal
 
 **Where it starts.** A shell terminal starts in the project's directory, or, when a worktree of the project's
-repository is chosen, in the project's place in that worktree. The start is refused when the project does not exist
+repository is chosen, in the project's place in that worktree. When a folder below that place is named as well, it
+starts in that folder instead: the folder is named and checked as the paths File manager and Default application act on
+are (see "A row's actions" in `docs/product/project-pane.md`), so one that does not exist is refused with
+`file_not_found` and one that leads outside that place with `outside_scope`; one that is there but is not a folder is
+refused with `path_not_a_directory`. A symbolic link that leads to a folder inside that place is followed, and the
+shell starts in the folder it led to when the start was made. The start is refused when the project does not exist
 (including one removed while the shell was starting, whose terminal is then ended), when the chosen worktree is not
 one of the project's repository's, when the project has no place in that worktree, when the path to that place goes
 through a symbolic link anywhere below the worktree's root, when what is at the directory's path is not a folder, and

@@ -4,7 +4,7 @@
 import type { MessageParams, SourceUnavailableCause } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, snapshotState } from "./builders";
+import { SAMPLE, shellTerminalOf, snapshotState } from "./builders";
 import { IMAGES } from "./viewerImages";
 
 const GROUP = "Project pane: files";
@@ -101,6 +101,8 @@ const unreadableDir = (path: string): FixtureFile => ({
 
 const { console: console_, web, api, sessions } = SAMPLE;
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
+/** Website with a shell already running, so a terminal a row starts is told from it by its tab. */
+const shellState = snapshotState({ consoles: [console_], projects: [web, api], sessions, shellTerminals: [shellTerminalOf("sh-1", web, "pnpm dev", 0, { busy: true })] });
 const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (ui: Ui) => ui.wait(400)];
 const filterFiles: FixtureFiles = {
   ...SAMPLE_FILES,
@@ -201,7 +203,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "A project session's files",
-    description: "The Files panel docked in a wide window is one rounded card with a hairline edge and the shadow of the sidebar's floating card, 16px from the terminal (the width handle's gap) and 8px from the window's end, the bottom and the top bar, the gaps showing the terminal's own background rather than a sidebar-coloured column. Its 40px header runs the project name, the Files and Changes tabs, the filter, Collapse all folders (enabled, with src open) and refresh buttons, then Close panel, with no icon before the name; Files has no maximize, even beside the Terminal panel. The top bar has the Terminal toggle, not pressed, before the Files toggle, pressed, and no toggle for the pane itself. Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to see the pane fade in place, without sliding, onto Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's actions offer Browse files when its pane is hidden or belongs to another project.",
+    description: "The Files panel docked in a wide window is one rounded card with a hairline edge and the shadow of the sidebar's floating card, 16px from the terminal (the width handle's gap) and 8px from the window's end, the bottom and the top bar, the gaps showing the terminal's own background rather than a sidebar-coloured column. Its 40px header runs the project name, the Files and Changes tabs, the filter, Collapse all folders (enabled, with src open) and refresh buttons, then Close panel, with no icon before the name; Files has no maximize, even beside the Terminal panel. The top bar has the Terminal toggle, not pressed, before the Files toggle, pressed, and no toggle for the pane itself. Folders come first in natural order, with .git and the system files .DS_Store and ._server.ts left out. src is expanded and main.ts is selected, its rounded highlight keeping space on all four sides, as Git rows do. Expand or collapse a folder to watch its children slide and fade in or out with the same timing as the session menu, while following rows slide into place. Press a file for the viewer, then Left/Right to visit visible files. Switch between the Website and Search API sessions to see the pane fade in place, without sliding, onto Search API's own tree. Switching between the two Website sessions keeps the tree steady. A project's Open panel submenu offers Files while its Files panel is not on screen.",
     state,
     filesByProject: {
       [api.id]: {
@@ -306,28 +308,46 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project actions with its files already visible",
-    description: "Website's files are already visible, so its actions menu omits Browse files. Open in groups File manager and Terminal; no repository destination appears without a remote.",
+    description: "Website's files are already visible, so the Open panel submenu, open here, offers only Terminal: Files is left out.",
     state,
-    steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.press(ui.t("common.openIn"))],
+    steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.press(ui.t("sidebar.project.openPanel"))],
   },
   {
     id: "files-project-focus-menu",
     group: GROUP,
     category: "normal",
     title: "Project focus actions with its files already visible",
-    description: "In Website's focus mode with its files visible, the header's actions menu has no Browse files, and starts directly with Open in: no separator line above it.",
+    description: "In Website's focus mode with its files visible, the header's actions menu starts directly with Open panel, open here and offering only Terminal, and then Open in: no separator line above it.",
     state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${web.id}` },
-    steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name }))],
+    steps: [...openFiles, (ui) => ui.press(ui.t("sidebar.project.actions", { name: web.name })), (ui) => ui.press(ui.t("sidebar.project.openPanel"))],
   },
   {
     id: "files-row-menu",
     group: GROUP,
     category: "normal",
     title: "A file’s context menu",
-    description: "Right-clicking main.ts opens its menu at the pointer without opening the viewer. Copy path stays in the parent menu. Open in groups File manager, which reveals and selects the file, and Default application. Folder rows offer the same actions.",
+    description: "Right-clicking main.ts opens its menu at the pointer without opening the viewer. Copy path stays in the parent menu. Open in groups File manager, which reveals and selects the file, and Default application.",
     state,
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.contextMenu("main.ts"), (ui) => ui.press(ui.t("common.openIn"))],
+  },
+  {
+    id: "files-folder-row-menu",
+    group: GROUP,
+    category: "normal",
+    title: "A folder’s context menu",
+    description: "Right-clicking the src folder opens its menu at the pointer. Copy path stays in the parent menu. Open in groups File manager, which opens the folder, and Terminal, which starts a shell in it, beside the framed terminal icon; there is no Default application for a folder.",
+    state,
+    steps: [...openFiles, (ui) => ui.contextMenu("src"), (ui) => ui.press(ui.t("common.openIn"))],
+  },
+  {
+    id: "files-folder-open-terminal",
+    group: GROUP,
+    category: "normal",
+    title: "A folder opened in a terminal",
+    description: "Open in, then Terminal, chosen on the src folder: the Terminal panel opens under Files with a new tab beside the one already running, shown and focused, and its shell waiting at a prompt in ~/code/website/src.",
+    state: shellState,
+    steps: [...openFiles, (ui) => ui.contextMenu("src"), (ui) => ui.press(ui.t("common.openIn")), (ui) => ui.press(ui.t("common.terminal")), (ui) => ui.wait(600)],
   },
   {
     id: "files-viewer",
@@ -355,6 +375,16 @@ export const projectFilesScenarios: Scenario[] = [
       "notes.md": { text: "Notes\n" },
     },
     steps: [...openFiles, (ui) => ui.press("empty"), (ui) => ui.press("locked"), (ui) => ui.press("many"), (ui) => ui.wait(300)],
+  },
+  {
+    id: "files-folder-terminal-error",
+    group: GROUP,
+    category: "exceptional",
+    title: "A folder’s terminal refused, the folder gone",
+    description: "Open in, then Terminal, chosen on the src folder after it was replaced on the disk by a file: the error alert opens over the Terminal panel, titled \"Could not create the terminal\" and saying src is not a directory; its remedy says it may have been moved, renamed or deleted, and to find it in the project's files and try again from there. The panel behind it has no new tab.",
+    state,
+    shellTerminalStartError: { code: "path_not_a_directory", params: { path: "src" }, message: "src is not a directory" },
+    steps: [...openFiles, (ui) => ui.contextMenu("src"), (ui) => ui.press(ui.t("common.openIn")), (ui) => ui.press(ui.t("common.terminal")), (ui) => ui.wait(600)],
   },
   {
     id: "files-root-cut-short",

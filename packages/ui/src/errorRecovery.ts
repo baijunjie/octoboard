@@ -238,8 +238,8 @@ export function retryCanHelp(error: unknown): boolean {
   return !(error instanceof DaemonRequestError && STATE_IS_THE_ANSWER.has(error.code));
 }
 
-/** The codes of a file or folder in a project that is not there any more. */
-const GONE = new Set(["file_not_found", "path_not_found"]);
+/** The codes of a file or folder in a project that is not there any more, a folder that has become a file included. */
+const GONE = new Set(["file_not_found", "path_not_found", "path_not_a_directory"]);
 
 /** The remedy for a file or folder an action on the project's files no longer finds: it is found again in the project's
  * files, not by the general remedy of its codes, which picks one with Browse in a form. Undefined for any other failure,

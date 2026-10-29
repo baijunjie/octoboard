@@ -6,13 +6,14 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { setGitModeWorktree } from "../browser/browserState";
+import { DaemonRequestError } from "../daemon-client";
 import { presence, stubListMotion } from "../components/listMotionTestSupport";
 import { isolate } from "../i18n/isolate";
 import { PlatformProvider } from "../platform/react";
 import type { Event, Project, RequestBody, ShellTerminal } from "../protocol";
 import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal, type Daemon } from "../store";
 import { ShellTerminalPanel } from "./ShellTerminalPanel";
-import { startShellTerminal } from "./shellTerminals";
+import { startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -186,6 +187,42 @@ it.each([true, false])("focuses the terminal a start from the panel made with th
   await act(async () => panel.container.querySelector<HTMLButtonElement>("button[aria-label='New terminal']")!.click());
   act(() => panel.lateEvent());
   await vi.waitFor(() => expect(focused).toEqual(["new"]));
+});
+
+it("takes a focus request once its terminal is shown, so none is left to act on a later choice of that tab", async () => {
+  const panel = mount([shell("a", 1)]);
+  await act(async () => {
+    await startShellTerminal(panel.daemon, "p", { focus: true });
+  });
+  await vi.waitFor(() => expect(focused).toEqual(["new"]));
+  expect(takeShellTerminalFocus("new")).toBe(false);
+});
+
+it("starts a terminal in the place given, and focuses it once shown when asked from outside the panel", async () => {
+  const panel = mount([shell("a", 1)]);
+  await act(async () => {
+    await startShellTerminal(panel.daemon, "p", { place: { worktree: "w", path: "src/ui" }, focus: true });
+  });
+  expect(panel.request).toHaveBeenCalledWith({ type: "create_shell_terminal", project: "p", worktree: "w", path: "src/ui" });
+  expect(panel.shown()).toBe("new");
+  await vi.waitFor(() => expect(focused).toEqual(["new"]));
+});
+
+it("starts a terminal in the project's own directory for an empty place, not in the Git mode's worktree", async () => {
+  const panel = mount([shell("a", 1)]);
+  await act(async () => {
+    await startShellTerminal(panel.daemon, "p", { place: {} });
+  });
+  expect(panel.request).toHaveBeenCalledWith({ type: "create_shell_terminal", project: "p" });
+});
+
+it("words a refused start in a folder as that folder being gone, and a refused start elsewhere by its own code", async () => {
+  const toastError = vi.fn();
+  const gone = new DaemonRequestError("not a folder", "path_not_a_directory", { path: "/w/src" });
+  const daemon = { request: vi.fn(async () => { throw gone; }), store: createStateStore(), toastError } as unknown as Pick<Daemon, "request" | "store" | "toastError">;
+  await startShellTerminal(daemon, "p", { place: { path: "src" } });
+  await startShellTerminal(daemon, "p", { place: {} });
+  expect(toastError.mock.calls.map((call) => call[3])).toEqual(["hostPathGone", undefined]);
 });
 
 it("starts no second terminal from the header while the first, with none yet, is being started", async () => {

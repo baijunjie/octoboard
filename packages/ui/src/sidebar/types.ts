@@ -1,5 +1,6 @@
 import type { ActionMenuEntry } from "../components/ActionMenu";
 import type { DialogRequest, NewSessionRequest } from "../dialogs/dialogRequest";
+import type { PanelKind } from "../panels/stackState";
 import type { Console, ConsoleSessionColour, Project, Session } from "../protocol";
 import type { SettingsSectionId } from "../settings/SettingsDialog";
 
@@ -17,6 +18,9 @@ export type ArchiveScope = { console: string } &
     | { project?: never; consoleSession?: never }
   );
 
+/** The panels of a project's right pane that a project menu can open. */
+export type ProjectPanelKind = Extract<PanelKind, "files" | "terminal">;
+
 /** What focus mode is given over to: one project, or one console session. */
 export type FocusTarget = { project: Project } | { consoleSession: Session };
 
@@ -24,8 +28,8 @@ export type FocusTarget = { project: Project } | { consoleSession: Session };
  * spread, so a child's prop list says exactly what data it narrows instead of inheriting whatever
  * the parent happened to have in scope under the same names. */
 export interface SidebarHandlers {
-  /** The project whose browser is currently visible, docked or floating. */
-  visibleBrowserProjectId?: string;
+  /** The project that owns the right pane and the panels of it on screen, docked or floating. */
+  visibleProjectPanels?: { project: string; kinds: readonly string[] };
   onSelectSession: (session: Session) => void;
   onReopenSession: (session: Session) => void;
   /** Enters a console session's focus mode and selects it, as one navigation. */
@@ -37,12 +41,13 @@ export interface SidebarHandlers {
   /** Enters the focus mode of a project or a console session, or with `undefined` leaves it. */
   onFocus: (target: FocusTarget | undefined) => void;
   onOpenArchive: (scope: ArchiveScope) => void;
-  /** Opens the project's browser in the aside, starting nothing. */
-  onBrowseProject: (project: Project) => void;
+  /** Opens the project's panel of `kind` in the aside, as its top-bar toggle does; the Terminal
+   * panel starts a shell only when the project has none. */
+  onOpenProjectPanel: (project: Project, kind: ProjectPanelKind) => void;
   /** Opens the project directory in the system file manager. */
   onOpenProjectDirectory: (project: Project) => void;
   /** Opens the system terminal at the project's directory. */
-  onOpenProjectTerminal: (project: Project) => void;
+  onOpenSystemTerminal: (project: Project) => void;
   /** Opens a validated repository web URL; absent without browser-link support. */
   onOpenRepository?: (url: string) => void;
   onCopyProjectName: (project: Project) => void;

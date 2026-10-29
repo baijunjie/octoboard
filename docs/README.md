@@ -141,7 +141,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Terminal panel](product/terminal-panel.md) — the right pane's Terminal panel: tabs, actions and the shell terminal.
 - [Shell terminals](product/shell-terminals.md) — plain shells the daemon runs for a project: ownership, title and
   closing.
-- [Opening a project terminal](product/project-terminal.md) — which terminal opens for a project and when it refuses.
+- [Opening a project terminal](product/project-terminal.md) — which system terminal Open in › System terminal opens for a
+  project and when it refuses.
 - [Project pane](product/project-pane.md) — the Files panel and file tree of a project.
 - [Project pane Git mode](product/project-pane-git-mode.md) — reviewing one branch's changes: selector, worktrees and
   what is remembered.
