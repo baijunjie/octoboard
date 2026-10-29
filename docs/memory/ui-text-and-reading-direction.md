@@ -45,8 +45,11 @@ in from the start:
 - An icon that points a direction mirrors with `rtl:-scale-x-100`. An expand / collapse chevron switches between two
   glyphs (forward when collapsed, down when expanded) instead of rotating one: a mirrored forward chevron turned a
   quarter points up.
-- Content whose direction is not the UI's sets its own: a path `dir="ltr"`, a name the user typed `dir="auto"`
-  (`FadeOverflow` takes the same `dir` and fades along it).
+- Content whose direction is not the UI's sets its own: an identifier — a path, a branch name — `dir="ltr"` on its
+  own label whatever script it starts with, even though the user typed it; free-form names (a session title, a
+  project, tag or account name) `dir="auto"`. `FadeOverflow` takes the same `dir` and fades along it. A tooltip is
+  portalled out and does not inherit the label's `dir`; the full list of left-to-right values and the tooltip rule
+  are in the "Text direction" section of `docs/ui-accessibility.md`.
 - `dir="auto"` only decides for an element that holds the text itself: the engine reads the element's own text and
   stops at every descendant carrying a `dir` of its own, so a container whose text all sits in such descendants — the
   paragraphs of a rendered Markdown list or quote — can never resolve. An unresolved `auto` falls back to `ltr`

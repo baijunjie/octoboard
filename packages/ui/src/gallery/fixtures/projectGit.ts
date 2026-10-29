@@ -486,10 +486,13 @@ const WHOLE_COMMITS: FixtureCommit[] = [
 ];
 
 /** The sample repository's branches and a dozen more, past what a selector's list shows without
- * scrolling (ten rows of its height). */
+ * scrolling (ten rows of its height). The first of the others starts with right-to-left letters and
+ * is long enough to be cut, within the rows in sight: a name is read left to right whatever it starts
+ * with. */
 const CROWDED_BRANCHES: BranchInfo[] = [
   ...BRANCHES,
   ...[
+    "مراجعة/feature-ranking-pipeline-boosts-applied-after-deduplication-and-the-final-sort",
     "feature/saved-searches",
     "feature/query-suggestions",
     "feature/result-pagination",
@@ -1176,7 +1179,7 @@ const reviewScenarios: Scenario[] = [
     category: "normal",
     title: "More branches than the selector shows",
     description:
-      "The Branch selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges.",
+      "The Branch selector open over a repository with more branches than its list holds: the list scrolls and its rows fade at the bottom edge, where more are waiting, while the popover around it keeps its edges. The row that opens with Arabic letters is laid out left to right like the others: cut at its start and fading at its left edge, it shows its end and not its Arabic opening, as the long local branch does.",
     state,
     preferences,
     git: { ...SAMPLE_GIT, branches: CROWDED_BRANCHES },

@@ -201,6 +201,21 @@ it("gives a clipped label the whole of its text as a tooltip while the pointer i
   finish();
 });
 
+it.each([
+  ["a left-to-right label lays its plain-text tooltip out left to right too", "ltr" as const, "ltr"],
+  ["a label of any other direction leaves its tooltip to the window's", "auto" as const, null],
+])("%s", (_, dir, tooltipDir) => {
+  // Starts with right-to-left characters, which a tooltip left to the window's direction would
+  // lay out in the opposite order from the label.
+  const name = "مراجعة/feature";
+  const { enter, settle, finish } = mount({ dir, clip: "start", titleWhenClipped: name, children: name }, true);
+  enter();
+  settle();
+  const value = [...tooltip()!.querySelectorAll("span")].find((span) => span.textContent === name);
+  expect(value?.getAttribute("dir") ?? null).toBe(tooltipDir);
+  finish();
+});
+
 it("gives a label that fits no tooltip repeating what it already shows", () => {
   const { enter, settle, finish } = mount({ titleWhenClipped: "short", children: "short" }, false);
   enter();

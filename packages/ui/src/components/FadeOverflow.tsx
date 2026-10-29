@@ -274,9 +274,11 @@ interface FadeOverflowProps {
   /** The element to render. */
   as?: "div" | "span";
   className?: string;
-  /** The element's text direction, for content whose direction is not the UI's: `ltr` for a path,
-   * `auto` for a name the user typed. The fade follows the direction the element resolves to, while
-   * text that fits stays aligned the way its surroundings are. */
+  /** The element's text direction, for content whose direction is not the UI's: `ltr` for a path or
+   * a branch name, `auto` for a name the user typed. The fade follows the direction the element
+   * resolves to, while text that fits stays aligned the way its surroundings are. On an `ltr` label
+   * a plain-string tooltip is laid out left to right too, so it is the value itself; a sentence
+   * goes in as a node. */
   dir?: "ltr" | "rtl" | "auto";
   /** Language of the text when it differs from the surrounding UI. */
   lang?: string;
@@ -396,7 +398,11 @@ export function FadeOverflow({
   useMarquee(ref, marquee, clip, marqueeHolds);
 
   const mask = maskImage(fade, clipped);
-  const tooltip = hasTitle(title) ? title : clipped.start || clipped.end ? titleWhenClipped : undefined;
+  const shownTitle = hasTitle(title) ? title : clipped.start || clipped.end ? titleWhenClipped : undefined;
+  // A plain-text tooltip is the label's own value in full, and the tooltip surface is portalled out
+  // of the label, so a left-to-right value (a path, a branch name) carries its direction over
+  // rather than taking the window's.
+  const tooltip = dir === "ltr" && typeof shownTitle === "string" ? <span dir="ltr">{shownTitle}</span> : shownTitle;
   // The pointer is followed only where a tooltip was asked for, and from the prop rather than from
   // what is clipped right now, so that a label clipped while the pointer is already on it cannot
   // be left hovered for good.
