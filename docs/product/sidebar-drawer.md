@@ -15,8 +15,8 @@ the right pane share the content panel (their widths are in "Pane widths below 1
 - The drawer has the same rounded corners, hairline edge and light card shadow as the floating panes (see "A hidden
   pane floats in on hover" in `docs/product/window-layout.md`). It keeps an **8 px gap** from the top bar, from the
   window's bottom (or the connection banner when it is shown) and from the rail, and is never drawn over the rail;
-  below 782 px it keeps the 8 px from the window's start edge instead, the rail being inside it. Its headers are 40 px
-  high (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
+  below 782 px the gaps are **4 px**, with the start gap measured from the window's edge instead, the rail being
+  inside it. Header heights are in "The window chrome and the content panel" in `docs/product/window-layout.md`.
 - From 782 px up to 1168 px it opens by fading in while rising into place by **4% of its own height**, and closes by
   fading out while sinking back, without sliding sideways. Below 782 px it fades in while sliding in from the window's
   start edge by **40 px**, and fades out while sliding back towards it. Either way it moves over **240 ms** with the
@@ -26,7 +26,7 @@ the right pane share the content panel (their widths are in "Pane widths below 1
   attention of assistive technology.
 - From 782 px up the drawer is 280 px wide; below 782 px it is **328 px**, the rail's 48 px and the sidebar's 280 px.
   Either way it is capped to the window's width less 64 px, so it never reaches the opposite edge of the content
-  panel; below 782 px that leaves at least 56 px of the dimmed area beside its end, there to press to close it. The
+  panel; below 782 px that leaves at least 60 px of the dimmed area beside its end, there to press to close it. The
   dimmed area behind the open drawer covers the content panel,
   including the gaps — below 782 px its whole width, the rail being in the drawer — leaving the top bar, the rail where
   it is in the row and the banner's Retry usable. It fades in and out with the drawer over the same 240 ms, at once

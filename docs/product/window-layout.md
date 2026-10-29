@@ -70,12 +70,12 @@ surface in both appearances" in `docs/product/appearance.md`).
 mode's header (see `docs/product/sidebar.md` and `docs/product/focus-mode.md`) — and so is the archive view's header
 (see "The archive view" in `docs/product/archive-view.md`), so the lines under them run on as one line across the panel.
 The top bar's 40 px is a tier of its own and no part of this. A floating sidebar, the sidebar's drawer and every card
-of the right pane are cards inset 8 px from the top bar (see "A hidden pane floats in on hover" below, "Below 1168 px:
-the sidebar becomes a drawer" in `docs/product/sidebar-drawer.md` and "The panel cards" in
-`docs/product/right-pane-panels.md`), and their headers are
-**40 px** — shorter by that 8 px inset, the card's edge taking no space — so the line under a card's header stays
-level with the line under the headers docked beside it; the text in a card's header therefore sits 4 px lower than
-theirs.
+of the right pane are inset **8 px** from the top bar at 782 px and wider, and **4 px** below 782 px (see "A hidden
+pane floats in on hover" below, "Below 1168 px: the sidebar becomes a drawer" in
+`docs/product/sidebar-drawer.md` and "The panel cards" in `docs/product/right-pane-panels.md`). Their headers are
+**40 px** at 782 px and wider, and **44 px** below it — shorter than the docked headers by the inset, the card's edge
+taking no space — so the line under a card's header stays level with the line under the headers docked beside it.
+The text in a card's header therefore sits 4 px lower than theirs at 782 px and wider, and 2 px lower below it.
 
 **The lines that divide a pane's parts are grooves**: the line under every pane header, and the lines that divide
 parts and rows elsewhere in the window — under the project pane's filter bar, the Git mode's worktree selector bar and
