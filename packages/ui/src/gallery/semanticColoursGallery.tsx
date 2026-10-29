@@ -192,13 +192,13 @@ export function SemanticColoursGallery(): React.ReactElement {
               <Surface name="Card" note="--surface" className="rounded-lg bg-surface shadow-(--panel-shadow)">
                 {MEANINGS.map((meaning) => <Specimen key={meaning.color} meaning={meaning} chip alert />)}
               </Surface>
-              <Surface name="Dialog" note="--overlay with the control fills" className="control-fills rounded-2xl bg-overlay shadow-overlay">
+              <Surface name="Dialog" note="--overlay with the control fills; in dark --floating with the floating fills" className="floating-surface control-fills rounded-2xl bg-overlay shadow-overlay">
                 {MEANINGS.map((meaning) => <Specimen key={meaning.color} meaning={meaning} chip alert />)}
               </Surface>
               <Surface name="Panel" note="--panel" className="rounded-lg border border-separator bg-panel">
                 {MEANINGS.map((meaning) => <Specimen key={meaning.color} meaning={meaning} chip alert />)}
               </Surface>
-              <Surface name="Tooltip" note="--overlay with the control fills" className="control-fills rounded-xl bg-overlay shadow-overlay">
+              <Surface name="Tooltip" note="--overlay with the control fills; in dark --floating with the floating fills" className="floating-surface control-fills rounded-xl bg-overlay shadow-overlay">
                 {MEANINGS.map((meaning) => <Specimen key={meaning.color} meaning={meaning} chip alert={false} />)}
               </Surface>
               <Surface name="Sidebar row, resting" note="--panel-sidebar" className="sidebar-fills rounded-lg bg-panel-sidebar">

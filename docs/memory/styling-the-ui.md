@@ -76,6 +76,26 @@ twin wins and the `docked:` value never applies — with no build warning and no
 - `rtl:` has no `max-` form, so a `docked:` value for a property also set under `rtl:` needs a `docked:rtl:` twin
   instead.
 
+## Under a local override of a HeroUI token, use the token itself, not its `--color-*` alias or a token derived from it
+
+Several rules in `packages/ui/src/style.css` give a subtree its own value of a HeroUI token: `.control-fills` and
+`.sidebar-fills` the `--default` family, and in dark every floating surface (a dialog, a menu, a popover, a tooltip, a
+toast) its own `--overlay`, `--surface`, `--default`, `--border` and `--separator`. A custom property whose value is a
+`var()` is resolved on the element that declares it and inherited as that result, so inside such a subtree only the
+overridden token itself carries the local value:
+
+- HeroUI's theme (`packages/ui/node_modules/@heroui/styles/dist/themes/shared/theme.css`) declares its colours in
+  `@theme inline` as `--color-<name>: var(--<name>)`, which Tailwind emits on `:root`. A utility (`bg-overlay`,
+  `bg-overlay/80`) is compiled with `var(--<name>)` inlined and follows the local value, but `var(--color-<name>)`
+  written in an arbitrary value or plain CSS resolves on the root and draws the page's colour inside the surface:
+  `shadow-[0_-4px_0_0_var(--color-overlay)]` on a sticky row in a dialog painted a dark strip once dialogs got their
+  own `--overlay`. Write `var(--<name>)` there.
+- HeroUI's tokens computed from another (`--default-hover`, `--default-soft`, `--surface-hover`, `--field-focus`,
+  `--field-border-hover`, `--field-border-focus`, in `.../dist/themes/default/variables.css`) are resolved on the root
+  too, and neighbours such as `--surface-secondary` are values of their own, so overriding `--default` or `--surface`
+  on an element moves none of them. A new local override sets, on the same element, every token the components inside
+  it draw with, as the existing rules do.
+
 ## Dim a region with a veil, not `opacity` on it
 
 In the app's WKWebView, `opacity` below 1 on an ancestor of anything that fades (an opacity transition, such as a

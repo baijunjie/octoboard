@@ -44,21 +44,21 @@ function colorClasses(color: StatusBadgeColor, variant: StatusBadgeVariant): str
  * `"soft"` (borderless, for a state) or `"bordered"` (a hairline edge, for a qualifier of the name; the default).
  *
  * The neutral badge is the foreground at 8% in light and 10% in dark, with `--default-foreground` as text and a
- * hairline of `--app-muted` at 28%. The fill is translucent, as the coloured ones are, so it deepens on a grey
- * surface (a hovered or selected row) instead of vanishing into it. A coloured badge has HeroUI's soft fill
- * (12-15% of the colour) and, bordered, a hairline mixed 35% from the solid colour; HeroUI's soft foreground alone
- * falls to 3.5:1-4.3:1 on some surfaces, so the text is mixed toward the foreground (15% in light for accent, warning
- * and danger, 20% for success; 15% for accent and 25% for danger in dark, none for success and warning). Measured
- * with the fill composited over the field, dialog and popover surface, a tooltip over one of those and its control
- * fill, the dialog's and the pane's control fill and its hover, the sidebar row resting, hovered and selected,
- * `--panel` with its hover and selected fills, `--background`, `--panel-sidebar` and `--chrome`, the Git change list's
- * rows (the sidebar's surface) and a card on `--surface`, the text minima
- * are, in light, 10.68:1 neutral, 4.51:1 accent, 4.65:1 success, 4.65:1 warning, 4.75:1 danger and 6.45:1 help, at
- * the worst on a hovered control fill (the neutral fill read by the focus view's count badge on the sidebar's hovered
- * tertiary button is 9.42:1); in dark 7.26:1 neutral, 4.61:1 accent, 5.17:1 success, 5.67:1 warning, 4.70:1
- * danger and 5.78:1 help, at the worst on the dark tooltip's control fill. The fills sit 1.07:1-1.25:1 off a light
- * surface and 1.09:1-1.32:1 off a dark one (the neutral one 1.19:1-1.20:1 and 1.14:1-1.31:1), and the hairline
- * 1.15:1-1.52:1 from its fill in light and 1.28:1-2.33:1 in dark (neutral 1.38:1-1.48:1 and 1.36:1-1.58:1).
+ * hairline of `--app-muted` at 28%. The fill is translucent, as the coloured ones are, so it deepens on a grey surface
+ * (a hovered or selected row) instead of vanishing into it. A coloured badge has HeroUI's soft fill (12-15% of the
+ * colour) and, bordered, a hairline mixed 35% from the solid colour; HeroUI's soft foreground alone falls to
+ * 3.5:1-4.3:1 on some surfaces, so the text is mixed toward the foreground (15% in light for accent, warning and
+ * danger, 20% for success; 15% for accent and 25% for danger in dark, none for success and warning). Measured with the
+ * fill composited over the field and the floating surfaces (dialog, popover, tooltip), the floating and the pane's
+ * control fill and their hovers, the sidebar row resting, hovered and selected, `--panel` with its hover and selected
+ * fills, `--background`, `--panel-sidebar` and `--chrome`, the Git change list's rows (the sidebar's surface) and a
+ * card on `--surface`, the text minima are, in light, 10.68:1 neutral, 4.51:1 accent, 4.65:1 success, 4.65:1 warning,
+ * 4.75:1 danger and 6.45:1 help, at the worst on a hovered control fill (the neutral fill read by the focus view's
+ * count badge on the sidebar's hovered tertiary button is 9.42:1); in dark 7.26:1 neutral, 4.51:1 accent, 5.06:1
+ * success, 5.54:1 warning, 4.59:1 danger and 5.71:1 help, at the worst on a floating surface's hovered control fill.
+ * The fills sit 1.07:1-1.25:1 off a light surface and 1.09:1-1.32:1 off a dark one (the neutral one 1.19:1-1.20:1 and
+ * 1.14:1-1.31:1), and the hairline 1.15:1-1.52:1 from its fill in light and 1.27:1-2.33:1 in dark (neutral
+ * 1.38:1-1.48:1 and 1.40:1-1.58:1).
  *
  * A comma that only assistive technology reads keeps the name and the value apart, which
  * `separated={false}` leaves out for a badge with no name before it. `single` is for one character

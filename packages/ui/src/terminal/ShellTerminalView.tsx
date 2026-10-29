@@ -275,7 +275,7 @@ export function ShellTerminalView({
       {shown && <StatusAnnouncer text={!running ? t("shellTerminal.exited") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />}
       <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         {shown && !running && (
-          <Surface className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
+          <Surface className="floating-surface pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
             <span aria-hidden="true" className="text-app-muted">
               {t("shellTerminal.exited")}
             </span>

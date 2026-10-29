@@ -638,7 +638,7 @@ export function TerminalPane({
       <StatusAnnouncer text={barSaid} />
       <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
         {dormantBar && (
-          <Surface ref={barRef} className="pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
+          <Surface ref={barRef} className="floating-surface pointer-events-auto flex items-center gap-3 rounded-lg px-3 py-2 text-sm shadow-lg">
             <span aria-hidden="true" className="text-app-muted">
               {dormantBar.sentence}
             </span>
