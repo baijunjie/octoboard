@@ -246,6 +246,16 @@ for (const placement of PLACEMENTS) {
   });
 }
 
+it("keeps a clipped branch's end in view and a detached commit id's start, also when a branch gives way to a commit id", () => {
+  stubOverflow();
+  const badge = PLACEMENTS[0].mount(gitStatusOf(web.id), "git-branch");
+  const line = lineOf(badge);
+  expect(line.scrollLeft).toBe(200);
+  act(() => store.setState({ gitStatuses: new Map([[web.id, gitStatusOf(web.id, { branch: "a1b2c3d", detached: true })]]) }));
+  expect(lineOf(badge)).toBe(line);
+  expect(line.scrollLeft).toBe(0);
+});
+
 it("names the touch popover of the badge in focus mode's header by a generic word, not by the sentence it holds", () => {
   const badge = PLACEMENTS[1].mount(gitStatusOf(web.id, { ahead: 1 }), "git-branch");
   press(badge, "touch");
@@ -293,7 +303,7 @@ it.each(PLACEMENTS)("runs only the hovered project name or branch in $name, leav
   const badge = placement.mount(gitStatusOf(web.id, { ahead: 1 }), "git-branch");
   const surface = placement.name === "a sidebar project row"
     ? badge.closest<HTMLElement>('div[role="button"]')!
-    : badge.parentElement!;
+    : badge.closest<HTMLElement>(".groove-b")!;
   const name = Array.from(surface.querySelectorAll<HTMLElement>(".overflow-hidden"))
     .find((element) => element.textContent === web.name)!;
   const branch = lineOf(badge);

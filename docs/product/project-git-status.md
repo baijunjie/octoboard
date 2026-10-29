@@ -75,12 +75,15 @@ push is running. Once all pushes of the project end, successfully or otherwise, 
 state, or its idle glyph if neither is running (see "Pushing the current branch" in
 `docs/product/project-git-actions.md`).
 
-**As the row gets tight only the branch name gives way**: the branch name (or short commit id) shows its
-beginning and fades at its right edge. The state glyph, upstream arrows and counts remain visible, even when none of
-the branch name fits. Only the branch name runs as a marquee while the pointer is over it (see "Names too long for
-their space" in `docs/product/labels-and-tooltips.md`). The branch and counts read left to right even under a
-right-to-left language. The project's name keeps a floor of its own and never vanishes. The text saying that the
-repository has no commits yet follows the same fade and marquee rules, but follows the window's reading direction.
+**As the row gets tight only the branch name gives way**: a branch name is cut at its start, keeping its end in
+view and fading at its left edge, while a detached `HEAD`'s short commit id is cut at its end, keeping its beginning
+(see "Names too long for their space" in `docs/product/labels-and-tooltips.md`). The state glyph, upstream arrows and
+counts remain visible, even when none of the branch name fits. Only the branch name runs as a marquee while the pointer
+is over it — a branch name from its end back toward its beginning. The branch and counts read left to right even under
+a right-to-left language. The project's name keeps a floor of its own and never vanishes. The text saying that the
+repository has no commits yet is cut at its end and follows the same fade and marquee rules, but follows the window's
+reading direction. How the badge shares a project's focus mode header with the title is in "What both views show" in
+`docs/product/focus-mode.md`.
 
 **One tooltip for the whole badge.** Resting the mouse anywhere on the badge — the state glyph, the branch name or
 either count — shows one tooltip, after the window's usual wait and on pointer hover only, since the badge is no tab

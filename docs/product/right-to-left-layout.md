@@ -26,7 +26,9 @@ product docs name for parts of the window:
 - Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left. So is the file viewer's
   layout: an image change's Before and After images, side by side, have Before on the right.
 - A name or breadcrumb too long for its space fades out where it ends in its own direction: a name the user typed is
-  laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge.
+  laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge. A path
+  and a branch name fade where they begin instead (see "Names too long for their space" in
+  `docs/product/labels-and-tooltips.md`).
 - Paths always read left to right, in the fields that take one and in the settings list. Settings' Default clone
   directory field reads left to right as one control: its folder mark stays beside the path at the field's left edge,
   rather than sitting at the field's leading edge with the path pushed away from it (see "Default clone directory" in

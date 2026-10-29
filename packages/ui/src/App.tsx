@@ -724,7 +724,7 @@ export function App(): React.ReactElement {
       const current = currentBranch === branch.name;
       return {
         label: name,
-        content: <FadeOverflow as="span" dir="ltr" className="block" titleWhenClipped={name}>{name}</FadeOverflow>,
+        content: <FadeOverflow as="span" dir="ltr" clip="start" className="block" titleWhenClipped={name}>{name}</FadeOverflow>,
         icon: GitBranch,
         selected: current,
         onClick: () => {

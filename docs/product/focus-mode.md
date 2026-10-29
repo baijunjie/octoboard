@@ -16,7 +16,13 @@ heading; the console session's title is on its own card below. The heading is a 
 nothing. The header shows no pin button. A project's header also carries its branch badge, whose failure mark after a
 failed check is a tab stop of its own (see "The branch badge" in `docs/product/project-git-status.md`), and, after the
 **+**, the project's action menu without its **Focus mode**, **Pin** / **Unpin** and **View archive** items — the view's
-own **Archived (n)** list stands in for the last. A console session's header carries nothing else — no colour, lock
+own **Archived (n)** list stands in for the last. In a project's header the title — the console's name over the
+project's name — and the branch badge split the room between the back button and the header's buttons evenly;
+whichever needs less than its half hands the rest to the other, and the badge sits at the end of that room, next to the
+buttons. The badge's state glyph or failure mark and its upstream counts always stay visible, so when they alone need
+more than half — a narrow sidebar, large counts — none of the branch name shows and the title takes the rest; the
+project's name keeps its floor all the same. While the badge shows nothing — no git status yet, or a directory that is
+not a repository — the title takes the whole room. A console session's header carries nothing else — no colour, lock
 button or action menu, and no menu on a right-click: those are on the console session's own card below it (see "A
 console session's focus mode" below).
 

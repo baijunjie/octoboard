@@ -84,10 +84,21 @@ function FocusHeader({
  * the view holds reads as sections of that heading: the sections below are a level under it, and
  * the project groups inside those a level under them again.
  * `min-w-16` is the floor itself: this is the flex item (`flex-1`'s basis is 0%, so a floor on the
- * label inside `PaneTitle` would clamp nothing), leaving, in a project's header,
- * `GitBadge`'s branch track as the part that keeps giving way once this is reached. */
-function FocusTitle({ heading, overline }: { heading: string; overline?: string }): React.ReactElement {
-  return <PaneTitle className="min-w-16 flex-1 px-1" heading={heading} overline={overline} />;
+ * label inside `PaneTitle` would clamp nothing).
+ *
+ * `sharesRow` is for a header that also carries the branch badge (`FocusBranch`): the title then
+ * grows no wider than its text, so that the two split the room evenly from a zero basis and
+ * whichever needs less hands the rest to the other. */
+function FocusTitle({ heading, overline, sharesRow }: { heading: string; overline?: string; sharesRow?: boolean }): React.ReactElement {
+  return <PaneTitle className={`min-w-16 flex-1 px-1 ${sharesRow ? "max-w-max" : ""}`} heading={heading} overline={overline} />;
+}
+
+/** The branch badge in a project's focus header, as the other half of the room `FocusTitle` shares:
+ * an even share from a zero basis, never wider than the badge itself, and pushed to the end of
+ * whatever the two leave over. No `min-w-0`, so the box's automatic minimum keeps the badge's glyph
+ * and counts while only its branch track gives way. */
+function FocusBranch({ children }: { children: React.ReactNode }): React.ReactElement {
+  return <div className="ms-auto flex max-w-max flex-1">{children}</div>;
 }
 
 /** A project's focus mode: the sidebar given over to one project, its sessions not bound to a
@@ -128,13 +139,19 @@ export function ProjectFocusView({
   const viewAll = () => handlers.onOpenArchive({ console: project.console_id, project: project.id });
   const headerRef = useRef<HTMLDivElement>(null);
   const switchFocus = useFocusHandoff(() => headerRef.current?.querySelector("button")?.focus());
+  // When `GitBadge` draws nothing (no status yet, not a repository), the title takes the row alone.
+  const showsBranch = gitStatus?.repository === true;
 
   return (
     <>
       <FocusHeader handlers={handlers} ref={headerRef}>
-        <FocusTitle heading={project.name} overline={parentConsole.name} />
+        <FocusTitle heading={project.name} overline={parentConsole.name} sharesRow={showsBranch} />
         {/* Alone in the header, so a tap on it opens the popover. */}
-        <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} />
+        {showsBranch && (
+          <FocusBranch>
+            <GitBadge status={gitStatus} touchPopover returnFocusTo={headerRef} />
+          </FocusBranch>
+        )}
         <RowIconGroup>
           <NewSessionButton shortcut label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
