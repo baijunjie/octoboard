@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import type { ProjectSourceInfo } from "../protocol";
-import { openDetails, press } from "../components/detailsTestSupport";
+import { press } from "../components/detailsTestSupport";
 import { change, changeViewFixture, mountRows } from "./browserTestSupport";
 import { changeItem } from "./changes";
 import { GitView, type ChangesViewProps } from "./GitView";
@@ -103,13 +103,11 @@ it("retains source Git stderr as structured diagnostics in the pane, which opens
   const detail = "fatal: unable to read /tmp/مراجعة\n    indented reason";
   const { container } = mountWorktreeNotice("/r", { ...source("/r", "/r"), git: null, git_error: detail });
   expect(report).not.toHaveBeenCalled();
-  // The diagnostics are behind the Alert's Details button, not in the Alert.
-  expect(container.querySelector("pre")).toBeNull();
-  const dialog = openDetails(container);
-  expect(dialog.querySelector("pre")?.textContent).toBe(detail);
-  expect(dialog.querySelector("pre")?.getAttribute("dir")).toBe("ltr");
-  expect(dialog.querySelectorAll("pre")).toHaveLength(1);
-  expect(container.querySelector("[data-slot=alert-description] pre")).toBeNull();
+  // The diagnostics are on the panel's details surface, not in its lines.
+  const details = container.querySelector('[data-slot="empty-state"] > [data-slot="surface"]')!;
+  expect(details.querySelector("pre")?.textContent).toBe(detail);
+  expect(details.querySelector("pre")?.getAttribute("dir")).toBe("ltr");
+  expect(container.querySelectorAll("pre")).toHaveLength(1);
   expect(container.querySelector("[role=alert]")).toBeNull();
 });
 
@@ -284,7 +282,7 @@ it("offers no Try again on a failure that is the state of the repository, where 
   expect([...dialog.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Try again");
 });
 
-it("puts both failed parts into one empty-state failure with one Try again and each part's words in Details, when nothing is listed", () => {
+it("puts both failed parts into one empty-state failure with one Try again and each part's words on its details surface, when nothing is listed", () => {
   const onRetry = vi.fn();
   const { container } = mountPartFailure({
     items: [],
@@ -293,10 +291,10 @@ it("puts both failed parts into one empty-state failure with one Try again and e
   const panel = container.querySelector('[data-slot="empty-state"]')!;
   expect(panel.querySelector("h2")?.textContent).toBe("Could not list the changes");
   expect(container.querySelector("[data-section-heading-control]")).toBeNull();
-  expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again", "Details"]);
-  const dialog = openDetails(panel);
-  expect(dialog.textContent).toContain("The uncommitted changes could not be listed");
-  expect(dialog.textContent).toContain("This branch's commits could not be compared");
+  expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
+  const details = panel.querySelector(':scope > [data-slot="surface"]')!;
+  expect(details.textContent).toContain("The uncommitted changes could not be listed");
+  expect(details.textContent).toContain("This branch's commits could not be compared");
   act(() => [...panel.querySelectorAll("button")].find((button) => button.textContent === "Try again")!.click());
   expect(onRetry).toHaveBeenCalledOnce();
 });

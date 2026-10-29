@@ -111,10 +111,10 @@ unavailable or failed state.
 - **Unavailable**: a neutral empty panel in the history's place (no danger glyph, since the record's state is not a
   failed load and reading it again would not change it), headed that the history is unavailable, saying the agent's
   record of the session could not be found or read and suggesting reopening the session to see its terminal. It has
-  neither Try again nor Details.
+  no Try again.
 - **Failed**: the request for the history itself failed — the connection to the daemon dropped, or the daemon
   refused it. An empty-state failure in the history's place, headed that the history could not be loaded, gives the
-  actual reason, with any diagnostic details behind **Details** (see "Names and diagnostic details" in
+  actual reason, with any diagnostic details under it (see "Names and diagnostic details" in
   `docs/product/error-alerts.md`), and **Try again**, which reads it again. A failed history is also read again by
   itself when the connection to the daemon comes back. Reopen remains available on the floating bar.
 

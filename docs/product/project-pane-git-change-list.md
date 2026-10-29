@@ -453,8 +453,8 @@ leaves (see "Moving between changes" in `docs/product/project-pane-git-change-vi
   When nothing is listed and exactly one part failed, that failure takes the list's place instead, as an empty-state
   failure with **Try again**. When nothing is listed and more than one part failed, they take the list's place
   together as one empty-state failure, saying that the changes could not be listed because neither the uncommitted
-  nor the committed part could be read, with each part's reason under **Details**, and **Try again** unless reading
-  again could help neither. None of them opens an error alert.
+  nor the committed part could be read, with each part's reason, then any further explanation and raw text of its own,
+  in its details, and **Try again** unless reading again could help neither. None of them opens an error alert.
   Changes that kept moving while they were listed, after two more tries, say so; Refresh tries again. Try again on
   the empty-state failure, pressed from the keyboard, hands keyboard focus to the header's Refresh.
 - **The repository could not be read** takes the whole view's place as an empty-state failure, with Try again.

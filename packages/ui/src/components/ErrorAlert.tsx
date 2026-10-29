@@ -79,7 +79,7 @@ export function ErrorAlert({
             <AlertStatusContext.Provider value={status}>
               {/* The recovery action is the primary one, so it takes the trailing edge, as a dialog's
                   confirming button does; Details stands before it. */}
-              {details && <DetailsButton inAlert>{details}</DetailsButton>}
+              {details && <DetailsButton>{details}</DetailsButton>}
               {actions}
             </AlertStatusContext.Provider>
           </div>

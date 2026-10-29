@@ -287,7 +287,7 @@ in place of the diff, in the current language. The cases beyond those of a file 
 | A file it has to show whole (an untracked file, the inside version of a rename across the boundary, a binary side) is larger than 4 MiB | its size, and the most that can be opened |
 | It kept changing while it was being read, after two more tries | it kept changing, and is read again at the next refresh |
 | A committed change's commit is one the repository no longer has (a deleted branch's, once Git has pruned it) | the repository has no such commit |
-| A committed change's content is missing from the repository | Git could not read it, with Git's own message behind Details |
+| A committed change's content is missing from the repository | Git could not read it, with Git's own message under that |
 
 A change whose worktree is gone is none of these: the viewer closes instead (see "When the open change changes"
 above).

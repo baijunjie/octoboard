@@ -8,7 +8,6 @@ import { EmptyPanel } from "./components/EmptyPanel";
 import { ErrorAlert } from "./components/ErrorAlert";
 import { DiagnosticBlock } from "./components/DiagnosticBlock";
 import { InlineReference } from "./components/InlineReference";
-import { StatusMark } from "./components/StatusMark";
 import { BareTitleBar } from "./components/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scrollFade";
 import { Message, useT } from "./i18n/react";
@@ -23,10 +22,9 @@ type StartupScreenProps =
   }
   | {
     /** A failure that is the whole page: the empty state's shape in the danger tone, its heading `title`, the line
-     * under it `description` in the application's own words, and `details` (the raw text) in the popover of a mark
-     * right after the heading, never on the page (see "A whole subject that failed" in
-     * `docs/ui-accessibility.md`). */
-    failure: { title: React.ReactNode; description: React.ReactNode; markLabel: string; details: React.ReactNode };
+     * under it `description` in the application's own words, and `details` (the raw text) on a surface of its own
+     * under that line (see "A whole subject that failed" in `docs/ui-accessibility.md`). */
+    failure: { title: React.ReactNode; description: React.ReactNode; details: React.ReactNode };
     message?: never;
     /** The failure's recovery, its primary button, for a screen that has something to offer besides giving up. */
     action?: { label: string; onSelect: () => void };
@@ -63,8 +61,7 @@ export function StartupScreen({ message, failure, action }: StartupScreenProps):
           <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
             {failure ? (
               <div className="m-auto w-full min-w-0 max-w-xl p-8">
-                {/* Quit stands beside the recovery as the second way out; with no recovery it is the one action. The
-                    raw text is the mark's popover, so the row never holds more than the two buttons. */}
+                {/* Quit stands beside the recovery as the second way out; with no recovery it is the one action. */}
                 <EmptyPanel
                   tone="danger"
                   icon={CircleAlert}
@@ -73,7 +70,7 @@ export function StartupScreen({ message, failure, action }: StartupScreenProps):
                   description={failure.description}
                   action={action ? { label: action.label, variant: "primary", onPress: action.onSelect } : quit}
                   secondaryAction={action ? quit : undefined}
-                  headingMark={<StatusMark label={failure.markLabel}>{failure.details}</StatusMark>}
+                  details={failure.details}
                 />
               </div>
             ) : (
@@ -95,7 +92,7 @@ export function StartupHeading({ children }: { children: React.ReactNode }): Rea
 }
 
 /** The screen for a daemon that failed to start, which the shell passed along as `?error=`: the failure in the
- * application's own words, with the daemon's own message in the popover of the mark after the heading. */
+ * application's own words, with the daemon's own message under it. */
 export function DaemonFailedScreen({ error }: { error: string }): React.ReactElement {
   const t = useT();
   // Reported once per error: the alert's words are components that follow the language, so a change of language needs no new report.
@@ -115,9 +112,7 @@ export function DaemonFailedScreen({ error }: { error: string }): React.ReactEle
       failure={{
         title: t("startup.daemonFailed.title"),
         description: t("startup.daemonFailed.remedy"),
-        markLabel: t("startup.daemonFailed.markLabel"),
-        // A popover's height is bounded, so a long message scrolls within it (`tall`).
-        details: <DiagnosticBlock wrap tall>{error}</DiagnosticBlock>,
+        details: <DiagnosticBlock>{error}</DiagnosticBlock>,
       }}
     />
   );

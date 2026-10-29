@@ -81,10 +81,10 @@ it("renders the heading at the level asked for", () => {
   expect(container.querySelector("h2")).toBeNull();
 });
 
-it("takes the danger tone for its glyph, and puts Details after the action in the centred row", () => {
+it("takes the danger tone for its glyph and keeps the action neutral", () => {
   const container = mount(<EmptyPanel tone="danger" icon={FolderOpen} message="Could not load" description="Gone." action={{ label: "Try again", onPress: () => {} }} details={<p>Why</p>} />);
   expect(container.querySelector("svg")!.parentElement!.className).toContain("text-danger-soft-foreground");
-  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again", "Details"]);
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
   expect(container.querySelector("button")!.className).not.toContain("danger");
 });
 
@@ -95,35 +95,26 @@ it("speaks the heading and the line, and not the buttons, when it announces", ()
   expect(alert.querySelector("button")).toBeNull();
 });
 
-it("draws a heading mark right after the heading, on its line, and keeps it out of the button row", () => {
+it("holds a failure's details on a surface under the lines, outside the announcement and the button row", () => {
   const container = mount(
     <EmptyPanel
       tone="danger"
       icon={FolderOpen}
-      headingLevel={1}
       message="Could not start"
-      action={{ label: "Quit", onPress: () => {} }}
-      headingMark={<button type="button" aria-label="Error details" />}
+      description="Gone."
+      remedy="Restart it."
+      action={{ label: "Try again", onPress: () => {} }}
+      secondaryAction={{ label: "Quit", onPress: () => {} }}
+      details={<p>Why</p>}
+      announce
     />,
   );
-  const heading = container.querySelector("h1")!;
-  const mark = container.querySelector<HTMLElement>("button[aria-label='Error details']")!;
-  expect(mark.parentElement!.previousElementSibling).toBe(heading);
-  expect(mark.parentElement!.parentElement).toBe(heading.parentElement);
-  expect([...container.querySelectorAll("button")].map((button) => button.textContent || button.getAttribute("aria-label"))).toEqual(["Error details", "Quit"]);
-});
-
-it("keeps a heading mark out of the announced element and a row to two buttons", () => {
-  const container = mount(
-    <EmptyPanel tone="danger" icon={FolderOpen} headingLevel={1} message="Could not start" action={{ label: "Try again", onPress: () => {} }} secondaryAction={{ label: "Quit", onPress: () => {} }} headingMark={<button type="button" aria-label="Why" />} />,
-  );
-  expect(container.querySelector("[role=alert]")).toBeNull();
-  expect(container.querySelectorAll("button")).toHaveLength(3);
-  // A heading mark takes the place of Details and cannot be announced with the heading.
-  // @ts-expect-error a heading mark and Details are not both allowed
-  <EmptyPanel icon={FolderOpen} message="x" headingMark={<span />} details={<span />} />;
-  // @ts-expect-error a heading mark is not announced
-  <EmptyPanel icon={FolderOpen} message="x" headingMark={<span />} announce />;
-  // @ts-expect-error a second way out and Details are not both allowed
-  <EmptyPanel icon={FolderOpen} message="x" secondaryAction={{ label: "Quit", onPress: () => {} }} details={<span />} />;
+  const panel = container.querySelector('[data-slot="empty-state"]')!;
+  const surface = panel.querySelector(':scope > [data-slot="surface"]')!;
+  expect(surface.textContent).toBe("Why");
+  expect(surface.previousElementSibling?.textContent).toBe("Restart it.");
+  expect(container.querySelector("[role=alert]")?.textContent).toBe("Could not startGone.");
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again", "Quit"]);
+  // @ts-expect-error a silent panel holds no details
+  <EmptyPanel icon={FolderOpen} message="x" silent details={<span />} />;
 });

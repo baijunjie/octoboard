@@ -46,7 +46,7 @@ const accentContext = contextOf(30);
 const windowlessContext: SessionContext = { tokens: 130_000 };
 
 // A failure the application has no words for, so the pane shows its generic sentence and the raw
-// message behind Details.
+// message on the details surface under it.
 const historyFailure = { code: "internal_error", params: { detail: "failed to read the session record: input/output error" }, message: "failed to read the session record: input/output error" };
 
 /** What the session's record holds: the user's messages, those Octoboard wrote into the session (a
@@ -258,7 +258,7 @@ export const sessionHistoryScenarios: Scenario[] = [
     category: "exceptional",
     id: "history-failed",
     title: "Archived session history request failed",
-    description: "The pane takes the empty-state shape with a danger glyph, the heading and the application's generic sentence for an unexpected failure under it. The archive and creation times stay visible in the header above the failure. Try again, the primary button, requests history again, and the secondary Details holds the daemon's raw message; the floating bar still offers Reopen.",
+    description: "The pane takes the empty-state shape with a danger glyph, the heading and the application's generic sentence for an unexpected failure under it. The archive and creation times stay visible in the header above the failure. The daemon's raw message sits on a surface of its own under the sentence, and Try again, the primary button below it, requests history again; the floating bar still offers Reopen.",
     sessionHistory: { [archived.id]: historyFailure },
     steps: openHistory,
   },

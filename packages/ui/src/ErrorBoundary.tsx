@@ -41,7 +41,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 
 /** The fallback, a function component because only one can read the current language. The error's
  * own text is raw, so the page says what happened and what to do in the application's words and the
- * text is in the popover of the mark after the heading. */
+ * text sits on a surface of its own under them. */
 function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   const t = useT();
   const text = errorDiagnostic(error);
@@ -61,10 +61,7 @@ function ErrorScreen({ error, onRetry }: { error: Error; onRetry: () => void }):
       failure={{
         title: t("error.crashed.heading"),
         description: t("error.crashed.retry"),
-        markLabel: t("error.crashed.markLabel"),
-        // The stack is taller than the popover more often than not, so the block scrolls (`tall`), and its lines are
-        // wider, so they wrap rather than run past its edge.
-        details: <DiagnosticBlock wrap tall>{text}</DiagnosticBlock>,
+        details: <DiagnosticBlock>{text}</DiagnosticBlock>,
       }}
       action={{ label: t("error.tryAgain"), onSelect: onRetry }}
     />

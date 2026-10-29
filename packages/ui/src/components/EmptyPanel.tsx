@@ -1,12 +1,13 @@
-import { EmptyState } from "@heroui/react";
+import { EmptyState, Surface } from "@heroui/react";
 import type { LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
 import { Button } from "./Button";
-import { DetailsButton } from "./DetailsButton";
-import { MarkLineBox } from "./MarkLineBox";
+import { DiagnosticLayoutContext } from "./DiagnosticBlock";
 import { TitledControl } from "./TitledControl";
 import { useAnnouncement } from "./useAnnouncement";
+
+const WRAPPED_TALL = { wrap: true, tall: true };
 
 /** `ErrorAlert`'s announcement of a failure panel. */
 interface Announcement {
@@ -28,22 +29,20 @@ interface Announcement {
  *
  * `tone="danger"` is the shape of a failure that is the whole state of what the panel fills (a pane
  * whose subject could not be loaded): a danger glyph, the heading saying what could not be loaded,
- * and in the centred row the recovery `action` and Details, the button that opens `details` in a
- * popover (further explanation in the application's own words, then raw text). `remedy` is the one
- * main thing to do, a second line under the first. A startup screen, whose row is kept for its recovery and
- * Quit, passes `headingMark` instead of `details`: the mark follows the heading and the row holds the actions
- * alone. `announce`, `announceKey` and `announceDelayMs` are
+ * the line under it, `remedy` (the one main thing to do) as a second line, then `details` (further
+ * explanation in the application's own words, then raw text) on a surface of its own under them, and
+ * the recovery `action` in the centred row. `announce`, `announceKey` and `announceDelayMs` are
  * `ErrorAlert`'s: the heading and the first line, and nothing else, are spoken as an alert. */
 export function EmptyPanel({
   icon: Icon,
   message,
   headingLevel = 2,
+  headingId,
   description,
   remedy,
   action,
   secondaryAction,
   details,
-  headingMark,
   compact,
   silent,
   tone,
@@ -60,6 +59,8 @@ export function EmptyPanel({
    * `SectionHeading` is an `h3`, so a panel inside one of those sections passes 3, and a panel that
    * is the whole page (a startup failure) passes 1. A compact row has no heading. */
   headingLevel?: 1 | 2 | 3;
+  /** The full panel's heading's id, for an owner that names something after the heading. */
+  headingId?: string;
   /** The full panel's line under the heading, explaining what the heading leaves out; a compact
    * row has no room for one. It sits in a `p`, so it takes phrasing content only. */
   description?: React.ReactNode;
@@ -85,36 +86,14 @@ export function EmptyPanel({
      * rather than in it, as a ref held in a prop object makes every read of that object a read of a ref. */
     actionRef?: React.Ref<HTMLButtonElement>;
     silent?: never;
-  } & (
-    // A row holds at most two buttons: the action and one more, a second way out or a failure's Details. A heading
-    // mark takes the place of Details, and with it the panel cannot announce, since the mark would sit
-    // inside the announced element.
-    | (Announcement & { headingMark?: never } & (
-      | {
-        /** A second way out beside the action, quieter than it, for a full panel only. */
-        secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
-        details?: never;
-      }
-      | {
-        secondaryAction?: never;
-        /** What a failure's Details button opens (further explanation, then raw text), in the centred
-         * row after the action; with none there is no Details button. The full panel only, and like the actions never with `silent`. */
-        details?: React.ReactNode;
-      }
-    ))
-    | {
-      secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
-      details?: never;
-      /** A mark (`StatusMark`) right after the heading, on its line, holding a startup screen's raw error
-       * text, whose row is kept for its recovery and Quit. The full panel only, never with `silent`,
-       * `announce` or `details`. */
-      headingMark?: React.ReactNode;
-      announce?: false;
-      announceKey?: never;
-      announceDelayMs?: never;
-    }
-  ))
-  | (Announcement & { action?: never; actionRef?: never; secondaryAction?: never; details?: never; headingMark?: never; silent?: true })
+    /** A second way out beside the action, quieter than it, for a full panel only. */
+    secondaryAction?: { label: string; icon?: LucideIcon; onPress: () => void };
+    /** The rest of a failure (further explanation, then raw text), on a surface of its own under the
+     * lines, outside the announcement. The full panel only, and never with `silent`: a raw block too
+     * wide or tall for its box scrolls, and takes focus to do it. */
+    details?: React.ReactNode;
+  } & Announcement)
+  | (Announcement & { action?: never; actionRef?: never; secondaryAction?: never; details?: never; silent?: true })
 )): React.ReactElement {
   const messageId = useId();
   const actionId = useId();
@@ -178,18 +157,20 @@ export function EmptyPanel({
           explaining line's size and colour both, leaving the weight as the only thing telling the
           two apart — too little to read as a heading. */}
       <div key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-center gap-3">
-        {headingMark ? (
-          <div className="flex min-w-0 max-w-full items-start justify-center gap-1.5">
-            <Heading className="min-w-0 text-base font-semibold text-foreground">{message}</Heading>
-            <MarkLineBox size="text-base">{headingMark}</MarkLineBox>
-          </div>
-        ) : (
-          <Heading className="text-base font-semibold text-foreground">{message}</Heading>
-        )}
+        <Heading id={headingId} className="text-base font-semibold text-foreground">{message}</Heading>
         {description && <p className="max-w-sm text-sm break-words text-app-muted">{description}</p>}
       </div>
       {remedy && <p className="-mt-3 max-w-sm text-sm break-words text-app-muted">{remedy}</p>}
-      {(action || secondaryAction || details) && (
+      {/* Start-aligned, unlike the lines above it: it holds paragraphs and raw text. The border is what
+          sets it apart on a dialog or a viewer, which are the default surface's colour themselves. Raw
+          text wraps rather than scrolling sideways out of a box this narrow, and scrolls within its
+          block (`tall`) once taller than its room rather than pushing the buttons off the page. */}
+      {details && (
+        <Surface className="flex w-full max-w-sm min-w-0 flex-col gap-2 rounded-xl border border-separator p-3 text-start text-sm text-app-muted [overflow-wrap:anywhere]">
+          <DiagnosticLayoutContext.Provider value={WRAPPED_TALL}>{details}</DiagnosticLayoutContext.Provider>
+        </Surface>
+      )}
+      {(action || secondaryAction) && (
         <div className="flex flex-wrap items-center justify-center gap-3">
           {action && (
             // A press never takes focus: it would drop to `<body>` when the panel goes away, and
@@ -213,7 +194,6 @@ export function EmptyPanel({
               {secondaryAction.label}
             </Button>
           )}
-          {details && <DetailsButton placement="bottom">{details}</DetailsButton>}
         </div>
       )}
     </EmptyState>

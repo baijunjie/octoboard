@@ -67,8 +67,8 @@ project's own folder.
 
 - A project in no repository says it is not in a Git repository.
 - A repository Git cannot read — `git` not installed or older than 2.36, a repository belonging to another user, a
-  damaged one — shows an empty-state failure headed that Git review is unavailable, with Git's own message behind
-  Details and no Try again.
+  damaged one — shows an empty-state failure headed that Git review is unavailable, with Git's own message under
+  its line and no Try again.
 - Either way the Files mode still works.
 
 The repository's worktrees are every one there is now — not a bare main repository, and not a worktree Git reports as

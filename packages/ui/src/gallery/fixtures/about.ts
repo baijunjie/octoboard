@@ -154,7 +154,7 @@ export const aboutScenarios: Scenario[] = [
     category: "exceptional",
     title: "Third-party licenses, the list could not be loaded",
     description:
-      "The dialog's title and introduction over a danger empty state: a danger glyph, the heading \"Could not load the licenses\", its summary and the remedy, with Try again as the primary button and Details beside it. Details holds the loader's own text on a secondary surface. The first load failed and the next one succeeds, so Try again replaces the failure with the list.",
+      "The dialog's title and introduction over a danger empty state: a danger glyph, the heading \"Could not load the licenses\", its summary and the remedy, with the loader's own text on a surface of its own under them and Try again as the primary button below it. The first load failed and the next one succeeds, so Try again replaces the failure with the list.",
     licensesDialog: { failsOnce: LICENSES },
   },
 ];

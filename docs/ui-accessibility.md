@@ -601,9 +601,10 @@ scroll *this* scroller, it becomes a focusable `region` with an accessible name,
 scroll it. The test is that scroller, not what it contains: a stop inside it carries focus only as far as itself, so
 everything past that stop is still content nothing reaches. A dialog whose controls are all in its footer is the case
 `Dialog` owns, named by the dialog's own title; the screen shown before there is anything to show is another, named from
-the catalog, where the buttons sit after the message; the crash screen's stack trace, in the popover of the mark after
-its heading, is a scroller in its own right, as is the daemon's message in the daemon-failed screen's, each named "Error
-details" as any diagnostic block is.
+the catalog, where the buttons sit after the message; the crash screen's stack trace, on the details surface under its
+lines, is a scroller in its own right, as is the daemon's message in the daemon-failed screen's, each named "Error
+details" as any diagnostic block is; a pane's whole-subject failure taller than the pane is another, named by its
+heading.
 
 Such a region appears only while the scroller overflows, since a tab stop that scrolls nothing is one the user passes
 for no reason — the crash screen's stack trace and the screen's own column both come and go that way. The exception
@@ -1122,23 +1123,24 @@ list) is a warning mark after the field's label; a reason a dialog cannot procee
 an Alert at the top of its body.
 
 The Alert holds, beside `Alert.Indicator`: an `Alert.Title` saying what happened, then at most two sentences in the
-application's own words: an `Alert.Description` saying why, when that is known, and a second one with the one main
-thing to do about it. At its end, in the place HeroUI's own Alert puts its action button, stand at most two buttons:
-**Details** when there is more to show, then the recovery action when there is one (Try again, or the action that
-fixes it) at the trailing edge, where the primary button of a trailing-aligned group goes (see "Button order follows
-the group's alignment" under "Buttons"). Details opens a popover holding the rest: first any further explanation in
-the application's own words (a reason per cause, each cause's own fix, further guidance), then what is not written for
-the reader — a message passed through from the system, Git or an agent, a diagnostic block, raw entries, each block on
-a surface of its own (see "References in copy use `InlineReference`"). Raw text is never shown outside Details, and
-the one-sentence description and main remedy are never hidden in it; an error with nothing beyond those two sentences
-has no Details button. A catalog message keeps the same split: its visible summary and remedy carry no raw parameter
-(no system text, no `{detail}`), and any further explanation is a `.details` entry of its own that Details shows
-first. Try again appears only where trying again can change the answer; a failure that is the subject's state (no
-common commit, not a repository, a file outside the scope) has none. The buttons take the Alert's status colour, as
-HeroUI's own Alert examples do: the recovery action is the solid button of that colour (HeroUI's `danger` variant in a
-danger Alert; the same solid treatment from `--warning` / `--warning-foreground` in a warning one, HeroUI having no
-warning button), and Details is the soft button of that colour (`danger-soft`, or its warning counterpart), so neither
-reads as a neutral control dropped onto a coloured box.
+application's own words: an `Alert.Description` saying why, when that is known, and a second one with the one main thing
+to do about it. At its end, in the place HeroUI's own Alert puts its action button, stand at most two buttons:
+**Details** when there is more to show, then the recovery action when there is one (Try again, or the action that fixes
+it) at the trailing edge, where the primary button of a trailing-aligned group goes (see "Button order follows the
+group's alignment" under "Buttons"). Details opens a popover holding the rest: first any further explanation in the
+application's own words (a reason per cause, each cause's own fix, further guidance), then what is not written for the
+reader — a message passed through from the system, Git or an agent, a diagnostic block, raw entries, each block on a
+surface of its own (see "References in copy use `InlineReference`"). An Alert never shows raw text outside Details (a
+whole subject that failed shows it on the page, see "A whole subject that failed"), and the one-sentence description and
+main remedy are never hidden in it; an error with nothing beyond those two sentences has no Details button. A catalog
+message keeps the same split: its visible summary and remedy carry no raw parameter (no system text, no `{detail}`), and
+any further explanation is a `.details` entry of its own that Details shows first. Try again appears only where trying
+again can change the answer; a failure that is the subject's state (no common commit, not a repository, a file outside
+the scope) has none. The buttons take the Alert's status colour, as HeroUI's own Alert examples do: the recovery action
+is the solid button of that colour (HeroUI's `danger` variant in a danger Alert; the same solid treatment from
+`--warning` / `--warning-foreground` in a warning one, HeroUI having no warning button), and Details is the soft button
+of that colour (`danger-soft`, or its warning counterpart), so neither reads as a neutral control dropped onto a
+coloured box.
 
 Every Alert — an error, a warning — has a title. HeroUI centres the indicator on the title's 24px line, so an Alert
 that opens with its 20px description draws its first line off the glyph's centre; the title is what keeps them
@@ -1162,21 +1164,26 @@ loading and unsupported content keep their state presentations.
 A page, pane or list whose whole subject could not be loaded has nothing else to show, so its failure takes the empty
 state's shape (see "An empty state is a glyph, a heading, and what fills it") rather than an Alert: a danger glyph, a
 heading saying what could not be loaded, the line under it in the application's own words (why, and how to recover),
-and in its centred row the recovery action (Try again) as the primary button and **Details** as a secondary one, its
-popover holding what an Alert's Details holds: further explanation in the application's own words, then the raw text.
-An Alert is for a failure shown among other content.
+then what an Alert's Details holds — further explanation in the application's own words, then the raw text — on a
+`Surface` of its own under those lines, bordered with the separator colour so it stands apart on a dialog or a viewer as
+on a pane, start-aligned and outside the announcement, its raw blocks wrapped and `tall` so they neither scroll sideways
+in that narrow box nor push the row off the page, and in its centred row the recovery action (Try again) as the primary
+button. Nothing else marks it as an error: no status mark beside the heading and no Details button, since the page has
+room for the whole failure. The cap on a raw block is a share of the window, so where the panel fills a pane (which does
+not scroll) or a dialog's body, it scrolls in its place, a region named by its heading (see "A scroller nothing else on
+screen scrolls takes focus itself"). An Alert is for a failure shown among other content.
 
 A startup screen whose whole subject failed — the daemon that failed to start, and the crash screen — is a page whose
 whole subject failed like any other: it takes the empty state's shape above, its heading the page's `h1` and the line
 under it in the application's own words. Its row holds at most two buttons: the recovery (Try again, on the crash
 screen) as the primary with Quit beside it, or Quit alone where there is no recovery; Quit stands only where the
-application can quit itself. Its raw text — the daemon's message or the crash's stack — is a mark right after the
-heading, on both screens alike, whose popover holds only that text; it is never on the page. A screen whose only
-content is an explanation with no raw text in it — the startup screen with no daemon address, and its instructions for
-giving one — is the error's own surface, as the error alert dialog is, kept apart on purpose: it is no failure of
-something loaded but a configuration still to be given, so it is not the empty state's shape, and its heading and
-instructions may stand around the Alert. The heading is centred over the column, as is the row of buttons under it;
-the Alert, the instructions and any list in them are start-aligned, so a list's bullets stay beside their text.
+application can quit itself. Its raw text — the daemon's message or the crash's stack — sits on the surface under the
+line, as on any other such page. A screen whose only content is an explanation with no raw text in it — the startup
+screen with no daemon address, and its instructions for giving one — is the error's own surface, as the error alert
+dialog is, kept apart on purpose: it is no failure of something loaded but a configuration still to be given, so it is
+not the empty state's shape, and its heading and instructions may stand around the Alert. The heading is centred over
+the column, as is the row of buttons under it; the Alert, the instructions and any list in them are start-aligned, so a
+list's bullets stay beside their text.
 
 #### On the screen: an Alert when it matters, a mark at its point otherwise
 
@@ -1453,12 +1460,11 @@ level below that view's, and it sets no heading ids, since several such document
 
 Every place that has nothing to show takes one shape, through `EmptyPanel`
 (`packages/ui/src/components/EmptyPanel.tsx`): a glyph, a heading naming what is missing, optionally a line under it,
-and optionally a centred row of at most two buttons that wraps — the action that fills it, then a second way out of the
-state or a failure's **Details** — putting its primary first, as "Button order follows the group's alignment" under
-"Buttons" has it. A startup screen's failure carries its raw text in a mark right after the heading (`headingMark`)
-instead of Details. The whole shape, and which state takes which part, is `docs/product/empty-states.md`. Nothing builds
-a second one out of centred text, and a state with no glyph is not one of these — HeroUI's bare `EmptyState` is reached
-only through this component.
+optionally a failure's details on a surface under that line, and optionally a centred row of at most two buttons that
+wraps — the action that fills it, then a second way out of the state — putting its primary first, as "Button order
+follows the group's alignment" under "Buttons" has it. The whole shape, and which state takes which part, is
+`docs/product/empty-states.md`. Nothing builds a second one out of centred text, and a state with no glyph is not one of
+these — HeroUI's bare `EmptyState` is reached only through this component.
 
 - The heading is a short phrase carrying **no punctuation at all**, a comma inside it included: a title that needs one
   is a sentence, and the part after the comma belongs in the line under it. "No sessions yet", not "No sessions yet,
@@ -1472,11 +1478,12 @@ only through this component.
   that line. Its message is plain text rather than a heading; where the list has one creation action, the whole row
   performs it. The main content's full panel carries the current action without a competing full panel in the sidebar.
 - A load failure that leaves the whole place with nothing to show takes this shape too, as its error presentation: a
-  danger glyph, a heading saying what could not be loaded, and Try again and Details in the row (see "Errors shown among
-  other content"); its copy follows the "Errors" section of `.claude/skills/knowledge-i18n-copy/SKILL.md`. It is told
-  from an absence by its danger glyph and its retry. What the subject *is* is a state of the subject, not a failed load,
-  even when the panel warns about it: a project that is in no repository, a worktree that is gone, a repository Git
-  itself refuses, are all empty states, since no retry would change the answer.
+  danger glyph, a heading saying what could not be loaded, its details on a surface under the line, and Try again in the
+  row (see "Errors shown among other content"); its copy follows the "Errors" section of
+  `.claude/skills/knowledge-i18n-copy/SKILL.md`. It is told from an absence by its danger glyph and its retry. What the
+  subject *is* is a state of the subject, not a failed load, even when the panel warns about it: a project that is in no
+  repository, a worktree that is gone, a repository Git itself refuses, are all empty states, since no retry would
+  change the answer.
 
 Where a region elsewhere already speaks the state, the panel takes `silent` and is hidden from screen readers so it is
 not read twice. What that region says is then the only way to hear it, so it says the whole state as one sentence, from

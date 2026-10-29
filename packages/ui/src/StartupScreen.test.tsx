@@ -3,7 +3,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, onTestFinished } from "vitest";
 
-import { press } from "./components/detailsTestSupport";
 import { errorAlerts } from "./errorAlerts";
 import { t } from "./i18n/language";
 import type { PlatformAdapter } from "./platform";
@@ -28,19 +27,14 @@ function mount(screen: React.ReactElement = <DaemonFailedScreen error={DIAGNOSTI
   return container;
 }
 
-it("says the daemon's failure to start in the application's words and keeps its own message in a mark after the heading", () => {
+it("says the daemon's failure to start in the application's words and keeps its own message on a surface under them", () => {
   const container = mount();
-  const heading = container.querySelector("h1")!;
-  expect(heading.textContent).toBe(t("startup.daemonFailed.title"));
+  const panel = container.querySelector('[data-slot="empty-state"]')!;
+  expect(container.querySelector("h1")?.textContent).toBe(t("startup.daemonFailed.title"));
   expect(container.textContent).toContain(t("startup.daemonFailed.remedy"));
-  expect(container.textContent).not.toContain(DIAGNOSTIC);
-  expect(container.querySelector("pre")).toBeNull();
-  // A plain browser has no quit flow, so the row is empty and the mark, right after the heading, is the page's only button.
-  const buttons = [...container.querySelectorAll("button")];
-  expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([t("startup.daemonFailed.markLabel")]);
-  expect(buttons[0].parentElement!.previousElementSibling).toBe(heading);
-  press(buttons[0]);
-  expect(document.querySelector(`[role="dialog"][aria-label="${t("startup.daemonFailed.markLabel")}"] pre`)?.textContent).toBe(DIAGNOSTIC);
+  expect(panel.querySelector(':scope > [data-slot="surface"] pre')?.textContent).toBe(DIAGNOSTIC);
+  // A plain browser has no quit flow, so the page has no button at all.
+  expect(container.querySelector("button")).toBeNull();
 });
 
 it("keeps no danger tone on the page outside a glyph or an Alert", () => {
