@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 
 import { errorAlerts } from "../errorAlerts";
 import { detailsButton } from "./detailsTestSupport";
+import { AnchoredTooltip } from "./AnchoredTooltip";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "./StatusAnnouncer";
 import { ActionMenu, type ActionMenuEntry, type ActionMenuPanelContext } from "./ActionMenu";
 
@@ -319,6 +320,75 @@ it("lets the pointer reach every item's label content, so a clipped label can op
   // HeroUI's `.menu-item:hover` fill and `:active` shrink, which the disabled row now matches under its label.
   expect(item("Off").className).toContain("data-[disabled=true]:hover:bg-transparent");
   expect(item("Off").className).toContain("data-[disabled=true]:active:transform-none");
+});
+
+describe("Escape with a label's tooltip open", () => {
+  /** A label whose tooltip shows as the menu opens, as a clipped one's does under the pointer. */
+  function Hovered({ text, immediate = true }: { text: string; immediate?: boolean }) {
+    const anchor = useRef<HTMLSpanElement>(null);
+    return (
+      <>
+        <span ref={anchor}>{text}</span>
+        <AnchoredTooltip tooltip={`The whole ${text}`} anchor={anchor} hovered immediate={immediate} />
+      </>
+    );
+  }
+  const item = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent === name)!;
+  const tooltip = () => document.querySelector('[role="tooltip"]');
+  const escape = (target: Element) => act(async () => void target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+
+  it("closes only the tooltip, leaving the menu open with focus where it was, and the next Escape closes the menu", async () => {
+    await openMenu([
+      { label: "Plain", icon: Trash2, onClick: () => {} },
+      { label: "Long", content: <Hovered text="Long" />, icon: Trash2, onClick: () => {} },
+    ]);
+    await act(async () => item("Plain").focus());
+    expect(tooltip()?.textContent).toBe("The whole Long");
+
+    await escape(item("Plain"));
+    expect(tooltip()).toBeNull();
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
+    expect(document.activeElement).toBe(item("Plain"));
+
+    await escape(item("Plain"));
+    expect(document.querySelector("[role=menu]")).toBeNull();
+  });
+
+  it("closes only the tooltip inside a submenu, leaving the submenu open", async () => {
+    await openMenu([{ label: "Sub", icon: Trash2, items: [
+      { label: "Inner", icon: Trash2, onClick: () => {} },
+      { label: "Long", content: <Hovered text="Long" />, icon: Trash2, onClick: () => {} },
+    ] }]);
+    await act(async () => {
+      item("Sub").focus();
+      item("Sub").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(item("Inner"));
+    expect(tooltip()?.textContent).toBe("The whole Long");
+
+    await escape(item("Inner"));
+    expect(tooltip()).toBeNull();
+    expect(document.querySelectorAll("[role=menu]")).toHaveLength(2);
+    expect(document.activeElement).toBe(item("Inner"));
+
+    await escape(item("Inner"));
+    expect(document.querySelectorAll("[role=menu]")).toHaveLength(1);
+  });
+
+  it("closes the menu while the tooltip is still waiting to show", async () => {
+    // A tooltip closed by an earlier test leaves react-aria's tooltips warm, showing the next one at
+    // once, for half a second.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 600)));
+    await openMenu([
+      { label: "Plain", icon: Trash2, onClick: () => {} },
+      { label: "Long", content: <Hovered text="Long" immediate={false} />, icon: Trash2, onClick: () => {} },
+    ]);
+    await act(async () => item("Plain").focus());
+    expect(tooltip()).toBeNull();
+
+    await escape(item("Plain"));
+    expect(document.querySelector("[role=menu]")).toBeNull();
+  });
 });
 
 describe("a disabled item", () => {

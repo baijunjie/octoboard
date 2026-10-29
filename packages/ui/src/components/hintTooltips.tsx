@@ -4,6 +4,7 @@ import { mergeProps, useFocusable } from "react-aria";
 import { Popover as SurfacePopover, TooltipContext, TooltipTriggerStateContext, useSlottedContext } from "react-aria-components";
 
 import { useT } from "../i18n/react";
+import { isImeKey } from "../imeKey";
 import { interactionIsTouch } from "../touchInput";
 import { useLatest } from "./useLatest";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
@@ -293,8 +294,10 @@ function PhrasingTrigger(props: React.ComponentProps<"span">): React.ReactElemen
  * It never opens a touch popover: with no trigger of its own there is nothing to tap, and a tap on
  * the row it sits in is the row's action.
  *
- * With no trigger element, react-aria holds no Escape listener for it either, so the key is not
- * swallowed while it is open. It is marked `data-anchored-tooltip` for the code that tells a
+ * With no trigger element, react-aria holds no Escape listener for it either. Inside a popup that
+ * holds focus (a menu, a select's list) it takes an Escape for itself all the same, as a tooltip with
+ * a trigger does there (see `OpenWhileMounted`); anywhere else the key is not swallowed while it is
+ * open. It is marked `data-anchored-tooltip` for the code that, outside such a popup, tells a
  * tooltip which swallows the key from one that does not.
  */
 export function AnchoredHint({
@@ -319,7 +322,7 @@ export function AnchoredHint({
   if (!hovered) return null;
   return (
     <Tooltip>
-      <OpenWhileMounted immediate={immediate} />
+      <OpenWhileMounted immediate={immediate} anchor={anchor} />
       <TooltipSurface triggerRef={anchor} placement={placement} data-anchored-tooltip="">
         {tooltip}
       </TooltipSurface>
@@ -327,22 +330,37 @@ export function AnchoredHint({
   );
 }
 
-/** Reports to the tooltip's own state the hover that a trigger element would have reported. */
-function OpenWhileMounted({ immediate }: { immediate: boolean }): null {
+/** Reports to the tooltip's own state the hover that a trigger element would have reported, and takes the
+ * Escape that one would have taken inside a popup holding focus. */
+function OpenWhileMounted({ immediate, anchor }: { immediate: boolean; anchor: React.RefObject<Element | null> }): null {
   const state = useContext(TooltipTriggerStateContext);
+  const isOpen = useLatest(state?.isOpen ?? false);
   useEffect(() => {
     state?.open(immediate);
     // A press can cover the anchor with an overlay without sending pointerleave. Close the
     // tooltip, including its pending opening, before the press reaches that overlay's trigger.
     const close = () => state?.close(true);
+    // Escape dismisses a shown tooltip on its own, without the pointer or focus moving (WCAG 2.2
+    // SC 1.4.13), so where focus is in the popup the anchor sits in — a menu, a submenu, a select's
+    // list: react-aria's popover, which alone carries `data-trigger` — the key goes no further. The
+    // popup closes from a React handler, below this capture-phase listener, and would otherwise
+    // close with the tooltip. Anywhere else the key carries on to whatever was waiting for it — a
+    // dialog closes as it does under any tooltip, the agent's terminal takes it as an interrupt —
+    // and a tooltip still waiting out its delay is not yet shown, so it leaves the key alone too.
+    const closeOnKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isImeKey(event) && isOpen.current && anchor.current?.closest("[data-trigger]")?.contains(document.activeElement)) {
+        event.stopPropagation();
+      }
+      close();
+    };
     document.addEventListener("pointerdown", close, true);
-    document.addEventListener("keydown", close, true);
+    document.addEventListener("keydown", closeOnKey, true);
     // Closing on the way out is not optional: whether a tooltip has just been shown is tracked
     // globally, over every tooltip in the window, and one that goes away without closing leaves
     // that state standing, so the next tooltip to open shows with no delay.
     return () => {
       document.removeEventListener("pointerdown", close, true);
-      document.removeEventListener("keydown", close, true);
+      document.removeEventListener("keydown", closeOnKey, true);
       state?.close(true);
     };
     // Mount and unmount alone: opening again would undo a close react-aria made for a reason of

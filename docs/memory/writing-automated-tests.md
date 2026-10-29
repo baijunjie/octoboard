@@ -187,6 +187,14 @@ positive tests".
   it goes through `act`.
 - A root is not the only thing a test arms. Whatever it set going it also stops or awaits before it ends — a
   module-level singleton's own queue and timers, such as HeroUI's toast queue, which a later unmount cannot reach.
+- react-aria's tooltip warm-up is such a singleton, with no way to reset it: showing any tooltip sets one flag for the
+  whole window, and closing it leaves the flag set for 500 ms (`TOOLTIP_COOLDOWN` in react-stately 3.50.0's
+  `useTooltipTriggerState`), during which the next tooltip opens with no delay. So a test that counts on a tooltip
+  still waiting out its delay starts cold itself — waits 600 ms of real time first, before faking any timers, as the
+  "still waiting to show" case in `packages/ui/src/components/ActionMenu.test.tsx` does — or it passes alone and fails
+  after any test that closed a tooltip. A test that fakes timers and shows a tooltip runs them out before restoring
+  real ones, as `finish` in `packages/ui/src/components/AnchoredTooltip.test.tsx` does, or the flag stays set for the
+  rest of the file.
 - Settling HeroUI's toast queue in a test that has queued a toast: fake the timers for that test (restored with
   `onTestFinished`), run `toast.clear()` and `vi.runOnlyPendingTimers()` together inside one `act`, and assert after
   the unmount that `toast.getQueue().visibleToasts` is empty. The assertion is the load-bearing half rather than the

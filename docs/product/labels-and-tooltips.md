@@ -31,6 +31,13 @@ keeps its own width, padding and text sizes, being a panel):
   pointer press or key press (see `docs/product/terminal-links.md`). So does the tooltip on the tab of an added agent
   that is not installed, in Settings, Escape included, and it stays closed until the pointer is off the tab and the tab
   has lost keyboard focus, or until keyboard focus arrives on the tab again (see "Tooltips on indicators" below).
+- **Escape inside a menu or a select's list closes only the tooltip.** While keyboard focus is in a menu, a submenu or
+  a select's list of options, Escape with a tooltip shown there — the one on a clipped item or option label as well as
+  one on a mark — closes the tooltip and nothing else: the menu or list stays open with focus where it was, and the
+  next Escape closes it as usual. A tooltip still waiting to open does not hold the key back, so that Escape closes the
+  menu or list at once. Elsewhere Escape is not held back by a tooltip on clipped text: in a dialog it closes the dialog
+  together with any tooltip open in it, and outside dialogs and popups it goes on to whatever takes it, such as the
+  agent in a session's terminal.
 - **A touch has no hover, so on a touch screen the same text opens in a popover.** Which of the two shows follows the
   input of the interaction, not the device: a mouse hover and keyboard focus open the tooltip, and a finger's or a pen's
   press opens the popover, on a phone, on a tablet with a trackpad and on a touch-screen laptop alike. A mouse press

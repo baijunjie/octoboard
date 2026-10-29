@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { act, useState } from "react";
+import { act, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { InlineReference } from "../components/InlineReference";
 
 import { OptionSelect } from "./OptionSelect";
@@ -159,4 +160,38 @@ it("keeps aria-disabled in step with an option that becomes disabled and enabled
   expect(busy().getAttribute("aria-disabled")).toBe("true");
   render(false);
   expect(busy().getAttribute("aria-disabled")).toBeNull();
+});
+
+it("closes only an option's tooltip on Escape, leaving the list open with focus where it was, and the next Escape closes the list", async () => {
+  /** A label whose tooltip shows as the list opens, as a clipped one's does under the pointer. */
+  function Hovered() {
+    const anchor = useRef<HTMLSpanElement>(null);
+    return (
+      <>
+        <span ref={anchor}>Long</span>
+        <AnchoredTooltip tooltip="The whole Long" anchor={anchor} hovered immediate />
+      </>
+    );
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<OptionSelect label="Branch" value="a" onChange={() => {}} options={[
+    { value: "a", label: "Short" },
+    { value: "b", label: "Long", labelContent: <Hovered /> },
+  ]} />));
+  await act(async () => container.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
+  const tooltip = () => document.querySelector('[role="tooltip"]');
+  const escape = () => act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+  const focused = document.activeElement;
+  expect(focused?.getAttribute("role")).toBe("option");
+  expect(tooltip()?.textContent).toBe("The whole Long");
+
+  await escape();
+  expect(tooltip()).toBeNull();
+  expect(document.querySelector('[role="listbox"]')).not.toBeNull();
+  expect(document.activeElement).toBe(focused);
+
+  await escape();
+  expect(document.querySelector('[role="listbox"]')).toBeNull();
 });

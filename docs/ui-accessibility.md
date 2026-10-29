@@ -795,6 +795,16 @@ reached, until the pointer next moved. A tooltip of a control inside the overlay
 tooltip shape draws on does this (`hintTooltips.tsx` in `packages/ui/src/components/`), so a new tooltip needs nothing
 of its own.
 
+Escape dismisses a shown tooltip without the pointer or focus moving (WCAG 2.2 SC 1.4.13). Inside a popup that holds
+focus — a menu, a submenu, a select's list — that Escape closes the tooltip alone, leaving the popup open with focus
+where it was, and the next Escape closes the popup as usual. A tooltip with a trigger gets this from react-aria, which
+takes the key while it is open; the anchored shape, which has none, takes it itself, but only while it is shown and
+only when focus is inside the react-aria popover its anchor sits in, so a tooltip still waiting out its delay leaves
+the key to the popup. Outside such a popup the key goes on: a dialog closes with whatever tooltip is open in it (see
+`useEscapeWhileTooltipOpen` in `packages/ui/src/dialogs/`), and the agent's terminal still takes it as an interrupt.
+A combo box keeps focus in its input, outside its list, so an anchored tooltip in the list would close with it; none
+of its options carries one.
+
 ### A help tip: an explanation behind a "?"
 
 An explanation moved off the screen into a "?" uses `HelpTip` (`packages/ui/src/components/HelpTip.tsx`), never a
