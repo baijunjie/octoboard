@@ -865,6 +865,51 @@ it("hoverMenuLabel fails where the tooltip that opens is not the one named", asy
   release(document.querySelector("[data-slot=label] > *")!);
 });
 
+/** A menu item whose label holds two lines, the second of which (an identifier) carries the anchored tooltip, as the
+ * Copy session ID item does: the pointer entering the first line, or the wrapper around both, opens nothing. */
+function ItemWithLineTip({ tip }: { tip: string }): React.ReactElement {
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const { hoverProps, isHovered } = useHover({});
+  return (
+    <div role="menuitem">
+      <span data-slot="label">
+        <span className="flex-col">
+          <span>Copy session ID</span>
+          <span ref={ref} {...hoverProps}>
+            bb1cf4cb-37e3-4ea1
+            <AnchoredTooltip tooltip={tip} anchor={ref} hovered={isHovered} />
+          </span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
+it("hoverMenuLabel with a line points at that line inside the label", async () => {
+  mountForTooltip(<ItemWithLineTip tip="bb1cf4cb-37e3-4ea1-9907" />);
+  await settledLive(createUi(document, "en").hoverMenuLabel((name) => name.startsWith("Copy session ID"), "bb1cf4cb-37e3-4ea1-9907", "bb1cf4cb-37e3-4ea1"));
+  expect(openTooltip()?.textContent).toBe("bb1cf4cb-37e3-4ea1-9907");
+  release(document.querySelector("[data-slot=label] span span:last-child")!);
+});
+
+it("hoverMenuLabel without a line leaves a tooltip on the second line shut", async () => {
+  mountForTooltip(<ItemWithLineTip tip="bb1cf4cb-37e3-4ea1-9907" />);
+  const done = expect(createUi(document, "en").hoverMenuLabel((name) => name.startsWith("Copy session ID"), "bb1cf4cb-37e3-4ea1-9907")).rejects.toThrow(
+    /its anchored tooltip is none/,
+  );
+  await vi.advanceTimersByTimeAsync(9000);
+  await done;
+});
+
+it("hoverMenuLabel fails where no line of the label reads the one named", async () => {
+  mountForTooltip(<ItemWithLineTip tip="bb1cf4cb-37e3-4ea1-9907" />);
+  const done = expect(createUi(document, "en").hoverMenuLabel((name) => name.startsWith("Copy session ID"), "x", "no such line")).rejects.toThrow(
+    /that reads no such line/,
+  );
+  await vi.advanceTimersByTimeAsync(9000);
+  await done;
+});
+
 it("touchPress opens a help tip's explanation in the popover a finger gets", async () => {
   mountWindow();
   await settled(createUi(document, "en").touchPress("About Billing"));

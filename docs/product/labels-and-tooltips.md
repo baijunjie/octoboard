@@ -354,12 +354,14 @@ and pressing the name still runs nothing. The diff separator's tooltip follows t
 `docs/product/right-to-left-layout.md`). **So is a branch name**, so that its end — the part that tells sibling
 branches apart — stays in view: in a project's branch badge, on its sidebar row and in its focus mode's header; in the
 Git mode's branch selector, both its current choice and its listed options; and in the project menu's **Switch branch**
-submenu. The short commit id a detached `HEAD` shows in the badge, which is known by its beginning, the badge's text
-saying the repository has no commits yet and the branch selector's placeholder asking for a branch are cut at their end,
-like every other label. Everything this section says holds for a label cut at its start, mirrored: it rests pinned to
-its end, fades at its start, and carries its full text as its tooltip while it is cut.
+submenu. The short commit id a detached `HEAD` shows in the badge and the session ID under the **Copy session ID**
+item's label, each known by its beginning, the badge's text saying the repository has no commits yet and the branch
+selector's placeholder asking for a branch are cut at their end, like every other label. Everything this section says
+holds for a label cut at its start, mirrored: it rests pinned to its end, fades at its start, and carries its full text
+as its tooltip while it is cut.
 
-**A label that reads left to right whatever the language** — a path, a branch name, the file viewer's file name (see
+**A label that reads left to right whatever the language** — a path, a branch name, the session ID under the **Copy
+session ID** item's label, the file viewer's file name (see
 "What is mirrored" and "What is not mirrored" in `docs/product/right-to-left-layout.md`) — gives its full text in its tooltip left to right too, under a right-to-left
 language as well, so the tooltip shows the same value the label does; where that tooltip wraps, its lines still sit
 on the window's reading side. A tooltip that is a sentence rather than the value itself reads in the window's

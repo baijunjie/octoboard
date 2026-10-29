@@ -52,11 +52,13 @@ A session row's action menu offers:
 - **Copy session ID** — immediately after Rename, shows the session ID below its label in muted monospace text,
   left to right on one line within the same menu item, fading where it overflows. An overflowing ID scrolls while the
   pointer is over the ID line and returns to its beginning when the pointer leaves; it stays still under reduced motion.
-  Selecting the item copies the full ID exactly to the clipboard. Available for project and console sessions wherever
-  their action menus are offered, including right-click menus, focus mode and nested sessions. An archived session's
-  menu offers it after Reopen. Where the platform has no clipboard, or it
-  refuses, the ID is copied through the browser's selection copy instead. Success raises a notice toast; a copy neither
-  way allows raises an error alert.
+  While the ID is cut off, resting the pointer on the ID line shows the full ID as its tooltip, left to right in every
+  language; an ID that fits shows none, and keyboard focus shows none (see "Names too long for their space" in
+  `docs/product/labels-and-tooltips.md`). Pressing the ID line is pressing the item. Selecting the item copies the
+  full ID exactly to the clipboard. Available for project and console sessions wherever their action menus are offered,
+  including right-click menus, focus mode and nested sessions. An archived session's menu offers it after Reopen. Where
+  the platform has no clipboard, or it refuses, the ID is copied through the browser's selection copy instead. Success
+  raises a notice toast; a copy neither way allows raises an error alert.
 - **Colour** — a console session's row only: a submenu of swatches where the user chooses the console session's colour
   (see "The binding badge" below). A project session's row has no such entry, and neither has an archived console
   session's.
