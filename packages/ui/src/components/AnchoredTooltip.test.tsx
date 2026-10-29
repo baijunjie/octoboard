@@ -84,14 +84,15 @@ it("closes when something under the anchor scrolls, and opens again only once th
   finish();
 });
 
-it("leaves Escape to whatever is waiting for it while it is open", () => {
+it("leaves Escape to whatever is waiting for it while it is open outside a popup holding focus", () => {
   const { container, hover, settle, finish } = mount();
   hover(true);
   settle();
   expect(tooltip()).not.toBeNull();
 
   // react-aria takes Escape above the React tree while a tooltip with a trigger element of its own
-  // is open; this tooltip has none, so the key reaches the surface the pointer happens to be over.
+  // is open; this tooltip has none, so outside a popup holding focus (where it takes the key itself)
+  // the key reaches the surface the pointer happens to be over.
   let reached = false;
   const listen = () => void (reached = true);
   window.addEventListener("keydown", listen);

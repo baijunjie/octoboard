@@ -22,12 +22,13 @@ import { isImeKey } from "../imeKey";
  * It acts only while a tooltip with a trigger element is open, which is exactly when react-aria
  * will swallow the key, so no other state is touched and the surface cannot be asked to close
  * twice. An `AnchoredTooltip` has no trigger element, so react-aria holds no listener for it and the
- * key reaches the surface; it is marked `data-anchored-tooltip` and left out here, as acting on it
- * too would close the surface from this listener and from its own handler both. It leaves the key to
- * propagate, so the tooltip is still dismissed and react-aria still reads the press as keyboard
- * input — what decides whether whatever focus returns to on closing draws a focus ring. A
- * modified, held or composing Escape is left alone: react-aria's own dismissal ignores those
- * presses, so with a tooltip open they do nothing, as they do without one.
+ * key reaches the surface (it holds the key back itself only inside a popup that holds focus, which
+ * is portalled out of every surface); it is marked `data-anchored-tooltip` and left out here, as
+ * acting on it too would close the surface from this listener and from its own handler both. It
+ * leaves the key to propagate, so the tooltip is still dismissed and react-aria still reads the
+ * press as keyboard input — what decides whether whatever focus returns to on closing draws a
+ * focus ring. A modified, held or composing Escape is left alone: react-aria's own dismissal
+ * ignores those presses, so with a tooltip open they do nothing, as they do without one.
  *
  * TODO: Drop this once react-aria leaves Escape to the surfaces around a tooltip: its
  * `useTooltipTrigger` stops propagation for every Escape while the tooltip is open, whatever else

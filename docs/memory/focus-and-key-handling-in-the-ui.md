@@ -232,7 +232,7 @@ For a field such a change locks (the answer to a lookup), hand focus on with `us
 goes away; there too a test blurs the control itself as it disables it, or it passes against the ordering that breaks
 in the browser.
 
-## Escape is taken above the React tree: a pane's listener, and react-aria's while a tooltip is open
+## Escape is taken above the React tree: a pane's listener, and a tooltip's while one is open
 
 Two capture-phase `keydown` listeners run before React's own dispatch, so a React `onKeyDown` can neither be relied on
 to receive Escape nor hold on to it — `onKeyDownCapture` on a wrapper does not help, as React dispatches from its root
@@ -251,11 +251,11 @@ scenario at a normal width, with the sidebar docked and nothing floating, never 
 dispatched Escape is never a neutral way to close a tooltip, whether in a scenario step or a test: while an overlay
 is up, this listener takes the key first and dismisses the overlay too.
 
-The second is react-aria's: while a tooltip **that has a trigger element** is open, `useTooltipTrigger` holds a
-capture-phase listener on `document` that calls `stopPropagation()` on every Escape, whatever else was waiting for the
-key (react-aria 3.52.1, unchanged in 3.53.1). The listener is installed for every open tooltip, but its whole body is
-guarded on the trigger's ref, which only the trigger element's provider ever sets — so a tooltip hung on a control or
-on an indicator swallows the key and one anchored to an element that is not its trigger does not. Every icon-only
+The second is the open tooltip's. While a tooltip **that has a trigger element** is open, react-aria's
+`useTooltipTrigger` holds a capture-phase listener on `document` that calls `stopPropagation()` on every Escape,
+whatever else was waiting for the key (react-aria 3.52.1, unchanged in 3.53.1). The listener is installed for every
+open tooltip, but its whole body is guarded on the trigger's ref, which only the trigger element's provider ever sets —
+so a tooltip hung on a control or on an indicator swallows the key. Every icon-only
 control here carries a tooltip through `TitledControl`, and such a tooltip opens on keyboard focus as much as on
 hover, so one Tab inside any dialog or view reaches that state — when Escape does nothing somewhere, what predicts it
 is "a tooltip with a trigger is open", not which control holds focus. A surface that dismisses itself from a React
@@ -265,6 +265,13 @@ and only while such a tooltip is open. Call it rather than writing your own, and
 surface that already calls it, every dialog included. Such a handler can only choose whether to act, never
 route the key onwards: once react-aria has swallowed it nothing can hand it back to the control that wanted it, which
 is why a combo box's suggestion list inside a dialog does not withdraw on Escape while a tooltip is open.
+
+A tooltip anchored to an element that is not its trigger (`AnchoredHint` in
+`packages/ui/src/components/hintTooltips.tsx`, a clipped label's tooltip) gets no such listener from react-aria and
+stops the key itself in one case only: while it is shown and focus is inside the react-aria popover its anchor sits in
+(a menu, a submenu, a select's list), as `docs/ui-accessibility.md`'s "A tooltip is the application's own, never the
+browser's `title`" sets out. Anywhere else — a dialog, a view, the terminal — it lets Escape through, which is why
+`useEscapeWhileTooltipOpen` leaves it out.
 
 ## A key handler goes on a plain DOM element, not on a HeroUI or react-aria component
 
