@@ -2655,7 +2655,7 @@ async fn open_detached_with(
 /// already deleted; if it could not be deleted it is left interrupted, and the notice is sent all
 /// the same. The notice carries the failure's own code as `reason_code` and its params beside
 /// `title` and `reason` (the English account), so a client words the reason itself.
-fn report_failed_launch(state: &Arc<AppState>, session: &Session, err: &anyhow::Error) {
+pub(crate) fn report_failed_launch(state: &Arc<AppState>, session: &Session, err: &anyhow::Error) {
     let (code, coded, reason) = error_parts(err);
     let mut pairs: Vec<(&str, &str)> = coded
         .iter()
@@ -4722,6 +4722,8 @@ pub(crate) async fn switch_session_account_with(
 /// claim. Nothing is required by default.
 #[derive(Clone, Copy, Default)]
 pub(crate) struct SwitchOnlyIf<'a> {
+    /// The failed turn and process whose verified quota recovery authorizes this restart.
+    pub recovery: Option<&'a crate::auto_switch::PendingRecovery>,
     /// The account the session must still be on (`Some(None)` the default account).
     pub on_account: Option<Option<&'a str>>,
     /// The session must not be shown as waiting for the user, by whatever route: moving it would
@@ -4801,7 +4803,13 @@ pub(crate) async fn switch_session_account_if(
     // can launch, resume, switch or delete the session while its process is down, while the
     // relaunched one is being watched, or while the account is put back; refused here when one
     // of those is under way.
+    if only_if.recovery.is_none() {
+        state.quota_recovery.cancel(id);
+    }
     let claim = state.begin_account_switch(id, only_if.watch_launch)?;
+    if only_if.recovery.is_some_and(|wait| !wait.still_due(state)) {
+        return Err(NoLongerDue("the quota recovery no longer belongs to this turn").into());
+    }
     let before = state.session_record(id)?;
     refuse_unless_still_askers(&before, asked_by)?;
     refuse_if_archived(&before)?;
@@ -4827,7 +4835,13 @@ pub(crate) async fn switch_session_account_if(
         return Err(NoLongerDue("the session has no running process now").into());
     }
     let target_account = checked_account_reference(state, before.agent, account)?;
-    refuse_if_on_account(&before, &target_account)?;
+    let same_account = before.account_id == target_account;
+    if !only_if
+        .recovery
+        .is_some_and(crate::auto_switch::PendingRecovery::permits_current_account)
+    {
+        refuse_if_on_account(&before, &target_account)?;
+    }
     let target_dir = state.store.account_dir(&target_account)?;
     refuse_if_account_disabled(state, before.agent, target_account.as_deref())?;
     refuse_if_account_quota_exhausted(
@@ -4881,6 +4895,11 @@ pub(crate) async fn switch_session_account_if(
         }
     }
 
+    if only_if.recovery.is_some_and(|wait| !wait.still_due(state)) {
+        return Err(
+            NoLongerDue("the quota recovery was cancelled while preparing the restart").into(),
+        );
+    }
     // Whether this switch stopped a running process: one that had exited by itself already, and
     // is only waiting to be deregistered, is not its doing.
     let ended_a_process = match state.live_session(id) {
@@ -4926,7 +4945,9 @@ pub(crate) async fn switch_session_account_if(
             target_account.as_deref(),
         )
         .await?;
-        if let Some((from, to, record, agent_session_id)) = relocation {
+        if let Some((from, to, record, agent_session_id)) =
+            relocation.filter(|(from, to, _, _)| from != to)
+        {
             let agent = before.agent;
             // The environment the relaunch will see, which with the target's `config.toml` says
             // where a Codex home keeps its database.
@@ -4974,7 +4995,7 @@ pub(crate) async fn switch_session_account_if(
                 &[("session", id)],
             ));
         }
-        if only_if.usage_limited {
+        if only_if.usage_limited && !same_account {
             // Noted under the claim, so that a turn waiting for it to end never picks this account.
             state.note_left_for_limit(id, before.account_id.as_deref());
         }
@@ -6920,6 +6941,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = auto_switch_on_usage_limit {
         changed |= state.store.set_auto_switch_on_usage_limit(value)?;
+        if !value {
+            state.quota_recovery.clear();
+        }
     }
     if let Some(value) = sidebar_order_by_status {
         changed |= state.store.set_sidebar_order_by_status(value)?;

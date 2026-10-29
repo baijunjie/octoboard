@@ -7,11 +7,11 @@ asked to confirm. An owner moves a session of its own with the `switch_session_a
 unless they have chosen to have switches approved without asking (see "Switching from an owner's tool" below). Both run
 the same switch, described from "What a switch does" on. Octoboard makes that switch by itself in one case only: while
 the user has **Automatically switch accounts at the usage limit** on, a session whose turn stops on its account's usage
-limit is switched to another account (see `docs/product/automatic-account-switch.md`); otherwise a switch is made only
-when the user or an owner asks for one, and never because an account reads as used up. A session cannot be switched
-onto a used-up account (see "A used-up account" in `docs/product/account-quotas.md`), onto one that is not logged in
-(see "An account that is not logged in" there), nor onto a turned-off one (see "Turning an account off" in
-`docs/product/agent-accounts.md`).
+limit is switched to another account, or waits for fresh quota evidence when none qualifies (see "When no account
+qualifies" in `docs/product/automatic-account-switch.md`); otherwise a switch is made only when the user or an owner
+asks for one, and never because an account reads as used up. A session cannot be switched onto a used-up account (see "A
+used-up account" in `docs/product/account-quotas.md`), onto one that is not logged in (see "An account that is not
+logged in" there), nor onto a turned-off one (see "Turning an account off" in `docs/product/agent-accounts.md`).
 
 ## Confirming a switch
 
