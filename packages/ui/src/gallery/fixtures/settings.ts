@@ -713,6 +713,19 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-git-clone-dir-tooltip",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: git, the clone directory's full path in a tooltip",
+    description: "The mouse rests on the Default clone directory field, whose path is written from the home directory (~/Projects/clients/...), so a tooltip above it gives the full path from the root (/Users/dev/Projects/clients/...), long enough to wrap onto a second line. The path reads left to right, starting with its leading \"/\" at the left: under a right-to-left language the tooltip does not move it to the far end, and both lines start at the tooltip's left edge, the second not sitting at the right.",
+    state: { ...browserState, settings: { ...browserState.settings!, default_clone_dir: "/Users/dev/Projects/clients/acme-corporation/internal-platform/services/billing" } },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.git")),
+      (ui) => ui.hoverField(ui.t("settings.cloneDir.label"), "/Users/dev/Projects/clients/acme-corporation/internal-platform/services/billing"),
+    ],
+  },
+  {
     id: "settings-accounts",
     group: GROUP,
     category: "normal",

@@ -2,6 +2,7 @@ import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 import { onReducedMotion, prefersReducedMotion } from "../reducedMotion";
 import { AnchoredTooltip } from "./AnchoredTooltip";
+import { ValueTooltipText } from "./ValueTooltipText";
 
 interface Clipped {
   start: boolean;
@@ -402,7 +403,7 @@ export function FadeOverflow({
   // A plain-text tooltip is the label's own value in full, and the tooltip surface is portalled out
   // of the label, so a left-to-right value (a path, a branch name) carries its direction over
   // rather than taking the window's.
-  const tooltip = dir === "ltr" && typeof shownTitle === "string" ? <span dir="ltr">{shownTitle}</span> : shownTitle;
+  const tooltip = dir === "ltr" && typeof shownTitle === "string" ? <ValueTooltipText>{shownTitle}</ValueTooltipText> : shownTitle;
   // The pointer is followed only where a tooltip was asked for, and from the prop rather than from
   // what is clipped right now, so that a label clipped while the pointer is already on it cannot
   // be left hovered for good.

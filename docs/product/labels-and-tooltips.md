@@ -51,6 +51,14 @@ keeps its own width, padding and text sizes, being a panel):
 - Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
   long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
   its characters, which is its word boundary.
+- **A tooltip that is a left-to-right value in full reads as one left-to-right block in every language** — a clipped
+  path's, branch name's, session ID's, file name's or account email's full text (see "Names too long for their space"
+  below), the full path of Settings' Default clone directory field (see "Default clone directory" in
+  `docs/product/settings.md`) and an OSC 8 hyperlink's target in a terminal (see `docs/product/terminal-links.md`).
+  Under a right-to-left language too, it reads from the left, and where it is long enough to wrap, every line starts at
+  the tooltip's left edge. A value on one line looks the same in either direction. A tooltip that is a sentence rather
+  than a value — even one naming a path or a branch — reads in the window's direction, its lines aligned to the
+  window's reading side.
 
 Two places show the operating system's own tooltip instead, which follows the system's styling and timing: a link inside
 a Markdown document in the file viewer, where — for a web or mail address, or a path in the project — the address it
@@ -368,11 +376,11 @@ holds for a label cut at its start, mirrored: it rests pinned to its end, fades 
 as its tooltip while it is cut.
 
 **A label that reads left to right whatever the language** — a path, a branch name, the session ID under the **Copy
-session ID** item's label, the file viewer's file name (see
-"What is mirrored" and "What is not mirrored" in `docs/product/right-to-left-layout.md`) — gives its full text in its tooltip left to right too, under a right-to-left
-language as well, so the tooltip shows the same value the label does; where that tooltip wraps, its lines still sit
-on the window's reading side. A tooltip that is a sentence rather than the value itself reads in the window's
-direction as usual.
+session ID** item's label, the file viewer's file name, an account's sign-in email (see
+"What is mirrored" and "What is not mirrored" in `docs/product/right-to-left-layout.md`) — gives its full text in its
+tooltip left to right too, under a right-to-left language as well, so the tooltip shows the same value the label does,
+as one left-to-right block (see "How a tooltip behaves" above). A tooltip that is a sentence rather than the value
+itself reads in the window's direction as usual.
 
 A project's branch name in its branch badge also follows these fade and marquee rules. The badge's tooltip is not
 one of this section's, though: the whole badge carries one tooltip describing the branch and its counts, shown whether
