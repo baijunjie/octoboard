@@ -97,28 +97,15 @@ export const reportScenarios: Scenario[] = [
     category: "normal",
     title: "Latest interactive report",
     state: twoSessions,
-    description: "The latest report is an interactive form; pagination belongs to the selected console session. The \"Live changes\" buttons delete its newest page (the pager moves to the one before, and the count drops), delete all of its pages (the empty state takes the panel's body, the panel staying) and push a new one (it appears as the latest).",
+    description: "The latest report is an interactive form; pagination belongs to the selected console session. The \"Live changes\" buttons delete its newest page (the pager moves to the one before, and the count drops), delete all of its pages (the empty state takes the panel's body, the panel staying) and push a new one (it appears as the latest). Choose Phone (420px) to see the layout below 782px: the Report card floats over the console session's terminal instead of docking beside it, with a dimmed strip of the terminal beside it, reaching the window's start edge since no rail stands there, that closes it when pressed. The card keeps its header, the page arrows and count and Close panel; opening it with a mouse or the keyboard moves focus into the card, onto the page arrows' first enabled button (Previous page, on the last page shown).",
     steps: [
       (ui) => ui.press(ui.session("Hub 2")),
+      (ui) => ui.showPanel("report"),
     ],
     liveChanges: [
       latestPageDeleted("delete-latest", "Hub 2's newest page is deleted", hub2.id),
       allPagesDeleted("delete-all", "All of Hub 2's pages are deleted", hub2.id),
       pagePushed("push-page", "A new page is pushed to Hub 2", pageOf("h2-new", hub2.id, summary("Hub 2, pushed live"), 0)),
-    ],
-  },
-  {
-    id: "report-overlay",
-    group: GROUP,
-    category: "normal",
-    title: "Report over the terminal on a phone",
-    width: 390,
-    state: twoSessions,
-    description: "Below 782px the Report card floats over the console session's terminal instead of docking beside it, with a dimmed strip of the terminal beside it, reaching the window's start edge since no rail stands there, that closes it when pressed. The card keeps its header, the page arrows and count and Close panel; opening it with a mouse or the keyboard moves focus into the card, onto the page arrows' first enabled button (Previous page, on the last page shown). The width is fixed because the layout exists only in this range.",
-    steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
-      (ui) => ui.press(ui.session("Hub 2")),
-      (ui) => ui.press(ui.t("titleBar.report.show")),
     ],
   },
   {
@@ -130,6 +117,7 @@ export const reportScenarios: Scenario[] = [
     description: "The first page is read-only and its controls are disabled.",
     steps: [
       (ui) => ui.press(ui.session("Hub")),
+      (ui) => ui.showPanel("report"),
       (ui) => ui.press(ui.t("report.previous")),
     ],
   },
@@ -158,9 +146,13 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project session with a report",
-    description: "A project session that has pages: the right pane stacks a Report card above the project's Files card, and the top bar offers the Report, Files and Terminal toggles in that order, the order the cards stack, Report and Files pressed. The Report shows only the selected session's two pages, on the latest, not those of the project's other session. Selecting that other session swaps the Report for its own page; the Files card stays as it was.",
+    description: "A project session that has pages: the right pane stacks a Report card above the project's Files card, and the top bar offers the Report, Files and Terminal toggles in that order, the order the cards stack, Report and Files pressed. The Report shows only the selected session's two pages, on the latest, not those of the project's other session. Selecting that other session swaps the Report for its own page; the Files card stays as it was. Choose Phone (420px) to see the layout below 782px: the Report floats over the terminal as the only card, as a console session's does, and the top bar lists the Report, Files and Terminal toggles, Report pressed. The \"Live changes\" buttons delete all of the session's pages (the card and its toggle go, the terminal uncovered) and push a page (only the toggle returns, not pressed: at that width the card does not float again until the toggle is pressed).",
     state: projectSessions,
-    steps: [openProjectSession(withReport.title)],
+    steps: [openProjectSession(withReport.title), (ui) => ui.showPanel("report")],
+    liveChanges: [
+      allPagesDeleted("delete-all", "All pages are deleted", withReport.id),
+      pagePushed("push-page", "A page is pushed", pageOf("pr-new", withReport.id, summary("Idempotency keys, pushed live"), 0)),
+    ],
   },
   {
     id: "report-project-closed",
@@ -180,24 +172,6 @@ export const reportScenarios: Scenario[] = [
     description: "A project session that has pushed nothing: the top bar offers only the Files and Terminal toggles and the pane holds Files, with no Report toggle or card.",
     state: projectSessions,
     steps: [openProjectSession(withoutReport.title)],
-  },
-  {
-    id: "report-project-overlay",
-    group: GROUP,
-    category: "normal",
-    title: "Project session's report over the terminal on a phone",
-    width: 390,
-    state: projectSessions,
-    description: "Below 782px a project session's Report floats over the terminal as the only card, as a console session's does; the top bar lists the Report, Files and Terminal toggles, Report pressed. The \"Live changes\" buttons delete all of its pages (the card and its toggle go, the terminal uncovered) and push a page (only the toggle returns, not pressed: the card does not float again until the toggle is pressed). The width is fixed because the layout exists only in this range.",
-    steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
-      (ui) => ui.press(ui.session(withReport.title)),
-      (ui) => ui.press(ui.t("titleBar.report.show")),
-    ],
-    liveChanges: [
-      allPagesDeleted("delete-all", "All pages are deleted", withReport.id),
-      pagePushed("push-page", "A page is pushed", pageOf("pr-new", withReport.id, summary("Idempotency keys, pushed live"), 0)),
-    ],
   },
   {
     id: "report-project-live",
@@ -257,6 +231,7 @@ export const reportScenarios: Scenario[] = [
     pageListErrors: { [stale.id]: listFailure },
     steps: [
       (ui) => ui.press(ui.session("Stale pages")),
+      (ui) => ui.showPanel("report"),
       (ui) => ui.hoverStatusMark(ui.t("report.listFailed")),
     ],
   },

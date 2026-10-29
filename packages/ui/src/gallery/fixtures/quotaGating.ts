@@ -425,7 +425,13 @@ export const quotaGatingScenarios: Scenario[] = [
       }),
       agentAvailability: available,
     },
-    steps: [(ui) => ui.press(ui.session("Port the importer to the new parser")), (ui) => ui.press(ui.t("common.close"))],
+    steps: [
+      (ui) => ui.press(ui.session("Port the importer to the new parser")),
+      (ui) => ui.press(ui.t("common.close")),
+      // The question's dialog holds the toggle inert, so the drawer a pick leaves up from 782px to 1168px is closed
+      // after it.
+      (ui) => ui.closeDrawer(),
+    ],
   },
   {
     id: "settings-accounts-from-incomplete-launch",

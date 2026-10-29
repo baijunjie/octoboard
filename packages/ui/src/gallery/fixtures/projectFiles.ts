@@ -103,7 +103,7 @@ const { console: console_, web, api, sessions } = SAMPLE;
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
 /** Website with a shell already running, so a terminal a row starts is told from it by its tab. */
 const shellState = snapshotState({ consoles: [console_], projects: [web, api], sessions, shellTerminals: [shellTerminalOf("sh-1", web, "pnpm dev", 0, { busy: true })] });
-const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (ui: Ui) => ui.wait(400)];
+const openFiles = [(ui: Ui) => ui.press(ui.session("Fix the summary layout")), (ui: Ui) => ui.showPanel("files"), (ui: Ui) => ui.wait(400)];
 const filterFiles: FixtureFiles = {
   ...SAMPLE_FILES,
   "src/services": { dir: true },
@@ -242,6 +242,8 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files pane's width handle in focus and under the pointer",
+    // The width handle exists only where the right pane docks (from 782px).
+    minWidth: 782,
     description: "The handle in the gap on the pane's inner edge shows its grip, a short rounded pill centred in the gap, and a Resize tooltip opening beside it, on its end side and centred on it, while the pointer is on it. The grip is drawn here through keyboard focus (with its focus ring), as the gallery cannot hold a CSS hover; with the pointer alone it shows on hover and during a drag, and is hidden otherwise. Arrow keys resize the pane from the focused handle, and double-clicking resets its width.",
     state,
     steps: [...openFiles, (ui) => ui.focusControl(ui.t("pane.resizeAside")), (ui) => ui.hoverAnchored(ui.t("pane.resizeAside"), ui.t("pane.resize"))],

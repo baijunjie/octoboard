@@ -58,7 +58,7 @@ export const updateScenarios: Scenario[] = [
     category: "normal",
     title: "Update notice, release notes open",
     description:
-      "What is new is open (chevron up) and the plain-text notes fill a tinted box under the strip's row, keeping their line breaks; the box scrolls when the notes are longer than it is tall, and the terminal above is pushed up by the strip's height.",
+      "What is new is open (chevron up) and the plain-text notes fill a tinted box under the strip's row, keeping their line breaks; the box scrolls when the notes are longer than it is tall, and the terminal above is pushed up by the strip's height. Choose Phone (420px) to see the sentence and the buttons wrap onto more than one line, the notes box taking the strip's width.",
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [openSession, (ui) => ui.press(ui.t("updates.notice.notes"))],
@@ -102,18 +102,6 @@ export const updateScenarios: Scenario[] = [
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [openSession, downloadAndInstall],
-  },
-  {
-    id: "updates-notice-narrow",
-    group: GROUP,
-    category: "normal",
-    title: "Update notice in a narrow window, notes open",
-    description: "The sentence and the buttons wrap onto more than one line and the notes box takes the strip's width. Fixed at 420px because the wrapping only exists below the width where the row fits on one line.",
-    width: 420,
-    state: quiet,
-    updater: { check: newer, checked: true },
-    // The sidebar is a drawer at this width, and closed.
-    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), openSession, (ui) => ui.press(ui.t("updates.notice.notes"))],
   },
   {
     id: "updates-settings-idle",

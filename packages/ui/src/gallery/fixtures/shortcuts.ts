@@ -36,11 +36,6 @@ const customised: Overrides = {
   newSession: { code: "KeyO", primary: true },
 };
 
-/** Changes among the first rows of the desktop app's list, which a narrow window shows without scrolling. */
-const customisedAtTop: Overrides = {
-  previousConsoleSession: { code: "KeyJ", primary: true },
-};
-
 const menuCustomised: Overrides = {
   focusMode: { code: "KeyG", primary: true, shift: true },
   lock: { code: "KeyK", primary: true, shift: true },
@@ -87,7 +82,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, some changed",
     description:
-      "Toggle focus mode, Lock or unlock the session and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line.",
+      "Toggle focus mode, Lock or unlock the session and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: below 640px each row stacks its keys and buttons under its name, and the intro line stacks Restore defaults under itself.",
     state,
     preferences: customisedPreferences(customised),
     steps: openSection,
@@ -101,20 +96,6 @@ export const shortcutsScenarios: Scenario[] = [
       "The New session row has \"Press the new keys…\" in place of its key caps, and its button reads Cancel; the other rows stay as they were. Escape or Cancel leaves the row as it was.",
     state,
     steps: [...openSection, recordFor("newSession")],
-  },
-  {
-    id: "settings-shortcuts-narrow",
-    group: GROUP,
-    category: "normal",
-    title: "Keyboard shortcuts in a narrow window",
-    description:
-      "Below 640px each row stacks its keys and buttons under its name, and the intro line stacks Restore defaults under itself. Previous console session shows a changed key with Reset, and the reason a key was refused (Next console session, recording a key without a modifier) wraps under its name. Fixed to a window that narrow, which is the layout it checks.",
-    width: 560,
-    desktopApp: true,
-    state,
-    preferences: customisedPreferences(customisedAtTop),
-    // The rail comes in with the sidebar's drawer at this width.
-    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), ...openSection, recordFor("nextConsoleSession"), chord({ code: "KeyJ" })],
   },
   {
     id: "settings-shortcuts-conflict",
@@ -153,7 +134,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a key without a modifier",
     description:
-      "Recording continues on the Lock or unlock row, whose line says to hold ⌘ (Ctrl outside an Apple keyboard) with the key.",
+      "Recording continues on the Lock or unlock row, whose line says to hold ⌘ (Ctrl outside an Apple keyboard) with the key. Choose 560px to see the line wrap under the row's name, where each row stacks below 640px.",
     state,
     steps: [...openSection, recordFor("lock"), chord({ code: "KeyJ" })],
   },

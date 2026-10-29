@@ -104,9 +104,7 @@ function SizeBox({
 }
 
 /** The view that picking `scenario` reaches: a scenario carrying its own width, height or held modifier opens
- * at it, dropping whatever was chosen for an earlier one. Each is otherwise sticky across the list, and a
- * scenario whose steps open the drawer that exists only below the breakpoint cannot run in a wide
- * window — the press finds nothing and the page paints its failure overlay. */
+ * at it, dropping whatever was chosen for an earlier one. Each is otherwise sticky across the list. */
 function viewOf(view: View, scenario: Scenario): View {
   return {
     ...view,
@@ -122,7 +120,7 @@ function Gallery(): React.ReactElement {
   const [run, setRun] = useState(0);
   const scenario = SCENARIOS.find((s) => s.id === view.scenario) ?? DEFAULT_SCENARIO;
   const category = CATEGORIES.find(({ id }) => id === scenario.category)!;
-  const width = view.width ?? scenario.width ?? DEFAULT_WIDTH;
+  const width = Math.max(view.width ?? scenario.width ?? DEFAULT_WIDTH, scenario.minWidth ?? 0);
   const height = view.height ?? scenario.height;
   const update = (patch: Partial<View>) => setView((current) => ({ ...current, ...patch }));
   const frame = useRef<HTMLIFrameElement>(null);
@@ -133,6 +131,10 @@ function Gallery(): React.ReactElement {
   }, [view]);
 
   const frameQuery = `?${sharedParams({ ...view, scenario: scenario.id })}`;
+  // The frame's URL says nothing of its width, which is only the iframe's size, so the width goes into its key: the
+  // steps find the sidebar's drawer, a panel or a docked layout by the width the frame is, and must run again at a new
+  // one.
+  const frameKey = `${run}${frameQuery}@${width}`;
 
   // The live changes are offered once the frame says it is ready: the page listens for them only after its steps.
   useEffect(() => {
@@ -149,7 +151,7 @@ function Gallery(): React.ReactElement {
       }
     }, 200);
     return () => clearInterval(timer);
-  }, [run, frameQuery, scenario]);
+  }, [frameKey, scenario]);
 
   return (
     <>
@@ -263,7 +265,7 @@ function Gallery(): React.ReactElement {
         <div className="stage">
           <iframe
             ref={frame}
-            key={`${run}${frameQuery}`}
+            key={frameKey}
             title={scenario.title}
             src={`gallery-frame.html${frameQuery}`}
             style={{ width, height }}

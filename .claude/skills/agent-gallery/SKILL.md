@@ -32,6 +32,8 @@ row each, and the items below the table say so where packages differ.
   or `--lang all` (every language with a catalog) when the user asks for other languages. It loads exactly the
   scenarios it is given, never skipping one; its page loads wait for a heavy-step slot (the lock `pnpm verify` also
   takes). The flags are in `packages/ui/README.md`, section "Sweeping the gallery".
+  Narrow widths: the quick check also runs its scenarios with `--width 420,800`, as the page's width control would
+  load them, since steps must run at any width the control picks.
   Kept out of the quick check and run only when the user asks: the dark theme, `pnpm gallery:sweep --theme dark`;
   chip geometry, self-built on Playwright, `node scripts/gallery-chip-geometry.mjs http://localhost:<port>` in
   `packages/ui` against a gallery served from this checkout (unlike the sweep it falls back to no other browser:

@@ -18,6 +18,8 @@ const TERMINAL_ONLY: Preferences = { panelStacks: { project: { open: ["terminal"
 const WIDE_TERMINAL: Preferences = { ...TERMINAL_ONLY, asideWidth: 560 };
 
 const openWebsite = (ui: Ui) => ui.press(ui.session("Fix the summary layout"));
+/** Brings the Terminal panel in where it is closed, below 782px, as it is open already in a docked window. */
+const showTerminal = (ui: Ui) => ui.showPanel("terminal");
 /** Opens the session, then lets the Files panel read its folder, which draws nothing until it has. */
 const openWebsiteWithFiles = [openWebsite, (ui: Ui) => ui.wait(400)];
 
@@ -46,10 +48,10 @@ export const terminalPanelScenarios: Scenario[] = [
     category: "normal",
     title: "Terminal panel with one tab",
     description:
-      "The Terminal panel alone in the right pane, as the top bar's Terminal toggle (pressed) opens it. Its header runs the Terminal name, the tab strip with the single shell selected and its close mark, New terminal, the tab's actions menu, then Maximize panel, then Close panel: Terminal offers maximize even as the only panel. The shell draws on the card's own terminal background, inset as the agent terminal is.",
+      "The Terminal panel alone in the right pane, as the top bar's Terminal toggle (pressed) opens it. Its header runs the Terminal name, the tab strip with the single shell selected and its close mark, New terminal, the tab's actions menu, then Maximize panel, then Close panel: Terminal offers maximize even as the only panel. The shell draws on the card's own terminal background, inset as the agent terminal is. Choose Phone (420px) to see it float over the agent terminal as a card, with a dimmed strip of the terminal beside it, and no Maximize panel, which a floating card does not offer; Escape closes the card only outside the shell: typing in the shell leaves it open. At 360px or less the strip narrows from 48px to 24px to leave the card room, and the header still fits the Terminal name, the tab with its close mark, New terminal, the actions menu and Close panel.",
     state: stateOf(oneShell),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite],
+    steps: [openWebsite, (ui) => ui.showPanel("terminal")],
   },
   {
     id: "shell-panel-tabs",
@@ -106,6 +108,8 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Terminal panel maximized",
+    // A floating card has no Maximize panel: it exists only where the right pane docks (from 782px).
+    minWidth: 782,
     description:
       "Files and Terminal are both open and the Terminal is maximized: its card leaves the right pane's column and covers only the agent terminal's area, which is inert beneath it, while the sidebar stays as it was. Files stays docked in the column at its full height, with no separator above it, and both toggles in the top bar stay pressed. The Terminal header offers Restore panel size in place of Maximize; restoring returns the card to the stack under Files unchanged.",
     state: stateOf(severalShells),
@@ -117,6 +121,8 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Terminal panel maximized with Files closed",
+    // A floating card has no Maximize panel: it exists only where the right pane docks (from 782px).
+    minWidth: 782,
     description:
       "The Terminal panel is the only panel and is maximized: the right pane's column folds away, with its width handle, and the card spans over the agent terminal's area to the window's end. Its header offers Restore panel size, and the Files toggle in the top bar is not pressed.",
     state: stateOf(severalShells),
@@ -128,6 +134,8 @@ export const terminalPanelScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files floated in beside a maximized Terminal",
+    // A floating card has no Maximize panel: it exists only where the right pane docks (from 782px).
+    minWidth: 782,
     description:
       "With the Terminal panel maximized and Files closed, hovering the Files toggle floats the Files card in at the window's end, over the maximized card, the pointer resting on it. The Files toggle is not pressed; pressing it docks Files into the column, the Terminal staying maximized.",
     state: stateOf(severalShells),
@@ -155,28 +163,15 @@ export const terminalPanelScenarios: Scenario[] = [
     state: stateOf([]),
     preferences: TERMINAL_ONLY,
     shellTerminalStart: "pending",
-    steps: [openWebsite, (ui) => ui.press(ui.t("shellTerminal.new"))],
-  },
-  {
-    id: "shell-panel-overlay-small-phone",
-    group: GROUP,
-    category: "normal",
-    title: "Terminal panel over the terminal on a small phone",
-    width: 360,
-    description:
-      "In a window 360px wide or less the Terminal card floats over the agent terminal, and the dimmed strip of the terminal beside it narrows from 48px to 24px to leave the card room: its header fits the Terminal name, the tab with its close mark, New terminal, the actions menu and Close panel with no Maximize panel, which a floating card does not offer. Escape closes the card only outside the shell: typing in the shell leaves it open. The width is fixed because the narrow strip exists only at 360px or less.",
-    state: stateOf(oneShell),
-    steps: [
-      (ui) => ui.press(ui.t("titleBar.sidebar.show")),
-      openWebsite,
-      (ui) => ui.press(ui.t("titleBar.terminal.show")),
-    ],
+    steps: [openWebsite, showTerminal, (ui) => ui.press(ui.t("shellTerminal.new"))],
   },
   {
     id: "shell-panel-floating",
     group: GROUP,
     category: "normal",
     title: "Floating Terminal card",
+    // Hovering a toggle floats a panel in only where the right pane docks (from 782px); below it a press does.
+    minWidth: 782,
     description:
       "The Terminal card floated in over the agent terminal by hovering the Terminal toggle with no panel open, the pointer now resting on the card. Only the Terminal card floats, with the same rounded corners, hairline edge and shadow as the floating Files card, over the agent terminal, which shows in the gaps around it. The Terminal toggle is not pressed: pressing it docks the pane.",
     state: stateOf(oneShell),
@@ -192,7 +187,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "The header's actions button open on the shown tab, named after it: Rename terminal and Close terminal. It is the keyboard's way to a tab's actions, as a tab has no close control the keyboard can reach.",
     state: stateOf(severalShells),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite, (ui) => headerMenu(ui, "git log")],
+    steps: [openWebsite, showTerminal, (ui) => headerMenu(ui, "git log")],
   },
   {
     id: "shell-panel-tab-menu",
@@ -203,7 +198,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "A right-click on a tab that is not the shown one opens the same two actions at the pointer, for that tab: its context menu is its own, the shown tab does not change. The pane is widened to 560px so all three tabs are whole and the right-clicked one is in plain view.",
     state: stateOf(severalShells),
     preferences: WIDE_TERMINAL,
-    steps: [openWebsite, (ui) => ui.contextMenu("pnpm dev")],
+    steps: [openWebsite, showTerminal, (ui) => ui.contextMenu("pnpm dev")],
   },
   {
     id: "shell-panel-tab-menu-focused",
@@ -214,7 +209,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "The pnpm dev tab had the keyboard focus when its context menu opened at it, the shown tab unchanged; focus is now inside the open menu, and the menu returns it to the pnpm dev tab when it closes. \"Another window closes pnpm dev\" among the \"Live changes\" buttons removes the tab under the open menu, to show where focus goes when the tab it would return to is gone: the tab fades out, the menu goes with it and focus lands on the shown tab (git log), with its focus ring, rather than on the page. \"Another window reopens pnpm dev\" brings the tab back, not selected. With reduced motion the tab goes at once.",
     state: stateOf(severalShells),
     preferences: WIDE_TERMINAL,
-    steps: [openWebsite, (ui) => ui.focusControl("pnpm dev"), (ui) => ui.contextMenu("pnpm dev")],
+    steps: [openWebsite, showTerminal, (ui) => ui.focusControl("pnpm dev"), (ui) => ui.contextMenu("pnpm dev")],
     liveChanges: [
       terminalClosed("close-pnpm-dev", "Another window closes pnpm dev", "sh-2"),
       terminalOpened("open-pnpm-dev", "Another window reopens pnpm dev", severalShells[1]),
@@ -229,7 +224,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "The Rename terminal dialog opened from the actions menu, its Name field holding the shell's current title. A name of blanks is refused with \"Name is required.\".",
     state: stateOf(severalShells),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite, (ui) => headerMenu(ui, "git log"), (ui) => ui.press(ui.t("shellTerminal.rename"))],
+    steps: [openWebsite, showTerminal, (ui) => headerMenu(ui, "git log"), (ui) => ui.press(ui.t("shellTerminal.rename"))],
   },
   {
     id: "shell-close-busy",
@@ -240,7 +235,7 @@ export const terminalPanelScenarios: Scenario[] = [
       "Closing the shown tab, whose shell is running pnpm dev, asks first: a warning modal titled Close terminal whose first sentence names the terminal as a chip, then the warning that closing ends what runs there, and a destructive Close terminal button. An idle or exited tab closes without asking.",
     state: stateOf([shellTerminalOf("sh-1", web, "zsh", 0), shellTerminalOf("sh-2", web, "pnpm dev", 1, { busy: true })]),
     preferences: TERMINAL_ONLY,
-    steps: [openWebsite, (ui) => headerMenu(ui, "pnpm dev"), (ui) => ui.press(ui.t("shellTerminal.close"))],
+    steps: [openWebsite, showTerminal, (ui) => headerMenu(ui, "pnpm dev"), (ui) => ui.press(ui.t("shellTerminal.close"))],
   },
   {
     id: "shell-panel-reconnecting",

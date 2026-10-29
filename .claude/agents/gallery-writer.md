@@ -57,9 +57,11 @@ Do not guess at what you are unsure of: list it in the report for whoever dispat
   coexist on screen go into one scenario, and confirmation targets are split only where showing one would replace or
   displace another. Being able to switch back and forth between two targets does not make them the same view.
 - **Viewing conditions do not get their own scenarios**: theme, language, window size and other conditions switched by
-  the gallery's viewing controls do not earn a copy of the same target; only where the confirmation target itself
-  exists only under some condition (a drawer that appears only in a narrow window, the width where text starts to
-  truncate) is the condition fixed in the scenario, with the title or description saying why.
+  the gallery's viewing controls do not earn a copy of the same target, and a layout that differs under a condition is
+  what those controls are for: the scenario that shows the state points at the condition in its description. Steps
+  are written to run under whatever condition the controls pick, so no copy is made just to reach a control under it.
+  A condition is fixed in the scenario only where the confirmation target cannot be reached by choosing that
+  condition with the controls on another scenario, with the title or description saying why.
 - **Mocks are shaped for the target and follow the real contract**: supply only the fields and conditions the target
   needs; mocks use the same types or contract as the real interface, so a contract change makes the mock fail rather
   than relying on someone remembering to sync it.

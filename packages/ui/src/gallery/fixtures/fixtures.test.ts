@@ -196,6 +196,11 @@ describe("gallery scenarios", () => {
     expect(SCENARIOS.filter((s) => s.width === DEFAULT_WIDTH).map((s) => s.id)).toEqual([]);
   });
 
+  it("write a minWidth a window the page opens at can have, and never beside a width", () => {
+    const wrong = SCENARIOS.filter((s) => s.minWidth !== undefined && (s.minWidth <= 0 || s.minWidth > DEFAULT_WIDTH || s.width !== undefined));
+    expect(wrong.map((s) => s.id)).toEqual([]);
+  });
+
   it("write no height below the shortest window the page takes, which it would not be shown at", () => {
     expect(SCENARIOS.filter((s) => s.height !== undefined && s.height < MIN_HEIGHT).map((s) => s.id)).toEqual([]);
   });

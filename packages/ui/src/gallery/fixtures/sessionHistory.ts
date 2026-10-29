@@ -208,14 +208,12 @@ export const sessionHistoryScenarios: Scenario[] = [
     id: "history-owner-long",
     title: "Archived session history with a long owner title",
     description:
-      "The window is narrowed to 480 px, where the owner title, far longer than the line, fades out at its end after \"Reports to\" with its start still readable, instead of pushing the dates away; the dates keep their own lines on the trailing side. Hover the owner: the full title shows as a tooltip, and the text scrolls as a marquee.",
-    width: 480,
+      "The owner title is far longer than the line, so it fades out at its end after \"Reports to\" with its start still readable, instead of pushing the dates away; the dates keep their own lines on the trailing side. Hover the owner: the full title shows as a tooltip, and the text scrolls as a marquee. Choose 480px to see it in a narrow window.",
     state: boundStateWith(
       "Rework the pricing page so that it loads in under a second on a cold cache, then audit every other marketing page for the same image and cache header problems",
     ),
     sessionHistory: { [archived.id]: MESSAGES, "s-owner": OWNER_MESSAGES },
-    // The sidebar is a drawer at this width, and closed.
-    steps: [(ui) => ui.press(ui.t("titleBar.sidebar.show")), ...openHistory],
+    steps: openHistory,
   },
   {
     ...base,

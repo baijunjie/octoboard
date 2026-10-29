@@ -48,6 +48,12 @@ say otherwise.
                         with a catalog (${LANGUAGES_WITH_CATALOGS.join(", ")}). Default: ${DEFAULT_LANGUAGES.join(", ")}.
   --theme <name>        light (default), dark or both. A scenario's steps do not depend on the theme, so
                         light settles a step that no longer runs; dark when asked for.
+  --width <list>        Comma-separated window widths in pixels to load each scenario at, as the page's width
+                        control would: a scenario that carries a width of its own keeps it and is loaded once, and one with a
+                        minWidth is loaded no narrower than it.
+                        Without it every scenario opens at its own width, or 1440. For proving that a scenario's
+                        steps hold at a narrower window than the sweep's default (the Reopen pointer check of
+                        history-loaded runs only at its own width).
   --jobs <n>            Pages loaded at once (default: ${defaultJobs()}).
   --url <origin>        Use the gallery served at this origin (a running \`pnpm gallery\`) instead of
                         starting a dev server of this checkout.
@@ -105,6 +111,7 @@ function parse() {
         lang: { type: "string" },
         theme: { type: "string" },
         jobs: { type: "string" },
+        width: { type: "string" },
         url: { type: "string" },
         list: { type: "boolean" },
         playwright: { type: "string" },
@@ -126,12 +133,15 @@ function parse() {
   if (!["light", "dark", "both"].includes(theme)) throw new SetupError(`--theme is light, dark or both, not "${theme}"`);
   const jobs = values.jobs === undefined ? defaultJobs() : Number(values.jobs);
   if (!Number.isInteger(jobs) || jobs < 1) throw new SetupError(`--jobs is a positive whole number, not "${values.jobs}"`);
+  const widths = values.width === undefined ? undefined : [...new Set(values.width.split(",").map((w) => Number(w.trim())))];
+  if (widths && (widths.length === 0 || widths.some((w) => !Number.isInteger(w) || w < 1))) throw new SetupError(`--width is a comma-separated list of positive whole numbers, not "${values.width}"`);
   return {
     patterns: positionals,
     group: values.group,
     languages,
     themes: theme === "both" ? ["light", "dark"] : [theme],
     jobs,
+    widths,
     url: values.url?.replace(/\/+$/, ""),
     list: values.list ?? false,
     playwright: values.playwright ?? process.env.OCTOBOARD_PLAYWRIGHT,
@@ -302,7 +312,7 @@ async function readGallery(browser, origin) {
         const { SCENARIOS } = await import("/src/gallery/fixtures/index.ts");
         const { LANGUAGES } = await import("/src/i18n/languages.ts");
         return {
-          scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, width: s.width, height: s.height, live: (s.liveChanges ?? []).map((change) => change.id) })),
+          scenarios: SCENARIOS.map((s) => ({ id: s.id, group: s.group, width: s.width, minWidth: s.minWidth, height: s.height, live: (s.liveChanges ?? []).map((change) => change.id) })),
           languages: [...LANGUAGES],
         };
       }),
@@ -374,12 +384,12 @@ async function checkArchivedReopen(page, language) {
 }
 
 /** Runs one scenario in its own page of `context` and returns the failure text, or undefined if clean. */
-async function sweepOne(context, origin, scenario, language, theme) {
+async function sweepOne(context, origin, scenario, language, theme, width) {
   const page = await context.newPage();
   const problems = [];
   page.on("pageerror", (error) => problems.push(`uncaught: ${firstLine(error)}`));
   try {
-    await page.setViewportSize({ width: scenario.width ?? 1440, height: scenario.height ?? 900 });
+    await page.setViewportSize({ width: width ?? scenario.width ?? 1440, height: scenario.height ?? 900 });
     const query = new URLSearchParams({ scenario: scenario.id, theme, lang: language });
     // The scenario's live changes, applied after its steps and before the page is ready (the frame runs `live=`
     // first), as a viewer pressing each of its buttons would.
@@ -397,7 +407,7 @@ async function sweepOne(context, origin, scenario, language, theme) {
       problems.push(`the page never became ready within ${READY_TIMEOUT_MS / 1000}s`);
     }
     await page.waitForTimeout(SETTLE_MS);
-    if (scenario.id === "history-loaded" && language === "en" && problems.length === 0) await checkArchivedReopen(page, language);
+    if (scenario.id === "history-loaded" && language === "en" && width === undefined && problems.length === 0) await checkArchivedReopen(page, language);
     const banner = await within(
       READ_TIMEOUT_MS,
       page.evaluate(() => Array.from(document.querySelectorAll("[data-gallery-failure] > div"), (line) => line.textContent ?? "")),
@@ -427,9 +437,9 @@ async function runAll(browser, origin, jobs, concurrency, onDone) {
     const context = await browser.newContext();
     try {
       for (let i = next++; i < jobs.length && !running.interrupted; i = next++) {
-        const { scenario, language, theme } = jobs[i];
+        const { scenario, language, theme, width } = jobs[i];
         const started = Date.now();
-        const failure = await sweepOne(context, origin, scenario, language, theme);
+        const failure = await sweepOne(context, origin, scenario, language, theme, width);
         results[i] = { ...jobs[i], failure, ms: Date.now() - started };
         onDone(results[i]);
       }
@@ -447,7 +457,7 @@ async function runAll(browser, origin, jobs, concurrency, onDone) {
  * it, so that they do not wait on a slot held by the test run that started them. */
 const stateDir = process.env.OCTOBOARD_SWEEP_STATE_DIR;
 
-const label = (r) => `${r.language}/${r.theme}  ${r.scenario.id}`;
+const label = (r) => `${r.language}/${r.theme}${r.width ? `/${r.width}px` : ""}  ${r.scenario.id}`;
 
 /** What is open, for the signal handlers to close; `interrupted` is set before they close it, so that
  * the pages that fail because their browser went away are not reported. */
@@ -514,10 +524,16 @@ async function main() {
       for (const s of scenarios) console.log(s.id);
       return 0;
     }
-    const jobs = options.themes.flatMap((theme) => options.languages.flatMap((language) => scenarios.map((scenario) => ({ scenario, language, theme }))));
+    // A scenario that carries a width keeps it, as it does on the page, where picking one drops the width chosen
+    // before.
+    // One that cannot be narrower than its target exists in is loaded at that width, once.
+    const widthsOf = (scenario) => (scenario.width || !options.widths ? [undefined] : [...new Set(options.widths.map((width) => Math.max(width, scenario.minWidth ?? 0)))]);
+    const jobs = options.themes.flatMap((theme) =>
+      options.languages.flatMap((language) => scenarios.flatMap((scenario) => widthsOf(scenario).map((width) => ({ scenario, language, theme, width })))),
+    );
     const concurrency = Math.min(options.jobs, jobs.length);
     console.error(
-      `Sweeping ${plural(scenarios.length, "scenario")} x ${options.languages.join(", ")} x ${options.themes.join(", ")} = ${plural(jobs.length, "load")}; ${concurrency} at a time`,
+      `Sweeping ${plural(scenarios.length, "scenario")} x ${options.languages.join(", ")} x ${options.themes.join(", ")}${options.widths ? ` x ${options.widths.join(", ")}px` : ""} = ${plural(jobs.length, "load")}; ${concurrency} at a time`,
     );
     release = await acquireSlot(`${path.basename(path.resolve(packageDir, "../.."))}: gallery sweep`, {
       root: stateDir && path.join(stateDir, "slots"),

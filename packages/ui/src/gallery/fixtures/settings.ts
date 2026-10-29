@@ -157,23 +157,8 @@ const unavailableQuotaState: Scenario["state"] = {
   ],
 };
 
-/** One window wide enough to wrap: a model's display name as long as one can be. */
-const NARROW_MODEL = "Claude Opus Extended Context Research Preview";
-
-/** For the narrow layout: Claude Code's default account with a long model name, and Work, an owned account whose
- * details dialog has a second, shorter reading to compare with. */
-const narrowQuotaState: Scenario["state"] = {
-  ...quotaState,
-  settings: { ...approvalState.settings!, added_agents: ALL_AGENTS, accounts: approvalState.settings!.accounts.filter((account) => account.id === "a-work") },
-  accountQuotas: [
-    quotaOf("claude", null, "max", [
-      quotaWindow("session", 18, 117),
-      quotaWindow("weekly", 5, 3 * 24 * 60 + 4 * 60),
-      quotaWindow("weekly_model", 27, 3 * 24 * 60 + 4 * 60, NARROW_MODEL),
-    ]),
-    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 62, 42), quotaWindow("weekly", 34, 2 * 24 * 60 + 5 * 60)]),
-  ],
-};
+/** A model's display name as long as one can be, long enough to wrap in a narrow window. */
+const LONG_MODEL_NAME = "Claude Opus Extended Context Research Preview";
 
 /** Claude Code's default account and Work turned off for new sessions, and Trial, signed out and turned off too;
  * Client, with no reading yet, stays on. Work keeps its reading, which its row keeps showing while it is off. */
@@ -233,6 +218,17 @@ const unknownLoginEmailState: Scenario["state"] = {
 const defaultEmailState: Scenario["state"] = {
   ...quotaState,
   accountQuotas: quotaState.accountQuotas!.map((quota) => quota.agent === "claude" && quota.account === null ? { ...quota, email: DEFAULT_EMAIL } : quota),
+};
+
+/** `defaultEmailState` with the name of Claude Code's default account's model-specific window as long as a model's can
+ * be, for the account details dialog, whose lines wrap in a narrow window. */
+const longModelNameState: Scenario["state"] = {
+  ...defaultEmailState,
+  accountQuotas: defaultEmailState.accountQuotas!.map((quota) =>
+    quota.agent === "claude" && quota.account === null
+      ? { ...quota, windows: quota.windows.map((window) => (window.kind === "weekly_model" ? { ...window, label: LONG_MODEL_NAME } : window)) }
+      : quota,
+  ),
 };
 
 /** Claude Code's accounts with their sign-in emails: the default account's, Work's, Client's (an address longer than
@@ -335,9 +331,6 @@ function loginFromInline(): Step[] {
     (ui) => ui.wait(LOGIN_ENDS_WITHIN_MS),
   ];
 }
-
-/** Opens the sidebar's drawer, which brings the rail in below 782px, where Settings is. */
-const openDrawer: Step = (ui) => ui.press(ui.t("titleBar.sidebar.show"));
 
 const openAccounts: Step[] = [
   (ui) => ui.press(ui.t("rail.settings")),
@@ -724,7 +717,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic; there is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Usage, Status and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); a soft success \"Logged in\" badge in the Status cell after it; and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
+    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic; there is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Usage, Status and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); a soft success \"Logged in\" badge in the Status cell after it; and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once. Choose 560px to see the narrow layout: below about 640px the Permission approval row stays within the section, and the table is wider than the section, so it scrolls sideways, its columns keeping their widths, the later columns cut at the edge and the ⋮ column pinned at the end with a hairline at its start while there is more beside it; the tab strip, the two switches above it and the tab buttons fit the width, and the scroller is a focusable region while it overflows.",
     state: { ...quotaState, settings: { ...quotaState.settings!, account_order: { claude: ["a-work", null, "a-long"], codex: ["a-codex-auto", "a-codex", "a-codex-user", null] } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -772,8 +765,8 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account details, the default account",
-    description: "The default account's details, in a modal titled Account details: the body starts with the bold name Default followed on the same line by the Max badge and \"Logged in\", its muted email dev@octoboard.example on the line under them, and the config directory is the line under that, ending right after the path with the small \"?\" that explains the default account. Usage shows all three windows. Nothing in the dialog can be changed: the Disable and sharing switches are in Account settings.",
-    state: defaultEmailState,
+    description: "The default account's details, in a modal titled Account details: the body starts with the bold name Default followed on the same line by the Max badge and \"Logged in\", its muted email dev@octoboard.example on the line under them, and the config directory is the line under that, ending right after the path with the small \"?\" that explains the default account. Usage shows all three windows, the model-specific one under a model name as long as one can be. Choose 560px to see the details stack below 640px: that name wraps beside its reset time on the same line, with its bar under it. Nothing in the dialog can be changed: the Disable and sharing switches are in Account settings.",
+    state: longModelNameState,
     steps: accountDetails(defaultAccount),
   },
   {
@@ -811,17 +804,6 @@ export const settingsScenarios: Scenario[] = [
     description: "Work's details after a usage read that failed for a reason other than being signed out: the first line is the name Work followed by the plain muted \"Unknown\" in place of a login badge, with no plan, then the danger-coloured circled \"!\" for the failed read; the email dev@work.octoboard.example is on the line under it, not beside the name. The config directory is the line under the email, and the Usage section is a dash, with no windows to show.",
     state: unknownLoginEmailState,
     steps: accountDetails("Work"),
-  },
-  {
-    id: "settings-account-details-narrow",
-    group: GROUP,
-    category: "normal",
-    title: "Account details in a narrow window",
-    description: "Below 640px the details stack: a model's name as long as one can be wraps beside its reset time on the same line, with its bar under it. The default account's details are shown, with its Session, Weekly · all models and long-named weekly lines.",
-    width: 560,
-    state: narrowQuotaState,
-    // The rail comes in with the sidebar's drawer at this width.
-    steps: [openDrawer, ...accountDetails(defaultAccount)],
   },
   {
     id: "settings-account-settings-default",
@@ -891,7 +873,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab scrolled with many accounts",
-    description: "The section is scrolled down, so the agent tab strip with its ⋮ buttons and the two icon buttons is pinned at the top of it with its bottom rule and the Claude Code indicator showing, on the dialog's own surface; the table's header and the first rows have scrolled away underneath it and are cut off cleanly against its rule.",
+    description: "The section is scrolled down, so the agent tab strip with its ⋮ buttons and the two icon buttons is pinned at the top of it with its bottom rule and the Claude Code indicator showing, on the dialog's own surface; the table's header and the first rows have scrolled away underneath it and are cut off cleanly against its rule. Choose 560px to see the narrow layout, where the sections scroll too: the Settings sections are tabs in a row above, which stays put, and the table itself still scrolls sideways with its actions column pinned.",
     state: manyAccountsState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -966,31 +948,6 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.touchPress(ui.t("settings.accounts.claudeCompat.helpLabel")),
     ],
   })),
-  {
-    id: "settings-accounts-quota-narrow",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: accounts, Claude Code table in a narrow window",
-    description: "Below about 640px the Permission approval row above the table stays within the section, and the table is wider than the section, so it scrolls sideways: its columns keep their widths, the later columns are cut at the edge and the ⋮ column stays pinned at the end, with a hairline at its start while there is more beside it. The tab strip, the two switches above it and the tab buttons fit the width. The scroller is a focusable region while it overflows.",
-    width: 560,
-    state: narrowQuotaState,
-    steps: [openDrawer, ...openAccounts],
-  },
-  {
-    id: "settings-accounts-many-narrow",
-    group: GROUP,
-    category: "normal",
-    title: "Settings: accounts, Claude Code tab scrolled with many accounts in a narrow window",
-    description: "Below 640px the sections scroll too: with the section scrolled down, the agent tab strip is pinned at the top of it, the table rows pass beneath it, and the table itself still scrolls sideways with its actions column pinned. The Settings sections are tabs in a row above, which stays put.",
-    width: 560,
-    state: manyAccountsState,
-    steps: [
-      openDrawer,
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.scrollPanel(ui.t("settings.section.accounts"), SCROLLED_UNDER_STRIP),
-    ],
-  },
   {
     id: "settings-accounts-agents-undecided",
     group: GROUP,

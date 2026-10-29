@@ -1,4 +1,4 @@
-import type { Scenario } from "../scenario";
+import type { Scenario, Step } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 import { PATH_LINK_FILES, PATH_LINK_WORKTREE_FILES } from "./pathLinkFiles";
 
@@ -36,6 +36,14 @@ const PATH_LINK_SCENARIO = {
 const STARTUP_AND_CONNECTION = "Startup and connection";
 const TERMINAL = "Terminal";
 
+/** Selects the session titled `title`, whose terminal the scenarios look at, then closes the drawer a pick leaves up
+ * from 782px to 1168px, where it would cover the terminal's left side. */
+const pickSessionTitled = (title: string): Step => async (ui) => {
+  await ui.press(ui.session(title));
+  await ui.closeDrawer();
+};
+const pickSession = pickSessionTitled("Fix the summary layout");
+
 export const connectionScenarios: Scenario[] = [
   {
     id: "daemon-connecting",
@@ -59,7 +67,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Reconnecting",
     description: "The connection banner along the bottom over the last known state.",
     state: connected("reconnecting"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
+    steps: [pickSession],
   },
   {
     id: "daemon-lost",
@@ -68,7 +76,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Reconnect budget spent",
     description: "The banner offers Try again.",
     state: connected("closed"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
+    steps: [pickSession],
   },
   {
     id: "daemon-exited",
@@ -78,7 +86,7 @@ export const connectionScenarios: Scenario[] = [
     description: "The error alert dialog, titled \"The daemon exited unexpectedly\", says the daemon runs your sessions and terminals and Octoboard cannot work without it, and to restart Octoboard to continue, the app name a chip; the shell's own text is behind Error details, closed, and the Report issue guidance and button are offered as for any unexpected failure. The window behind is dimmed, with the connection banner of the lost daemon.",
     state: connected("closed"),
     daemonExited: "the daemon process exited with status 101",
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout"))],
+    steps: [pickSession],
   },
   {
     id: "daemon-lost-behind-dialog",
@@ -88,7 +96,8 @@ export const connectionScenarios: Scenario[] = [
     description: "Try again has keyboard focus while the file viewer stays open. F6 moves between the viewer and the banner. Enter retries without dismissing the viewer, and so does a pointer press on Try again. After returning, Tab stays inside the viewer and Escape still closes it. Narrow the window: the viewer ends above the banner with its bottom edge and rounded corners visible.",
     state: connected("open"),
     steps: [
-      (ui) => ui.press(ui.session("Fix the summary layout")),
+      pickSession,
+      (ui) => ui.showPanel("files"),
       (ui) => ui.wait(400),
       (ui) => ui.press("src"),
       (ui) => ui.press("main.ts"),
@@ -105,7 +114,7 @@ export const connectionScenarios: Scenario[] = [
     description: "The right-click menu offers Copy, Paste and Select all, with Copy disabled and no hint under it, since nothing is selected and the program does not report the mouse. Paste uses a private sample clipboard containing echo hello, and copying updates only that clipboard.",
     clipboard: { text: "echo hello" },
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.terminalContextMenu()],
+    steps: [pickSession, (ui) => ui.terminalContextMenu()],
   },
   {
     id: "terminal-edit-menu-mouse-reporting",
@@ -116,7 +125,7 @@ export const connectionScenarios: Scenario[] = [
     terminal: "mouse",
     clipboard: { text: "echo hello" },
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.terminalContextMenu()],
+    steps: [pickSession, (ui) => ui.terminalContextMenu()],
   },
   {
     id: "terminal-edit-menu-selected",
@@ -127,7 +136,7 @@ export const connectionScenarios: Scenario[] = [
     clipboard: { text: "echo hello" },
     state: connected("open"),
     steps: [
-      (ui) => ui.press(ui.session("Fix the summary layout")),
+      pickSession,
       (ui) => ui.terminalContextMenu(),
       (ui) => ui.press(ui.t("terminal.selectAll")),
       (ui) => ui.terminalContextMenu(),
@@ -142,7 +151,7 @@ export const connectionScenarios: Scenario[] = [
     clipboard: "unavailable",
     state: connected("open"),
     steps: [
-      (ui) => ui.press(ui.session("Fix the summary layout")),
+      pickSession,
       (ui) => ui.terminalContextMenu(),
       (ui) => ui.press(ui.t("terminal.selectAll")),
       (ui) => ui.terminalContextMenu(),
@@ -157,7 +166,7 @@ export const connectionScenarios: Scenario[] = [
     terminal: "fullscreen",
     preferences: { panelStacks: { project: { open: [], shares: {} }, report: { open: [], shares: {} } } },
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400)],
+    steps: [pickSession, (ui) => ui.wait(400)],
   },
   {
     id: "terminal-link-tooltip",
@@ -166,7 +175,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Hovering a terminal hyperlink",
     description: "The pointer is on the \"layout notes\" hyperlink: a tooltip names the link's real address, which its text does not say, and the address reads left to right in Arabic too.",
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalLink("layout notes")],
+    steps: [pickSession, (ui) => ui.wait(400), (ui) => ui.hoverTerminalLink("layout notes")],
   },
   {
     id: "terminal-status-touch-popover",
@@ -175,7 +184,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Tapping the top bar's status glyph",
     description: "The glyph at the end of the top bar's breadcrumb has been tapped with a finger, so its text, Working, stays open in a popover drawn like the tooltip, above it and with no tooltip on top of it; unlike the tooltip, it stays until Escape or an outside tap.",
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.tapTopBarStatus()],
+    steps: [pickSession, (ui) => ui.tapTopBarStatus()],
   },
   {
     id: "terminal-broken-url-hover",
@@ -184,7 +193,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Hovering a URL the program broke across rows",
     description: "The pointer is on the last row of an address the program broke at the right edge, so the first piece fills the row: the whole address, on every row it spans, is underlined, and clicking opens the full address. The window's width decides where it breaks.",
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("lang=zh-Hans")],
+    steps: [pickSession, (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("lang=zh-Hans")],
   },
   {
     id: "terminal-broken-url-short-hover",
@@ -193,7 +202,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Hovering a URL broken short of the right edge",
     description: "The pointer is on the last row of the address that stops short of the right edge, so blank cells remain after its first piece. The address above it still fills its row. The link colour covers only the address text, not those blank cells. The underline runs across every row this address spans: on the first row it continues through the blank cells to the right edge, and on the last row it includes the indent and stops at the end of the address. Clicking opens the full address.",
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("account&theme=light")],
+    steps: [pickSession, (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("account&theme=light")],
   },
   {
     id: "terminal-path-links",
@@ -206,7 +215,7 @@ export const connectionScenarios: Scenario[] = [
       "Three paths stay plain: src/summary/Draft.ts, which does not exist, src/shared/index.ts, which the daemon answers none for as it would one that more than one of the project's folders holds, and app/[id]/page.tsx, a route that is not looked up at all. " +
       "The pointer is on src/summary/Summary.tsx:42:7, which is underlined from its first character to the 7, not the full stop.",
     ...PATH_LINK_SCENARIO,
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.hoverTerminalUrl("src/summary/Summary.tsx:42:7")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.hoverTerminalUrl("src/summary/Summary.tsx:42:7")],
   },
   {
     id: "terminal-path-link-code",
@@ -217,7 +226,7 @@ export const connectionScenarios: Scenario[] = [
       "Clicking src/summary/Summary.tsx:42:7 opened Summary.tsx in the file viewer over the window, with the terminal left as it was behind it: line 42 is marked and scrolled into view, and the column is ignored. " +
       "There are no Previous and Next buttons. At the far right of the header row, after the copy and wrap buttons, are File manager and Default application.",
     ...PATH_LINK_SCENARIO,
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Summary.tsx:42:7")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Summary.tsx:42:7")],
   },
   {
     id: "terminal-path-link-markdown",
@@ -226,7 +235,7 @@ export const connectionScenarios: Scenario[] = [
     title: "A path with a line opens its Markdown file as source",
     description: "Clicking docs/summary-notes.md:13 opened the document in its source view, not rendered, with line 13 marked and scrolled into view.",
     ...PATH_LINK_SCENARIO,
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/summary-notes.md:13")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/summary-notes.md:13")],
   },
   {
     id: "terminal-path-link-worktree",
@@ -237,7 +246,7 @@ export const connectionScenarios: Scenario[] = [
       "Clicking the side worktree's src/ui.ts:7 opened a file that exists only there, with line 7 marked: its first line says it is the experimental layout in the side worktree. " +
       "The project's own folder has no src/ui.ts.",
     ...PATH_LINK_SCENARIO,
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/ui.ts:7")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/ui.ts:7")],
   },
   {
     id: "terminal-path-link-directory",
@@ -248,7 +257,7 @@ export const connectionScenarios: Scenario[] = [
       "Clicking docs/plans/summary-layout, a folder, opened its README.md in the file viewer rather than the file manager: the plan's heading and milestones, rendered as a document. " +
       "Clicking the same link with Command (Control off macOS) held opens the folder on the host instead, which the gallery cannot show.",
     ...PATH_LINK_SCENARIO,
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
   },
   {
     id: "terminal-path-link-launchable",
@@ -259,7 +268,7 @@ export const connectionScenarios: Scenario[] = [
       "Clicking bin/helper, a built program of no type the viewer can show, opened the viewer on it all the same, with a \"This file cannot be displayed\" panel and its size in place of any content. " +
       "Nothing is launched on the host and no other window opens.",
     ...PATH_LINK_SCENARIO,
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("bin/helper")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("bin/helper")],
   },
   {
     id: "terminal-starting",
@@ -268,7 +277,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Terminal of a session still starting",
     description: "The selected session's agent is still being launched: the terminal is covered by a spinner and \"Starting session…\", with no Reconnect button. Its sidebar row shows the muted turning arc.",
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [...sessions, starting] }),
-    steps: [(ui) => ui.press(ui.session(starting.title))],
+    steps: [pickSessionTitled(starting.title)],
   },
   {
     id: "terminal-switching-account",
@@ -284,7 +293,7 @@ export const connectionScenarios: Scenario[] = [
       }),
       ["s-interrupted", "s-console"],
     ),
-    steps: [(ui) => ui.press(ui.session("Interrupted by a restart"))],
+    steps: [pickSessionTitled("Interrupted by a restart")],
   },
   {
     id: "terminal-path-link-removed",
@@ -296,7 +305,7 @@ export const connectionScenarios: Scenario[] = [
       "Its remedy says the file may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/src/summary/Draft.ts": { view: { path: "src/summary/Draft.ts" } } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Draft.ts")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("src/summary/Draft.ts")],
   },
   {
     id: "terminal-path-link-removed-folder",
@@ -308,7 +317,7 @@ export const connectionScenarios: Scenario[] = [
       "Its remedy says it may have been moved, renamed or deleted, and to find it in the project's files and try again from there; it does not offer Browse.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", gone: true } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
   },
   {
     id: "terminal-path-link-removed-outside",
@@ -320,7 +329,7 @@ export const connectionScenarios: Scenario[] = [
       "It has no remedy line: unlike a project file, there are no project files to find it in.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", gone: true } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {
     id: "terminal-path-link-refused-ambiguous",
@@ -332,7 +341,7 @@ export const connectionScenarios: Scenario[] = [
       "Its remedy says to find the one meant in the project's files and open it from there.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", refused: "ambiguous" } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("docs/plans/summary-layout")],
   },
   {
     id: "terminal-path-link-refused-launchable",
@@ -344,7 +353,7 @@ export const connectionScenarios: Scenario[] = [
       "Its remedy says that to run it, the user opens it from the file manager themself.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/Users/dev/code/website/bin/helper": { kind: "file", refused: "launchable", view: { path: "bin/helper" } } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("bin/helper")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("bin/helper")],
   },
   {
     id: "terminal-path-link-refused-not-private",
@@ -356,7 +365,7 @@ export const connectionScenarios: Scenario[] = [
       "Its remedy says that if the user trusts it, they open it from the file manager themself.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "not_private" } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {
     id: "terminal-path-link-refused-not-openable",
@@ -368,7 +377,7 @@ export const connectionScenarios: Scenario[] = [
       "It has no remedy line: the sentence says it all.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "not_a_file_or_folder" } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {
     id: "terminal-path-link-refused-unreadable",
@@ -380,7 +389,7 @@ export const connectionScenarios: Scenario[] = [
       "It has no remedy line. The system's own text, Input/output error (os error 5), is only in the Error details disclosure, closed here.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {
     id: "terminal-path-link-refused-outside",
@@ -392,7 +401,7 @@ export const connectionScenarios: Scenario[] = [
       "It has no remedy line.",
     ...PATH_LINK_SCENARIO,
     pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", outside: true } },
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
   },
   {
     id: "terminal-reconnecting",
@@ -402,7 +411,7 @@ export const connectionScenarios: Scenario[] = [
     description: "The session is live but its terminal socket never connects: after the first failed attempt the terminal stays covered by the spinner and \"Reconnecting the terminal…\".",
     terminal: "refuse",
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(1500)],
+    steps: [pickSession, (ui) => ui.wait(1500)],
   },
   {
     id: "terminal-disconnected",
@@ -413,6 +422,6 @@ export const connectionScenarios: Scenario[] = [
     terminal: "refuse",
     terminalRetriesImmediate: true,
     state: connected("open"),
-    steps: [(ui) => ui.press(ui.session("Fix the summary layout")), (ui) => ui.wait(2000)],
+    steps: [pickSession, (ui) => ui.wait(2000)],
   },
 ];

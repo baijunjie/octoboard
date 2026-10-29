@@ -238,3 +238,123 @@ it("chord presses a portable binding with this platform's modifiers on the focus
   await done;
   expect(seen).toEqual([`KeyF:F:${IS_MAC}:${!IS_MAC}:true`]);
 });
+
+// The sidebar's drawer, a panel's toggle and the breakpoints they hang on, below: the stylesheet declares the
+// breakpoints and the window's width decides which side of them a media query falls.
+const SHOW_SESSIONS = format("en", "titleBar.sidebar.show");
+const HIDE_SESSIONS = format("en", "titleBar.sidebar.hide");
+
+function windowOfWidth(width: number): void {
+  document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
+  document.documentElement.style.setProperty("--breakpoint-phone", "782px");
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: width >= Number(/min-width: ([\d.]+)px/.exec(query)![1]) }));
+}
+afterEach(() => vi.unstubAllGlobals());
+
+/** A sidebar toggle and a drawer, closed (inert) until the toggle is pressed, holding a session row named Hub. */
+function drawerWithToggle(): { toggle: HTMLButtonElement; hub: HTMLButtonElement; drawer: HTMLElement } {
+  document.body.innerHTML = `<button id="toggle" aria-label="${SHOW_SESSIONS}"></button><nav data-region="sidebar" inert><button id="hub">Hub</button></nav>`;
+  const toggle = document.getElementById("toggle") as HTMLButtonElement;
+  const drawer = document.querySelector("nav") as HTMLElement;
+  toggle.addEventListener("click", () => {
+    const open = toggle.getAttribute("aria-label") === HIDE_SESSIONS;
+    toggle.setAttribute("aria-label", open ? SHOW_SESSIONS : HIDE_SESSIONS);
+    drawer.toggleAttribute("inert", open);
+  });
+  return { toggle, hub: document.getElementById("hub") as HTMLButtonElement, drawer };
+}
+
+it("press opens the sidebar's drawer first for a control that is only inside it, below the docked breakpoint", async () => {
+  windowOfWidth(420);
+  const { hub, drawer } = drawerWithToggle();
+  const pressed = vi.fn();
+  hub.addEventListener("click", pressed);
+  const done = createUi(document, "en").press("Hub");
+  await vi.advanceTimersByTimeAsync(2000);
+  await done;
+  expect(drawer.hasAttribute("inert")).toBe(false);
+  expect(pressed).toHaveBeenCalledOnce();
+});
+
+it("press leaves the drawer alone in a docked window and fails for a control inert in it", async () => {
+  windowOfWidth(1440);
+  const { toggle } = drawerWithToggle();
+  const done = expect(createUi(document, "en").press("Hub")).rejects.toThrow(/Nothing to press matching Hub/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await done;
+  expect(toggle.getAttribute("aria-label")).toBe(SHOW_SESSIONS);
+});
+
+it("press does not open the drawer for a control that only takes a moment to appear outside it", async () => {
+  windowOfWidth(420);
+  const { toggle } = drawerWithToggle();
+  const pressed: string[] = [];
+  document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
+  setTimeout(() => document.body.insertAdjacentHTML("beforeend", '<button id="late">Hub</button>'), 100);
+  const done = createUi(document, "en").press("Hub");
+  await vi.advanceTimersByTimeAsync(1000);
+  await done;
+  expect(toggle.getAttribute("aria-label")).toBe(SHOW_SESSIONS);
+  expect(pressed).toEqual(["late"]);
+});
+
+it.each([
+  ["Show", "titleBar.files.show", true],
+  ["Hide", "titleBar.files.hide", false],
+] as const)("showPanel presses a %s toggle only when it is the one that brings the panel in", async (_word, key, pressesIt) => {
+  document.body.innerHTML = `<button aria-label="${format("en", key)}"></button>`;
+  const pressed = vi.fn();
+  document.addEventListener("click", pressed);
+  const done = createUi(document, "en").showPanel("files");
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(pressed).toHaveBeenCalledTimes(pressesIt ? 1 : 0);
+});
+
+it("showPanel waits for a toggle that is drawn late and fails where there is none", async () => {
+  document.body.innerHTML = "";
+  setTimeout(() => document.body.insertAdjacentHTML("beforeend", `<button aria-label="${format("en", "titleBar.report.show")}"></button>`), 1000);
+  const pressed = vi.fn();
+  document.addEventListener("click", pressed);
+  const late = createUi(document, "en").showPanel("report");
+  await vi.advanceTimersByTimeAsync(1500);
+  await late;
+  expect(pressed).toHaveBeenCalledOnce();
+  document.body.innerHTML = "";
+  const none = expect(createUi(document, "en").showPanel("terminal")).rejects.toThrow(/Nothing is named Show terminal panel or Hide terminal panel/);
+  await vi.advanceTimersByTimeAsync(6000);
+  await none;
+});
+
+it.each([
+  [420, true],
+  [1440, false],
+])("closeDrawer closes the drawer when it is open in a window of %i px and does nothing docked", async (width, closes) => {
+  windowOfWidth(width);
+  const { toggle } = drawerWithToggle();
+  if (width < 1168) toggle.click();
+  else toggle.setAttribute("aria-label", HIDE_SESSIONS);
+  const done = createUi(document, "en").closeDrawer();
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  expect(toggle.getAttribute("aria-label")).toBe(closes ? SHOW_SESSIONS : HIDE_SESSIONS);
+});
+
+it("hoverTerminalUrl puts the pointer on the first row of a link that wraps in a narrow terminal", async () => {
+  document.body.innerHTML = '<div data-region="terminal"><div class="xterm"><div class="xterm-screen"></div></div></div>';
+  const xterm = document.querySelector(".xterm") as HTMLElement & { octoboardTerminalText?: unknown };
+  const rows = ["xxxxabcdef", "gh        ", "          "];
+  xterm.octoboardTerminalText = { cols: () => 10, rows: () => 3, row: (y: number) => rows[y] };
+  const screen = document.querySelector(".xterm-screen") as HTMLElement;
+  screen.getBoundingClientRect = () => ({ x: 0, y: 0, width: 100, height: 30, top: 0, left: 0, right: 100, bottom: 30, toJSON: () => ({}) });
+  const moves: [number, number][] = [];
+  screen.addEventListener("mousemove", (event) => {
+    moves.push([(event as MouseEvent).clientX, (event as MouseEvent).clientY]);
+    xterm.classList.add("xterm-cursor-pointer");
+  });
+  const done = createUi(document, "en").hoverTerminalUrl("abcdefgh");
+  await vi.advanceTimersByTimeAsync(500);
+  await done;
+  // Cell 4 of row 0 starts it and six cells of the row hold it: the middle is cell 7, in the row's own height.
+  expect(moves[0]).toEqual([70, 5]);
+});
