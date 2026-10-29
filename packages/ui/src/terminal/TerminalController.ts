@@ -187,6 +187,11 @@ export interface TerminalControllerHandlers {
 export const OPTION_FORCES_SELECTION =
   typeof navigator !== "undefined" && ["Macintosh", "MacIntel", "MacPPC", "Mac68K"].includes(navigator.platform);
 
+/** The terminal's font: a monospace stack with CJK coverage, since these agents render box-drawing
+ * TUIs and sometimes CJK status text, and the default `courier-new` xterm.js falls back to has
+ * neither. */
+export const TERMINAL_FONT_FAMILY = '"SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", "PingFang SC", monospace';
+
 /**
  * Owns the terminal pane end to end: the one `xterm.js` instance, the active session's socket,
  * the connection status, and keyboard focus — all four change together inside `attach()`, which
@@ -287,9 +292,7 @@ export class TerminalController {
     const onLinkClick = terminalLinkHandler(handlers.openLink, () => this.term.hasSelection());
     this.term = new Terminal({
       scrollback: 10000,
-      // A monospace stack with CJK coverage: these agents render box-drawing TUIs and sometimes
-      // CJK status text, and the default `courier-new` xterm.js falls back to has neither.
-      fontFamily: '"SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", "PingFang SC", monospace',
+      fontFamily: TERMINAL_FONT_FAMILY,
       theme: XTERM_THEMES[initialColorTheme],
       // The colours on screen are the agent's own, picked for whichever background its own theme
       // setting assumes, so on the other one some of them all but vanish (a dark theme's pale

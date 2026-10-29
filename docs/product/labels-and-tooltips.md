@@ -51,6 +51,16 @@ keeps its own width, padding and text sizes, being a panel):
 - Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
   long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
   its characters, which is its word boundary.
+- **A tooltip that is a value in full shows in the font family the value is drawn in.** Such a tooltip is a clipped
+  label's full text (see "Names too long for their space" below), the full path of Settings' Default clone directory
+  field (see "Default clone directory" in `docs/product/settings.md`) or an OSC 8 hyperlink's target in a terminal (see
+  `docs/product/terminal-links.md`). So a value shown in monospace has a monospace tooltip — the session ID under the
+  **Copy session ID** item's label, a path set in monospace (a directory path listed in Settings, see "How paths are
+  shown" in `docs/product/settings.md`, and the file's path in the file viewer's header details), the Default clone
+  directory field's full path — and a terminal link's target is shown in the terminal's own monospace font. A value
+  drawn in the window's UI font, such as a branch name, a session's name or a path not set in monospace, keeps the UI
+  font in its tooltip. Only the font family is carried over: the tooltip keeps its own text size and weight. A tooltip
+  that is a sentence rather than a value — even one naming a path or a branch — is in the UI font.
 - **A tooltip that is a left-to-right value in full reads as one left-to-right block in every language** — a clipped
   path's, branch name's, session ID's, file name's or account email's full text (see "Names too long for their space"
   below), the full path of Settings' Default clone directory field (see "Default clone directory" in
@@ -363,7 +373,8 @@ archive is for — shown while the pointer is on the label and not on keyboard f
 document whether or not it is cut, so assistive technology is given it either way. This holds for an action-menu
 item that cannot be chosen too — one that is disabled, with or without a reason under its name, such as a used-up
 account in a session's **Switch account** submenu: its clipped name shows its tooltip while the pointer is on the name,
-and pressing the name still runs nothing. The diff separator's tooltip follows the operating system's rules instead.
+and pressing the name still runs nothing. A tooltip giving a label's full text shows it in the label's own font family
+(see "How a tooltip behaves" above). The diff separator's tooltip follows the operating system's rules instead.
 
 **A path is cut at its start instead**, so that its last folder stays in view (see
 `docs/product/right-to-left-layout.md`). **So is a branch name**, so that its end — the part that tells sibling

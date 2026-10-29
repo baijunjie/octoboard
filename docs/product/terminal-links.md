@@ -32,7 +32,8 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 - **An address opens in the user's own browser** — to a new tab, in the UI opened in a browser — as a web link in a
   Markdown document does (see `docs/product/markdown-documents.md`).
 - **An OSC 8 hyperlink shows its real target as a tooltip** once the pointer has rested on it for the window's usual
-  tooltip delay, reading left to right in every language (see "How a tooltip behaves" in
+  tooltip delay, in the terminal's own monospace font and reading left to right in every language (see "How a tooltip
+  behaves" in
   `docs/product/labels-and-tooltips.md`). A plain-text address has no
   tooltip, its text being its target. The tooltip goes when the pointer leaves the link, when the terminal's view
   scrolls, and when the terminal is cleared to draw a session afresh — selecting another session, a reattach, or an

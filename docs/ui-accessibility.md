@@ -794,6 +794,16 @@ visible text may differ from where it leads. Nothing else carries the target, bu
 reaches no assistive technology (xterm.js keeps its rows `aria-hidden` and runs without its screen-reader mode), so the
 tooltip withholds nothing the text around it would otherwise give.
 
+**A value tooltip keeps its label's font family.** A tooltip that is a value in full rather than a sentence — a clipped
+label's whole text, a field's expanded path, a terminal link's URI — shows in the font family of the element that draws
+the value: a session ID, a path or a terminal's text in monospace keeps monospace in its tooltip, and a name in the UI
+font stays in it. Only the family is carried over; the tooltip keeps its own size and weight. The tooltip is portalled
+out of the label and inherits nothing from it, so the value is drawn with `ValueTooltipText`, which reads the computed
+font family off the element its required `label` names; no call site states a font. `FadeOverflow` draws every
+plain-string tooltip that way, the string being the label's own text in full, and a sentence goes in as a node, which
+keeps the tooltip's own font. Where the element under the pointer does not itself draw the value (the box laid over a
+terminal link), that box carries the value's font for the tooltip to read.
+
 A tooltip of any shape closes once what it belongs to turns inert: a dialog or a modal popover opening over it, or a
 region the window makes inert itself. An overlay that covers the control under a resting pointer sends no
 `pointerleave`, so without this the tooltip would stay drawn over the overlay, naming a control that can no longer be
@@ -1912,7 +1922,8 @@ stacking context). The formula sets `unicode-bidi: isolate` itself (`FormulaView
   inside the tooltip's right-to-left paragraph, a value long enough to wrap starts its second line at the right, so it
   no longer reads as one left-to-right value. As a block every line starts at the left. `FadeOverflow` does this for a
   plain-string tooltip on an `ltr` label, which is why a sentence goes in as a node there; a sentence tooltip keeps
-  the window's direction and alignment.
+  the window's direction and alignment. The same block carries the label's font family (see "A value tooltip keeps
+  its label's font family" under "A tooltip is the application's own, never the browser's `title`").
 
 **A value substituted into a sentence is isolated.** Without it the bidi algorithm reorders the value against the
 sentence around it: `“/Users/dev/app”` reads as `”Users/dev/app/“`, and a trailing full stop or a closing parenthesis

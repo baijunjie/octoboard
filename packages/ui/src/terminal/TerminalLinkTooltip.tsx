@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { ValueTooltipText } from "../components/ValueTooltipText";
+import { TERMINAL_FONT_FAMILY } from "./TerminalController";
 import type { HoveredTerminalLink } from "./terminalLinks";
 
 /**
@@ -29,17 +30,18 @@ export function TerminalLinkTooltip({
   if (!link) return null;
   return (
     <>
-      {/* The tooltip is placed against this empty box lying over the link. */}
+      {/* The tooltip is placed against this empty box lying over the link, which stands for the
+          link's text and so carries the terminal's font, for the URI to take from it. */}
       <div
         ref={anchor}
         aria-hidden="true"
         className="pointer-events-none fixed"
-        style={{ left: link.left, top: link.top, width: link.width, height: link.height }}
+        style={{ left: link.left, top: link.top, width: link.width, height: link.height, fontFamily: TERMINAL_FONT_FAMILY }}
       />
       {/* Keyed so a move straight from one link to another places the tooltip afresh. */}
       <AnchoredTooltip
         key={`${link.uri}\n${link.left},${link.top}`}
-        tooltip={<ValueTooltipText>{link.uri}</ValueTooltipText>}
+        tooltip={<ValueTooltipText label={anchor} dir="ltr">{link.uri}</ValueTooltipText>}
         anchor={anchor}
         hovered
       />
