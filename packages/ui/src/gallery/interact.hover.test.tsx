@@ -825,6 +825,46 @@ it("hoverAnchored fails where the tooltip that opens is not the one named", asyn
   release(document.querySelector('[aria-label="Codex (not installed)"]')!);
 });
 
+/** A menu item whose label's content (not the item) carries the anchored tooltip, as a clipped menu label does. */
+function ItemWithLabelTip({ tip, disabled }: { tip: string; disabled?: boolean }): React.ReactElement {
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const { hoverProps, isHovered } = useHover({});
+  return (
+    <div role="menuitem" aria-disabled={disabled ? "true" : undefined}>
+      <span data-slot="label">
+        <span ref={ref} {...hoverProps}>
+          feature/a-long-branch
+          <AnchoredTooltip tooltip={tip} anchor={ref} hovered={isHovered} />
+        </span>
+      </span>
+    </div>
+  );
+}
+
+it("hoverMenuLabel puts up the tooltip of a menu item's label content", async () => {
+  mountForTooltip(<ItemWithLabelTip tip="feature/a-long-branch-name" />);
+  await settledLive(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "feature/a-long-branch-name"));
+  expect(openTooltip()?.textContent).toBe("feature/a-long-branch-name");
+  release(document.querySelector("[data-slot=label] > *")!);
+});
+
+it("hoverMenuLabel reaches the label of a disabled menu item too", async () => {
+  mountForTooltip(<ItemWithLabelTip tip="feature/a-long-branch-name" disabled />);
+  await settledLive(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "feature/a-long-branch-name"));
+  expect(openTooltip()?.textContent).toBe("feature/a-long-branch-name");
+  release(document.querySelector("[data-slot=label] > *")!);
+});
+
+it("hoverMenuLabel fails where the tooltip that opens is not the one named", async () => {
+  mountForTooltip(<ItemWithLabelTip tip="feature/a-long-branch-name" />);
+  const done = expect(createUi(document, "en").hoverMenuLabel("feature/a-long-branch", "main")).rejects.toThrow(
+    /has no tooltip "main": its anchored tooltip is "feature\/a-long-branch-name"/,
+  );
+  await vi.advanceTimersByTimeAsync(3000);
+  await done;
+  release(document.querySelector("[data-slot=label] > *")!);
+});
+
 it("touchPress opens a help tip's explanation in the popover a finger gets", async () => {
   mountWindow();
   await settled(createUi(document, "en").touchPress("About Billing"));

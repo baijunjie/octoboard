@@ -27,6 +27,13 @@ const settings: Settings = {
   accounts,
 };
 
+/** The name of Work in the one menu that shows a disabled account's label clipped by the menu's width. */
+const longWorkName = "Work account for the Acme Corporation engagement";
+const longWorkNameSettings: Settings = {
+  ...settings,
+  accounts: accounts.map((account) => (account.id === "a-work" ? { ...account, name: longWorkName } : account)),
+};
+
 const available = new Map<Agent, AgentAvailability>(
   ALL_AGENTS.map((agent) => [agent, { agent, availability: "available", default_account_dir: `/Users/dev/.${agent}` }]),
 );
@@ -464,11 +471,12 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Switch account menu, an account at its limit",
-    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client; each account shows its compact usage bar in place of the key icon, as in the account picker. Work, whose session limit is reached, is greyed out and cannot be chosen, with its reason on two lines under its name, \"Limit reached\" and when it resets (arrow keys still reach it, and its accessible name carries the reason); Personal, nearly spent, and Client, not read yet (an empty track), can be chosen.",
-    state: switchState(claudeQuotas),
+    description: "The row's Switch account submenu lists Default (current), Work, Personal and Client; each account shows its compact usage bar in place of the key icon, as in the account picker. Work, whose session limit is reached, is greyed out and cannot be chosen, with its reason on two lines under its name, \"Limit reached\" and when it resets (arrow keys still reach it, and its accessible name carries the reason); Personal, nearly spent, and Client, not read yet (an empty track), can be chosen. Work's name is long enough to be clipped at the menu's edge, and with the pointer resting on it a tooltip (drawn over the Default row) carries the full name while the greyed-out row stays unlit.",
+    state: { ...switchState(claudeQuotas), settings: longWorkNameSettings },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Review the release checklist" })),
       (ui) => ui.press(ui.t("sidebar.session.switchAccount")),
+      (ui) => ui.hoverMenuLabel(longWorkName, longWorkName),
     ],
   },
   {

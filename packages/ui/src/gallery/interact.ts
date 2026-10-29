@@ -19,6 +19,9 @@ import { STATUS_LABELS, type StatusKey } from "../viewer/statusMarks";
 const PRESSABLE =
   "button, [role=button], [role=menuitem], [role=menuitemradio], [role=tab], [role=option], [role=row], a[href], input[type=checkbox], input[type=radio], summary, [role=separator][tabindex]";
 
+/** A menu item, whichever way it is checked: what a menu's rows are looked up among. */
+const MENU_ITEM = "[role=menuitem], [role=menuitemradio]";
+
 /** The name a control is found by: its `aria-label`, otherwise its text (a menu item uses its labelled span), and for a checkbox, radio or switch
  * the text of its label, or of the element its `aria-labelledby` names when the label stands beside
  * it. Deliberately not the browser's accessible-name computation, which folds in the label of a
@@ -26,7 +29,7 @@ const PRESSABLE =
  * handed. */
 function nameOf(element: Element): string {
   let label: string | undefined;
-  if (element.matches('[role="menuitem"], [role="menuitemradio"]')) {
+  if (element.matches(MENU_ITEM)) {
     // The menu label excludes its trailing keyboard hint and description.
     const labelledBy = element.getAttribute("aria-labelledby");
     label = labelledBy
@@ -301,6 +304,13 @@ export interface Ui {
    * catches a control drawn without a tooltip (nothing opens) and another control's tooltip. `tooltip`
    * is the text as the window shows it, with a chip's text in place. */
   hoverAnchored: (host: Matcher, tooltip: string) => Promise<void>;
+  /** Moves the pointer onto the label of the menu item named `item`, enabled or disabled, and leaves it
+   * there, for the tooltip of a label clipped by the menu's width. The pointer goes to the label's content (what
+   * `[data-slot=label]` holds), not to the item: the tooltip is that content's, and a real pointer
+   * reaches it only where the label lets it through. The tooltip is the anchored shape, found as in
+   * `hoverAnchored`, and the step fails unless it reads `tooltip`, which also catches a label that is
+   * not clipped (nothing opens). */
+  hoverMenuLabel: (item: Matcher, tooltip: string) => Promise<void>;
   /** Moves the pointer onto the status letter of the change row named `row` and leaves it there, as
    * `hoverIndicator` does, for the tooltip that names `status`. The letter is `aria-hidden` and its
    * tooltip is the anchored shape, which is mounted only while the pointer is on the letter and is
@@ -516,6 +526,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     return named.filter((element) => !named.some((other) => other !== element && element.contains(other)));
   };
   const find = (matcher: Matcher): HTMLElement | undefined => findAll(matcher)[0];
+  /** The menu item named `matcher`, disabled or not: a disabled item is a row a pointer cannot press, not one to skip.
+   * Items in an inert subtree stay out, as everywhere else. */
+  const findMenuItem = (matcher: Matcher): HTMLElement | undefined =>
+    Array.from(doc.querySelectorAll<HTMLElement>(MENU_ITEM)).find((element) => !element.closest("[inert]") && matches(matcher, nameOf(element)));
 
   /** Puts the pointer on the terminal's text `text`, waiting for a row that holds it. `away` is a point on
    * another row, for a pointer that must leave this one: the nearest row that holds no text, else a neighbour. */
@@ -586,6 +600,20 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     pointAt(indicator);
     await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
     return indicator;
+  };
+
+  /** Waits for the anchored tooltip (found by its `data-anchored-tooltip` mark) and fails unless it reads `tooltip`;
+   * `owner` says whose tooltip it was to be. */
+  const expectAnchoredTooltip = async (owner: string, tooltip: string): Promise<void> => {
+    const shown = withoutIsolates(
+      await waitFor(
+        () => doc.querySelector("[data-anchored-tooltip]")?.textContent ?? undefined,
+        `${owner} has no tooltip "${tooltip}": its anchored tooltip is none`,
+      ),
+    ).trim();
+    if (shown !== tooltip) {
+      throw new Error(`${owner} has no tooltip "${tooltip}": its anchored tooltip is "${shown}"`);
+    }
   };
 
   /** Presses `element` with a finger: the pointer events react-aria's `usePress` reads, then the click
@@ -866,15 +894,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async hoverAnchored(host, tooltip) {
       await hover(() => find(host), `Nothing to hover matching ${String(host)}`);
-      const shown = withoutIsolates(
-        await waitFor(
-          () => doc.querySelector("[data-anchored-tooltip]")?.textContent ?? undefined,
-          `The control matching ${String(host)} has no tooltip "${tooltip}": its anchored tooltip is none`,
-        ),
-      ).trim();
-      if (shown !== tooltip) {
-        throw new Error(`The control matching ${String(host)} has no tooltip "${tooltip}": its anchored tooltip is "${shown}"`);
-      }
+      await expectAnchoredTooltip(`The control matching ${String(host)}`, tooltip);
+    },
+    async hoverMenuLabel(item, tooltip) {
+      await hover(
+        () => findMenuItem(item)?.querySelector<HTMLElement>("[data-slot=label] > *") ?? undefined,
+        `Nothing to hover in the label of the menu item matching ${String(item)}`,
+      );
+      await expectAnchoredTooltip(`The label of the menu item matching ${String(item)}`, tooltip);
     },
     async floatPane(toggle) {
       const control = await waitFor(() => find(toggle), `Nothing to hover matching ${String(toggle)}`);

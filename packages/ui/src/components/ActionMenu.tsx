@@ -73,7 +73,8 @@ export function isActionMenuOpen(): boolean {
 export interface ActionMenuItem {
   label: string;
   /** What the item shows in place of `label` (a path that has to read left to right); `label` stays
-   * its text value for typeahead. */
+   * its text value for typeahead. It takes the pointer as `label` does, so a tooltip or marquee in it
+   * needs nothing added (see `labelPointerClass`). */
   content?: React.ReactNode;
   /** A lucide glyph, or any element of about the same size (an agent's mark, a console's avatar). */
   icon: LucideIcon | React.ReactElement;
@@ -144,6 +145,22 @@ export interface ActionMenuNote {
 }
 
 export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | ActionMenuNote | "separator";
+
+/** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
+ * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
+ * `DISABLED_ROW_CLASS`); a press on it still bubbles to the item, which runs it as before.
+ *
+ * The cursor over that content stays the one the row shows elsewhere: the row's hand on an item that can be
+ * chosen, where WebKit gives the `label` element its own arrow, and on a disabled item the arrow the pointer
+ * passing through the row shows, where HeroUI's disabled label would show `not-allowed`. */
+function labelPointerClass(disabled: boolean): string {
+  return `*:pointer-events-auto ${disabled ? "cursor-default" : "cursor-[inherit]"}`;
+}
+
+/** A disabled row that its label's content has given the pointer back to matches `:hover` and `:active` while the
+ * pointer is on that content, so HeroUI's hover fill and press shrink are cancelled on it; it stays at full
+ * opacity too (see `renderItem`). */
+const DISABLED_ROW_CLASS = "data-[disabled=true]:opacity-100 data-[disabled=true]:hover:bg-transparent data-[disabled=true]:active:transform-none";
 
 /** Whether an item cannot be chosen: it is disabled, or it gives a reason it cannot be. */
 function isDisabledItem(entry: ActionMenuItem): boolean {
@@ -226,42 +243,47 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
 
   // The disabled style fades the whole item, which would take its text below the contrast it needs; so a
   // disabled item stays at full opacity and is dimmed by its icon fading and its label taking the secondary
-  // text colour. A shortcut at its end keeps its colour. Overriding HeroUI's disabled look this way, the row's
-  // fade and the label's (`[data-disabled=true] .label`), is by the user's decision.
-  const renderItem = (entry: ActionMenuItem, index: number) => (
-    <Dropdown.Item
-      key={index}
-      id={itemId(index)}
-      textValue={entry.label}
-      data-marquee-scope
-      aria-label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
-      className={isDisabledItem(entry) ? "data-[disabled=true]:opacity-100" : undefined}
-      variant={entry.destructive ? "danger" : "default"}
-      isDisabled={isDisabledItem(entry)}
-      shouldCloseOnSelect={entry.closeOnSelect}
-    >
-      {isDisabledItem(entry) ? (
-        <span aria-hidden="true" className="flex shrink-0 opacity-(--disabled-opacity)">
+  // text colour. A shortcut at its end keeps its colour. Its label still takes the pointer, so that a clipped
+  // name shows its tooltip, without the row lighting or shrinking under it. Overriding HeroUI's disabled look
+  // this way, the row's fade and the label's (`[data-disabled=true] .label`) and the label taking the pointer, is
+  // by the user's decision.
+  const renderItem = (entry: ActionMenuItem, index: number) => {
+    const disabled = isDisabledItem(entry);
+    return (
+      <Dropdown.Item
+        key={index}
+        id={itemId(index)}
+        textValue={entry.label}
+        data-marquee-scope
+        aria-label={entry.reason && !entry.description ? t("menu.nameWithReason", { name: isolate(entry.ariaLabel ?? entry.label), reason: reasonText(entry.reason) }) : entry.ariaLabel}
+        className={disabled ? DISABLED_ROW_CLASS : undefined}
+        variant={entry.destructive ? "danger" : "default"}
+        isDisabled={disabled}
+        shouldCloseOnSelect={entry.closeOnSelect}
+      >
+        {disabled ? (
+          <span aria-hidden="true" className="flex shrink-0 opacity-(--disabled-opacity)">
+            <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
+          </span>
+        ) : (
           <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
+        )}
+        {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
+            its own. */}
+        <span className="flex min-w-0 flex-1 flex-col">
+          {/* HeroUI sizes a menu item's label to its text (`w-fit`), which would run a long one under
+              `end`; `max-w-full` keeps it to its column, where it fades. */}
+          <Label className={`min-w-0 max-w-full text-clip ${labelPointerClass(disabled)}${disabled ? " text-app-muted opacity-100" : ""}`}>
+            {entry.content ?? <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>}
+          </Label>
+          {entry.description && <Description className="sr-only">{entry.description}</Description>}
+          {entry.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={entry.reason} /></span>}
         </span>
-      ) : (
-        <ItemIcon icon={entry.icon} destructive={entry.destructive} className={entry.iconClassName} />
-      )}
-      {/* A label is often a name the user typed, so it reads in its own direction; `content` sets
-          its own. */}
-      <span className="flex min-w-0 flex-1 flex-col">
-        {/* HeroUI sizes a menu item's label to its text (`w-fit`), which would run a long one under
-            `end`; `max-w-full` keeps it to its column, where it fades. */}
-        <Label className={`min-w-0 max-w-full text-clip${isDisabledItem(entry) ? " text-app-muted opacity-100" : ""}`}>
-          {entry.content ?? <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>}
-        </Label>
-        {entry.description && <Description className="sr-only">{entry.description}</Description>}
-        {entry.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={entry.reason} /></span>}
-      </span>
-      {!entry.reason && entry.end}
-      {entry.selected !== undefined && <Dropdown.ItemIndicator />}
-    </Dropdown.Item>
-  );
+        {!entry.reason && entry.end}
+        {entry.selected !== undefined && <Dropdown.ItemIndicator />}
+      </Dropdown.Item>
+    );
+  };
 
   // A disabled item stays in the arrow-key walk (the default skips it), so the reason under it (a quota
   // used up) can be reached and read from the keyboard while the item still refuses to run. react-stately
@@ -308,7 +330,7 @@ function MenuItems({ entries, autoFocus }: { entries: ActionMenuEntry[]; autoFoc
         <Dropdown.SubmenuTrigger key={index}>
           <Dropdown.Item id={itemId(index)} textValue={entry.label} data-marquee-scope>
             <ItemIcon icon={entry.icon} />
-            <Label className="min-w-0 flex-1 text-clip">
+            <Label className={`min-w-0 flex-1 text-clip ${labelPointerClass(false)}`}>
               <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={entry.label}>{entry.label}</FadeOverflow>
             </Label>
             {/* HeroUI's indicator is a chevron that always points right, while the submenu opens

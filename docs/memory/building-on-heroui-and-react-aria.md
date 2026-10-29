@@ -85,6 +85,21 @@ other HeroUI part, search its stylesheet in that directory for `pointer-events-n
 gallery's hover steps dispatch events to an element rather than hit-testing, so they pass either way; only a real
 pointer in the running page shows the miss.
 
+Giving the pointer back inside a `Label` changes two more things, neither visible in the source:
+
+- The cursor over that element stops being the row's hand: it inherits from the `Label`, which renders a `label`
+  element, and WebKit's own stylesheet gives `label` `cursor: default`. Put `cursor-[inherit]` on the `Label`.
+- On a disabled item the row ignores the pointer (HeroUI's `status-disabled`), yet it matches `:hover` and `:active`
+  while the pointer is on the element inside it, as every ancestor of the hovered element does whatever its own
+  `pointer-events`. HeroUI keys the item's hover fill and press shrink on those pseudo-classes as well as on
+  `data-hovered` / `data-pressed`, so the disabled row lights and shrinks under that element, and the element shows
+  the `not-allowed` cursor of `[data-disabled=true] .label`, none of which the row showed before. react-aria sets no
+  `data-hovered` or `data-pressed` on a disabled item, so cancel the pseudo-class forms on the row
+  (`data-[disabled=true]:hover:` / `data-[disabled=true]:active:` variants) and give the `Label` the row's cursor.
+  For a menu item that cancellation is an approved departure from HeroUI's look, recorded under "Confirmed visual
+  choices" in `docs/ui-accessibility.md`; anywhere else it is a change of HeroUI's look and goes by "Do not change how
+  a HeroUI component looks" there.
+
 ## An ancestor's context decides a react-aria element's props, so the default in its own file is not what renders
 
 A react-aria-components element merges a context value over the props it was given (`useContextProps`), and a parent

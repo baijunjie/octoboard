@@ -345,8 +345,10 @@ Except for the report timestamp, clipped text then has its full text as its tool
 its conditions as the strip shows them, wrapped (see "Filtering the project list" in `docs/product/sidebar.md`),
 and for the archive view's heading, the longer title that also names the project, console session or console the
 archive is for — shown while the pointer is on the label and not on keyboard focus; the label's whole text is in the
-document whether or not it is cut, so assistive technology is given it either way. The diff separator's tooltip
-follows the operating system's rules instead.
+document whether or not it is cut, so assistive technology is given it either way. This holds for an action-menu
+item that cannot be chosen too — one that is disabled, with or without a reason under its name, such as a used-up
+account in a session's **Switch account** submenu: its clipped name shows its tooltip while the pointer is on the name,
+and pressing the name still runs nothing. The diff separator's tooltip follows the operating system's rules instead.
 
 **A path is cut at its start instead**, so that its last folder stays in view (see
 `docs/product/right-to-left-layout.md`). **So is a branch name**, so that its end — the part that tells sibling
@@ -376,10 +378,14 @@ or not the branch name is cut (see "The branch badge" in `docs/product/project-g
   Pointing at a status or agent icon, a branch glyph or upstream count, a row or header button, or the surrounding
   space starts none of those labels. Context-size chips and time fields remain separate from the model line's marquee.
 - An action-menu item or submenu item, a select's option or directory-picker row runs its one label while the pointer is
-  anywhere over that item or row. A select's current choice or placeholder runs while the pointer is over its trigger,
-  and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while the pointer
-  is anywhere over it, its tags moving together rather than each on its own. A fixed session-owner label and a diff's
-  collapsed-line label run over their text controls.
+  anywhere over that item or row. An action-menu item that cannot be chosen is the exception: its name runs only while
+  the pointer is on the name itself, and pointing at the rest of its row runs nothing; the row neither lights up nor
+  shrinks under the pointer, and the pointer keeps the plain arrow over it, name included. So is the **Copy session ID**
+  item, whose session ID line runs only while the pointer is on that line (see "Session rows" in
+  `docs/product/sidebar-session-rows.md`). A select's current choice or placeholder runs while the pointer is over its
+  trigger, and a picked tag while it is over the tag. The project filter's strip of conditions runs as a whole while
+  the pointer is anywhere over it, its tags moving together rather than each on its own. A fixed session-owner label and
+  a diff's collapsed-line label run over their text controls.
 - After an initial pause of about 600 ms the text scrolls at reading speed, about 60 px a second, toward the edge it
   is cut at — a label cut at its end scrolls forward through its text, one cut at its start scrolls back toward its
   beginning. It pauses there for three seconds, returns to where it rests in about 200 ms, then waits three seconds

@@ -300,8 +300,8 @@ export function sessionMenu(
       content: (
         <span className="flex min-w-0 max-w-full flex-col">
           <span>{t("sidebar.session.copyId")}</span>
-          {/* HeroUI's label ignores pointer events; the ID needs its own hover target. */}
-          <span aria-hidden="true" data-marquee-scope className="pointer-events-auto min-w-0">
+          {/* The ID runs as a marquee under the pointer on it alone, not on the whole item. */}
+          <span aria-hidden="true" data-marquee-scope className="min-w-0">
             <FadeOverflow as="span" dir="ltr" className="block font-mono text-xs text-app-muted">{session.id}</FadeOverflow>
           </span>
         </span>
