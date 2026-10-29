@@ -12,7 +12,7 @@ import { setLanguage } from "../i18n/language";
 import type { Event, ImportedProject } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ImportResult } from "./ImportResult";
-import { settingLinesOf } from "./testSupport";
+import { openTab, settingLinesOf } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -44,7 +44,11 @@ it("groups a count by the language of the application, not the browser's", () =>
   expect(container.textContent).toContain("1.200 projects created");
 });
 
-it("says nothing failed once rather than listing zeros, and lists a failure when there is one", () => {
+/** The items of a region's totals line, without the dot drawn between them. */
+const totals = (container: Element, label = "Totals for consoles and projects") =>
+  Array.from(container.querySelectorAll(`ul[aria-label="${label}"] > li`)).map((li) => li.textContent!.replace(/·$/, ""));
+
+it("says nothing failed once rather than listing zeros, and lists a failure when there is one, each total as a list item", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -66,16 +70,14 @@ it("says nothing failed once rather than listing zeros, and lists a failure when
       ),
     );
   render("created");
-  expect(container.textContent).toContain("1 console created. 1 project created. Nothing failed.");
+  expect(totals(container)).toEqual(["1 console created", "1 project created", "Nothing failed"]);
   expect(container.textContent).not.toContain("0 failed");
   render("failed");
-  expect(container.textContent).toContain("1 item failed. 1 project not attempted.");
+  expect(totals(container)).toEqual(["1 failed", "1 project not attempted"]);
   expect(container.textContent).not.toContain("Nothing failed");
 });
 
-// Stacked, a row is a block of values and the header is not drawn; the label in front of each value is
-// all that says what it is the value of, and it is what a later restyle drops without anyone noticing.
-it("keeps a label in front of every value of a row, for when the rows are stacked, a header for each column, and the console's name once as its group's header", () => {
+it("gives each console a card named by its heading with its own outcome, and a row for each project with its outcome as text", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -84,66 +86,29 @@ it("keeps a label in front of every value of a row, for when the rows are stacke
     container.remove();
   });
   const consoles = [
-    { name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1), { ...project(2), status: "failed" as const, via: null }] },
-  ];
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles }} /></DaemonProvider>));
-  const headers = [...container.querySelectorAll("thead th")].map((th) => th.textContent);
-  expect(headers).toEqual(["Project", "Result", "Detail"]);
-  // Each value is found by what it is and must carry the name of the column it belongs to: the
-  // labels and the headers are written from one list, so only a known pair can show them swapped.
-  const labelOf = (value: string) =>
-    [...container.querySelectorAll("tbody td")].find((td) => td.textContent?.endsWith(value))?.querySelector("span[aria-hidden=true]")
-      ?.textContent;
-  expect(labelOf("P1")).toBe("Project");
-  expect(labelOf("Created")).toBe("Result");
-  expect(labelOf("At its exported path")).toBe("Detail");
-  expect(container.querySelector("table")?.getAttribute("role")).toBe("table");
-  // The console is named once, by the header cell that spans the group, which no value label stands in front of.
-  const group = container.querySelector("tbody")!;
-  const header = group.querySelector("th")!;
-  expect(header.textContent).toBe("C");
-  expect(header.getAttribute("role")).toBe("rowheader");
-  expect(header.getAttribute("scope")).toBe("rowgroup");
-  expect(header.getAttribute("colspan")).toBe("3");
-  expect(group.querySelectorAll("th")).toHaveLength(1);
-  expect([...group.querySelectorAll("tr")].map((tr) => tr.querySelectorAll("td").length)).toEqual([0, 3, 3]);
-});
-
-it("gives a console that failed or came out empty a line of its own in its group, headed by its name, and one group to each console", () => {
-  const daemon = { store: createStateStore({}) } as Daemon;
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  onTestFinished(() => {
-    act(() => root.unmount());
-    container.remove();
-  });
-  const consoles = [
-    { name: "Fine", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] },
-    { name: "Broken", status: "failed" as const, console: null, error: { code: "path_not_found", message: "no", params: { path: "/missing" } }, account_fallbacks: [], projects: [{ ...project(2), status: "not_attempted" as const, via: null }] },
+    { name: "Fine", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1), { ...project(2), status: "left_out" as const, via: null }] },
+    { name: "Broken", status: "failed" as const, console: null, error: { code: "path_not_found", message: "no", params: { path: "/missing" } }, account_fallbacks: [], projects: [{ ...project(3), status: "not_attempted" as const, via: null }] },
     { name: "Empty", status: "created" as const, console: "c-3", error: null, account_fallbacks: [], projects: [] },
   ];
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles }} /></DaemonProvider>));
-  const groups = [...container.querySelectorAll("tbody")];
-  expect(groups.map((group) => group.querySelector("th")!.textContent)).toEqual(["Fine", "Broken", "Empty"]);
-  // A console with nothing of its own to say only heads its group.
-  expect(groups[0].querySelector("th")!.getAttribute("scope")).toBe("rowgroup");
-  expect(groups[0].querySelector("th")!.getAttribute("colspan")).toBe("3");
-  expect(groups[0].querySelector("tr")!.querySelectorAll("td")).toHaveLength(0);
-  // A failed or empty one is the row header of a line with its result.
-  for (const [index, result] of [[1, "Failed"], [2, "Created"]] as const) {
-    const own = groups[index].querySelector("tr")!;
-    expect(own.querySelector("th")!.getAttribute("role")).toBe("rowheader");
-    expect(own.querySelector("th")!.getAttribute("scope")).toBe("rowgroup");
-    expect(own.querySelector("th")!.getAttribute("colspan")).toBeNull();
-    expect(own.querySelectorAll("td")[0].textContent).toContain(result);
+  expect(container.querySelector("table")).toBeNull();
+  const cards = [...container.querySelectorAll("section")];
+  expect(cards.map((card) => card.querySelector("h3")!.textContent)).toEqual(["Fine", "Broken", "Empty"]);
+  for (const card of cards) {
+    expect(document.getElementById(card.getAttribute("aria-labelledby")!)).toBe(card.querySelector("h3"));
   }
-  expect(groups[1].querySelector("tr button")!.getAttribute("aria-label")).toBe(`${isolate("Broken")} failed`);
-  expect(groups[1].textContent).toContain("Its console could not be created.");
-  expect(groups[1].querySelectorAll("tr")).toHaveLength(2);
-  expect(groups[2].querySelectorAll("tr")).toHaveLength(1);
+  // The console's own outcome is in its header, whatever it is, and each project's is a word in its row.
+  expect(cards.map((card) => card.querySelector(":scope > div")!.textContent)).toEqual(["FineCreated", "BrokenFailed", "EmptyCreated"]);
+  expect([...cards[0].querySelectorAll("li")].map((li) => li.textContent)).toEqual(["P1CreatedAt its exported path", "P2Left out"]);
+  // A failed console's reason is under its header, and its project says it was not tried.
+  expect(cards[1].textContent).toContain("/missing");
+  expect(cards[1].textContent).toContain("Its console could not be created.");
+  expect(cards[1].querySelectorAll("li")).toHaveLength(1);
+  expect(cards[2].querySelectorAll("li")).toHaveLength(0);
+  expect(cards[2].textContent).toContain("This console has no projects.");
 });
 
-it("does not say nothing failed beside a failure to apply the settings", () => {
+it("says nothing failed for the consoles and the accounts beside a failure to apply the settings", async () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -153,14 +118,20 @@ it("does not say nothing failed beside a failure to apply the settings", () => {
   });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   const settings_error = { code: "path_not_found", params: { path: "/Users/dev/missing" }, message: "no" };
-  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, settings_error }} /></DaemonProvider>));
+  const accounts = { agents_added: [], agents: [{ agent: "claude" as const, default_name_applied: false, accounts: [{ name: "Work", status: "created" as const, account: "a1", error: null, sharing_warning: null }] }] };
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, accounts, settings_error }} /></DaemonProvider>));
+  // The settings failure brings its tab forward; each other region's totals depend on its own failures alone.
   expect(container.textContent).toContain("The application settings could not be applied");
-  expect(container.textContent).not.toContain("Nothing failed");
+  expect(container.querySelector("[role=tab][aria-selected=true]")!.textContent).toBe("Application settings");
   // The failure's literal takes the danger tone of the line it is in.
   expect(container.querySelector("code")?.getAttribute("data-color")).toBe("danger");
+  await openTab("Consoles and projects");
+  expect(container.querySelector("ul[aria-label='Totals for consoles and projects']")!.textContent).toContain("Nothing failed");
+  await openTab("Accounts");
+  expect(container.querySelector("ul[aria-label='Totals for accounts']")!.textContent).toContain("Nothing failed");
 });
 
-it("puts no space between the sentences of the summary in a language that has none after its full stop", () => {
+it("lists the totals as items of their own in every language, with the dot between them hidden from assistive technology", () => {
   setLanguage("zh-Hans");
   onTestFinished(() => setLanguage("en"));
   const daemon = { store: createStateStore({}) } as Daemon;
@@ -172,7 +143,8 @@ it("puts no space between the sentences of the summary in a language that has no
   });
   const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles }} /></DaemonProvider>));
-  expect(container.textContent).toContain("已创建 1 个控制台。已创建 1 个项目。没有失败项。");
+  expect(totals(container, "控制台和项目汇总")).toEqual(["已创建 1 个控制台", "已创建 1 个项目", "没有失败项"]);
+  expect(container.querySelectorAll("ul[aria-label=控制台和项目汇总] [aria-hidden=true]")).toHaveLength(2);
 });
 
 it("announces a failure to apply the settings once focus has settled, with its title and description only", () => {
@@ -200,7 +172,7 @@ it("announces a failure to apply the settings once focus has settled, with its t
   expect(alerts[0].textContent).not.toContain("/Users/dev/missing is");
 });
 
-it("opens no error alert for partial import failures: the result screen already shows them", () => {
+it("opens no error alert for partial import failures: the result screen already shows them", async () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -216,8 +188,11 @@ it("opens no error alert for partial import failures: the result screen already 
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /><ErrorAlerts daemon={daemon} /></DaemonProvider>));
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
-  expect(container.textContent).toContain("1 item failed");
-  expect(container.querySelector("table button")).not.toBeNull();
+  expect(totals(container)).toEqual(["1 console created", "1 failed"]);
+  expect(container.querySelector("section li")!.textContent).toContain("/missing does not exist.");
+  // The tab with the settings' failure is marked, and shows it once opened.
+  expect(document.querySelector("[role=tab][aria-label='Application settings, needs attention']")).not.toBeNull();
+  await openTab("Application settings");
   // The reason is the application's own sentence; what the system said is behind Details.
   expect(container.textContent).toContain("Something unexpected went wrong.");
   expect(container.textContent).not.toContain("Settings unavailable");
@@ -296,7 +271,7 @@ it("tells what came of the keyboard shortcuts in the settings card, and the ones
   expect(settingLines(container)["Keyboard shortcuts"]).toEqual({ badge: "Defaults" });
 });
 
-it("marks a console and a project whose account fell back with a warning mark after the name in the table, the sentence in its popover, and lists no section of them", () => {
+it("marks a console and a project whose account fell back with a warning mark after the name, the sentence in its popover, and lists no section of them", async () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -309,18 +284,20 @@ it("marks a console and a project whose account fell back with a warning mark af
     { name: "Broken", status: "failed" as const, console: null, error: null, account_fallbacks: [{ agent: "claude" as const, name: "Gone" }], projects: [] },
   ];
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, settings_applied: { auto_pull_repositories: true } }} /></DaemonProvider>));
-  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Application settings applied"]);
-  const marks = [...container.querySelectorAll("table button[data-status-mark]")].filter((button) => button.getAttribute("aria-label")!.startsWith("Accounts not set up for"));
+  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["C", "Broken"]);
+  const marks = [...container.querySelectorAll("section button[data-status-mark]")].filter((button) => button.getAttribute("aria-label")!.startsWith("Accounts not set up for"));
   expect(marks.map((mark) => mark.getAttribute("aria-label"))).toEqual(["C", "P1", "P2", "Broken"].map((name) => `Accounts not set up for ${isolate(name)}`));
   // Each sits right after the name it qualifies.
   expect(marks[0].parentElement!.previousElementSibling?.textContent).toBe("C");
   expect(marks[2].parentElement!.previousElementSibling?.textContent).toBe("P2");
-  expect(container.querySelector("table")!.textContent).not.toContain("is not set up");
+  expect(container.querySelector("section")!.textContent).not.toContain("is not set up");
   press(marks[1]);
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("Codex account Personal is not set up in Octoboard, so the default account is used.");
+  await openTab("Application settings");
+  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["Application settings applied"]);
 });
 
-it("marks a failed line with the glyph and the word Failed, named after what failed, whose popover holds the reason, and writes no error text into the table", () => {
+it("writes a failed line's reason under its row, with the raw text behind Details and not in the row", () => {
   const daemon = { store: createStateStore({}) } as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -330,17 +307,34 @@ it("marks a failed line with the glyph and the word Failed, named after what fai
   });
   const result = {
     type: "configuration_imported" as const,
-    consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "path_not_found", message: "Directory unavailable", params: { path: "/missing" } } }] }],
+    consoles: [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [{ ...project(1), status: "failed" as const, error: { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } } }] }],
   };
   act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={result} /></DaemonProvider>));
-  const table = container.querySelector("table")!;
-  const mark = table.querySelector("button")!;
-  // Each failed row's mark names what failed, so several of them can be told apart.
-  expect(mark.getAttribute("aria-label")).toBe(`${isolate("P1")} failed`);
-  // The mark reads like the other outcomes: the glyph, then the word.
-  expect(mark.textContent).toBe("Failed");
-  expect(mark.querySelector("svg")).not.toBeNull();
-  expect(table.textContent).not.toContain("/missing");
-  press(mark);
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("/missing");
+  const row = container.querySelector("section li")!;
+  // The row reads like the others: the glyph, then the word; the reason is a paragraph of its own under it.
+  expect(row.querySelector("svg")).not.toBeNull();
+  expect(row.textContent).toContain("Failed");
+  expect(row.textContent).toContain("Something unexpected went wrong.");
+  expect(row.querySelector("button[data-status-mark]")).toBeNull();
+  expect(row.textContent).not.toContain("raw diagnostic text");
+  expect(openDetails(row).textContent).toContain("raw diagnostic text");
+});
+
+it("shows tabs only for the regions that were imported", () => {
+  const daemon = { store: createStateStore({}) } as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const tabs = () => Array.from(container.querySelectorAll("[role=tab]")).map((tab) => tab.textContent);
+  const accounts = { agents_added: [], agents: [] };
+  const consoles = [{ name: "C", status: "created" as const, console: "c-1", error: null, account_fallbacks: [], projects: [project(1)] }];
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles, accounts }} /></DaemonProvider>));
+  expect(tabs()).toEqual(["Consoles and projects", "Accounts"]);
+  // Imported without the consoles, only the accounts are left: one panel, no tab bar.
+  act(() => root.render(<DaemonProvider value={daemon}><ImportResult result={{ type: "configuration_imported", consoles: [], accounts }} /></DaemonProvider>));
+  expect(tabs()).toEqual([]);
+  expect(container.querySelector("section")).toBeNull();
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ImportedProject } from "../protocol";
+import type { ImportedAccount, ImportedProject } from "../protocol";
 import { importDisagreement, withShortcutsEcho } from "./fixtureConfiguration";
 
 const project = (name: string, status: ImportedProject["status"], via: ImportedProject["via"] = null): ImportedProject => ({
@@ -57,6 +57,44 @@ describe("importDisagreement", () => {
 
   it("finds application settings asked for that the result does not report", () => {
     expect(importDisagreement(request([], true), result([]))).toMatch(/asked for the application settings/);
+  });
+});
+
+describe("importDisagreement over the consoles", () => {
+  it("finds consoles reported that the request asked not to create", () => {
+    const request = { type: "import_configuration" as const, document: {}, apply_consoles: false };
+    expect(importDisagreement(request, result([project("A", "created", "clone")]))).toMatch(/asked for none/);
+  });
+
+  it("finds none where the request asked for no consoles and the result has none, or left the choice out", () => {
+    expect(importDisagreement({ type: "import_configuration" as const, document: {}, apply_consoles: false, resolutions: [{ console: 0, project: 0, choice: { kind: "clone" } }] }, { consoles: [] })).toBeUndefined();
+    expect(importDisagreement({ type: "import_configuration" as const, document: {} }, { consoles: [] })).toBeUndefined();
+  });
+});
+
+describe("importDisagreement over accounts", () => {
+  const account = (name: string, status: ImportedAccount["status"]): ImportedAccount => ({ name, status, account: status === "created" || status === "existing" ? "a-1" : null, error: null, sharing_warning: null });
+  const accounts = (...list: ImportedAccount[]) => ({ agents_added: [], agents: [{ agent: "claude" as const, accounts: list, default_name_applied: false }] });
+  const asked = (resolutions: { account: number; leave_out?: boolean; directory?: string }[], apply_accounts?: boolean) => ({
+    type: "import_configuration" as const,
+    document: {},
+    apply_accounts,
+    account_resolutions: resolutions.map((resolution) => ({ agent: "claude" as const, ...resolution })),
+  });
+
+  it("finds none where the accounts left out are the ones the request leaves out", () => {
+    const list = [account("A", "created"), account("B", "left_out"), account("C", "existing"), account("D", "failed")];
+    expect(importDisagreement(asked([{ account: 1, leave_out: true }, { account: 3, directory: "~/d" }], true), { ...result([]), accounts: accounts(...list) })).toBeUndefined();
+  });
+
+  it("finds an account reported left out that the request does not leave out, and the other way about", () => {
+    expect(importDisagreement(asked([], true), { ...result([]), accounts: accounts(account("A", "left_out")) })).toMatch(/A is reported left out/);
+    expect(importDisagreement(asked([{ account: 0, leave_out: true }], true), { ...result([]), accounts: accounts(account("A", "created")) })).toMatch(/A is reported created, but the request leaves it out/);
+  });
+
+  it("finds accounts reported that the request did not ask for, or asked for and not reported", () => {
+    expect(importDisagreement(asked([], false), { ...result([]), accounts: accounts() })).toMatch(/did not ask/);
+    expect(importDisagreement(asked([], true), result([]))).toMatch(/asked for the accounts/);
   });
 });
 

@@ -1974,6 +1974,90 @@ describe("the fixture daemon's configuration export", () => {
       { name: "Website", path: "website", remote_url: "git@github.com:acme/website.git" },
     ]);
   });
+
+  describe("regions", () => {
+    const account = (id: string, agent: Agent, name: string, config_dir: string, extra: { share_default_config?: boolean; disabled?: boolean } = {}) => ({ id, agent, name, config_dir, ...extra });
+    const daemon = createFixtureDaemon({
+      id: "export-regions",
+      group: "Configuration",
+      category: "normal",
+      title: "",
+      state: snapshotState({
+        consoles: [consoleOf("c-1", "Work"), consoleOf("c-2", "Home")],
+        projects: [projectOf("p-1", "c-1", "Website")],
+        settings: {
+          auto_pull_repositories: false,
+          auto_delete_unresumable_archives: true,
+          added_agents: ["codex", "claude"],
+          default_clone_dir: "/Users/dev/Projects",
+          git_workflow: DEFAULT_GIT_WORKFLOW,
+          accounts: [
+            account("a-1", "claude", "Work", "/Users/dev/.claude-work", { share_default_config: true }),
+            account("a-2", "claude", "Studio", "/Volumes/Shared/claude-studio", { disabled: true }),
+            account("a-3", "codex", "Home", "/Users/dev"),
+          ],
+          account_order: { claude: ["a-2", null, "a-1"] },
+          default_account_names: { claude: "Personal" },
+        },
+      }),
+    });
+    const exported = async (request: Partial<Extract<RequestBody, { type: "export_configuration" }>> = {}) =>
+      ((await daemon.request({ type: "export_configuration", ...request })) as { document: ReturnType<typeof exportedDocument> }).document;
+
+    it("settles the regions an absent field leaves open as the daemon does", async () => {
+      const everything = await exported();
+      expect(everything.consoles.map((console) => console.name).sort()).toEqual(["Home", "Work"]);
+      expect(everything.settings).toBeDefined();
+      expect(everything).not.toHaveProperty("accounts");
+      const one = await exported({ console: "c-1" });
+      expect(one.consoles.map((console) => console.name)).toEqual(["Work"]);
+      expect(one).not.toHaveProperty("settings");
+      expect(one).not.toHaveProperty("accounts");
+    });
+
+    it("chooses the consoles, the settings and the accounts independently", async () => {
+      const none = await exported({ consoles: "none", include_settings: true });
+      expect(none.consoles).toEqual([]);
+      expect(none.settings).toBeDefined();
+      const oneWithSettings = await exported({ consoles: "one", console: "c-2", include_settings: true, include_accounts: true });
+      expect(oneWithSettings.consoles.map((console) => console.name)).toEqual(["Home"]);
+      expect(oneWithSettings.settings).toBeDefined();
+      expect(oneWithSettings.accounts).toBeDefined();
+      const allWithoutSettings = await exported({ consoles: "all", include_settings: false });
+      expect(allWithoutSettings.consoles).toHaveLength(2);
+      expect(allWithoutSettings).not.toHaveProperty("settings");
+    });
+
+    it("refuses an export of nothing, one of a console with none named, and one of a console it does not have", async () => {
+      await expect(exported({ consoles: "none" })).rejects.toMatchObject({ code: "export_empty" });
+      await expect(exported({ consoles: "none", include_settings: false, include_accounts: false })).rejects.toMatchObject({ code: "export_empty" });
+      await expect(exported({ consoles: "one" })).rejects.toMatchObject({ code: "field_required" });
+      await expect(exported({ console: "c-9" })).rejects.toMatchObject({ code: "unknown_console" });
+    });
+
+    it("exports the accounts in their display order with the default account's place, and no id", async () => {
+      const { accounts } = await exported({ consoles: "none", include_accounts: true });
+      expect(accounts).toEqual({
+        added_agents: ["codex", "claude"],
+        agents: [
+          {
+            agent: "claude",
+            default_account: { name: "Personal", position: 1 },
+            accounts: [
+              { name: "Studio", directory: "/Volumes/Shared/claude-studio", share_default_config: false, disabled: true },
+              { name: "Work", directory: "~/.claude-work", share_default_config: true, disabled: false },
+            ],
+          },
+          { agent: "codex", default_account: { name: null, position: 0 }, accounts: [{ name: "Home", directory: "~", share_default_config: false, disabled: false }] },
+        ],
+      });
+    });
+
+    it("writes every account directory, home-relative or absolute, whatever the paths choice", async () => {
+      const { accounts } = await exported({ consoles: "none", include_accounts: true, include_paths: false });
+      expect(accounts?.agents[0].accounts.map((account) => account.directory)).toEqual(["/Volumes/Shared/claude-studio", "~/.claude-work"]);
+    });
+  });
 });
 
 describe("the fixture daemon's git workflow settings", () => {

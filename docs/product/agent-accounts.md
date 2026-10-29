@@ -15,8 +15,9 @@ every account of the agent are in `docs/product/per-agent-settings.md`.
 ## Added agents
 
 Octoboard keeps a list of the agents the user has **added**, in an order the user sets. It is kept by the daemon with
-the other application settings, so every window shows the same list, and it is not part of a configuration export (see
-"What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`).
+the other application settings, so every window shows the same list. A configuration export that includes the
+accounts carries it, and an import appends the agents it names that are not on the list yet (see "The accounts" and
+"Importing accounts" in `docs/product/configuration-export-and-import.md`).
 
 The list decides which agents this section shows, and in what order: the agent strip and the Add account form's agent
 picker. Every other place that lists agents follows it too, in its order: the console, project, session and handoff
@@ -148,9 +149,10 @@ share. Its actions menu holds **Details**, **Settings**, **Rename**, **Log in**,
 user gave it, empty when there is none, and a note that leaving it empty uses the standard name. The name is stored
 trimmed. A blank name, or the word "Default" in any letter case, clears it, and the default account is again shown under
 its name in the current language. The name cannot be one an account the user owns of the same agent already has,
-compared trimmed and ignoring letter case; that is reported under the name field. The name is kept by the daemon and is
-not part of a configuration export (see "What is not configuration and never travels" in
-`docs/product/configuration-export-and-import.md`).
+compared trimmed and ignoring letter case; that is reported under the name field. The name is kept by the daemon. A
+configuration export that includes the accounts carries it, and an import gives it to the default account only when
+that one has no name of its own and no account of the agent has the name (see "The accounts" and "Importing accounts"
+in `docs/product/configuration-export-and-import.md`).
 
 The name the user gave is what the default account is called everywhere it is named: in this section, the rail's account
 quota panel, the console, project and session dialogs' account pickers (see "Agent config directories" in
@@ -206,7 +208,9 @@ tab in view; the readings already held are shown at once.
 Each agent has its own account display order, including its default account. Until the user sets an order, the default
 account comes first, followed by the accounts the user owns in the order they are kept. A newly added account follows
 those already ordered; removing an account leaves the others in their places. The order is kept by the daemon for all
-windows on that machine and does not travel in configuration exports.
+windows on that machine. A configuration export that includes the accounts carries it, and an import puts the accounts
+it creates after the agent's other accounts, in the file's order (see "The accounts" and "Importing accounts" in
+`docs/product/configuration-export-and-import.md`).
 
 In Settings, drag a row by the grip before its name with a mouse or a pen: once the pointer moves far enough, the row
 follows it and the other rows make room. Releasing drops it in the new place. Touch keeps its native scrolling. Escape,
@@ -330,8 +334,10 @@ is still unanswered is ignored. A client turns an account off or on with the pro
 Turning an account back on while **Start usage windows automatically** is on starts at once any window its held reading
 shows has not begun counting, as turning that setting on does.
 
-Whether an account is turned off is kept by the daemon on this machine and is not part of a configuration export (see
-"What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`). An agent can read
+Whether an account is turned off is kept by the daemon on this machine. A configuration export that includes the
+accounts carries it for the accounts the user owns, not for the default account, and an import gives it to the accounts
+it creates, never to one that already exists (see "The accounts" and "Importing accounts" in
+`docs/product/configuration-export-and-import.md`). An agent can read
 it — `get_settings` marks each account that is turned off — but no tool turns an account off or on (see "Application
 settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
 

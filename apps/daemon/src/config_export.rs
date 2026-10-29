@@ -1,5 +1,6 @@
-//! The configuration document: what one console's configuration, or all of the application's,
-//! looks like once it has been lifted out of this machine's database. `apps/daemon/PROTOCOL.md`
+//! The configuration document: what the consoles' and projects' configuration, the application's
+//! settings and the account structure look like once they have been lifted out of this machine's
+//! database, each region on its own. `apps/daemon/PROTOCOL.md`
 //! ("Configuration export") is the specification; this module is its Rust form and builds it.
 //!
 //! The document is the input of a later import as well as a file the user keeps and shares, so its
@@ -9,21 +10,24 @@
 //! What it leaves out is deliberate. A session, a page, a transcript and a trust record are state
 //! of this machine and not configuration. A console's `workdir` is left out because the daemon
 //! derives it from the console's id when the console is created, so it would carry that id and
-//! Octoboard's own layout, and an import makes its own. An account travels as its name alone
-//! ([`AccountName`]) and never as an id or a `config_dir`, since an id means nothing elsewhere and
-//! the directory is this machine's layout. `Settings.default_clone_dir` stays behind for the same
+//! Octoboard's own layout, and an import makes its own. An account referenced by a console or a
+//! project travels as its name alone ([`AccountName`]) and never as an id or a `config_dir`, since
+//! an id means nothing elsewhere and the directory is this machine's layout. The accounts region
+//! ([`DocumentAccounts`]) is the one place accounts are described, and it never holds a
+//! credential, an id or a quota reading. `Settings.default_clone_dir` stays behind for the same
 //! reason: an import places projects under the *importing* machine's own.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::account_dirs::account_dir_key;
 use crate::git_remote;
 use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
 use crate::protocol::{
-    Account, Agent, CodedError, Console, Project, ProjectAccount, ProjectSource,
+    error_code, Account, Agent, CodedError, Console, Project, ProjectAccount, ProjectSource,
 };
 use crate::store::Store;
 
@@ -45,10 +49,67 @@ pub struct ConfigurationDocument {
     /// The Octoboard version that produced the document, for diagnosing one that misbehaves. An
     /// import never reads it, and it is absent in a document exported before it existed.
     pub exported_by: Option<String>,
-    /// The application settings that are not console-scoped. Present in a full export only: its
-    /// absence is what says the document holds one console.
+    /// The application settings that are not console-scoped. Present exactly when the export
+    /// included them, whichever consoles it holds.
     pub settings: Option<DocumentSettings>,
+    /// The account structure. Present exactly when the export included it; a reader that does not
+    /// know the field ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accounts: Option<DocumentAccounts>,
+    /// The consoles exported, which may be none.
     pub consoles: Vec<DocumentConsole>,
+}
+
+/// The account structure of this machine, never a credential: which agents the user has added and
+/// each agent's accounts.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DocumentAccounts {
+    /// The agents the user has added, in their order. Absent when the exporting machine had not
+    /// yet decided the list (it was still finding out which agents are installed), which on import
+    /// adds none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub added_agents: Option<Vec<Agent>>,
+    /// One entry for each agent that has an account of its own or a named default account, in
+    /// `Agent::ALL` order.
+    pub agents: Vec<DocumentAgentAccounts>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DocumentAgentAccounts {
+    pub agent: Agent,
+    #[serde(default)]
+    pub default_account: DocumentDefaultAccount,
+    /// The accounts the user owns, in the agent's display order.
+    #[serde(default)]
+    pub accounts: Vec<DocumentAccount>,
+}
+
+/// What the document says of an agent's default account. Its directory is whatever the agent
+/// resolves on the machine, so it is not carried, and neither is its disabled flag.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentDefaultAccount {
+    /// The name the user gave it; `null` when it is unnamed.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Its place in the display order: how many of the agent's accounts come before it.
+    #[serde(default)]
+    pub position: usize,
+}
+
+/// An account the user owns. Its id, its login and everything the agent keeps in its directory
+/// stay behind.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentAccount {
+    pub name: String,
+    /// `~/<relative path>` for a directory under the exporting machine's home directory (also `~`
+    /// for the home directory itself); otherwise the absolute path. Whatever the export's paths
+    /// choice: an account cannot exist without its directory.
+    pub directory: String,
+    /// Whether the account shares the agent's default configuration.
+    #[serde(default)]
+    pub share_default_config: bool,
+    #[serde(default)]
+    pub disabled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -204,36 +265,125 @@ pub struct DocumentProject {
     pub git_workflow: GitWorkflowOverride,
 }
 
-/// The document for the console `console`, or for every console and the application settings when
-/// it is `None`. A console that does not exist is refused rather than exported as an empty
-/// document. With `include_paths` false a project's `path` is only its last segment, so the
-/// document carries nothing of this machine's layout; an import takes such a name for what it is
-/// (see `config_import`).
-pub fn build(
-    store: &Store,
-    console: Option<&str>,
-    include_paths: bool,
-) -> Result<ConfigurationDocument> {
-    let mut consoles = match console {
-        Some(id) => vec![store
+/// Which consoles an export holds. On the wire it is the request's `consoles` field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportedConsoles {
+    /// The console the request names.
+    One,
+    All,
+    None,
+}
+
+/// Which consoles an export holds, as `build` takes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConsoleScope {
+    One(String),
+    All,
+    None,
+}
+
+/// What an export holds: its consoles and projects, the application settings and the accounts,
+/// each region chosen on its own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Selection {
+    pub consoles: ConsoleScope,
+    pub settings: bool,
+    pub accounts: bool,
+    /// Whether a project's absolute path is written in full rather than as its last segment.
+    pub paths: bool,
+}
+
+impl Selection {
+    /// Every console, the application settings and no accounts: what an export with no choices
+    /// made holds.
+    #[cfg(test)]
+    pub fn full(paths: bool) -> Self {
+        Self {
+            consoles: ConsoleScope::All,
+            settings: true,
+            accounts: false,
+            paths,
+        }
+    }
+
+    /// The console `id` alone.
+    #[cfg(test)]
+    pub fn console(id: &str, paths: bool) -> Self {
+        Self {
+            consoles: ConsoleScope::One(id.to_string()),
+            settings: false,
+            accounts: false,
+            paths,
+        }
+    }
+
+    /// The selection a request's fields make, with the absent ones as `export_configuration`
+    /// documents them. A selection that holds nothing is refused with `export_empty`, and `one`
+    /// without a console with `field_required`.
+    pub fn from_request(
+        console: Option<String>,
+        consoles: Option<ExportedConsoles>,
+        include_settings: Option<bool>,
+        include_accounts: Option<bool>,
+        paths: bool,
+    ) -> Result<Self> {
+        let consoles = match consoles {
+            Some(ExportedConsoles::None) => ConsoleScope::None,
+            Some(ExportedConsoles::All) => ConsoleScope::All,
+            Some(ExportedConsoles::One) => ConsoleScope::One(console.ok_or_else(|| {
+                CodedError::raised(
+                    error_code::FIELD_REQUIRED,
+                    "`console` is required when `consoles` is `one`",
+                    &[("field", "console")],
+                )
+            })?),
+            None => console.map_or(ConsoleScope::All, ConsoleScope::One),
+        };
+        let selection = Self {
+            settings: include_settings.unwrap_or(consoles == ConsoleScope::All),
+            accounts: include_accounts.unwrap_or(false),
+            consoles,
+            paths,
+        };
+        if selection.consoles == ConsoleScope::None && !selection.settings && !selection.accounts {
+            return Err(CodedError::raised(
+                error_code::EXPORT_EMPTY,
+                "nothing is selected to export",
+                &[],
+            ));
+        }
+        Ok(selection)
+    }
+}
+
+/// The document `selection` asks for. A console that does not exist is refused rather than
+/// exported as an empty document. Without `paths` a project's `path` is only its last segment, so
+/// the document carries nothing of this machine's layout; an import takes such a name for what it
+/// is (see `config_import`).
+pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocument> {
+    let mut consoles = match &selection.consoles {
+        ConsoleScope::One(id) => vec![store
             .get_console(id)?
             .ok_or_else(|| CodedError::unknown_console(id))?],
-        None => store.list_consoles()?,
+        ConsoleScope::All => store.list_consoles()?,
+        ConsoleScope::None => Vec::new(),
     };
+    let include_paths = selection.paths;
     // Ordered here and not left to the queries, which `snapshot` shares and which leave ties
     // undefined: consoles are created in quick succession and a console's projects may share a
     // name. The id only breaks a tie and does not reach the document.
     consoles.sort_by(|a, b| (a.created_at, &a.id).cmp(&(b.created_at, &b.id)));
-    let accounts: HashMap<String, Account> = store
-        .list_accounts()?
-        .into_iter()
+    let all_accounts = store.list_accounts()?;
+    let accounts: HashMap<String, Account> = all_accounts
+        .iter()
+        .cloned()
         .map(|account| (account.id.clone(), account))
         .collect();
     let mut projects = store.list_projects()?;
     projects.sort_by(|a, b| (&a.name, &a.id).cmp(&(&b.name, &b.id)));
-    let settings = match console {
-        Some(_) => None,
-        None => Some(DocumentSettings {
+    let settings = if selection.settings {
+        Some(DocumentSettings {
             auto_pull_repositories: store.auto_pull_repositories()?,
             auto_delete_unresumable_archives: Some(store.auto_delete_unresumable_archives()?),
             auto_select_account: Some(store.auto_select_account()?),
@@ -248,7 +398,14 @@ pub fn build(
             git_workflow: Some(store.git_workflow_settings()?),
             claude_compatibility: Some(store.claude_compatibility_choices()?),
             keyboard_shortcuts: None,
-        }),
+        })
+    } else {
+        None
+    };
+    let document_accounts = if selection.accounts {
+        Some(document_accounts(store, &all_accounts)?)
+    } else {
+        None
     };
 
     let consoles = consoles
@@ -267,8 +424,94 @@ pub fn build(
         version: VERSION,
         exported_by: Some(env!("CARGO_PKG_VERSION").to_string()),
         settings,
+        accounts: document_accounts,
         consoles,
     })
+}
+
+/// The agents' display order of accounts as a client shows it: the saved order without what no
+/// longer exists or repeats, then the default account (`None`) and the accounts added since, in
+/// `owned` order, wherever the saved order does not place them. `owned` is the ids of the agent's
+/// accounts in their stored order.
+pub(crate) fn display_order(saved: &[Option<String>], owned: &[String]) -> Vec<Option<String>> {
+    let mut remaining: Vec<Option<String>> = std::iter::once(None)
+        .chain(owned.iter().cloned().map(Some))
+        .collect();
+    let mut order = Vec::new();
+    let later = std::iter::once(None).chain(owned.iter().cloned().map(Some));
+    for id in saved.iter().cloned().chain(later) {
+        if let Some(at) = remaining.iter().position(|candidate| *candidate == id) {
+            remaining.remove(at);
+            order.push(id);
+        }
+    }
+    order
+}
+
+fn document_accounts(store: &Store, all: &[Account]) -> Result<DocumentAccounts> {
+    let home = crate::paths::home_dir();
+    let names = store.default_account_names()?;
+    let mut agents = Vec::new();
+    for agent in Agent::ALL {
+        let owned: Vec<&Account> = all
+            .iter()
+            .filter(|account| account.agent == agent)
+            .collect();
+        let default_name = names.get(agent.wire_name()).cloned();
+        if owned.is_empty() && default_name.is_none() {
+            continue;
+        }
+        let ids: Vec<String> = owned.iter().map(|account| account.id.clone()).collect();
+        let order = display_order(&store.account_order(agent)?, &ids);
+        let position = order.iter().position(Option::is_none).unwrap_or(0);
+        let accounts = order
+            .into_iter()
+            .flatten()
+            .filter_map(|id| owned.iter().find(|account| account.id == id))
+            .map(|account| DocumentAccount {
+                name: account.name.clone(),
+                directory: document_directory(&account.config_dir, &home),
+                share_default_config: account.share_default_config,
+                disabled: account.disabled,
+            })
+            .collect();
+        agents.push(DocumentAgentAccounts {
+            agent,
+            default_account: DocumentDefaultAccount {
+                name: default_name,
+                position,
+            },
+            accounts,
+        });
+    }
+    Ok(DocumentAccounts {
+        added_agents: store.added_agents()?,
+        agents,
+    })
+}
+
+/// An account directory as the document writes it: `~/<relative>` under `home`, otherwise the
+/// path itself. Home is matched segment by segment through [`account_dir_key`], so a directory
+/// spelled in another letter case than home on a case-insensitive file system still reads as under
+/// it, and the absolute path with the user name in it is not exported; the relative part keeps its
+/// own spelling.
+fn document_directory(dir: &str, home: &Path) -> String {
+    if home == Path::new("/") {
+        return dir.to_string();
+    }
+    let key = |segment: Component<'_>| account_dir_key(&segment.as_os_str().to_string_lossy());
+    let mut rest = Path::new(dir).components();
+    for segment in home.components() {
+        if !rest.next().is_some_and(|under| key(under) == key(segment)) {
+            return dir.to_string();
+        }
+    }
+    let relative = rest.as_path();
+    if relative.as_os_str().is_empty() {
+        "~".to_string()
+    } else {
+        format!("~/{}", relative.to_string_lossy())
+    }
 }
 
 fn document_console(
@@ -520,7 +763,14 @@ mod tests {
     fn exported(console: Option<&str>) -> (ConfigurationDocument, String) {
         let (state, _dir) = crate::test_support::app_state("config-export");
         populated(&state.store);
-        let document = build(&state.store, console, true).expect("built");
+        let document = build(
+            &state.store,
+            &match console {
+                Some(id) => Selection::console(id, true),
+                None => Selection::full(true),
+            },
+        )
+        .expect("built");
         let text = serde_json::to_string(&document).unwrap();
         (document, text)
     }
@@ -643,7 +893,7 @@ mod tests {
     fn an_export_without_paths_records_each_projects_directory_name_and_nothing_of_the_layout() {
         let (state, _dir) = crate::test_support::app_state("config-export-no-paths");
         populated(&state.store);
-        let document = build(&state.store, None, false).expect("built");
+        let document = build(&state.store, &Selection::full(false)).expect("built");
         let hub = document
             .consoles
             .iter()
@@ -672,7 +922,7 @@ mod tests {
         state.store.insert_project(&local).unwrap();
 
         let projects = |include_paths| {
-            build(&state.store, None, include_paths)
+            build(&state.store, &Selection::full(include_paths))
                 .expect("built")
                 .consoles
                 .into_iter()
@@ -827,7 +1077,8 @@ mod tests {
         trusted.trust_consent = true;
         state.store.update_project(&trusted).unwrap();
 
-        let text = serde_json::to_string(&build(&state.store, None, true).unwrap()).unwrap();
+        let text =
+            serde_json::to_string(&build(&state.store, &Selection::full(true)).unwrap()).unwrap();
 
         for absent in [
             "secret-dir",
@@ -851,6 +1102,307 @@ mod tests {
         assert_eq!(read, document);
     }
 
+    fn request(
+        console: Option<&str>,
+        consoles: Option<ExportedConsoles>,
+        include_settings: Option<bool>,
+        include_accounts: Option<bool>,
+    ) -> Result<Selection> {
+        Selection::from_request(
+            console.map(str::to_string),
+            consoles,
+            include_settings,
+            include_accounts,
+            true,
+        )
+    }
+
+    #[test]
+    fn a_request_without_the_new_fields_means_what_it_always_did() {
+        let selection = request(None, None, None, None).unwrap();
+        assert_eq!(selection, Selection::full(true));
+        let selection = request(Some("console-1"), None, None, None).unwrap();
+        assert_eq!(selection, Selection::console("console-1", true));
+        let parsed: crate::protocol::Request =
+            serde_json::from_str(r#"{"type":"export_configuration","console":"c"}"#).unwrap();
+        match parsed.body {
+            RequestBody::ExportConfiguration {
+                console,
+                consoles,
+                include_settings,
+                include_accounts,
+                include_paths,
+            } => assert_eq!(
+                (
+                    console.as_deref(),
+                    consoles,
+                    include_settings,
+                    include_accounts,
+                    include_paths
+                ),
+                (Some("c"), None, None, None, true)
+            ),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn each_region_is_chosen_on_its_own_and_settings_follow_the_consoles_only_while_unsaid() {
+        use ExportedConsoles::{All, None as NoConsoles, One};
+        let selection = |consoles, settings, accounts| {
+            request(Some("console-1"), Some(consoles), settings, accounts).unwrap()
+        };
+        let one = selection(One, None, None);
+        assert_eq!(
+            (one.consoles.clone(), one.settings, one.accounts),
+            (ConsoleScope::One("console-1".to_string()), false, false)
+        );
+        let one_with_settings = selection(One, Some(true), Some(true));
+        assert!(one_with_settings.settings && one_with_settings.accounts);
+        let all_without_settings = selection(All, Some(false), None);
+        assert_eq!(all_without_settings.consoles, ConsoleScope::All);
+        assert!(!all_without_settings.settings);
+        // `console` is read for `one` alone.
+        let none_with_accounts = selection(NoConsoles, None, Some(true));
+        assert_eq!(none_with_accounts.consoles, ConsoleScope::None);
+        assert!(!none_with_accounts.settings && none_with_accounts.accounts);
+        assert!(selection(NoConsoles, Some(true), None).settings);
+        assert!(request(None, Some(NoConsoles), None, Some(true)).is_ok());
+        // Without a console, accounts alone leave the default meaning of the rest.
+        let only_accounts = request(None, None, None, Some(true)).unwrap();
+        assert_eq!(only_accounts.consoles, ConsoleScope::All);
+        assert!(only_accounts.settings && only_accounts.accounts);
+    }
+
+    #[test]
+    fn an_export_of_nothing_is_refused_and_so_is_one_console_without_its_name() {
+        use ExportedConsoles::{None as NoConsoles, One};
+        for refused in [
+            request(None, Some(NoConsoles), None, None),
+            request(None, Some(NoConsoles), Some(false), Some(false)),
+            request(Some("console-1"), Some(NoConsoles), None, Some(false)),
+        ] {
+            let err = refused.expect_err("nothing to export");
+            assert_eq!(
+                err.downcast_ref::<CodedError>().unwrap().code,
+                error_code::EXPORT_EMPTY
+            );
+        }
+        let err = request(None, Some(One), None, None).expect_err("no console named");
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().code,
+            error_code::FIELD_REQUIRED
+        );
+    }
+
+    #[test]
+    fn the_regions_of_a_document_follow_the_selection_whatever_the_consoles() {
+        let (state, _dir) = crate::test_support::app_state("config-export-regions");
+        populated(&state.store);
+        let built = |consoles, settings, accounts| {
+            let selection = Selection {
+                consoles,
+                settings,
+                accounts,
+                paths: true,
+            };
+            build(&state.store, &selection).unwrap()
+        };
+        let none = built(ConsoleScope::None, true, false);
+        assert!(none.consoles.is_empty() && none.settings.is_some() && none.accounts.is_none());
+        let one = built(ConsoleScope::One("console-2".to_string()), true, true);
+        assert_eq!(one.consoles.len(), 1);
+        assert!(one.settings.is_some() && one.accounts.is_some());
+        let accounts_alone = built(ConsoleScope::None, false, true);
+        assert!(accounts_alone.consoles.is_empty() && accounts_alone.settings.is_none());
+        let text = serde_json::to_string(&accounts_alone).unwrap();
+        assert!(
+            text.contains(r#""accounts":{"#) && text.contains(r#""settings":null"#),
+            "{text}"
+        );
+        let all = built(ConsoleScope::All, false, false);
+        assert_eq!(all.consoles.len(), 3);
+        assert!(all.settings.is_none());
+        assert!(!serde_json::to_string(&all)
+            .unwrap()
+            .contains(r#""accounts""#));
+        let read: ConfigurationDocument =
+            serde_json::from_str(&serde_json::to_string(&accounts_alone).unwrap()).unwrap();
+        assert_eq!(read, accounts_alone);
+    }
+
+    fn home() -> std::path::PathBuf {
+        crate::paths::home_dir()
+    }
+
+    /// Accounts of every kind: under the home directory and outside it, in a saved order that
+    /// differs from the stored one, one shared and one disabled.
+    fn with_accounts(store: &Store) -> (String, String) {
+        let under_home = home().join(".claude-work").to_string_lossy().into_owned();
+        let outside = "/srv/agents/claude-team".to_string();
+        let mut work = account("acct-1", Agent::Claude, "Work", &under_home);
+        work.share_default_config = true;
+        let mut team = account("acct-2", Agent::Claude, "Team", &outside);
+        team.disabled = true;
+        store.insert_account(&work).unwrap();
+        store.insert_account(&team).unwrap();
+        store
+            .insert_account(&account(
+                "acct-3",
+                Agent::Codex,
+                "Solo",
+                "/srv/agents/codex",
+            ))
+            .unwrap();
+        // The saved order: Team, the default, then Work.
+        store
+            .reorder_accounts(
+                Agent::Claude,
+                &[Some("acct-2".to_string()), None, Some("acct-1".to_string())],
+            )
+            .unwrap();
+        store
+            .set_default_account_name(Agent::Claude, Some("Personal"))
+            .unwrap();
+        store
+            .set_added_agents_if_undecided(&[Agent::Codex, Agent::Claude])
+            .unwrap();
+        (under_home, outside)
+    }
+
+    fn exported_accounts(store: &Store, paths: bool) -> DocumentAccounts {
+        let selection = Selection {
+            consoles: ConsoleScope::None,
+            settings: false,
+            accounts: true,
+            paths,
+        };
+        build(store, &selection).unwrap().accounts.unwrap()
+    }
+
+    #[test]
+    fn the_accounts_region_carries_the_structure_in_display_order_and_nothing_to_log_in_with() {
+        let (state, _dir) = crate::test_support::app_state("config-export-accounts");
+        with_accounts(&state.store);
+
+        let accounts = exported_accounts(&state.store, true);
+
+        assert_eq!(
+            accounts.added_agents,
+            Some(vec![Agent::Codex, Agent::Claude])
+        );
+        let agents: Vec<Agent> = accounts.agents.iter().map(|entry| entry.agent).collect();
+        assert_eq!(
+            agents,
+            [Agent::Claude, Agent::Codex],
+            "grok has nothing to carry"
+        );
+        let claude = &accounts.agents[0];
+        let names: Vec<&str> = claude.accounts.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, ["Team", "Work"], "in the saved display order");
+        assert_eq!(
+            claude.default_account,
+            DocumentDefaultAccount {
+                name: Some("Personal".to_string()),
+                position: 1
+            }
+        );
+        assert!(claude.accounts[0].disabled && !claude.accounts[0].share_default_config);
+        assert!(!claude.accounts[1].disabled && claude.accounts[1].share_default_config);
+        let codex = &accounts.agents[1];
+        assert_eq!(codex.default_account, DocumentDefaultAccount::default());
+
+        let text = serde_json::to_string(&accounts).unwrap();
+        for leaked in ["acct-", "incomplete", "token", "credential", "quota"] {
+            assert!(!text.contains(leaked), "{leaked} is in {text}");
+        }
+    }
+
+    #[test]
+    fn an_account_without_a_saved_order_follows_the_default_account_first() {
+        let (state, _dir) = crate::test_support::app_state("config-export-account-order");
+        state
+            .store
+            .insert_account(&account("acct-1", Agent::Grok, "One", "/srv/one"))
+            .unwrap();
+        state
+            .store
+            .insert_account(&account("acct-2", Agent::Grok, "Two", "/srv/two"))
+            .unwrap();
+        // A saved order that lacks the newer account and names a deleted one.
+        state
+            .store
+            .reorder_accounts(
+                Agent::Grok,
+                &[Some("acct-1".to_string()), None, Some("acct-2".to_string())],
+            )
+            .unwrap();
+        state.store.delete_account("acct-2").unwrap();
+        state
+            .store
+            .insert_account(&account("acct-4", Agent::Grok, "Four", "/srv/four"))
+            .unwrap();
+
+        let grok = &exported_accounts(&state.store, true).agents[0];
+
+        let names: Vec<&str> = grok.accounts.iter().map(|a| a.name.as_str()).collect();
+        assert_eq!(names, ["One", "Four"]);
+        assert_eq!(grok.default_account.position, 1);
+        assert_eq!(
+            display_order(&[], &["a".to_string(), "b".to_string()]),
+            [None, Some("a".to_string()), Some("b".to_string())]
+        );
+    }
+
+    #[test]
+    fn a_directory_under_home_is_written_from_it_and_one_outside_in_full_whatever_the_paths_choice()
+    {
+        let (state, _dir) = crate::test_support::app_state("config-export-directories");
+        let (_, outside) = with_accounts(&state.store);
+        let directories = |paths| {
+            let accounts = exported_accounts(&state.store, paths);
+            accounts.agents[0]
+                .accounts
+                .iter()
+                .map(|account| (account.name.clone(), account.directory.clone()))
+                .collect::<HashMap<_, _>>()
+        };
+
+        let full = directories(true);
+        assert_eq!(full["Work"], "~/.claude-work");
+        assert_eq!(full["Team"], outside);
+        assert_eq!(
+            directories(false),
+            full,
+            "an account cannot exist without its directory"
+        );
+
+        assert_eq!(document_directory(&home().to_string_lossy(), &home()), "~");
+        assert_eq!(document_directory("/srv/a", Path::new("/")), "/srv/a");
+    }
+
+    #[test]
+    fn a_directory_under_home_in_another_letter_case_is_written_from_home_where_case_is_folded() {
+        let home = Path::new("/Users/me");
+
+        // The relative part keeps the spelling it was stored with.
+        let recased = document_directory("/users/me/.Claude-X", home);
+        if cfg!(target_os = "macos") {
+            assert_eq!(recased, "~/.Claude-X");
+            assert_eq!(document_directory("/USERS/ME", home), "~");
+        } else {
+            assert_eq!(recased, "/users/me/.Claude-X");
+        }
+        assert_eq!(
+            document_directory("/Users/me/.Claude-X", home),
+            "~/.Claude-X"
+        );
+        assert_eq!(
+            document_directory("/Users/mentor/.x", home),
+            "/Users/mentor/.x"
+        );
+    }
+
     #[tokio::test]
     async fn an_unknown_console_is_refused_with_the_protocol_error_instead_of_an_empty_document() {
         let (state, _dir) = crate::test_support::app_state("config-export-unknown-console");
@@ -861,6 +1413,9 @@ mod tests {
             Some("req-1".to_string()),
             RequestBody::ExportConfiguration {
                 console: Some("no-such-console".to_string()),
+                consoles: None,
+                include_settings: None,
+                include_accounts: None,
                 include_paths: true,
             },
         )
@@ -874,6 +1429,9 @@ mod tests {
             Some("req-2".to_string()),
             RequestBody::ExportConfiguration {
                 console: None,
+                consoles: None,
+                include_settings: None,
+                include_accounts: None,
                 include_paths: true,
             },
         )

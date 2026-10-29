@@ -695,17 +695,30 @@ async fn handle_inner(
 
         RequestBody::ExportConfiguration {
             console,
+            consoles,
+            include_settings,
+            include_accounts,
             include_paths,
-        } => Ok(Some(Event::ConfigurationExported {
-            id: request_id,
-            document: config_export::build(&state.store, console.as_deref(), include_paths)?,
-        })),
+        } => {
+            let selection = config_export::Selection::from_request(
+                console,
+                consoles,
+                include_settings,
+                include_accounts,
+                include_paths,
+            )?;
+            Ok(Some(Event::ConfigurationExported {
+                id: request_id,
+                document: config_export::build(&state.store, &selection)?,
+            }))
+        }
 
         RequestBody::InspectConfiguration { document } => {
             let inspection = config_import::inspect(state, &document).await?;
             Ok(Some(Event::ConfigurationInspected {
                 id: request_id,
                 settings: inspection.settings,
+                accounts: inspection.accounts,
                 consoles: inspection.consoles,
             }))
         }
@@ -714,13 +727,24 @@ async fn handle_inner(
             document,
             resolutions,
             apply_settings,
+            apply_accounts,
+            account_resolutions,
+            apply_consoles,
         } => {
-            let imported =
-                config_import::apply(state, &document, resolutions, apply_settings).await?;
+            let imported = config_import::apply(
+                state,
+                &document,
+                resolutions,
+                apply_settings,
+                apply_accounts.then_some(account_resolutions),
+                apply_consoles,
+            )
+            .await?;
             Ok(Some(Event::ConfigurationImported {
                 id: request_id,
                 settings_applied: imported.settings_applied,
                 settings_error: imported.settings_error,
+                accounts: imported.accounts,
                 consoles: imported.consoles,
             }))
         }
@@ -6310,7 +6334,7 @@ pub(crate) fn account_name_key(name: &str) -> String {
 /// account's name takes part, compared against [`crate::protocol::DEFAULT_ACCOUNT_NAME`] since the
 /// daemon carries no locale to compare the user's own translated word against. `exclude_id` lets a
 /// rename compare against every *other* account without colliding with itself.
-fn colliding_account_name(
+pub(crate) fn colliding_account_name(
     state: &Arc<AppState>,
     agent: Agent,
     name: &str,
@@ -6333,7 +6357,7 @@ fn colliding_account_name(
 
 /// The name of the account of `agent` that is a row (so not the default) whose name collides with
 /// `name`, if any.
-fn colliding_owned_account_name(
+pub(crate) fn colliding_owned_account_name(
     state: &Arc<AppState>,
     agent: Agent,
     name: &str,
@@ -6355,12 +6379,51 @@ fn colliding_owned_account_name(
 /// daemon shows for an unnamed default account, in any letter case. The name takes part in the
 /// same collision check as an account's, so neither can take the other's; the default's own name
 /// is no collision, so only the accounts that are rows are compared.
-fn set_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -> Result<()> {
-    let name = name.trim();
+pub(crate) fn set_default_account_name(
+    state: &Arc<AppState>,
+    agent: Agent,
+    name: &str,
+) -> Result<()> {
     let _writes = state.lock_account_writes();
-    let clears = name.is_empty()
-        || account_name_key(name) == account_name_key(crate::protocol::DEFAULT_ACCOUNT_NAME);
-    let changed = if clears {
+    write_default_account_name(state, agent, name.trim())
+}
+
+/// [`set_default_account_name`] for a default account that still has no name of its own, checked
+/// under the lock the write takes so a rename made in between is not overwritten. Whether the name
+/// was written: `false` when the default account was named already, or when `name` is blank or
+/// the word shown for an unnamed one, which clears the name and so writes nothing here.
+pub(crate) fn name_unnamed_default_account(
+    state: &Arc<AppState>,
+    agent: Agent,
+    name: &str,
+) -> Result<bool> {
+    let name = name.trim();
+    if clears_default_account_name(name) {
+        return Ok(false);
+    }
+    let _writes = state.lock_account_writes();
+    if state
+        .store
+        .default_account_names()?
+        .contains_key(agent.wire_name())
+    {
+        return Ok(false);
+    }
+    write_default_account_name(state, agent, name)?;
+    Ok(true)
+}
+
+/// Whether `name`, given to a default account, clears its name instead: it is blank, or the word
+/// shown for an unnamed default account.
+pub(crate) fn clears_default_account_name(name: &str) -> bool {
+    let key = account_name_key(name);
+    key.is_empty() || key == account_name_key(crate::protocol::DEFAULT_ACCOUNT_NAME)
+}
+
+/// Writes the trimmed `name` of `agent`'s default account; the caller holds the account writes
+/// lock.
+fn write_default_account_name(state: &Arc<AppState>, agent: Agent, name: &str) -> Result<()> {
+    let changed = if clears_default_account_name(name) {
         state.store.set_default_account_name(agent, None)?
     } else {
         if let Some(existing) = colliding_owned_account_name(state, agent, name, None)? {
@@ -6441,7 +6504,7 @@ fn check_account_name_unique(
     }
 }
 
-fn account_name_taken(agent: Agent, name: &str, existing: &str) -> anyhow::Error {
+pub(crate) fn account_name_taken(agent: Agent, name: &str, existing: &str) -> anyhow::Error {
     CodedError::raised(
         error_code::ACCOUNT_NAME_TAKEN,
         format!(
@@ -6459,7 +6522,7 @@ fn account_name_taken(agent: Agent, name: &str, existing: &str) -> anyhow::Error
 /// conventional one the adapter falls back to when nothing overrides it (`~/.claude`, `~/.codex`,
 /// `~/.grok`). Both go through the same expansion and lexical normalisation as `dir`. Symlinks are
 /// not followed. `exclude_id` lets an update compare against every *other* account.
-fn colliding_account_dir(
+pub(crate) fn colliding_account_dir(
     state: &Arc<AppState>,
     agent: Agent,
     dir: &str,
@@ -6506,7 +6569,7 @@ fn check_account_dir_unique(
 }
 
 /// A name as stored: trimmed, and refused if that leaves nothing.
-fn normalize_account_name(name: &str) -> Result<String> {
+pub(crate) fn normalize_account_name(name: &str) -> Result<String> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(field_required("name"));
@@ -6571,6 +6634,21 @@ fn create_account(
     name: String,
     config_dir: String,
 ) -> Result<()> {
+    insert_new_account(state, agent, name, config_dir, false)?;
+    Ok(())
+}
+
+/// Creates an account through the checks of the Add account form (the name rules, the directory
+/// rules, a name and a directory no other account of the agent has), stores it with the given
+/// `disabled` flag, broadcasts the settings and returns it. Sharing is not set: it is a change of
+/// its own (`shared_config::set`).
+pub(crate) fn insert_new_account(
+    state: &Arc<AppState>,
+    agent: Agent,
+    name: String,
+    config_dir: String,
+    disabled: bool,
+) -> Result<Account> {
     let name = normalize_account_name(&name)?;
     let config_dir = normalize_account_dir(agent, &config_dir)?;
     let account = Account {
@@ -6580,7 +6658,7 @@ fn create_account(
         config_dir,
         share_default_config: false,
         share_default_config_incomplete: false,
-        disabled: false,
+        disabled,
     };
     {
         // The checks and the insert are one step: another create or update cannot slip between.
@@ -6590,7 +6668,7 @@ fn create_account(
         state.store.insert_account(&account)?;
     }
     broadcast_settings(state)?;
-    Ok(())
+    Ok(account)
 }
 
 fn update_account(

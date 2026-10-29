@@ -98,7 +98,8 @@ field that appears only after a choice in the dialog does not take focus when it
 dialog between its **New conversation** and **Resume conversation** tabs leaves focus on the tab, and switching **Add
 project**'s **Source** to a git repository leaves it on that picker. A form dialog with no text field opens with focus
 on its submit button instead: the export dialog's **Export** button, and the import dialog's **Choose file** button in
-its first step (see "In the window" in `docs/product/configuration-export-and-import.md`).
+its first step (see "The export dialog" and "Choosing the file to import" in
+`docs/product/configuration-export-and-import-dialogs.md`).
 
 ## What Enter submits in a form dialog
 

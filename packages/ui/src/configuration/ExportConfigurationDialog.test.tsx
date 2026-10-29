@@ -104,12 +104,13 @@ it("asks for the paths only when the box is checked", async () => {
   const mounted = mount();
   await act(async () => pathsBox().click());
   await press("Export");
-  expect(mounted.sent()).toEqual([{ type: "export_configuration", console: "c-main", include_paths: true }]);
+  expect(mounted.sent()).toEqual([{ type: "export_configuration", console: "c-main", consoles: "one", include_settings: true, include_accounts: false, include_paths: true }]);
 });
 
 it.each([
-  { scope: undefined, sent: { type: "export_configuration", console: "c-main", include_paths: false } },
-  { scope: "Everything", sent: { type: "export_configuration", include_paths: false } },
+  { scope: undefined, sent: { type: "export_configuration", console: "c-main", consoles: "one", include_settings: true, include_accounts: false, include_paths: false } },
+  { scope: "All consoles and their projects", sent: { type: "export_configuration", consoles: "all", include_settings: true, include_accounts: false, include_paths: false } },
+  { scope: "Do not export consoles", sent: { type: "export_configuration", consoles: "none", include_settings: true, include_accounts: false } },
 ])("asks for the document of the scope chosen: $scope", async ({ scope, sent }) => {
   const mounted = mount();
   if (scope) {
@@ -122,9 +123,62 @@ it.each([
   expect(mounted.sent()).toEqual([sent]);
 });
 
-it("offers only everything where there is no console in hand", () => {
+it("offers no single console where there is none in hand", () => {
   mount(undefined, null);
-  expect(document.body.querySelectorAll("input[type=radio]")).toHaveLength(0);
+  const labels = Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=radio]")).map((input) => input.labels?.[0]?.textContent);
+  expect(labels).toEqual(["All consoles and their projects", "Do not export consoles"]);
+  expect(radio("All consoles and their projects").checked).toBe(true);
+});
+
+const radio = (label: string) =>
+  Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=radio]")).find((input) => input.labels?.[0]?.textContent === label)!;
+const box = (label: string) =>
+  Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
+const exportButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Export")!;
+
+it("exports the global regions on their own, the application settings checked and the accounts not by default", async () => {
+  const mounted = mount();
+  expect(box("Application settings").checked).toBe(true);
+  expect(box("Accounts").checked).toBe(false);
+  expect(text()).toContain("No login credentials are included");
+  await act(async () => radio("Do not export consoles").click());
+  await act(async () => box("Accounts").click());
+  await act(async () => box("Application settings").click());
+  await press("Export");
+  expect(mounted.sent()).toEqual([{ type: "export_configuration", consoles: "none", include_settings: false, include_accounts: true }]);
+});
+
+it("keeps Export unavailable while nothing is selected", async () => {
+  mount();
+  await act(async () => radio("Do not export consoles").click());
+  expect(exportButton().disabled).toBe(false);
+  await act(async () => box("Application settings").click());
+  expect(exportButton().disabled).toBe(true);
+  await act(async () => box("Accounts").click());
+  expect(exportButton().disabled).toBe(false);
+});
+
+it("keeps the paths option about project paths alone, whatever the accounts choice, and shows and sends it only while consoles are exported", async () => {
+  const mounted = mount();
+  const wording = () => hint().textContent;
+  const before = wording();
+  await act(async () => box("Accounts").click());
+  expect(wording()).toBe(before);
+  expect(wording()).not.toContain("account");
+  await act(async () => pathsBox().click());
+  const alert = document.body.querySelector("[data-slot=alert-root]")!.textContent;
+  expect(alert).toContain("The file contains project paths");
+  await act(async () => box("Accounts").click());
+  expect(document.body.querySelector("[data-slot=alert-root]")!.textContent).toBe(alert);
+
+  // Not shown while no console is exported, with or without accounts, and then not sent.
+  await act(async () => radio("Do not export consoles").click());
+  expect(box("Include full project paths")).toBeUndefined();
+  expect(document.body.querySelector("[data-slot=alert-root]")).toBeNull();
+  await act(async () => box("Accounts").click());
+  expect(box("Include full project paths")).toBeUndefined();
+  await press("Export");
+  expect(mounted.sent()).toEqual([{ type: "export_configuration", consoles: "none", include_settings: true, include_accounts: true }]);
 });
 
 it("saves the document as the daemon sent it, under a name for the console, and says where it went", async () => {

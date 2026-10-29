@@ -1,22 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import { REVIEW } from "../gallery/fixtures/configuration";
-import type { ImportedConsole } from "../protocol";
+import type { ImportedConsole, InspectedAccount, InspectedAccounts, InspectedConsole } from "../protocol";
 import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
 import {
+  accountChoicesFor,
+  accountResolutionsOf,
+  accountsNeedAttention,
   applyToAll,
   availableFor,
+  carriedRegions,
   choicesFor,
   claudeCompatibilityChanges,
   directoryProblem,
   documentShortcuts,
+  hasAccountDirectoryProblem,
   hasClaudeCompatibilityChoices,
+  importedRegions,
+  initialAccountReview,
   initialReview,
   outcomeOf,
   resolutionsOf,
   shortcutsRecord,
   shortcutsReview,
   targetOf,
+  withEffectiveFallbacks,
   withRow,
 } from "./importPlan";
 
@@ -186,5 +194,122 @@ describe("Claude compatibility in a document", () => {
     expect(claudeCompatibilityChanges({ codex: false }, { codex: true, grok: true })).toBe(true);
     expect(claudeCompatibilityChanges({ codex: true }, { codex: true, grok: true })).toBe(false);
     expect(claudeCompatibilityChanges({ codex: false }, {})).toBe(false);
+  });
+});
+
+describe("accounts", () => {
+  const account = (name: string, status: InspectedAccount["status"]): InspectedAccount => ({
+    name,
+    directory: `~/.${name}`,
+    proposed_directory: `/home/.${name}`,
+    status,
+    in_use_by: null,
+    error: null,
+    share_default_config: false,
+    disabled: false,
+  });
+  const accounts: InspectedAccounts = {
+    agents_to_add: [],
+    agents: [
+      { agent: "claude", default_name: null, default_name_applies: false, accounts: [account("a", "new"), account("b", "existing"), account("c", "directory_in_use"), account("d", "invalid")] },
+      { agent: "codex", default_name: null, default_name_applies: false, accounts: [account("e", "new")] },
+    ],
+  };
+
+  it("creates what can be created as proposed and leaves out what cannot", () => {
+    expect(initialAccountReview(accounts).map((rows) => rows.map((row) => row.choice))).toEqual([["create", "create", "leave_out", "leave_out"], ["create"]]);
+    expect(initialAccountReview(undefined)).toEqual([]);
+  });
+
+  it("sends a resolution only for an account moved or left out, named by its index among its agent's accounts, never for an existing one", () => {
+    const review = initialAccountReview(accounts);
+    review[0][0] = { choice: "leave_out", directory: "" };
+    review[0][1] = { choice: "leave_out", directory: "" };
+    review[0][3] = { choice: "directory", directory: "~/moved" };
+    expect(accountResolutionsOf(accounts, review)).toEqual([
+      { agent: "claude", account: 0, leave_out: true },
+      { agent: "claude", account: 2, leave_out: true },
+      { agent: "claude", account: 3, directory: "~/moved" },
+    ]);
+  });
+
+  it("finds a typed account directory the daemon would refuse only on an account placed in a directory", () => {
+    const review = initialAccountReview(accounts);
+    expect(hasAccountDirectoryProblem(review)).toBe(false);
+    review[0][2] = { choice: "directory", directory: "" };
+    expect(hasAccountDirectoryProblem(review)).toBe(true);
+    review[0][2] = { choice: "directory", directory: "relative" };
+    expect(hasAccountDirectoryProblem(review)).toBe(true);
+    review[0][2] = { choice: "directory", directory: "~/x" };
+    expect(hasAccountDirectoryProblem(review)).toBe(false);
+  });
+
+  it("asks for attention for a directory in use or an invalid account, not for a new or existing one", () => {
+    expect(accountsNeedAttention(accounts)).toBe(true);
+    expect(accountsNeedAttention({ ...accounts, agents: [{ ...accounts.agents[1] }, { ...accounts.agents[0], accounts: [account("a", "new"), account("b", "existing")] }] })).toBe(false);
+  });
+
+  describe("a reference to an account of the document", () => {
+    const reference = (name: string, agent: "claude" | "codex" = "claude") => ({ agent, name });
+    const references = [reference("A"), reference("c"), reference("D"), reference("gone"), reference("E", "codex")];
+    const referencing: InspectedConsole[] = [
+      { name: "Hub", account_fallbacks: references, projects: [{ ...website, account_fallbacks: references }] },
+    ];
+    const fallenBack = (review: ReturnType<typeof initialAccountReview>, importing = true) => {
+      const [hub] = withEffectiveFallbacks(referencing, accounts, review, importing);
+      expect(hub.projects[0].account_fallbacks).toEqual(hub.account_fallbacks);
+      return hub.account_fallbacks.map((fallback) => fallback.name);
+    };
+
+    it("binds to an account the import creates, however it is created, and falls back for one it leaves out", () => {
+      const review = initialAccountReview(accounts);
+      // A is new and created, and E too; C and D cannot be created as proposed and start left out.
+      expect(fallenBack(review)).toEqual(["c", "D", "gone"]);
+      review[0][2] = { choice: "directory", directory: "~/c" };
+      review[0][3] = { choice: "directory", directory: "~/d" };
+      expect(fallenBack(review)).toEqual(["gone"]);
+      review[0][0] = { choice: "leave_out", directory: "" };
+      review[1][0] = { choice: "leave_out", directory: "" };
+      expect(fallenBack(review)).toEqual(["A", "gone", "E"]);
+    });
+
+    it("keeps the fallback for an account that cannot be created for its name, which no directory cures", () => {
+      const taken = { ...account("A", "invalid"), error: { code: "account_name_taken", params: {}, message: "taken" } };
+      const named = { ...accounts, agents: [{ ...accounts.agents[0], accounts: [taken] }] };
+      expect(accountChoicesFor(taken)).toEqual(["leave_out"]);
+      expect(accountChoicesFor(account("A", "invalid"))).toEqual(["directory", "leave_out"]);
+      const blankName = { ...account("A", "invalid"), error: { code: "field_required", params: { field: "name" }, message: "blank" } };
+      expect(accountChoicesFor(blankName)).toEqual(["leave_out"]);
+      const blankDirectory = { ...account("A", "invalid"), error: { code: "field_required", params: { field: "config_dir" }, message: "blank" } };
+      expect(accountChoicesFor(blankDirectory)).toEqual(["directory", "leave_out"]);
+      const [hub] = withEffectiveFallbacks(referencing, named, [[{ choice: "directory", directory: "~/a" }]], true);
+      expect(hub.account_fallbacks.map((fallback) => fallback.name)).toContain("A");
+    });
+
+    it("counts an account that exists already as the one it names", () => {
+      const withExisting = [{ ...referencing[0], account_fallbacks: [reference("B")] }];
+      expect(withEffectiveFallbacks(withExisting, accounts, initialAccountReview(accounts), true)[0].account_fallbacks).toEqual([]);
+    });
+
+    it("stands as the daemon reported it while the accounts are not imported", () => {
+      expect(withEffectiveFallbacks(referencing, accounts, initialAccountReview(accounts), false)).toBe(referencing);
+      expect(fallenBack(initialAccountReview(accounts), false)).toHaveLength(references.length);
+    });
+  });
+});
+
+describe("the regions of a document", () => {
+  it("lists the ones it carries in the dialog's order, and its consoles when it carries nothing at all", () => {
+    expect(carriedRegions({ consoles, accounts: {}, settings: {} })).toEqual(["consoles", "accounts", "settings"]);
+    expect(carriedRegions({ consoles: [], accounts: {} })).toEqual(["accounts"]);
+    expect(carriedRegions({ consoles: [], settings: {} })).toEqual(["settings"]);
+    expect(carriedRegions({ consoles: [] })).toEqual(["consoles"]);
+  });
+
+  it("imports the checked ones, or the only one a document carries whatever its box says", () => {
+    const checked = { consoles: true, accounts: false, settings: true };
+    expect(importedRegions(["consoles", "accounts", "settings"], checked)).toEqual(["consoles", "settings"]);
+    expect(importedRegions(["accounts"], checked)).toEqual(["accounts"]);
+    expect(importedRegions(["consoles", "accounts"], { ...checked, consoles: false })).toEqual([]);
   });
 });

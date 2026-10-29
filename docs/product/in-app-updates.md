@@ -20,7 +20,7 @@ older version.
 
 The choice is kept **per client**, in the window's own browser storage, as the choice to keep running in the background
 is (see "Closing the window" in `docs/product/application-lifecycle.md`): the daemon neither stores nor carries
-it, and it is not part of a configuration export (see "The application settings a full export carries" in
+it, and it is not part of a configuration export (see "The application settings an export carries" in
 `docs/product/configuration-export-and-import.md`). Storage that has been cleared, or holds anything but Stable, reads
 as Beta.
 

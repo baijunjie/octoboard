@@ -85,14 +85,15 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   file name. Keep failed subjects out of normal navigation.
 - `state` is built with `snapshotState` from `builders.ts`, so a protocol change breaks it at typecheck. State that
   lives in a component rather than the store (a dialog, the archive view, the selected session) is reached with the
-  shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; `ui.confirm()`
-  presses a dialog's confirming button, `ui.contextMenu` opens a row's right-click menu, `ui.touchPress` and
-  `ui.tapTopBarStatus` press with a finger, for the popover a touch opens in place of a tooltip; `ui.swipe` swipes a
-  finger across the window (the touch events `useSwipe` reads) to open or close a phone-width drawer or floating panel;
-  `ui.hoverStatusMark` rests the mouse on a status mark and waits for its non-modal popover, where
-  `ui.touchPressStatusMark` opens the press form with focus inside; `ui.openGitFailure` does the same for a git badge's
-  failure mark, in a given sidebar row or in focus mode's header; a raw-text disclosure of an error alert is opened with
-  `ui.press(ui.t("error.diagnostics"))`).
+  shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; `ui.pressTab`
+  presses a tab where a checkbox or button before it carries the same name, as the import review's "What to import"
+  checkboxes and its tabs do; `ui.confirm()` presses a dialog's confirming button, `ui.contextMenu` opens a row's
+  right-click menu, `ui.touchPress` and `ui.tapTopBarStatus` press with a finger, for the popover a touch opens in place
+  of a tooltip; `ui.swipe` swipes a finger across the window (the touch events `useSwipe` reads) to open or close a
+  phone-width drawer or floating panel; `ui.hoverStatusMark` rests the mouse on a status mark and waits for its
+  non-modal popover, where `ui.touchPressStatusMark` opens the press form with focus inside; `ui.openGitFailure` does
+  the same for a git badge's failure mark, in a given sidebar row or in focus mode's header; a raw-text disclosure of an
+  error alert is opened with `ui.press(ui.t("error.diagnostics"))`).
 - Steps run at any width the page's width control picks (the frame reloads at the chosen width), so they name controls
   as they would in a docked window. A session row or rail control that sits only in the sidebar's closed drawer (inert
   below `docked` for the rows, below `phone` for the rail) makes the lookup press the drawer's toggle first, once the
@@ -325,7 +326,7 @@ Imports run one way between the feature directories: `src/panels/` imports `src/
 | `src/quota/` | Agent account plan quota: wording and used-up judgement, the meters and usage bars, and `RailQuotaEntry`, the rail's quota entry and panel |
 | `src/settings/` | The settings modal: `SettingsDialog` and its sections (general, git, agent accounts and the added agents, where an account opens a read-only details dialog (`AccountDetailsDialog.tsx`, with the account's email) or a settings dialog for sharing and turning it off (`AccountSettingsDialog.tsx`), with each agent's Claude compatibility switch in `AgentClaudeCompatibilitySetting.tsx` and `hasClaudeCompatibility` (`claudeCompatibility.ts`) saying which agents have it, agent behavior, trusted folders, macOS permissions, notifications, shortcuts, configuration, About) |
 | `src/dialogs/` | The console, project, session, rename, confirmation, directory-picker and daemon-question dialogs on the shared `Dialog` frame, `ErrorAlerts` (the acknowledgement host), `useFailureWhenBlocked` (turns a dialog unusable as it stands into a failure modal) and the shared form controls; `SessionModelDialog.tsx` changes a session's model and effort, using the `LaunchPickers` and `useLaunchModels` shared with the Advanced sections in `LaunchSettingsFields.tsx` |
-| `src/configuration/` | Configuration export and import: `ExportConfigurationDialog`, `ImportConfigurationDialog` and the pure import plan |
+| `src/configuration/` | Configuration export and import: `ExportConfigurationDialog` (chooses the regions to export independently) and `ImportConfigurationDialog`, which shows the review (`ImportReview` as the frame with its "What to import" region checkboxes, `RegionTabs`, and one panel per region: `ImportConsoles`, `ImportAccounts`, `ImportSettings`) and then the result (`ImportResult` with `ResultCards`); `importParts.tsx` holds the pieces they share and `importPlan.ts` the pure plan (regions, account review state, fallbacks) |
 | `src/about/`, `src/updates/` | The third-party licenses dialog and its data (the generated `licenses.generated.json`, with the committed `licenses.fallback.json` standing in until the generator has run; `src/cssDependencies.test.ts` checks that every package a stylesheet names is a production dependency, so it reaches that list); the self-update on the UI side: `createUpdateStore`, `UpdatesProvider`, the persisted channel and `UpdateNotice` |
 
 ### Shared helpers

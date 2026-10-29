@@ -92,6 +92,9 @@ it.each([
   ["configuration_version_unsupported", { version: "3", supported: "1" }],
   ["configuration_unreadable", { detail: "bad" }],
   ["import_resolution_invalid", { console: "0", project: "1" }],
+  ["import_resolution_invalid", { agent: "Claude Code", account: "1" }],
+  ["import_accounts_missing", {}],
+  ["export_empty", {}],
   ["import_choice_unavailable", { choice: "clone" }],
   ["import_settings_missing", {}],
 ] as const)("words the configuration code %s in every catalog, each in its own language", (code, params) => {

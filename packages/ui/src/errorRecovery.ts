@@ -6,7 +6,7 @@ import { isUncataloguedFailure } from "./uncataloguedFailure";
 export type ErrorRecovery =
   | "diskSpace" | "access" | "connection" | "path" | "account" | "tool" | "shell"
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
-  | "configuration" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
+  | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
@@ -63,7 +63,9 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   conversation: ["conversation_not_found", "conversation_to_resume_not_found", "resume_id_invalid", "conversation_outside_project", "conversation_in_session"],
   ownerGone: ["quick_create_owner_gone"],
   session: ["session_archived", "session_not_running", "session_already_on_account", "unknown_session", "session_request_not_waiting", "session_request_answered", "trust_not_waiting", "session_not_bound"],
-  configuration: ["configuration_not_recognised", "configuration_version_unsupported", "configuration_unreadable", "import_choice_unavailable"],
+  configuration: ["configuration_not_recognised", "configuration_version_unsupported", "configuration_unreadable", "import_choice_unavailable", "import_resolution_invalid", "import_settings_missing", "import_accounts_missing"],
+  // The export dialog keeps Export unavailable while nothing is chosen, so only a client that does not guard it meets this.
+  exportSelection: ["export_empty"],
   // The console dialog draws a picked image into a data URL scaled down to the limit, so only an imported configuration
   // carries an avatar that is not an image or is too large.
   avatarImage: ["icon_not_an_image"],

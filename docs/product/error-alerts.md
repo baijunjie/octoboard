@@ -9,7 +9,7 @@ Where a failure, a warning or a note is shown follows from how it arises, not fr
 | An important failure of automatic behaviour — a load, a refresh, a lookup a form makes on its own that could not run — one that blocks what follows, or that a component cannot do its job without | On that screen: in place of a whole page, pane, panel or list that could not be loaded, an empty-state failure; among other content, a compact alert (see "Failures shown on the screen" below) |
 | A warning about the consequence of a choice the user is making: an option of a dialog that, selected, makes what the dialog does riskier | A warning alert directly under that option, only while it is selected, never a mark (see "Warnings about a choice being made" below). A warning about the state of what an option acts on is a mark beside it, as below |
 | A failure or a warning about the state of something that does not block what follows, and a note | A mark at the point it concerns — a row, a table cell, a field, a checkbox, a setting, a list section's heading, a page's heading or a pane's or view's title, a line naming what it is about, a spot in a rendered document; one with no point to be located at is a compact alert in a shared place, the top of a dialog's body or of a section (see "Failures, warnings and notes marked at their point" below) |
-| A result view showing a failed result | A compact alert in that view: a configuration import's application settings that could not be applied (see "In the window" in `docs/product/configuration-export-and-import.md`) |
+| A result view showing a failed result | In that view: a part that failed as a whole is a compact alert, such as a configuration import's application settings that could not be applied; an item of the result that failed has its outcome and its reason written out in its row, such as a console, project or account of a configuration import (see "The import result" in `docs/product/configuration-export-and-import-dialogs.md`) |
 | A failure that ends what a dialog was opened for, while it is open | The dialog turns into a failure modal (see "The failure modal" below) |
 
 A destructive confirmation is not a failure: it is a warning modal, the warning icon in its header and what it does as
@@ -227,8 +227,8 @@ The places with a compact alert:
 - a submenu whose items are read as it opens, which is the project menu's Switch branch (see "Switching the local
   branch" in `docs/product/project-git-actions.md`), titled that the items could not be loaded;
 - Settings' Permissions section when the grants could not be read (see "Permissions" in `docs/product/settings.md`);
-- a configuration import's application settings that could not be applied, in the import's result (see "In the
-  window" in `docs/product/configuration-export-and-import.md`);
+- a configuration import's application settings that could not be applied, in the import's result (see "The import
+  result" in `docs/product/configuration-export-and-import-dialogs.md`);
 - the lookups forms make on their own that stop the form from going on, directly under the field they are about,
   which they describe to assistive technology: a project folder's detection that could not be made, and a
   repository's check (see "Associating a project" in `docs/product/projects.md`), and the session dialog's Session ID
@@ -263,8 +263,8 @@ option's new state has been spoken.
 
 The places with such a warning:
 
-- the export dialog's **Include full project paths** checkbox, saying that the file contains project paths (see "In
-  the window" in `docs/product/configuration-export-and-import.md`);
+- the export dialog's **Include full project paths** checkbox, saying that the file contains project paths (see "The
+  export dialog" in `docs/product/configuration-export-and-import-dialogs.md`);
 - the trust dialog's choice to trust every project under a folder, saying that projects added there later will be
   trusted too (see "The trust dialog" in `docs/product/folder-trust.md`).
 
@@ -291,9 +291,7 @@ thing to do about it, any further explanation, then any raw text (see "Failures 
 the failure can be retried from there, **Try again** at its trailing end. A reason that is one short line and has
 nothing more to it (an image or a formula in a document that could not be shown) is that popover with the one line in
 it. A popover taller than the room beside its mark scrolls its content within itself, with **Try again** kept in view
-under it, and the scrolling content is then a stop for the keyboard, so it can be scrolled from there. The exception is
-a mark followed by a word that has nothing more to say (a failed import line with no reason given): it is the glyph and
-the word as plain text, no button and no popover.
+under it, and the scrolling content is then a stop for the keyboard, so it can be scrolled from there.
 
 The popover opens by the input the device has:
 
@@ -318,9 +316,6 @@ The places with an error mark:
 
 - a folder in the Files tree that could not be listed, after its name (see "Rows and the keyboard" in
   `docs/product/project-pane.md`);
-- a project or console of a configuration import that failed, in the import's result, where the word **Failed**
-  follows the mark, as the other results have their words, and where a reason was given the mark and word open the
-  popover as one (see "In the window" in `docs/product/configuration-export-and-import.md`);
 - a project's branch badge whose last check failed, where the mark stands in for the badge's branch glyph, and is a
   tab stop of its own on the sidebar row and in focus mode's header; Git's own message is the last thing in its
   popover and in no tooltip or name (see "The branch badge" in `docs/product/project-git-status.md`);
@@ -338,8 +333,11 @@ The places with a warning mark:
 
 - a console or project of a configuration import whose account references fall back to a default account, after its
   name, in the review and in the result, and a project of the review not found on the machine running Octoboard,
-  after its name — one mark saying both when the project has fallbacks too (see "In the window" in
-  `docs/product/configuration-export-and-import.md`);
+  after its name — one mark saying both when the project has fallbacks too (see "Consoles and projects in the review"
+  and "Account fallbacks" in `docs/product/configuration-export-and-import-dialogs.md`);
+- an account of a configuration import's review that cannot be created as the file has it — its directory in use, or a
+  name or directory the Add account form refuses — after its name (see "Accounts in the review" in
+  `docs/product/configuration-export-and-import-dialogs.md`);
 - a project removal's option to move the folder to the Trash, after its label, when what goes with the folder could
   not be looked up (see "With a project's folder moved to the Trash" in
   `docs/product/branch-and-worktree-cleanup.md`);
@@ -487,9 +485,9 @@ moved to another account, see "When a switch fails" in `docs/product/switching-s
 request is scoped to cannot be read), and recognized operating-system causes provide the remedy; a recognized
 operating-system cause takes precedence over the others, except for a switch's copy that failed and could not put back
 an older item: that is classified by the item put aside, and the operating-system cause's remedy is given as well;
-except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "In the
-window" in `docs/product/configuration-export-and-import.md`); and except for a denied read of the project's files,
-which keeps its own remedy (see above) — each whatever operating-system cause it names. A failure whose named cause is
+except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "When the
+file fails" in `docs/product/configuration-export-and-import-dialogs.md`); and except for a denied read of the
+project's files, which keeps its own remedy (see above) — each whatever operating-system cause it names. A failure whose named cause is
 not one the window knows stays unexpected, except a folder a request is scoped to that cannot be read, which gets the
 remedy for any other cause (see above). An unfamiliar failure does not get generic retry advice merely because it
 occurred during a familiar operation. A failed automatic account switch has nothing left to retry, so none of its

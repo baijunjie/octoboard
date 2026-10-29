@@ -83,5 +83,6 @@ configuration files for it.
 
 The choices are kept by the daemon, so every window shows the same. Unlike the approval modes, a console session may
 read and change them (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md`), and a full configuration export carries the explicit choices (see "The
-application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
+`docs/product/agent-settings-tools.md`), and a configuration export that includes the application settings carries
+the explicit choices (see "The application settings an export carries" in
+`docs/product/configuration-export-and-import.md`).
