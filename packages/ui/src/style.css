@@ -369,12 +369,13 @@ html {
    `edge` prop), since the track there is hardly off its surface. The edge is an inset shadow on both bars alike: inside
    the track, so the bars keep their 4:3 heights and end together, and painted under the fill, so it outlines only the
    empty part (over the fill it would leave a 3px bar a single pixel of its colour). From the tokens, track against the
-   surface, light / dark: the table cell 1.27 / 2.18; a popover or menu 1.19 / 1.78; a trigger 1.00 / 1.50 (the fills
+   surface, light / dark: the table cell 1.27 / 1.86; a popover or menu 1.19 / 1.86; a trigger 1.00 / 1.50 (the fills
    against it are under `.quota-meter--claude`). The edge as drawn (25% of the foreground over the track) against the
-   surface outside it and the track inside it, light / dark: a popover or menu 2.02 and 1.70 / 3.63 and 2.04; a trigger
-   1.69 and 1.69 / 2.87 and 1.91. The edge is a hint at a track that is already there, not a control boundary, so it is
-   not held to 3:1; against a dark popover's surface it happens to pass it. In dark a popover's own surface is nearly
-   `--default`, so the dark track is a step lighter. */
+   surface outside it and the track inside it, light / dark: a popover or menu 2.02 and 1.70 / 3.53 and 1.90; a trigger
+   1.69 and 1.69 / 2.85 and 1.90. The edge is a hint at a track that is already there, not a control boundary, so it is
+   not held to 3:1; against a dark popover's surface it happens to pass it. In dark the track is a step lighter than
+   `--default`, which on a select trigger is the trigger's own fill and on a floating surface 1.24:1 off it: a track
+   that faint is lost on a dark ground, where a light one at 1.19:1 still reads. */
 .quota-bar-track {
   background-color: var(--default);
 }
@@ -429,9 +430,10 @@ html {
    is in words"); Codex's is a blue; Grok's is the foreground, as its mark is. Inside `.control-fills` (Settings, the
    dialogs, the rail panel) `--default` is `--control-fill`, and the compact bar's dark track lightens that a step (see
    `.quota-bar-track`): the lightest dark track, and the one that sets Claude's dark value. From the tokens, light then
-   dark: the compact bar on `--control-fill` (a table cell, a select trigger) Claude 3.55 / 3.07, Codex 3.65 / 3.16; the
-   compact bar on HeroUI's own `--default` (a popover, a menu) Claude 3.77 / 3.75, Codex 3.88 / 3.86; the meters, on
-   `--control-fill` itself (the rail panel, the details) Claude 3.55 / 4.60, Codex 3.65 / 4.74. */
+   dark: the compact bar on `--control-fill` (a table cell, a select trigger; in dark also a popover and a menu, whose
+   `--default` is the floating fill) Claude 3.55 / 3.01, Codex 3.65 / 3.10; the compact bar on HeroUI's own `--default`
+   (a light popover or menu) Claude 3.77, Codex 3.88; the meters, on `--control-fill` itself (the rail panel, the
+   details) Claude 3.55 / 4.52, Codex 3.65 / 4.65. */
 .quota-meter--claude {
   --meter-fill: #c2562f;
 }
@@ -584,9 +586,6 @@ html {
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
   --control-fill: oklch(0.92 0.004 286);
   --control-fill-hover: oklch(0.89 0.004 286);
-  --tooltip-on-overlay: var(--overlay);
-  --tooltip-on-overlay-fill: var(--control-fill);
-  --tooltip-on-overlay-fill-hover: var(--control-fill-hover);
 }
 
 .dark,
@@ -610,9 +609,15 @@ html {
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
   --control-fill-hover: oklch(0.36 0.006 286);
-  --tooltip-on-overlay: oklch(0.3 0.006 286);
-  --tooltip-on-overlay-fill: oklch(0.36 0.006 286);
-  --tooltip-on-overlay-fill-hover: oklch(0.39 0.006 286);
+  /* The dark floating surfaces and what is drawn on them (see the rule that applies them, below), and the edge every
+     dark overlay takes in place of HeroUI's faint inset line: a hairline and a drop shadow, which sets one floating
+     surface apart from another of the same colour under it, as light's drop shadow does. */
+  --floating: oklch(0.275 0.006 286);
+  --floating-fill: oklch(0.335 0.006 286);
+  --floating-fill-hover: oklch(0.365 0.006 286);
+  --floating-edge: oklch(0.36 0.006 286);
+  --floating-secondary: oklch(0.23 0.006 286);
+  --overlay-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.08), 0 1px 3px oklch(0 0 0 / 0.3), 0 8px 24px -4px oklch(0 0 0 / 0.45);
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar and report panel. A ghost button's hover and pressed
@@ -635,12 +640,13 @@ html {
 /* The fills of HeroUI's `--default` family on a surface of the app's own: a dialog, whose surface is
    `--overlay`, and the project pane, whose surface is `--panel-sidebar` (the pane's tabs, header and Git
    mode; the report panel on the same surface takes `.sidebar-fills`). HeroUI tunes `--default` for the
-   page background (dark L 0.12), and these are lighter (dark L 0.21 and 0.27): a control drawn from
-   `--default` lands almost on its surface (1.19:1 and 1.08:1 in light, 1.19:1 and 1.01:1 in dark, against
-   a dialog and the panel). `--control-fill` and `--control-fill-hover` are opaque steps off the surface
-   instead: 1.27:1 resting and 1.39:1 hovered against a light dialog, 1.15:1 and 1.26:1 against the light
-   panel, 1.45:1 and 1.63:1 against a dark dialog and 1.23:1 and 1.39:1 against the dark panel. The family
-   is overridden whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are
+   page background (dark L 0.12), and these are lighter: a control drawn from `--default` lands almost on
+   its surface (1.19:1 and 1.08:1 in light against a dialog and the panel, 1.01:1 in dark against the
+   panel). `--control-fill` and `--control-fill-hover` are opaque steps off the surface instead: 1.27:1
+   resting and 1.39:1 hovered against a light dialog, 1.15:1 and 1.26:1 against the light panel, and
+   1.23:1 and 1.39:1 against the dark panel. In dark a dialog is one of the floating surfaces, which set
+   these two to their own fills (see the rule for them below), so the class there resolves to those. The
+   family is overridden whole, as `.sidebar-fills` does, since `--default-hover` and `--default-soft` are
    computed on `<html>`.
 
    Unlike `.sidebar-fills`, whose tints are translucent so that a control on a hovered or selected
@@ -651,14 +657,12 @@ html {
 
    A tooltip or popover is portalled to the end of `<body>`, outside the pane or dialog that carries
    this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
-   visual choices" in docs/ui-accessibility.md); a tooltip over a dialog, a menu, a select's or
-   combo box's list or a popover then takes its own fills in `--tooltip-on-overlay-fill`, below.
-   Everything a dialog, the pane or such a tooltip or popover (also on `--overlay`) draws from
-   `--default` takes the fills: a secondary button, a tab list, a ghost button's hover, a toggle
-   button, a search field and a select in their secondary variant, and the file viewer's image
-   checkerboard (`.viewer-checkerboard`), whose squares step 1.10:1 from its ground in light and
-   1.28:1 in dark (1.04:1 and 1.05:1 on HeroUI's own fill), inside the viewer's frame surface like
-   every other frame. */
+   visual choices" in docs/ui-accessibility.md). Everything a dialog, the pane or such a tooltip or
+   popover draws from `--default` takes the fills: a secondary button, a tab list, a ghost button's
+   hover, a toggle button, a search field and a select in their secondary variant, and the file
+   viewer's image checkerboard (`.viewer-checkerboard`), whose squares step 1.10:1 from its ground in
+   light, and in dark 1.41:1 in a dialog and 1.28:1 in the pane (on HeroUI's own fill 1.04:1 in light
+   and 1.05:1 in dark), inside the viewer's frame surface like every other frame. */
 .control-fills {
   --default: var(--control-fill);
   --default-hover: var(--control-fill-hover);
@@ -668,14 +672,14 @@ html {
 
 /* HeroUI's `--separator`, the 1px line its own components divide their parts with (the action
    menu's separator), and which the app still draws with itself where a groove does not fit: the
-   session tree's branch connectors and the dashed outline of an empty column in the file viewer.
-   It is set a step further from the surfaces than HeroUI's own, whose dark value (L 0.25) is the
-   dark sidebar's own colour and vanishes there, as a branch connector on the dark sidebar would.
-   This is a quiet line on every surface it divides: 1.29 / 1.22 against `--panel` and
-   `--panel-sidebar` in light, 1.35 / 1.23 in dark, lighter than the dark surfaces rather than
-   darker so it reads as an edge. Not a control's boundary, so it is not held to 3:1. The light
-   selector excludes the dark theme rather than relying on order, since an unlayered root
-   declaration would otherwise beat the library's layered dark rule. */
+   session tree's branch connectors and the dashed outline of an empty column in the file viewer. It
+   is set a step further from the surfaces than HeroUI's own, whose dark value (L 0.25) is the dark
+   sidebar's own colour and vanishes there, as a branch connector on the dark sidebar would. This is
+   a quiet line on every surface it divides: 1.29 / 1.22 against `--panel` and `--panel-sidebar` in
+   light, 1.35 / 1.23 in dark (a floating surface takes its own, below), lighter than the dark
+   surfaces rather than darker so it reads as an edge. Not a control's boundary, so it is not held
+   to 3:1. The light selector excludes the dark theme rather than relying on order, since an
+   unlayered root declaration would otherwise beat the library's layered dark rule. */
 :root:not(.dark):not([data-theme="dark"]) {
   --separator: oklch(0.9 0.004 286);
 }
@@ -781,16 +785,17 @@ html {
    need 3:1 on every surface they sit on. At the worst of the content surfaces (field, dialog, popover,
    tooltip, the control fills with their hovers, the sidebar resting, hovered and selected, the panel with
    its hover and selected fills, `--background`, `--chrome`) they are, in light, 4.36:1 accent, 3.93:1
-   success, 4.10:1 warning and 4.83:1 danger, all on a hovered control fill; in dark 4.38:1, 6.17:1, 7.17:1
-   and 3.85:1, on the dark tooltip's control fill. The title bar's status glyph and the rail's waiting hand
-   sit on the window material (light #e2e4e5, dark #484a4b), resting, hovered and pressed: accent 4.77 /
-   4.17 / 3.62 light and 3.61 resting in dark (a dot that is not a button), success 4.30 / 3.76 / 3.27
-   light and 5.08 / 4.06 / 3.34 dark, warning 4.48 / 3.92 / 3.40 light and 5.90 / 4.72 / 3.88 dark. A
-   destructive menu item's icon is `text-danger`, HeroUI's colour for that item's label. The focus ring
-   (`--focus`, which is `--accent`) and the accent fills are HeroUI's too, and are in light 3.68:1 on a
-   dialog, 3.53:1 on the panel, 3.01:1 on a selected panel row and 2.82:1 on a selected sidebar row,
-   2.90:1 on a control fill and 2.64:1 on a hovered one, in dark 4.81:1, 4.48:1, 3.58:1, 3.27:1, 3.32:1
-   and 2.94:1; the user accepted the shortfalls for one accent colour. */
+   success, 4.10:1 warning and 4.83:1 danger, all on a hovered control fill; in dark 4.32:1, 6.08:1, 7.05:1
+   and 3.78:1, on a floating surface's hovered control fill. The title bar's status glyph and the rail's
+   waiting hand sit on the window material (light #e2e4e5, dark #484a4b), resting, hovered and pressed:
+   accent 4.77 / 4.17 / 3.62 light and 3.61 resting in dark (a dot that is not a button), success 4.30 /
+   3.76 / 3.27 light and 5.08 / 4.06 / 3.34 dark, warning 4.48 / 3.92 / 3.40 light and 5.90 / 4.72 / 3.88
+   dark. A destructive menu item's icon is `text-danger`, HeroUI's colour for that item's label, which falls
+   under 3:1 on a dark floating surface (see the rule for those below). The focus ring (`--focus`, which is
+   `--accent`) and the accent fills are HeroUI's too, and are in light 3.68:1 on a dialog, 3.53:1 on the
+   panel, 3.01:1 on a selected panel row and 2.82:1 on a selected sidebar row, 2.90:1 on a control fill and
+   2.64:1 on a hovered one, in dark 4.03:1, 4.48:1, 3.58:1, 3.27:1, 3.26:1 and 2.89:1; the user accepted the
+   shortfalls for one accent colour. */
 
 /* A console's default avatar (`ConsoleAvatar.tsx`): the network glyph in
    `--avatar-foreground` on one of these, picked from the name. Muted fills on hues spread around
@@ -907,40 +912,52 @@ html {
   }
 }
 
-/* A tooltip over a dialog, a menu, a select's or combo box's list or a popover: HeroUI draws each of
-   those and the tooltip on `--overlay`, so the tooltip lands on its own colour and only
-   `--overlay-shadow` marks its edge. In light that shadow is a real drop shadow and is left alone;
-   in dark it is a faint inset line and nothing else, so the tooltip takes a step off the surface
-   there (`--tooltip-on-overlay`, 1.30:1 against dark `--overlay`). This is a deliberate departure
-   from HeroUI's look, kept in docs/ui-accessibility.md's "Confirmed visual choices" section.
-   Setting `--overlay` on the tooltip reaches its arrow too, which HeroUI fills from the same token.
-   Light's `--tooltip-on-overlay` is `var(--overlay)`, which resolves to the plain surface where it
-   is declared, on the root, before the tooltip inherits it; declared on the tooltip itself, beside
-   the `--overlay` this rule sets, the two would form a cycle and the tooltip would lose its
-   background.
+/* The dark floating surfaces: a dialog, a menu or submenu, a select's or combo box's list, a popover, a tooltip and
+   what is drawn as one (the touch and hint popovers, the rail's quota panel), a toast, and a bar floating over the
+   terminal (`floating-surface`). HeroUI draws them on `--overlay` and `--surface` (L 0.21), darker than the content
+   panel, so a menu sinks into the sidebar under it. Here they are drawn on `--floating`, a step lighter than the panel,
+   as a white surface sits over the light window, and every level follows light ratio for ratio: the surface 1.11:1 over
+   `--panel` and 1.02:1 over `--panel-sidebar` (white 1.11:1 over the light sidebar and 1.04:1 over the light panel);
+   the `--default` family 1.24:1 resting and 1.39:1 hovered (light's control fill 1.27:1 and 1.39:1); `--border` and
+   `--separator`, the edge of HeroUI's outline button, its tab list and its menu dividers, 1.36:1 (light 1.35:1);
+   HeroUI's secondary `Surface` (`--surface-secondary`), the recessed frame of raw diagnostics, a confirmation's branch
+   list, licence texts and the file viewer's checkerboard, 1.14:1 below the surface (light 1.15:1). Every floating
+   surface is the one colour, as in light, so one over another (a tooltip over a menu, a confirmation over Settings) is
+   set apart by `--overlay-shadow`. A deliberate departure from HeroUI's look, kept in docs/ui-accessibility.md's
+   "Confirmed visual choices" section; light keeps HeroUI's own.
 
-   A tooltip is portalled to the document's end rather than drawn inside the surface under it, so
-   the surface is found from the root, and the step holds for every tooltip while one of those
-   surfaces is open. Such a tooltip all but always belongs to the surface: each of them but the
-   combo box's list is modal and makes everything outside it inert (under a dialog, everything but
-   the toast region and the connection banner). A tooltip elsewhere while a combo box's list is open
-   takes the step too, which still sets it apart from what it sits on. Opening or closing one of
-   these surfaces flips what the root matches, but WebKit then re-matches only the `.tooltip`
-   elements, a small fraction of the `inert` toggle the same overlay already makes. The touch and
-   hint popovers are drawn as a tooltip (`.tooltip`, not `.popover`), so one of them open lifts
-   neither the others nor a tooltip over it.
+   The step is small because HeroUI's `--muted` on a fill that holds secondary text (a placeholder, a menu item's
+   description under the pointer) keeps 4.5:1 only up to L 0.335, the resting fill; on the hovered fill it is 4.05:1.
+   HeroUI's own labels lose to the lighter ground too: `--danger` on a destructive menu item's label and icon is
+   3.33:1 at rest and 2.69:1 under the pointer, on a field's error text 3.33:1; a secondary button's label is 4.32:1
+   on its hovered fill, a soft danger button's 4.41:1 on its hover. All are shortfalls the user accepted for the
+   scheme; the menu item's icon sits beside the label that says what it does.
 
-   The `--default` family moves with the surface: the dark step above leaves `--control-fill`
-   (L 0.33) only 1.12:1 from the tooltip (1.04:1 on HeroUI's own), against 1.45:1 on the plain
-   `--overlay`. `--tooltip-on-overlay-fill` is the control fill one hover step lighter (L 0.36,
-   hovered 0.39), 1.27:1 resting, which is what the light fill gives on either surface. This rule
-   outranks the `.control-fills` a tooltip carries. */
-html:has(.modal__backdrop, .alert-dialog__backdrop, .dropdown__popover, .select__popover, .combo-box__popover, .popover) .tooltip {
-  --overlay: var(--tooltip-on-overlay);
-  --default: var(--tooltip-on-overlay-fill);
-  --default-hover: var(--tooltip-on-overlay-fill-hover);
-  --default-soft: var(--tooltip-on-overlay-fill);
-  --default-soft-hover: var(--tooltip-on-overlay-fill-hover);
+   The surfaces are matched on themselves, since each is portalled out of what opened it, and set the whole
+   `--default` family, as `.control-fills` does, since HeroUI computes `--default-hover` and `--default-soft` on the
+   root. They set `--control-fill` too, so a `.control-fills` on or inside one (a dialog's, a tooltip's) resolves to
+   the floating fills, while the project pane's keeps the panel's. `--surface` follows `--overlay` for a toast and a
+   terminal bar, which HeroUI draws on `--surface`, and for a veil or a key cap drawn from it inside a floating
+   surface. */
+:is(.dark, [data-theme="dark"]) :is(.modal__dialog, .alert-dialog__dialog, .dropdown__popover, .select__popover, .combo-box__popover, .popover, .tooltip, .toast, .floating-surface) {
+  --overlay: var(--floating);
+  --surface: var(--floating);
+  --surface-secondary: var(--floating-secondary);
+  --border: var(--floating-edge);
+  --separator: var(--floating-edge);
+  --control-fill: var(--floating-fill);
+  --control-fill-hover: var(--floating-fill-hover);
+  --default: var(--control-fill);
+  --default-hover: var(--control-fill-hover);
+  --default-soft: var(--control-fill);
+  --default-soft-hover: var(--control-fill-hover);
+}
+
+/* A bar of the app's own that floats over the terminal takes the dark edge every HeroUI floating surface draws from
+   `--overlay-shadow`, in place of its own drop shadow, which alone is lost on the dark terminal. Unlayered, so it wins
+   over the bar's shadow utility. */
+:is(.dark, [data-theme="dark"]) .floating-surface {
+  box-shadow: var(--overlay-shadow);
 }
 
 /* A checkbox's box sits on its label's first line, centred in that line, whether the label wraps or
@@ -1445,7 +1462,7 @@ html.pane-resizing * {
    `--warning-soft` fill over the surfaces an Alert sits on (background, surface, overlay, panel, sidebar and
    control fill) leaves the soft foreground at 3.94:1 on the control fill, 4.37:1 on the sidebar and 4.43:1 on
    the background in light (hover down to 3.84:1), where the tint text is 4.77:1 at the lowest (4.65:1 on hover);
-   in dark both are at least 4.62:1 (the tint text equals the soft foreground there). */
+   in dark both are at least 4.55:1 (the tint text equals the soft foreground there). */
 .alert-button--warning-soft {
   --button-bg: var(--warning-soft);
   --button-bg-hover: var(--warning-soft-hover);

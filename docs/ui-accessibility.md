@@ -138,7 +138,7 @@ arrow the rest of the row shows rather than HeroUI's `not-allowed` (`cursor-defa
 default disabled look, an approved exception by the user's decision (see "Do not change how a HeroUI component looks").
 
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
-name and its meters' headlines take the secondary text colour (6.0:1 light, 6.7:1 dark on the panel's popover), a
+name and its meters' headlines take the secondary text colour (6.0:1 light, 5.7:1 dark on the panel's popover), a
 warning-coloured "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
 (`.quota-meter--used-up` in `packages/ui/src/style.css`), fainter than the agent colours. Settings' accounts table marks
 such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu bar icon's
@@ -163,26 +163,39 @@ A notice toast (HeroUI's accent variant) tints its indicator with the title's `-
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
 title.
 
-A tooltip over any surface drawn on `--overlay` (a dialog, a menu or submenu, a select's or combo box's list, a
-popover) takes `--tooltip-on-overlay` in dark, a step lighter than that surface (1.30:1), instead of HeroUI's
-`--overlay`: HeroUI draws the surface and the tooltip on that one colour and gives the tooltip no edge in dark but a
-faint inset line, so a tooltip, such as the full label of a clipped menu item, cannot be told from the surface under
-it. In light it keeps HeroUI's own surface, whose drop shadow already sets it apart. The rule is the `.tooltip` one
-under `html:has(.modal__backdrop, …)` in `packages/ui/src/style.css`, which lists the surfaces; a new kind of overlay
-drawn on `--overlay` that can carry a tooltip joins that list. A surface drawn as a tooltip (`Hint`'s touch and hover
-popovers, among them the rail's account quota panel) cannot join it, since listing it would lift the surface itself:
-a status mark's popover opened over the quota panel keeps the panel's colour.
+In dark, every floating surface — a dialog, a menu or submenu, a select's or combo box's list, a popover, a tooltip and
+what is drawn as one (the touch and hint popovers, the rail's account quota panel), a toast, and a bar floating over the
+terminal (the dormant session's and the exited shell's) — is drawn on the project's `--floating`, by the user's
+decision, instead of HeroUI's `--overlay` and `--surface`, which are darker than the content panel and sink a menu into
+the sidebar under it. The dark levels follow light's ratio for ratio, where every floating surface is white: the surface
+is 1.11:1 over the panel and 1.02:1 over the sidebar (white: 1.11:1 over the light sidebar, 1.04:1 over the light
+panel); the `--default` family on it is 1.24:1 resting and 1.39:1 hovered (light's control fill: 1.27:1 and 1.39:1);
+`--border` and `--separator`, which HeroUI's outline button, tab list and menu dividers draw with, are 1.36:1 (light:
+1.35:1); HeroUI's secondary `Surface`, the recessed frame of raw diagnostics, a confirmation's branch list, licence
+texts and the file viewer's checkerboard, is 1.14:1 below it (light: 1.15:1). All floating surfaces share the one
+colour, as in light, so one over another — a tooltip over a menu or a dialog, a confirmation over Settings, a status
+mark's popover over the quota panel — is set apart by its edge: dark `--overlay-shadow` is a hairline and a drop shadow
+instead of HeroUI's faint inset line. The rule is the floating-surface rule in `packages/ui/src/style.css`, which lists
+the surfaces; a new kind of floating surface joins that list (a bar of the app's own takes its `floating-surface` class,
+which in dark also gives it that edge). Light keeps HeroUI's own surfaces and shadows.
+
+The step is held small by HeroUI's `--muted`, which keeps 4.5:1 on a fill holding secondary text (a placeholder, a menu
+item's description under the pointer) only up to that resting fill. The user accepted the shortfalls the lighter ground
+leaves in HeroUI's own colours: `--muted` on the hovered fill is 4.05:1; `--danger` is 3.33:1 for a destructive menu
+item's label and icon at rest and for a field's error text, and 2.69:1 for the menu item under the pointer, where its
+label still says what it does; a secondary button's label is 4.32:1 on its hovered fill and a soft danger button's
+4.41:1 on its hover.
 
 A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
 dialog around its trigger carries, and a control drawn from `--default` inside it, a secondary button or a ghost
 button's hover, would sit at about 1.19:1 against its `--overlay` surface. The shared tooltip and popover components
 (`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`, and the touch popover they open, which is drawn as a tooltip)
-therefore carry `control-fills` themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark tooltip over such a
-surface sits a step lighter, so it takes its own fill (`--tooltip-on-overlay-fill`, 1.27:1) from the same `.tooltip`
-rule as `--tooltip-on-overlay`. A new tooltip or popover that can hold a control drawn from `--default` carries
-`control-fills` too. The project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap
-would leave the field's `--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching
-its fill.
+therefore carry `control-fills` themselves, giving 1.27:1 in light; in dark the floating-surface rule above sets the
+fills itself (1.24:1). A new tooltip or popover that can hold a control drawn from `--default` carries `control-fills`
+too. In light the project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave
+the field's `--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching its fill. In
+dark it takes the floating fills like every floating surface: the secondary search field draws every state from the
+`--default` family there, `--field-border` is transparent and `--field-focus` shows only on an invalid field.
 
 A dialog's Advanced section opens from a small ghost button (`AdvancedSection` in
 `packages/ui/src/dialogs/AdvancedSection.tsx`) whose label is in `--app-muted` at rest and the foreground on hover and
@@ -771,13 +784,13 @@ with a trackpad gets what the input it used answers:
 - a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
 - a touch or pen press opens the same content in a **touch popover**, where the shape allows it. The popover is drawn
   like the tooltip, from the one definition: it carries HeroUI's own `tooltip` class (surface, padding, text size, width
-  cap, word breaking, and the fills it takes over an overlay surface in `style.css`) and the same `control-fills`,
-  rather than a copy of them. It is modal, as a popover is: an outside tap or Escape closes it, and focus, which it
-  takes, goes back to what held it. Being modal it hides its trigger from assistive technology while open, so it is not
-  linked to the trigger as a description, as the tooltip is; its dialog is named by the trigger's name, or by the
-  generic word Hint where the trigger has none or its name is the tooltip's own text: a dialog is never named by the
-  text it holds, which VoiceOver would read twice as it takes focus. The tooltip is closed and held back while it is
-  open, as a pen can hover before it presses and an open tooltip would swallow Escape ahead of the popover.
+  cap, word breaking) and the same `control-fills`, rather than a copy of them. It is modal, as a popover is: an outside
+  tap or Escape closes it, and focus, which it takes, goes back to what held it. Being modal it hides its trigger from
+  assistive technology while open, so it is not linked to the trigger as a description, as the tooltip is; its dialog is
+  named by the trigger's name, or by the generic word Hint where the trigger has none or its name is the tooltip's own
+  text: a dialog is never named by the text it holds, which VoiceOver would read twice as it takes focus. The tooltip is
+  closed and held back while it is open, as a pen can hover before it presses and an open tooltip would swallow Escape
+  ahead of the popover.
 
 Whether a shape opens it is a parameter, not a guess. Recognising from the DOM or from props whether a trigger "is a
 button" is unreliable: a react-aria control hides its press handling in its own hooks, a mark's own trigger is a
@@ -1736,10 +1749,11 @@ details' meters — carries its meaning in words, so its colours are decorative 
 from assistive technology, and the option's description or the cell's hidden text states the remaining usage; a meter
 states it in its own accessible name and value, while its drawn headline is hidden. Its track is `--default`, which
 inside `.control-fills` (Settings, the dialogs, the rail panel) is `--control-fill`; in dark the compact bar's
-`.quota-bar-track` is a step lighter than its `--default`, so it can be seen on a dark popover. The track is not held to
-3:1 against its surface. The fill's agent colour is kept at 3:1 or better against every track it is drawn on at full
-opacity, in both appearances, though nothing requires it: a bar's state never rests on its colour alone. The grey of a
-used-up account is not: it is meant to recede, a step fainter than the agent colours, and its badge says why.
+`.quota-bar-track` is a step lighter than its `--default`, so it can be seen on a dark popover (1.86:1 off it). The
+track is not held to 3:1 against its surface. The fill's agent colour is kept at 3:1 or better against every track it is
+drawn on at full opacity, in both appearances, though nothing requires it: a bar's state never rests on its colour
+alone. The grey of a used-up account is not: it is meant to recede, a step fainter than the agent colours, and its badge
+says why.
 
 ### Row action menu buttons
 
