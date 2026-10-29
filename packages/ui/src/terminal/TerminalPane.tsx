@@ -180,6 +180,23 @@ export function TerminalPane({
     }
   }, [switching, focusTerminal]);
   const held = useFocusHandoff(restoreFocus ?? focusTerminal);
+  // Selecting another archived session replaces the history, and focus in it falls to `<body>` (a
+  // sidebar row's press leaves focus where it was). The user made that move, so focus goes where
+  // focus meant for the terminal goes, with the modality the selecting input left: no ring after a
+  // pointer press, unlike `held`, which turns the ring on for a control that went away by itself.
+  // `held` cannot tell the two apart, so this runs first, as a layout effect, and leaves it nothing
+  // to do. Only towards another archived session: a live one's terminal is where the keyboard works
+  // next, as for any other hand-off. The flag goes while no history is shown or it is inert, as
+  // focus can leave it then without a blur.
+  const historyFocusedRef = useRef(false);
+  useLayoutEffect(() => {
+    if (!historyFocusedRef.current || document.activeElement !== document.body) return;
+    historyFocusedRef.current = false;
+    if (archivedRef.current) (restoreFocus ?? focusTerminal)();
+  }, [session?.id]);
+  useLayoutEffect(() => {
+    if (!isArchived || resuming) historyFocusedRef.current = false;
+  }, [isArchived, resuming]);
 
   useImperativeHandle(
     ref,
@@ -542,7 +559,16 @@ export function TerminalPane({
       {session && isArchived && (
         // Under the cover, which a resume raises over it; inert meanwhile, so what is hidden is
         // out of reach too.
-        <div ref={historyRef} {...held} inert={resuming} className="contents">
+        <div
+          ref={historyRef}
+          onFocus={(event) => { historyFocusedRef.current = true; held.onFocus(event); }}
+          onBlur={(event) => {
+            if (document.activeElement !== event.target) historyFocusedRef.current = false;
+            held.onBlur(event);
+          }}
+          inert={resuming}
+          className="contents"
+        >
           <SessionHistoryView key={session.id} session={session} onSelectSession={onSelectSession} />
         </div>
       )}

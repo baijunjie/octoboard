@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import React, { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../errorAlerts";
@@ -505,6 +507,22 @@ it("moves focus held inside the pane to the history when the session on screen b
   show({ session: { ...session, status: "archived" } });
   await act(async () => {});
   expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
+});
+
+it.each([
+  ["pointer", false],
+  ["keyboard", true],
+] as const)("keeps focus in the history when another archived session is selected by %s, ringed only after a key", async (modality, ringed) => {
+  const previous = getInteractionModality();
+  onTestFinished(() => { act(() => Reflect.apply(setInteractionModality, undefined, [previous])); });
+  const { container, handle, show } = mountArchived();
+  await act(async () => {});
+  act(() => setInteractionModality(modality));
+  act(() => handle.current?.focus());
+  show({ session: sessionOf("s-older", "c-1", undefined, "Older work", "archived") });
+  await act(async () => {});
+  expect(container.querySelector("section")?.contains(document.activeElement)).toBe(true);
+  expect(container.querySelector("[data-focus-visible]") !== null).toBe(ringed);
 });
 
 it("reaches the history itself through the handle while it is still loading", () => {

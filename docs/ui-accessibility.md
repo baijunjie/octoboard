@@ -515,6 +515,14 @@ the ring follows how the press came; `HandOffOnUnmount` always sets it, its trig
 trigger is really a press — the change filter field closed from the header's toggle, which takes no focus itself —
 knowingly: focus lands on a control the user did not aim it at either way.
 
+Selecting another archived session while focus is in the history on screen is not such a move: a sidebar row's press
+keeps focus where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether
+from a row, Back and Forward, the rail or the owner link of an archived owner. `TerminalPane` hands focus on, ahead of
+`useFocusHandoff`, the way focus meant for the agent terminal goes (the new history, a covering panel, or the top bar
+after a tap) without setting the modality, so the ring follows the input that selected: none after a pointer press,
+shown after a key. A switch from the history to a live session, or to none, still goes through `useFocusHandoff` with
+the ring on.
+
 After a tap (`interactionIsTouch` in `packages/ui/src/touchInput.ts`: the last press was a finger; a mouse, a trackpad
 or any key counts as not, so an iPad with a keyboard keeps the desktop rules) two things change. An automatic move does
 not turn the ring on — every such move asks `ringForAutomaticFocus`, F6 being the one exception, as a key — since there
@@ -630,7 +638,9 @@ something of its own stays; one that only scrolls comes and goes with the overfl
 Such a handler calls react-aria's `setInteractionModality("keyboard")` first when the handler sits on the window's
 capture phase and stops propagation. react-aria tracks modality from a capture-phase listener on the document, which
 the key then never reaches; without the call, what the handler focuses draws no ring when the previous input was a
-pointer.
+pointer. A handler for a chord with ⌘ or Ctrl (or Alt outside macOS) calls it too, whether or not it stops the key:
+react-aria does not count such a chord as a keyboard interaction. It calls it only once it knows the shortcut will act, so
+a shortcut with nothing to do does not turn a ring on where focus already is.
 
 ## Accessible names
 

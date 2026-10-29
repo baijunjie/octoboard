@@ -2,7 +2,9 @@
 import { act, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
+import { afterEach, beforeEach, describe, expect, it, type Mock, onTestFinished, vi } from "vitest";
 
 import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -201,6 +203,18 @@ describe("useNavigationHistory", () => {
       expect(h.shown().session).toBe("a");
       act(() => h.navigation.moveByShortcut(false));
       expect(h.shown().session).toBe("b");
+    });
+
+    it("moves as a keyboard interaction, for the focus it hands on to show its ring, and leaves the modality alone with nowhere to go", () => {
+      const previous = getInteractionModality();
+      onTestFinished(() => Reflect.apply(setInteractionModality, undefined, [previous]));
+      setInteractionModality("pointer");
+      const h = mount({ platform: { kind: "browser", windowChrome } });
+      visitAll(h, "a", "b");
+      act(() => h.navigation.moveByShortcut(false));
+      expect(getInteractionModality()).toBe("pointer");
+      act(() => h.navigation.moveByShortcut(true));
+      expect(getInteractionModality()).toBe("keyboard");
     });
 
     it.each(['<div role="dialog"></div>', '<div role="menu"></div>'])("does nothing while %s is open", (markup) => {
