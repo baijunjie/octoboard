@@ -1,4 +1,5 @@
 import { Disclosure, Tabs } from "@heroui/react";
+import { buttonVariants } from "@heroui/styles";
 import React from "react";
 
 import { StatusAnnouncer } from "../components/StatusAnnouncer";
@@ -6,9 +7,9 @@ import { useTabScrollLabels } from "../components/tabScrollLabels";
 import { useT } from "../i18n/react";
 
 /** The collapsed Advanced section of a dialog, folded away by default as what is inside is rarely
- * set. The trigger spans the row so the whole row expands the section; HeroUI pushes its indicator
- * to the far end with an auto margin, which `ms-0` cancels so the chevron follows the label. The
- * label is set like the labels of the fields around it (`Label`'s size, weight and colour). */
+ * set. The trigger is drawn as a small ghost button in muted text, by the user's decision, so at
+ * rest it reads as an action rather than a field label set in from the others. `ms-0` drops the
+ * button's negative icon margin on the label's side of the chevron. */
 export function AdvancedSection({
   expanded,
   onExpandedChange,
@@ -26,7 +27,7 @@ export function AdvancedSection({
   return (
     <Disclosure isExpanded={expanded} onExpandedChange={onExpandedChange}>
       <Disclosure.Heading>
-        <Disclosure.Trigger className="flex w-full items-center gap-1 text-sm font-medium text-foreground">
+        <Disclosure.Trigger className={`${buttonVariants({ variant: "ghost", size: "sm" })} text-app-muted hover:text-foreground data-[focus-visible=true]:text-foreground`}>
           {t("dialog.agentSettings.advanced")}
           <Disclosure.Indicator className="ms-0" />
         </Disclosure.Trigger>
