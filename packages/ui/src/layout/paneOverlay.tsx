@@ -123,23 +123,15 @@ export function RailClip({ floating, children }: { floating: boolean; children: 
   );
 }
 
-/** Memoised once read. That holds only while `style.css` declares `--peek-gap` once,
- * unconditionally: overriding it under a media query or a theme would leave this at the value read
- * first, and the halo would stop matching the card without any visible symptom. */
-let peekGapPxCache: number | undefined;
-
 /** Reads `--peek-gap` back out of `style.css` (a px length), and throws if its value does not parse
  * as a number. Not a fallback to 0: that is the geometry the halo exists to correct, and nothing
  * would say so. Called every time the sidebar's floating card's pointer watch arms (the aside's
- * needs no halo), but reads the stylesheet only until it succeeds; a failure is not cached, so the
- * next call retries. The watch's call is in an effect, and a throw there reaches the
- * `ErrorBoundary` around the whole app: the failure screen. Both entry points import `style.css`
- * before mounting, so only a stylesheet that lost the token can cause it. */
+ * needs no halo), reading the current responsive gap. The watch's call is in an effect, and a
+ * throw there reaches the `ErrorBoundary` around the whole app: the failure screen. Both entry
+ * points import `style.css` before mounting, so only a stylesheet that lost the token can cause it. */
 function peekGapPx(): number {
-  if (peekGapPxCache !== undefined) return peekGapPxCache;
   const raw = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--peek-gap"));
   if (!Number.isFinite(raw)) throw new Error("--peek-gap is not set");
-  peekGapPxCache = raw;
   return raw;
 }
 

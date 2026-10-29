@@ -27,21 +27,21 @@ and the right pane" in `docs/product/window-layout.md`.
 
 The right pane has **no frame or surface of its own**: it is its cards. Each card looks exactly like the sidebar's
 floating card (see "A hidden pane floats in on hover" in `docs/product/window-layout.md`): rounded corners, the hairline
-edge, the light card shadow and the sidebar's background, docked and floating alike. The cards keep **8 px** from the
-top bar, from the window's end edge and from its bottom (or the connection banner), **8 px** from the terminal and **10
-px** from each other; the gaps on the terminal's side and between cards hold the resize grips (see "Resizing the sidebar
-and the right pane" in `docs/product/window-layout.md` and "Resizing panels" below). What shows around and between the
-cards is the terminal's area, in the terminal's own background, so the cards read as lying on the content. A single open
-panel takes the stack's full height.
+edge, the light card shadow and the sidebar's background, docked and floating alike. At 782 px and wider the cards
+keep **8 px** from the top bar, from the window's end edge and from its bottom (or the connection banner), **8 px**
+from the terminal and **10 px** from each other; the gaps on the terminal's side and between cards hold the resize
+grips (see "Resizing the sidebar and the right pane" in `docs/product/window-layout.md` and "Resizing panels" below).
+Below 782 px the gaps are in "Below 782 px: one panel floats over the terminal" below. What shows around and between
+the cards is the terminal's area, in the terminal's own background, so the cards read as lying on the content. A
+single open panel takes the stack's full height.
 
 A panel is never shorter than **120 px**.
 
 ## A panel's header
 
-Every panel starts with a **header**, laid out as the sidebar's floating card's header is: **40 px** high, with the
-same inset, title size and weight, and icon buttons, so the line under it stays level with the line under the docked
-panes' headers beside it (see "The window chrome and the content panel" in `docs/product/window-layout.md`). It holds,
-from its leading side:
+Every panel starts with a **header**, laid out as the sidebar's floating card's header is, with the same inset, title
+size and weight, and icon buttons. Header heights and alignment are in "The window chrome and the content panel" in
+`docs/product/window-layout.md`. It holds, from its leading side:
 
 - the panel's **title** — the project's name for the Files panel, "Terminal" for the Terminal panel, "Report" for the
   report panel;
@@ -155,7 +155,7 @@ terminal taking the content panel's whole width under it. The threshold is the s
   Opening the Terminal panel on a project with no shell starts one, as it does docked (see "Starting a terminal" in
   `docs/product/terminal-panel.md`).
 - **How it is drawn**: the panel's own card at the right pane's chosen width, capped to what the content panel leaves
-  beside a **dimmed strip** of the terminal, with an **8 px** gap all round the card, from the top bar, the window's
+  beside a **dimmed strip** of the terminal, with a **4 px** gap all round the card, from the top bar, the window's
   end edge, its bottom (or the connection banner) and the strip. It has no width handle and no Maximize panel. The
   strip is on the side away from the window's end, reaching the window's start edge, the rail not being in the row
   there (see "Below 782 px: the rail comes in with the drawer" in `docs/product/sidebar-drawer.md`); it is **48 px**
@@ -169,7 +169,7 @@ terminal taking the content panel's whole width under it. The threshold is the s
   both appear and go at once.
 - **Opening or closing it never resizes the terminal**, and the terminal has no minimum width here, so the row never
   scrolls sideways.
-- **It closes** on Close panel in its header, on its toggle, on a press on the dimmed strip or in the card's 8 px
+- **It closes** on Close panel in its header, on its toggle, on a press on the dimmed strip or in the card's 4 px
   gap, on a touch swipe (see `docs/product/touch-swipes.md`), and on `Escape`, which does not reach the running
   agent. In a field holding text `Escape` only clears the field first, and inside a shell terminal of the Terminal panel it goes to the shell and leaves the panel open.
 - **While it is shown the agent terminal under it cannot be used**, with the pointer or the keyboard, and is not an

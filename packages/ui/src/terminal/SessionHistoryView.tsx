@@ -72,7 +72,7 @@ export function SessionHistoryView({
       className="absolute inset-0 flex flex-col bg-panel outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus data-focus-visible:ring-inset"
     >
       {/* At narrow widths the header wraps its contents so the dates stay readable. */}
-      <header className="flex min-h-(--pane-header-height) shrink-0 flex-wrap items-center gap-x-3 gap-y-2 groove-b px-(--pane-inset) py-1.5">
+      <header className="flex min-h-(--pane-header-height) shrink-0 flex-wrap items-center gap-x-3 gap-y-2 groove-b px-(--pane-inset) py-1">
         <div className="flex min-w-24 flex-1 flex-col gap-0.5">
           {/* The context badge follows the heading and never shrinks; the heading clips first. */}
           <div className="flex items-center gap-2">
@@ -132,7 +132,7 @@ function OwnerLine({ ownerId, onSelectSession }: { ownerId: string | null | unde
               type="button"
               {...focus}
               onClick={() => onSelectSession(owner)}
-              className="min-w-0 rounded-sm text-(--tint-accent-fg) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
+              className="min-w-0 cursor-pointer rounded-sm text-(--tint-accent-fg) underline underline-offset-2 outline-none data-focus-visible:ring-2 data-focus-visible:ring-focus"
             >
               <FadeOverflow as="span" className="block min-w-0" dir="auto" titleWhenClipped={title}>
                 {title}

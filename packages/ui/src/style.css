@@ -317,8 +317,7 @@ html {
   /* The gap an overlay pane keeps from the window's edges and the top bar, and the sidebar from
      the rail (`drawerClass` in `layout/paneOverlay.tsx`). `peekGapPx` there reads it back with
      `parseFloat` and throws when that does not yield a number, so the `px` unit is load-bearing:
-     `0.5rem` would be read as 0.5px. It reads it once, so declare it here only, never under a media
-     query or a theme. */
+     `0.5rem` would be read as 0.5px. Phone-width cards use the smaller gap below. */
   --peek-gap: 8px;
 
   /* How far a panel is shifted towards its edge while it is away, below the `phone` breakpoint, where
@@ -1103,6 +1102,10 @@ html.pane-resizing * {
 
 /* Below the `phone` breakpoint the card slides in from the end edge instead of rising, and out to it. */
 @media (width < theme(--breakpoint-phone)) {
+  :root {
+    --peek-gap: 4px;
+  }
+
   [data-card-motion="away"] [data-panel-card],
   [data-card-motion="preparing"] [data-panel-card] {
     translate: var(--phone-slide) 0;
