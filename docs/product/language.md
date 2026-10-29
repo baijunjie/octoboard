@@ -144,7 +144,7 @@ A client reports its language:
   every start: the daemon keeps the most recent report.
 
 The first launch's pick from the system is not reported by itself; it reaches the daemon only through the report on
-connecting. The held language is not carried by a configuration export (see "The application settings a full export
+connecting. The held language is not carried by a configuration export (see "The application settings an export
 carries" in `docs/product/configuration-export-and-import.md`), and agents can neither read nor change it (see "Who
 reads and changes what" in `docs/product/agent-settings-tools.md`).
 

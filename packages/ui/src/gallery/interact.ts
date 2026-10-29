@@ -173,6 +173,9 @@ export interface Ui {
   /** Presses the menu item named `matcher`, for a name an open menu shares with a control elsewhere on the page (the
    * Settings item of an account's menu, and the rail's Settings button). */
   pressMenuItem: (matcher: Matcher) => Promise<void>;
+  /** Presses the tab named `matcher`, for a name a tab shares with a control before it in the page (the import review's
+   * "Application settings" tab and the checkbox of that name above the tab bar). */
+  pressTab: (matcher: Matcher) => Promise<void>;
   /** Presses the control named `matcher` with a finger: the touch pointer events a touch screen sends, then the
    * click that follows. For a control that opens its text in a popover on a touch, pen or virtual press and
    * shows it as a tooltip on mouse hover and keyboard focus, such as a help tip's "?": a real mouse press opens
@@ -1199,6 +1202,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       const [show, hide] = [t("titleBar.sidebar.show"), t("titleBar.sidebar.hide")];
       const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to close the drawer with`);
       if (nameOf(toggle) === hide) await clickWhenFound(() => toggle, "");
+    },
+    async pressTab(matcher) {
+      await clickWhenFound(() => findAll(matcher).find((element) => element.matches('[role="tab"]')), `No tab matching ${String(matcher)}`);
     },
     async swipe(toward) {
       const view = doc.defaultView!;

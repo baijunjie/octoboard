@@ -787,7 +787,7 @@ export interface DocumentConsole {
   projects: DocumentProject[];
 }
 
-/** The application settings a full export carries. */
+/** The application settings an export carries when they are chosen. */
 export interface DocumentSettings {
   auto_pull_repositories: boolean;
   /** Absent in a file exported before the setting existed; applying then leaves it as it is. */
@@ -829,10 +829,48 @@ export interface ConfigurationDocument {
   version: number;
   /** The Octoboard version that exported it, for diagnosis only. Absent in an older file. */
   exported_by?: string | null;
-  /** Present in a full export only. */
+  /** Present exactly when the application settings were exported, whichever consoles. */
   settings?: DocumentSettings | null;
+  /** Present exactly when the accounts were exported. */
+  accounts?: DocumentAccounts;
+  /** The consoles exported; empty when none was. */
   consoles: DocumentConsole[];
 }
+
+/** The account structure of a configuration document: never a credential, an id or a quota reading. */
+export interface DocumentAccounts {
+  /** The added agents in their order; absent when the exporting machine had not decided the list. */
+  added_agents?: Agent[];
+  /** An entry for each agent with an account of its own or a named default account. */
+  agents: DocumentAgentAccounts[];
+}
+
+export interface DocumentAgentAccounts {
+  agent: Agent;
+  default_account: DocumentDefaultAccount;
+  /** The accounts the user owns, in the agent's display order. */
+  accounts: DocumentAccount[];
+}
+
+/** What a document says of an agent's default account; its directory and disabled flag are not carried. */
+export interface DocumentDefaultAccount {
+  /** The name the user gave it; absent or null when unnamed. */
+  name?: string | null;
+  /** How many of the agent's accounts come before it in the display order. */
+  position: number;
+}
+
+export interface DocumentAccount {
+  name: string;
+  /** `~/<relative path>` under the exporting machine's home directory (`~` for the directory itself);
+   * elsewhere the absolute path, whatever the export's paths choice. */
+  directory: string;
+  share_default_config: boolean;
+  disabled: boolean;
+}
+
+/** Which consoles `export_configuration` holds. */
+export type ExportedConsoles = "one" | "all" | "none";
 
 /** The directory a project of an imported document can be placed in. */
 export type ImportChoiceKind = "exported_path" | "default_clone_dir" | "clone" | "directory";
@@ -852,11 +890,60 @@ export interface ProjectResolution {
   choice: ImportChoice;
 }
 
+/** The choice made for one account of the document when applying: another directory, or leaving
+ * the account out. Exactly one of the two is given. */
+export interface AccountResolution {
+  agent: Agent;
+  /** The account's index among the document's accounts of `agent`, in the order it lists them. */
+  account: number;
+  /** An absolute path or one starting with `~/`. */
+  directory?: string;
+  leave_out?: boolean;
+}
+
 /** An account reference of the document that names no account of its agent on this machine, and
  * so is bound to that agent's default account. */
 export interface AccountFallback {
   agent: Agent;
   name: string;
+}
+
+/** What importing one account of the document would do. `existing`: an account of the agent has
+ * the name, and it is used as it is, never modified. `directory_in_use`: another account of the
+ * agent, the default one included, uses the proposed directory. `invalid`: the Add account form
+ * would refuse the name or the directory. */
+export type AccountStatus = "new" | "existing" | "directory_in_use" | "invalid";
+
+export interface InspectedAccount {
+  name: string;
+  /** As the document records it. */
+  directory: string;
+  /** As it resolves on this machine; null when the document's cannot be resolved. */
+  proposed_directory: string | null;
+  status: AccountStatus;
+  /** The name of the account that uses the proposed directory, for `directory_in_use`. */
+  in_use_by: string | null;
+  /** Why it is `invalid`. */
+  error: ImportFailure | null;
+  share_default_config: boolean;
+  disabled: boolean;
+}
+
+export interface InspectedAgentAccounts {
+  agent: Agent;
+  /** In the document's order. */
+  accounts: InspectedAccount[];
+  /** The name the document gives the agent's default account. */
+  default_name: string | null;
+  /** Whether importing would apply `default_name`. */
+  default_name_applies: boolean;
+}
+
+export interface InspectedAccounts {
+  /** The document's added agents not yet added here, which importing would add, in the document's order. */
+  agents_to_add: Agent[];
+  /** In the document's order, one entry for each agent. */
+  agents: InspectedAgentAccounts[];
 }
 
 /** The directory each choice would use for a project, present only for the choices its state
@@ -945,6 +1032,35 @@ export interface ImportFailure {
 }
 
 export type ImportStatus = "created" | "left_out" | "failed" | "not_attempted";
+
+export type AccountOutcome = "created" | "existing" | "left_out" | "failed";
+
+export interface ImportedAccount {
+  name: string;
+  status: AccountOutcome;
+  /** The id of the account created, or of the one that existed. */
+  account: string | null;
+  /** Why it failed. */
+  error: ImportFailure | null;
+  /** Why sharing the default configuration, which the document asked for, was not turned on for an
+   * account that was created all the same. */
+  sharing_warning: ImportFailure | null;
+}
+
+export interface ImportedAgentAccounts {
+  agent: Agent;
+  /** In the document's order. */
+  accounts: ImportedAccount[];
+  /** Whether the document's name for the default account was applied. */
+  default_name_applied: boolean;
+}
+
+export interface ImportedAccounts {
+  /** The agents appended to the added agents, in the order they were. */
+  agents_added: Agent[];
+  /** In the document's order, one entry for each agent. */
+  agents: ImportedAgentAccounts[];
+}
 
 export interface ImportedProject {
   name: string;
@@ -1358,21 +1474,45 @@ export type RequestBody =
    * and added, the newest record winning. Nothing found is `not_found`, not an error; an ID that is
    * no UUID is refused with `resume_id_invalid`, a project that does not exist with `unknown_project`. */
   | { type: "locate_conversation_to_resume"; project: string; agent_session_id: string }
-  /** Answered with `configuration_exported`: the document of the console `console` names, or, with
-   * none, of every console and the application settings. Refused with `unknown_console` for a
-   * console that does not exist. With `include_paths` false (absent is true) each project's path
-   * is written as only its directory's name and a remote that cannot be cloned from (a local path)
-   * is left out, so the file reveals no path of the daemon's host. */
-  | { type: "export_configuration"; console?: string; include_paths?: boolean }
+  /** Answered with `configuration_exported`: the document holding the regions chosen. `consoles`
+   * says which consoles and projects: `one` (the console `console` names), `all` or `none`; absent
+   * it is `one` when `console` is given and `all` otherwise. `include_settings` says whether the
+   * application settings are in it; absent it is true exactly when every console is exported.
+   * `include_accounts` says whether the account structure is, never a credential; absent it is false.
+   * Refused with `export_empty` when nothing is selected, `field_required` for `one` without a
+   * `console`, and `unknown_console` for a console that does not exist. With `include_paths` false
+   * (absent is true) each project's path is written as only its last segment and a remote that
+   * cannot be cloned from (a local path) is left out, so the file reveals no project path of the
+   * daemon's host; account directories are always written. */
+  | {
+    type: "export_configuration";
+    console?: string;
+    consoles?: ExportedConsoles;
+    include_settings?: boolean;
+    include_accounts?: boolean;
+    include_paths?: boolean;
+  }
   /** Answered with `configuration_inspected`: what importing `document` would meet on this machine.
    * Changes nothing. The document is untrusted input; refused with `configuration_not_recognised`,
    * `configuration_version_unsupported` or `configuration_unreadable`. */
   | { type: "inspect_configuration"; document: unknown }
   /** Answered with `configuration_imported` once the last project is placed, which can take as
    * long as every clone together. `document` is the one that was inspected, unchanged. A project
-   * with no resolution is left out. Refused before anything is created with the codes of
-   * `inspect_configuration`, `import_resolution_invalid` and `import_settings_missing`. */
-  | { type: "import_configuration"; document: unknown; resolutions?: ProjectResolution[]; apply_settings?: boolean }
+   * with no resolution is left out. With `apply_accounts` the document's accounts are created
+   * first, so the references of consoles and projects bind to them; `account_resolutions` give an
+   * account another directory or leave it out and are read only then. With `apply_consoles` false
+   * (absent is true) no console or project is created and `resolutions` are not read. Refused before anything is
+   * created with the codes of `inspect_configuration`, `import_resolution_invalid` (a project's or an
+   * account's resolution), `import_settings_missing` and `import_accounts_missing`. */
+  | {
+    type: "import_configuration";
+    document: unknown;
+    resolutions?: ProjectResolution[];
+    apply_settings?: boolean;
+    apply_accounts?: boolean;
+    account_resolutions?: AccountResolution[];
+    apply_consoles?: boolean;
+  }
   | {
     type: "open_session";
     console_id: string;
@@ -1881,15 +2021,24 @@ export type Event =
   /** The reply to `export_configuration`: the document to save as a file. */
   | { type: "configuration_exported"; id?: string; document: ConfigurationDocument }
   /** The reply to `inspect_configuration`: one entry per console of the document, in its order,
-   * and `settings` when the document carries any. */
-  | { type: "configuration_inspected"; id?: string; settings?: InspectedSettings | null; consoles: InspectedConsole[] }
-  /** The reply to `import_configuration`: one entry per console of the document, in its order.
-   * A console or project that went wrong is reported in it rather than failing the request. */
+   * `settings` and `accounts` when the document carries any. */
+  | {
+    type: "configuration_inspected";
+    id?: string;
+    settings?: InspectedSettings | null;
+    accounts?: InspectedAccounts | null;
+    consoles: InspectedConsole[];
+  }
+  /** The reply to `import_configuration`: what came of the settings and accounts asked for, and one
+   * entry per console of the document, in its order (none with `apply_consoles` false). A console or
+   * project that went wrong is reported in it rather than failing the request. */
   | {
     type: "configuration_imported";
     id?: string;
     settings_applied?: DocumentSettings | null;
     settings_error?: ImportFailure | null;
+    /** Present only when `apply_accounts` was sent. */
+    accounts?: ImportedAccounts | null;
     consoles: ImportedConsole[];
   }
   /** The reply to `probe_path_links`: one entry per path asked, in order, `path` as asked. */

@@ -131,6 +131,14 @@ box is taller than its label's line, which sits at its top), and move the note u
 its own `useId`, set in the checkbox's `aria-describedby` and indented under the label by hand. A dialog option gets
 all of this from `ConfirmOption`'s `mark` (`packages/ui/src/dialogs/ConfirmOption.tsx`).
 
+## An option's note never changes with an option below it
+
+In a `packages/ui` form, what an option's note says may follow its own state and the options above it,
+never an option further down: the form is read top to bottom, and ticking something later must not rewrite what was
+already read. When a later option would make an earlier note inaccurate, narrow the earlier option so its meaning does
+not depend on the later one, and let the later option say what it adds in its own note. Hiding or disabling an option
+because of one above it is fine.
+
 ## A modal whose content is one body is a `Dialog`; one made of panels keeps its own frame
 
 `Dialog` (`packages/ui/src/dialogs/Dialog.tsx`) is a titled frame around a single scrolling body, plus an optional

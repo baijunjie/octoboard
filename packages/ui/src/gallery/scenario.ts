@@ -3,7 +3,7 @@ import type { ErrorRecovery } from "../errorRecovery";
 import type { Translate } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
 import type { Imported } from "../configuration/ImportResult";
-import type { Inspection } from "../configuration/ImportReview";
+import type { Inspection } from "../configuration/importPlan";
 import type { AvailableUpdate, MacosPermissionsStatus, UpdateChannel, UpdateProgress } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
 import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, SessionBranchItem, SessionRecordsPresence } from "../protocol";

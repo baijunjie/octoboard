@@ -497,6 +497,12 @@ export function hasRefusedQuotaWindow(params: MessageParams): boolean {
   return refusedQuotaWindow(params) !== undefined;
 }
 
+/** An account's name as the application shows it: the default account, which the daemon names by its fixed English
+ * `DEFAULT_ACCOUNT_NAME`, by its name in `language` (as the accounts section does), any other account by its own. */
+export function accountNameText(language: Language, name: string): string {
+  return name === DEFAULT_ACCOUNT_NAME ? format(language, "settings.accounts.defaultName", {}) : name;
+}
+
 /** The codes whose account name params may be the default account's, which the daemon names by its fixed
  * English `DEFAULT_ACCOUNT_NAME`, and the params that hold one. */
 const DEFAULT_ACCOUNT_NAME_PARAMS: Record<string, readonly string[]> = {
@@ -548,7 +554,7 @@ export function daemonParams<V = never>(
   const all = NESTED_FAILURE_CODES.has(code) && params.reason_code ? withUiParams(params.reason_code, params) : withUiParams(code, params);
   // The default account is shown by its name in the current language, as the accounts section does.
   for (const accountParam of DEFAULT_ACCOUNT_NAME_PARAMS[code] ?? []) {
-    if (all[accountParam] === DEFAULT_ACCOUNT_NAME) all[accountParam] = format(language, "settings.accounts.defaultName", {});
+    if (accountParam in all) all[accountParam] = accountNameText(language, all[accountParam]);
   }
   const shown: Record<string, string | number> = Object.fromEntries(
     Object.entries(all).map(([name, value]) => [name, paramText(records, name, value, code, language)]),

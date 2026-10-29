@@ -41,6 +41,20 @@ it("focus finds a field by the accessible name of a label whose visible text is 
   expect(document.activeElement).toBe(document.getElementById("dir"));
 });
 
+it("pressTab presses the tab of a name a checkbox before it shares", async () => {
+  document.body.innerHTML = '<label><input type="checkbox" id="box"> Application settings</label><div role="tablist"><button role="tab" id="tab">Application settings</button></div>';
+  const box = document.getElementById("box") as HTMLInputElement;
+  const tab = document.getElementById("tab") as HTMLElement;
+  const pressed: string[] = [];
+  box.addEventListener("click", () => pressed.push("box"));
+  tab.addEventListener("click", () => pressed.push("tab"));
+  const ui = createUi(document, "en");
+  const done = ui.pressTab("Application settings");
+  await vi.advanceTimersByTimeAsync(400);
+  await done;
+  expect(pressed).toEqual(["tab"]);
+});
+
 it("stuckExit names what is still closing once the wait is spent", async () => {
   exiting("General Appearance");
   const result = stuckExit(document);

@@ -8,11 +8,11 @@ import { usePlatform } from "../platform/react";
 import { useCurrentConsole } from "../sidebar/sidebarView";
 import { SettingRow } from "./SettingRow";
 
-/** Moving configuration between computers: exporting the console the sidebar shows, or everything,
- * to a file, and importing a file exported elsewhere (see
- * `docs/product/configuration-export-and-import.md`). Each opens its own dialog, which saves or
- * opens the file through the platform; where the platform has no configuration-file capability
- * there is nothing to press and the section says so. */
+/** Moving configuration between computers: exporting consoles and projects, the application settings
+ * or the account structure to a file, and importing a file exported elsewhere (see
+ * `docs/product/configuration-export-and-import-dialogs.md`). Each opens its own dialog, which
+ * saves or opens the file through the platform; where the platform has no configuration-file
+ * capability there is nothing to press and the section says so. */
 export function ConfigurationSection(): React.ReactElement {
   const t = useT();
   const { configurationFile } = usePlatform();

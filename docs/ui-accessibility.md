@@ -866,6 +866,12 @@ keyboard focus, in the latter case once any scroll that focus set off to reveal 
 under an open tooltip closes it; and since nothing links it to the tab, the tab's accessible name carries "not
 installed" and each owned account's visible "not usable" line carries the rest.
 
+The import dialog's region tabs follow the same pattern: a region whose panel needs attention (a project not found, an
+account that cannot be created as it is) has a warning glyph after its tab's name, the tab's accessible name ends with
+its needing attention, and a tooltip anchored beside the tab says so, opening on hover and on the tab's keyboard focus
+(by input modality, so a mouse press that focuses the tab opens nothing). That tab strip does not scroll, so the
+tooltip does not wait for a reveal scroll to settle. The marks inside the panel carry the specifics.
+
 ### Hover marquees belong to one text label
 
 A clipped name, heading or detail scrolls only while the pointer is over its own text region. Independent labels
@@ -1263,8 +1269,8 @@ busy the layout around it is:
 
 Here and in "How a mark is drawn and opened", a mark is a status mark (`StatusMark`): a button that opens a popover,
 or, with a word and nothing more to say, that glyph and word as plain text. The glyphs elsewhere in this standard that
-carry only a tooltip (an agent icon, a badge, the not-installed agent's warning glyph, the branch badge's failure
-glyph) are indicators, not marks in this sense, and are not placed by this rule.
+carry only a tooltip (an agent icon, a badge, the not-installed agent's warning glyph, an import region tab's warning
+glyph, the branch badge's failure glyph) are indicators, not marks in this sense, and are not placed by this rule.
 
 A mark that appears by itself after the view has first painted, as a change of state with nothing else changing around
 it (a setting's last check failing while the view is open), is announced once, its name or the sentence it stands for
@@ -1291,14 +1297,14 @@ The item shows a minimal mark (`StatusMark`): a danger, warning or note glyph wi
 after the name on a row that has one** (a tree folder's, the account name line's), not at the row's trailing edge: the
 name keeps its clipping and fade, so a long name clips and the mark stays visible after its visible text, and a hover
 marquee, if the name has one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes
-the place of its own layout: the status column of a table (an import result), beside the section's heading for a part
-of a compact layout, inline with the text in a document. A failed Git check of a project stands at the start of its
+the place of its own layout: a status column of a table, beside the section's heading for a part of a compact layout,
+inline with the text in a document. A failed Git check of a project stands at the start of its
 Git badge, in place of the badge's branch glyph, outside the badge's tooltip trigger and as a tab stop of its own; while
 a check, pull or push runs the refresh glyph takes its place, and the mark comes back when that run ends unless a check
 in it succeeded. The row's accessible name adds the mark's name ("Git check failed") as its own phrase; Git's text is
 in no name and no tooltip, only in the mark's popover. A press on the mark keeps to itself and does not reach the
 pressable row around it, and when the mark goes away while it or its popover holds focus, focus goes to the row (or
-focus mode's header). No sentence of error text is written into the row.
+focus mode's header). No sentence of error text is written into the row, except in a report of outcomes (below).
 
 A mark placed after a line of text is centred on that line by construction: the box holding it is one line of that
 text's own size and line height (`MarkLineBox`, `h-[1lh]` under the text's size class), the mark centred in it, so it
@@ -1327,9 +1333,9 @@ The popover is `Hint` of kind `popover` and follows the input matrix of "A float
 window": **a mouse click opens nothing**, and its buttons and text are reached with the mouse by moving the pointer into
 the hover-opened popover, which stays open.
 
-Where the row's other outcomes are each a glyph and a word in a status column (an import result's Created, Left
-out, Not attempted), the failed outcome is the same shape (its glyph and the word Failed) and that pair, where there is
-detail to show, is the one trigger of the popover, named by the row's own label. In a section's heading (the Git
+Where the row's other outcomes are each a glyph and a word in a status column, the failed outcome is the same shape
+(its glyph and the word Failed) and that pair, where there is detail to show, is the one trigger of the popover, named
+by the row's own label. In a section's heading (the Git
 change list) the trigger takes no tab stop of its own; the application's own walk reaches it (Right from the heading's
 band), and when a press-opened popover (touch, keyboard, assistive technology) closes, focus goes to the heading's band,
 which takes it only when focus was on the mark or the page body, as for a press from scratch. A hover-opened one moved
@@ -1355,6 +1361,16 @@ is one more stop, named by the sentence, and its popover is named by its tone's 
 failed) the mark is drawn right after the anchor, not in it, so no button nests in a link and a press on the mark is not
 a press on the link. Its target is exempt from "Pointer target size" as inline text is. A note in running text is the
 same button.
+
+**A report of outcomes** is the one place a failure's reason is written into its row: the import dialog's result,
+whose whole purpose is to say what happened to each console, project and account (`ResultCards.tsx` in
+`packages/ui/src/configuration/`). Each row says its outcome as a glyph and a word, and a failed row writes the reason
+in the application's words and the main remedy (in the secondary text colour) under the row as text; the further
+explanation and the raw text stay behind a **Details** button that opens the same popover a mark's would, so raw text
+is still a diagnostic block and never inline. A row that succeeded with a warning (an account created whose sharing
+could not be turned on) writes the warning's sentence under the row the same way, its glyph in the warning colour,
+followed by the remedy and Details. A failed row without a reason is the glyph and the word alone. Anywhere else, a
+failure in a row is a mark.
 
 ### References in copy use `InlineReference`
 
@@ -1667,6 +1683,16 @@ panel shadow (`shadow-(--panel-shadow)`, as the focus-mode session cards are), w
 place a selected state's border takes. That edge is decorative and is not held to 3:1; a panel card's hairline
 (`panel-edge`) and a groove divider (`groove-b` and its other sides) are decorative in the same way. Its selected state
 takes the accent icon colour (`--accent-soft-foreground`, see "One definition per semantic colour"), which reaches 3:1.
+
+A card that sits on a dialog's own surface has no other surface to stand off from, and the panel shadow alone is
+invisible on white (and on the dark dialog, whose shadow is black on near-black). So the import dialog's cards, in its
+review and its result alike (`CARD_CLASS` in `packages/ui/src/configuration/importParts.tsx`), take HeroUI's
+`--surface-secondary` fill, one step off the dialog in both appearances, with the `panel-edge` hairline and the panel
+shadow. A card's header row (`CARD_HEADER_CLASS`, the same file) is one step further, the card's fill mixed with 6% of
+the foreground colour, so the heading reads apart from the rows under it; HeroUI's `--surface-tertiary` is too close to
+the card's fill to show in either appearance. That fill is decorative and not held to 3:1; the header's text and glyphs
+are held to their usual ratios against it. These fills stay in the import dialog: the dialog's surface and HeroUI's
+controls are not restyled for them.
 
 An unarchived locked session communicates its state through a persistent warning-coloured lock button with an Unlock
 accessible name and tooltip. Hovering or keyboard-focusing the button changes the glyph to an open lock; unlocking

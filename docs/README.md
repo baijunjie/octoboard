@@ -92,8 +92,10 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [The revert gate](product/revert-gate.md) — the guard against quietly undoing changes already on a branch.
 - [Branch and worktree cleanup](product/branch-and-worktree-cleanup.md) — removing a session's branches and worktrees
   when it is archived or deleted.
-- [Configuration export and import](product/configuration-export-and-import.md) — carrying the configuration to another
-  machine.
+- [Configuration export and import](product/configuration-export-and-import.md) — the configuration document and its
+  regions (consoles and projects, application settings, the account structure) and what an import does with each.
+- [The configuration export and import dialogs](product/configuration-export-and-import-dialogs.md) — the export
+  dialog's region choices and the import dialog's file step, region-tabbed review and result.
 
 ### Window and interface
 

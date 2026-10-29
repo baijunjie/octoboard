@@ -1,159 +1,20 @@
 # Configuration export and import
 
 Octoboard can lift its configuration out of one machine and build it again on another. What travels is a **configuration
-document**: one console or every console, the projects associated with them and, for a full export, the application
-settings. Nothing of what a machine is doing goes with it, so what arrives on the other side is the layout of consoles
-and projects, with its agents still to be signed in and its directories still to be trusted.
+document**, made of up to three **regions**, each chosen on its own: the **consoles and projects** (one console, every
+console, or none), the **accounts** — the structure of the agents' accounts, never anything to log one in with — and the
+**application settings**. Nothing of what a machine is doing goes with it, so what arrives on the other side is the
+layout of consoles, projects and accounts, with its accounts still to be logged in and its directories still to be
+trusted.
 
 A **machine**, here, is the host the daemon runs on, which is where the projects, the accounts and the default clone
 directory are. The window is not always on it: the desktop app's is, but a browser tab reaching a daemon on a server is
 on another machine. So a path, a directory or an account this document speaks of is the host's, never the browser's, and
 the window's own machine is only where a file is saved or picked.
 
-## In the window
-
-Exporting is the **Export…** button of Settings' **Configuration** section, and nowhere else.
-Importing is the **Import…** button of that section, and the **Import configuration…** button of the welcome screen,
-which is what an installation with no console yet shows. Both go through the window's own file dialogs, so no place is
-imposed on the file: the desktop app raises its save and open dialogs, and a browser tab downloads the file and opens a
-file picker. Where the window can do neither, the welcome screen's button is not shown and the Configuration section
-says that exporting and importing are not available (see "Configuration" in `docs/product/settings.md`).
-
-**The file.** Both dialogs offer JSON files (`.json`). The name offered for saving is `octoboard-<console name>.json`
-for one console — any character a file name cannot hold (a control character, `/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`,
-`|`) becomes a space, and runs of spaces become one — and `octoboard-configuration.json` for everything, or for a
-console whose name leaves nothing. The user can change it in the save dialog; a browser may file the download under a
-name of its own. The desktop app's open dialog reads the picked file whole and refuses, before anything is sent to the
-daemon, one larger than 64 MiB, as too large to be a configuration file, and one that is not UTF-8 text, as not a text
-file; either is told in an error alert over the import dialog whose remedy is to choose a configuration file a
-compatible version exported, and another file can be chosen.
-
-**When the file fails.** An error alert raised from either dialog — a file that could not be saved or read, or a
-request the daemon refuses — stands over it, and the dialog stays open. It is titled "Could not export the
-configuration" from the export dialog and "Could not import the configuration" from the import dialog (see "The error
-alert" in `docs/product/error-alerts.md`). A file that could not be written says that the file could not be saved,
-with the remedy to choose a writable folder with enough disk space and save again, unless a recognized
-operating-system cause the system's error names gives its own, such as granting Octoboard access (see "Recovery and
-unexpected errors" in `docs/product/error-alerts.md`). A picked file that could not be read at all says that the file
-could not be read, with the remedy, whatever the system's error names, to make sure the file still exists and that
-Octoboard may read it, granting access in the system's privacy settings if needed, or to choose another file. What the
-system itself said is under **Error details**, never in the sentence.
-
-**Exporting** opens a dialog that asks what to export: the console the sidebar shows, or everything; with no console
-there is only everything. Each choice says whether the application settings go with it: everything carries them, this
-device's keyboard shortcuts included, and a single console does not. Under that choice is a checkbox, **Include full
-project paths**, unchecked by default (see "Project paths" below). Its note follows its state: while unchecked, that
-checking it has the file record each project's full directory path, so an import can look for the project there first;
-while checked, that an import first looks for each project at its recorded full path. Only while it is checked, and so
-before anything is saved, a warning alert stands directly under it (see "Warnings about a choice being made" in
-`docs/product/error-alerts.md`), titled that the file contains project paths: these are paths on the machine running
-Octoboard, which may not be the device the user is on, and they can reveal details such as the user name; the thing to
-do is to share the file only with people the user trusts. The dialog's **Export** button then asks the daemon for the
-document and opens the save dialog. In the desktop app a toast names the file it was saved as. A browser files a
-download itself, under its own name and wherever its settings say, and does not report one that was blocked or
-cancelled, so there the toast says only that the configuration was downloaded and names no file. Dismissing the
-desktop app's save dialog saves nothing and leaves the export dialog open; a file that could not be written is told as
-above.
-
-**Importing** opens a dialog in three steps. The user picks a file — the step says beforehand that the file is one
-exported earlier, that its contents can be reviewed and where each project goes on the machine running Octoboard chosen
-before anything is created, and that an export of everything also includes the application settings — and the window
-sends its document to the daemon to be inspected; a file that is not JSON, or that the daemon refuses (not a
-configuration, a version this Octoboard does not read, unreadable), is told with its reason, and another can be chosen.
-A browser too old to report a dismissed file picker never answers for one, so the dialog is not held while the picker is
-open: it can be closed, or the picker opened again. What the daemon answers is then **reviewed before anything is
-created**, in this order:
-
-- A sentence naming the file and saying that every console is created as a new one and the existing consoles stay as
-  they are.
-- Four buttons under the label **Set every project that offers it to**: **Exported path**, **Default clone
-  directory**, **Clone from remote** and **Leave out**, each with the number of projects it reaches. Each sets that
-  choice on every project that offers it — Leave out reaches every project — and a project it does not reach keeps its
-  choice; a button that reaches none is unavailable.
-- A card for each console: its name, how many projects it has (or that it has none), and a row for each of its
-  projects. Where the console's own account references would fall back to a default account, an amber warning mark
-  follows its name (see the account fallbacks below).
-- When the document carries application settings, a card for them (below).
-- While any project is set to be cloned, a note that cloning can take several minutes and that an import cannot be
-  cancelled once it has started.
-
-A **project's row** has the project's name and, under it, where the daemon found it: at its exported path, in the
-default clone directory, or not found but able to be cloned from its remote. That line follows what was found, whatever
-choice is then made. A project with nothing offered, and so no default (see "Where an imported project goes" below), has
-no such line: an amber warning mark follows its name instead, named after the project as not found, whose popover says
-that it was not found on the machine running Octoboard and that it is left out unless a directory is chosen for it. A
-project not found that also has account fallbacks still has this one mark, named after the project as not found and with
-accounts not set up, its popover adding the fallbacks' sentences (see the account fallbacks below) after its own. The
-choice of where the project goes sits at the end of the name's line, and drops under it where the row is narrow; its
-accessible name is "Where to place" followed by the project's name. A row offers only the choices its state allows, with
-the daemon's default preselected, and always offers **Another directory** and **Leave out**. Labelled lines under them
-give the paths:
-
-- **Exported path** — the path the project had on the exporting machine. There is none for a project the document
-  records by its directory name alone, nor for a project placed at its exported path, whose **Placed in** line already
-  says it.
-- **Placed in** — the directory the choice would use, for the exported path and the default clone directory.
-- **Clone from** and **Clone into** — where a clone would come from and go to, for a clone.
-
-Another directory has no Placed in line: it shows a field labelled **Directory** (its accessible name is "Directory
-for" followed by the project's name) where a path is typed or browsed to; a path that is not absolute and does not
-start with `~/` is refused. A project left out has no path line but its exported path. Where the project's own account
-references would fall back to a default account, an amber warning mark follows its name (see the account fallbacks
-below).
-
-The **application settings card** is headed by the checkbox **Also apply the application settings**, unchecked. Under
-it is a line for each setting the document carries — one an older document leaves out has no line — naming the setting
-with a badge for what applying would change from what is set now: **Turns on**, with what then follows in that
-setting's own words (see "The application settings a full export carries" below); **Turns off**; or **No change**. A
-document that carries the application-wide git workflow settings adds one line for all four, named **Git workflow**,
-badged **Set to the file's** when they differ from the current ones and **No change** when they do
-not. A document that carries a Claude compatibility choice for an agent that has the setting adds one line for them all,
-named **Claude compatibility**, badged **Set to the file's** when applying would change the value of an agent this
-machine reports and **No change** when it would not; a document with no such choice has no line. A document that
-carries keyboard shortcuts adds a line for them, badged **Set to the file's**, with how many of the
-file's shortcuts differ from the defaults — counting only those that can be used here — and that they apply to this
-device or browser only; **Back to defaults**, with that it applies to this device or browser only; or **No change**,
-when the file's are the ones this device already has. These lines are the checkbox's description.
-
-The review's **Import** button sends the document unchanged, with the choice of every project that is placed, in one
-request; a project left out is sent none. A directory the user typed that is not usable stops the import before any
-request and is marked on its row. The dialog cannot be dismissed while the request runs, which with clones can be long.
-The **result** replaces the review, in this order:
-
-- A summary of the totals: only what happened, and that nothing failed when so.
-- When the application settings could not be applied, a red alert saying so with the reason.
-- A table with the columns **Project**, **Result** and **Detail**, grouped by console: each console's name heads its
-  projects once, and a console that could not be created, or that came out with no projects, shows its own result on
-  that heading line. Under it each project has a line with its result (created, left out, not attempted, each in words
-  with a glyph) and a detail: how a created project was placed (at its exported path, in the default clone directory,
-  cloned from its remote, in the directory chosen), or that a project was not attempted because its console could not be
-  created. A line that failed has no detail: its result is a red circled `!` followed by the word **Failed**, like the
-  other results. Where the failure came with a reason, the two together are one control, named for that project — or
-  console — having failed, which opens a popover with why, any raw diagnostic included (see "Failures, warnings and
-  notes marked at their point" in `docs/product/error-alerts.md`); where it came with none, they are the glyph and the
-  word alone, with nothing to open. In a narrow dialog each line becomes a block that names every value, under its
-  console's name. A console or project whose account references fell back to a default account has an amber warning mark
-  right after its name, on the console's heading line or the project's line (see the account fallbacks below); the
-  result has no list of them elsewhere.
-- When the application settings were applied, a card headed **Application settings applied**, with a line for each
-  setting applied, badged **On** or **Off**; one line for the git workflow settings, when the document carried them,
-  badged **Matches the file**; one line for Claude compatibility, when the document carried a choice for an agent that
-  has the setting, badged **Matches the file**; and, when this device applied the file's keyboard shortcuts, a line for them badged with
-  how many changes from the defaults its shortcuts now have, or **Defaults**, with how many of the file's shortcuts
-  could not be used here and were left out said under it, when any were.
-
-The result is the only place the import's failures are shown: no error alert opens for them.
-
-**Account fallbacks.** In the review and in the result alike, a console or project holding account references that match
-no account (see "Accounts are rebound by name" below) has an amber warning triangle right after its name, named that
-accounts are not set up for that console or project — in the review, for a project not found, the not-found mark
-instead, which says both. Its popover has one sentence per such reference, naming the agent
-and the account and saying that the account is not set up in Octoboard, so the default account is used. It opens as a
-row's mark does (see "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md`). A console
-or project with no such reference has no mark.
-
-Exporting and importing are also requests of the daemon, which any program on its host can reach (see "Who can reach
-the daemon" in `docs/product/application-lifecycle.md`).
+How the window exports and imports — where it starts, the export dialog, and the import's review and result — is in
+`docs/product/configuration-export-and-import-dialogs.md`. Exporting and importing are also requests of the daemon,
+which any program on its host can reach (see "Who can reach the daemon" in `docs/product/application-lifecycle.md`).
 
 ## The configuration document
 
@@ -163,15 +24,23 @@ nothing in it is rewritten or built by hand: an export produces it and an import
 
 ### Scope
 
-There are two scopes, and the document has the same shape either way:
+A document holds the regions its export chose, and has the same shape whichever they are:
 
-- **one console** — that console and its projects, with no application settings;
-- **everything** — every console with its projects, plus the application settings.
+- **consoles and projects** — one console, every console, or none, each with its projects; a document without them has
+  an empty list of consoles;
+- **application settings** — present exactly when they were chosen, whichever consoles were;
+- **accounts** — present exactly when they were chosen, and then always every account, whichever consoles were.
 
-A full export is a list of consoles that happens to hold all of them, and it is the presence of the application
-settings that says a document is a full one. Within a document the consoles stand in the order they were created and
-each console's projects by name, so the same configuration exports the same way every time. Every project of a console
-travels, whether or not its directory is a git repository.
+No region says anything about another: a document that carries the application settings is not therefore one of every
+console, and one that carries a single console may carry the settings and the accounts too. An export that would hold
+nothing — no console, no application settings and no accounts — is refused (`export_empty`). A request to the daemon
+that does not say which consoles exports the one it names, or every console when it names none; one that does not say
+whether the application settings are included includes them exactly when every console is exported; and one that does
+not say whether the accounts are included leaves them out.
+
+Within a document the consoles stand in the order they were created and each console's projects by name, so the same
+configuration exports the same way every time. Every project of a console travels, whether or not its directory is a
+git repository.
 
 ### What each console carries
 
@@ -195,12 +64,11 @@ it, its own default agent if it has one, whether it is pinned, its tags (see `do
 set per agent — the account its sessions run under and the model and reasoning effort they launch with (see
 `docs/product/projects.md`), and its own git workflow settings under `git_workflow`, `null` for each item it leaves
 to the application-wide value (see "A project's own git workflow settings" in
-`docs/product/git-workflow-settings.md`). Every export
-carries them, full or of one console. An import stores the description trimmed, and a project of a document that
-carries no description is imported with none; one whose document carries no git workflow settings follows every
-application-wide value. Export and import preserve the full length of project names and descriptions,
-including values beyond the editing limits in "Project names" and "The project's description" in
-`docs/product/projects.md`; an import neither rejects nor truncates them for their length.
+`docs/product/git-workflow-settings.md`). Every export of consoles carries them, of one console or of all. An import
+stores the description trimmed, and a project of a document that carries no description is imported with none; one
+whose document carries no git workflow settings follows every application-wide value. Export and import preserve the
+full length of project names and descriptions, including values beyond the editing limits in "Project names" and "The
+project's description" in `docs/product/projects.md`; an import neither rejects nor truncates them for their length.
 
 An import treats a project's path as a starting point and never as a place to write (see "Where an imported project
 goes" below).
@@ -209,24 +77,27 @@ goes" below).
 
 An export either includes full project paths or leaves them out; the export dialog leaves them out unless its checkbox
 is checked, and a request to the daemon that does not say which includes them. Either way the document has the same
-format and version.
+format and version. The choice is about projects alone: the accounts' directories are written whatever it says (see
+"The accounts" below).
 
 - **Full paths included** — each project's path is its absolute directory path on the exporting machine, and its remote
-  URL is the one recorded for it, whatever it is. A project's path, and a remote URL that is itself a local path or a
-  `file://` URL, are the only paths of the exporting machine anywhere in the document, which is the thing to look at
-  before handing the file to someone else.
+  URL is the one recorded for it, whatever it is. A project's path, a remote URL that is itself a local path or a
+  `file://` URL, and an account directory outside the home directory are the only paths of the exporting machine
+  anywhere in the document, which is the thing to look at before handing the file to someone else.
 - **Full paths left out** — each project's path is only the last segment of its directory path, its directory name
   (empty for a path with none, such as `/`), and its remote URL is kept only when it may be cloned from (see "What may
   be cloned from" below); any other remote URL, such as a local path or a `file://` URL, is left out. Such a document
-  holds no path of the exporting machine.
+  holds no path of the exporting machine but, when it carries the accounts, an account directory outside the home
+  directory.
 
-### How an account travels
+### How an account reference travels
 
-An account reference travels as the account's **name alone**, and which agent it belongs to is settled by the setting
-it sits in — the console's Claude Code account names a Claude Code account. Neither the account's stored id nor its
-config directory is in the document: the id means nothing elsewhere and the directory is the layout of the machine it
-was on. The accounts themselves therefore do not travel either; an import rebinds every reference to the importing
-machine's own accounts (see "Accounts are rebound by name" below).
+An account reference — the account a console or a project names for an agent — travels as the account's **name alone**,
+and which agent it belongs to is settled by the setting it sits in — the console's Claude Code account names a Claude
+Code account. Neither the account's stored id nor its config directory is in the reference: the id means nothing
+elsewhere and the directory is the layout of the machine it was on. An import rebinds every reference by name to the
+importing machine's own accounts, which include those it creates from the document's accounts (see "Accounts are rebound
+by name" below).
 
 A reference to an account that has since been deleted, or that belongs to another agent than the setting it sits in, is
 dropped from the document, leaving exactly what deleting that account leaves behind: the console on that agent's
@@ -236,6 +107,30 @@ default account, the project back to inheriting its console's reference (see "Ag
 A project keeps all three states its account setting can be in: inheriting its console's reference, the agent's default
 account pinned even where the console names another, or a named account.
 
+### The accounts
+
+The accounts region is the structure of the exporting machine's accounts (see `docs/product/agent-accounts.md`), and
+never a credential, a login state or a quota reading. It holds:
+
+- the **added agents**, in their order (see "Added agents" in `docs/product/agent-accounts.md`); left out while the
+  exporting machine's list is still undecided, and an import of such a document then adds no agent;
+- for each agent that has an account the user owns or a default account the user has named, in the order Claude Code,
+  Codex, Grok Build:
+  - the **default account**'s name as the user gave it, if any, and its place in the agent's display order — how many
+    accounts come before it. The default account's directory, which the agent resolves on each machine, and whether it
+    is turned off are not carried;
+  - each **account the user owns**, in the agent's display order (see "Reordering accounts" in
+    `docs/product/agent-accounts.md`): its name, its directory, whether it shares the default configuration and whether
+    it is turned off.
+
+No account carries its stored id, and an account whose last sharing change did not finish is not marked as such in the
+document.
+
+An account's **directory is always written**, whatever the choice about project paths, since an account cannot be
+created without one: as `~/` followed by its path under the exporting machine's home directory when it lies there (`~`
+for the home directory itself), so the user name is not in it, and as the absolute path otherwise. On a file system that
+ignores letter case, a directory spelled in another case than the home directory still counts as under it.
+
 ### Models and efforts travel as stored
 
 A model name and a reasoning effort travel as they are stored. They are read only when a session is launched, so a
@@ -244,20 +139,20 @@ meets it (see `docs/product/model-and-reasoning-effort.md`).
 
 ### What is not configuration and never travels
 
-Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep,
-and folder trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
+Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep, and folder
+trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
 configuration, and are in no document. Neither is the default clone directory: that one is the importing machine's own
 to choose, and an import places what it clones under it (see "Default clone directory" in `docs/product/settings.md`).
-No console and no project carries its stored id. Codex's and Claude Code's permission approval settings also stay
+No console, project or account carries its stored id. Codex's and Claude Code's permission approval settings also stay
 local: exports omit them and imports leave the importing machine's choices unchanged, since importing them could
 silently turn on **Approve everything**, which on its own machine is saved only after a confirmation (see "Approval
-modes" in `docs/product/per-agent-settings.md`). So do the list of added agents, each agent's account display order, the
-names the user gave the default accounts and which accounts are turned off (see "Added agents", "Reordering accounts",
-"The default account" and "Turning an account off" in `docs/product/agent-accounts.md`). Account quota readings are not
-stored at all and are in no document either (see
-"How a quota is read" in `docs/product/account-quotas.md`).
+modes" in `docs/product/per-agent-settings.md`). Nothing to log an account in with — credentials, login state — is in any
+document, so every account an import creates starts not logged in; nor are the default account's directory and whether
+the default account is turned off. The added agents, the accounts and their order, sharing and turned-off choices, and
+the default accounts' names travel only in the accounts region (see "The accounts" above). Account quota readings are
+not stored at all and are in no document either (see "How a quota is read" in `docs/product/account-quotas.md`).
 
-### The application settings a full export carries
+### The application settings an export carries
 
 Thirteen, each under its own key. The first is in every document that has application settings. Each of the other
 twelve is missing from a document exported before it was carried, and applying that document's settings then leaves
@@ -301,8 +196,8 @@ settings leaves it as the importing daemon holds it.
   under `git_workflow`, an object holding all four of `development`, `rebase_before_merge`, `delivery` and
   `revert_gate`.
   Applying the document's settings sets all four to the document's values, and a document without it, or with `null`
-  there, leaves them as they are. The import review and its result each have one line for all four (see "In the window"
-  above).
+  there, leaves them as they are. The import review and its result each have one line for all four (see "The import
+  review" and "The import result" in `docs/product/configuration-export-and-import-dialogs.md`).
 - **Claude compatibility** (see "Claude compatibility" in `docs/product/per-agent-settings.md`), under
   `claude_compatibility`, an object keyed by agent (`codex`, `grok`) holding `true` or `false`. It carries only the
   choices the user made: an agent never chosen for is absent, so on the importing machine it keeps following that
@@ -313,22 +208,25 @@ settings leaves it as the importing daemon holds it.
 
 **The keyboard shortcuts of the exporting client** travel with these, under `keyboard_shortcuts`. They are not the
 daemon's: each client keeps its own (see "Where the shortcuts are kept" in `docs/product/keyboard-shortcuts.md`), so
-the client adds them to the document it saves — only the shortcuts it has changed from their defaults, and `{}` when
-it has changed none — and the daemon neither builds nor reads them. A full document asked of the daemon by any other
-program therefore has none. Their form is in "The shortcuts as data" in `docs/product/keyboard-shortcuts.md`. A
-document without them leaves the importing client's shortcuts as they are when its settings are applied; one with `{}`
-puts them back to their defaults.
+the client adds them to the document it saves whenever it carries the application settings — only the shortcuts it has
+changed from their defaults, and `{}` when it has changed none — and the daemon neither builds nor reads them. A
+document with application settings asked of the daemon by any other program therefore has none. Their form is in "The
+shortcuts as data" in `docs/product/keyboard-shortcuts.md`. A document without them leaves the importing client's
+shortcuts as they are when its settings are applied; one with `{}` puts them back to their defaults.
 
-A single console's document carries no application settings at all. The settings that belong to one machine or to its
-accounts stay out of every document (see "What is not configuration and never travels" above).
+A document whose export did not include the application settings carries none of them, whichever consoles it holds.
+The settings that belong to one machine stay out of every document (see "What is not configuration and never travels"
+above).
 
 ### Versions
 
 The format marker tells a configuration document from any other JSON. The version is a whole number, 2 today, and is
 raised only when a change would make a reader written for an older version misread a document — a field dropped, or
 given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know; neither is
-renaming one whose old name an import still reads, as with `auto_sync_repositories` above. An import refuses a document
-whose format it does not recognize, and one whose version is 0 or newer than it reads, before it creates anything.
+renaming one whose old name an import still reads, as with `auto_sync_repositories` above. The accounts region was added
+the same way, without raising the version: a document exported before it existed carries no accounts. An import refuses
+a document whose format it does not recognize, and one whose version is 0 or newer than it reads, before it creates
+anything.
 
 A document of an older version is not refused: before reading it, an import upgrades it to the current version one
 version at a time, so a file exported before the version was raised stays importable. The upgrade is part of the import
@@ -344,9 +242,11 @@ document exported before it existed does not carry it.
 ## Importing
 
 An import is two steps. **Inspecting** reads a document and answers what importing it would meet on the daemon's host;
-it changes nothing and runs no `git`. **Applying** takes the same document, together with the choice made for each
-project, and creates. The document is untrusted input: every path and URL in it is data the daemon's host checks, and
-nothing in it is acted on as it stands.
+it changes nothing and runs no `git`. **Applying** takes the same document, together with which of its regions to
+import and the choice made for each project and each account, and creates. The consoles and projects are imported
+unless the import is told to leave them out; the accounts and the application settings only when it is asked for them.
+The document is untrusted input: every path and URL in it is data the daemon's host checks, and nothing in it is acted
+on as it stands.
 
 ### Where an imported project goes
 
@@ -386,16 +286,76 @@ form, which leaves the judgement to git (see "Associating a project" in `docs/pr
 A URL that is not accepted is not offered as a clone, and asking for the clone of such a project anyway is refused for
 that project.
 
+### Importing accounts
+
+Inspecting a document that carries accounts says, for each of its accounts, agent by agent in the document's order,
+what importing it would come to:
+
+- **Existing** — an account of the same agent already has its name, compared trimmed and ignoring letter case. An
+  import uses that account as it is and **never changes it**: the document's directory, sharing and turned-off choices
+  are not applied to it.
+- **New** — it can be created as the document has it.
+- **Directory in use** — its directory, as it resolves here, is already another account's of that agent, the default
+  account included, or that of an earlier new account of the document, compared as the Add account form compares
+  directories (see "Agent config directories" in `docs/product/consoles.md`); the inspection names the account that
+  uses it.
+- **Cannot be created** — the Add account form would refuse it (see "Adding, editing and removing an account" in
+  `docs/product/agent-accounts.md`): its name is blank, is the word "Default", is the name this machine's default
+  account of that agent has been given, or is taken by an earlier account of the document; or its directory is not
+  absolute once resolved. The inspection gives the form's reason.
+
+A directory is resolved on the daemon's host: `~` and a path starting with `~/` under its home directory, an absolute
+path as it is; a bare name is not a directory. A directory that does not exist yet is fine, as it is for the Add account
+form. Any account but an existing one can be left out. An account whose directory is in use or cannot be used can be
+given **another directory** instead, absolute or starting with `~/`; one whose name is the problem can only be left
+out, since no directory would help.
+
+The inspection also says which of the document's added agents this machine has not added (none while this machine's
+list is undecided), and, for each agent, the name the document gives its default account and whether an import would
+apply it: only when this machine's default account of that agent has no name of its own, and the name is neither blank
+nor "Default" and is no account's of that agent, the ones the import would create included.
+
+Applying the accounts comes **before any console is created**, and nothing of it is undone:
+
+1. Every agent of the document's added agents that this machine has not added is appended to its list, in the
+   document's order. A list still undecided is decided first, as adding an agent decides it; where it stays undecided,
+   nothing is appended.
+2. Each account, in the document's order: an existing one is used as it is; one left out is skipped; any other is
+   created through the Add account form's checks, in the other directory given for it where there is one. One that
+   fails them now — a directory another account has taken since the inspection, say — is recorded as failed with the
+   reason, and the import goes on.
+3. The accounts created come after the agent's other accounts in its display order, in the document's order. The
+   default account keeps its place on this machine: its place in the document is not applied.
+4. A created account takes the document's turned-off choice. Where the document says it shares the default
+   configuration, sharing is then turned on for it as its switch turns it on (see "Turning sharing on" in
+   `docs/product/sharing-the-default-configuration.md`); when that fails, the account stays created and the failure is
+   a warning on it.
+5. The default account's name is applied under the rule above, checked again at that moment, so a name the default
+   account was given meanwhile is kept. Whether the default account is turned off is never applied.
+
+Every change appears in every window as the same change made by hand does. **Nothing is logged in**: the accounts are
+created without credentials, and the user logs each one in afterwards (see `docs/product/logging-accounts-in.md`).
+
 ### Accounts are rebound by name
 
 Every account reference of the document is bound to the account of the daemon's host that has the same name and belongs
 to the agent whose setting the reference sits in, matched **ignoring letter case** — which is how account names are
 unique within an agent in the first place (see "Adding, editing and removing an account" in
-`docs/product/agent-accounts.md`). A reference that matches no account falls back to that agent's **default
-account**, pinned rather than left inheriting, and every such fallback is listed one by one: the inspection says
-which references would fall back, the result of an import which ones did.
+`docs/product/agent-accounts.md`). When the accounts are imported too, they are created first, so a reference to an
+account the import creates binds to it, whichever directory it was given, and falls back only when that account was left
+out or failed. A reference that matches no account falls back to that agent's **default account**, pinned rather than
+left inheriting, and every such fallback is listed one by one: the inspection says which references would fall back,
+the result of an import which ones did. Since no account the import would create exists yet when it inspects, the
+inspection lists the references to them as well; the import review tells them apart by what is being imported (see
+"Account fallbacks" in `docs/product/configuration-export-and-import-dialogs.md`).
 
 ### What applying does
+
+Applying goes region by region: first the accounts, when they are asked for, so that the consoles' and projects'
+references can bind to them (see "Importing accounts" above); then the consoles and projects, unless the import is told
+to leave them out, in which case no console or project is created and no choice for a project is read; then the
+application settings, when they are asked for (see "Application settings are left alone unless they are asked for"
+below).
 
 **An import always creates.** Every console of the document becomes a new console, whether or not one of the same name
 is already there — console names are not unique, so two of a name stand side by side.
@@ -415,8 +375,8 @@ an imported project goes through its agent's trust confirmation just as one adde
 falls under a folder the user has already trusted on the daemon's host (see "The trust permission" in
 `docs/product/folder-trust.md`).
 
-Every console and every project appears as soon as it is created rather than when the import finishes, so a long import
-fills the window in as it goes.
+Every account, console and project appears as soon as it is created rather than when the import finishes, so a long
+import fills the window in as it goes.
 
 ### Application settings are left alone unless they are asked for
 
@@ -453,9 +413,12 @@ Refused before anything at all is created:
 
 - a document that is not a configuration document, one whose version is 0 or newer than this Octoboard reads, and one
   that cannot be read;
-- a choice that cannot be right: it names a project the document does not have, it names one project twice, or the
-  directory it points at is neither absolute nor starts with `~/`;
-- a request to apply application settings a document does not carry;
+- a choice for a project that cannot be right: it names a project the document does not have, it names one project
+  twice, or the directory it points at is neither absolute nor starts with `~/`;
+- a choice for an account that cannot be right: it names an account the document does not have, it names one account
+  twice, it gives both another directory and leaving the account out, or neither, or the directory it gives is neither
+  absolute nor starts with `~/`;
+- a request to apply application settings, or to create accounts, that a document does not carry;
 - anything creating a console by hand would refuse of any console in the document — an avatar that is not an image
   (`icon_not_an_image`), or one larger than 256 KiB (`icon_too_large`; see "Avatar" in `docs/product/consoles.md`).
   Since a document can carry several consoles, the refusal names the console whose avatar it is (the daemon gives its
@@ -464,9 +427,11 @@ Refused before anything at all is created:
   The remedy for each is to give that console, in the Octoboard the configuration came from, an avatar that is an
   image, or a smaller one, then export again and import the new file.
 
-**Past that point nothing is refused and nothing is undone**, because by then earlier consoles and projects exist and
-have already appeared:
+**Past that point nothing is refused and nothing is undone**, because by then earlier accounts, consoles and projects
+exist and have already appeared:
 
+- an account that cannot be created is recorded as failed with the reason, sharing that could not be turned on is a
+  warning on its account, and the remaining accounts, then the consoles, are imported as usual;
 - a console that cannot be created is recorded as failed, every project of it as not attempted, and the next console of
   the document is imported;
 - a project that cannot be placed — the recorded path is gone, a clone fails or the directory it would create already
@@ -474,9 +439,11 @@ have already appeared:
   failed with the reason, and the remaining projects are imported as usual;
 - application settings that could not be applied are reported as such, and the import stands.
 
-The result says, for every console and every project of the document, whether it was created, left out for want of a
-choice, failed and why, or never attempted — so the outcome never has to be pieced together from what appeared in the
-window.
+The result says, for every console and every project of the document when the consoles were imported, whether it was
+created, left out for want of a choice, failed and why, or never attempted; and for every account of the document when
+the accounts were, whether it was created, already existed, was left out or failed and why, with any sharing warning,
+which agents were added and which default accounts were named — so the outcome never has to be pieced together from
+what appeared in the window.
 
 ### How long an import takes
 

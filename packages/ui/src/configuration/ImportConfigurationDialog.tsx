@@ -13,9 +13,25 @@ import { usePlatform } from "../platform/react";
 import { replaceOverrides, shortcutOverrides } from "../shortcuts/store";
 import { useDaemon } from "../store";
 import { fileFailure } from "./failureText";
-import { documentShortcuts, hasDirectoryProblem, initialReview, resolutionsOf, shortcutsRecord, shortcutsReview, type ReviewState } from "./importPlan";
+import {
+  accountResolutionsOf,
+  carriedRegions,
+  documentShortcuts,
+  hasAccountDirectoryProblem,
+  hasDirectoryProblem,
+  importedRegions,
+  initialAccountReview,
+  initialReview,
+  resolutionsOf,
+  shortcutsRecord,
+  shortcutsReview,
+  type AccountReviewState,
+  type Inspection,
+  type ReviewState,
+} from "./importPlan";
 import { ImportResult, type Imported } from "./ImportResult";
-import { ImportReview, type Inspection } from "./ImportReview";
+import { ImportReview } from "./ImportReview";
+import type { Region } from "./RegionTabs";
 
 type Stage =
   | { kind: "choose" }
@@ -26,19 +42,25 @@ type Stage =
  * dismissed: a browser reports the chosen file just after the focus returns. */
 const FOCUS_GRACE_MS = 500;
 
+/** The regions checked on opening a review: the application settings change how this machine behaves rather than add
+ * something to it, so they start unchecked. */
+const DEFAULT_CHECKED: Record<Region, boolean> = { consoles: true, accounts: true, settings: false };
+
 /**
- * Imports a configuration document in three steps inside one dialog. The user picks a file through
- * the platform's open dialog and the daemon inspects it; what it answers is reviewed here, a row
- * for every project, before anything is created; and applying sends the document as it was read
- * with the choice made for each project, and shows what came of it. A document the daemon refuses
- * leaves the dialog on the first step, with the reason, for another file to be tried. The daemon's
- * reply to an import comes only after its last clone, so the dialog cannot be dismissed while one
- * is out. Waiting for the file is not such a time: a browser without the file input's `cancel`
- * event never answers for a dismissed picker, so the dialog is held busy only from the file
- * onwards. The button shows it is waiting and ignores another press meanwhile, but Escape and the
- * close button still work. Where the picker is never reported dismissed, the window regaining focus
- * with no file chosen frees the step to be tried again; a file that arrives from that picker after
- * all is still honoured, until a newer press opens another one.
+ * Imports a configuration document in three steps inside one dialog. The user picks a file through the platform's open
+ * dialog and the daemon inspects it; what it answers is reviewed here, a row for every project and for every account,
+ * before anything is created; and applying sends the document as it was read with the choice made for each project and
+ * account, and shows what came of it. The regions of the file are imported as the user checks them (the consoles and
+ * projects and the accounts by default, the application settings not), and only a checked region is sent, reviewed or
+ * shown in the result; with none checked there is nothing to import. A directory typed for a project or an account that
+ * the daemon would refuse stops the import at the row, bringing its tab forward. A document the daemon refuses leaves
+ * the dialog on the first step, with the reason, for another file to be tried. The daemon's reply to an import comes
+ * only after its last clone, so the dialog cannot be dismissed while one is out. Waiting for the file is not such a
+ * time: a browser without the file input's `cancel` event never answers for a dismissed picker, so the dialog is held
+ * busy only from the file onwards. The button shows it is waiting and ignores another press meanwhile, but Escape and
+ * the close button still work. Where the picker is never reported dismissed, the window regaining focus with no file
+ * chosen frees the step to be tried again; a file that arrives from that picker after all is still honoured, until a
+ * newer press opens another one.
  */
 export function ImportConfigurationDialog({ onClose }: { onClose: () => void }): React.ReactElement {
   const t = useT();
@@ -48,7 +70,12 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
   const { shown, attempt } = useSubmitValidation();
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   const [review, setReview] = useState<ReviewState>([]);
-  const [applySettings, setApplySettings] = useState(false);
+  const [accountReview, setAccountReview] = useState<AccountReviewState>([]);
+  // Which regions of the file are imported: an unchecked one has no tab and is not sent. Read only for a file that
+  // carries more than one (see `importedRegions`).
+  const [checked, setChecked] = useState<Record<Region, boolean>>(DEFAULT_CHECKED);
+  // The review's selected tab, kept here so an import stopped by a row's problem can bring the row's tab forward.
+  const [tab, setTab] = useState<Region>();
   // Counts the imports a row's problem stopped, so the first such row gets focus once its message
   // is on screen.
   const [stopped, setStopped] = useState(0);
@@ -121,14 +148,25 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       }
       const inspection = (await request({ type: "inspect_configuration", document })) as Inspection;
       setReview(initialReview(inspection.consoles));
-      setApplySettings(false);
+      setAccountReview(initialAccountReview(inspection.accounts));
+      setChecked(DEFAULT_CHECKED);
+      setTab(undefined);
       setStage({ kind: "review", fileName: opened.name, document, inspection });
     });
   };
 
   const apply = () => {
     if (stage.kind !== "review" || busy) return;
-    if (!attempt(hasDirectoryProblem(review) ? "directory" : undefined)) {
+    const accounts = stage.inspection.accounts;
+    const inFile = carriedRegions(stage.inspection);
+    const regions = importedRegions(inFile, checked);
+    if (regions.length === 0) return;
+    const importingConsoles = regions.includes("consoles");
+    const creatingAccounts = regions.includes("accounts") && !!accounts;
+    const consolesProblem = importingConsoles && hasDirectoryProblem(review);
+    const accountsProblem = creatingAccounts && hasAccountDirectoryProblem(accountReview);
+    if (!attempt(consolesProblem || accountsProblem ? "directory" : undefined)) {
+      setTab(consolesProblem ? "consoles" : "accounts");
       setStopped((count) => count + 1);
       return;
     }
@@ -136,8 +174,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       const result = (await request({
         type: "import_configuration",
         document: stage.document,
-        resolutions: resolutionsOf(review),
-        apply_settings: applySettings,
+        resolutions: importingConsoles ? resolutionsOf(review) : [],
+        apply_settings: regions.includes("settings"),
+        // Absent means true for a daemon that predates the choice, so only a refusal is spelled out.
+        ...(inFile.includes("consoles") && !importingConsoles && { apply_consoles: false }),
+        ...(creatingAccounts && { apply_accounts: true, account_resolutions: accountResolutionsOf(accounts, accountReview) }),
       })) as Imported;
       // The daemon applied the settings it knows and echoed the shortcuts it passes through, which are this
       // client's own to apply: it does so only for what the daemon says it applied.
@@ -147,13 +188,15 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     });
   };
 
+  // Nothing checked is nothing to import.
+  const nothingToImport = stage.kind === "review" && importedRegions(carriedRegions(stage.inspection), checked).length === 0;
   // The footer's buttons stay while the body changes.
   const reviewFooter = (
     <>
       <Button type="button" variant="secondary" onPress={onClose} isDisabled={busy}>
         {t("common.cancel")}
       </Button>
-      <Button type="submit" isPending={busy}>
+      <Button type="submit" isPending={busy} isDisabled={nothingToImport}>
         {busy ? t("configuration.import.review.pending") : t("configuration.import.review.submit")}
       </Button>
     </>
@@ -200,8 +243,12 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
             inspection={stage.inspection}
             review={review}
             onReview={setReview}
-            applySettings={applySettings}
-            onApplySettings={setApplySettings}
+            accountReview={accountReview}
+            onAccountReview={setAccountReview}
+            checked={checked}
+            onChecked={(region, on) => setChecked((current) => ({ ...current, [region]: on }))}
+            tab={tab}
+            onTab={setTab}
             shortcuts={shortcuts && shortcutsReview(shortcuts, currentShortcuts)}
             shown={shown}
           />

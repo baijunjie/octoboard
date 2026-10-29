@@ -1783,26 +1783,39 @@ pub enum RequestBody {
         project: String,
         agent_session_id: String,
     },
-    /// The configuration document of the console `console`, or, when it is absent, of every
-    /// console and the application settings, answered with `configuration_exported`. A console
-    /// that does not exist is refused with `unknown_console`. Reads what is stored; touches no
-    /// session, runs no `git`. `include_paths` says whether each project's absolute directory path
-    /// is written; absent is true. False writes only the directory's name, and a remote that
-    /// cannot be cloned from (a local path) is left out, so the file reveals no path of this
-    /// machine.
+    /// The configuration document, answered with `configuration_exported`: the regions picked by
+    /// `consoles` (`one`, the console `console`; `all`; or `none`), `include_settings` (the
+    /// application settings) and `include_accounts` (the account structure, never a credential).
+    /// Absent fields keep their older meaning: `consoles` is `one` when `console` is given and
+    /// `all` otherwise, `include_settings` is true exactly when every console is exported, and
+    /// `include_accounts` is false. A request that would export nothing is refused with
+    /// `export_empty`, `consoles: "one"` without a `console` with `field_required`, and a console
+    /// that does not exist with `unknown_console`. `console` is read only for `one`. Reads what is
+    /// stored; touches no session, runs no `git`. `include_paths` says whether each project's
+    /// absolute directory path is written; absent is true. False writes only the directory's name,
+    /// and a remote that cannot be cloned from (a local path) is left out, so the file reveals no
+    /// project path of this machine. An account directory is always written, whatever it says.
     ExportConfiguration {
         #[serde(default)]
         console: Option<String>,
+        #[serde(default)]
+        consoles: Option<crate::config_export::ExportedConsoles>,
+        #[serde(default)]
+        include_settings: Option<bool>,
+        #[serde(default)]
+        include_accounts: Option<bool>,
         #[serde(default = "default_true")]
         include_paths: bool,
     },
     /// Reads a configuration document and answers with `configuration_inspected`: for each project
-    /// which directories it could be placed in on this machine, and for each account reference
-    /// whether it falls back to a default account. Changes nothing. `document` is the JSON a
-    /// client read from a file and is checked here, not trusted: a `format` that is not a
-    /// configuration document, a `version` newer than this daemon reads, or a body that cannot be
-    /// read is refused with `configuration_not_recognised`, `configuration_version_unsupported`
-    /// or `configuration_unreadable`.
+    /// which directories it could be placed in on this machine, for each account reference that
+    /// matches no account here (it then falls back to the agent's default account; one the
+    /// document's accounts would create is listed too, and the client tells them apart from
+    /// `accounts`), and, when the document carries accounts, what importing each of them would do.
+    /// Changes nothing. `document` is the JSON a client read from a file and is checked here, not
+    /// trusted: a `format` that is not a configuration document, a `version` newer than this daemon
+    /// reads, or a body that cannot be read is refused with `configuration_not_recognised`,
+    /// `configuration_version_unsupported` or `configuration_unreadable`.
     InspectConfiguration {
         document: serde_json::Value,
     },
@@ -1813,6 +1826,10 @@ pub enum RequestBody {
     /// document does not have, naming one twice, or choosing a `directory` that is neither an
     /// absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of
     /// that before anything is created.
+    ///
+    /// With `apply_accounts` the document's accounts are created first, so the consoles' and
+    /// projects' account references bind to them, then the consoles and projects, then the
+    /// settings. `account_resolutions` give a document account another directory or leave it out.
     ImportConfiguration {
         document: serde_json::Value,
         #[serde(default)]
@@ -1822,6 +1839,20 @@ pub enum RequestBody {
         /// `import_settings_missing`.
         #[serde(default)]
         apply_settings: bool,
+        /// Whether to create the document's accounts on this machine; absent means false. Asking
+        /// for them of a document that carries none is refused with `import_accounts_missing`.
+        #[serde(default)]
+        apply_accounts: bool,
+        /// The choices for document accounts; one that names an account the document lacks,
+        /// names one twice, gives both or neither of `directory` and `leave_out`, or gives a
+        /// `directory` that is neither an absolute path nor starts with `~/`, is refused with
+        /// `import_resolution_invalid`.
+        #[serde(default)]
+        account_resolutions: Vec<crate::config_import::AccountResolution>,
+        /// Whether to create the document's consoles and projects; absent means true. Without
+        /// them no console or project is created and `resolutions` are not read.
+        #[serde(default = "default_true")]
+        apply_consoles: bool,
     },
     OpenSession {
         console_id: String,
@@ -2747,18 +2778,22 @@ pub enum Event {
         document: crate::config_export::ConfigurationDocument,
     },
     /// The reply to `inspect_configuration` (see "Configuration import" in
-    /// `apps/daemon/PROTOCOL.md`): one entry per console of the document, in its order.
+    /// `apps/daemon/PROTOCOL.md`): the settings and accounts the document carries,
+    /// and one entry per console of the document, in its order.
     ConfigurationInspected {
         id: Option<String>,
         settings: Option<crate::config_import::InspectedSettings>,
+        accounts: Option<crate::config_import::InspectedAccounts>,
         consoles: Vec<crate::config_import::InspectedConsole>,
     },
-    /// The reply to `import_configuration`: one entry per console of the document, in its order,
-    /// each naming the console created for it.
+    /// The reply to `import_configuration`: what came of the settings and accounts asked for, and
+    /// one entry per console of the document, in its order, each naming the console created for
+    /// it; no entry at all with `apply_consoles` false.
     ConfigurationImported {
         id: Option<String>,
         settings_applied: Option<crate::config_export::DocumentSettings>,
         settings_error: Option<crate::config_import::ImportFailure>,
+        accounts: Option<crate::config_import::ImportedAccounts>,
         consoles: Vec<crate::config_import::ImportedConsole>,
     },
     /// The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole
@@ -3605,11 +3640,18 @@ pub mod error_code {
     /// A configuration document could not be read. `params` names the `detail`.
     pub const CONFIGURATION_UNREADABLE: &str = "configuration_unreadable";
     /// A resolution of `import_configuration` is not one the document can take. `params` names the
-    /// `console` and `project` it gave, as indexes.
+    /// `console` and `project` it gave, as indexes, or for an account's resolution the `agent` and
+    /// the `account` index within that agent's accounts of the document.
     pub const IMPORT_RESOLUTION_INVALID: &str = "import_resolution_invalid";
     /// `import_configuration` was asked to apply a document's application settings and the
-    /// document carries none, as a single console's export does not.
+    /// document carries none.
     pub const IMPORT_SETTINGS_MISSING: &str = "import_settings_missing";
+    /// `import_configuration` was asked to create a document's accounts and the document carries
+    /// none.
+    pub const IMPORT_ACCOUNTS_MISSING: &str = "import_accounts_missing";
+    /// `export_configuration` was asked for nothing: no console, no application settings and no
+    /// accounts.
+    pub const EXPORT_EMPTY: &str = "export_empty";
     /// A project of an import was left uncreated because the directory choice made for it cannot be
     /// used: the document gives it no usable path or remote URL for that choice. `params` names the
     /// `choice`.
@@ -4043,6 +4085,15 @@ mod tests {
         match serde_json::from_str::<Request>(json).unwrap().body {
             RequestBody::ExportConfiguration { include_paths, .. } => assert!(include_paths),
             _ => panic!("not export_configuration"),
+        }
+    }
+
+    #[test]
+    fn an_absent_apply_consoles_means_true() {
+        let json = r#"{"type":"import_configuration","document":{}}"#;
+        match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::ImportConfiguration { apply_consoles, .. } => assert!(apply_consoles),
+            _ => panic!("not import_configuration"),
         }
     }
 

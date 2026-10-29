@@ -156,8 +156,8 @@ sessions and projects by their status, so that the ones waiting for the user com
 the switch is on the row's description says what is happening now: sessions and projects move as their status changes,
 and projects with no unarchived session end the list. While it is off the description says what turning it on will
 do, and that projects with no unarchived session end the list. The daemon stores it as `sidebar_order_by_status` and
-keeps it, so every window shows the same. A console session may read and change it, and a full configuration export
-carries it (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
+keeps it, so every window shows the same. A console session may read and change it, and a configuration export that
+includes the application settings carries it (see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
 `docs/product/configuration-export-and-import.md`). The order under either state, and what else follows it, are in
 "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`.
 
@@ -262,9 +262,10 @@ turning it on will do, and while it is on it says what is happening now.
   leaves — and how a deliberate undo passes: made with `git revert`, or with a `Reverts: <sha>` line in the message of
   the commit that undoes it (see "A deliberate revert" in `docs/product/revert-gate.md`).
 
-A console session may read and change all four git workflow settings, and a full configuration export carries them
-(see "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
-application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
+A console session may read and change all four git workflow settings, and a configuration export that includes the
+application settings carries them (see "Application settings: `get_settings` and `update_settings`" in
+`docs/product/agent-settings-tools.md` and "The application settings an export carries" in
+`docs/product/configuration-export-and-import.md`).
 
 ## Agent accounts
 
@@ -281,9 +282,9 @@ account, preferring the account of its initial agent whose weekly quota resets s
 only when that agent has no usable account. While the switch is off the row's description says what turning it on will
 do, and while it is on it says what is happening now: a new session uses the account whose weekly limit resets soonest,
 so usage left before a reset is not wasted. The daemon stores it as `auto_select_account` and keeps it, so every window
-shows the same. Unlike the switches in Agent behavior, a console session may read and change it, and a full
-configuration export carries it (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md` and "The application settings a full export carries" in
+shows the same. Unlike the switches in Agent behavior, a console session may read and change it, and a configuration
+export that includes the application settings carries it (see "Application settings: `get_settings` and
+`update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
 `docs/product/configuration-export-and-import.md`). Which account is chosen, and who applies the choice, are in "Which
 account a session uses" in `docs/product/opening-sessions.md`. Turning it on or off changes no session already open. It
 governs the initial agent and account of new sessions; explicit choices still win, and it does not move a session that
@@ -297,8 +298,9 @@ description says that, once it is on, a session that stops at its account's usag
 with usage left and carries on; while it is on, it says that this is what happens. The daemon stores it as
 `auto_switch_on_usage_limit` and keeps it, so every window shows the same. A console session can neither read nor change
 it, since it ends sessions' processes and spends another account's quota without asking (see "Who reads and changes
-what" in `docs/product/agent-settings-tools.md`); a full configuration export carries it (see "The application settings
-a full export carries" in `docs/product/configuration-export-and-import.md`). Turning it on does not act on sessions
+what" in `docs/product/agent-settings-tools.md`); a configuration export that includes the application settings carries
+it (see "The application settings an export carries" in `docs/product/configuration-export-and-import.md`). Turning it
+on does not act on sessions
 already stopped. Turning it off cancels waits for quota recovery; turning it back on does not restore them. While it is
 on, a turn that stops on the usage limit with no eligible alternative account can continue after a fresh successful
 quota reading, on another account of its agent or on its original account (see "When no account qualifies" in
@@ -317,8 +319,9 @@ how: a usage window that has reset does not start counting until the account's n
 countdown and the longer it waits the later its next reset comes; with the switch on, one small request is sent on that
 account with the agent's cheapest model to start it. The daemon stores it as `auto_start_quota_windows` and keeps it, so
 every window shows the same. A console session can neither read nor change it, since it spends the user's quota (see
-"Who reads and changes what" in `docs/product/agent-settings-tools.md`); a full configuration export carries it (see
-"The application settings a full export carries" in `docs/product/configuration-export-and-import.md`). When a request
+"Who reads and changes what" in `docs/product/agent-settings-tools.md`); a configuration export that includes the
+application settings carries it (see "The application settings an export carries" in
+`docs/product/configuration-export-and-import.md`). When a request
 is sent, what it is and what it leaves behind are in `docs/product/starting-usage-windows.md`.
 
 ## Agent behavior
@@ -327,8 +330,8 @@ What a session may do without asking the user first, and how it asks the user. A
 much, above five rows: **Automatically approve session requests**, **Automatically approve resume requests**,
 **Automatically approve account switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The
 section is the same in every client. Each switch is kept by the daemon, so every window shows the same, and besides its
-row only an import asked to apply a full configuration document's application settings changes it (see "The
-application settings a full export carries" in `docs/product/configuration-export-and-import.md`); turning one on or
+row only an import asked to apply a configuration document's application settings changes it (see "The application
+settings an export carries" in `docs/product/configuration-export-and-import.md`); turning one on or
 off leaves the others as they are. What an automatic approval does, what turning one of the four approval switches on
 changes, and why agents cannot change any of them are in "Approving requests automatically" in
 `docs/product/session-requests.md`.
@@ -426,11 +429,12 @@ lists and how a shortcut is changed are in `docs/product/keyboard-shortcuts.md`.
 
 ## Configuration
 
-Two rows, each opening its own dialog: **Export configuration**, which saves a console, or every console with the
-application settings, as a file, and **Import configuration**, which creates consoles and projects from such a file
-(see `docs/product/configuration-export-and-import.md`). A console is exported from the one the sidebar shows, which is
-the first while none is chosen. Both rows need the window to be able to save and open files, and where it cannot the
-section holds a line saying that exporting and importing configuration files is not available here.
+Two rows, each opening its own dialog: **Export configuration**, which saves consoles and projects, the application
+settings or the accounts as a file, and **Import configuration**, which creates consoles, projects and accounts, and
+applies application settings, from such a file (see `docs/product/configuration-export-and-import.md` and
+`docs/product/configuration-export-and-import-dialogs.md`). A single console is exported from the one the sidebar shows,
+which is the first while none is chosen. Both rows need the window to be able to save and open files, and where it
+cannot the section holds a line saying that exporting and importing configuration files is not available here.
 
 ## About
 

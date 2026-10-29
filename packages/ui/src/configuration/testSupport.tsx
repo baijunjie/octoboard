@@ -81,3 +81,10 @@ export function settingLinesOf(list: Element): Record<string, { badge: string; n
     }),
   );
 }
+
+/** Selects the tab with this label, whether or not it is marked as needing attention. */
+export async function openTab(label: string): Promise<void> {
+  const tab = Array.from(document.body.querySelectorAll<HTMLElement>("[role=tab]")).find((t) => t.textContent === label);
+  if (!tab) throw new Error(`no tab labelled ${label}`);
+  await act(async () => tab.click());
+}

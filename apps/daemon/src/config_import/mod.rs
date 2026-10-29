@@ -6,8 +6,12 @@
 //! The document is untrusted input. Its paths and URLs are data to check against this machine,
 //! never values to act on: a project's directory comes from one of four choices, each offered only
 //! when its state allows, and every one of them ends in the ordinary association, which requires
-//! an existing directory or clones a remote. A document names no database id and no folder-trust
-//! state, so a project created here is as untrusted as one added by hand.
+//! an existing directory or clones a remote. An account's directory is proposed in the review and
+//! created through the same checks as Add account, and sharing its configuration goes through the
+//! normal sharing path. A document names no database id and no folder-trust state, so a project
+//! created here is as untrusted as one added by hand.
+
+mod accounts;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Component, Path, PathBuf};
@@ -33,6 +37,9 @@ use crate::protocol::{
     error_code, Account, Agent, CodedError, Params, ProjectAccount, ProjectSource,
 };
 use crate::state::AppState;
+
+use accounts::{apply_accounts, index_account_resolutions, inspect_accounts};
+pub use accounts::{AccountResolution, ImportedAccounts, InspectedAccounts};
 
 /// Which directory a project is placed in. [`DirectoryChoice`] is the caller's pick of one, and
 /// this is the bare name that results report.
@@ -179,8 +186,10 @@ pub struct InspectedSettings {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Inspection {
-    /// Absent when the document holds one console and so carries no settings.
+    /// Absent when the document carries no settings.
     pub settings: Option<InspectedSettings>,
+    /// Absent when the document carries no accounts.
+    pub accounts: Option<InspectedAccounts>,
     pub consoles: Vec<InspectedConsole>,
 }
 
@@ -191,6 +200,8 @@ pub struct Imported {
     pub settings_applied: Option<DocumentSettings>,
     /// Why the settings asked for were not applied.
     pub settings_error: Option<ImportFailure>,
+    /// What came of the accounts; absent unless the caller asked for them.
+    pub accounts: Option<ImportedAccounts>,
     pub consoles: Vec<ImportedConsole>,
 }
 
@@ -295,6 +306,7 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
 }
 
 /// The document's account references bound to this machine's accounts.
+#[derive(Default)]
 struct Rebinder {
     accounts: Vec<Account>,
 }
@@ -339,7 +351,7 @@ impl Rebinder {
         if found.is_none() {
             fallbacks.push(AccountFallback {
                 agent,
-                name: name.clone(),
+                name: name.to_string(),
             });
         }
         found
@@ -361,7 +373,7 @@ impl Rebinder {
                 None => {
                     fallbacks.push(AccountFallback {
                         agent,
-                        name: name.clone(),
+                        name: name.to_string(),
                     });
                     ProjectAccount::Default
                 }
@@ -513,8 +525,13 @@ async fn probe_offers(
 /// answer does not wait for it. A project whose check did not come back is offered nothing.
 pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Result<Inspection> {
     let document = parse(document)?;
+    let host_accounts = state.store.list_accounts()?;
     let rebinder = Rebinder {
-        accounts: state.store.list_accounts()?,
+        accounts: host_accounts,
+    };
+    let accounts = match &document.accounts {
+        Some(document_accounts) => Some(inspect_accounts(state, document_accounts, &rebinder)?),
+        None => None,
     };
     let clone_dir = state.store.default_clone_dir()?;
 
@@ -597,7 +614,11 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                 .collect(),
         })
         .collect();
-    Ok(Inspection { settings, consoles })
+    Ok(Inspection {
+        settings,
+        accounts,
+        consoles,
+    })
 }
 
 /// The resolutions keyed by project, refused as a whole when one cannot be right.
@@ -640,6 +661,32 @@ fn index_resolutions(
     Ok(chosen)
 }
 
+/// The new console a document console describes, its account references bound as `accounts` says.
+fn new_console(document_console: DocumentConsole, accounts: ConsoleAccounts) -> NewConsole {
+    NewConsole {
+        name: document_console.name,
+        default_agent: document_console.default_agent,
+        project_session_agent: document_console.project_session_agent,
+        claude_account_id: accounts.claude,
+        codex_account_id: accounts.codex,
+        grok_account_id: accounts.grok,
+        claude_console_session_model: document_console.claude_console_session_model,
+        claude_console_session_effort: document_console.claude_console_session_effort,
+        codex_console_session_model: document_console.codex_console_session_model,
+        codex_console_session_effort: document_console.codex_console_session_effort,
+        grok_console_session_model: document_console.grok_console_session_model,
+        grok_console_session_effort: document_console.grok_console_session_effort,
+        claude_project_session_model: document_console.claude_project_session_model,
+        claude_project_session_effort: document_console.claude_project_session_effort,
+        codex_project_session_model: document_console.codex_project_session_model,
+        codex_project_session_effort: document_console.codex_project_session_effort,
+        grok_project_session_model: document_console.grok_project_session_model,
+        grok_project_session_effort: document_console.grok_project_session_effort,
+        icon: document_console.icon,
+        console_session_prompt: document_console.console_session_prompt,
+    }
+}
+
 /// `err` with the console it refuses named (`console_name`) when it is a refused avatar: a document
 /// may carry several consoles, and the refusal has to say whose avatar it is.
 fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
@@ -656,12 +703,18 @@ fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
 /// Creates a console for each console of the document and associates its projects as `resolutions`
 /// say, through the same association a hand-added project goes through.
 ///
+/// The document's consoles are created only when `apply_consoles`; without it no console or
+/// project is created and `resolutions` are not read.
+///
 /// What can be refused without side effects is refused before the first console is created: the
 /// document, the resolutions, whatever `create_console` would refuse of any console, and a request
-/// for settings the document does not carry. After that nothing is undone and nothing is thrown
-/// away: a console that cannot be created, a project that cannot be placed, or settings that
-/// cannot be applied is reported in the result, and the rest carry on. A console whose projects
-/// all failed is still created.
+/// for settings or accounts the document does not carry. After that nothing is undone and nothing
+/// is thrown away: a console that cannot be created, a project that cannot be placed, or settings
+/// that cannot be applied is reported in the result, and the rest carry on. A console whose
+/// projects all failed is still created.
+///
+/// The document's accounts are created only when `accounts` (the resolutions for them) is given,
+/// first, so the consoles' and projects' account references bind to them; see [`apply_accounts`].
 ///
 /// The document's application settings are applied only when `apply_settings` asks for it, last,
 /// through the path a settings update takes, since they change how this machine behaves rather
@@ -674,9 +727,16 @@ pub async fn apply(
     document: &serde_json::Value,
     resolutions: Vec<ProjectResolution>,
     apply_settings: bool,
+    accounts: Option<Vec<AccountResolution>>,
+    apply_consoles: bool,
 ) -> Result<Imported> {
-    let document = parse(document)?;
-    let mut chosen = index_resolutions(&document, resolutions)?;
+    let mut document = parse(document)?;
+    let mut chosen = if apply_consoles {
+        index_resolutions(&document, resolutions)?
+    } else {
+        document.consoles.clear();
+        HashMap::new()
+    };
     if apply_settings && document.settings.is_none() {
         return Err(CodedError::raised(
             error_code::IMPORT_SETTINGS_MISSING,
@@ -684,39 +744,50 @@ pub async fn apply(
             &[],
         ));
     }
+    let account_step = match accounts {
+        None => None,
+        Some(resolutions) => {
+            let document_accounts = document.accounts.as_ref().ok_or_else(|| {
+                CodedError::raised(
+                    error_code::IMPORT_ACCOUNTS_MISSING,
+                    "the document carries no accounts to create",
+                    &[],
+                )
+            })?;
+            Some((
+                document_accounts,
+                index_account_resolutions(document_accounts, resolutions)?,
+            ))
+        }
+    };
+    let clone_dir = state.store.default_clone_dir()?;
+
+    // What `create_console` would refuse of any console is refused before the first account is
+    // created; the account references are not bound yet, and nothing in the check depends on them.
+    let unbound = Rebinder::default();
+    for document_console in &document.consoles {
+        let new = new_console(document_console.clone(), unbound.console(document_console));
+        coordinator::check_new_console(state, &new)
+            .map_err(|err| naming_console(err, &new.name))?;
+    }
+
+    let imported_accounts = match account_step {
+        Some((document_accounts, chosen)) => {
+            Some(apply_accounts(state, document_accounts, chosen).await?)
+        }
+        None => None,
+    };
+    // After the accounts, so a reference binds to one the import created.
     let rebinder = Rebinder {
         accounts: state.store.list_accounts()?,
     };
-    let clone_dir = state.store.default_clone_dir()?;
 
     let mut prepared = Vec::new();
     for document_console in document.consoles {
         let accounts = rebinder.console(&document_console);
-        let new = NewConsole {
-            name: document_console.name,
-            default_agent: document_console.default_agent,
-            project_session_agent: document_console.project_session_agent,
-            claude_account_id: accounts.claude,
-            codex_account_id: accounts.codex,
-            grok_account_id: accounts.grok,
-            claude_console_session_model: document_console.claude_console_session_model,
-            claude_console_session_effort: document_console.claude_console_session_effort,
-            codex_console_session_model: document_console.codex_console_session_model,
-            codex_console_session_effort: document_console.codex_console_session_effort,
-            grok_console_session_model: document_console.grok_console_session_model,
-            grok_console_session_effort: document_console.grok_console_session_effort,
-            claude_project_session_model: document_console.claude_project_session_model,
-            claude_project_session_effort: document_console.claude_project_session_effort,
-            codex_project_session_model: document_console.codex_project_session_model,
-            codex_project_session_effort: document_console.codex_project_session_effort,
-            grok_project_session_model: document_console.grok_project_session_model,
-            grok_project_session_effort: document_console.grok_project_session_effort,
-            icon: document_console.icon,
-            console_session_prompt: document_console.console_session_prompt,
-        };
-        coordinator::check_new_console(state, &new)
-            .map_err(|err| naming_console(err, &new.name))?;
-        prepared.push((new, accounts.fallbacks, document_console.projects));
+        let fallbacks = accounts.fallbacks.clone();
+        let projects = document_console.projects.clone();
+        prepared.push((new_console(document_console, accounts), fallbacks, projects));
     }
 
     let mut imported = Vec::new();
@@ -800,6 +871,7 @@ pub async fn apply(
     Ok(Imported {
         settings_applied,
         settings_error,
+        accounts: imported_accounts,
         consoles: imported,
     })
 }
@@ -936,11 +1008,11 @@ mod tests {
     use crate::test_support::{app_state, ScratchDir, PATIENCE};
     use serde_json::json;
 
-    fn code_of(err: &anyhow::Error) -> &'static str {
+    pub(super) fn code_of(err: &anyhow::Error) -> &'static str {
         err.downcast_ref::<CodedError>().expect("coded").code
     }
 
-    fn project(name: &str, path: &str) -> DocumentProject {
+    pub(super) fn project(name: &str, path: &str) -> DocumentProject {
         DocumentProject {
             name: name.to_string(),
             path: path.to_string(),
@@ -963,7 +1035,7 @@ mod tests {
         }
     }
 
-    fn console(name: &str, projects: Vec<DocumentProject>) -> DocumentConsole {
+    pub(super) fn console(name: &str, projects: Vec<DocumentProject>) -> DocumentConsole {
         DocumentConsole {
             name: name.to_string(),
             icon: None,
@@ -989,18 +1061,19 @@ mod tests {
         }
     }
 
-    fn document(consoles: Vec<DocumentConsole>) -> serde_json::Value {
+    pub(super) fn document(consoles: Vec<DocumentConsole>) -> serde_json::Value {
         serde_json::to_value(ConfigurationDocument {
             format: config_export::FORMAT.to_string(),
             version: config_export::VERSION,
             exported_by: None,
             settings: None,
+            accounts: None,
             consoles,
         })
         .unwrap()
     }
 
-    fn account(id: &str, agent: Agent, name: &str) -> Account {
+    pub(super) fn account(id: &str, agent: Agent, name: &str) -> Account {
         Account {
             id: id.to_string(),
             agent,
@@ -1012,13 +1085,13 @@ mod tests {
         }
     }
 
-    fn directory(parent: &Path, name: &str) -> PathBuf {
+    pub(super) fn directory(parent: &Path, name: &str) -> PathBuf {
         let path = parent.join(name);
         std::fs::create_dir_all(&path).expect("directory");
         path
     }
 
-    fn at(console: usize, project: usize, choice: DirectoryChoice) -> ProjectResolution {
+    pub(super) fn at(console: usize, project: usize, choice: DirectoryChoice) -> ProjectResolution {
         ProjectResolution {
             console,
             project,
@@ -1033,7 +1106,9 @@ mod tests {
         document: &serde_json::Value,
         resolutions: Vec<ProjectResolution>,
     ) -> Result<Vec<ImportedConsole>> {
-        Ok(apply(state, document, resolutions, false).await?.consoles)
+        Ok(apply(state, document, resolutions, false, None, true)
+            .await?
+            .consoles)
     }
 
     fn with_settings(
@@ -1048,7 +1123,7 @@ mod tests {
         document
     }
 
-    fn stored_projects(state: &Arc<AppState>) -> Vec<Project> {
+    pub(super) fn stored_projects(state: &Arc<AppState>) -> Vec<Project> {
         state.store.list_projects().unwrap()
     }
 
@@ -1125,7 +1200,7 @@ mod tests {
             bound.fallbacks,
             vec![AccountFallback {
                 agent: Agent::Grok,
-                name: "Work".to_string()
+                name: "Work".to_string(),
             }]
         );
 
@@ -1705,7 +1780,7 @@ mod tests {
             ),
         ];
         for (document, resolutions, code) in refusals {
-            let err = apply(&state, &document, resolutions, false)
+            let err = apply(&state, &document, resolutions, false, None, true)
                 .await
                 .expect_err(code);
             assert_eq!(code_of(&err), code);
@@ -1778,8 +1853,10 @@ mod tests {
         };
         stored.default_agent = Some(Agent::Codex);
         source.store.insert_project(&stored).unwrap();
-        let exported =
-            serde_json::to_value(config_export::build(&source.store, None, true).unwrap()).unwrap();
+        let exported = serde_json::to_value(
+            config_export::build(&source.store, &config_export::Selection::full(true)).unwrap(),
+        )
+        .unwrap();
 
         let (target, _target_dir) = app_state("import-roundtrip-target");
         let consoles = inspect(&target, &exported).await.unwrap().consoles;
@@ -1868,12 +1945,16 @@ mod tests {
             .settings
             .is_none());
 
-        let imported = apply(&state, &full, Vec::new(), false).await.unwrap();
+        let imported = apply(&state, &full, Vec::new(), false, None, true)
+            .await
+            .unwrap();
         assert_eq!(imported.settings_applied, None);
         assert!(!state.store.auto_pull_repositories().unwrap());
         assert!(state.store.auto_delete_unresumable_archives().unwrap());
 
-        let imported = apply(&state, &full, Vec::new(), true).await.unwrap();
+        let imported = apply(&state, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert_eq!(
             imported.settings_applied,
             Some(DocumentSettings {
@@ -1913,11 +1994,17 @@ mod tests {
         source.store.set_auto_start_quota_windows(true).unwrap();
         let hub = crate::test_support::console(&source_dir);
         source.store.insert_console(&hub).unwrap();
-        let full =
-            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
-                .unwrap();
+        let full = serde_json::to_value(
+            crate::config_export::build(&source.store, &config_export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
         let single = serde_json::to_value(
-            crate::config_export::build(&source.store, Some(&hub.id), true).unwrap(),
+            crate::config_export::build(
+                &source.store,
+                &config_export::Selection::console(&hub.id, true),
+            )
+            .unwrap(),
         )
         .unwrap();
         assert!(single
@@ -1925,10 +2012,14 @@ mod tests {
             .is_none_or(|settings| settings.is_null()));
 
         let (target, _target_dir) = app_state("import-round-trip-target");
-        apply(&target, &single, Vec::new(), false).await.unwrap();
+        apply(&target, &single, Vec::new(), false, None, true)
+            .await
+            .unwrap();
         assert!(!target.store.auto_pull_repositories().unwrap());
         assert!(target.store.auto_delete_unresumable_archives().unwrap());
-        apply(&target, &full, Vec::new(), true).await.unwrap();
+        apply(&target, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert!(target.store.auto_pull_repositories().unwrap());
         assert!(!target.store.auto_delete_unresumable_archives().unwrap());
         assert!(target.store.auto_select_account().unwrap());
@@ -1962,9 +2053,11 @@ mod tests {
             .store
             .insert_console(&crate::test_support::console(&source_dir))
             .unwrap();
-        let full =
-            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
-                .unwrap();
+        let full = serde_json::to_value(
+            crate::config_export::build(&source.store, &config_export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(full["settings"]["auto_approve_session_requests"], true);
         assert_eq!(full["settings"]["auto_approve_resume_requests"], true);
         assert_eq!(full["settings"]["auto_approve_account_switches"], true);
@@ -1982,12 +2075,16 @@ mod tests {
         assert_eq!(settings.auto_approve_handoffs, Some(true));
         assert!(!settings.current_auto_approve_handoffs);
 
-        apply(&target, &full, Vec::new(), false).await.unwrap();
+        apply(&target, &full, Vec::new(), false, None, true)
+            .await
+            .unwrap();
         assert!(!target.store.auto_approve_session_requests().unwrap());
         assert!(!target.store.auto_approve_resume_requests().unwrap());
         assert!(!target.store.auto_approve_account_switches().unwrap());
         assert!(!target.store.auto_approve_handoffs().unwrap());
-        apply(&target, &full, Vec::new(), true).await.unwrap();
+        apply(&target, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert!(target.store.auto_approve_session_requests().unwrap());
         assert!(target.store.auto_approve_resume_requests().unwrap());
         assert!(target.store.auto_approve_account_switches().unwrap());
@@ -2004,9 +2101,11 @@ mod tests {
             .store
             .insert_console(&crate::test_support::console(&source_dir))
             .unwrap();
-        let full =
-            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
-                .unwrap();
+        let full = serde_json::to_value(
+            crate::config_export::build(&source.store, &config_export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(full["settings"]["ask_questions_as_choices"], false);
 
         let (target, _target_dir) = app_state("import-ask-choices-target");
@@ -2014,9 +2113,13 @@ mod tests {
         assert_eq!(settings.ask_questions_as_choices, Some(false));
         assert!(settings.current_ask_questions_as_choices);
 
-        apply(&target, &full, Vec::new(), false).await.unwrap();
+        apply(&target, &full, Vec::new(), false, None, true)
+            .await
+            .unwrap();
         assert!(target.store.ask_questions_as_choices().unwrap());
-        apply(&target, &full, Vec::new(), true).await.unwrap();
+        apply(&target, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert!(!target.store.ask_questions_as_choices().unwrap());
     }
 
@@ -2034,9 +2137,11 @@ mod tests {
             .store
             .insert_console(&crate::test_support::console(&source_dir))
             .unwrap();
-        let full =
-            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
-                .unwrap();
+        let full = serde_json::to_value(
+            crate::config_export::build(&source.store, &config_export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(
             full["settings"]["claude_compatibility"],
             serde_json::json!({ "codex": false })
@@ -2055,9 +2160,13 @@ mod tests {
         assert!(!settings.claude_compatibility.unwrap()["codex"]);
         assert!(!settings.current_claude_compatibility["grok"]);
 
-        apply(&target, &full, Vec::new(), false).await.unwrap();
+        apply(&target, &full, Vec::new(), false, None, true)
+            .await
+            .unwrap();
         assert!(target.store.claude_compatibility_of(Agent::Codex).unwrap());
-        apply(&target, &full, Vec::new(), true).await.unwrap();
+        apply(&target, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert!(!target.store.claude_compatibility_of(Agent::Codex).unwrap());
         // The document makes no choice for Grok Build, so the target's stays.
         assert!(!target.store.claude_compatibility_of(Agent::Grok).unwrap());
@@ -2074,9 +2183,11 @@ mod tests {
             .store
             .insert_console(&crate::test_support::console(&source_dir))
             .unwrap();
-        let mut full =
-            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
-                .unwrap();
+        let mut full = serde_json::to_value(
+            crate::config_export::build(&source.store, &config_export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
         assert!(full["settings"].get("interface_language").is_none());
         assert!(full["settings"]
             .get("reply_in_interface_language")
@@ -2085,7 +2196,9 @@ mod tests {
         full["settings"]["reply_in_interface_language"] = serde_json::json!(false);
         let (target, _target_dir) = app_state("import-reply-language-target");
         inspect(&target, &full).await.unwrap().settings.unwrap();
-        apply(&target, &full, Vec::new(), true).await.unwrap();
+        apply(&target, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert_eq!(target.store.interface_language().unwrap(), None);
     }
 
@@ -2121,9 +2234,11 @@ mod tests {
             })
             .unwrap();
         let global = source.store.git_workflow_settings().unwrap();
-        let full =
-            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
-                .unwrap();
+        let full = serde_json::to_value(
+            crate::config_export::build(&source.store, &config_export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(full["settings"]["git_workflow"]["delivery"], "merge");
         assert_eq!(
             full["consoles"][0]["projects"][0]["git_workflow"]["delivery"],
@@ -2131,7 +2246,11 @@ mod tests {
         );
         assert!(full["consoles"][0]["projects"][0]["git_workflow"]["revert_gate"].is_null());
         let single = serde_json::to_value(
-            crate::config_export::build(&source.store, Some(&hub.id), true).unwrap(),
+            crate::config_export::build(
+                &source.store,
+                &config_export::Selection::console(&hub.id, true),
+            )
+            .unwrap(),
         )
         .unwrap();
         assert!(single["settings"].is_null());
@@ -2153,6 +2272,8 @@ mod tests {
             &full,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
             false,
+            None,
+            true,
         )
         .await
         .unwrap();
@@ -2163,7 +2284,9 @@ mod tests {
             "settings are applied only when asked for"
         );
         let mut events = target.subscribe();
-        apply(&target, &full, Vec::new(), true).await.unwrap();
+        apply(&target, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert_eq!(target.store.git_workflow_settings().unwrap(), global);
         let mut broadcast = false;
         while let Ok(event) = events.try_recv() {
@@ -2201,6 +2324,8 @@ mod tests {
             &older,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
             true,
+            None,
+            true,
         )
         .await
         .unwrap();
@@ -2223,9 +2348,11 @@ mod tests {
         let hub = crate::test_support::console(&source_dir);
         source.store.insert_console(&hub).unwrap();
         crate::test_support::insert_project(&source, &repo);
-        let mut document =
-            serde_json::to_value(crate::config_export::build(&source.store, None, true).unwrap())
-                .unwrap();
+        let mut document = serde_json::to_value(
+            crate::config_export::build(&source.store, &config_export::Selection::full(true))
+                .unwrap(),
+        )
+        .unwrap();
         document["version"] = 1.into();
         let settings = document["settings"].as_object_mut().unwrap();
         settings.remove("git_workflow");
@@ -2257,6 +2384,8 @@ mod tests {
             &target,
             &document,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
+            true,
+            None,
             true,
         )
         .await
@@ -2308,7 +2437,9 @@ mod tests {
         assert_eq!(settings.auto_approve_resume_requests, None);
         assert!(settings.current_auto_approve_resume_requests);
 
-        let imported = apply(&state, &older, Vec::new(), true).await.unwrap();
+        let imported = apply(&state, &older, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert_eq!(
             imported.settings_applied,
             Some(DocumentSettings {
@@ -2343,7 +2474,9 @@ mod tests {
         let mut older = document(vec![console("Hub", Vec::new())]);
         older["settings"] = json!({ "auto_sync_repositories": true });
 
-        let imported = apply(&state, &older, Vec::new(), true).await.unwrap();
+        let imported = apply(&state, &older, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert_eq!(
             imported.settings_applied,
             Some(DocumentSettings {
@@ -2377,14 +2510,18 @@ mod tests {
         full["settings"]["keyboard_shortcuts"] = shortcuts.clone();
 
         inspect(&state, &full).await.unwrap();
-        let imported = apply(&state, &full, Vec::new(), true).await.unwrap();
+        let imported = apply(&state, &full, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert_eq!(
             imported.settings_applied.unwrap().keyboard_shortcuts,
             Some(shortcuts)
         );
 
         let without = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
-        let imported = apply(&state, &without, Vec::new(), true).await.unwrap();
+        let imported = apply(&state, &without, Vec::new(), true, None, true)
+            .await
+            .unwrap();
         assert_eq!(imported.settings_applied.unwrap().keyboard_shortcuts, None);
     }
 
@@ -2397,7 +2534,9 @@ mod tests {
             .unwrap()
             .remove("console_session_prompt");
 
-        apply(&state, &older, Vec::new(), false).await.unwrap();
+        apply(&state, &older, Vec::new(), false, None, true)
+            .await
+            .unwrap();
         let stored = state.store.list_consoles().unwrap().remove(0);
         assert_eq!(stored.console_session_prompt, None);
     }
@@ -2417,8 +2556,10 @@ mod tests {
         )
         .await
         .unwrap();
-        let exported =
-            serde_json::to_value(config_export::build(&state.store, None, true).unwrap()).unwrap();
+        let exported = serde_json::to_value(
+            config_export::build(&state.store, &config_export::Selection::full(true)).unwrap(),
+        )
+        .unwrap();
         let (target, _target_dir) = app_state("import-legacy-project-text-target");
         import(
             &target,
@@ -2464,6 +2605,8 @@ mod tests {
             &state,
             &document(vec![console("Hub", Vec::new())]),
             Vec::new(),
+            true,
+            None,
             true,
         )
         .await
@@ -2530,6 +2673,8 @@ mod tests {
             &state,
             &applied,
             vec![at(0, 0, DirectoryChoice::ExportedPath)],
+            true,
+            None,
             true,
         )
         .await
