@@ -189,6 +189,64 @@ test("installer includes pre-commit and refuses external hooks or configured hoo
   });
 });
 
+test("pnpm install's hook installer installs on the main branch of the main working copy only, and never fails", () => {
+  fixture(({ root, git }) => {
+    mkdirSync(path.join(root, ".githooks"));
+    for (const name of ["auto-install.sh", "install.sh", "hook.sh"]) {
+      copyFileSync(new URL(`../../.githooks/${name}`, import.meta.url), path.join(root, ".githooks", name));
+    }
+    writeFileSync(path.join(root, ".githooks/branches"), "# resident guarded branches\nmain\n");
+    const hooks = path.join(root, ".git/hooks");
+    const hook = path.join(hooks, "pre-commit");
+    const env = { ...process.env };
+    delete env.CI;
+    const invoke = (cwd = root, extra = {}) => spawnSync("sh", [path.join(root, ".githooks/auto-install.sh")], { cwd, encoding: "utf8", env: { ...env, ...extra } });
+    const clear = () => rmSync(hooks, { recursive: true, force: true });
+
+    assert.equal(invoke(root, { CI: "true" }).status, 0);
+    assert.equal(existsSync(hook), false);
+
+    git("worktree", "add", "-q", "--detach", path.join(root, "linked"));
+    assert.equal(invoke(path.join(root, "linked")).status, 0);
+    assert.equal(existsSync(hook), false);
+
+    // A fresh clone gets the committed resident guarded branches.
+    const fresh = invoke();
+    assert.equal(fresh.status, 0, fresh.stderr);
+    assert.match(readFileSync(hook, "utf8"), /revert-gate hook entry/);
+    assert.equal(git("config", "--get-all", "revert-gate.branch"), "main");
+
+    // Configured branches are kept.
+    clear();
+    git("config", "--add", "revert-gate.branch", "kept");
+    assert.equal(invoke().status, 0);
+    assert.match(readFileSync(hook, "utf8"), /revert-gate hook entry/);
+    assert.equal(git("config", "--get-all", "revert-gate.branch"), "main\nkept");
+
+    // Another revision checked out would install its own, possibly older, hook.sh.
+    clear();
+    git("checkout", "-q", "--detach");
+    assert.equal(invoke().status, 0);
+    assert.equal(existsSync(hook), false);
+    git("checkout", "-q", "main");
+
+    // A hook system owning core.hooksPath calls hook.sh itself: nothing to install or warn about.
+    git("config", "core.hooksPath", "external-hooks");
+    const owned = invoke();
+    assert.equal(owned.status, 0);
+    assert.equal(owned.stderr, "");
+    assert.equal(existsSync(hook), false);
+    git("config", "--unset", "core.hooksPath");
+
+    mkdirSync(hooks);
+    writeFileSync(hook, "#!/bin/sh\n# external hook\n");
+    const refused = invoke();
+    assert.equal(refused.status, 0);
+    assert.match(refused.stderr, /were not installed; fix the cause and run sh \.githooks\/install\.sh --pr-only/);
+    assert.equal(readFileSync(hook, "utf8"), "#!/bin/sh\n# external hook\n");
+  });
+});
+
 test("when the revert gate and the push verification both run, each receives the pushed lines and refusals propagate", () => {
   fixture(({ root, git, base, head }) => {
     const bin = path.join(root, "bin");

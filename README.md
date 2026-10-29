@@ -58,11 +58,15 @@ then start Tauri.
 
 ### Code quality
 
-Install the workspace and enable the repository hooks once per clone (repeat after hook changes):
+Install the workspace; in the main working copy with the main branch checked out, this also installs the
+repository hooks, keeping any resident guarded branches already configured (CI, linked worktrees and other
+checkouts skip it, as does a clone whose `core.hooksPath` hands hooks to another hook system; a hook that cannot
+be installed is reported as a warning). After hook changes land in the main branch, run `pnpm install` there again
+to refresh them; `pnpm hooks:install` installs them explicitly and also resets the resident guarded branches to
+`.githooks/branches`:
 
 ```sh
 pnpm install
-pnpm hooks:install
 ```
 
 Before each commit, the hook formats only staged JavaScript, TypeScript, TSX, Vue and Rust files. It formats
