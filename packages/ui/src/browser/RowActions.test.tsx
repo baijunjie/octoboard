@@ -4,7 +4,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
-import { RowActions, RowPathScope } from "./RowActions";
+import { OpenShellTerminal, RowActions, RowPathScope } from "./RowActions";
 import { ChangeList } from "./ChangeList";
 import { change, changeViewFixture, committedChange, mountRows } from "./browserTestSupport";
 import { changeItems } from "./changes";
@@ -162,6 +162,78 @@ it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with th
   act(() => entry.click());
   await flush();
   expect(request).toHaveBeenCalledExactlyOnceWith({ type, project: "p", worktree: "w", path: "src/caf%C3%A9.ts" });
+});
+
+const openInItems = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent);
+
+it.each([undefined, "w"])("offers a folder File manager and Terminal in worktree %s, and no Default application", async (worktree) => {
+  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const openTerminal = vi.fn();
+  const container = mountRows(
+    <OpenShellTerminal.Provider value={openTerminal}>
+      <RowPathScope.Provider value={{ project: "p", worktree }}><RowActions path="src/ui" name="ui" directory /></RowPathScope.Provider>
+    </OpenShellTerminal.Provider>,
+    { request, toasts },
+  );
+  act(() => actionsOf(container).click());
+  act(() => openIn().click());
+  expect(openInItems()).toEqual(["Copy path", "Open in", "File manager", "Terminal"]);
+  act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Terminal")!.click());
+  await flush();
+  expect(openTerminal).toHaveBeenCalledExactlyOnceWith({ project: "p", ...(worktree !== undefined && { worktree }), path: "src/ui" });
+  expect(request).not.toHaveBeenCalled();
+});
+
+it("sends reveal_project_path for a folder's File manager", async () => {
+  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/ui" name="ui" directory /></RowPathScope.Provider>,
+    { request, toasts },
+  );
+  act(() => actionsOf(container).click());
+  act(() => openIn().click());
+  expect(openInItems()).toEqual(["Copy path", "Open in", "File manager"]);
+  act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "File manager")!.click());
+  await flush();
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "reveal_project_path", project: "p", path: "src/ui" });
+});
+
+it("leaves Terminal out of a file's Open in", () => {
+  const container = mountRows(
+    <OpenShellTerminal.Provider value={vi.fn()}>
+      <RowPathScope.Provider value={{ project: "p" }}><RowActions path="a.ts" name="a.ts" /></RowPathScope.Provider>
+    </OpenShellTerminal.Provider>,
+    { toasts },
+  );
+  act(() => actionsOf(container).click());
+  act(() => openIn().click());
+  expect(openInItems()).toEqual(["Copy path", "Open in", "File manager", "Default application"]);
+});
+
+it("gives the tree layout's folder row the actions button, reserved and reached by the arrow keys, with a menu for the folder's path", async () => {
+  const openTerminal = vi.fn();
+  const writeText = vi.fn(async () => {});
+  const container = mountRows(
+    <OpenShellTerminal.Provider value={openTerminal}>
+      <RowPathScope.Provider value={{ project: "p", worktree: "w" }}>
+        <ChangeList items={items} selected={undefined} label="Changes" onOpen={vi.fn()} listRef={() => {}} changeView={changeViewFixture({ layout: "tree" })} />
+      </RowPathScope.Provider>
+    </OpenShellTerminal.Provider>,
+    { clipboard: { writeText }, toasts },
+  );
+  const folder = [...container.querySelectorAll<HTMLElement>("[role=row]")].find((row) => row.textContent?.startsWith("src"))!;
+  expect(actionsOf(folder).getAttribute("aria-label")).toBe(`Actions for folder ${isolate("src")}`);
+  act(() => folder.focus());
+  press(folder, "ArrowRight");
+  expect(document.activeElement).toBe(actionsOf(folder));
+  act(() => actionsOf(folder).click());
+  act(() => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+  await flush();
+  expect(writeText).toHaveBeenCalledWith("src");
+  act(() => actionsOf(folder).click());
+  act(() => openIn().click());
+  act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent === "Terminal")!.click());
+  expect(openTerminal).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "src" });
 });
 
 it("reports a system-open failure through the existing error toast", async () => {

@@ -95,8 +95,8 @@ is a **preview**:
   area and the right pane change only **once the press has ended**, and to what the press chose itself where it
   chose something: a session the press selected is shown, with its own pane; otherwise the console's remembered
   session is shown as described in "What switching console shows" above. A press that only gave the right pane to
-  something, as Browse files does, still brings the remembered session into the terminal's area, and the right pane
-  keeps what the press gave it. In the window's history the console change together with the press's selection, or
+  something, as Open panel in a project's action menu does, still brings the remembered session into the terminal's
+  area, and the right pane keeps what the press gave it. In the window's history the console change together with the press's selection, or
   with the remembered session shown at its end, counts as one visit (see "What counts as a place" in
   `docs/product/navigation-history.md`).
 - Showing the sidebar for good with its toggle while it previews a console shows the current console, not the one the

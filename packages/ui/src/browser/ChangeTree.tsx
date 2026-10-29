@@ -10,6 +10,7 @@ import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText } from "./changeRow";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type ChangeSection, type CommitRef } from "./changes";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, ChangeListLayout, CHANGE_SCROLL_CLASS, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
+import { RowActions } from "./RowActions";
 import { shortCommit } from "./shortCommit";
 import { BrowserListMotion, useBrowserListMotion } from "./useBrowserListMotion";
 import { DirectoryRow, ExpandChevron, ROW_CLASS, ROW_HEIGHT, RowContent } from "./treeRow";
@@ -127,21 +128,25 @@ export function ChangeTree({
 
   const renderNode = (node: ChangeNode): React.ReactElement => {
     if (node.type === "change") return <ChangeTreeRow item={node.item} isSelected={node.item.key === selected} layout={layout} />;
+    const children = (
+      <Collection items={node.children} dependencies={[language, selected, layout]}>
+        {renderNode}
+      </Collection>
+    );
+    if (node.type === "directory") return <ChangeDirectoryRow node={node}>{children}</ChangeDirectoryRow>;
     return (
       <TreeItem
         data-list-motion={node.key}
         id={node.key}
-        textValue={node.type === "commit" ? commitText(node.commit) : node.name}
-        aria-label={node.type === "commit" ? commitLabel(node.commit, node.count, language) : undefined}
+        textValue={commitText(node.commit)}
+        aria-label={commitLabel(node.commit, node.count, language)}
         hasChildItems
         className={ROW_CLASS}
       >
         <TreeItemContent>
-          {({ isExpanded }) => (node.type === "commit" ? <CommitRow commit={node.commit} count={node.count} isExpanded={isExpanded} /> : <DirectoryRow name={node.name} isExpanded={isExpanded} />)}
+          {({ isExpanded }) => <CommitRow commit={node.commit} count={node.count} isExpanded={isExpanded} />}
         </TreeItemContent>
-        <Collection items={node.children} dependencies={[language, selected, layout]}>
-          {renderNode}
-        </Collection>
+        {children}
       </TreeItem>
     );
   };
@@ -218,6 +223,24 @@ function CommitRow({ commit, count, isExpanded }: { commit: CommitRef; count: nu
       )}
       <span className="shrink-0 text-app-muted">{new Intl.NumberFormat(language).format(count)}</span>
     </RowContent>
+  );
+}
+
+/** A directory's row in the tree layout: the folder the changes under it are grouped by, with the
+ * button of the row's actions at its end, which keeps its room while hidden as a change's does. */
+function ChangeDirectoryRow({ node, children }: { node: Extract<ChangeNode, { type: "directory" }>; children: React.ReactNode }): React.ReactElement {
+  const rowRef = useRef<HTMLDivElement>(null);
+  return (
+    <TreeItem data-list-motion={node.key} id={node.key} textValue={node.name} hasChildItems className={ROW_CLASS} ref={rowRef}>
+      <TreeItemContent>
+        {({ isExpanded }) => (
+          <DirectoryRow name={node.name} isExpanded={isExpanded}>
+            <RowActions reserve contextTargetRef={rowRef} path={node.path} name={node.name} directory />
+          </DirectoryRow>
+        )}
+      </TreeItemContent>
+      {children}
+    </TreeItem>
   );
 }
 

@@ -4,6 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 import { gitModeWorktree } from "../browser/browserState";
 import { t } from "../i18n/language";
 import { errorPresentation } from "../errorPresentation";
+import { hostPathRecovery } from "../errorRecovery";
 import { createPersistedPreference } from "../persistedPreference";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import type { ShellTerminal } from "../protocol";
@@ -95,15 +96,43 @@ export function useShellTerminalStarting(project: string): boolean {
   return useSyncExternalStore(subscribeStarting, () => startingSnapshot).has(project);
 }
 
+/** Where a shell starts, when it is not in the worktree the project's Git mode shows: the
+ * project's own directory, or a worktree's, and a folder below it, as a wire path. */
+export interface ShellTerminalPlace {
+  worktree?: string;
+  path?: string;
+}
+
+/** How long a request to focus a started terminal stays good, for a panel that never shows it. */
+const FOCUS_REQUEST_MS = 5000;
+
+/** The terminal a start from outside the panel asked to have focused, until the panel shows it. */
+let focusRequested: { terminal: string; at: number } | undefined;
+
+/** Whether `terminal` is the one a start asked to focus once shown; asking takes the request,
+ * which a terminal that is shown takes whether or not it is acted on. */
+export function takeShellTerminalFocus(terminal: string): boolean {
+  const request = focusRequested;
+  if (request?.terminal !== terminal) return false;
+  focusRequested = undefined;
+  return Date.now() - request.at < FOCUS_REQUEST_MS;
+}
+
 /**
- * Starts a shell terminal for `project` in the worktree its Git mode shows (`gitModeWorktree`),
- * the project's own directory when it shows none, and makes it the project's tab once the daemon
- * has it. `ifNone` starts one only while the project has none and none is being started, as
- * opening the Terminal panel does; while one is being started it resolves with the result of the
- * earliest start still pending instead of starting another. A refusal is reported as an error. Resolves with the new terminal's
+ * Starts a shell terminal for `project` in `place`, or in the worktree its Git mode shows
+ * (`gitModeWorktree`) when none is given, the project's own directory when it shows none, and makes
+ * it the project's tab once the daemon has it. `focus` asks the panel to focus the terminal once it
+ * shows it, for a start made from outside the panel (`takeShellTerminalFocus`). `ifNone` starts one
+ * only while the project has none and none is being started, as opening the Terminal panel does;
+ * while one is being started it resolves with the result of the earliest start still pending
+ * instead of starting another. A refusal is reported as an error. Resolves with the new terminal's
  * id, or nothing when none was started.
  */
-export function startShellTerminal(daemon: Pick<Daemon, "request" | "store" | "toastError">, project: string, { ifNone = false } = {}): Promise<string | undefined> {
+export function startShellTerminal(
+  daemon: Pick<Daemon, "request" | "store" | "toastError">,
+  project: string,
+  { ifNone = false, place, focus = false }: { ifNone?: boolean; place?: ShellTerminalPlace; focus?: boolean } = {},
+): Promise<string | undefined> {
   if (ifNone) {
     const earliest = inFlight.get(project)?.values().next().value;
     if (earliest) return earliest;
@@ -111,7 +140,7 @@ export function startShellTerminal(daemon: Pick<Daemon, "request" | "store" | "t
   }
   const pending = inFlight.get(project) ?? new Set();
   inFlight.set(project, pending);
-  const started: Promise<string | undefined> = createShellTerminal(daemon, project).finally(() => {
+  const started: Promise<string | undefined> = createShellTerminal(daemon, project, place, focus).finally(() => {
     pending.delete(started);
     if (pending.size === 0 && inFlight.get(project) === pending) inFlight.delete(project);
   });
@@ -119,19 +148,20 @@ export function startShellTerminal(daemon: Pick<Daemon, "request" | "store" | "t
   return started;
 }
 
-async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "toastError">, project: string): Promise<string | undefined> {
+async function createShellTerminal(daemon: Pick<Daemon, "request" | "store" | "toastError">, project: string, place: ShellTerminalPlace | undefined, focus: boolean): Promise<string | undefined> {
   setStarting(project, true);
   try {
-    const worktree = gitModeWorktree(project);
-    const reply = await daemon.request({ type: "create_shell_terminal", project, ...(worktree !== undefined && { worktree }) });
+    const { worktree, path } = place ?? { worktree: gitModeWorktree(project) };
+    const reply = await daemon.request({ type: "create_shell_terminal", project, ...(worktree !== undefined && { worktree }), ...(path !== undefined && { path }) });
     if (reply.type !== "shell_terminal_created") return undefined;
+    if (focus) focusRequested = { terminal: reply.shell_terminal.id, at: Date.now() };
     // The broadcast of the record can come after this reply; seeded here (a record the broadcast
     // already brought stands), the pending state never ends on a store without it.
     seedShellTerminal(daemon.store, reply.shell_terminal);
     setActiveShellTerminal(project, reply.shell_terminal.id);
     return reply.shell_terminal.id;
   } catch (err) {
-    daemon.toastError(errorPresentation(err), undefined, t("shellTerminal.newFailedTitle"));
+    daemon.toastError(errorPresentation(err), undefined, t("shellTerminal.newFailedTitle"), place?.path ? hostPathRecovery(err) : undefined);
     return undefined;
   } finally {
     setStarting(project, false);

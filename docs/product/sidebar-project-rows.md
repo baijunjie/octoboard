@@ -40,14 +40,12 @@ held, opens the session at once without it (see "Opening a session with defaults
 focus mode, apart from the items those views leave out (see "What both views show" and "A console session's focus mode"
 in `docs/product/focus-mode.md`). Choosing an action closes the menu at once; submenu entries open their next menu.
 Separators split it into four groups, in this order: the first holds **Pin** / **Unpin**, as in a session's menu, and
-the actions for viewing the project inside the app (**Focus mode**, **Browse files**, **View archive**); then the **Open
-in** submenu and **Git** submenu; managing the project itself (**Rename**, **Copy project name**, **Project settings**);
-and **Remove project**. An item a view does not offer is left out without moving the others.
+the actions for viewing the project inside the app (**Focus mode**, **View archive**); then the **Open panel**, **Open
+in** and **Git** submenus; managing the project itself (**Rename**, **Copy project name**, **Project settings**); and
+**Remove project**. An item a view does not offer is left out without moving the others.
 
 - **Pin** / **Unpin** — see "Pinning" in `docs/product/order-of-projects-and-sessions.md`.
 - **Focus mode** — see `docs/product/focus-mode.md`.
-- **Browse files** — see "Opening a project's files" in `docs/product/project-pane.md` for its visibility and the Files
-  mode it opens.
 - **View archive** — a submenu of the project's archive preview (see "The archive view" in
   `docs/product/archive-view.md` for what it lists and how each item looks); choosing one selects it (see "Selecting a
   session" in `docs/product/sidebar.md`). After them, **View all**, without a count, opens the archive view whenever the
@@ -55,12 +53,15 @@ and **Remove project**. An item a view does not offer is left out without moving
   shows only a disabled item saying so. On a project's heading in a console session's focus mode, the submenu covers
   only the project's share of that console session's archive, and its View all opens the console session's archive view
   instead (see "A console session's focus mode" in `docs/product/focus-mode.md`).
-- **Open in** — a submenu with **File manager**, then **Terminal**, then the project's repository host when available.
-  File manager opens the project's directory on the daemon's host (see "Opening the system file manager" below).
-  Terminal opens the system terminal at that directory (see "Opening a project terminal" in
-  `docs/product/project-terminal.md`). Both are offered for every project, including one that is not a git repository
-  and one whose git status has not arrived. Neither raises a success toast; a failure is an error alert. The repository
-  entry opens the recorded remote's web address in the client's browser and carries a trailing external-link icon.
+- **Open panel** — a submenu with **Files**, then **Terminal**, which open that panel of the project's right pane
+  inside the window; an entry whose panel is already on screen for the project is left out, and so is the submenu when
+  both are (see "Opening a panel from a project's action menu" in `docs/product/right-pane-panels.md`).
+- **Open in** — a submenu with **File manager**, then **System terminal**, then the project's repository host when
+  available. File manager opens the project's directory on the daemon's host (see "Opening the system file manager"
+  below). System terminal opens the operating system's terminal application at that directory (see "Opening a project
+  terminal" in `docs/product/project-terminal.md`). Both are offered for every project, including one that is not a
+  git repository and one whose git status has not arrived. Neither raises a success toast; a failure is an error alert.
+  The repository entry opens the recorded remote's web address in the client's browser and carries a trailing external-link icon.
   Public GitHub, GitLab and Bitbucket hosts carry their brand names and icons; other hosts carry their hostname and a
   globe icon, including self-hosted installations. A missing, invalid, local or unsupported remote, or a client unable
   to open web links, leaves out the repository entry. HTTP and HTTPS remotes retain their web scheme; SSH, SCP-style,

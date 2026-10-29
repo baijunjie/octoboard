@@ -1540,9 +1540,11 @@ export type RequestBody =
    * follows as `project_git_status` broadcasts. */
   | { type: "pull_project_branch"; project: string }
   /** Starts a shell terminal in the project's directory, or with `worktree` in the project's place
-   * in that worktree of its repository. Answered with `shell_terminal_created`; a `worktree` that is
-   * not one of the project's is `worktree_unavailable`. */
-  | { type: "create_shell_terminal"; project: string; worktree?: string }
+   * in that worktree of its repository, and with `path` in that folder below it (a wire path, as
+   * `reveal_project_path`'s). Answered with `shell_terminal_created`; a `worktree` that is not one
+   * of the project's is `worktree_unavailable`, a `path` that is not a directory
+   * `path_not_a_directory`, and one that is missing `file_not_found`. */
+  | { type: "create_shell_terminal"; project: string; worktree?: string; path?: string }
   /** Names a shell terminal; the shell's own titles no longer change it. Stored trimmed; a blank
    * title is `field_required`. */
   | { type: "rename_shell_terminal"; shell_terminal: string; title: string }

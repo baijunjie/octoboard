@@ -133,6 +133,7 @@ it.each([
 it.each([
   [new DaemonRequestError("gone", "file_not_found", { path: "a", root: "project" }), "hostPathGone"],
   [new DaemonRequestError("gone", "path_not_found", { path: "a" }), "hostPathGone"],
+  [new DaemonRequestError("gone", "path_not_a_directory", { path: "a" }), "hostPathGone"],
   [new DaemonRequestError("gone", "file_not_found", { path: "a", root: "temporary" }), "none"],
   [new DaemonRequestError("outside", "outside_scope", { path: "a" }), "none"],
   [new DaemonRequestError("outside", "outside_scope", { path: "a", action: "open" }), "none"],

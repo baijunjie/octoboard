@@ -1680,6 +1680,25 @@ describe("the fixture daemon's shell terminals", () => {
     expect(started.shell_terminal.cwd).toBe("/Users/dev/code/search-api-experiments/apps/web");
   });
 
+  it("starts a terminal in the folder asked for below the place it starts in, and draws a fresh prompt there", async () => {
+    const daemon = daemonWithProject({ git: { ...SAMPLE_GIT, scope: "apps/web" } });
+    const own = await daemon.request({ type: "create_shell_terminal", project: "p", path: "src/ui" });
+    if (own.type !== "shell_terminal_created") throw new Error("expected shell_terminal_created");
+    expect(own.shell_terminal.cwd).toBe("/Users/dev/code/site/src/ui");
+    expect(daemon.terminalUrl(own.shell_terminal.id)).toBe(terminalFixtureUrl("shell", own.shell_terminal.id, "/Users/dev/code/site/src/ui"));
+    const side = await daemon.request({ type: "create_shell_terminal", project: "p", worktree: "wt-side", path: "src" });
+    if (side.type !== "shell_terminal_created") throw new Error("expected shell_terminal_created");
+    expect(side.shell_terminal.cwd).toBe("/Users/dev/code/search-api-experiments/apps/web/src");
+  });
+
+  it("refuses a start with the scenario's error, after checking the project", async () => {
+    const error = { code: "path_not_a_directory", params: { path: "src/ui" }, message: "not a directory" };
+    const daemon = daemonWithProject({ shellTerminalStartError: error });
+    await expect(daemon.request({ type: "create_shell_terminal", project: "p", path: "src/ui" })).rejects.toMatchObject({ code: error.code, params: error.params });
+    await expect(daemon.request({ type: "create_shell_terminal", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+    expect(daemon.store.getState().shellTerminals.size).toBe(0);
+  });
+
   it("leaves a start unanswered when the scenario says so", async () => {
     const daemon = createFixtureDaemon({ id: "shell-starting", group: "Terminal panel", category: "normal", title: "", shellTerminalStart: "pending", state: snapshotState({ consoles: [consoleOf("c", "Work")], projects: [projectOf("p", "c", "Site")] }) });
     const outcome = await Promise.race([daemon.request({ type: "create_shell_terminal", project: "p" }).then(() => "answered"), new Promise((resolve) => setTimeout(() => resolve("pending"), 50))]);

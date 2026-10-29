@@ -428,9 +428,10 @@ For example:
 - A full disk asks the user to free space on the disk used by Octoboard and the project, then retry.
 - A locked session asks the user to choose Unlock in that session's action menu, then retry.
 - An invalid or unavailable path asks the user to correct it or browse to an existing, accessible location. A file or
-  folder that File manager or Default application no longer finds, or a file or folder a terminal's path link names in
-  the project that is gone when the click reads it or opens it on the host, instead says it may have been moved,
-  renamed or deleted, and that one moved or renamed can be found in the project's files and tried again from there (see
+  folder that File manager or Default application no longer finds, a folder a folder row's Terminal would start a
+  shell in that is no longer there or is no longer a folder, or a file or folder a terminal's path link names in the
+  project that is gone when the click reads it or opens it on the host, instead says it may have been moved, renamed or
+  deleted, and that one moved or renamed can be found in the project's files and tried again from there (see
   "A row's actions" in `docs/product/project-pane.md`, "Opened from the terminal" in `docs/product/file-viewer.md` and
   "File paths" in `docs/product/terminal-links.md`). A path link's file or folder gone from a temporary directory
   outside the project gets no remedy: the alert's sentence already says it does not exist any more.
@@ -474,7 +475,7 @@ For example:
   refuse it, such as a file or folder in the way of a tracked file (a restore discards uncommitted changes by design).
   A restore refused because a Git operation is unfinished (`git_operation_in_progress`) has no remedy: its sentence
   already says to finish or abort the operation. None of these offers **Report issue**.
-- A system application that would not open — the terminal (`terminal_unavailable`), the file manager
+- A system application that would not open — the system terminal (`terminal_unavailable`), the file manager
   (`directory_unavailable`) or the default application (`path_open_failed`), whether from a project's action menu, the
   project pane's row menu, the file viewer or a terminal's path link — gets a remedy of its own that names only that
   application and asks the user to check that it is installed (for the default application, that one is set for that

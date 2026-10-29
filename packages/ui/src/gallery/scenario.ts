@@ -202,6 +202,9 @@ export interface Scenario {
   /** `"pending"`: `create_shell_terminal` is never answered, so a start stays in flight and the
    * Terminal panel keeps its "Starting terminal…" state. */
   shellTerminalStart?: "pending";
+  /** A refusal of `create_shell_terminal`, for a start the window could not have seen coming (a folder that is gone
+   * or no longer a folder, a place the system denies); left out, a start succeeds, in the folder it asked for. */
+  shellTerminalStartError?: FixtureError;
   /** The desktop shell asks the window to quit (Cmd+Q) once the steps have run: with a busy session or shell terminal
    * the confirmation they hold the quit up with is on screen, and with none the quit goes straight to the shell. The
    * platform has no exit capability otherwise; what the shell does with the quit is nothing (confirming ends nothing)

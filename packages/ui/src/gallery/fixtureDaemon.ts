@@ -244,6 +244,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
   const scenarioToastsRaised = new Promise<void>((resolve) => (markToastsRaised = resolve));
   let openedSessionCount = 0;
   let createdShellTerminalCount = 0;
+  /** The shell terminals this window started, which draw a fresh prompt instead of the sample of a used shell. */
+  const startedShellTerminals = new Set<string>();
   let createdProjectCount = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
@@ -1239,6 +1241,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const project = store.getState().projects.get(body.project);
           if (!project) return fail({ code: "unknown_project", params: { project: body.project }, message: `unknown project ${body.project}` });
           if (scenario.shellTerminalStart === "pending") return new Promise<Event>(() => {});
+          if (scenario.shellTerminalStartError) return fail(scenario.shellTerminalStartError);
           // A project's place in another worktree is that worktree's root joined with the repository's `scope`, as
           // `get_project_source` builds the project's own: the refusal names that place, and a terminal started there starts in it.
           const target = body.worktree === undefined ? undefined : git?.worktrees.find((worktree) => worktree.id === body.worktree);
@@ -1256,13 +1259,14 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             id: `shell-gallery-${++createdShellTerminalCount}`,
             project_id: project.id,
             worktree: body.worktree ?? null,
-            cwd: target ? placeIn(target) : project.path,
+            cwd: [target ? placeIn(target) : project.path, ...(body.path ? [body.path] : [])].join("/"),
             title: "zsh",
             renamed: false,
             state: "running",
             busy: false,
             created_at: Date.now(),
           };
+          startedShellTerminals.add(shellTerminal.id);
           store.setState((state) => ({ shellTerminals: new Map(state.shellTerminals).set(shellTerminal.id, shellTerminal) }));
           return { type: "shell_terminal_created", shell_terminal: shellTerminal };
         }
@@ -1304,7 +1308,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
     terminalUrl: (id) => {
       const shell = store.getState().shellTerminals.get(id);
       if (!shell) return terminalFixtureUrl(scenario.terminal ?? "output", id);
-      return terminalFixtureUrl(shell.state === "exited" ? "exited" : scenario.shellTerminal ?? "shell", id);
+      // A shell this window started draws a fresh prompt in the folder it started in.
+      return terminalFixtureUrl(shell.state === "exited" ? "exited" : scenario.shellTerminal ?? "shell", id, startedShellTerminals.has(id) ? shell.cwd : undefined);
     },
     terminalReconnectDelay: scenario.terminalRetriesImmediate ? () => 0 : undefined,
   };

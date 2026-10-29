@@ -480,6 +480,28 @@ pub fn resolve_project_path(
     Ok(directory.join(lexical.file_name().expect("a non-root entry has a name")))
 }
 
+/// Resolves a live path that must be a folder, for a host action that starts something in it, to
+/// the canonical folder under the same scope as live browsing. A final symbolic link is followed,
+/// so what starts there starts in the folder that was checked, not wherever a link at that name
+/// points later. Refuses what is not a folder with `path_not_a_directory`.
+pub fn resolve_project_directory(
+    state: &AppState,
+    project: &str,
+    worktree: Option<&str>,
+    path: &str,
+    git: &dyn Fn() -> Result<GitEnv>,
+) -> Result<std::path::PathBuf> {
+    let rel = parse_path(path)?;
+    let record = stored_project(state, project)?;
+    let git = Git::new(git);
+    let scope = scope_for(&record, worktree, &git, &AtomicBool::new(false))?;
+    let canonical = live::resolve(&scope.canonical, &rel)?;
+    if !canonical.is_dir() {
+        return Err(crate::hostfs::not_a_directory(&canonical));
+    }
+    Ok(canonical)
+}
+
 /// One live directory a project's paths can name: where it is, and the worktree id that reads it
 /// (`worktree` of the browse requests); none for the project's own directory.
 #[derive(Debug, Clone, PartialEq, Eq)]

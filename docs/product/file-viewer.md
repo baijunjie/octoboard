@@ -54,9 +54,9 @@ alternates between "Show document" and "Show source", between "Show split diff" 
 "Wrap lines" and "Don't wrap lines". Nothing about the state is said in colour; the whole convention is in "Two-state
 icon toggles" in `docs/product/labels-and-tooltips.md`.
 
-**File manager and Default application** are the two actions of a row's Open in submenu, on the same live file and with
-the same effect (see "A row's actions" in `docs/product/project-pane.md`): File manager opens the folder holding the
-file and selects it, Default application opens the file with the operating system's default application, both on the
+**File manager and Default application** are the two actions of a file row's Open in submenu, on the same live file
+and with the same effect (see "A row's actions" in `docs/product/project-pane.md`): File manager opens the folder
+holding the file and selects it, Default application opens the file with the operating system's default application, both on the
 machine running the daemon. They are offered only on a live file — a file opened from Files or from the terminal, and an
 uncommitted change that is not a deletion, in the worktree it is read from; a committed change and a change that deletes
 the file have neither. Each is an icon button whose tooltip is the short name the row's menu uses while the name

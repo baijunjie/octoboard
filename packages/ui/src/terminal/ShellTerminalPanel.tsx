@@ -31,7 +31,7 @@ import { Message, useT } from "../i18n/react";
 import type { Project, ShellTerminal } from "../protocol";
 import { useDaemon, type Daemon } from "../store";
 import { ringForAutomaticFocus } from "../touchInput";
-import { setActiveShellTerminal, startShellTerminal, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
+import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
 
 /**
@@ -159,14 +159,17 @@ export function ShellTerminalPanel({
   const previousActiveId = useRef(activeId);
   // A tab that becomes the shown one while focus is in the one it replaces (a terminal arriving, or
   // the shown one chosen from elsewhere) takes the focus, which the replaced view's hiding would
-  // otherwise drop to `<body>`; and so does the terminal a start from here made.
+  // otherwise drop to `<body>`; and so does the terminal a start from here made, or one a start from
+  // outside asked to have focused (`takeShellTerminalFocus`).
   useLayoutEffect(() => {
     const previous = previousActiveId.current;
     previousActiveId.current = activeId;
     const view = activeId === undefined ? undefined : views.current.get(activeId);
     if (!view) return;
     const leavesFocus = previous !== undefined && previous !== activeId && document.getElementById(`shell-terminal-${previous}`)?.contains(document.activeElement);
-    if (leavesFocus || focusOnShown.current === activeId) {
+    // Taken whenever its terminal is shown, so a request not acted on cannot act on a later choice of that tab.
+    const requested = activeId !== undefined && takeShellTerminalFocus(activeId);
+    if (leavesFocus || focusOnShown.current === activeId || requested) {
       focusOnShown.current = undefined;
       view.focus();
     }

@@ -117,8 +117,8 @@ from 1 with the oldest page first. A thin row under the header carries the page'
 current language (see "What follows the language" in `docs/product/language.md`) and — on any page but the newest — a
 "Read-only" badge. The position, the total and the badge all count the selected session's pages only. The place
 the user has paged to is not kept: whenever the report panel gives way in the right pane — another session selected, or
-Browse files putting a project's Files panel in its place — coming back to it shows its newest page again, started over
-from its markup, with anything typed into its form and not submitted gone.
+Open panel in a project's action menu putting a project's panel in its place — coming back to it shows its newest page
+again, started over from its markup, with anything typed into its form and not submitted gone.
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
   to it.

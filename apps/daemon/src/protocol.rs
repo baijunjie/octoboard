@@ -2243,12 +2243,16 @@ pub enum RequestBody {
         project: String,
     },
     /// Starts a shell terminal in the project's directory, or with `worktree` in the project's
-    /// place in that worktree of its repository (the same scoped root as browsing). Answered with
-    /// `shell_terminal_created`, and broadcast as `shell_terminal_upserted`.
+    /// place in that worktree of its repository (the same scoped root as browsing). A non-empty
+    /// `path`, a canonical wire path as in `reveal_project_path`, starts it in that folder below
+    /// there instead; a path that is not a folder is refused with `path_not_a_directory`. Answered
+    /// with `shell_terminal_created`, and broadcast as `shell_terminal_upserted`.
     CreateShellTerminal {
         project: String,
         #[serde(default)]
         worktree: Option<String>,
+        #[serde(default)]
+        path: String,
     },
     /// Renames a shell terminal; from then on the shell's own titles no longer change it. The
     /// title is stored trimmed and cannot be blank.
@@ -2274,7 +2278,9 @@ pub enum RequestBody {
     OpenProjectDirectory {
         project: String,
     },
-    /// Reveals an existing live path in the daemon host's file manager, selecting it.
+    /// Reveals an existing live path in the daemon host's file manager: a file is selected in its
+    /// folder, a folder is opened (a symbolic link counts as a file, and a folder macOS treats as
+    /// a package is selected in its parent, as opening it would launch it).
     /// Uses the same canonical wire path and optional worktree identity as live browsing.
     RevealProjectPath {
         project: String,
@@ -4495,6 +4501,18 @@ mod tests {
         assert_eq!(
             worktree(r#"{"type":"create_shell_terminal","project":"p","worktree":"w"}"#),
             Some("w".to_string())
+        );
+        let path = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::CreateShellTerminal { path, .. } => path,
+            _ => panic!("parses as create_shell_terminal"),
+        };
+        assert_eq!(
+            path(r#"{"type":"create_shell_terminal","project":"p"}"#),
+            ""
+        );
+        assert_eq!(
+            path(r#"{"type":"create_shell_terminal","project":"p","path":"src/a%25"}"#),
+            "src/a%25"
         );
     }
 

@@ -19,6 +19,8 @@ import { ArchiveLayer } from "./archive/ArchiveLayer";
 import type { ArchiveViewState } from "./archive/ArchiveView";
 import { forgetProjectsOtherThan, noteSessionSwitch, setProjectBrowserMode } from "./browser/browserState";
 import { LazyTerminalFileViewer } from "./browser/LazyTerminalFileViewer";
+import type { HostPath } from "./components/useHostPathActions";
+import { OpenShellTerminal } from "./browser/RowActions";
 import { ConnectionBanner } from "./components/ConnectionBanner";
 import { ContentPanel } from "./components/ContentPanel";
 import { HandOffOnUnmount } from "./components/HandOffOnUnmount";
@@ -87,7 +89,7 @@ import { indexSessions, sessionsOf } from "./sessions/sessionIndex";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
 import { useSwitchShortcut } from "./sidebar/switchShortcut";
-import type { ArchiveScope } from "./sidebar/types";
+import type { ArchiveScope, ProjectPanelKind } from "./sidebar/types";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual } from "./store";
 import { terminalEmptyState } from "./terminal/emptyState";
 import { startShellTerminal } from "./terminal/shellTerminals";
@@ -272,8 +274,12 @@ export function App(): React.ReactElement {
     if (panes.sidebarOpen) panes.closeSidebar();
   };
   const [peekKind, setPeekKind] = useState<PanelKind>();
-  const filesOnScreen =
-    ownerKind === "project" && (openPanels.includes("files") || (panes.asidePeek.active && peekKind === "files"));
+  // The panels the project menu need not offer, as they are on screen: open, or floating in on hover.
+  const panelsOnScreen = panes.asidePeek.active && peekKind !== undefined && !openPanels.includes(peekKind) ? [...openPanels, peekKind] : openPanels;
+  // Every sidebar row takes it, so it keeps its identity until the panels on screen change.
+  const panelsKey = panelsOnScreen.join(",");
+  const asideProjectId = ownerKind === "project" ? asideProject?.id : undefined;
+  const visibleProjectPanels = asideProjectId === undefined ? undefined : { project: asideProjectId, kinds: panelsKey === "" ? [] : panelsKey.split(",") };
   // A panel kind's toggle shows or hides its panel; pressing it while the pane floats in docks it.
   const togglePanel = (kind: PanelKind) => {
     if (!ownerKind || !ownerStack) return;
@@ -662,17 +668,24 @@ export function App(): React.ReactElement {
     if (session.status === "archived") void resumeSession(session.id);
   };
 
-  /** Opens a project's browser in the aside, putting the aside on screen (its Files panel open;
-   * a maximized panel stays maximized), without selecting or starting any session: the terminal
-   * beside it stays as it is. */
-  const browseProject = (project: Project) => {
-    setProjectBrowserMode(project.id, "files");
-    setOwnerByUser({ kind: "project", project: project.id });
-    if (asideFloats) return openFloating("project", "files");
-    setPanelStack("project", openPanel(panelStacks.project, "files", OWNER_KINDS.project));
-    floating.noteOpened("project", "files");
+  /** Puts a project's `kind` panel on screen: the project owns the aside, and the panel opens
+   * docked, or floating in a narrow window (a maximized panel stays maximized), without selecting or
+   * starting any session: the terminal beside it stays as it is. */
+  const showProjectPanel = (project: string, kind: ProjectPanelKind) => {
+    setOwnerByUser({ kind: "project", project });
+    if (asideFloats) return openFloating("project", kind);
+    setPanelStack("project", openPanel(panelStacks.project, kind, OWNER_KINDS.project));
+    floating.noteOpened("project", kind);
     // The sidebar's drawer in a narrow window covers what was asked for.
     if (panes.sidebarOpen) panes.closeSidebar();
+  };
+
+  /** Opens a project's panel as its top-bar toggle opens it: the Terminal panel starts a shell
+   * only when the project has none. */
+  const openProjectPanel = (project: Project, kind: ProjectPanelKind) => {
+    if (kind === "files") setProjectBrowserMode(project.id, "files");
+    showProjectPanel(project.id, kind);
+    if (kind === "terminal") void startShellTerminal(daemon, project.id, { ifNone: true });
   };
 
   const pullProjectBranch = (project: Project) => {
@@ -701,8 +714,15 @@ export function App(): React.ReactElement {
     );
   };
 
-  const openProjectTerminal = (project: Project) => {
-    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.openTerminalFailedTitle")));
+  /** Shows a project's Terminal panel and starts a new shell terminal in the folder, which
+   * becomes the shown tab and takes focus. */
+  const openShellTerminal = ({ project, worktree, path }: HostPath) => {
+    showProjectPanel(project, "terminal");
+    void startShellTerminal(daemon, project, { place: { ...(worktree !== undefined && { worktree }), path }, focus: true });
+  };
+
+  const openSystemTerminal = (project: Project) => {
+    request({ type: "open_project_terminal", project: project.id }).catch((err: unknown) => toastError(errorPresentation(err as Error), undefined, t("sidebar.project.openSystemTerminalFailedTitle")));
   };
 
   const pushProjectBranch = (project: Project) => {
@@ -967,7 +987,7 @@ export function App(): React.ReactElement {
   });
   const stableSetSessionColour = useStableHandler(setSessionColour);
   const stableOpenArchive = useStableHandler(openArchive);
-  const stableBrowseProject = useStableHandler(browseProject);
+  const stableOpenProjectPanel = useStableHandler(openProjectPanel);
   const stableSwitchConsole = useStableHandler(switchConsole);
   const stableCommitPreview = useStableHandler(commitPreview);
   const stableNextWaiting = useStableHandler(selectNextWaiting);
@@ -996,7 +1016,8 @@ export function App(): React.ReactElement {
   const stableFocus = useStableHandler(sidebarView.setFocus);
   const stableOpenProjectDirectory = useStableHandler(openProjectDirectory);
   const stableOpenRepository = useStableHandler(openRepository);
-  const stableOpenProjectTerminal = useStableHandler(openProjectTerminal);
+  const stableOpenSystemTerminal = useStableHandler(openSystemTerminal);
+  const stableOpenShellTerminal = useStableHandler(openShellTerminal);
   const stableCopySessionId = useStableHandler(copySessionId);
   const stableCopyProjectName = useStableHandler(copyProjectName);
   const stablePullProjectBranch = useStableHandler(pullProjectBranch);
@@ -1126,10 +1147,10 @@ export function App(): React.ReactElement {
                 onQuickCreateSession={stableQuickCreateSession}
                 onFocus={stableFocus}
                 onOpenArchive={stableOpenArchive}
-                visibleBrowserProjectId={filesOnScreen ? asideProject?.id : undefined}
-                onBrowseProject={stableBrowseProject}
+                visibleProjectPanels={visibleProjectPanels}
+                onOpenProjectPanel={stableOpenProjectPanel}
                 onOpenProjectDirectory={stableOpenProjectDirectory}
-                onOpenProjectTerminal={stableOpenProjectTerminal}
+                onOpenSystemTerminal={stableOpenSystemTerminal}
                 onOpenRepository={links ? stableOpenRepository : undefined}
                 onCopyProjectName={stableCopyProjectName}
                 onCopySessionId={stableCopySessionId}
@@ -1230,28 +1251,30 @@ export function App(): React.ReactElement {
                   />
                 </div>
                 {asideOwner && (
-                  <RightPane
-                    owner={asideOwner}
-                    project={asideProject}
-                    layout={asideLayout}
-                    active={paneShown || panes.asidePeek.active}
-                    selectedSessionId={selectedSessionId}
-                    reportSessionId={reportSessionId}
-                    focusTerminal={focusTerminal}
-                    frameKeys={{
-                      onEscape: panes.dismissOverlays,
-                      onCycleRegion: regionCycle.cycle,
-                      onMoveHistory: navigation.moveByShortcut,
-                      onMoveConsoleSession: moveConsoleSession,
-                    }}
-                    peekKind={peekKind}
-                    onViewFile={viewLinkedFile}
-                    onDismiss={() => panes.asidePeek.hide()}
-                    maximizeArea={agentAreaRef}
-                    areaEasing={isDockEasing(sidebarColumnPhase)}
-                    float={asideFloat}
-                    floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
-                  />
+                  <OpenShellTerminal.Provider value={stableOpenShellTerminal}>
+                    <RightPane
+                      owner={asideOwner}
+                      project={asideProject}
+                      layout={asideLayout}
+                      active={paneShown || panes.asidePeek.active}
+                      selectedSessionId={selectedSessionId}
+                      reportSessionId={reportSessionId}
+                      focusTerminal={focusTerminal}
+                      frameKeys={{
+                        onEscape: panes.dismissOverlays,
+                        onCycleRegion: regionCycle.cycle,
+                        onMoveHistory: navigation.moveByShortcut,
+                        onMoveConsoleSession: moveConsoleSession,
+                      }}
+                      peekKind={peekKind}
+                      onViewFile={viewLinkedFile}
+                      onDismiss={() => panes.asidePeek.hide()}
+                      maximizeArea={agentAreaRef}
+                      areaEasing={isDockEasing(sidebarColumnPhase)}
+                      float={asideFloat}
+                      floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
+                    />
+                  </OpenShellTerminal.Provider>
                 )}
               </main>
               {asideOwner && asideDocked && (
