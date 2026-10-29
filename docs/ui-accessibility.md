@@ -172,6 +172,11 @@ sits a step lighter, so it takes its own fill (`--tooltip-on-dialog-fill`, 1.27:
 too. The project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave the
 field's `--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching its fill.
 
+A dialog's Advanced section opens from a small ghost button (`AdvancedSection` in
+`packages/ui/src/dialogs/AdvancedSection.tsx`) whose label is in `--app-muted` at rest and the foreground on hover and
+keyboard focus, instead of the ghost variant's `--default-foreground`, by the user's decision: its box lines up with
+the fields above, so its label sits in from theirs, and in their colour it would read as a field label out of line.
+
 ## Keyboard
 
 Every interactive control is reachable from the keyboard and operable with Enter / Space, except for the collection-row
