@@ -52,7 +52,7 @@ export function TrustedFoldersSection(): React.ReactElement {
               <TitledControl title={t("settings.trusted.removeTooltip")}>
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="danger-soft"
                   preventFocusOnPress
                   // The tooltip nearly repeats the accessible name; an empty description keeps it from being read twice.
                   aria-describedby=""
