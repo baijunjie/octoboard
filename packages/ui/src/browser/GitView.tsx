@@ -244,8 +244,8 @@ function failureParts({ branches, branch, uncommitted, committed, items }: Pick<
 }
 
 /** The uncommitted changes and the branch's commits both failed and nothing is listed: one heading
- * and one Try again, with each part's own sentence in Details, then its raw text, in place of the two
- * marks. */
+ * and one Try again, with each part's own sentence on the details surface, then its raw text, in
+ * place of the two marks. */
 function BothFailed({ failures, announce, onRetry }: { failures: ChangesFailure[]; announce: boolean; onRetry: (from: Element | null) => void }): React.ReactElement {
   const t = useT();
   return (

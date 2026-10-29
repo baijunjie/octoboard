@@ -218,7 +218,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Reports that could not be listed, none known yet",
-    description: "The console session has no page the panel knows of, so the failure takes the panel's place in the empty-state shape, under the panel header: a danger glyph, the heading and the application's generic sentence. Try again is the primary button and Details the secondary one, which holds the daemon's raw message.",
+    description: "The console session has no page the panel knows of, so the failure takes the panel's place in the empty-state shape, under the panel header: a danger glyph, the heading and the application's generic sentence. The daemon's raw message sits on a surface of its own under the sentence, with Try again as the only button below it.",
     state: failedLists,
     pageListErrors: { [unlisted.id]: listFailure },
     steps: [
@@ -230,7 +230,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Project session whose reports could not be listed",
-    description: "A project session whose page listing failed, with nothing known of its pages: the Report toggle is still offered, ahead of Files and Terminal, and its card sits above Files with the failure in place of a page, under the panel header, with Try again and Details.",
+    description: "A project session whose page listing failed, with nothing known of its pages: the Report toggle is still offered, ahead of Files and Terminal, and its card sits above Files with the failure in place of a page, under the panel header, with the daemon's raw message on a surface of its own under the sentence and Try again below it.",
     state: projectSessions,
     pageListErrors: { [withoutReport.id]: listFailure },
     steps: [openProjectSession(withoutReport.title)],

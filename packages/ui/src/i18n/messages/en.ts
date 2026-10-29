@@ -71,7 +71,6 @@ export const en = {
 
   "startup.daemonFailed.title": "The daemon failed to start",
   "startup.daemonFailed.description": "The daemon is the background process that runs your sessions and terminals.",
-  "startup.daemonFailed.markLabel": "Why the daemon did not start",
   "startup.daemonFailed.remedy": "{appName} cannot work without it. Open {appName} again to try once more.",
   "startup.noAddress.title": "No daemon address",
   "startup.noAddress.alertTitle": "Could not connect to the daemon",
@@ -187,7 +186,6 @@ export const en = {
   "error.alertLocationUnknown": "Unknown",
   "error.acknowledge": "OK",
   "error.crashed": "{appName} hit an error it could not recover from.",
-  "error.crashed.markLabel": "Why {appName} stopped",
   "error.crashed.heading": "An unexpected error occurred",
   "error.crashed.retry": "Try again. If the error comes back, report it.",
   "error.tryAgain": "Try again",

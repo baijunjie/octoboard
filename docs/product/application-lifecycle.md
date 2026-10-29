@@ -40,8 +40,8 @@ Two things happen on every daemon start:
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
 processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a screen
 that says the daemon failed to start and offers to quit — a failed start never leaves a window with no explanation. The
-daemon's own reason is not on that screen itself but in the popover of the mark after its heading (the screen is
-described in "The window chrome and the content panel" in `docs/product/window-layout.md`); the error alert shown over
+daemon's own reason is on that screen under its explanation (the screen is described in "The window chrome and the
+content panel" in `docs/product/window-layout.md`); the error alert shown over
 the screen, titled "The daemon failed to start", says that the daemon is the background process that runs the user's
 sessions and terminals, then that Octoboard cannot work without it and that opening Octoboard again tries once more,
 with the same reason in a block under its **Error details**. It is a known failure, not an unexpected one: it asks for

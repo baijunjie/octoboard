@@ -464,7 +464,7 @@ export const projectFilesScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "A project folder that cannot be read",
-    description: "The failure takes the empty-state shape in place of the tree: a danger glyph, the heading and the application's own explanation of why the folder cannot be read, with Try again as the primary button and Details, which holds the system's reason, beside it. Narrow shows the same failure in the docked Files card.",
+    description: "The failure takes the empty-state shape in place of the tree: a danger glyph, the heading and the application's own explanation of why the folder cannot be read, with the system's reason on a surface of its own under the explanation and Try again as the primary button below it. Narrow shows the same failure in the docked Files card.",
     state,
     files: {
       "": {

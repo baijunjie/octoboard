@@ -57,7 +57,6 @@ export const zhHans: Translation<"other"> = {
 
   "startup.daemonFailed.title": "守护进程启动失败",
   "startup.daemonFailed.description": "守护进程是运行会话和终端的后台进程。",
-  "startup.daemonFailed.markLabel": "守护进程未能启动的原因",
   "startup.daemonFailed.remedy": "没有它，{appName} 无法工作。请重新打开 {appName} 再试一次。",
   "startup.noAddress.title": "未指定守护进程地址",
   "startup.noAddress.alertTitle": "无法连接守护进程",
@@ -171,7 +170,6 @@ export const zhHans: Translation<"other"> = {
   "error.alertLocationUnknown": "未知",
   "error.acknowledge": "确定",
   "error.crashed": "{appName} 遇到了无法恢复的错误。",
-  "error.crashed.markLabel": "{appName} 停止运行的原因",
   "error.crashed.heading": "发生意外错误",
   "error.crashed.retry": "请重试。如果错误再次出现，请报告此问题。",
   "error.tryAgain": "重试",

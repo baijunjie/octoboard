@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { ErrorBoundary } from "./ErrorBoundary";
-import { press } from "./components/detailsTestSupport";
 import { t } from "./i18n/language";
 import type { PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
@@ -49,14 +48,10 @@ async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number 
   return container;
 }
 
-/** The scroller holding the stack of the crash, in the popover the mark after the page's heading opens. */
-async function stack(container: HTMLElement): Promise<HTMLElement> {
-  press(container.querySelector(`button[aria-label="${t("error.crashed.markLabel")}"]`)!);
-  const details = document.querySelector<HTMLElement>(`[role="dialog"][aria-label="${t("error.crashed.markLabel")}"]`)!;
-  // HeroUI writes the fade's state on the next frame.
-  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
-  const block = details.querySelector("pre")?.closest<HTMLElement>("[data-slot=scroll-shadow]");
-  if (!block) throw new Error("the crash screen's Details shows no stack");
+/** The scroller holding the stack of the crash, on the surface under the page's lines. */
+function stack(container: HTMLElement): HTMLElement {
+  const block = container.querySelector('[data-slot="empty-state"] > [data-slot="surface"] pre')?.closest<HTMLElement>("[data-slot=scroll-shadow]");
+  if (!block) throw new Error("the crash screen shows no stack");
   return block;
 }
 
@@ -74,7 +69,7 @@ it.each([
   ["the stack", stack],
   ["the screen's column", column],
 ])("makes %s a named region while it scrolls", async (_name, scroller) => {
-  const scrolling = await scroller(await mountCrashed({ scrollHeight: 1000, clientHeight: 100 }));
+  const scrolling = scroller(await mountCrashed({ scrollHeight: 1000, clientHeight: 100 }));
   expect(scrolling.getAttribute("role")).toBe("region");
   expect(scrolling.getAttribute("aria-label")).toBeTruthy();
   expect(scrolling.tabIndex).toBe(0);
@@ -84,21 +79,18 @@ it.each([
   ["the stack", stack],
   ["the screen's column", column],
 ])("does not make %s a region when it fits", async (_name, scroller) => {
-  const fitting = await scroller(await mountCrashed({ scrollHeight: 100, clientHeight: 100 }));
+  const fitting = scroller(await mountCrashed({ scrollHeight: 100, clientHeight: 100 }));
   expect(fitting.hasAttribute("role")).toBe(false);
   expect(fitting.hasAttribute("tabindex")).toBe(false);
 });
 
-it("says the crash in the application's words on the page and keeps the error's own text in a mark after the heading, with Try again and Quit the only buttons", async () => {
+it("says the crash in the application's words on the page and keeps the error's own text on a surface under them, with Try again the only button", async () => {
   const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 });
   expect(container.querySelector("h1")?.textContent).toBe(t("error.crashed.heading"));
   expect(container.textContent).toContain(t("error.crashed.retry"));
-  expect(container.querySelector("pre")).toBeNull();
-  expect(container.textContent).not.toContain("boom");
-  const buttons = [...container.querySelectorAll("button")];
-  expect(buttons.map((button) => button.textContent || button.getAttribute("aria-label"))).toEqual([t("error.crashed.markLabel"), "Try again"]);
-  expect(buttons[0].parentElement?.previousElementSibling).toBe(container.querySelector("h1"));
-  expect((await stack(container)).textContent).toContain("boom");
+  // A plain browser has no quit flow, so Try again stands alone.
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
+  expect(stack(container).textContent).toContain("boom");
 });
 
 it.each([
@@ -114,5 +106,5 @@ it.each([
     throw error;
   }
   const container = await mountCrashed({ scrollHeight: 100, clientHeight: 100 }, CrashingThus);
-  expect((await stack(container)).textContent).toBe(shown);
+  expect(stack(container).textContent).toBe(shown);
 });

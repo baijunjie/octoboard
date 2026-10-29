@@ -5,7 +5,6 @@ import { setInteractionModality } from "react-aria";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
-import { openDetails } from "../components/detailsTestSupport";
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Event, HistoryMessage, Session, SessionContext } from "../protocol";
@@ -136,14 +135,13 @@ it("shows a failed request as an error with Try again, and reads again when it i
   const container = await mount(new Error("gone"));
   expect(container.textContent).toContain("Could not load the history of this session");
   expect(container.textContent).toContain("Something unexpected went wrong.");
-  expect(container.textContent).not.toContain("gone");
   // It arrived after the view painted, so the title and the reason announce themselves, and nothing else does.
   const announcement = container.querySelector("[role=alert]")!;
   expect(announcement.textContent).toBe("Could not load the history of this sessionSomething unexpected went wrong.");
-  // The reason and Try again are inside the one panel.
+  // The reason, its raw text and Try again are inside the one panel.
   const panel = container.querySelector('[data-slot="empty-state"]')!;
-  expect(openDetails(panel).textContent).toBe("gone");
-  expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again", "Details"]);
+  expect(panel.querySelector(':scope > [data-slot="surface"]')?.textContent).toBe("gone");
+  expect([...panel.querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Try again"]);
   expect(errorAlerts.report).not.toHaveBeenCalled();
   expect(container.textContent).not.toContain("History unavailable");
   daemon.request.mockResolvedValue({ type: "session_history", session: "s-1", messages: history });

@@ -470,6 +470,6 @@ no package matches.
 
 The list is loaded when the dialog opens, which says it is loading meanwhile. Where it cannot be read, the dialog shows
 an empty-state failure (see "Failures shown on the screen" in `docs/product/error-alerts.md`) saying the licenses could
-not be loaded, with **Try again** and the loader's own text behind **Details**. A build made without the list shows,
+not be loaded, with the loader's own text under it and **Try again**. A build made without the list shows,
 with no search field and no count, an empty state saying that this build has no license list because it was made
 without it.

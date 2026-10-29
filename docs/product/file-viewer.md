@@ -169,7 +169,7 @@ what the viewer shows for
 
 **An error** fills the body when the file or change cannot be opened at all: an empty-state failure, centred in the
 body, with the same red circled `!` as a failure notice, headed that it could not be opened, with the reason under it
-and any details behind **Details** (see "Errors" in `docs/product/project-pane.md`). An image that was read but cannot
+and any details under that (see "Errors" in `docs/product/project-pane.md`). An image that was read but cannot
 be decoded, and has no text to fall back to, is the same kind of error, headed that the image cannot be displayed, with
 what to check about the file. Neither has Try again. A file still in conflict whose content cannot be read shows the
 first of these errors and nothing more — no mark after the path — its conflict being said by the title's Conflicted

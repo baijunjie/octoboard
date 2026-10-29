@@ -110,19 +110,18 @@ bar, the content panel spans the window.
 
 The screens for a daemon that could not start and for a UI that failed are each an empty-state failure of the whole
 page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred in the content panel: a red
-circled `!`, a heading that is the page's top-level heading, followed on its line by an error mark (a red circled `!`
-button), one line under it in Octoboard's own words, and a centred row of at most two buttons. The failure's raw text
-is in the popover the heading's mark opens, and never on the page; neither screen holds an alert or a **Details**
-button, and nothing on it but the glyph and the mark is drawn in the danger colour. **Quit** is there only where the
-application can quit itself.
+circled `!`, a heading that is the page's top-level heading, one line under it in Octoboard's own words, the failure's
+raw text on a surface of its own under that line, and a centred row of at most two buttons. Neither screen holds an
+alert, a mark beside its heading or a **Details** button, and nothing on it but the glyph is drawn in the danger
+colour. **Quit** is there only where the application can quit itself.
 
-- **A UI that failed**: headed that an unexpected error occurred, its mark named why Octoboard stopped, with the line
-  saying to try again and, if the error comes back, to report it. Its row holds **Try again**, the primary button,
-  then **Quit**. The mark's popover holds the stack trace, headed by the error's name and message, the stack following
-  them without repeating that line where the stack already begins with it.
-- **A daemon that could not start**: headed that the daemon failed to start, its mark named why the daemon did not
-  start, with the line saying Octoboard cannot work without it and that opening Octoboard again tries once more. Its
-  row holds **Quit** alone. The mark's popover holds the daemon's own message, its long lines wrapped.
+- **A UI that failed**: headed that an unexpected error occurred, with the line saying to try again and, if the error
+  comes back, to report it. Under it is the stack trace, headed by the error's name and message, the stack following
+  them without repeating that line where the stack already begins with it. Its row holds **Try again**, the primary
+  button, then **Quit**.
+- **A daemon that could not start**: headed that the daemon failed to start, with the line saying Octoboard cannot work
+  without it and that opening Octoboard again tries once more. Under it is the daemon's own message. Its row holds
+  **Quit** alone.
 
 The error alert shown first, over the screen for a UI that failed, is titled that an unexpected error occurred, and
 its body says that Octoboard hit an error it could not recover from, with the same stack trace, headed the same way,

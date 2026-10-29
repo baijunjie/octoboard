@@ -71,8 +71,8 @@ product docs name for parts of the window:
   `docs/product/report-panel.md`); and the waiting count's overflow label reads "99+".
 - **A literal to type, and program text**: the query parameter and the environment-variable names the startup screen
   gives when it has no daemon address to connect to (`?port=`, `VITE_DAEMON_PORT`, `OCTOBOARD_DAEMON_PORT`) and the
-  command it names, and the stack trace in the heading mark's popover on the screen for a failed UI, which also keeps
-  its left alignment and so its indentation.
+  command it names, and the stack trace on the screen for a failed UI, which also keeps its left alignment and so its
+  indentation.
 - **The terminal**, which is never mirrored (see "What follows the language" in `docs/product/language.md`).
 - **A report page**, which keeps its own direction; only the panel around it is mirrored (see "What follows the
   language" in `docs/product/language.md`).

@@ -50,21 +50,10 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The daemon failed to start",
     description:
-      "The error dialog has been acknowledged, leaving the page that is the whole failure, in the empty-state shape: a danger glyph, the heading naming the failure as the page's only h1 with a danger mark (a circled !, named \"Why the daemon did not start\") right after it, and one line in the application's own words saying what to do. The row under it holds Quit alone: there is no Try again, since nothing can be retried from here, and no Details button. No daemon text is on the page; it is in the mark's popover, shown in the next scenario. The native-capable browser stub exposes Quit without closing the preview.",
+      "The error dialog has been acknowledged, leaving the page that is the whole failure, in the empty-state shape: a danger glyph, the heading naming the failure as the page's only h1 with no mark beside it, and one line in the application's own words saying what to do. Under it, start-aligned on a surface of its own, is the daemon's text, wrapped over as many lines as it needs and no horizontal scroll. The text is taller than the block allows (up to 40% of the window's height), so it scrolls vertically inside the surface with a fade at the edge it hides the rest behind; use Short to see that, then Tab onto the text, named Error details, for its focus ring and keyboard scrolling. The row under the surface holds Quit alone: there is no Try again, since nothing can be retried from here, and no Details button. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: DAEMON_FAILED,
     steps: [(ui) => ui.press(ui.t("error.acknowledge"))],
-  },
-  {
-    id: "startup-daemon-failed-details",
-    group: GROUP,
-    category: "exceptional",
-    title: "The daemon failed to start, the mark's popover open",
-    description:
-      "The mouse rests on the danger mark after the heading: its popover opens with no click and no focus taken, holding only the daemon's text, wrapped over as many lines as it needs, on a surface of its own; nothing in the application's own words repeats there. The text is far taller than the window: the surface holds as much as the popover allows and the text scrolls vertically inside it with a fade at the edge it hides the rest behind, and no horizontal scroll. Use Short to see that, then Tab onto the text, named Error details, for its focus ring and keyboard scrolling.",
-    quitRequested: true,
-    startup: DAEMON_FAILED,
-    steps: [(ui) => ui.press(ui.t("error.acknowledge")), (ui) => ui.hoverStatusMark(ui.t("startup.daemonFailed.markLabel"))],
   },
   {
     id: "startup-daemon-failed-alert",
@@ -72,7 +61,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The daemon failed to start, the error dialog",
     description:
-      "The error dialog that opens over the page, titled \"The daemon failed to start\": its body is only the application's own two sentences (the daemon is the background process that runs your sessions and terminals; Octoboard cannot work without it and should be opened again to try once more), a known failure, so there is no report guidance and no Report issue button. The daemon's text is behind Error details, open here, in a wrapping block on its own surface, not as the dialog's body text. The message is taller than the dialog's body, which scrolls with a fade at its bottom edge. The page behind is dimmed and is looked at in the scenarios above.",
+      "The error dialog that opens over the page, titled \"The daemon failed to start\": its body is only the application's own two sentences (the daemon is the background process that runs your sessions and terminals; Octoboard cannot work without it and should be opened again to try once more), a known failure, so there is no report guidance and no Report issue button. The daemon's text is behind Error details, open here, in a wrapping block on its own surface, not as the dialog's body text. The message is taller than the dialog's body, which scrolls with a fade at its bottom edge. The page behind is dimmed and is looked at in the scenario above.",
     quitRequested: true,
     startup: DAEMON_FAILED,
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],
@@ -83,21 +72,10 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The UI crashed",
     description:
-      "The error dialog has been acknowledged, leaving the crash page in the empty-state shape: a danger glyph, the heading \"An unexpected error occurred\" as the page's only h1 with a danger mark (a circled !, named \"Why Octoboard stopped\") right after it, and one line in the application's own words reading \"Try again. If the error comes back, report it.\" The row under it holds Try again as the primary button and Quit: two buttons, no Details. No error text is on the page; the stack is in the mark's popover, shown in the next scenario. The native-capable browser stub exposes Quit without closing the preview.",
+      "The error dialog has been acknowledged, leaving the crash page in the empty-state shape: a danger glyph, the heading \"An unexpected error occurred\" as the page's only h1 with no mark beside it, and one line in the application's own words reading \"Try again. If the error comes back, report it.\" Under it, start-aligned on a surface of its own, is the stack, wrapped, as tall as the surface allows (up to 40% of the window's height) and then scrolling vertically with a fade at the edge it hides the rest behind. Use Short to see that, then Tab onto the stack, named Error details, for its focus ring and keyboard scrolling. The row under the surface holds Try again as the primary button and Quit: two buttons, no Details. The native-capable browser stub exposes Quit without closing the preview.",
     quitRequested: true,
     startup: { kind: "crash", stack: stackOf(12) },
     steps: [(ui) => ui.press(ui.t("error.acknowledge"))],
-  },
-  {
-    id: "startup-crash-details",
-    group: GROUP,
-    category: "exceptional",
-    title: "The UI crashed, the mark's popover open",
-    description:
-      "The mouse rests on the danger mark after the heading: its popover opens with no click and no focus taken, holding only the stack, on a surface of its own named Error details. The stack is as tall as the popover allows (up to 40% of the window's height), then scrolls (both ways) with a fade at the edge it hides the rest behind. Use Short to see that, then Tab onto the stack for its focus ring and keyboard scrolling; Fit shows it whole without a fade.",
-    quitRequested: true,
-    startup: { kind: "crash", stack: stackOf(12) },
-    steps: [(ui) => ui.press(ui.t("error.acknowledge")), (ui) => ui.hoverStatusMark(ui.t("error.crashed.markLabel"))],
   },
   {
     id: "startup-crash-alert",
@@ -105,7 +83,7 @@ export const startupScenarios: Scenario[] = [
     category: "exceptional",
     title: "The UI crashed, the error dialog",
     description:
-      "The error dialog that opens over the crash page, titled \"An unexpected error occurred\": its body is only the application's own sentence (that Octoboard hit an error it could not recover from) and the report guidance. The stack is behind Error details, open here, on a surface of its own that keeps the danger tone, as tall as the dialog allows with a fade at the edge it hides the rest behind. The page behind is dimmed and is looked at in the scenarios above.",
+      "The error dialog that opens over the crash page, titled \"An unexpected error occurred\": its body is only the application's own sentence (that Octoboard hit an error it could not recover from) and the report guidance. The stack is behind Error details, open here, on a surface of its own that keeps the danger tone, as tall as the dialog allows with a fade at the edge it hides the rest behind. The page behind is dimmed and is looked at in the scenario above.",
     quitRequested: true,
     startup: { kind: "crash", stack: stackOf(12) },
     steps: [(ui) => ui.press(ui.t("error.diagnostics"))],

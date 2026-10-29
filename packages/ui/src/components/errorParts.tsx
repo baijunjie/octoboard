@@ -9,8 +9,8 @@ import type { MessageParams } from "../protocol";
 import { DaemonErrorMessage, type DaemonErrorPart } from "./DaemonErrorMessage";
 import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
 
-/** The details of a failure for an alert's Details popover (further explanation, then raw text), or
- * nothing when there is neither. */
+/** The details of a failure for an alert's Details popover or an empty-state failure's details surface
+ * (further explanation, then raw text), or nothing when there is neither. */
 export function errorDetails(error: ErrorPresentation): React.ReactNode {
   return typeof error !== "string" && hasErrorDetails(error) ? <DaemonErrorMessage error={error} part="details" /> : undefined;
 }

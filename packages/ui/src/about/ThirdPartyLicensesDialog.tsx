@@ -78,8 +78,9 @@ export function ThirdPartyLicensesList({ licenses }: { licenses: ThirdPartyLicen
   );
 }
 
-/** Where the dialog's load stands: running, ended in `error` (the loader's own text, for Details), or done.
- * `retrying` is a Try again whose load is still running, which keeps the failure on screen with its button pending. */
+/** Where the dialog's load stands: running, ended in `error` (the loader's own text, for the failure's details), or
+ * done. `retrying` is a Try again whose load is still running, which keeps the failure on screen with its button
+ * pending. */
 type Loaded = { status: "loading" } | { status: "failed"; error: string; retrying: boolean } | { status: "loaded"; licenses: ThirdPartyLicenses };
 
 /** The third-party licenses, loaded when the dialog opens (the list is a chunk of its own, see

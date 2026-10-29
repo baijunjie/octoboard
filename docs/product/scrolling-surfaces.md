@@ -78,9 +78,12 @@ Once it holds more than it can show, each of these fades at its edge:
   as a column as tall as the sections it holds, however many there are, which therefore never scrolls and carries
   no fade;
 - the **screens shown before there is anything to show** (see "The window chrome and the content panel" in
-  `docs/product/window-layout.md`): the column of content of each of them, and, in the popover of the mark after the
-  heading of the screens for a UI that failed and for a daemon that could not start, the stack trace and the daemon's
-  message.
+  `docs/product/window-layout.md`): the column of content of each of them;
+- an **empty-state failure** (see "Failures shown on the screen" in `docs/product/error-alerts.md`) taller than the
+  pane, panel or dialog body it fills, and each block of raw text on an empty-state failure's details surface — the
+  stack trace on the screen for a UI that failed and the daemon's message on the screen for a daemon that could not
+  start among them — once it is taller than the height it is held to (see "Names and diagnostic details" in
+  `docs/product/error-alerts.md`).
 
 Three kinds of scrolling show no fade:
 
@@ -111,10 +114,13 @@ covers. These are:
   buttons sit at the end of that content and the window itself never scrolls, so a long message — the instructions
   of the screen with no daemon address, say — would otherwise leave nothing between those buttons and the top of the
   screen to take focus. In Tab order it comes before the buttons it holds.
-- **the stack trace in the heading mark's popover on the screen for a UI that failed, and the daemon's message in the
-  heading mark's popover on the screen for a daemon that could not start**, each named "Error details". Nothing else in
-  that popover takes focus, so without it the fade at the block's edge would be saying there is more where a keyboard
-  could not go.
+- **a block of raw text on an empty-state failure's details surface** — the stack trace on the screen for a UI that
+  failed and the daemon's message on the screen for a daemon that could not start among them — named "Error details",
+  or by the heading over it where several blocks stand together. Nothing in the block takes focus, so without it the
+  fade at the block's edge would be saying there is more where a keyboard could not go.
+- **an empty-state failure taller than the pane, panel or dialog body it fills**, named by its heading. Nothing around
+  it scrolls, and its lines and details hold little or nothing that takes focus, so without it what is scrolled out of
+  view there would be out of the keyboard's reach.
 - **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes focus,
   so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts… (see "What the
   panel shows" in `docs/product/account-quota-panel.md`).
