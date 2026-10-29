@@ -112,7 +112,7 @@ function ApprovalReviewerSelect(): React.ReactElement {
 
 /** Claude Code's four choices. Approve everything is saved only after the confirmation dialog: it makes Claude Code run
  * every tool without asking in every account, and Octoboard suppresses Claude Code's own warning for it (see "Approval
- * modes" in `docs/product/agent-accounts.md`). */
+ * modes" in `docs/product/per-agent-settings.md`). */
 function ClaudeApprovalModeSelect(): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
@@ -134,7 +134,8 @@ function ClaudeApprovalModeSelect(): React.ReactElement {
 }
 
 /** An agent's Permission approval row, above its accounts table: one choice that applies to every account of the agent
- * (see "Approval modes" in `docs/product/agent-accounts.md`). Nothing for an agent with no approval choice (Grok). */
+ * (see "Approval modes" in `docs/product/per-agent-settings.md`). Nothing for an agent with no approval choice
+ * (Grok). */
 export function AgentApprovalSetting({ agent }: { agent: Agent }): React.ReactElement | null {
   const t = useT();
   if (!hasApprovalChoice(agent)) return null;

@@ -11,7 +11,7 @@ import type { Console, Project, Session } from "../protocol";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
 import { account, availability, bus, consoles, projects, request, sectionEntry, sessions, settings, toastError } from "./agentAccountsSectionTestState";
-import { animate, buttonNamed, chooseItem, menuItem, mount, openDetailsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
+import { animate, buttonNamed, chooseItem, menuItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf, selectTab } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -37,7 +37,7 @@ it("offers one Codex mode above the table, following configuration by default", 
   expect(container.querySelectorAll("tbody select")).toHaveLength(0);
 });
 
-it("says the permission approval once, as a row above the table with its help, not in a column or the details", async () => {
+it("says the permission approval once, as a row above the table with its help, not in a column or the details or settings dialogs", async () => {
   const { container } = mount("Codex");
   const panel = container.querySelector('[role="tabpanel"]')!;
   expect(panel.textContent?.match(/Permission approval/g)).toHaveLength(1);
@@ -47,6 +47,11 @@ it("says the permission approval once, as a row above the table with its help, n
   const dialog = await openDetailsOf(container, "codex-work");
   expect(dialog.querySelector("select")).toBeNull();
   expect(dialog.textContent).not.toContain("Permission approval");
+  await act(async () => buttonNamed(dialog, t("common.close"))!.click());
+  await frames();
+  const settingsDialog = await openSettingsOf(container, "codex-work");
+  expect(settingsDialog.querySelector("select")).toBeNull();
+  expect(settingsDialog.textContent).not.toContain("Permission approval");
 });
 
 it("shows no permission approval row for Grok", () => {
@@ -442,14 +447,14 @@ it("closes its Add agent dialog when Settings asks for anything else", () => {
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("shows the agent tab of an account Settings was asked about and opens its details on the sharing switch", async () => {
+it("shows the agent tab of an account Settings was asked about and opens its settings, not its details, on the sharing switch", async () => {
   const { container, showSharingOf } = mount("Claude Code");
   const switchOf = () => document.body.querySelector('[data-sharing-account="codex-work"] input[role="switch"]');
   expect(switchOf()).toBeNull();
   showSharingOf("codex-work");
   await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))); });
   expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Codex");
-  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Account settings");
   expect(switchOf()).not.toBeNull();
   expect(document.activeElement).toBe(switchOf());
 });
@@ -463,7 +468,7 @@ it("shows the focus ring on the sharing switch even after a pointer press opened
   expect(getInteractionModality()).toBe("keyboard");
 });
 
-it("opens no details for an account whose agent is not in the list, focusing the section's tab", async () => {
+it("opens no settings for an account whose agent is not in the list, focusing the section's tab", async () => {
   settings.added_agents = ["claude", "grok"];
   const { container, showSharingOf } = mount("Claude Code");
   const entry = document.body.lastElementChild as HTMLElement;
@@ -479,30 +484,36 @@ it("opens no details for an account whose agent is not in the list, focusing the
   expect(document.querySelector('[role="dialog"]')).toBeNull();
 });
 
-it("gives focus back to the row's actions button after its details close, in a language whose button name is not English", async () => {
+it("gives focus back to the row's actions button after its details or settings close, in a language whose button name is not English", async () => {
   const before = currentLanguage();
   setLanguage("zh-Hans");
   onTestFinished(() => { act(() => setLanguage(before)); });
   const { container } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>("[data-row-actions] button")!;
   expect(trigger.getAttribute("aria-label")).not.toContain("Actions for");
-  const dialog = await openDetailsOf(container, "codex-work", t("settings.accounts.settingsItem"));
-  await act(async () => buttonNamed(dialog, t("common.close"))!.click());
-  await frames();
-  expect(document.querySelector('[role="dialog"]')).toBeNull();
-  expect(document.activeElement).toBe(trigger);
+  for (const open of [() => openSettingsOf(container, "codex-work", t("settings.accounts.settingsItem")), () => openDetailsOf(container, "codex-work", t("settings.accounts.detailsItem"))]) {
+    const dialog = await open();
+    await act(async () => buttonNamed(dialog, t("common.close"))!.click());
+    await frames();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  }
 });
 
-it("opens the details of an account from the first entry of its actions menu, gives focus back to the menu's button on closing, and closes with the account", async () => {
+it("opens the details of an account from the first entry of its actions menu, read-only, gives focus back to the menu's button on closing, and closes with the account", async () => {
   const { container, render } = mount("Codex");
   const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
   const dialog = await openDetailsOf(container, "codex-work");
   expect(dialog.textContent).toContain("codex-work");
-  expect(dialog.querySelector("h2")?.textContent).toBe("Account settings");
+  expect(dialog.querySelector("h2")?.textContent).toBe("Account details");
   // The body leads with the account's name.
   expect(dialog.querySelector("[data-slot=modal-body]")?.textContent).toMatch(/^codex-work/);
   expect(dialog.textContent).not.toContain("Codex account");
   expect(dialog.textContent).toContain("/home/dev/.codex-work");
+  // Nothing in it to change: no switch, and no button but the header's close.
+  expect(dialog.querySelector('input[role="switch"]')).toBeNull();
+  expect([...dialog.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).not.toContain("Log in");
+  expect(dialog.textContent).not.toContain("Disable account");
   // No footer: the header's close button closes it.
   expect(buttonNamed(dialog, "Close")).toBe(dialog.querySelector('button[aria-label="Close"]'));
   await act(async () => buttonNamed(dialog, "Close")!.click());
@@ -510,6 +521,28 @@ it("opens the details of an account from the first entry of its actions menu, gi
   expect(document.querySelector('[role="dialog"]')).toBeNull();
   expect(document.activeElement).toBe(trigger);
   await openDetailsOf(container, "codex-work");
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  settings.accounts = settings.accounts.filter((held) => held.id !== "codex-work");
+  render();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("opens the settings of an account from the second entry of its actions menu, with its name first and only its switches after, and closes with the account", async () => {
+  const { container, render } = mount("Codex");
+  const trigger = rowOf(container, "codex-work").querySelector<HTMLElement>('button[aria-label^="Actions for"]')!;
+  const dialog = await openSettingsOf(container, "codex-work");
+  expect(dialog.querySelector("h2")?.textContent).toBe("Account settings");
+  expect(dialog.querySelector("[data-slot=modal-body]")?.textContent).toMatch(/^codex-work/);
+  expect([...dialog.querySelectorAll('input[role="switch"]')].map((input) => input.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, ""))).toEqual([
+    "Share default configuration for codex-work",
+    "Disable account codex-work",
+  ]);
+  expect(dialog.textContent).not.toContain("/home/dev/.codex-work");
+  expect(dialog.textContent).not.toContain("Usage");
+  await act(async () => buttonNamed(dialog, "Close")!.click());
+  await frames();
+  expect(document.activeElement).toBe(trigger);
+  await openSettingsOf(container, "codex-work");
   expect(document.querySelector('[role="dialog"]')).not.toBeNull();
   settings.accounts = settings.accounts.filter((held) => held.id !== "codex-work");
   render();

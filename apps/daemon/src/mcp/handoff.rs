@@ -449,6 +449,7 @@ mod tests {
                 account: Some(id.to_string()),
                 fetched_at: 1,
                 plan: None,
+                email: None,
                 windows: vec![window],
                 unavailable: None,
             };

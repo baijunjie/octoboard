@@ -97,7 +97,7 @@ screens, terminal titles and session records the tests replay.
 
 | Path | Role |
 |---|---|
-| `src/account_quotas/` | Each account's plan quota read from its agent's own CLI: the held readings and background poller, the on-request refresh, the minimal request that starts a reset usage window, the used-up judgement (`AccountQuotas::exhausted`), and verified availability for automatic recovery (`AccountQuotas::verified_available`); completed readings notify `auto_switch` |
+| `src/account_quotas/` | Each account's plan quota read from its agent's own CLI, and the email it is signed in with (`email.rs`, read from the CLI's local sign-in record and carried on each reading): the held readings and background poller, the on-request refresh, the minimal request that starts a reset usage window, the used-up judgement (`AccountQuotas::exhausted`), and verified availability for automatic recovery (`AccountQuotas::verified_available`); completed readings notify `auto_switch` |
 | `src/account_login/` | Signing an account in with its agent's own CLI in the background (`AccountLogins`: one per account, timeout, cancel) |
 | `src/account_dirs.rs`, `src/shared_items.rs`, `src/relocate.rs` | An account's configuration directory as text (`normalize_account_dir`, `account_dir_key`), the catalog of entries that may be shared with the default account's directory, and copying a session's conversation record between configuration directories for an account switch (`locate` finds a conversation record) |
 | `src/shared_config/` | An account sharing its agent's default configuration (below) |

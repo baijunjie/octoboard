@@ -1,24 +1,26 @@
 # Logging an account in
 
 Signing an agent account in from Settings' **Agent accounts** section, for the default account and the accounts the
-user owns alike. The section itself, its accounts table and the account settings dialog, where Log in sits, are in
+user owns alike. The section itself and its accounts table, where Log in sits, are in
 `docs/product/agent-accounts.md`.
 
 ## Where Log in appears
 
 **Log in** is always in an account's actions menu, whatever its login state, so an account that is logged in can be
-logged in again; it is unavailable there while a login of the account runs. For an account known to be signed out, Log
-in also appears as an icon button directly after its **Not logged in** badge — in the Status column of the accounts
-table, and in the heading of its account settings dialog (see "The accounts table" and "The account settings dialog" in
-`docs/product/agent-accounts.md`). The icon button's tooltip is "Log in" and the name announced for it names the
-account; while a login of the account runs it is unavailable, its tooltip and description saying the account is logging
-in. This applies to the default account and the accounts the user owns alike.
+logged in again; it is unavailable there while a login of the account runs. For an account known to be signed out and
+not turned off, Log in also appears as an icon button directly after its **Not logged in** badge in the Status column
+of the accounts table (see "The accounts table" in `docs/product/agent-accounts.md`); a turned-off account has none
+there. Neither account dialog has a Log in button. The icon button's tooltip is "Log in" and the name announced for it
+names the account; while a login of the account runs it is unavailable, its tooltip and description saying the account
+is logging in. This applies to the default account and the accounts the user owns alike.
 
 ## How each agent signs in
 
 Log in signs the account in with its agent's own CLI, run by the daemon in the background against the account's config
 directory (for the default account, the directory the user's login shell gives the agent), with no terminal and no
-window. Octoboard never reads or writes the credential itself. Each agent signs in its own way:
+window. Octoboard never uses or writes the credential itself; it reads the agent's sign-in record only for the
+account's email (see "The account's sign-in email" in `docs/product/account-quotas.md`). Each agent signs in its own
+way:
 
 | Agent | What the user sees |
 |---|---|
@@ -46,12 +48,12 @@ runs at most one login per account, and one Codex login at a time across all acc
 account whose login is running.
 
 Where keyboard focus goes once the dialog has closed depends on what opened it. When a Log in icon button opened it, a
-login that succeeded puts focus on a control that stays, since the icon button goes away once the account reads as
-logged in: the row's actions menu button for the table's, the first switch of the account settings dialog for the
-dialog's. When the dialog closes any other way — Cancel login, Escape, the close button, Close after a failure — focus
-goes back to the icon button once it is available again, which is after the daemon has answered the cancel, or to that
-same control if the button has gone by then or the login turns out to have succeeded after all. When Log in in the
-actions menu opened it, focus goes back to the row's actions menu button.
+login that succeeded puts focus on the row's actions menu button, a control that stays, since the icon button goes away
+once the account reads as logged in. When the dialog closes any other way — Cancel login, Escape, the close button,
+Close after a failure — focus goes back to the icon button once it is available again, which is after the daemon has
+answered the cancel, or to that same control if the button has gone by then: the login turned out to have succeeded
+after all, or the account was turned off meanwhile. When Log in in the actions menu opened it, focus goes back to the
+row's actions menu button.
 
 When the Agent accounts section opens while a login is already running — after a reload, or started in another window
 — the dialog opens on that login (on one of them, when several are running), without starting another, so it can be

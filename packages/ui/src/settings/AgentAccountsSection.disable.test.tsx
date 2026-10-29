@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DaemonRequestError } from "../daemon-client";
 import type { Account, AccountQuota } from "../protocol";
 import { accountQuotas, request, settings, toastError } from "./agentAccountsSectionTestState";
-import { mount, mountDetails, rowOf } from "./agentAccountsSectionTestSupport";
+import { mount, mountSettings, openDetailsOf, openSettingsOf, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -59,18 +59,79 @@ describe("turning an account off", () => {
     expect(disableSwitch(rowOf(container, "codex-work")).checked).toBe(false);
   });
 
-  it("shows a turned-off row only by its switch, with no sentence of its own, no muting and nothing hidden", () => {
+  it("shows a turned-off row by its switch and a Disabled badge in its Status cell, with no sentence of its own, no muting and nothing hidden", () => {
     accountQuotas.push(quotaOf("codex", "codex-work", { agent: "codex" } as Partial<AccountQuota>));
     settings.accounts[1]!.disabled = true;
     const { container } = mount("Codex");
     const row = rowOf(container, "codex-work");
     expect(row.textContent).not.toContain("Skipped by automatic account selection");
-    expect(row.textContent).not.toContain("Disabled");
-    expect(row.querySelector("td:nth-child(4)")!.classList.contains("text-app-muted")).toBe(false);
+    expect(row.querySelector("td:nth-child(3)")!.classList.contains("text-app-muted")).toBe(false);
     expect(disableSwitch(row).checked).toBe(true);
     // The usage and the actions stay.
     expect(row.querySelector(".quota-bar-track")).not.toBeNull();
     expect(row.querySelector('button[aria-label^="Actions for"]')).not.toBeNull();
+  });
+
+  describe("the Status cell", () => {
+    const statusOf = (row: Element) => row.querySelectorAll("td")[2]!;
+    const signedOut = (account: string | null) => quotaOf("codex", account, { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Codex" }, message: "x" } });
+    const badges = (cell: Element) => [...cell.querySelectorAll("span[data-variant]")].map((chip) => chip.textContent);
+
+    it("says Disabled in place of the login state, and no Log in icon, for a turned-off account", () => {
+      accountQuotas.push(signedOut("codex-work"));
+      settings.accounts[1]!.disabled = true;
+      const { container } = mount("Codex");
+      const status = statusOf(rowOf(container, "codex-work"));
+      expect(badges(status)).toEqual(["Disabled"]);
+      expect(status.querySelector('button[aria-label^="Log in"]')).toBeNull();
+      // Log in stays in the actions menu, which this cell does not touch.
+      expect(rowOf(container, "codex-work").querySelector('button[aria-label^="Actions for"]')).not.toBeNull();
+    });
+
+    it("shows the login state and the Log in icon again once the account is turned on", () => {
+      accountQuotas.push(signedOut("codex-work"));
+      const { container, render } = mount("Codex");
+      expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Not logged in"]);
+      expect(statusOf(rowOf(container, "codex-work")).querySelector('button[aria-label^="Log in"]')).not.toBeNull();
+      settings.accounts[1]!.disabled = true;
+      render();
+      expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Disabled"]);
+      expect(statusOf(rowOf(container, "codex-work")).querySelector('button[aria-label^="Log in"]')).toBeNull();
+      settings.accounts[1]!.disabled = false;
+      render();
+      expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Not logged in"]);
+    });
+
+    it("leaves the screen-reader separator out of the Status cell's badge, and keeps it in the details dialog's", async () => {
+      accountQuotas.push(quotaOf("codex", "codex-work"), quotaOf("codex", null));
+      settings.accounts[1]!.disabled = true;
+      const { container } = mount("Codex");
+      expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Disabled"]);
+      expect(statusOf(rowOf(container, "codex-work")).querySelector(".sr-only")).toBeNull();
+      expect(badges(statusOf(rowOf(container, "default:codex")))).toEqual(["Logged in"]);
+      expect(statusOf(rowOf(container, "default:codex")).querySelector(".sr-only")).toBeNull();
+      const dialog = await openDetailsOf(container, "default:codex");
+      const badge = [...dialog.querySelectorAll("span[data-variant]")].find((chip) => chip.textContent?.includes("Logged in"))!;
+      expect(badge.previousElementSibling?.classList.contains("sr-only")).toBe(true);
+    });
+
+    it("says nothing of Disabled in the details or the settings dialog of a turned-off account", async () => {
+      accountQuotas.push(signedOut("codex-work"));
+      settings.accounts[1]!.disabled = true;
+      const { container } = mount("Codex");
+      for (const open of [openDetailsOf, openSettingsOf]) {
+        const dialog = await open(container, "codex-work");
+        expect(dialog.textContent).not.toMatch(/Disabled/);
+      }
+    });
+
+    it("says Disabled for the default account of an agent turned off, and leaves an enabled account's badge", () => {
+      accountQuotas.push(quotaOf("codex", null), quotaOf("codex", "codex-work"));
+      settings.disabled_default_accounts = ["codex"];
+      const { container } = mount("Codex");
+      expect(badges(statusOf(rowOf(container, "default:codex")))).toEqual(["Disabled"]);
+      expect(badges(statusOf(rowOf(container, "codex-work")))).toEqual(["Logged in"]);
+    });
   });
 
   it("turns off the default account of an agent alone", () => {
@@ -80,8 +141,8 @@ describe("turning an account off", () => {
     expect(disableSwitch(rowOf(container, "claude-work")).checked).toBe(false);
   });
 
-  it("puts the Disable account switch, with its explanation, last in the details", async () => {
-    const { dialog } = await mountDetails("Codex");
+  it("puts the Disable account switch, with its explanation, last in the settings", async () => {
+    const { dialog } = await mountSettings("Codex");
     expect(dialog.textContent).toContain("Disable account");
     expect(disableSwitch(dialog).checked).toBe(false);
     expect(dialog.textContent).toContain("Once this is on, this account no longer appears in account choices or usage displays, except while a running session still uses it. New sessions will not use it, and running sessions keep running.");
@@ -92,14 +153,14 @@ describe("turning an account off", () => {
 
   it("describes a turned-off account's Disable account switch by its state", async () => {
     settings.accounts[1]!.disabled = true;
-    const { dialog } = await mountDetails("Codex");
+    const { dialog } = await mountSettings("Codex");
     expect(dialog.textContent).toContain("This account is disabled: it no longer appears in account choices or usage displays");
     expect(dialog.textContent).not.toContain("Once on, this account");
   });
 
-  it("keeps the sharing switch of a turned-off account in its details", async () => {
+  it("keeps the sharing switch of a turned-off account in its settings", async () => {
     settings.accounts[1]!.disabled = true;
-    const { dialog } = await mountDetails("Codex");
+    const { dialog } = await mountSettings("Codex");
     expect(disableSwitch(dialog).checked).toBe(true);
     expect(dialog.querySelector("[data-sharing-account]")).not.toBeNull();
   });

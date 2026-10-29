@@ -157,7 +157,7 @@ consequences and timing of an action.
 The permission-approval explanation in Settings' Agent accounts section is an exception: its handling, timing and
 Codex's possible extra token cost sit in a help tip beside the name of an agent's **Permission approval** row, whose
 visible line says only that it applies to every account of the agent (see "Approval modes" in
-`docs/product/agent-accounts.md`). So, in part, is the **Share default configuration** row: what is shared and never
+`docs/product/per-agent-settings.md`). So, in part, is the **Share default configuration** row: what is shared and never
 shared, what turning sharing off does to conversations and the idle sessions a change would end sit in the help tip
 beside the row's name, while the row's line says what turning the switch on does, or what is the case while it is on,
 and why the switch cannot be turned now stays under that line (see "Sharing the default configuration" in
@@ -167,7 +167,7 @@ and why the switch cannot be turned now stays under that line (see "Sharing the 
 
 One status is a deliberate exception: an added agent that is not installed, in Settings' Agent accounts section. The
 status itself stays visible, as a warning glyph after the agent's name on its tab, and each account the user owns of
-that agent still says visibly, in its account settings dialog, that it is not usable; only the glyph's explanation —
+that agent still says visibly, in its account details dialog, that it is not usable; only the glyph's explanation —
 that the agent is not installed and its accounts are not usable until it is on `PATH` — sits in a tooltip on the tab,
 which opens on hover and on keyboard focus (see "Tooltips on indicators" below, and "The agent strip" in
 `docs/product/agent-accounts.md`). An agent that is not added has no tab and so no such status. That tooltip is not a
@@ -190,11 +190,11 @@ Help tips are used in these places:
   "Detect from files" looks for in each repository and what happens to one it cannot decide on (see "The project's
   default agent" in `docs/product/projects.md`);
 - each agent's **default account** in Settings' Agent accounts section, right after its directory in its account
-  settings dialog: that it is the agent's own default configuration directory, which new sessions use when no account is
+  details dialog: that it is the agent's own default configuration directory, which new sessions use when no account is
   chosen and whose configuration other accounts can share (see "The default account" in
   `docs/product/agent-accounts.md`);
 - the name of Claude Code's and Codex's **Permission approval** row in Settings' Agent accounts section (see "Approval
-  modes" in `docs/product/agent-accounts.md`);
+  modes" in `docs/product/per-agent-settings.md`);
 - the **Share default configuration** row of an account's settings dialog: what is linked to the default account's
   directory, what is never shared and what happens when sharing is turned off (see "Sharing the default configuration"
   in `docs/product/agent-accounts.md`);
@@ -323,7 +323,7 @@ keyboard focus, but not when a mouse press is what focuses the tab. On keyboard 
 section have stopped scrolling the tab into view, since a scroll under an open tooltip closes it; a press or a key
 before then cancels it. For how a press or a key closes it see "How a tooltip behaves" above. Nothing links the tooltip
 to the tab for assistive technology: the tab's accessible name says the agent is not installed, and a line in the
-settings dialog of each of the agent's own accounts says it is not usable (see "The agent strip" in
+details dialog of each of the agent's own accounts says it is not usable (see "The agent strip" in
 `docs/product/agent-accounts.md`).
 
 ## Names too long for their space

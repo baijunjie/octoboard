@@ -61,7 +61,9 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Model and reasoning effort](product/model-and-reasoning-effort.md) — the Advanced section's model and effort pickers
   and what a session shows running.
 - [Agent accounts](product/agent-accounts.md) — Settings' Agent accounts section: added agents, the default account,
-  owned accounts and approval modes.
+  owned accounts, the accounts table and the account details and settings dialogs.
+- [Per-agent settings](product/per-agent-settings.md) — settings that apply to every account of one agent: permission
+  approval modes and Claude compatibility.
 - [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.
 - [Sharing the default configuration](product/sharing-the-default-configuration.md) — an account sharing the agent's
   default configuration and how a change is carried out.

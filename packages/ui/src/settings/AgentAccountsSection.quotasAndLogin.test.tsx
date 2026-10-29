@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import type { Account, AccountQuota, AgentAvailability } from "../protocol";
 import { press } from "../components/tooltipTestSupport";
 import { trackMountRefocus } from "../dialogs/dialogTestSupport";
-import { accountLogins, accountQuotas, availability, request, toastError } from "./agentAccountsSectionTestState";
+import { accountLogins, accountQuotas, availability, request, settings, toastError } from "./agentAccountsSectionTestState";
 import { buttonNamed, mount, openDetailsOf, rowLogin, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
@@ -60,7 +60,7 @@ it("explains the default account in a help tip after its path in the details hea
   // It follows the path, in the body below the account's name and its badges; the title is a plain name.
   expect(tip.previousElementSibling!.textContent).toContain("/home/dev/.claude");
   expect(dialog.textContent).not.toContain("Claude Code account");
-  expect(dialog.querySelector("h2, [role=heading]")!.textContent).toBe("Account settings");
+  expect(dialog.querySelector("h2, [role=heading]")!.textContent).toBe("Account details");
   // The first line of the body is the name, then its badges, and the path comes after them.
   const text = dialog.textContent!;
   expect(text).toContain("Default");
@@ -88,7 +88,7 @@ it("shows the login state of each account: logged in once read, not logged in as
   expect([...rowOf(failed.container, "default:claude").querySelectorAll("span[data-variant]")].map((chip) => chip.textContent)).not.toContain("Not logged in");
 });
 
-it("keeps the Log in icon for a signed-out account only, in its Status cell and in its details header", async () => {
+it("keeps the Log in icon for a signed-out account only, in its Status cell and not in its details", async () => {
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
   accountQuotas.push(quotaOf("claude", null));
   accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
@@ -97,7 +97,8 @@ it("keeps the Log in icon for a signed-out account only, in its Status cell and 
   expect(rowLogin(await openDetailsOf(container, "default:claude"))).toBeUndefined();
   const dialog = await openDetailsOf(container, "claude-work");
   expect(dialog.textContent).toContain("Not logged in");
-  await act(async () => rowLogin(dialog)!.click());
+  expect(rowLogin(dialog)).toBeUndefined();
+  await act(async () => rowLogin(rowOf(container, "claude-work"))!.click());
   expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
 });
 
@@ -136,7 +137,7 @@ it("logs in a signed-out account from the icon button after its badge in the Sta
   expect(login.textContent).toBe("");
   expect(login.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Log in to claude-work");
   // It follows the badge, in the Status cell.
-  expect(login.closest("td")).toBe(rowOf(container, "claude-work").querySelectorAll("td")[1]);
+  expect(login.closest("td")).toBe(rowOf(container, "claude-work").querySelectorAll("td")[2]);
   expect(login.previousElementSibling?.textContent).toBe("Not logged in");
   await act(async () => login.click());
   expect(request).toHaveBeenLastCalledWith({ type: "start_account_login", agent: "claude", account: "claude-work" });
@@ -291,6 +292,28 @@ it("gives focus back to the row's own Log in button when the login it opened is 
   await frames();
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   expect(document.activeElement).toBe(login);
+});
+
+it("puts focus on the row's actions button when the account is turned off while the login its own button opened is up", async () => {
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, render } = mount();
+  const login = rowLogin(rowOf(container, "claude-work"))!;
+  act(() => login.focus());
+  await act(async () => login.click());
+  const settled = trackMountRefocus();
+  accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await settled();
+  settings.accounts.find((account) => account.id === "claude-work")!.disabled = true;
+  render();
+  expect(rowLogin(rowOf(container, "claude-work"))).toBeUndefined();
+  await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
+  accountLogins.splice(0, 1, { agent: "claude", account: "claude-work", status: "cancelled", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+  render();
+  await frames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.activeElement?.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "")).toBe("Actions for claude-work (Claude Code)");
 });
 
 async function failedLoginDialog(failure: { code: string; params: Record<string, string>; message: string }): Promise<Element> {

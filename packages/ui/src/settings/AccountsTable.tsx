@@ -6,19 +6,21 @@ import { useListMotion } from "../components/useListMotion";
 import { ActionMenu, type ActionMenuEntry } from "../components/ActionMenu";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { HelpTip } from "../components/HelpTip";
+import { DotStatusBadge } from "../components/DotStatusBadge";
 import { FadedScroller, useFadeRegion } from "../components/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Account, Agent } from "../protocol";
+import { AccountEmail } from "./AccountEmail";
 import { AccountUsageCell } from "../quota/AccountUsageCell";
 import { AccountNameLine, LoginStateBadge } from "../quota/AccountQuotaSummary";
 import { exhaustedQuotaWindow } from "../quota/quotaFormat";
 import { useAccountQuota } from "../quota/useAccountQuota";
-import { useDaemonStore } from "../store";
 import { useNow } from "../useNow";
 import { AccountDisableSwitch } from "./AccountDisableSwitch";
-import { AccountLoginAnnouncer, accountLoginOf, useClearSucceededLogin } from "./AccountLogin";
+import { AccountLoginAnnouncer, useClearSucceededLogin, useSucceededAccountLogin } from "./AccountLogin";
 import { AccountLoginButton, type ReturnLoginFocus } from "./AccountLoginButton";
+import { useAccountDisabled } from "./useAccountDisabled";
 
 /** The pinned cell's start edge while the table scrolls: a hairline, as a shadow since a cell's border is the
  * groove's. */
@@ -26,13 +28,13 @@ const PINNED_EDGE = "group-data-[overflowing]/accounts:shadow-[inset_1px_0_0_var
 
 const HEADER = "px-2 pb-2 text-start text-xs font-medium whitespace-nowrap text-app-muted groove-b";
 
-/** One agent's accounts as a table, a row for each account (`AccountTableRow`, as `children`) under column headers
- * said once: the account (name and plan), its status (login state, with the Log in icon while it is signed out), its
- * usage, whether it is turned off (the Disable switch), and an actions column that holds the actions menu, whose first
- * entry opens the details. Narrower than its columns need, the table scrolls sideways (a focusable region while it
- * does) and the actions column stays pinned at the end edge. The scroller draws no fade, which would dim that column,
- * and keeps clear of it when focus scrolls a control into view: its end scroll padding takes the column's measured
- * width. */
+/** One agent's accounts as a table, a row for each account (`AccountTableRow`, as `children`) under column headers said
+ * once: the account (name, plan and email), its usage, its status (login state, with the Log in icon while it is signed
+ * out, or "Disabled" while it is turned off), whether it is turned off (the Disable switch), and an actions column that
+ * holds the actions menu, whose first entries open the account's details and settings. Narrower than its columns need,
+ * the table scrolls sideways (a focusable region while it does) and the actions column stays pinned at the end edge.
+ * The scroller draws no fade, which would dim that column, and keeps clear of it when focus scrolls a control into
+ * view: its end scroll padding takes the column's measured width. */
 export function AccountsTable({ agent, children }: { agent: Agent; children: React.ReactNode }): React.ReactElement {
   const t = useT();
   const region = useFadeRegion({ label: t("settings.accounts.table.scrollLabel", { agent: AGENT_LABEL[agent] }) });
@@ -57,8 +59,8 @@ export function AccountsTable({ agent, children }: { agent: Agent; children: Rea
             <tr>
               <th aria-hidden="true" className={`${HEADER} w-px`} />
               <th scope="col" className={HEADER}>{t("settings.accounts.table.account")}</th>
-              <th scope="col" className={HEADER}>{t("settings.accounts.table.status")}</th>
               <th scope="col" className={HEADER}>{t("settings.accounts.table.usage")}</th>
+              <th scope="col" className={HEADER}>{t("settings.accounts.table.status")}</th>
               <th scope="col" className={HEADER}>
                 <span className="inline-flex items-center gap-1">
                   {t("settings.accounts.disable")}
@@ -85,12 +87,13 @@ export function rowActionsTrigger(row: string): HTMLElement | null {
 
 const CELL = "px-2 py-3 align-middle groove-b group-last/row:border-b-0";
 
-/** One account's row (`account` null for the agent's default account): its `name` with the plan (the row's header cell,
- * with the name muted while its quota is used up), its login state with the Log in icon while it is signed out (the
- * Status cell), a compact usage indicator (grey and followed by the "Limit reached" badge while used up), the Disable
- * switch, and the actions `menu`, whose first entry opens the details. A turned-off account's row looks like any other
- * but for its switch. The hidden status region that says a login succeeded is the row's, which also clears that login
- * once it has been shown. */
+/** One account's row (`account` null for the agent's default account): its `name` with the plan and, under them, the
+ * email it is signed in with (the row's header cell, with the name muted while its quota is used up), a compact usage
+ * indicator (grey and followed by the "Limit reached" badge while used up), its login state with the Log in icon while
+ * it is signed out (the Status cell), the Disable switch, and the actions `menu`, whose first entries open the details
+ * and the settings. A turned-off account's Status cell says "Disabled" in a neutral badge instead, with no Log in icon
+ * (the menu still offers Log in); the rest of its row looks like any other. The hidden status region that says a login
+ * succeeded is the row's, which also clears that login once it has been shown. */
 export function AccountTableRow({ agent, account, name, menu, onLogin, onDragStart, dragDisabled }: {
   agent: Agent;
   account: Account | null;
@@ -104,9 +107,9 @@ export function AccountTableRow({ agent, account, name, menu, onLogin, onDragSta
   const id = account?.id ?? null;
   const quota = useAccountQuota(agent, id);
   const exhausted = exhaustedQuotaWindow(quota, useNow());
-  const login = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, id));
-  const succeeded = login?.status === "succeeded" ? login : undefined;
+  const succeeded = useSucceededAccountLogin(agent, id);
   useClearSucceededLogin(succeeded);
+  const disabled = useAccountDisabled(agent, id);
   const actions = useRef<HTMLDivElement>(null);
   return (
     <tr data-account-row={id ?? `default:${agent}`} data-list-motion={id ?? `default:${agent}`} className="group/row bg-overlay">
@@ -120,16 +123,19 @@ export function AccountTableRow({ agent, account, name, menu, onLogin, onDragSta
       <th scope="row" className={`${CELL} text-start font-normal`}>
         <div className="max-w-56 min-w-28">
           <AccountNameLine name={<FadeOverflow dir="auto" titleWhenClipped={name}>{name}</FadeOverflow>} quota={quota} usedUp={exhausted !== undefined} showUpdated={false} showFailure={false} showUsedUp={false} />
+          <AccountEmail quota={quota} clip />
           <AccountLoginAnnouncer login={succeeded} name={name} />
         </div>
       </th>
+      <td className={CELL}><AccountUsageCell quota={quota} exhausted={exhausted} /></td>
       <td className={`${CELL} whitespace-nowrap`}>
         <div className="flex items-center gap-1">
-          <LoginStateBadge quota={quota} />
-          <AccountLoginButton agent={agent} account={id} name={name} quota={quota} onLogin={onLogin} fallback={() => actions.current?.querySelector<HTMLElement>("button")} />
+          {disabled
+            ? <DotStatusBadge separated={false}>{t("settings.accounts.disabledState")}</DotStatusBadge>
+            : <LoginStateBadge quota={quota} separated={false} />}
+          <AccountLoginButton agent={agent} account={id} name={name} quota={quota} turnedOff={disabled} onLogin={onLogin} fallback={() => actions.current?.querySelector<HTMLElement>("button")} />
         </div>
       </td>
-      <td className={CELL}><AccountUsageCell quota={quota} exhausted={exhausted} /></td>
       <td className={CELL}><AccountDisableSwitch agent={agent} account={id} name={name} /></td>
       <td className={`${CELL} ${PINNED_EDGE} sticky end-0 z-1 bg-overlay`}>
         <div ref={actions} data-row-actions="" className="flex items-center justify-end gap-1">

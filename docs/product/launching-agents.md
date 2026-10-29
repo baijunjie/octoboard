@@ -68,7 +68,7 @@ Claude Code's folder trust and Codex's approval reviewer affect what Octoboard c
 `docs/product/per-agent-launch-specifics.md` and "The raised hand" in `docs/product/session-statuses.md`). Their
 configuration files are read at launch and never rewritten. Claude Code's trust is given by answering its trust
 confirmation. Codex's reviewer and Claude Code's approval mode can be overridden for every account of the agent in
-Settings; see "Approval modes" in `docs/product/agent-accounts.md`.
+Settings; see "Approval modes" in `docs/product/per-agent-settings.md`.
 
 Everything Octoboard adds is injected **per launch** and disappears with the process. In consequence, a project's own
 configuration keeps working exactly as it does outside Octoboard: its instruction file, its skills, its hooks and its
@@ -159,10 +159,10 @@ with.
 
 The model and reasoning effort resolved for the session are passed on the launch as well (see "The model and reasoning
 effort" below), as is an explicit Codex approval reviewer or Claude Code approval mode chosen for the agent (see
-"Approval modes" in `docs/product/agent-accounts.md`), and, for Codex and Grok Build while the agent's Claude
+"Approval modes" in `docs/product/per-agent-settings.md`), and, for Codex and Grok Build while the agent's Claude
 compatibility is on, what has the session load Claude Code's configuration: for Codex, a section appended to its
 developer instructions and Claude Code's MCP servers, for Grok Build, its own switches for Claude Code's configuration
-(see "Claude compatibility" in `docs/product/agent-accounts.md`). These are the user's choices carried to the agent,
+(see "Claude compatibility" in `docs/product/per-agent-settings.md`). These are the user's choices carried to the agent,
 separate from the injected capabilities.
 
 ### The console session's instruction file

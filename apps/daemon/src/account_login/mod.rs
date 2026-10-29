@@ -668,6 +668,7 @@ mod tests {
             account: Some("a".to_string()),
             fetched_at: 1,
             plan: None,
+            email: None,
             windows: Vec::new(),
             unavailable: None,
         };

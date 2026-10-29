@@ -23,8 +23,9 @@ directory, after which it is read afresh from the new one; renaming it keeps the
 Octoboard asks the agent's own CLI, given the environment a session of that account would get: the login shell's
 environment, with the agent's configuration directory set to the account's directory (left as the shell has it for
 the default account). It runs from the home directory, with no terminal. The CLI looks after its own sign-in, Keychain
-access and token refresh; Octoboard never reads a credential and never contacts a service of its own. Each agent is
-asked over the channel it offers its own front ends:
+access and token refresh; Octoboard never uses a credential and never contacts a service of its own. It reads the
+agent's local sign-in record only to take the account's email from it (see "The account's sign-in email" below). Each
+agent is asked over the channel it offers its own front ends:
 
 | Agent | What is run | What it is asked |
 |---|---|---|
@@ -55,10 +56,44 @@ having no quota to report (see "Why a quota is unavailable" below), not as not l
 for want of a sign-in that comes without the state telling the two apart is a failed reading. Neither not logged in
 nor no quota to report is a failed reading.
 
-Readings live in the daemon's memory only. They are never stored, are not part of the application settings a console
-session can read, and are never exported with the configuration (see "What is not configuration and never travels"
-in `docs/product/configuration-export-and-import.md`), so after the daemon restarts every account starts unread
-again.
+Readings live in the daemon's memory only, the sign-in email included. They are never stored, are not part of the
+application settings a console session can read, and are never exported with the configuration (see "What is not
+configuration and never travels" in `docs/product/configuration-export-and-import.md`), so after the daemon restarts
+every account starts unread again.
+
+## The account's sign-in email
+
+Each reading also carries, as `email`, the email the account is signed in with, so that accounts can be told apart. It
+is taken from the agent's own sign-in record on this machine, read as a file, whenever the account is read:
+
+| Agent | Where the email is taken from |
+|---|---|
+| Claude Code | `oauthAccount.emailAddress` in `.claude.json`: the one in the account's directory, and for the default account the file Claude Code itself uses — `.claude.json` in the directory the login shell's `CLAUDE_CONFIG_DIR` names, else `~/.claude.json` |
+| Codex | The `email` claim of the ID token (`tokens.id_token`) in the directory's `auth.json`, or, when that claim is missing or not text, the email of its OpenAI profile claim. The token's signature is not checked. |
+| Grok Build | The `email` of the entries in the directory's `auth.json`, when every entry that has one gives the same address; none when they differ |
+
+For Codex and Grok Build the directory is the account's own, and for the default account the one the login shell's
+environment gives the agent (`CODEX_HOME` or `GROK_HOME`, else the agent's own default directory). The address is
+taken trimmed, and only when it is a single line of at most 254 characters.
+
+The email is read whatever the quota reading's outcome, so an account whose quota could not be read still has one. It
+is none:
+
+- when the account reads as not logged in (see "Quota states" below), whatever a leftover record says, and when its
+  directory does not exist;
+- for the default account, when the login shell's environment could not be read, since its record's place follows
+  that environment; an account the user owns is still read from its own directory then;
+- when the record is missing, cannot be read or understood, or holds no email — including a Codex account that keeps
+  its sign-in in the system keyring rather than in `auth.json`. This is never a failure: the reading goes on as it
+  would without it.
+
+A failed reading that keeps the windows of an earlier one (see "Quota states" below) takes the email of the newer
+attempt, so the email is always the latest attempt's. Nothing else in the record is kept, and the email is never
+written to the daemon's log or put into an error. Settings shows it in the accounts table and in both account dialogs
+(see "The accounts table", "The account details dialog" and "The account settings dialog" in
+`docs/product/agent-accounts.md`); nothing else shows it — not the account pickers, the rail's account quota panel,
+the menu bar icon or a session's information — and a session is not given it (see "Reading quotas from a session"
+below).
 
 ## When quotas are read
 
@@ -132,7 +167,7 @@ these windows are shown: extra usage, spend, credit balances and pace estimates 
 
 In Settings and in the rail's panel, the account's plan sits beside its name as a small badge, absent when the agent
 does not name one; in Settings a badge in the accounts table's Status column, and beside the name in the account's
-account settings dialog, says whether the account is logged in (see "The accounts table" in
+account details dialog, says whether the account is logged in (see "The accounts table" in
 `docs/product/agent-accounts.md`). Each window shows:
 
 - what remains of the window, as a whole percent from 0 to 100 (a window the agent reports as more than fully used
@@ -146,7 +181,7 @@ account settings dialog, says whether the account is logged in (see "The account
   appearance. In the rail's panel, in Settings' accounts table and in the menu bar icon's quota submenus a used-up
   account's bars are a neutral grey instead (see "A used-up account" below).
 
-Settings shows an account's quota in two places (see "The accounts table" and "The account settings dialog" in
+Settings shows an account's quota in two places (see "The accounts table" and "The account details dialog" in
 `docs/product/agent-accounts.md`):
 
 - the accounts table's **Usage** cell holds the account's compact usage bar, the one an account picker shows (see "In
@@ -155,13 +190,13 @@ Settings shows an account's quota in two places (see "The accounts table" and "T
   draw — none read, not logged in, or a failed reading with nothing read before — the cell holds a dash, followed by
   the failure mark when the reading failed (see "Quota states" below). A used-up account's cell is marked as "A used-up
   account" below says;
-- the account's settings dialog draws its quota as the rail's panel does, every window included.
+- the account's details dialog draws its quota as the rail's panel does, every window included.
 
-In the rail's panel, and in the account settings dialog, each window has a line reading "<window> N% remaining", with
+In the rail's panel, and in the account details dialog, each window has a line reading "<window> N% remaining", with
 the countdown at the end of the same line, above its bar.
 
 How long ago the windows shown were read is shown in small muted text — at the end of the **Usage** heading in an
-account's settings dialog in Settings (the table does not show it), at the end of its name line in the rail's panel
+account's details dialog in Settings (the table does not show it), at the end of its name line in the rail's panel
 (which shows no directories), and at the end of its header in the menu bar icon's quota submenu: "Updated just now"
 under a minute, otherwise "Updated 3 minutes ago" (in hours or days once it is that old). It is shown whenever the
 account has windows to show, including windows kept after a newer reading failed, which a warning mark after it says are
@@ -175,7 +210,7 @@ Each notices the reset passing on its own clock: within 30 seconds in Settings, 
 at the reset time itself on the rail's button, as of its opening in the Switch account submenu, and in the menu bar
 as "The icon's menu" in `docs/product/menu-bar-icon.md` says.
 
-In the rail's panel and the account settings dialog, an account with both a five-hour and an account-wide weekly window
+In the rail's panel and the account details dialog, an account with both a five-hour and an account-wide weekly window
 shows the two as **one meter**: the five-hour window's line and its bar, directly beneath it a thinner bar for the
 weekly window, and beneath that the weekly window's line, in the muted text colour. Every other window — Grok Build's
 credit pool, a model-specific weekly limit, an account-wide weekly window with no five-hour window beside it — keeps a
@@ -212,12 +247,12 @@ This is what Settings and the rail's panel show; the menu bar icon's menu differ
 
 | State | What the account shows |
 |---|---|
-| Its agent is not available, or not yet determined | Nothing about a quota, no plan either; in Settings, a dash in the table's Usage cell and in the account settings dialog's Usage. |
-| Not read yet | "Reading usage…" in place of the windows, in the table's Usage cell and in the account settings dialog. |
+| Its agent is not available, or not yet determined | Nothing about a quota, no plan either; in Settings, a dash in the table's Usage cell and in the account details dialog's Usage. |
+| Not read yet | "Reading usage…" in place of the windows, in the table's Usage cell and in the account details dialog. |
 | Read | The plan, the windows and how long ago they were read. |
-| Never read successfully, and the last reading failed | No windows, and a red failure mark named "Usage unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and on the account settings dialog's first line, after the account's name and its badges; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md` for how the popover opens). |
-| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. In Settings the account settings dialog shows them so; the table's Usage cell draws them as its bar, followed by the out-of-date mark. |
-| Not logged in: its directory does not exist, or the agent says it holds no credential there (see "How a quota is read" above) | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings the table's Usage cell holds a dash and the account's **Not logged in** badge says why (see "The accounts table" in `docs/product/agent-accounts.md`); its account settings dialog says, in place of the windows, that it is not logged in yet and to log in to use it. |
+| Never read successfully, and the last reading failed | No windows, and a red failure mark named "Usage unavailable" on the account's name line — in Settings, after the dash in the table's Usage cell and on the account details dialog's first line, after the account's name and its badges; it opens a popover with the reason (see "Why a quota is unavailable" below, and "Failures, warnings and notes marked at their point" in `docs/product/error-alerts.md` for how the popover opens). |
+| Read before, but the latest reading failed | The last good plan and windows stay, and "Updated …" still says how long ago they were read, followed by an amber warning mark named as out of date and when they were last read ("Out of date: last read 12 minutes ago"); it opens a popover with the reason the newer reading failed. The next successful reading clears it. In Settings the account details dialog shows them so; the table's Usage cell draws them as its bar, followed by the out-of-date mark. |
+| Not logged in: its directory does not exist, or the agent says it holds no credential there (see "How a quota is read" above) | Any windows read before are dropped, and the agent's own message is not shown. In the rail's panel, a single line saying the account is not logged in yet and pointing to logging in to use it stands in place of the windows. In Settings the table's Usage cell holds a dash and the account's **Not logged in** badge says why (see "The accounts table" in `docs/product/agent-accounts.md`); its account details dialog says, in place of the windows, that it is not logged in yet and to log in to use it. |
 
 ## Why a quota is unavailable
 
@@ -295,7 +330,7 @@ recedes the same way: its name in the **Account** column is in the muted text co
 usage bar in the same neutral grey, followed by a warning-coloured **Limit reached** badge (and by the out-of-date mark
 when the windows are out of date). There assistive technology does not read the badge: in place of what remains, the
 cell's words say which limit the account has reached and, when known, when it resets ("Reached session limit · resets in
-42m"). The account settings dialog does not mark a used-up account.
+42m"). The account details dialog does not mark a used-up account.
 
 In the macOS menu bar icon's quota submenus a used-up account's bars are drawn in the same neutral grey (see "The
 icon's menu" in `docs/product/menu-bar-icon.md`); no other usage bar turns grey.
@@ -417,7 +452,7 @@ refreshed, else `null`), `can_open` and `cannot_open_reason` (below), and its `w
 the five-hour window, whichever agent's it is; `weekly` for the account-wide weekly window; `weekly_model` for a model's
 own weekly window, the model named by `label`; `credit_period` for a credit pool), `label`, `used_percent`,
 `remaining_percent` (100 less the used share, never below 0), `resets_at` and `window_minutes`. Values are percentages
-only; no absolute token or money amount is given.
+only; no absolute token or money amount is given, and no account's sign-in email.
 
 - **`can_open`** says whether a session could be opened on the account now. When it is `false`, `cannot_open_reason`
   says why in prose: the account is used up (see "A used-up account" above), it is not logged in (see "An account that

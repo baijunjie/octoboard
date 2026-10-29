@@ -13,7 +13,7 @@ import { windowAttention } from "../components/windowTestSupport";
 import { SettingsDialog } from "./SettingsDialog";
 import { registerSettingsLauncher } from "./settingsLauncher";
 import { accountLogins, bus, dismissAccountLogin, request, settings, toastError, trackAccountLogin } from "./agentAccountsSectionTestState";
-import { buttonNamed, chooseItem, mount, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
+import { buttonNamed, chooseItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
 vi.mock("../components/AgentIcon", async (importOriginal) => (await import("./agentAccountsSectionTestState")).agentIconStandIn(await importOriginal()));
@@ -49,17 +49,17 @@ describe("an account's actions menu", () => {
 
   const items = () => [...document.querySelectorAll("[role=menuitem]")].map((entry) => entry.textContent);
 
-  it("holds Settings, Edit, Log in and Remove for an owned account, in place of buttons of their own", async () => {
+  it("holds Details, Settings, Edit, Log in and Remove for an owned account, in place of buttons of their own", async () => {
     const { container } = mount();
     expect(buttonNamed(container, "Edit")).toBeUndefined();
     await openAccountMenu(container, 1);
-    expect(items()).toEqual(["Settings", "Edit", "Log in", "Move earlier", "Move later", "Remove"]);
+    expect(items()).toEqual(["Details", "Settings", "Edit", "Log in", "Move earlier", "Move later", "Remove"]);
   });
 
-  it("holds Settings, Rename and Log in for the default account, which has no directory or removal to offer", async () => {
+  it("holds Details, Settings, Rename and Log in for the default account, which has no directory or removal to offer", async () => {
     const { container } = mount();
     await openAccountMenu(container, 0);
-    expect(items()).toEqual(["Settings", "Rename", "Log in", "Move earlier", "Move later"]);
+    expect(items()).toEqual(["Details", "Settings", "Rename", "Log in", "Move earlier", "Move later"]);
   });
 
   it("is offered by the default account and each owned account", () => {
@@ -282,6 +282,25 @@ describe("an account's actions menu", () => {
     expect(dismissAccountLogin).toHaveBeenCalledOnce();
     render();
     expect(region.textContent).toBe("");
+  });
+
+  it.each([["details", openDetailsOf], ["settings", openSettingsOf]] as const)("announces a login that succeeded from inside the %s dialog", async (_, open) => {
+    fakeTimers();
+    windowAttention();
+    const { container, render } = mount();
+    const dialog = await open(container, "claude-work");
+    const said = () => [...dialog.querySelectorAll('[role="status"]')].map((region) => region.textContent).join("").replace(/[\u2068\u2069]/g, "");
+    expect(said()).toBe("");
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "succeeded", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    render();
+    act(() => vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
+    expect(said()).toBe("claude-work: logged in.");
+    // The row clears the shown login after a while; closing the dialog and running out what is pending ends the test
+    // clean.
+    act(() => vi.advanceTimersByTime(6000));
+    expect(dismissAccountLogin).toHaveBeenCalledOnce();
+    act(() => buttonNamed(dialog, "Close")!.click());
+    act(() => vi.runOnlyPendingTimers());
   });
 
   it("holds the announcement and the clearing of a login that succeeded while the window was not attended until the user is back", () => {

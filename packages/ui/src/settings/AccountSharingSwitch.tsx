@@ -17,7 +17,7 @@ import { SettingRow, SettingSwitch } from "./SettingRow";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
  * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the
- * account's details dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end,
+ * account's settings dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end,
  * with the warning's mark after it): the progress bar takes the row's full width under it. What the switch does now
  * is the row's description, following its position (and left out while a change runs or did not finish); what
  * turning it off does is behind the label's help tip, with the idle sessions it would end; and under the

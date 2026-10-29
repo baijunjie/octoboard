@@ -39,7 +39,7 @@ to any session:
   an agent the user removed or never added and start sessions on it, and which agents Octoboard runs, and in what
   order they are offered, is the user's own choice;
 - reading or changing Claude Code's approval mode or Codex's approval reviewer (see "Approval modes" in
-  `docs/product/agent-accounts.md`), since a session could otherwise lift the permission prompts of the sessions
+  `docs/product/per-agent-settings.md`), since a session could otherwise lift the permission prompts of the sessions
   launched after it, its own next resume included, for instance by switching Claude Code to Approve everything;
 - reading or changing whether session requests, resume requests, account switches or handoffs are approved
   automatically (see "Approving requests automatically" in `docs/product/session-requests.md`), since a session could
@@ -196,7 +196,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `sidebar_order_by_status` | Whether the user's sidebar ranks sessions and projects by status (see "Order the sidebar by status" in `docs/product/settings.md` and "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `rebase_before_merge`, `delivery` and `revert_gate` (see "The four settings" in `docs/product/git-workflow-settings.md`); `rebase_before_merge` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
-| `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/agent-accounts.md`). |
+| `claude_compatibility` | For each agent other than Claude Code, by its name (`codex`, `grok`), whether its sessions load Claude Code's configuration: the value in effect, the default included while the user has made no choice (see "Claude compatibility" in `docs/product/per-agent-settings.md`). |
 | `accounts` | Every account, each with `id`, `agent`, `name`, `default` and `disabled`, which is true for an account the user turned off, so that no new session can be opened on it (see "Turning an account off" in `docs/product/agent-accounts.md`). Each agent's default account is listed first among that agent's, with the id `default` and, as its `name`, the name the user gave it, else `Default` (see "The default account" in `docs/product/agent-accounts.md`). An account's directory is never given. |
 | `trusted_directories` | The trusted folders (see "Trusted folders" in `docs/product/folder-trust.md`). Read-only. |
 

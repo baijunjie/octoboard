@@ -7223,6 +7223,7 @@ mod tests {
             account: None,
             fetched_at: 1,
             plan: None,
+            email: None,
             windows: vec![QuotaWindow {
                 kind: QuotaWindowKind::Session,
                 label: None,
@@ -8200,6 +8201,7 @@ mod tests {
             account: account.map(str::to_string),
             fetched_at: 1,
             plan: None,
+            email: None,
             windows: vec![QuotaWindow {
                 kind: QuotaWindowKind::Weekly,
                 label: None,
@@ -8350,6 +8352,7 @@ mod tests {
             account: account.map(str::to_string),
             fetched_at: 1,
             plan: None,
+            email: None,
             windows: vec![crate::protocol::QuotaWindow {
                 kind: crate::protocol::QuotaWindowKind::Weekly,
                 label: None,
@@ -8455,6 +8458,7 @@ mod tests {
             account: Some("claude-a".to_string()),
             fetched_at: 1,
             plan: None,
+            email: None,
             windows: vec![QuotaWindow {
                 kind: QuotaWindowKind::Session,
                 label: None,
@@ -8547,6 +8551,7 @@ mod tests {
             account: Some("claude-a".to_string()),
             fetched_at: 1,
             plan: None,
+            email: None,
             windows: vec![QuotaWindow {
                 kind: QuotaWindowKind::Weekly,
                 label: None,
@@ -8729,6 +8734,7 @@ mod tests {
                 account: Some("claude-weekly".to_string()),
                 fetched_at: 1,
                 plan: None,
+                email: None,
                 unavailable: None,
                 windows: vec![QuotaWindow {
                     kind: QuotaWindowKind::Weekly,
@@ -10365,6 +10371,7 @@ mod tests {
                     account: Some(account.clone()),
                     fetched_at: 1,
                     plan: None,
+                    email: None,
                     windows: Vec::new(),
                     unavailable: None,
                 });

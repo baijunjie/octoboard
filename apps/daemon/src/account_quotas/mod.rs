@@ -1,8 +1,9 @@
 //! How much of each account's plan quota is left, asked of the agent's own CLI. Octoboard never
-//! reads an agent's credentials or calls its servers: the CLI, run the way a session of the
+//! uses an agent's credentials or calls its servers: the CLI, run the way a session of the
 //! account would be, handles its own login, Keychain access and token refresh. What is asked and
 //! how a reply is read is `probe.rs`'s; this module keeps the readings and decides when to take
-//! them.
+//! them. Each reading also carries the email the account is signed in with, which `email.rs`
+//! takes from the agent's sign-in record whether or not the quota could be read.
 //!
 //! Readings are runtime state: held in [`AccountQuotas`], never stored and never exported. A
 //! poller started with the daemon keeps them fresh, and `refresh_account_quotas` runs the same
@@ -42,6 +43,7 @@
 //! The module also decides whether a reading means the account is used up
 //! ([`AccountQuotas::exhausted`]).
 
+mod email;
 mod kick;
 mod probe;
 
@@ -60,6 +62,7 @@ use crate::protocol::{
     QuotaUnavailable, QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
+use email::account_email;
 use kick::{kick, KICK_TIMEOUT};
 pub(crate) use probe::CODEX_APP_SERVER_ARGS;
 use probe::{config_dir_missing, failed, probe, PROBE_TIMEOUT};
@@ -400,9 +403,10 @@ impl AccountQuotas {
     }
 
     /// Records the outcome of the probe `claim` covered, unless the account was forgotten while
-    /// it ran. A failure over a reading that had windows keeps that reading, with the reason set
-    /// beside it, so a client can show it as stale; an account that never read keeps none. Only a
-    /// failure counts towards the backoff: that the CLI has no quota to report is not one.
+    /// it ran. A failure over a reading that had windows keeps its windows and plan, with the
+    /// reason set beside them and the email of the newer attempt, so a client can show it as
+    /// stale; an account that never read keeps none. Only a failure counts towards the backoff:
+    /// that the CLI has no quota to report is not one.
     fn finish(&self, state: &AppState, claim: Claim, mut quota: AccountQuota) -> bool {
         let mut recorded = false;
         self.change(state, |inner| {
@@ -428,6 +432,7 @@ impl AccountQuotas {
                 if !previous.quota.windows.is_empty() {
                     quota = AccountQuota {
                         unavailable: Some(unavailable.clone()),
+                        email: quota.email,
                         ..previous.quota.clone()
                     };
                 }
@@ -1171,10 +1176,11 @@ fn read(
     if let Some(dir) = missing_config_dir(key) {
         return unavailable_quota(key, config_dir_missing(key.agent, dir));
     }
-    let result = match shell() {
+    let shell_env = shell();
+    let result = match &shell_env {
         Ok(shell_env) => probe(
             key.agent,
-            &shell_env,
+            shell_env,
             key.config_dir.as_deref().map(Path::new),
             PROBE_TIMEOUT,
             cancel,
@@ -1188,16 +1194,35 @@ fn read(
             ))
         }
     };
+    // An account that is not signed in has no email, whatever a leftover record says. Without a
+    // shell environment an owned account's directory is still known, but the default account's
+    // follows the user's own variables, so it gets none rather than a guess.
+    let no_env = HashMap::new();
+    let env = match &shell_env {
+        Ok(env) => Some(env),
+        Err(_) if key.config_dir.is_some() => Some(&no_env),
+        Err(_) => None,
+    };
+    let email = match &result {
+        Err(unavailable) if is_account_state(&unavailable.code) => None,
+        _ => env.and_then(|env| {
+            account_email(key.agent, key.config_dir.as_deref().map(Path::new), env)
+        }),
+    };
     match result {
         Ok(reading) => AccountQuota {
             agent: key.agent,
             account: key.account.clone(),
             fetched_at: now_millis(),
             plan: reading.plan,
+            email,
             windows: reading.windows,
             unavailable: None,
         },
-        Err(unavailable) => unavailable_quota(key, unavailable),
+        Err(unavailable) => AccountQuota {
+            email,
+            ..unavailable_quota(key, unavailable)
+        },
     }
 }
 
@@ -1243,6 +1268,7 @@ fn unavailable_quota(key: &Key, unavailable: QuotaUnavailable) -> AccountQuota {
         account: key.account.clone(),
         fetched_at: now_millis(),
         plan: None,
+        email: None,
         windows: Vec::new(),
         unavailable: Some(unavailable),
     }
@@ -1340,6 +1366,7 @@ mod tests {
             account: key.account.clone(),
             fetched_at: 1,
             plan: None,
+            email: None,
             windows: Vec::new(),
             unavailable: failed
                 .then(|| QuotaUnavailable::new(code::TIMED_OUT, "no", &[("agent", "x")])),
@@ -1417,6 +1444,7 @@ mod tests {
         let good = AccountQuota {
             fetched_at: 7,
             plan: Some("plus".to_string()),
+            email: Some("old@example.com".to_string()),
             windows: vec![QuotaWindow {
                 kind: QuotaWindowKind::Session,
                 label: None,
@@ -1435,10 +1463,17 @@ mod tests {
         state
             .account_quotas
             .recorded(&state, key.clone(), good.clone());
-        state
-            .account_quotas
-            .recorded(&state, key.clone(), quota_of(&key, true));
+        // The email is the newer attempt's, whatever the failure kept of the older reading.
+        state.account_quotas.recorded(
+            &state,
+            key.clone(),
+            AccountQuota {
+                email: Some("new@example.com".to_string()),
+                ..quota_of(&key, true)
+            },
+        );
         let held = &state.account_quotas.list()[0];
+        assert_eq!(held.email.as_deref(), Some("new@example.com"));
         assert_eq!(held.windows, good.windows);
         assert_eq!((held.fetched_at, held.plan.as_deref()), (7, Some("plus")));
         assert_eq!(
@@ -1793,6 +1828,92 @@ mod tests {
         let quota = read(&key, &shell, &AtomicBool::new(false));
         assert_ne!(quota.unavailable.unwrap().code, code::CONFIG_DIR_MISSING);
         assert!(bin.join("runs").exists());
+    }
+
+    /// A Codex account directory under `dir` whose `auth.json` carries an ID token for
+    /// `me@example.com`, and the key of the owned account over it.
+    fn codex_account_with_email(dir: &crate::test_support::ScratchDir) -> Key {
+        use base64::Engine;
+        let account = dir.join("account");
+        std::fs::create_dir(&account).unwrap();
+        let claims = base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(r#"{"email":"me@example.com"}"#);
+        std::fs::write(
+            account.join("auth.json"),
+            format!(r#"{{"tokens":{{"id_token":"e30.{claims}.sig"}}}}"#),
+        )
+        .unwrap();
+        Key {
+            agent: Agent::Codex,
+            account: Some("a".to_string()),
+            config_dir: Some(account.to_string_lossy().into_owned()),
+        }
+    }
+
+    #[test]
+    fn the_email_is_read_when_the_quota_could_not_be() {
+        let dir = crate::test_support::ScratchDir::new("quota-email-failed");
+        let bin = dir.join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let env = crate::test_support::fake_agent(&bin, "codex", "exit 1");
+        let key = codex_account_with_email(&dir);
+        let shell = move || Ok(env.clone());
+        let quota = read(&key, &shell, &AtomicBool::new(false));
+        assert_eq!(quota.unavailable.unwrap().code, code::COMMAND_FAILED);
+        assert_eq!(quota.email.as_deref(), Some("me@example.com"));
+    }
+
+    #[test]
+    fn a_signed_out_account_has_no_email_whatever_a_leftover_record_says() {
+        let dir = crate::test_support::ScratchDir::new("quota-email-signed-out");
+        let bin = dir.join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let env = crate::test_support::fake_agent(
+            &bin,
+            "codex",
+            r#"while read line; do case "$line" in
+*rateLimits*) echo '{"id":2,"error":{"code":-32600,"message":"codex account authentication required to read rate limits"}}';;
+*account/read*) echo '{"id":3,"result":{"account":null,"requiresOpenaiAuth":true}}';;
+esac; done"#,
+        );
+        let key = codex_account_with_email(&dir);
+        let shell = move || Ok(env.clone());
+        let quota = read(&key, &shell, &AtomicBool::new(false));
+        assert_eq!(quota.unavailable.unwrap().code, code::NOT_SIGNED_IN);
+        assert_eq!(quota.email, None);
+    }
+
+    #[test]
+    fn a_missing_config_dir_has_no_email() {
+        let dir = crate::test_support::ScratchDir::new("quota-email-missing");
+        let mut key = codex_account_with_email(&dir);
+        std::fs::remove_dir_all(dir.join("account")).unwrap();
+        key.account = Some("gone".to_string());
+        let shell = || Ok(HashMap::new());
+        let quota = read(&key, &shell, &AtomicBool::new(false));
+        assert_eq!(quota.unavailable.unwrap().code, code::CONFIG_DIR_MISSING);
+        assert_eq!(quota.email, None);
+    }
+
+    #[test]
+    fn without_a_shell_environment_only_an_owned_account_has_an_email() {
+        let dir = crate::test_support::ScratchDir::new("quota-email-no-shell");
+        let owned = codex_account_with_email(&dir);
+        let shell = || Err(anyhow::anyhow!("no shell"));
+        let quota = read(&owned, &shell, &AtomicBool::new(false));
+        assert_eq!(
+            quota.unavailable.unwrap().code,
+            code::SHELL_ENVIRONMENT_FAILED
+        );
+        assert_eq!(quota.email.as_deref(), Some("me@example.com"));
+        // The default account's directory follows the user's own variables, which are not known.
+        let default = Key {
+            account: None,
+            config_dir: None,
+            ..owned
+        };
+        let quota = read(&default, &shell, &AtomicBool::new(false));
+        assert_eq!(quota.email, None);
     }
 
     /// Runs `refresh_with` over fake Codex and Grok CLIs that count their runs under `dir`.

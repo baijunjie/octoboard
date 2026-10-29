@@ -1808,6 +1808,23 @@ and, for Claude Code, its `sessions/` registration; a Claude Code probe syncs th
 starts with the account's whole configuration. Whether a user's hook fires was not observed for any agent: no session or
 turn starts in a probe, and the hook events documented above are session events.
 
+### The sign-in email
+
+None of the three probes above names the address an account is signed in with, so it is read from the file where each
+CLI keeps its sign-in. These are the CLIs' own files, not interfaces they publish; the fields were seen on a real
+signed-in account of each (Claude Code 2.1.312, Codex 0.163.0, Grok Build 1.0.70), by name only:
+
+- **Claude Code**: `oauthAccount.emailAddress` in `.claude.json`, which beside `emailAddress` holds `displayName`,
+  `organizationName` and the like. With `CLAUDE_CONFIG_DIR` set the file is `$CLAUDE_CONFIG_DIR/.claude.json`; without
+  it, `~/.claude.json` — not inside `~/.claude/`.
+- **Codex**: the `email` claim of the JWT in `tokens.id_token` of `$CODEX_HOME/auth.json` (`~/.codex` by default), with
+  the claim under `https://api.openai.com/profile` as a fallback. The app server's `account/read` documents
+  `{"type":"chatgpt","email","planType"}` for a ChatGPT login, but what it answers for a real login was not measured.
+  A login kept in the system keyring rather than the file (`cli_auth_credentials_store`) leaves no file to read.
+- **Grok Build**: `$GROK_HOME/auth.json` (`~/.grok` by default) is an object keyed `https://auth.x.ai::<uuid>`, each
+  entry holding `email`, `first_name`, `user_id` and the token. Which entry the CLI uses when there are several was not
+  established. A finished `grok login` also prints `✓ Signed in as <email>` on stderr.
+
 ## Starting a quota window
 
 A window only starts counting at the account's first request after it resets; until then the CLI reports it with no
