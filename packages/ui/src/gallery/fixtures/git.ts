@@ -138,10 +138,11 @@ const restoreFixture = { state: restoreState, git: RESTORE_GIT, files: RESTORE_F
 const openRestore = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.restoreChanges"))];
 
 const switchBranch = "feature/search-ranking";
+const longBranch = "feature/a-long-local-branch-name-to-check-menu-width-and-overflow";
 const switchGit: FixtureGit = {
   ...RESTORE_GIT,
   branches: [
-    { name: "feature/a-long-local-branch-name-to-check-menu-width-and-overflow", commit: "def123456789" },
+    { name: longBranch, commit: "def123456789" },
     { name: switchBranch, commit: RESTORE_GIT.worktrees[0].head! },
     { name: "main", commit: RESTORE_GIT.worktrees[0].head! },
     { name: "feature/regional-deployment", commit: "fed123456789" },
@@ -220,9 +221,9 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch", group: "Projects", category: "normal",
     title: "Local branch menu",
-    description: "The third menu lists local branches and checks the current one. Long branch names remain readable. Selecting feature/search-ranking switches immediately.",
+    description: "The third menu lists local branches and checks the current one. A long branch name is clipped at the menu's edge and, with the pointer resting on it, a tooltip carries the full name. Selecting feature/search-ranking switches immediately.",
     ...switchFixture,
-    steps: openSwitch,
+    steps: [...openSwitch, (ui) => ui.hoverMenuLabel(longBranch, longBranch)],
   },
   {
     id: "git-switch-branch-empty", group: "Projects", category: "normal",

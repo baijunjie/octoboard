@@ -302,6 +302,25 @@ describe("a note in a menu of choices", () => {
   });
 });
 
+it("lets the pointer reach every item's label content, so a clipped label can open its tooltip, and keeps a disabled row from lighting or shrinking under it", async () => {
+  await openMenu([
+    { label: "Plain", icon: Trash2, onClick: () => {} },
+    { label: "Own", content: <span>Own</span>, icon: Trash2, onClick: () => {} },
+    { label: "Sub", icon: Trash2, items: [{ label: "Inner", icon: Trash2, onClick: () => {} }] },
+    { label: "Off", icon: Trash2, disabled: true, onClick: () => {} },
+  ]);
+  const item = (name: string) => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent === name)!;
+  // HeroUI's label ignores the pointer, and the class gives it back to the label's children (jsdom has no CSS to measure).
+  const label = (name: string) => item(name).querySelector('[data-slot="label"]')!.className;
+  for (const name of ["Plain", "Own", "Sub", "Off"]) expect(label(name)).toContain("*:pointer-events-auto");
+  // The cursor over it stays the row's: the hand where the item can be chosen, the arrow on a disabled row.
+  for (const name of ["Plain", "Own", "Sub"]) expect(label(name)).toContain("cursor-[inherit]");
+  expect(label("Off")).toContain("cursor-default");
+  // HeroUI's `.menu-item:hover` fill and `:active` shrink, which the disabled row now matches under its label.
+  expect(item("Off").className).toContain("data-[disabled=true]:hover:bg-transparent");
+  expect(item("Off").className).toContain("data-[disabled=true]:active:transform-none");
+});
+
 describe("a disabled item", () => {
   const key = (target: Element, name: string) =>
     act(async () => {
