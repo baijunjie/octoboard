@@ -26,7 +26,7 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Switching a session's account](product/switching-session-accounts.md) — moving a session to another account of its
   agent and carrying its conversation.
 - [Automatic account switch](product/automatic-account-switch.md) — switching a session whose turn stopped at its
-  account's usage limit to another account by itself, and restoring it when that fails.
+  account's usage limit, waiting for quota recovery, and restoring it when a switch fails.
 - [Handing a session off to another agent](product/handing-off-sessions.md) — moving a session's work to a new session
   of a different agent.
 - [Changing a session's parent](product/changing-session-owners.md) — transferring to a parent, working independently

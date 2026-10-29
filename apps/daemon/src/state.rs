@@ -165,6 +165,7 @@ pub struct AppState {
     /// The accounts Octoboard moved each session off because a turn stopped on their usage limit,
     /// and when (`crate::auto_switch`), so that it does not move the session straight back to one.
     left_for_limit: Mutex<HashMap<String, Vec<AccountLeft>>>,
+    pub(crate) quota_recovery: crate::auto_switch::RecoveryState,
     /// The generation each session's record watch (`crate::record_watch`, run for Claude Code by
     /// `crate::transcript` and for Codex by `crate::rollout`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
@@ -646,6 +647,7 @@ impl AppState {
             mcp_tokens: RwLock::new(HashMap::new()),
             turns: Mutex::new(HashMap::new()),
             left_for_limit: Mutex::new(HashMap::new()),
+            quota_recovery: Default::default(),
             request_hands: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
             default_efforts: Mutex::new(HashMap::new()),
@@ -794,6 +796,7 @@ impl AppState {
     /// [`Self::lock_account_sharing`]): judged under the same lock as the claim, so a change
     /// either sees the claim or the launch sees the change.
     pub fn begin_launch(self: &Arc<Self>, id: &str) -> Result<LaunchClaim> {
+        self.quota_recovery.cancel(id);
         self.refuse_while_shutting_down()?;
         let mut live = self.live.write().expect("live sessions lock poisoned");
         if live.sessions.contains_key(id) {
@@ -884,6 +887,7 @@ impl AppState {
     /// change of its model: until the claim is released every client is shown it `starting` (see
     /// [`Self::shown_status`]), so nothing offers to resume it while its process is down.
     pub fn mark_model_change(&self, id: &str) {
+        self.quota_recovery.cancel(id);
         let marked = {
             let mut live = self.live.write().expect("live sessions lock poisoned");
             live.switching.contains(id) && live.model_changes.insert(id.to_string())
@@ -1032,6 +1036,7 @@ impl AppState {
     /// Claims the session for one interrupt, or `None` while another holds it. The claim ends when
     /// the guard drops, a panic included.
     pub fn claim_interrupt(self: &Arc<Self>, id: &str) -> Option<InterruptClaim> {
+        self.quota_recovery.cancel(id);
         let mut interrupts = self.interrupts.lock().expect("interrupt lock poisoned");
         interrupts.insert(id.to_string()).then(|| InterruptClaim {
             state: self.clone(),
@@ -1534,6 +1539,7 @@ impl AppState {
         account_id: Option<&str>,
         config_dir: Option<&str>,
     ) -> Result<()> {
+        self.quota_recovery.cancel(id);
         if let Some(session) = self.store.set_session_account(id, account_id, config_dir)? {
             self.publish_session(&session);
             crate::shared_config::publish(self);
@@ -1549,6 +1555,7 @@ impl AppState {
         model: &Option<Option<String>>,
         effort: &Option<Option<String>>,
     ) -> Result<()> {
+        self.quota_recovery.cancel(id);
         self.store.set_session_launch_overrides(id, model, effort)?;
         self.publish_session_by_id(id);
         Ok(())
@@ -1818,6 +1825,7 @@ impl AppState {
     /// orders it against a message written into the session. With no prompt to go by, the oldest
     /// credit is spent by this turn.
     pub fn turn_started(&self, id: &str, prompt: Option<&str>) {
+        self.quota_recovery.cancel(id);
         let mut turns = self.turns.lock().expect("turn lock poisoned");
         let turn = turns.entry(id.to_string()).or_default();
         // A prompt that arrives while the turn is open joins it, as one steered into a Codex turn
@@ -1876,6 +1884,7 @@ impl AppState {
     /// though no report follows: left open, a later clock-attributed end would find it and invent
     /// one.
     pub fn abandon_turn(&self, id: &str) {
+        self.quota_recovery.cancel(id);
         if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
             turn.open = false;
             turn.reported = false;
@@ -1968,6 +1977,7 @@ impl AppState {
     /// Drops what is held of the accounts the session was moved off for a limit, for a session
     /// archived or deleted.
     pub fn forget_left_for_limit(&self, id: &str) {
+        self.quota_recovery.cancel(id);
         self.left_for_limit
             .lock()
             .expect("left-for-limit lock poisoned")
@@ -2103,6 +2113,7 @@ impl AppState {
     /// than written even when the session looks ready, so order is structural rather than something
     /// each caller has to get right.
     pub fn queue_message(&self, id: &str, text: &str) -> Ticket {
+        self.quota_recovery.cancel(id);
         let ticket = self.outbox.push(id, text);
         self.note_activity(id);
         ticket
@@ -2472,6 +2483,7 @@ impl AppState {
     }
 
     fn forget_session_bookkeeping(&self, id: &str) {
+        self.quota_recovery.cancel(id);
         self.revoke_mcp_tokens(id);
         self.turns.lock().expect("turn lock poisoned").remove(id);
         self.forget_request_hand(id);

@@ -1,47 +1,7 @@
-//! The account switch Octoboard makes by itself: a session whose turn stopped because its account
-//! reached the plan's usage limit is moved to another account of its agent, while the setting
-//! `auto_switch_on_usage_limit` is on. What the switch does and refuses is
-//! `coordinator::switch_session_account_with`'s, the one an owner's tool and the user's request
-//! run, so the conversation comes along and the turn the limit stopped is continued (see
-//! `crate::switch_continue`).
-//!
-//! **When.** At the end of a failed turn (`reporting::close_turn_and_report`), and only when the
-//! session's conversation record says the turn stopped on the usage limit
-//! (`switch_continue::stopped_on_usage_limit`), read again for a few seconds ahead of the switch's
-//! claim, since the record may lag the report, and once more under the claim. A quota reading
-//! triggers nothing: it only chooses the target. A session is never moved because its account
-//! reads as used up, a working or an idle one included; each turn that hits the limit is its own
-//! one-shot trigger, so no wait is kept between switches. A turn that fails while the session is
-//! still under a claim (the continued turn of a switch that has just relaunched it) is judged when
-//! the claim ends, waiting for it up to [`CLAIM_WAIT`]; the trigger is dropped if the session was
-//! moved to another account meanwhile.
-//!
-//! **Which sessions.** Those with a process at their prompt or in a turn (`working`, `idle`). A
-//! session waiting for the user, by a hook, a request or what the terminal shows (a trust prompt, a
-//! dialog of the agent), is left alone: moving it would end the prompt it waits at. The exception
-//! is a session whose only wait is its agent's usage-limit dialog (Grok's): ending that dialog is
-//! the point of the switch. A session still under a launch, a resume or a switch once the claim
-//! wait is over is left alone too, and so is one a change of its account's sharing holds (the
-//! switch refuses both). A try refused only because the time was wrong is not an error and tells
-//! nobody.
-//! A locked session is switched like any other: the lock keeps it from being archived or deleted,
-//! not from moving between accounts, which neither removes it nor changes what it holds.
-//!
-//! **Which account.** `coordinator::preferred_weekly_account_except`, the one a new session would
-//! be given, without the account the session is on and without any it was moved off for a limit
-//! less than [`LEFT_FOR_LIMIT_FOR`] ago, so that two accounts that are both at their limit are not
-//! swapped between at every turn. It skips every account that clearly cannot take the session: one
-//! used up, turned off, logged out, in a sharing change, unknown, or whose quota cannot be read
-//! now or has not been read yet. No minimum of quota left is asked. With none left, nothing moves.
-//!
-//! **Who is told.** When the switch succeeds, the session, by the prompt it is relaunched with, its
-//! owner if it has one, and the user, by a `session_notice` (`account_switched_automatically`).
-//! When it fails after its process was ended, Octoboard brings the session back up on the account
-//! it had (`coordinator::restore_after_failed_switch`) and tells nobody. Only when that fails too
-//! are the owner and the user told, by a `session_notice`
-//! (`account_switch_automatically_failed`). A failure before the process was ended leaves the
-//! session as it was and is only logged. A switch for a session the user archived or deleted
-//! meanwhile, or cut short by the daemon shutting down, is neither told nor logged.
+//! Automatic switching and continuation of turns stopped by an account's usage limit.
+//! Waits are scoped to the failed turn and live process; successful quota probes reconsider
+//! only those waits. For the lifecycle and recovery rules see
+//! docs/product/automatic-account-switch.md's "Automatic account switch" section.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -69,6 +29,285 @@ const LEFT_FOR_LIMIT_FOR: Duration = Duration::from_secs(30 * 60);
 /// turn it continues may fail within that time.
 const CLAIM_WAIT: Duration = Duration::from_secs(15);
 
+/// Runtime waits belong to the failed turn and process, never to an idle session in general.
+pub(crate) struct RecoveryState {
+    inner: std::sync::Mutex<RecoveryInner>,
+    slots: tokio::sync::Semaphore,
+    #[cfg(test)]
+    launch: std::sync::Mutex<Option<RecoveryLaunch>>,
+}
+
+impl Default for RecoveryState {
+    fn default() -> Self {
+        Self {
+            inner: Default::default(),
+            slots: tokio::sync::Semaphore::new(4),
+            #[cfg(test)]
+            launch: Default::default(),
+        }
+    }
+}
+
+#[cfg(test)]
+#[derive(Clone)]
+struct RecoveryLaunch {
+    env: HashMap<String, String>,
+    launch: Arc<dyn Fn(LaunchRequest) -> Result<Launch> + Send + Sync>,
+}
+
+#[derive(Default)]
+struct RecoveryInner {
+    generations: HashMap<String, Arc<()>>,
+    waiting: HashMap<String, PendingRecovery>,
+}
+
+#[derive(Clone)]
+pub(crate) struct PendingRecovery {
+    session: Session,
+    live: Arc<crate::session::LiveSession>,
+    generation: Arc<()>,
+    input_writes: u64,
+    turn_ends: u64,
+    since: i64,
+    verified: Option<(Option<String>, Option<String>, i64)>,
+}
+
+impl RecoveryState {
+    pub fn cancel(&self, id: &str) {
+        let mut inner = self.inner.lock().expect("quota recovery lock poisoned");
+        inner.generations.remove(id);
+        inner.waiting.remove(id);
+    }
+
+    pub fn clear(&self) {
+        let mut inner = self.inner.lock().expect("quota recovery lock poisoned");
+        inner.waiting.clear();
+        inner.generations.clear();
+    }
+
+    fn capture(&self, state: &Arc<AppState>, id: &str) -> Result<Option<PendingRecovery>> {
+        let generation = self
+            .inner
+            .lock()
+            .expect("quota recovery lock poisoned")
+            .generations
+            .entry(id.to_string())
+            .or_default()
+            .clone();
+        let Some(live) = state.live_session(id) else {
+            self.cancel(id);
+            return Ok(None);
+        };
+        let session = match state.session_record(id) {
+            Ok(session) => session,
+            Err(err) => {
+                self.cancel(id);
+                return Err(err);
+            }
+        };
+        let input_writes = live.input_writes();
+        let turn_ends = state.turn_ends(id);
+        Ok(Some(PendingRecovery {
+            session,
+            live,
+            generation,
+            input_writes,
+            turn_ends,
+            since: crate::protocol::now_millis(),
+            verified: None,
+        }))
+    }
+}
+
+impl PendingRecovery {
+    pub(crate) fn permits_current_account(&self) -> bool {
+        self.verified.is_some()
+    }
+
+    pub(crate) fn still_due(&self, state: &Arc<AppState>) -> bool {
+        let id = &self.session.id;
+        state.store.auto_switch_on_usage_limit().unwrap_or(false)
+            && !state.is_shutting_down()
+            && state
+                .quota_recovery
+                .inner
+                .lock()
+                .expect("quota recovery lock poisoned")
+                .generations
+                .get(id)
+                .is_some_and(|generation| Arc::ptr_eq(generation, &self.generation))
+            && state
+                .live_session(id)
+                .is_some_and(|live| Arc::ptr_eq(&live, &self.live))
+            && !self.live.poll_exit()
+            && self.live.input_writes() == self.input_writes
+            && state.turn_ends(id) == self.turn_ends
+            && state
+                .store
+                .get_session(id)
+                .ok()
+                .flatten()
+                .is_some_and(|session| {
+                    matches!(
+                        state.status_for_switch(&session),
+                        SessionStatus::Working | SessionStatus::Idle
+                    ) && session.account_id == self.session.account_id
+                        && session.config_dir == self.session.config_dir
+                        && session.agent_session_id == self.session.agent_session_id
+                        && session.model == self.session.model
+                        && session.effort == self.session.effort
+                })
+            && self.verified.as_ref().is_none_or(|(account, dir, at)| {
+                state.store.account_dir(account).ok() == Some(dir.clone())
+                    && state.account_quotas.verified_available(
+                        self.session.agent,
+                        account.as_deref(),
+                        dir.as_deref(),
+                        *at,
+                    )
+            })
+    }
+}
+
+/// Only a newly recorded, successful probe is a reason to reconsider the waits.
+pub(crate) fn after_quota_refresh(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account: Option<String>,
+    config_dir: Option<String>,
+    started_at: i64,
+) -> Option<tokio::task::JoinHandle<()>> {
+    #[cfg(not(test))]
+    let (snapshot, launch) = (crate::env_shell::launch_snapshot, crate::term::launch);
+    #[cfg(test)]
+    let (snapshot, launch) = {
+        let hook = state.quota_recovery.launch.lock().unwrap().clone()?;
+        (
+            move || Ok(hook.env.clone()),
+            move |request| (hook.launch)(request),
+        )
+    };
+    let state = state.clone();
+    Some(tokio::spawn(async move {
+        let _slot = state.quota_recovery.slots.acquire().await;
+        recover_after_refresh(
+            &state, agent, account, config_dir, started_at, snapshot, launch,
+        )
+        .await;
+    }))
+}
+
+async fn recover_after_refresh(
+    state: &Arc<AppState>,
+    agent: Agent,
+    account: Option<String>,
+    config_dir: Option<String>,
+    started_at: i64,
+    snapshot: impl Fn() -> Result<HashMap<String, String>> + Clone + Send + 'static,
+    launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
+) {
+    if !state.store.auto_switch_on_usage_limit().unwrap_or(false) {
+        state.quota_recovery.clear();
+        return;
+    }
+    if !state.account_quotas.verified_available(
+        agent,
+        account.as_deref(),
+        config_dir.as_deref(),
+        started_at,
+    ) {
+        return;
+    }
+    let candidates: Vec<_> = state
+        .quota_recovery
+        .inner
+        .lock()
+        .expect("quota recovery lock poisoned")
+        .waiting
+        .values()
+        .filter(|wait| wait.session.agent == agent && started_at > wait.since)
+        .cloned()
+        .collect();
+    for mut wait in candidates {
+        let id = wait.session.id.clone();
+        // Claim before inspecting launch state: another callback may already be restarting it.
+        let claimed = {
+            let mut inner = state
+                .quota_recovery
+                .inner
+                .lock()
+                .expect("quota recovery lock poisoned");
+            if inner
+                .waiting
+                .get(&id)
+                .is_some_and(|pending| Arc::ptr_eq(&pending.generation, &wait.generation))
+            {
+                inner.waiting.remove(&id);
+                true
+            } else {
+                false
+            }
+        };
+        if !claimed {
+            continue;
+        }
+        if !wait.still_due(state) {
+            continue;
+        }
+        if state.is_launching(&id) {
+            keep_waiting(state, wait);
+            continue;
+        }
+        if switchable_session(state, &id).ok().flatten().is_none() {
+            continue;
+        }
+        if !coordinator::account_can_open(state, agent, account.as_deref()).unwrap_or(false)
+            || account
+                .as_deref()
+                .is_some_and(|id| state.sharing_locked(id).is_some())
+        {
+            keep_waiting(state, wait);
+            continue;
+        }
+        wait.verified = Some((account.clone(), config_dir.clone(), started_at));
+        let result = switch_to_with_recovery(
+            state,
+            &wait.session,
+            account.clone(),
+            snapshot.clone(),
+            launch.clone(),
+            Some(&wait),
+        )
+        .await;
+        if let Err(err) = result {
+            if !is_quiet(&err) && !state.is_shutting_down() {
+                tracing::warn!(session = %id, %err, "resuming a session after quota recovery failed");
+            }
+        }
+        // A refusal before stopping leaves this exact failed turn eligible for a later probe.
+        wait.verified = None;
+        if wait.still_due(state) {
+            keep_waiting(state, wait);
+        }
+    }
+}
+
+fn keep_waiting(state: &Arc<AppState>, wait: PendingRecovery) {
+    let mut inner = state
+        .quota_recovery
+        .inner
+        .lock()
+        .expect("quota recovery lock poisoned");
+    let id = &wait.session.id;
+    if inner
+        .generations
+        .get(id)
+        .is_some_and(|generation| Arc::ptr_eq(generation, &wait.generation))
+    {
+        inner.waiting.entry(id.clone()).or_insert(wait);
+    }
+}
+
 /// The sessions [`after_failed_turn`] was asked to switch under test.
 #[cfg(test)]
 pub(crate) static ASKED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
@@ -84,16 +323,20 @@ pub fn after_failed_turn(state: &Arc<AppState>, id: &str) {
             return;
         }
     }
+    let trigger = state.quota_recovery.capture(state, id).ok().flatten();
     // The switch itself starts an agent, which a test cannot; it only sees that one was asked for.
+    #[cfg(test)]
+    let _ = trigger;
     #[cfg(test)]
     ASKED.lock().unwrap().push(id.to_string());
     #[cfg(not(test))]
     {
         let (state, id) = (state.clone(), id.to_string());
         tokio::spawn(async move {
-            switch_after_failed_turn(
+            switch_after_failed_turn_captured(
                 &state,
                 &id,
+                trigger,
                 crate::env_shell::launch_snapshot,
                 crate::term::launch,
             )
@@ -105,13 +348,25 @@ pub fn after_failed_turn(state: &Arc<AppState>, id: &str) {
 /// [`after_failed_turn`], waiting for the switch, with the shell environment `snapshot` gives and
 /// the processes `launch` starts: `env_shell::launch_snapshot` and `term::launch` outside the
 /// tests, which cannot start an agent.
+#[cfg(test)]
 async fn switch_after_failed_turn(
     state: &Arc<AppState>,
     id: &str,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
 ) {
-    match try_switch(state, id, snapshot, launch).await {
+    let trigger = state.quota_recovery.capture(state, id).ok().flatten();
+    switch_after_failed_turn_captured(state, id, trigger, snapshot, launch).await;
+}
+
+async fn switch_after_failed_turn_captured(
+    state: &Arc<AppState>,
+    id: &str,
+    trigger: Option<PendingRecovery>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
+) {
+    match try_switch_captured(state, id, trigger, snapshot, launch).await {
         Ok(()) => {}
         // Archived or deleted while it was being switched, or the daemon shutting down.
         Err(err) if is_quiet(&err) || state.is_shutting_down() => {}
@@ -127,22 +382,37 @@ async fn switch_after_failed_turn(
 /// it is in a state to be switched and an account qualifies, and tells those concerned. Nothing
 /// when not. The turn's stop on the usage limit is waited for here, ahead of any claim: a failed
 /// turn that did not stop on it (an overload, a network error) must not leave the session shown as
-/// switching and refuse everything else meanwhile. Neither the wait nor the shell snapshot it may
-/// need is started unless some account could take the session. A claim held on the session is
+/// switching and refuse everything else meanwhile. With no target, the same confirmation
+/// authorizes a wait for a fresh quota probe. A claim held on the session is
 /// waited for first ([`wait_for_claim`]); a trigger from a turn on one account is dropped if the
 /// session was moved to another during that wait. What was decided on the records read here is
 /// held to under the switch's claim as well: the account the limit was found on (the session is
 /// left alone if it changed during the wait), that it has a process, that it does not wait for the
 /// user, and that its last turn stopped on the usage limit.
+#[cfg(test)]
 async fn try_switch(
     state: &Arc<AppState>,
     id: &str,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
 ) -> Result<()> {
+    let trigger = state.quota_recovery.capture(state, id)?;
+    try_switch_captured(state, id, trigger, snapshot, launch).await
+}
+
+async fn try_switch_captured(
+    state: &Arc<AppState>,
+    id: &str,
+    trigger: Option<PendingRecovery>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
+) -> Result<()> {
     if !state.store.auto_switch_on_usage_limit()? {
         return Ok(());
     }
+    let Some(trigger) = trigger else {
+        return Ok(());
+    };
     // The account the turn that triggered this ran on, which the wait for a claim may change.
     let Some(triggered_on) = state
         .store
@@ -156,9 +426,6 @@ async fn try_switch(
         return Ok(());
     };
     if session.account_id != triggered_on {
-        return Ok(());
-    }
-    if pick_target(state, &session)?.is_none() {
         return Ok(());
     }
     // The snapshot is taken for the record's sake only where finding it needs one (the default
@@ -181,13 +448,25 @@ async fn try_switch(
     let Some(waited) = switchable_session(state, id)? else {
         return Ok(());
     };
-    if waited.account_id != session.account_id {
+    if waited.account_id != session.account_id || !trigger.still_due(state) {
         return Ok(());
     }
     let Some(target) = pick_target(state, &waited)? else {
+        let mut inner = state
+            .quota_recovery
+            .inner
+            .lock()
+            .expect("quota recovery lock poisoned");
+        if inner
+            .generations
+            .get(id)
+            .is_some_and(|generation| Arc::ptr_eq(generation, &trigger.generation))
+        {
+            inner.waiting.insert(id.to_string(), trigger);
+        }
         return Ok(());
     };
-    switch_to(state, &waited, target, snapshot, launch).await
+    switch_to_with_recovery(state, &waited, target, snapshot, launch, Some(&trigger)).await
 }
 
 /// Waits up to [`CLAIM_WAIT`] for the claim on the session `id` to be released, so that a turn that
@@ -227,6 +506,7 @@ fn switchable_session(state: &Arc<AppState>, id: &str) -> Result<Option<Session>
 
 /// Switches `session` to `target`, the account picked for it, then tells those concerned; on a
 /// failure after its process was ended, brings it back up on the account it had.
+#[cfg(test)]
 async fn switch_to(
     state: &Arc<AppState>,
     session: &Session,
@@ -234,11 +514,28 @@ async fn switch_to(
     snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
     launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
 ) -> Result<()> {
+    switch_to_with_recovery(state, session, target, snapshot, launch, None).await
+}
+
+async fn switch_to_with_recovery(
+    state: &Arc<AppState>,
+    session: &Session,
+    target: Option<String>,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>> + Send + 'static,
+    launch: impl Fn(LaunchRequest) -> Result<Launch> + Clone + Send + 'static,
+    recovery: Option<&PendingRecovery>,
+) -> Result<()> {
     let id = session.id.as_str();
+    let same_account = session.account_id == target;
     let from = account_name(state, session, session.account_id.as_deref());
     let to = account_name(state, session, target.as_deref());
-    let note = note_to_session(session.agent, &from, &to);
+    let note = if same_account {
+        format!("{NOTICE_PREFIX} Your account's usage quota has recovered. Continue the work that its usage limit stopped.")
+    } else {
+        note_to_session(session.agent, &from, &to)
+    };
     let only_if = SwitchOnlyIf {
+        recovery,
         on_account: Some(session.account_id.as_deref()),
         not_waiting: true,
         running: true,
@@ -288,6 +585,23 @@ async fn switch_to(
         }
     };
     let moved = state.session_record(id)?;
+    if same_account {
+        let (state, moved) = (state.clone(), moved.clone());
+        tokio::task::spawn_blocking(move || {
+            let continuation = if continued {
+                "It was sent a prompt to continue; do not send it one yourself."
+            } else {
+                "It is awaiting instructions."
+            };
+            reporting::tell_owner(&state, &moved, |_| {
+                format!(
+                "{NOTICE_PREFIX}: session `{}` resumed automatically after its account's usage \
+                 quota recovered. {continuation}", moved.id)
+            });
+        })
+        .await?;
+        return Ok(());
+    }
     // The default account has no id, so its param is left out.
     let mut params = vec![
         ("agent", moved.agent.label()),
@@ -332,10 +646,28 @@ async fn restore(
         Ok(()) => Ok(()),
         Err(err) if is_quiet(&err) || is_already_up(&err) || state.is_shutting_down() => Ok(()),
         Err(err) => {
-            tell_switch_failed(state, session, target, &err).await;
+            if target == session.account_id.as_deref() {
+                tell_recovery_failed(state, session, &err).await;
+            } else {
+                tell_switch_failed(state, session, target, &err).await;
+            }
             Err(err)
         }
     }
+}
+
+async fn tell_recovery_failed(state: &Arc<AppState>, session: &Session, err: &anyhow::Error) {
+    coordinator::report_failed_launch(state, session, err);
+    let (state, session, reason) = (state.clone(), session.clone(), format!("{err:#}"));
+    let _ = tokio::task::spawn_blocking(move || {
+        reporting::tell_owner(&state, &session, |_| {
+            format!(
+            "{NOTICE_PREFIX}: session `{}` (\"{}\") could not resume after its account's usage \
+             quota recovered. It is interrupted and its work is stopped. Reason: {reason}",
+            session.id, session.title)
+        });
+    })
+    .await;
 }
 
 /// What the account `id` of `session`'s agent is called (`None` the default account), for a
@@ -756,6 +1088,435 @@ mod tests {
         fn write_conversation(&self, text: &str) {
             std::fs::write(self.dir.join("default-claude").join(CONVERSATION), text).unwrap();
         }
+    }
+
+    impl Fixture {
+        async fn waiting_for_quota(&self) {
+            self.hold(None, 100.0);
+            self.hold(Some("claude-a"), 100.0);
+            self.failed_turn().await;
+            assert!(self
+                .state
+                .quota_recovery
+                .inner
+                .lock()
+                .unwrap()
+                .waiting
+                .contains_key("w"));
+            assert_eq!(self.launched(), 0);
+            let (started, launches) = (self.started.clone(), self.launches.clone());
+            *self.state.quota_recovery.launch.lock().unwrap() = Some(RecoveryLaunch {
+                env: self.env(),
+                launch: Arc::new(move |request| {
+                    stand_in_launch(&started, &launches, || {})(request)
+                }),
+            });
+            // A probe that started before the wait is not evidence of recovery.
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+
+        fn refresh_quota(&self, account: Option<&str>, used: f64) -> tokio::task::JoinHandle<()> {
+            let quota = AccountQuota {
+                agent: Agent::Claude,
+                account: account.map(str::to_string),
+                fetched_at: now_millis(),
+                plan: None,
+                unavailable: None,
+                windows: vec![QuotaWindow {
+                    kind: QuotaWindowKind::Weekly,
+                    label: None,
+                    used_percent: used,
+                    resets_at: Some(now_millis() + 86_400_000),
+                    window_minutes: None,
+                }],
+            };
+            crate::account_quotas::finish_probe_for_test(
+                &self.state,
+                quota,
+                account
+                    .map(|id| self.dir.join(id))
+                    .as_deref()
+                    .and_then(|path| path.to_str()),
+            )
+            .unwrap()
+        }
+
+        async fn recovered(&self) {
+            let launches = self.launches.clone();
+            assert!(
+                crate::test_support::within(crate::test_support::PATIENCE, move || launches
+                    .lock()
+                    .unwrap()
+                    .len()
+                    == 1)
+                .await
+            );
+            let state = self.state.clone();
+            assert!(
+                crate::test_support::within(crate::test_support::PATIENCE, move || !state
+                    .is_launching("w"))
+                .await
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_successful_probe_recovers_a_waiting_turn_on_another_account_once() {
+        let fixture = Fixture::new("quota-recovery-other", SessionStatus::Idle);
+        fixture.waiting_for_quota().await;
+        // Even a recently exhausted account can be used after a verified fresh reading.
+        fixture.state.note_left_for_limit("w", Some("claude-a"));
+        let first = fixture.refresh_quota(Some("claude-a"), 20.0);
+        let second = fixture.refresh_quota(Some("claude-a"), 20.0);
+        first.await.unwrap();
+        second.await.unwrap();
+        fixture.refresh_quota(None, 10.0).await.unwrap();
+        fixture.recovered().await;
+        assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
+        assert_eq!(fixture.launched(), 1);
+        assert!(fixture
+            .prompt_of(0)
+            .unwrap()
+            .ends_with(crate::switch_continue::CONTINUE_PROMPT));
+    }
+
+    #[tokio::test]
+    async fn a_successful_probe_can_resume_the_account_the_turn_was_on() {
+        let fixture = Fixture::new("quota-recovery-own", SessionStatus::Idle);
+        fixture.waiting_for_quota().await;
+        let mut events = fixture.state.subscribe();
+        fixture.refresh_quota(None, 5.0).await.unwrap();
+        fixture.recovered().await;
+        assert_eq!(fixture.worker().account_id, None);
+        assert!(fixture
+            .prompt_of(0)
+            .unwrap()
+            .contains("usage quota has recovered"));
+        assert!(notices(&mut events, notice_code::ACCOUNT_SWITCHED_AUTOMATICALLY).is_empty());
+        let heard = output_containing(&fixture.owner, "resumed automatically");
+        assert!(heard.contains("resumed automatically"), "{heard}");
+    }
+
+    #[tokio::test]
+    async fn manual_input_or_a_new_turn_cancels_quota_recovery() {
+        for action in [
+            "input",
+            "turn",
+            "interrupt",
+            "model",
+            "archive",
+            "setting",
+            "process",
+            "exit",
+        ] {
+            let fixture = Fixture::new(
+                &format!("quota-recovery-cancel-{action}"),
+                SessionStatus::Idle,
+            );
+            fixture.waiting_for_quota().await;
+            match action {
+                "input" => fixture.worker_process.write_input(b"new task").unwrap(),
+                "turn" => fixture.state.turn_started("w", Some("new task")),
+                "interrupt" => {
+                    let _claim = fixture.state.claim_interrupt("w");
+                }
+                "model" => fixture
+                    .state
+                    .set_session_launch_overrides("w", &None, &None)
+                    .unwrap(),
+                "archive" => {
+                    coordinator::archive_session(&fixture.state, "w").unwrap();
+                }
+                "setting" => {
+                    fixture
+                        .state
+                        .store
+                        .set_auto_switch_on_usage_limit(false)
+                        .unwrap();
+                }
+                "process" => fixture.state.end_process_for_test("w"),
+                "exit" => {
+                    fixture.worker_process.terminate();
+                    let registered = fixture.state.live_session("w").expect("still registered");
+                    assert!(Arc::ptr_eq(&registered, &fixture.worker_process));
+                    assert!(fixture.worker_process.poll_exit());
+                }
+                _ => unreachable!(),
+            }
+            fixture.refresh_quota(Some("claude-a"), 20.0).await.unwrap();
+            assert_eq!(fixture.launched(), 0, "{action}");
+            assert!(!fixture
+                .state
+                .quota_recovery
+                .inner
+                .lock()
+                .unwrap()
+                .waiting
+                .contains_key("w"));
+        }
+    }
+
+    #[tokio::test]
+    async fn quota_refresh_never_resumes_an_unrelated_idle_session() {
+        let fixture = Fixture::new("quota-recovery-unrelated", SessionStatus::Idle);
+        let (started, launches) = (fixture.started.clone(), fixture.launches.clone());
+        *fixture.state.quota_recovery.launch.lock().unwrap() = Some(RecoveryLaunch {
+            env: fixture.env(),
+            launch: Arc::new(move |request| stand_in_launch(&started, &launches, || {})(request)),
+        });
+        fixture.refresh_quota(Some("claude-a"), 0.0).await.unwrap();
+        assert_eq!(fixture.launched(), 0);
+    }
+
+    #[tokio::test]
+    async fn failed_stale_or_still_exhausted_probes_keep_waiting() {
+        let fixture = Fixture::new("quota-recovery-no-proof", SessionStatus::Idle);
+        fixture.waiting_for_quota().await;
+        let mut quota = fixture
+            .state
+            .account_quotas
+            .held(
+                Agent::Claude,
+                Some("claude-a"),
+                fixture.dir.join("claude-a").to_str(),
+            )
+            .unwrap();
+        quota.windows[0].resets_at = Some(now_millis() - 1000);
+        crate::account_quotas::finish_probe_for_test(
+            &fixture.state,
+            quota.clone(),
+            fixture.dir.join("claude-a").to_str(),
+        )
+        .unwrap()
+        .await
+        .unwrap();
+        quota.windows[0].used_percent = 0.0;
+        quota.unavailable = Some(crate::protocol::QuotaUnavailable::new(
+            crate::protocol::quota_unavailable_code::TIMED_OUT,
+            "no",
+            &[],
+        ));
+        crate::account_quotas::finish_probe_for_test(
+            &fixture.state,
+            quota,
+            fixture.dir.join("claude-a").to_str(),
+        )
+        .unwrap()
+        .await
+        .unwrap();
+        assert_eq!(fixture.launched(), 0);
+        assert!(fixture
+            .state
+            .quota_recovery
+            .inner
+            .lock()
+            .unwrap()
+            .waiting
+            .contains_key("w"));
+        fixture.refresh_quota(Some("claude-a"), 20.0).await.unwrap();
+        fixture.recovered().await;
+    }
+
+    #[tokio::test]
+    async fn input_before_an_async_failure_trigger_is_judged_prevents_registering_a_wait() {
+        let fixture = Fixture::new("quota-recovery-stale-trigger", SessionStatus::Idle);
+        fixture.hold(Some("claude-a"), 100.0);
+        let trigger = fixture
+            .state
+            .quota_recovery
+            .capture(&fixture.state, "w")
+            .unwrap();
+        fixture.worker_process.write_input(b"user task").unwrap();
+        let env = fixture.env();
+        switch_after_failed_turn_captured(
+            &fixture.state,
+            "w",
+            trigger,
+            move || Ok(env),
+            fixture.launch_failing(0),
+        )
+        .await;
+        assert!(!fixture
+            .state
+            .quota_recovery
+            .inner
+            .lock()
+            .unwrap()
+            .waiting
+            .contains_key("w"));
+        assert_eq!(fixture.launched(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_probe_started_before_the_wait_or_with_another_exhausted_window_cannot_resume_it() {
+        let fixture = Fixture::new("quota-recovery-all-windows", SessionStatus::Idle);
+        fixture.waiting_for_quota().await;
+        let since = fixture.state.quota_recovery.inner.lock().unwrap().waiting["w"].since;
+        fixture.hold(Some("claude-a"), 0.0);
+        after_quota_refresh(
+            &fixture.state,
+            Agent::Claude,
+            Some("claude-a".to_string()),
+            Some(fixture.dir.join("claude-a").to_string_lossy().into_owned()),
+            since - 1,
+        )
+        .unwrap()
+        .await
+        .unwrap();
+        assert_eq!(fixture.launched(), 0);
+        let mut quota = fixture
+            .state
+            .account_quotas
+            .held(
+                Agent::Claude,
+                Some("claude-a"),
+                fixture.dir.join("claude-a").to_str(),
+            )
+            .unwrap();
+        quota.windows.push(QuotaWindow {
+            kind: QuotaWindowKind::Session,
+            label: None,
+            used_percent: 100.0,
+            resets_at: Some(now_millis() + 1000),
+            window_minutes: None,
+        });
+        crate::account_quotas::finish_probe_for_test(
+            &fixture.state,
+            quota,
+            fixture.dir.join("claude-a").to_str(),
+        )
+        .unwrap()
+        .await
+        .unwrap();
+        assert_eq!(fixture.launched(), 0);
+        assert!(fixture
+            .state
+            .quota_recovery
+            .inner
+            .lock()
+            .unwrap()
+            .waiting
+            .contains_key("w"));
+        fixture.refresh_quota(Some("claude-a"), 20.0).await.unwrap();
+        fixture.recovered().await;
+    }
+
+    #[tokio::test]
+    async fn a_models_window_alone_is_not_evidence_the_account_recovered() {
+        let fixture = Fixture::new("quota-recovery-model-only", SessionStatus::Idle);
+        fixture.waiting_for_quota().await;
+        let quota = AccountQuota {
+            agent: Agent::Claude,
+            account: Some("claude-a".to_string()),
+            fetched_at: now_millis(),
+            plan: None,
+            unavailable: None,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::WeeklyModel,
+                label: Some("Fable".to_string()),
+                used_percent: 0.0,
+                resets_at: Some(now_millis() + 86_400_000),
+                window_minutes: None,
+            }],
+        };
+        crate::account_quotas::finish_probe_for_test(
+            &fixture.state,
+            quota,
+            fixture.dir.join("claude-a").to_str(),
+        )
+        .unwrap()
+        .await
+        .unwrap();
+        assert_eq!(fixture.launched(), 0);
+        assert!(fixture
+            .state
+            .quota_recovery
+            .inner
+            .lock()
+            .unwrap()
+            .waiting
+            .contains_key("w"));
+        fixture.refresh_quota(Some("claude-a"), 20.0).await.unwrap();
+        fixture.recovered().await;
+    }
+
+    #[tokio::test]
+    async fn a_wait_for_the_user_that_appears_during_preparation_prevents_recovery() {
+        for screen in [false, true] {
+            let fixture = Fixture::new(
+                &format!("quota-recovery-late-wait-{screen}"),
+                SessionStatus::Idle,
+            );
+            fixture.waiting_for_quota().await;
+            let mut wait = fixture.state.quota_recovery.inner.lock().unwrap().waiting["w"].clone();
+            fixture.hold(Some("claude-a"), 20.0);
+            wait.verified = Some((
+                Some("claude-a".to_string()),
+                Some(fixture.dir.join("claude-a").to_string_lossy().into_owned()),
+                wait.since,
+            ));
+            let (state, live, env) = (
+                fixture.state.clone(),
+                fixture.state.live_session("w").unwrap(),
+                fixture.env(),
+            );
+            switch_to_with_recovery(&fixture.state, &fixture.worker(), Some("claude-a".to_string()),
+                move || {
+                    if screen {
+                        live.on_output("\n  Resume this conversation?\n  This conversation has been inactive for 1h and is 42k tokens long.\n  ❯ Resume\n    Start a new conversation\n\n  Enter to confirm · Esc to dismiss\n".as_bytes());
+                        assert!(live.look_for_dialog().current.is_some());
+                    } else {
+                        state.apply_hook_status("w", SessionStatus::WaitingUser).unwrap();
+                    }
+                    Ok(env)
+                }, fixture.launch_failing(0), Some(&wait)).await.unwrap();
+            assert_eq!(fixture.launched(), 0);
+            assert!(fixture.state.live_session("w").is_some());
+            assert!(!fixture.worker_process.was_ended_on_purpose());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_failed_recovery_on_the_same_account_reports_a_launch_failure() {
+        let fixture = Fixture::new("quota-recovery-own-failure", SessionStatus::Idle);
+        fixture.waiting_for_quota().await;
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let counted = attempts.clone();
+        fixture
+            .state
+            .quota_recovery
+            .launch
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .launch = Arc::new(move |_| {
+            counted.fetch_add(1, Ordering::SeqCst);
+            anyhow::bail!("the agent cannot be started")
+        });
+        let mut events = fixture.state.subscribe();
+        let mut failures = fixture.state.subscribe();
+        fixture.refresh_quota(None, 0.0).await.unwrap();
+        assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(fixture.worker().status, SessionStatus::Interrupted);
+        assert!(fixture.state.live_session("w").is_none());
+        let told = notices(&mut events, notice_code::LAUNCH_FAILED);
+        assert_eq!(told.len(), 1);
+        assert_eq!(told[0].1["title"], fixture.worker().title);
+        assert!(told[0].1["reason"].contains("the agent cannot be started"));
+        assert!(told[0].1.contains_key("reason_code"));
+        assert!(notices(
+            &mut failures,
+            notice_code::ACCOUNT_SWITCH_AUTOMATICALLY_FAILED
+        )
+        .is_empty());
+        let heard = output_containing(&fixture.owner, "could not resume after");
+        assert!(
+            heard.contains("interrupted and its work is stopped"),
+            "{heard}"
+        );
+        assert!(!heard.contains("could neither switch"), "{heard}");
+        assert!(!heard.contains("switched it to"), "{heard}");
     }
 
     /// The `session_notice` events of `code` among those received, with the session each is
@@ -1666,9 +2427,9 @@ mod tests {
         assert_eq!(fixture.worker().account_id.as_deref(), Some("claude-a"));
     }
 
-    /// Nothing is snapshotted or waited for while no account could take the session.
+    /// A wait is registered only after confirming the usage limit in the conversation record.
     #[tokio::test]
-    async fn no_snapshot_is_taken_while_no_account_qualifies() {
+    async fn no_target_still_confirms_the_usage_limit_before_registering_a_wait() {
         let fixture = Fixture::new("auto-switch-no-target", SessionStatus::Idle);
         fixture.hold(Some("claude-a"), 100.0);
         let taken = Arc::new(AtomicUsize::new(0));
@@ -1687,7 +2448,15 @@ mod tests {
         .await
         .expect("nothing to do");
 
-        assert_eq!(taken.load(Ordering::SeqCst), 0);
+        assert_eq!(taken.load(Ordering::SeqCst), 1);
+        assert!(fixture
+            .state
+            .quota_recovery
+            .inner
+            .lock()
+            .unwrap()
+            .waiting
+            .contains_key("w"));
         assert_eq!(fixture.launched(), 0);
     }
 
@@ -2117,9 +2886,17 @@ mod tests {
         let second = async {
             // The turn it continues fails once the session is relaunched on its new account, while
             // the claim is still held.
+            let deadline = Instant::now() + crate::test_support::PATIENCE;
             while !(fixture.state.is_launching("w")
-                && fixture.worker().account_id.as_deref() == Some("claude-a"))
+                && fixture.worker().account_id.as_deref() == Some("claude-a")
+                && fixture.state.live_session("w").is_some_and(|live| {
+                    !std::ptr::eq(live.as_ref(), fixture.worker_process.as_ref())
+                }))
             {
+                assert!(
+                    Instant::now() < deadline,
+                    "the switched process did not come up"
+                );
                 tokio::time::sleep(Duration::from_millis(20)).await;
             }
             fixture.failed_turn().await;

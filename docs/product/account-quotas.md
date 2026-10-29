@@ -96,7 +96,9 @@ again.
   twice at the same time. While a kick runs on an account the account is not read either, unless its login
   ends meanwhile.
 
-Each finished reading reaches every connected window straight away.
+Each finished reading reaches every connected window straight away. A fresh successful reading can also continue a
+turn waiting after the usage limit stopped it while automatic switching is on (see "When no account qualifies" in
+`docs/product/automatic-account-switch.md`).
 
 ## Quota windows
 

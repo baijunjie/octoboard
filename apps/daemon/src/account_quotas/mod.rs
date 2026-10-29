@@ -234,6 +234,35 @@ impl AccountQuotas {
         exhausted_in(&self.lock().entries, agent, account, config_dir, now)
     }
 
+    /// Recovery requires an actual successful probe after the failed turn, with every
+    /// account-wide window below its limit even when an old reset time has passed.
+    pub(crate) fn verified_available(
+        &self,
+        agent: Agent,
+        account: Option<&str>,
+        config_dir: Option<&str>,
+        started_at: i64,
+    ) -> bool {
+        let inner = self.lock();
+        inner
+            .entries
+            .get(&Key::of(agent, account, config_dir))
+            .is_some_and(|entry| {
+                let mut windows = entry
+                    .quota
+                    .windows
+                    .iter()
+                    .filter(|window| window.kind != QuotaWindowKind::WeeklyModel)
+                    .peekable();
+                entry.attempted_at >= started_at
+                    && entry.quota.unavailable.is_none()
+                    && windows.peek().is_some()
+                    && windows.all(|window| {
+                        window.used_percent.is_finite() && window.used_percent < 100.0
+                    })
+            })
+    }
+
     /// The held reading of the account under `config_dir`, if one is held. `None` for
     /// `config_dir` is the default account. A reading taken under another directory is not this
     /// account's.
@@ -374,12 +403,14 @@ impl AccountQuotas {
     /// it ran. A failure over a reading that had windows keeps that reading, with the reason set
     /// beside it, so a client can show it as stale; an account that never read keeps none. Only a
     /// failure counts towards the backoff: that the CLI has no quota to report is not one.
-    fn finish(&self, state: &AppState, claim: Claim, mut quota: AccountQuota) {
+    fn finish(&self, state: &AppState, claim: Claim, mut quota: AccountQuota) -> bool {
+        let mut recorded = false;
         self.change(state, |inner| {
             if inner.in_flight.get(&claim.key) != Some(&claim.token) {
                 return false;
             }
             inner.in_flight.remove(&claim.key);
+            recorded = true;
             if quota.unavailable.is_none() {
                 end_episodes(inner, &claim.key, &quota.windows);
             }
@@ -413,6 +444,7 @@ impl AccountQuotas {
             );
             true
         });
+        recorded
     }
 
     /// The claim for a kick of the account `key`, when its held reading calls for one: the setting
@@ -1043,7 +1075,8 @@ async fn read_account(
         )
     });
     let key = claim.key.clone();
-    state.account_quotas.finish(state, claim, quota);
+    drop(_slot);
+    let _ = finish_reading(state, claim, quota);
     if kicks {
         state.account_quotas.claim_kick(state, &key)
     } else {
@@ -1051,6 +1084,42 @@ async fn read_account(
         state.account_quotas.make_due_for_kick(state, &key);
         None
     }
+}
+
+fn finish_reading(
+    state: &Arc<AppState>,
+    claim: Claim,
+    quota: AccountQuota,
+) -> Option<tokio::task::JoinHandle<()>> {
+    let (key, started_at) = (claim.key.clone(), claim.started_at);
+    if state.account_quotas.finish(state, claim, quota) {
+        crate::auto_switch::after_quota_refresh(
+            state,
+            key.agent,
+            key.account,
+            key.config_dir,
+            started_at,
+        )
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn finish_probe_for_test(
+    state: &Arc<AppState>,
+    quota: AccountQuota,
+    config_dir: Option<&str>,
+) -> Option<tokio::task::JoinHandle<()>> {
+    let claim = {
+        let mut inner = state.account_quotas.lock();
+        state.account_quotas.claim_locked(
+            &mut inner,
+            Key::of(quota.agent, quota.account.as_deref(), config_dir),
+            now_millis(),
+        )
+    };
+    finish_reading(state, claim, quota)
 }
 
 /// Carries a claim from a kick through the reading after it, and on to a further kick if that

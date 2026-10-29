@@ -26,8 +26,9 @@ error say, switches nothing and never shows the session as switching.
 - **The record is read again for up to 4 seconds** when it does not say so yet, since an agent can report the failed
   turn before it writes why. That wait comes before the switch takes hold of the session; the record is read once more
   once it has, before the session's process is ended.
-- **A quota reading never triggers it.** A session is never switched because its account reads as used up, whether it
-  is working or awaiting instructions.
+- **A used-up quota reading never triggers it.** A fresh successful reading can later continue a turn already
+  stopped by the usage limit, as described in "When no account qualifies" below; it never resumes an unrelated idle
+  session.
 - **Each such turn is a trigger of its own**: nothing holds off a second switch after the first.
 
 **Which sessions.** A session is switched only while it has a process that is *working* or *awaiting instructions*,
@@ -61,7 +62,38 @@ whether or not that setting is on, with these left out:
   reading failed, or none is held.
 
 No minimum of quota left is asked for. When no account qualifies, nothing is switched and nobody is told; the
-session stays stopped on its limit, as without the setting.
+session waits as described below.
+
+## When no account qualifies
+
+The session stays stopped on its limit. While the setting remains on, Octoboard remembers that failed turn and can
+continue it after an account of the same agent has a fresh successful quota reading. It uses the existing readings
+in "When quotas are read" in `docs/product/account-quotas.md`; waiting adds no separate timer or quota requests.
+
+- **The reading must begin after the failed turn was captured**, report at least one account-wide window, and give
+  a finite used percentage below **100% in every account-wide window**: the five-hour window, account-wide weekly
+  window or credit pool. A model-specific window alone, a failed or unavailable reading, an older held reading, or
+  merely passing a reset time does not prove recovery.
+- **Only the account just read is considered**, and it must still be usable when the session is prepared to restart.
+  A fresh reading meeting these rules allows an account left for a usage limit in the last 30 minutes to be used
+  again. Other accounts' held readings do not trigger a switch.
+- **The original account can recover too.** Octoboard restarts the session on that account without copying its
+  conversation. The session is told that its quota recovered and to continue the work its usage limit stopped.
+  Its owner is told it resumed and whether it was sent a continuation prompt; the user gets no account-switched
+  toast. Moving to a different account has the success notices in "When the switch succeeds" below.
+- **The wait belongs to this failed turn and its running process.** New input or a queued message, a new turn, a
+  manual resume, restart, account switch, model or effort change, an interruption, archiving, deleting, or the process
+  exiting invalidates it. Changing the session's account configuration also invalidates it. A session waiting for
+  the user is left alone, including when that wait appears while a restart is being prepared.
+- **Turning the setting off cancels these waits.** Turning it back on does not recover them. The waits are held only
+  while the daemon runs and do not survive its restart.
+
+A restart refused before stopping the process can wait for another qualifying reading while the same failed turn
+is still eligible. The same wait is never restarted twice by overlapping readings. If restarting on the original
+account fails after stopping its process, Octoboard tries to bring it back up there without a prompt, as for a failed
+switch. If that also fails, it stays interrupted: the user gets the usual launch-failure alert, and its owner is told
+that it could not resume and its work stopped. Failures moving to another account follow "When the switch fails"
+below.
 
 ## When the switch succeeds
 
