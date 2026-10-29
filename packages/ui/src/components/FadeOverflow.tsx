@@ -282,7 +282,7 @@ interface FadeOverflowProps {
   lang?: string;
   /** Which edge the content is cut at. `end` (the default) shows the content's beginning; `start`
    * aligns it to the end, so what is lost is its beginning (a path whose last folder must stay
-   * readable). */
+   * readable, a branch name whose last segment is what tells it from its siblings). */
   clip?: "start" | "end";
   /** The tooltip the text carries only while an edge is clipped, so a name that fits does not
    * grow a tooltip repeating itself. `null`, `false` and `undefined` mean none. */
@@ -367,6 +367,9 @@ export function FadeOverflow({
         prev.start === next.start && prev.end === next.end && prev.rtl === next.rtl && Math.abs(prev.width - next.width) < 0.5 ? prev : next,
       );
     };
+    // A caller can change `clip` on a label that stays mounted (a branch giving way to a detached
+    // commit id), and a label clipped at its end is never pinned, so it is put where it now rests.
+    if (!marqueeHolds.current) scrollToOffset(element, restingOffset(element, clip));
     update();
     const stopObserving = observe(element, update);
     const remeasure = () => scheduleMeasure(element);

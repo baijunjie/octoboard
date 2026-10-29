@@ -29,15 +29,18 @@ function pointerOn(element: Element, entering: boolean): void {
 }
 
 /** Each label runs by itself; surrounding chrome leaves all labels still. Every run returns to
- * rest before the next pointer target, and the test leaves no animation or delayed work pending. */
+ * rest before the next pointer target, and the test leaves no animation or delayed work pending.
+ * Where a label rests is read before any pointer moves: one clipped at its start rests scrolled to
+ * its end, not at 0. */
 export function expectIndependentMarquees(labels: HTMLElement[], chrome: Element[]): void {
+  const rest = new Map(labels.map((label) => [label, label.scrollLeft]));
   for (const target of [...chrome, ...labels]) {
     pointerOn(target, true);
     act(() => void vi.advanceTimersByTime(1400));
     try {
       for (const label of labels) {
-        if (label === target) expect(label.scrollLeft).toBeGreaterThan(5);
-        else expect(label.scrollLeft).toBe(0);
+        if (label === target) expect(Math.abs(label.scrollLeft - rest.get(label)!)).toBeGreaterThan(5);
+        else expect(label.scrollLeft).toBe(rest.get(label));
       }
     } finally {
       pointerOn(target, false);
@@ -50,7 +53,7 @@ export function expectIndependentMarquees(labels: HTMLElement[], chrome: Element
       act(() => void vi.runOnlyPendingTimers());
       expect(vi.getTimerCount()).toBe(0);
     }
-    for (const label of labels) expect(label.scrollLeft).toBe(0);
+    for (const label of labels) expect(label.scrollLeft).toBe(rest.get(label));
   }
   expect(vi.getTimerCount()).toBe(0);
 }

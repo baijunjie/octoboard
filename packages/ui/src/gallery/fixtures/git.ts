@@ -51,12 +51,13 @@ const gitStatuses = [
   gitStatusOf(firstCheckProject.id, { branch: null, upstream: null, activity: "checking" }),
 ];
 
-// A long project name beside a long branch name with both counts non-zero, at the
-// sidebar's minimum docked width (`layout/paneWidth.ts`'s `PANES.sidebar.min`): the worst case for
-// the badge-versus-name squeeze and the branch-only fade and marquee. Branches keep their
-// beginning on the left in an RTL interface; the short branch verifies that large counts remain
-// visible when no branch text fits. Long branches have a tail only the marquee and the tooltip
-// reach. The first long branch is pushing, keeping
+// A long project name beside a long branch name with both counts non-zero. The scenarios fix the
+// sidebar at its minimum docked width (`layout/paneWidth.ts`'s `PANES.sidebar.min`), the worst case
+// for the badge-versus-name squeeze, or at a width where title and branch each keep a visible share
+// of the focus header for the branch-only fade and marquee. Branches stay left-to-right
+// in an RTL interface; the short branch verifies that large counts remain visible when no branch
+// text fits. Long branches are clipped at their start, so the end shows and only the marquee and
+// the tooltip reach the beginning. The first long branch is pushing, keeping
 // its upward activity spinner distinct from the scrolling ahead-count arrow in the row and focus header.
 const squeezeProject = projectOf(
   "p-squeeze",
@@ -201,8 +202,8 @@ export const gitScenarios: Scenario[] = [
   },
   {
     id: "git-badge-focus-long-error", group: GROUP, category: "exceptional",
-    title: "Long branch with a fetch failure in project focus",
-    description: "The failure is deliberate: fetch cannot resolve origin. Press the danger-coloured circled \"!\" named Git check failed at the start of the badge for its popover (reason, remedy, then Git's own text); only the long branch fades and scrolls, while the mark and counts stay visible. Hovering the branch or counts shows the badge's tooltip, which does not mention the failure.",
+    title: "Fetch failure at the narrowest project focus header",
+    description: "The failure is deliberate: fetch cannot resolve origin. Press the danger-coloured circled \"!\" named Git check failed at the start of the badge for its popover (reason, remedy, then Git's own text). At the narrowest sidebar the mark and the two counts take more than half of the header's free width, so the branch has no room and the badge shows only them, while the title (console over project name) keeps the rest and fades at its end. Hovering the counts shows the badge's tooltip, which does not mention the failure.",
     state: longFailureState,
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
   },
@@ -328,7 +329,7 @@ export const gitScenarios: Scenario[] = [
     title: "Branch badges",
     state: badgesState,
     preferences: { sidebarWidth: 280 },
-    description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. Hover a clipped project name or branch to scroll only that text, while state glyphs, arrows and counts stay visible; hovering row controls leaves both labels still. Hover badges for their full details, and drag the sidebar wider to inspect clipping.",
+    description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. A clipped branch loses its beginning and keeps its end. Hover a clipped project name or branch to scroll only that text, while state glyphs, arrows and counts stay visible; hovering row controls leaves both labels still. Hover badges for their full details, and drag the sidebar wider to inspect clipping.",
   },
   {
     id: "git-badge-focus",
@@ -343,10 +344,10 @@ export const gitScenarios: Scenario[] = [
     id: "git-badge-focus-long",
     group: GROUP,
     category: "normal",
-    title: "Long branch pushing in project focus",
+    title: "Long title and branch sharing the project focus header",
     state: badgesState,
-    preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
-    description: "The left loading glyph spins during pushing, and the always-visible ahead-count arrow scrolls upward; hover the glyph for the pushing status. The long project name and branch fade separately and run their own marquees on hover, while the glyph and both counts stay visible; hovering the console subtitle or header controls leaves both still.",
+    preferences: { sidebarWidth: 400, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
+    description: "The title (console over project name) and the branch each take half of the header's free width. The branch fades at its start and shows its end, and the title fades at its end; hover either for its own marquee, while the glyph and both counts stay visible. The left loading glyph spins during pushing, and the always-visible ahead-count arrow scrolls upward; hover the glyph for the pushing status. Hovering the console subtitle or header controls leaves both still.",
   },
   {
     id: "git-push-accepted",

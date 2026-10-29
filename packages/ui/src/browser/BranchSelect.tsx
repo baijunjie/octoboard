@@ -64,7 +64,8 @@ export function BranchSelect({
               <GitBranch aria-hidden="true" className="size-4 shrink-0 text-app-muted" />
               <FadeOverflow
                 as="span"
-                dir="ltr"
+                dir={name === undefined ? undefined : "ltr"}
+                clip={name === undefined ? "end" : "start"}
                 className="min-w-0 flex-1"
                 titleWhenClipped={title}
               >
@@ -94,7 +95,7 @@ export function BranchSelect({
               const branchName = displayWirePath(branch.name);
               return (
                 <ListBox.Item data-list-motion={branch.name} id={branch.name} textValue={branchName} className="mx-1.5 h-8 min-h-0 w-auto py-0 pe-7">
-                  <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={branchName}>
+                  <FadeOverflow as="span" dir="auto" clip="start" className="min-w-0 flex-1" titleWhenClipped={branchName}>
                     {branchName}
                   </FadeOverflow>
                   {branch.origin && <BranchOriginBadge origin={branch.origin} selectedSessionId={selectedSessionId} />}

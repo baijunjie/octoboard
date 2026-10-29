@@ -109,8 +109,10 @@ export function GitBadge({
       ) : (
         Glyph && <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
       )}
+      {/* A branch keeps its end, the part that tells it from its siblings; a short commit id keeps its
+          start, the prefix it is known by. */}
       {(status.branch || noCommitsYet) && (
-        <FadeOverflow as="span" dir={status.branch ? "ltr" : undefined} className="min-w-0">
+        <FadeOverflow as="span" dir={status.branch ? "ltr" : undefined} clip={status.branch && !status.detached ? "start" : "end"} className="min-w-0">
           {status.branch || <span dir="auto">{t("sidebar.git.noCommitsYet")}</span>}
         </FadeOverflow>
       )}

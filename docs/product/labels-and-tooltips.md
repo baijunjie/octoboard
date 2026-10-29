@@ -349,9 +349,13 @@ document whether or not it is cut, so assistive technology is given it either wa
 follows the operating system's rules instead.
 
 **A path is cut at its start instead**, so that its last folder stays in view (see
-`docs/product/right-to-left-layout.md`); every other label is cut at its end. Everything this section says holds for a
-label cut at its start, mirrored: it rests pinned to its end, fades at its start, and carries its full text as its
-tooltip while it is cut.
+`docs/product/right-to-left-layout.md`). **So is a branch name**, so that its end — the part that tells sibling
+branches apart — stays in view: in a project's branch badge, on its sidebar row and in its focus mode's header; in the
+Git mode's branch selector, both its current choice and its listed options; and in the project menu's **Switch branch**
+submenu. The short commit id a detached `HEAD` shows in the badge, which is known by its beginning, the badge's text
+saying the repository has no commits yet and the branch selector's placeholder asking for a branch are cut at their end,
+like every other label. Everything this section says holds for a label cut at its start, mirrored: it rests pinned to
+its end, fades at its start, and carries its full text as its tooltip while it is cut.
 
 A project's branch name in its branch badge also follows these fade and marquee rules. The badge's tooltip is not
 one of this section's, though: the whole badge carries one tooltip describing the branch and its counts, shown whether
