@@ -94,8 +94,10 @@ mark, so it is not told apart by colour alone. Opening and closing it with the m
 
 - While a filter is in force, a strip in the Projects heading's own line, between "Projects (n)" and the controls at
   the line's end, shows it; with no filter the strip is not there. Being part of the heading, it stays at the top
-  while the project list scrolls underneath. The keyword, if there is one, comes first, then the picked tags, each as
-  plain text in the heading line's own style, set apart from each other by spacing alone.
+  while the project list scrolls underneath. The keyword, if there is one, comes first, then the picked tags. Each
+  uses the same tag appearance as picked tags in a project's settings (see "Picked tags" in
+  `docs/product/project-tags.md`), in a read-only form: the keyword is grey, and the picked tags have a light accent
+  tint and accent-coloured text.
 - The strip only shows the filter: nothing in it is a control. Its entries have no remove buttons, take no keyboard
   focus and are not Tab stops, and neither the keyword nor a single tag can be dropped from here. The way to drop
   the filter from the heading is Clear filter, which drops the keyword and every picked tag together; the popover
@@ -104,8 +106,8 @@ mark, so it is not told apart by colour alone. Opening and closing it with the m
   it never wraps onto a further line and no entry in it is cut or fades on its own. When it does not fit it is cut at
   its end and fades there; it does not scroll sideways. While the mouse pointer is anywhere over the strip, the whole
   strip runs as one marquee, all its entries moving together. While cut, it carries the whole filter as its tooltip, the
-  same entries in the same order as plain text, but wrapped onto as many lines as the tooltip's width needs; a single
-  entry longer than a line is broken inside it. A strip that fits has no tooltip. For assistive technology the keyword
+  same read-only tags in the same order, but wrapped onto as many lines as the tooltip's width needs; a single tag
+  longer than a line is broken inside it. A strip that fits has no tooltip. For assistive technology the keyword
   and the picked tags are two groups, named **Filter keyword** and **Selected tags**.
 - Clicking Clear filter with the mouse leaves keyboard focus where it was; pressing it with the keyboard keeps focus
   on it.

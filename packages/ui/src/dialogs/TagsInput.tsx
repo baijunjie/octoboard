@@ -10,7 +10,7 @@ import React, { useRef, useState } from "react";
 import { useFocusVisible } from "react-aria";
 
 import { MotionListBox } from "../components/MotionListBox";
-import { PickedTag } from "../components/PickedTag";
+import { Tag } from "../components/Tag";
 import { InlineReference } from "../components/InlineReference";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
 import { useListMotion } from "../components/useListMotion";
@@ -116,7 +116,7 @@ export function TagsInput({
         >
           <TagGroup.List className="contents">
             {value.map((tag) => (
-              <PickedTag
+              <Tag
                 key={tag}
                 tag={tag}
                 removeTitle={<Message id="dialog.project.removeTag" params={{ tag: <InlineReference dir="auto" wrap>{tag}</InlineReference> }} />}

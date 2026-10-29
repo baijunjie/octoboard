@@ -1,4 +1,4 @@
-import { Tag } from "@heroui/react";
+import { Tag as HeroUITag, tagVariants } from "@heroui/react";
 import React from "react";
 
 import { textDirection } from "../i18n/languages";
@@ -8,10 +8,13 @@ import { TitledControl } from "./TitledControl";
 
 /** HeroUI has no accent variant for a removable tag, so this takes its selected tag's fill and the
  * shared accent text colour (`--tint-accent-fg`, a text on `--accent-soft` as a badge's is) without
- * introducing selection behaviour. The 3rem minimum applies only while the remove button
- * is visible, keeping a short label clear of the button and its fade while fitting the content at rest. */
+ * introducing selection behaviour. */
+const ACCENT_CLASS = "bg-accent-soft text-(--tint-accent-fg)";
+
+/** The 3rem minimum applies only while the remove button is visible, keeping a short label clear
+ * of the button and its fade while fitting the content at rest. */
 const TAG_CLASS =
-  "group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full bg-accent-soft text-(--tint-accent-fg) hover:bg-accent-soft-hover";
+  `group/tag min-w-0 hover:min-w-12 data-focus-visible:min-w-12 max-w-full ${ACCENT_CLASS} hover:bg-accent-soft-hover`;
 
 /** Laid over the tag's end rather than in the row, so it does not reserve space in the row:
  * 0.25rem from the end, inside the tag's 0.5rem end padding, so the 0.75rem glyph
@@ -52,29 +55,49 @@ function tagDirection(tag: string, ui: "ltr" | "rtl"): "ltr" | "rtl" {
   return RIGHT_TO_LEFT_LETTER.test(letter) ? "rtl" : "ltr";
 }
 
-/**
- * A tag the user has picked, removable, in the accent look. It goes in a HeroUI `TagGroup`, whose
- * `onRemove` receives its text. The label is one line that fades out where it is cut off and, while
- * the pointer is over the tag, scrolls through its whole text. The remove button shows only while
- * the pointer is over the tag or the tag has keyboard focus (where Backspace and Delete also remove
- * it), and then covers the label's end (the end its text runs to, see `tagDirection`), which fades
- * out ahead of it, so short tags widen only while the button is visible.
- */
-export function PickedTag({
-  tag,
-  removeTitle,
-}: {
+interface TagProps {
   tag: string;
+  motionKey?: string;
+}
+
+type ReadOnlyTagProps = TagProps & {
+  isReadOnly: true;
+  tone?: "accent" | "neutral";
+  wrap?: boolean;
+};
+
+type RemovableTagProps = TagProps & {
+  isReadOnly?: false;
   /** The remove button's tooltip, naming the tag. Its accessible name is the bare verb; the row adds
    * the tag's own text to it through react-aria's `aria-labelledby`, so it is not announced twice. */
   removeTitle: React.ReactNode;
-}): React.ReactElement {
+};
+
+/** A picked tag, either removable in a HeroUI TagGroup or static in a read-only summary. */
+export function Tag(props: ReadOnlyTagProps | RemovableTagProps): React.ReactElement {
+  if (props.isReadOnly) return <ReadOnlyTag {...props} />;
+  return <RemovableTag {...props} />;
+}
+
+/** HeroUI's Tag requires a collection and adds row focus even without selection or removal.
+ * Its official variants keep this static branch visually identical without introducing a grid or
+ * a disabled control. The containing summary owns clipping and marquees, never an individual tag. */
+function ReadOnlyTag({ tag, tone = "accent", wrap = false, motionKey }: ReadOnlyTagProps): React.ReactElement {
+  const slots = tagVariants({ size: "sm" });
+  const colour = tone === "accent" ? `${ACCENT_CLASS} hover:bg-accent-soft` : "bg-default text-default-foreground hover:bg-default";
+  const fit = wrap ? "min-w-0 max-w-full whitespace-normal [overflow-wrap:anywhere]" : "shrink-0 whitespace-nowrap";
+  return <span data-slot="tag" data-list-motion={motionKey} dir="auto" className={slots.base({ className: `cursor-default ${colour} ${fit}` })}>{tag}</span>;
+}
+
+/** A removable tag's label fades and runs as a marquee when clipped. The remove button overlays
+ * its text end on hover or keyboard focus, widening short tags only while the button is visible. */
+function RemovableTag({ tag, removeTitle, motionKey = `tag:${tag}` }: RemovableTagProps): React.ReactElement {
   const t = useT();
   const dir = tagDirection(tag, textDirection(useCurrentLanguage()));
   return (
-    <Tag
+    <HeroUITag
       id={tag}
-      data-list-motion={`tag:${tag}`}
+      data-list-motion={motionKey}
       dir={dir}
       textValue={tag}
       data-marquee-scope
@@ -103,7 +126,7 @@ export function PickedTag({
           <TitledControl title={removeTitle}>
             {/* Out of the tab order, so the tag group stays one tab stop: a tag is removed from the
                 keyboard with Delete or Backspace on the tag itself, which react-aria describes on it. */}
-            <Tag.RemoveButton
+            <HeroUITag.RemoveButton
               excludeFromTabOrder
               aria-label={t("common.removeTag")}
               aria-describedby=""
@@ -112,6 +135,6 @@ export function PickedTag({
           </TitledControl>
         </>
       )}
-    </Tag>
+    </HeroUITag>
   );
 }
