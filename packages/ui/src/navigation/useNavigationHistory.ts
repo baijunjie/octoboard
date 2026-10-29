@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { setInteractionModality } from "react-aria";
 import { flushSync } from "react-dom";
 
 import { refocusIfLost } from "../components/refocusIfLost";
@@ -105,9 +106,10 @@ export function useNavigationHistory({
     });
   });
 
-  const move = (direction: -1 | 1) => {
+  const move = (direction: -1 | 1, byKey = false) => {
     const target = go(history, direction, (target) => isLive(target, store.getState().sessions));
     if (!target) return;
+    if (byKey) setInteractionModality("keyboard");
     moving.current = true;
     flushSync(() => {
       setHistory(target.history);
@@ -142,9 +144,12 @@ export function useNavigationHistory({
     endJoin.current = stop;
   };
 
+  // react-aria does not count a ⌘ chord as a keyboard interaction (and the relay's key comes from
+  // another page), so a move the shortcut makes sets the modality itself, for focus it hands on to
+  // show its ring; one with nowhere to go leaves it alone.
   const moveByShortcut = (backward: boolean) => {
     if (!windowChrome || document.querySelector(MODAL_OPEN)) return;
-    move(backward ? -1 : 1);
+    move(backward ? -1 : 1, true);
   };
   useWindowShortcut(shortcutDirection, (direction) => moveByShortcut(direction === -1), windowChrome !== undefined && IS_MAC);
 
