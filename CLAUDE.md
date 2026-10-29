@@ -178,8 +178,9 @@ the earlier steps do not run them separately (the related tests a step runs to c
   format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
   refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)
   gets a warning and the stage is skipped; a missing `node_modules` fails it with a hint to run `pnpm install`. Do not
-  run a whole-repository formatter as a delivery step. Enable or refresh this clone's hooks with `pnpm hooks:install`
-  after hook changes have landed in the target branch.
+  run a whole-repository formatter as a delivery step. `pnpm install` in the main working copy, on the main
+  branch, installs the hooks (`.githooks/auto-install.sh`); after hook changes have landed in the main branch, run
+  it there again to refresh them (`pnpm hooks:install` also resets the resident guarded branches).
 - Before pushing, the `pre-push` hook runs the revert gate, then the checks through `scripts/pre-push.mjs` and
   `pnpm verify`. It measures from each actual destination's advertised remote commit to the exact pushed commit,
   including all unpushed local changes; a newly created branch is measured from its merge base with the live remote

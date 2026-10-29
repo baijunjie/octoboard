@@ -14,7 +14,8 @@
     "format": "eslint . --fix --fix-type layout && cargo fmt --all",
     "format:check": "pnpm lint && cargo fmt --all -- --check",
     "format:staged": "node scripts/format-staged.mjs",
-    "hooks:install": "sh .githooks/install.sh"
+    "hooks:install": "sh .githooks/install.sh",
+    "prepare": "sh .githooks/auto-install.sh"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
