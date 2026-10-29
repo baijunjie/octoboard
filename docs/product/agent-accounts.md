@@ -9,7 +9,8 @@ the user's `PATH` for its accounts to be usable. Below that paragraph sit **Auto
 added-agent list is still undecided, and while no agent is added. Below the switches sits the agent strip, which ends in
 the **Add agent** and **Add account** buttons, with the selected agent's accounts under it. What an account is and how
 consoles, projects and sessions use one are in "Agent config directories" in `docs/product/consoles.md`; signing an
-account in from this section is in `docs/product/logging-accounts-in.md`.
+account in from this section is in `docs/product/logging-accounts-in.md`, and the settings an agent's tab holds for
+every account of the agent are in `docs/product/per-agent-settings.md`.
 
 ## Added agents
 
@@ -58,7 +59,7 @@ every tab's actions button fades out, except the one holding keyboard focus, whi
 in at their new places once the tabs have settled. A press on a tab that does not move the pointer fades nothing.
 
 An agent that is not added has no tab, installed or not. An added agent that is not available has a warning icon after
-its name in its tab, and each account the user owns of that agent says, under its directory in its account settings
+its name in its tab, and each account the user owns of that agent says, under its directory in its account details
 dialog, that it is not usable until the agent is on `PATH`. The tab carries a tooltip, opened while the pointer is on
 the tab and while the tab has keyboard focus, that says the agent is not installed and that its accounts are not usable
 until it is on `PATH`; the tab's accessible name is the agent's name marked as not installed. How that tooltip opens and
@@ -134,13 +135,14 @@ usage limit** and **Start usage windows automatically**, stay above it.
 ## The default account
 
 Each agent has a **default account**, which can occupy any place in its accounts table (see "Reordering accounts"
-below); its account settings dialog shows the directory it currently resolves to. A "?" follows that directory there and
+below); its account details dialog shows the directory it currently resolves to. A "?" follows that directory there and
 says in its popover (see "The help tip" in `docs/product/labels-and-tooltips.md`) that this is the agent's own default
 configuration directory, which new sessions use when no account is chosen and whose configuration other accounts can
 share. Its directory cannot be edited, and the default account cannot be removed, but it can be turned off like any
 other account (see "Turning an account off" below). It has no sharing switch: its directory is the one other accounts
-share. Its actions menu holds **Settings**, **Rename**, **Log in**, **Move earlier** and **Move later**; where else
-**Log in** appears is in "Where Log in appears" in `docs/product/logging-accounts-in.md`.
+share. Its actions menu holds **Details**, **Settings**, **Rename**, **Log in**, **Move earlier** and **Move later**
+(see "The account details dialog" and "The account settings dialog" below); where else **Log in** appears is in
+"Where Log in appears" in `docs/product/logging-accounts-in.md`.
 
 **Rename** opens a dialog, titled for the default account of that agent, with a single name field holding the name the
 user gave it, empty when there is none, and a note that leaving it empty uses the standard name. The name is stored
@@ -161,29 +163,30 @@ settings tools answer (see "Application settings: `get_settings` and `update_set
 
 ## The accounts the user owns
 
-The accounts the user owns each have their name, directory and an actions menu holding **Settings**, **Edit**,
-**Log in**, **Move earlier** and **Move later** and, set apart, **Remove**; where else **Log in** appears is in
-"Where Log in appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths
+The accounts the user owns each have their name, directory and an actions menu holding **Details**, **Settings**,
+**Edit**, **Log in**, **Move earlier** and **Move later** and, set apart, **Remove**; where else **Log in** appears is
+in "Where Log in appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths
 are shown" in `docs/product/settings.md`.
 
 ## The accounts table
 
 Each agent's tab panel holds, for Claude Code and Codex, the agent's **Permission approval** row (see "Approval modes"
-below), then, for Codex and Grok Build, the agent's **Claude compatibility** row (see "Claude compatibility" below),
-then one table of the agent's accounts, named for the agent ("Claude Code accounts"): a row per account, in the saved
-order (see "Reordering accounts" below). Its columns:
+in `docs/product/per-agent-settings.md`), then, for Codex and Grok Build, the agent's **Claude compatibility** row (see
+"Claude compatibility" in `docs/product/per-agent-settings.md`), then one table of the agent's accounts, named for the
+agent ("Claude Code accounts"): a row per account, in the saved order (see "Reordering accounts" below). Its columns:
 
 | Column | What a row shows |
 |---|---|
 | No heading (first column) | The account's drag grip (see "Reordering accounts" below). |
-| **Account** | The account's name and, when the agent names one, its plan as a badge. A name too long for its space fades as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
-| **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`). |
-| **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says usage is being read. Out-of-date windows, the dash that stands in when there is no window to draw, and the marks that follow them are as in "How an account's quota is shown" and "Quota states" in `docs/product/account-quotas.md`; a dash with no mark after it is read by assistive technology as "No usage reading". A used-up account's bar is grey and followed by a **Limit reached** badge (see "A used-up account" in `docs/product/account-quotas.md`). Model-specific windows are left to the account settings dialog. |
+| **Account** | The account's name and, when the agent names one, its plan as a badge; under them, when its reading carries one, the email the account is signed in with (see "The account's sign-in email" in `docs/product/account-quotas.md`), in smaller muted text on a single line. A name or email too long for its space fades at its end as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`, the email with the whole address as its tooltip while it is cut. A row with no email has no line, nor room, for one. The name is in the muted text colour while the account is used up (see "A used-up account" in `docs/product/account-quotas.md`). |
+| **Usage** | The account's compact usage bar, the same as an account picker's, with no numbers: the five-hour window with the account-wide weekly window's thinner bar beneath it, or one bar for the account-wide weekly window or the credit pool (see "In an account picker" in `docs/product/account-quotas.md`); assistive technology reads what remains of those windows in words. While the first reading is on its way it says usage is being read. Out-of-date windows, the dash that stands in when there is no window to draw, and the marks that follow them are as in "How an account's quota is shown" and "Quota states" in `docs/product/account-quotas.md`; a dash with no mark after it is read by assistive technology as "No usage reading". A used-up account's bar is grey and followed by a **Limit reached** badge (see "A used-up account" in `docs/product/account-quotas.md`). Model-specific windows are left to the account details dialog. |
+| **Status** | The account's login state (below) and, for an account known to be signed out, the **Log in** icon button (see `docs/product/logging-accounts-in.md`); while the account is turned off, a neutral **Disabled** badge in their place and no Log in icon button (Log in stays in the actions menu). |
 | **Disable** | The account's Disable switch (see "Turning an account off" below). The column's heading carries a "?" help tip. |
 | No heading | The account's actions menu button (see "The default account" and "The accounts the user owns" above). |
 
 **Login state.** A badge in the Status column says whether the account is logged in, in words and with a dot, so the
-state is not carried by colour alone: **Logged in**, in the success colour, once a reading of its quota has been taken
+state is not carried by colour alone (while the account is turned off, the Status column's **Disabled** badge stands
+in its place, with a dot too): **Logged in**, in the success colour, once a reading of its quota has been taken
 — the latest reading succeeded, or the windows of an earlier one are still held after a newer reading failed; **Not
 logged in**, in the warning colour, while its quota is in the not-logged-in state (see "Quota states" in
 `docs/product/account-quotas.md`). While neither is known — the quota not read yet, or a reading that failed with
@@ -223,36 +226,48 @@ appended after its agent's current accounts. When a dialog passes over an unavai
 order; automatic weekly-quota selection keeps its separate tie order (see "Which account a session uses" in
 `docs/product/opening-sessions.md`).
 
+## The account details dialog
+
+**Details**, the first entry of an account's actions menu, with an info icon, opens a modal dialog of what is known
+about that one account, read-only. It is titled "Account details", whichever account it is opened on. The first line of
+its body is the account's name, followed by its plan badge, its login state — the badge as in the table, or, while that
+is not known, "Checking…" while the first reading is on its way and "Unknown" otherwise — and the "Usage unavailable"
+mark when its reading failed with nothing read before. Whether the account is turned off is not shown here. Under that
+line, when the account's reading carries one, is the email it is signed in with (see "The account's sign-in email" in
+`docs/product/account-quotas.md`), muted, on a line of its own, wrapping within the dialog when it is too long for one
+line. The next line is the account's directory; for the default account a "?" help tip follows it (see "The default
+account" above). For an account the user owns of an agent that is not available, a line under the directory says it is
+not usable until the agent is on `PATH`. Then comes **Usage** — the account's quota drawn as in the rail's account quota
+panel: the five-hour and account-wide weekly windows as one meter, every other window, model-specific ones included, as
+a meter of its own, one to a row. How long ago the windows were read, with the out-of-date mark when it applies, ends
+the heading. It says usage is being read while the first reading is on its way, says for an account that is not logged
+in that it is not logged in yet and to log in to use it, and holds a dash when there is no reading to show otherwise.
+How windows are named and drawn is in "How an account's quota is shown" in `docs/product/account-quotas.md`.
+
+The dialog holds no control but its close button: no switch, which are in the account settings dialog (below), and no
+**Log in** button (see "Where Log in appears" in `docs/product/logging-accounts-in.md`). It has no footer: it closes on
+its close button, on Escape and on a press outside it. It follows the account as it changes, from any window, tells
+assistive technology, naming the account, when a login of the account succeeds while it is open, and closes by itself
+when the account is removed. However it closes, keyboard focus then goes, its focus ring showing, back to the account's
+actions menu button in the table, or, when the account's row has gone with the account, to the Agent accounts tab in
+Settings' list of sections.
+
 ## The account settings dialog
 
-**Settings**, the first entry of an account's actions menu, with a gear icon, opens a modal dialog of everything about
-that one account. It is titled "Account settings", whichever account it is opened on. The first line of its body is the
-account's name, followed by its plan badge, its login state — the badge as in the table, or, while that is not known,
-"Checking…" while the first reading is on its way and "Unknown" otherwise — the "Usage unavailable" mark when its
-reading failed with nothing read before, and the **Log in** icon button for an account known to be signed out. The next
-line is the account's directory; for the default account a "?" help tip follows it (see "The default account" above).
-For an account the user owns of an agent that is not available, the dialog's body opens with a line saying it is not
-usable until the agent is on `PATH`. Then, one under another:
+**Settings**, the second entry of an account's actions menu, with a gear icon, opens a modal dialog of that one
+account's settings. It is titled "Account settings", whichever account it is opened on. The first line of its body is
+the account's name alone, with the email it is signed in with under it as in the account details dialog (above); its
+plan, login state, directory and usage are left to that dialog. Then come the account's settings, as rows like
+Settings' own, a name with a line under it and the control at the row's end; each row's line says what its switch does
+in the position it is in, and changes with it: **Share default configuration**, for an account the user owns (see
+"Sharing the default configuration" below), then, last, **Disable account** (see "Turning an account off" below).
 
-- **Usage** — the account's quota drawn as in the rail's account quota panel: the five-hour and account-wide weekly
-  windows as one meter, every other window, model-specific ones included, as a meter of its own, one to a row. How
-  long ago the windows were read, with the out-of-date mark when it applies, ends the heading. It says usage is
-  being read while the first reading is on its way, says for an account that is not logged in that it is not logged
-  in yet and to log in to use it, and holds a dash when there is no reading to show otherwise. How windows are named
-  and drawn is in "How an account's quota is shown" in `docs/product/account-quotas.md`.
-- The account's settings, as rows like Settings' own, a name with a line under it and the control at the row's end;
-  each row's line says what its switch does in the position it is in, and changes with it: **Share default
-  configuration**, for an account the user owns (see "Sharing the default configuration" below), then, last,
-  **Disable account** (see "Turning an account off" below).
-
-The dialog has no footer: it closes on its close button, on Escape and on a press outside it. It follows the account
-as it changes, from any window, and closes by itself when the account is removed. However it closes, keyboard focus
-then goes, its focus ring showing:
-
-- opened from the account's actions menu, back to that menu's button in the table, or, when the account's row has gone
-  with the account, to the Agent accounts tab in Settings' list of sections;
-- opened by Settings itself as it opened — by **View in Settings** (see "Starting a session on an account whose last
-  change is incomplete" in `docs/product/sharing-the-default-configuration.md`) — to the Agent accounts tab.
+It has no footer, closes, follows the account, tells of a login that succeeds and closes by itself when the account is
+removed as the account details dialog does. Opened from the account's actions menu, it hands keyboard focus back the
+same way. Settings also opens it by itself as Settings opens, by **View in Settings** (see "Starting a session on an
+account whose last change is incomplete" in `docs/product/sharing-the-default-configuration.md`), with keyboard focus on
+the Share default configuration switch, scrolled into view; closing a dialog opened so puts keyboard focus on the Agent
+accounts tab, its focus ring showing.
 
 ## Turning an account off
 
@@ -306,7 +321,8 @@ While an account is turned off:
 
 The sessions already running on it are not affected, and resuming, restarting or reopening a session on it is never
 refused for this. Its quota goes on being read in the background. Its row in the accounts table looks like any other,
-but for its switch.
+but for its switch and its Status cell, which says **Disabled** in place of its login state, with no Log in icon button
+(see "The accounts table" above); its account dialogs do not show it as turned off.
 
 **The switch** saves at once, on its own, and shows the daemon's recorded choice, which every window shares, moving
 when it changes. A refusal is shown in an error alert, the switch keeping its position; a press while the previous one
@@ -416,87 +432,6 @@ change already running) is shown in an error alert too, the switch keeping its p
 While the account's last change is incomplete and no change runs, starting a session on it from the window asks the
 user first (see "Starting a session on an account whose last change is incomplete" in
 `docs/product/sharing-the-default-configuration.md`).
-
-## Approval modes
-
-How Claude Code and Codex handle permission requests is **one setting per agent**, applied to every account of that
-agent, the default account included. It is set in the agent's tab, in the **Permission approval** row above the
-accounts table: the row's name with a "?" help tip, a line saying that it applies to every account of the agent, and a
-selector at the row's end. The help tip explains how the agent handles permission requests, that **Follow account
-configuration** leaves it to each account's own configuration and, for Codex, that automatic review may use
-additional tokens. Grok Build has no such row.
-
-Codex's choices:
-
-- **Follow account configuration** leaves the reviewer to each account's own Codex configuration. This is the initial
-  choice; automatic review is never enabled just by adding an account.
-- **Automatic review** asks Codex to review approval requests itself and may use additional tokens.
-- **Ask me** asks Codex to send approval requests to the user.
-
-Claude Code's choices:
-
-- **Follow account configuration** passes nothing, so each account's own `settings.json` decides. This is the initial
-  choice.
-- **Automatic** launches Claude Code in its auto mode, where a classifier approves what it judges safe and blocks the
-  rest. Whether auto mode is available to an account, which depends on its plan among other things, is Claude Code's
-  own decision; Octoboard only asks for it.
-- **Ask me** launches Claude Code so that every tool call not already allowed asks the user.
-- **Approve everything** launches Claude Code so that every tool runs without asking.
-
-The choice is saved when selected; the choices are unavailable while saving, and a failure is shown in an error alert
-titled "Could not save the permission approval". It applies when a session of any account of the agent next starts or
-resumes, including an account switch, and a legacy pinned directory with no account reference included; a running
-process keeps what it was started with. An explicit choice overrides the agent's own setting for that launch without
-writing its configuration files, and for Codex without changing its sandbox or approval policy. Whatever the choice,
-Follow account configuration included, Octoboard's own tools run without asking in both agents, while every other tool
-stays under the choice (see "Claude Code" and "Codex" in `docs/product/per-agent-launch-specifics.md`).
-
-**Approve everything** is saved only once the user accepts a destructive confirmation that names the agent and warns
-that every tool will run without asking in every account of that agent, commands that change or delete files included;
-its confirm button carries the choice's own name. Cancelling, Escape included, leaves the choice as it was. If the save
-fails, the error alert above is shown over the confirmation, which stays open, and the choice stays unchanged. Because
-the user has agreed there, Claude Code's own blocking warning for that mode never appears (see "Claude Code" in
-`docs/product/per-agent-launch-specifics.md`).
-
-The choices are stored by Octoboard and stay on this machine (see "What is not configuration and never travels" in
-`docs/product/configuration-export-and-import.md`). Versions of Octoboard that kept a choice per account are moved over
-once: each agent's setting takes the choice its default account had, and the other accounts' choices are dropped.
-
-## Claude compatibility
-
-Whether an agent other than Claude Code — Codex and Grok Build — has its sessions load Claude Code's configuration as
-well as its own: Claude Code's instructions (`CLAUDE.md` and rules), skills, agents, commands and MCP servers, and
-following Claude Code's hooks and permissions. It is **one setting per agent**, applied to every account of that agent,
-the default account included. Claude Code has no such setting.
-
-It is set in the agent's tab, in the **Claude compatibility** row: under the Permission approval row for Codex, directly
-above the accounts table for Grok Build, and never in Claude Code's tab. The row is there whether or not Claude Code is
-an added agent. It holds the row's name with a "?" help tip ("About Claude compatibility"), a line saying that it
-applies to every account of the agent, and a switch at the row's end, named "Claude compatibility for" and the agent.
-The help tip says what the setting does whatever the switch's position: when on, the agent's sessions load Claude
-Code's instructions, skills, agents, commands and MCP servers and follow its hooks and permissions; when off, they
-follow only their own configuration. For Codex it adds that Octoboard passes these in when a session starts or resumes,
-so a change takes effect then; for Grok Build, that Octoboard turns on the Claude support built into Grok Build, and
-that a change takes effect when a session next starts or resumes.
-
-**Until the user chooses** for an agent, its value follows a default: **Grok Build is on**, which is Grok's own default;
-**Codex is on while Claude Code is an added agent** and off otherwise (see "Added agents" above). Codex's default is
-worked out afresh whenever it is read, so adding or removing Claude Code moves it; while the list of added agents is
-still undecided, Claude Code counts as not added. Once the user has turned an agent's switch, that choice holds,
-whatever agents are added or removed later. The switch always shows the value in effect.
-
-The choice is saved when the switch is turned. The switch is unavailable while the save is unanswered — it looks
-disabled but stays focusable — and a failure is shown in an error alert titled "Could not save Claude compatibility",
-the switch keeping its position. The value is read when a session of any account of the agent starts or resumes,
-including an account switch; a running process keeps what it was started with. What a launch is given for it is in
-"Claude compatibility for Codex" and "Claude compatibility for Grok Build" in
-`docs/product/per-agent-launch-specifics.md`. Octoboard writes none of Claude Code's, Codex's or Grok Build's
-configuration files for it.
-
-The choices are kept by the daemon, so every window shows the same. Unlike the approval modes, a console session may
-read and change them (see "Application settings: `get_settings` and `update_settings`" in
-`docs/product/agent-settings-tools.md`), and a full configuration export carries the explicit choices (see "The
-application settings a full export carries" in `docs/product/configuration-export-and-import.md`).
 
 ## Adding, editing and removing an account
 

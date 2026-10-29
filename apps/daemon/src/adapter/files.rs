@@ -12,7 +12,7 @@ pub(super) const SMALL_FILE_LIMIT: usize = 1024 * 1024;
 
 /// The most bytes read from a configuration file that grows with use, such as Claude Code's global
 /// config, which holds an entry for every project.
-pub(super) const LARGE_FILE_LIMIT: usize = 64 * 1024 * 1024;
+pub(crate) const LARGE_FILE_LIMIT: usize = 64 * 1024 * 1024;
 
 /// `cwd` canonical, else as given: the `project` that `read_bounded_text` takes, so that a file
 /// inside it is recognised as such.

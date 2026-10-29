@@ -5336,6 +5336,7 @@ pub(super) mod tests {
                 account: Some("codex-work".to_string()),
                 fetched_at: 1,
                 plan: None,
+                email: None,
                 windows: vec![QuotaWindow {
                     kind: QuotaWindowKind::Weekly,
                     label: None,
@@ -5405,6 +5406,7 @@ pub(super) mod tests {
             account: account.map(str::to_string),
             fetched_at: 1,
             plan: None,
+            email: None,
             windows,
             unavailable: None,
         }
@@ -6375,6 +6377,7 @@ pub(super) mod tests {
                 account: account.map(str::to_string),
                 fetched_at: 1,
                 plan: None,
+                email: None,
                 windows: vec![QuotaWindow {
                     kind: QuotaWindowKind::Weekly,
                     label: None,

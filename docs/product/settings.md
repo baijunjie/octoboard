@@ -7,12 +7,13 @@ language the sides swap (see `docs/product/right-to-left-layout.md`). A section 
 in a paragraph under its heading, and no section heading has a "?" help tip; help tips are on the **Automatically pull
 repositories** and **Revert gate** rows in Git (see "Git" below), and in Agent accounts on the **Start usage windows
 automatically** row (see "Start usage windows automatically" below), on each agent's Permission approval row, on the
-accounts table's Disable heading and, in an account's settings dialog, after the default account's directory and on the
-sharing row (see "Approval modes", "The accounts table", "The account settings dialog" and "Sharing the default
-configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
-`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Git**, **Agent accounts**, **Agent
-behavior**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration** and
-**About**; the dialog opens on General unless it was asked to open on another section.
+accounts table's Disable heading, after the default account's directory in its account details dialog, and on the
+sharing row of an account's settings dialog (see "Approval modes" in `docs/product/per-agent-settings.md`, "The
+accounts table", "The account details dialog" and "Sharing the default configuration" in
+`docs/product/agent-accounts.md`, and "Explanations in help tips" in `docs/product/labels-and-tooltips.md`). The
+sections, in order, are **General**, **Git**, **Agent accounts**, **Agent behavior**, **Trusted folders**,
+**Permissions**, **Notifications**, **Keyboard shortcuts**, **Configuration** and **About**; the dialog opens on
+General unless it was asked to open on another section.
 
 A console session can read the default clone directory, the automatic pulling of repositories, the automatic deletion of
 archived sessions whose conversation is gone, automatic account selection, the ordering of the sidebar by status, the
@@ -74,10 +75,10 @@ Settings opens from:
 
 When the Add agent dialog is put in front, that dialog holds keyboard focus rather than the selected section's tab. A
 request to open Settings on a section while it is already open moves it to that section and closes the account add,
-edit, rename and remove forms, an account's settings dialog and the agent-removal form. It also closes the Add agent
-dialog unless the request is for that dialog. When the destination is not behind a login dialog, focus goes to the
-requested section's tab, or, when Add agent is requested, to that dialog in front of the Agent accounts section. The
-login dialog keeps its lifecycle (see `docs/product/logging-accounts-in.md`).
+edit, rename and remove forms, an account's details or settings dialog and the agent-removal form. It also closes the
+Add agent dialog unless the request is for that dialog. When the destination is not behind a login dialog, focus goes
+to the requested section's tab, or, when Add agent is requested, to that dialog in front of the Agent accounts section.
+The login dialog keeps its lifecycle (see `docs/product/logging-accounts-in.md`).
 
 Settings closes on `Escape`, on its close button, and on a press on the dimmed area around it. Closing it puts
 keyboard focus back on the selected session's terminal, unless a dialog is open beneath it: focus then stays in that

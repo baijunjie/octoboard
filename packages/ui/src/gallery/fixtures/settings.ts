@@ -12,6 +12,11 @@ const GROUP = "Settings";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 
+/** Sign-in emails of the accounts that have one; LONG_EMAIL is longer than the name column of the accounts table. */
+const DEFAULT_EMAIL = "dev@octoboard.example";
+const WORK_EMAIL = "dev@work.octoboard.example";
+const LONG_EMAIL = "platform-engineering.release-automation@internal-platform.acme-corporation.example";
+
 const state = snapshotState({
   consoles: [console_],
   projects: [web, api],
@@ -156,7 +161,7 @@ const unavailableQuotaState: Scenario["state"] = {
 const NARROW_MODEL = "Claude Opus Extended Context Research Preview";
 
 /** For the narrow layout: Claude Code's default account with a long model name, and Work, an owned account whose
- * settings dialog has a second, shorter reading to compare with. */
+ * details dialog has a second, shorter reading to compare with. */
 const narrowQuotaState: Scenario["state"] = {
   ...quotaState,
   settings: { ...approvalState.settings!, added_agents: ALL_AGENTS, accounts: approvalState.settings!.accounts.filter((account) => account.id === "a-work") },
@@ -170,15 +175,24 @@ const narrowQuotaState: Scenario["state"] = {
   ],
 };
 
-/** Claude Code's default account and Work turned off for new sessions; Client, with no reading yet, stays on. Work keeps
- * its reading, which its row keeps showing while it is off. */
+/** Claude Code's default account and Work turned off for new sessions, and Trial, signed out and turned off too;
+ * Client, with no reading yet, stays on. Work keeps its reading, which its row keeps showing while it is off. */
 const disabledState: Scenario["state"] = {
   ...quotaState,
   settings: {
     ...quotaState.settings!,
     disabled_default_accounts: ["claude"],
-    accounts: quotaState.settings!.accounts.map((account) => account.id === "a-work" ? { ...account, disabled: true } : account),
+    accounts: [
+      ...quotaState.settings!.accounts.map((account) => account.id === "a-work" ? { ...account, disabled: true } : account),
+      { id: "a-trial", agent: "claude", name: "Trial", config_dir: "/Users/dev/.claude-trial", disabled: true },
+    ],
   },
+  accountQuotas: [
+    ...quotaState.accountQuotas!,
+    quotaOf("claude", "a-trial", null, [], {
+      unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "Claude Code is not signed in: Error: not logged in"),
+    }),
+  ],
 };
 
 /** Work with a reading that has all three kinds of window, a model's own weekly one among them, for the details dialog's
@@ -191,7 +205,51 @@ const detailsWorkState: Scenario["state"] = {
       quotaWindow("session", 38, 150),
       quotaWindow("weekly", 66, 2 * 24 * 60 + 5 * 60),
       quotaWindow("weekly_model", 20, 2 * 24 * 60 + 5 * 60, "Fable"),
-    ], { fetched_at: minutesAgo(7) }),
+    ], { fetched_at: minutesAgo(7), email: WORK_EMAIL }),
+  ],
+};
+
+/** `detailsWorkState` with Work signed in under an address far longer than the dialog is wide, to see what the heading
+ * does with it. */
+const longEmailDetailsState: Scenario["state"] = {
+  ...detailsWorkState,
+  accountQuotas: detailsWorkState.accountQuotas!.map((quota) => quota.agent === "claude" && quota.account === "a-work" ? { ...quota, email: LONG_EMAIL } : quota),
+};
+
+/** Work whose latest read failed for a reason other than being signed out, so it has no plan, windows or login state to
+ * show, though the daemon still knows the email its credentials name. */
+const unknownLoginEmailState: Scenario["state"] = {
+  ...quotaState,
+  accountQuotas: [
+    ...quotaState.accountQuotas!.filter((quota) => quota.account !== "a-work" || quota.agent !== "claude"),
+    quotaOf("claude", "a-work", null, [], {
+      email: WORK_EMAIL,
+      unavailable: quotaFailure("quota_timed_out", { agent: "Claude Code" }, "Claude Code took too long to report its usage."),
+    }),
+  ],
+};
+
+/** Claude Code's default account signed in with an email, for the dialogs that name it. */
+const defaultEmailState: Scenario["state"] = {
+  ...quotaState,
+  accountQuotas: quotaState.accountQuotas!.map((quota) => quota.agent === "claude" && quota.account === null ? { ...quota, email: DEFAULT_EMAIL } : quota),
+};
+
+/** Claude Code's accounts with their sign-in emails: the default account's, Work's, Client's (an address longer than
+ * the name column), and Trial, signed out and so with none. Codex and Grok keep their readings as they were. */
+const emailsState: Scenario["state"] = {
+  ...quotaState,
+  settings: {
+    ...quotaState.settings!,
+    accounts: [...quotaState.settings!.accounts, { id: "a-trial", agent: "claude", name: "Trial", config_dir: "/Users/dev/.claude-trial" }],
+  },
+  accountQuotas: [
+    ...defaultEmailState.accountQuotas!.filter((quota) => quota.agent !== "claude" || quota.account === null),
+    quotaOf("claude", "a-work", "pro", [quotaWindow("session", 34, 150), quotaWindow("weekly", 21, 2 * 24 * 60 + 5 * 60)], { fetched_at: minutesAgo(7), email: WORK_EMAIL }),
+    quotaOf("claude", "a-long", "pro", [quotaWindow("session", 46, 83), quotaWindow("weekly", 62, 2 * 24 * 60 + 9 * 60)], { email: LONG_EMAIL }),
+    quotaOf("claude", "a-trial", null, [], {
+      unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "Claude Code is not signed in: Error: not logged in"),
+    }),
   ],
 };
 
@@ -286,19 +344,24 @@ const openAccounts: Step[] = [
   (ui) => ui.press(ui.t("settings.section.accounts")),
 ];
 
-/** The Settings item of the actions menu of the account `name` of `agent` on the tab in view (the default account's name is the
- * language's own); a menu item, since the rail has a Settings button of its name. */
-const openDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step => async (ui) => {
+/** The `item` (Details or Settings) of the actions menu of the account `name` of `agent` on the tab in view (the
+ * default account's name is the language's own); a menu item, since the rail has a Settings button of its name. */
+const openAccountDialog = (item: "settings.accounts.detailsItem" | "settings.accounts.settingsItem", name: string | ((ui: Ui) => string), agent: Agent): Step => async (ui) => {
   await ui.press(ui.t("settings.accounts.actionsLabel", { name: typeof name === "string" ? name : name(ui), agent: AGENT_LABEL[agent] }));
-  await ui.pressMenuItem(ui.t("settings.accounts.settingsItem"));
+  await ui.pressMenuItem(ui.t(item));
 };
+const openDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step => openAccountDialog("settings.accounts.detailsItem", name, agent);
+const openSettings = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step => openAccountDialog("settings.accounts.settingsItem", name, agent);
 const defaultAccount = (ui: Ui) => ui.t("settings.accounts.defaultName");
 
-/** Settings → Agent accounts with the details of the account `name` in front. */
+/** Settings → Agent accounts with the read-only details of the account `name` in front. */
 const accountDetails = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step[] => [...openAccounts, openDetails(name, agent)];
 
+/** Settings → Agent accounts with the settings (the switches) of the account `name` in front. */
+const accountSettings = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step[] => [...openAccounts, openSettings(name, agent)];
+
 const openSharingHelp = (name: string, agent: Agent = "claude"): Step[] => [
-  ...accountDetails(name, agent),
+  ...accountSettings(name, agent),
   (ui) => ui.touchPress(ui.t("settings.accounts.sharing.helpLabel")),
 ];
 
@@ -328,6 +391,12 @@ function sharingAccounts(work: { share: boolean; incomplete?: boolean }, client:
 
 /** Work does not share and Client does, with no working session or sign-in in the way. */
 const sharingState = sharingAccounts({ share: false }, { share: true });
+
+/** `sharingState` with Work signed in under an email, for the heading of its settings. */
+const sharingEmailState: Scenario["state"] = {
+  ...sharingState,
+  accountQuotas: [quotaOf("claude", "a-work", "pro", [quotaWindow("session", 38, 150), quotaWindow("weekly", 66, 2 * 24 * 60 + 5 * 60)], { email: WORK_EMAIL })],
+};
 
 /** Work has two sessions working and is being signed in as well, so its switch cannot be used and says both why. */
 const sharingInUseState: Scenario["state"] = {
@@ -655,7 +724,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Claude Code tab",
-    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic; there is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Status, Usage and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a soft success \"Logged in\" badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
+    description: "Claude Code's tab. Account rows have drag grips in a separate unlabelled first column, including Default; the Account header aligns with the names, and their menus offer Move earlier and Move later. Drag a grip to save a new order, or use the menu actions with a keyboard; Escape cancels a drag. The agents are tabs in an underline strip, unlike the filled tabs that switch the Settings sections, each with its own small ⋮ button at its end and the strip ending in two icon buttons, Add agent and Add account. Under it, one Permission approval row for the whole agent: its label with a help button, \"Applies to every Claude Code account\" under it and the selector at the end, on Automatic; there is no Claude compatibility row, which only the other agents' tabs have. Then one table lists the agent's accounts, Work, Default and Client in the saved order, under the headers Account, Usage, Status and Disable (with a small \"?\") and an unlabelled last column holding only the account's ⋮ menu. Each row has the name with its plan badge; a two-layer usage bar like the one the account pickers show, the session window's over the weekly one, with no numbers and, unlike the pickers' bars, no hairline edge (Work has reached its limit, so its bar is empty and grey, also where use went past 100%, followed in the same cell by a warning-coloured \"Limit reached\" badge, while its name stays muted with no badge beside it, unlike the rail's usage panel; the default account and Client have neither); a soft success \"Logged in\" badge in the Status cell after it; and the Disable switch, off. Client has no reading yet, so it has no plan or badge and its Usage cell says it is being read. Above the tab strip, the account-selection switch is followed directly by the \"Start usage windows automatically\" switch, both off, each description starting with \"Once this is on\"; the usage-window one is a single short sentence on what the switch does and its usage cost, with a small muted \"?\" at the end of its label. Remove Work or Client: the row fades out while sliding to the right while the remaining rows slide into place. \"Codex uninstalled\" among the \"Live changes\" buttons is the machine finding Codex missing while the strip is shown: its tab gains the warning mark and the tooltip that says why, widening in place while the tab after it slides along; \"Codex installed\" takes the mark away again. With reduced motion the strip changes at once.",
     state: { ...quotaState, settings: { ...quotaState.settings!, account_order: { claude: ["a-work", null, "a-long"], codex: ["a-codex-auto", "a-codex", "a-codex-user", null] } } },
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -683,7 +752,9 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, accounts turned off",
-    description: "The default account and Work are turned off: their Disable switches are on, and nothing else about their rows changes, since a turned-off account keeps its name, plan, status and usage bar as they were; Client's switch is off. The header's \"?\" next to Disable explains that a disabled account no longer appears in account choices or usage displays, except while a running session still uses it, new sessions do not use it, and running sessions keep running. Turn Disable off for either and the switch moves back; turn it on for Client and it does.",
+    description: "The default account, Work and Trial are turned off: their Disable switches are on and their Status cells read a neutral \"Disabled\" badge in place of the login state, while the rest of each row is unchanged: the default account keeps its name, plan and usage bar, and Work its muted name and grey bar with \"Limit reached\". Trial is signed out, so it has no Log in icon beside \"Disabled\", where a signed-out account that is on has one; its menu still offers Log in. Client's switch is off, and its Status cell has no badge as it has no reading yet. The header's \"?\" next to Disable explains that a disabled account no longer appears in account choices or usage displays, except while a running session still uses it, new sessions do not use it, and running sessions keep running. Turn Disable off for any of them and the switch moves back; turn it on for Client and it does.",
+    // Four rows under the three switches and the tab strip: taller than the default window, whose body would scroll.
+    height: 1000,
     state: disabledState,
     steps: openAccounts,
   },
@@ -692,7 +763,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account details, an account the user owns",
-    description: "Work's settings dialog, opened from its ⋮ menu, in a modal titled Account settings, with no footer button. The body starts with the bold name Work, followed on the same line by the Pro plan badge and the \"Logged in\" badge, and the config directory is the line under it. The Usage section has \"Updated 7 minutes ago\" at the end of its heading and the rail's meters: Session, as the two-layer bar with Weekly · all models under it, each line saying what remains and when it resets, then Fable weekly with its own bar. Below, two rows with a description under each label and the control at the end: Share default configuration, with its help button and its switch, off, whose description says turning it on links the account's configuration and history to the default account's directory, and Disable account, with its switch, off, whose description says that once on, the account no longer appears in account choices or usage displays, except while a running session still uses it, new sessions will not use it, and running sessions keep running.",
+    description: "Work's details, opened from the first entry of its ⋮ menu, in a read-only modal titled Account details, with no footer button and no switch or Log in button. The body starts with the bold name Work followed on the same line by the Pro plan badge and the \"Logged in\" badge, the muted email dev@work.octoboard.example on the line under them, and the config directory is the line under that. The Usage section has \"Updated 7 minutes ago\" at the end of its heading and the rail's meters: Session, as the two-layer bar with Weekly · all models under it, each line saying what remains and when it resets, then Fable weekly with its own bar.",
     state: detailsWorkState,
     steps: accountDetails("Work"),
   },
@@ -701,16 +772,25 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account details, the default account",
-    description: "The default account's settings dialog, titled Account settings: the body starts with the bold name Default, followed by the Max badge and \"Logged in\", and the config directory is the line under it, ending right after the path with the small \"?\" that explains the default account. Usage shows all three windows. The only row is Disable account: the default account has no Share default configuration row, and the permission approval is set on the tab, not here.",
-    state: quotaState,
+    description: "The default account's details, in a modal titled Account details: the body starts with the bold name Default followed on the same line by the Max badge and \"Logged in\", its muted email dev@octoboard.example on the line under them, and the config directory is the line under that, ending right after the path with the small \"?\" that explains the default account. Usage shows all three windows. Nothing in the dialog can be changed: the Disable and sharing switches are in Account settings.",
+    state: defaultEmailState,
     steps: accountDetails(defaultAccount),
+  },
+  {
+    id: "settings-account-details-long-email",
+    group: GROUP,
+    category: "normal",
+    title: "Account details, an email longer than the dialog",
+    description: "Work's details with a sign-in email far wider than the dialog: the first line keeps the name Work with the Pro and \"Logged in\" badges beside it, and the email is on the line under it, muted, wrapping onto further lines inside the dialog's width instead of pushing the badges down or out of it. The config directory is the line under the email.",
+    state: longEmailDetailsState,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-account-details-not-logged-in",
     group: GROUP,
     category: "normal",
     title: "Account details, an account not logged in",
-    description: "Work's settings dialog, which has never been logged in: after the name, in the body's first line, the soft warning \"Not logged in\" badge and the Log in icon button, and the Usage section has no meters but says \"Not logged in yet.\" with \"Log in to use this account.\" under it. The Share default configuration and Disable account rows are as usual.",
+    description: "Work's details, which has never been logged in: after the name, in the body's first line, with no email, the soft warning \"Not logged in\" badge, with no Log in button in the dialog (logging in is the row's and the menu's), and the Usage section has no meters but says \"Not logged in yet.\" with \"Log in to use this account.\" under it.",
     state: notSignedInState,
     steps: accountDetails("Work"),
   },
@@ -719,20 +799,49 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Account details, the agent is not installed",
-    description: "Personal's settings dialog on the Codex tab, whose agent is not installed: after the name, in the body's first line, the login state reads \"Unknown\", and under the line with the config directory a line says it is not usable until Codex is on PATH, both as chips. The Usage section is a dash, the account having no reading.",
+    description: "Personal's details on the Codex tab, whose agent is not installed: after the name, in the body's first line, the login state reads \"Unknown\", and under the line with the config directory a line says it is not usable until Codex is on PATH, both as chips. The Usage section is a dash, the account having no reading.",
     state: unavailableQuotaState,
     steps: [...openAccounts, (ui) => ui.press(ui.t("agents.notInstalled", { agent: AGENT_LABEL.codex })), openDetails("Personal", "codex")],
+  },
+  {
+    id: "settings-account-details-unknown-with-email",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account details, login state unknown with an email",
+    description: "Work's details after a usage read that failed for a reason other than being signed out: the first line is the name Work followed by the plain muted \"Unknown\" in place of a login badge, with no plan, then the danger-coloured circled \"!\" for the failed read; the email dev@work.octoboard.example is on the line under it, not beside the name. The config directory is the line under the email, and the Usage section is a dash, with no windows to show.",
+    state: unknownLoginEmailState,
+    steps: accountDetails("Work"),
   },
   {
     id: "settings-account-details-narrow",
     group: GROUP,
     category: "normal",
     title: "Account details in a narrow window",
-    description: "Below 640px the details stack: a model's name as long as one can be wraps beside its reset time on the same line, with its bar under it. The default account's settings dialog is shown, with its Session, Weekly · all models and long-named weekly lines, and the Disable account row.",
+    description: "Below 640px the details stack: a model's name as long as one can be wraps beside its reset time on the same line, with its bar under it. The default account's details are shown, with its Session, Weekly · all models and long-named weekly lines.",
     width: 560,
     state: narrowQuotaState,
     // The rail comes in with the sidebar's drawer at this width.
     steps: [openDrawer, ...accountDetails(defaultAccount)],
+  },
+  {
+    id: "settings-account-settings-default",
+    group: GROUP,
+    category: "normal",
+    title: "Account settings, the default account",
+    description: "The default account's Account settings, from the second entry of its ⋮ menu: the body starts with the bold name Default, its muted email dev@octoboard.example on the line under it, and its only row is Disable account, with its switch off: the default account has no Share default configuration row, and the permission approval is set on the tab, not here. The plan, login state, config directory and usage are in the details, not here.",
+    state: defaultEmailState,
+    steps: accountSettings(defaultAccount),
+  },
+  {
+    id: "settings-accounts-emails",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: accounts, sign-in emails under the names",
+    description: "Claude Code's table with each account's sign-in email under its name, muted and smaller, on a single line: Default (dev@octoboard.example) and Work (dev@work.octoboard.example) show theirs whole; Client's address is longer than the name column, so it is cut on one line and fades at the end, with the whole address in a tooltip while the pointer rests on it. Trial is signed out, so its row has no email line and no gap where it would be, and its name sits as it does in the rows without a reading.",
+    // Four rows under the three switches and the tab strip: taller than the default window, whose body would scroll.
+    height: 1000,
+    state: emailsState,
+    steps: openAccounts,
   },
   {
     id: "settings-accounts-tab-row-tooltip",
@@ -773,7 +882,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, default account help tip open",
-    description: "The mouse rests on the \"?\" at the end of the config directory line in the default account's settings dialog, so its popover is open, saying this is the agent's own default configuration directory, which new sessions use when no account is chosen and other accounts can share; no focus has moved, the popover stays while the pointer is on the \"?\" or the popover, and its text can be selected. The table behind the dialog carries no such \"?\".",
+    description: "The mouse rests on the \"?\" at the end of the config directory line in the default account's details, so its popover is open, saying this is the agent's own default configuration directory, which new sessions use when no account is chosen and other accounts can share; no focus has moved, the popover stays while the pointer is on the \"?\" or the popover, and its text can be selected. The table behind the dialog carries no such \"?\".",
     state: quotaState,
     steps: [...accountDetails(defaultAccount), (ui) => ui.hoverStatusMark(ui.t("settings.accounts.defaultHelp"))],
   },
@@ -835,7 +944,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, Grok Build tab",
-    description: "Grok Build has no permission approval choice, so its tab has no Permission approval row: the tab strip is followed by the Claude compatibility row alone, \"Applies to every Grok Build account\" under its name and its switch at the end, on (its default), and directly under it the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Status, Usage and Disable.",
+    description: "Grok Build has no permission approval choice, so its tab has no Permission approval row: the tab strip is followed by the Claude compatibility row alone, \"Applies to every Grok Build account\" under its name and its switch at the end, on (its default), and directly under it the table, with its one default account, a single weekly layer in its Usage cell and the columns Account, Usage, Status and Disable.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1014,7 +1123,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account actions menu, owned account",
-    description: "Work's ⋮ button, the only thing in the last column, is open: Settings first, then Edit and Log in; after a separator, Move earlier and Move later; then Remove in the danger tone after another separator. Work is between Default and Client, so both move actions are available.",
+    description: "Work's ⋮ button, the only thing in the last column, is open: Details first, then Settings, Edit and Log in; after a separator, Move earlier and Move later; then Remove in the danger tone after another separator. Work is between Default and Client, so both move actions are available.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1027,7 +1136,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Account actions menu, default account",
-    description: "The default account's menu holds Settings, Rename and Log in, followed by Move earlier and Move later after a separator. Default is first in the saved order, so Move earlier is disabled and Move later is available.",
+    description: "The default account's menu holds Details, Settings, Rename and Log in, followed by Move earlier and Move later after a separator. Default is first in the saved order, so Move earlier is disabled and Move later is available.",
     state: quotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1040,7 +1149,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, default account under a custom name",
-    description: "Claude Code's default account is called \"Studio laptop\" in place of Default; it keeps its plan badge, its \"Logged in\" badge and its usage bar, and its ⋮ menu and settings dialog open under that name. On the Codex tab the default account is still Default.",
+    description: "Claude Code's default account is called \"Studio laptop\" in place of Default; it keeps its plan badge, its \"Logged in\" badge and its usage bar, and its ⋮ menu and its details and settings dialogs open under that name. On the Codex tab the default account is still Default.",
     state: renamedDefaultState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1120,7 +1229,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, accounts not logged in yet",
-    description: "Work (never logged in) and Client (whose config directory does not exist yet) both show the soft warning \"Not logged in\" badge in the Status column with a small Log in icon button beside it, and a dash in the Usage cell, which assistive technology reads as no usage reading; they have no plan badge, and their Disable switches are off as usual. The default account above them is logged in: its plan, its \"Logged in\" badge and its usage bar.",
+    description: "Work (never logged in) and Client (whose config directory does not exist yet) both have a dash in the Usage cell, which assistive technology reads as no usage reading, and after it the soft warning \"Not logged in\" badge in the Status column with a small Log in icon button beside it; they have no plan badge, and their Disable switches are off as usual. The default account above them is logged in: its plan, its \"Logged in\" badge and its usage bar.",
     state: notSignedInState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
@@ -1224,9 +1333,9 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing the default configuration",
-    description: "Work's settings dialog, with Share default configuration as the row above Disable account: the label with its help button, the description under it, which says turning it on links the account's configuration and history to the default account's directory (it reads as already linked once the switch is on), and the switch at the end, off and usable, with nothing else under it. The help button holds what is shared and never shared, what turning sharing off does and what changing it does to idle sessions. The default account's settings dialog has no such row.",
-    state: sharingState,
-    steps: accountDetails("Work"),
+    description: "Work's Account settings, opened from the second entry of its ⋮ menu, in a modal with no footer button: the body starts with the bold name Work, its muted email dev@work.octoboard.example on the line under it, with nothing after the name (plan, login state, config directory and usage are in the details), and under it Share default configuration as the row above Disable account: the label with its help button, the description under it, which says turning it on links the account's configuration and history to the default account's directory (it reads as already linked once the switch is on), and the switch at the end, off and usable, with nothing else under it. The help button holds what is shared and never shared, what turning sharing off does and what changing it does to idle sessions. The default account's settings dialog has no such row.",
+    state: sharingEmailState,
+    steps: accountSettings("Work"),
   },
   {
     id: "settings-accounts-sharing-in-use",
@@ -1235,7 +1344,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: accounts, sharing cannot be changed while the account is in use",
     description: "Work's sharing switch is faded but still focusable, and the lines under the row's description, which say why, read that sharing cannot be changed while 2 of the account's sessions are working and to wait for them to finish, and that it cannot be changed while the account is being signed in.",
     state: sharingInUseState,
-    steps: accountDetails("Work"),
+    steps: accountSettings("Work"),
   },
   {
     id: "settings-accounts-sharing-progress",
@@ -1244,7 +1353,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: accounts, sharing change running",
     description: "Work is turning sharing on and changing entries, so its switch is faded but still focusable, with no lock line and no state description under the label. A determinate progress bar under the row reads 3 of 9, with the entry being processed, plugins/, as a chip under it.",
     state: sharingProgressState,
-    steps: accountDetails("Work"),
+    steps: accountSettings("Work"),
   },
   {
     id: "settings-accounts-sharing-progress-restart",
@@ -1253,7 +1362,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: accounts, sharing change ending and resuming sessions",
     description: "Work is turning sharing on and is ending the account's idle sessions first: its switch is faded but still focusable, with no lock line and no state description under the label, and an indeterminate bar under the row reads \"Ending idle sessions…\" in place of the count, with no entry.",
     state: sharingRestartState,
-    steps: accountDetails("Work"),
+    steps: accountSettings("Work"),
   },
   {
     id: "settings-accounts-sharing-help-claude",
@@ -1331,7 +1440,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Sharing change could not be finished",
     description: "In Work's settings dialog, turning sharing off did not finish, so the switch sits at its position before the change, on, and the row shows no state description. A warning triangle named \"Last sharing change\" sits right of the switch in the same row, with nothing written beside it, and nothing about the failure is under the row (no alert, no Details button, no Try again). The row keeps its label and switch on their lines at the dialog's width, the triangle not wrapping under the switch. Its popover is in the next scenario.",
     state: sharingFailedState,
-    steps: accountDetails("Work"),
+    steps: accountSettings("Work"),
   },
   {
     id: "settings-accounts-sharing-failed-details",
@@ -1340,7 +1449,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Sharing change could not be finished, several causes, popover open",
     description: "The triangle right of the switch is pressed, so its popover is open with focus inside it. In order: the title, \"Could not finish turning sharing off\"; \"Some files or folders could not be changed.\"; the way to try again, turning the switch off again; one compact line per cause (no permission to change skills/ and 1 more, plugins/ in use, and \"Could not change settings.json.\", whose fix reads that the system's own reason is below), each followed by its fix; the note that changing sharing ends the account’s 2 idle sessions and resumes them afterwards; then the raw side: each unfinished entry one tight row, its chip and what it was left as in words (the conversation abc with the titles of the sessions that recorded it, Fix the summary layout and Update the dependencies, joined as a list), followed by the system's original reason as small inline code on the same row.",
     state: sharingFailedState,
-    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
+    steps: [...accountSettings("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
     id: "settings-accounts-sharing-default-moved-details",
@@ -1349,7 +1458,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Sharing change failed, the default directory has moved, popover open",
     description: "The triangle right of Work's switch (on, its recorded position) is pressed. The popover holds the title \"Could not finish turning sharing on\", the single reason that the default account's directory has moved since sharing was turned on (no entry is named), and the advice to turn the switch off, then on again; below them only the raw reason, alone in a block on its own tinted surface, not as inline code.",
     state: sharingDefaultMovedState,
-    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
+    steps: [...accountSettings("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
     id: "settings-accounts-sharing-no-space-details",
@@ -1358,7 +1467,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Sharing change failed, not enough disk space, popover open",
     description: "Turning sharing on did not finish, so Work's switch sits at its position before the change, off, and the triangle right of it is pressed. The popover holds the title \"Could not finish turning sharing on\", the single cause \"There is not enough disk space.\" and its fix \"Free up disk space.\" as the two sentences after it (no entry is named), then the advice to turn the switch on again to try once more, then the raw reason alone in a block on its own tinted surface.",
     state: sharingNoSpaceState,
-    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
+    steps: [...accountSettings("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
     id: "settings-accounts-sharing-incomplete-details",
@@ -1367,7 +1476,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Sharing change left unfinished by a restart, popover open",
     description: "The choice is recorded as on, but the daemon was restarted in the middle of the change, so Work's switch sits at its position before the change, off, with the triangle right of it pressed. The popover is short: the title, \"The last attempt to turn sharing on did not finish\", and the advice to turn the switch on again. There is no reason, no cause line and no raw block, since no entries are known after a restart.",
     state: sharingIncompleteState,
-    steps: [...accountDetails("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
+    steps: [...accountSettings("Work"), (ui) => ui.touchPressStatusMark(ui.t("settings.accounts.sharing.unfinishedMark"))],
   },
   {
     id: "settings-accounts-sharing-refused",
@@ -1381,7 +1490,7 @@ export const settingsScenarios: Scenario[] = [
       params: { account: "a-work", name: "Work", sessions: "1", signing_in: "false" },
       message: "account `Work` is in use: 1 of its sessions is working",
     },
-    steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
+    steps: [...accountSettings("Work"), (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
   },
   {
     id: "settings-accounts-sharing-unfinished-asked",
@@ -1391,7 +1500,7 @@ export const settingsScenarios: Scenario[] = [
     description: "In Work's settings dialog the switch was pressed to turn sharing on and the change did not finish. The window that asked is told in an error alert dialog over the settings dialog, which says what could not be finished for Work and why, with the raw entries behind its Error details; the switch sits at its position before the change, off, and the warning triangle \"Last sharing change\" right of it stays as the lasting state once the alert is acknowledged. The same failure seen only through another window shows the triangle alone (the scenarios before this one).",
     state: sharingState,
     accountSharingError: SHARING_TURN_ON_ERROR,
-    steps: [...accountDetails("Work"), (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
+    steps: [...accountSettings("Work"), (ui) => ui.press(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }))],
   },
   {
     id: "settings-accounts-quota-unavailable",
@@ -1432,7 +1541,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, Codex not installed",
-    description: "The Codex tab is selected and carries a warning icon after its name; its Permission approval row is there as usual. Neither the default account nor Personal has a plan, a status or a usage reading: their Status cells are empty and their Usage cells dashes.",
+    description: "The Codex tab is selected and carries a warning icon after its name; its Permission approval row is there as usual. Neither the default account nor Personal has a plan, a status or a usage reading: their Usage cells are dashes and their Status cells empty.",
     state: unavailableQuotaState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),

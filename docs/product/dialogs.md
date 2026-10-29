@@ -11,9 +11,9 @@ out of reach in the rest of the window is in "What an open dialog, menu or popov
 **A dialog's title is a plain name** for what it does or what failed — "Switch account", "Delete session", "Cannot open
 a session" — the same words whatever it is opened on, for every form dialog, confirmation, error alert and failure
 modal. It names no session, account, project, branch or path and holds no count: what the dialog is about is named by
-the first sentence of its body ("The session Fix search will be switched to Work."), everything else following it. The
-account settings dialog's title is "Account settings", the body's first line naming the account, followed by its plan
-and login state, and the next its directory (see "The account settings dialog" in `docs/product/agent-accounts.md`). A
+the first sentence of its body ("The session Fix search will be switched to Work."), everything else following it. An
+account's two dialogs are titled "Account details" and "Account settings", the body's first line naming the account
+(see "The account details dialog" and "The account settings dialog" in `docs/product/agent-accounts.md`). A
 dialog that shows one piece of content rather than asking or reporting anything, the file viewer, keeps the name of what
 it shows as its title (see `docs/product/file-viewer.md`).
 

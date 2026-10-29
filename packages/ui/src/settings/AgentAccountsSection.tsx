@@ -1,6 +1,6 @@
 import { Button } from "../components/Button";
 import { Tabs } from "@heroui/react";
-import { ArrowUp, ArrowDown, Bot, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
+import { ArrowUp, ArrowDown, Bot, Info, LogIn, Pencil, Settings, Trash2, UserPlus, type LucideIcon } from "lucide-react";
 import React, { useContext, useEffect, useRef, useState } from "react";
 
 import { AGENT_LABEL, defaultAccountName, isAgentUnavailable } from "../agents";
@@ -19,6 +19,7 @@ import { useDaemon, useDaemonStore } from "../store";
 import { ringForAutomaticFocus } from "../touchInput";
 import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
+import { AccountSettingsDialog } from "./AccountSettingsDialog";
 import { AutoSelectAccountSetting } from "./AutoSelectAccountSetting";
 import { AutoSwitchOnUsageLimitSetting } from "./AutoSwitchOnUsageLimitSetting";
 import { accountLoginOf, loginIsActive } from "./AccountLogin";
@@ -38,6 +39,9 @@ import { SettingsFocusContext, useSectionRefocus } from "./useSectionRefocus";
  * this height by the `h-[45px]` class below, not left to HeroUI's own sizing, so the two are one number: the
  * Settings dialog clears its fade and the scroll padding for focus moves for this much. */
 export const AGENT_STRIP_HEIGHT = 45;
+
+/** Which of an account's two dialogs is open: its read-only details, or its switches. */
+type AccountView = "details" | "settings";
 
 /** How many animation frames (about half a second) `handFocusOnceClosed` waits for a closing dialog to go. */
 const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
@@ -83,17 +87,17 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
 
 /** Every added agent's accounts, with one tab for each in the order of the list (the first agent's open). A tab holds
  * the agent's Permission approval row (not for Grok), which applies to all its accounts, and a table with the agent's
- * accounts in their saved order, each a row (name and plan, status, usage, the Disable switch) with an actions menu
- * whose first entry opens the account's details in a modal. The section also has the means to add, edit and remove
- * the accounts the user owns, to rename the default account, and to add, remove and reorder the agents (see
- * `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The three switches, one that
- * picks a new session's account by the weekly quota resetting soonest, one that switches a session stopped at its
- * account's usage limit to another account, and one that starts a usage window that has not begun counting, sit above
- * that list, once: all apply to every agent, including when none is added. While the daemon has not decided the list
- * every agent is shown, and the agents cannot be removed or reordered yet. The default account is not a record: it is
- * the state of pinning nothing, so it is shown from the agent's availability and can be renamed but not edited or
- * removed. Opening the section asks the daemon to refresh the quotas that are due, those of every agent and not only of
- * the tab in view. */
+ * accounts in their saved order, each a row (name, plan and email, usage, status, the Disable switch) with an actions
+ * menu whose first entries open the account's details and its settings, each in a modal. The section also has the
+ * means to add, edit and remove the accounts the user owns, to rename the default account, and to add, remove and
+ * reorder the agents (see `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The
+ * three switches, one that picks a new session's account by the weekly quota resetting soonest, one that switches a
+ * session stopped at its account's usage limit to another account, and one that starts a usage window that has not
+ * begun counting, sit above that list, once: all apply to every agent, including when none is added. While the daemon
+ * has not decided the list every agent is shown, and the agents cannot be removed or reordered yet. The default account
+ * is not a record: it is the state of pinning nothing, so it is shown from the agent's availability and can be renamed
+ * but not edited or removed. Opening the section asks the daemon to refresh the quotas that are due, those of every
+ * agent and not only of the tab in view. */
 export function AgentAccountsSection(): React.ReactElement {
   const t = useT();
   const { request, store } = useDaemon();
@@ -106,8 +110,9 @@ export function AgentAccountsSection(): React.ReactElement {
   // The agent whose default account is being renamed.
   const [renamingDefault, setRenamingDefault] = useState<Agent>();
   const [removingAgent, setRemovingAgent] = useState<Agent>();
-  // The account whose details are in the modal; `focusSharing` puts focus on its sharing switch as it opens.
-  const [details, setDetails] = useState<{ agent: Agent; account: string | null; focusSharing?: boolean; fromRow?: boolean }>();
+  // The account whose details or settings are in the modal, whichever `view` names; `focusSharing` puts focus on the
+  // sharing switch of its settings as they open.
+  const [accountDialog, setAccountDialog] = useState<{ view: AccountView; agent: Agent; account: string | null; focusSharing?: boolean; fromRow?: boolean }>();
   // The account whose login is in the modal; `start` is whether opening it starts the login, which it does not for one
   // found running when the section opened. `returnFocus` is the Log in button's, when one opened it.
   const [loggingIn, setLoggingIn] = useState<{ agent: Agent; account: string | null; start: boolean; returnFocus?: ReturnLoginFocus }>();
@@ -141,7 +146,7 @@ export function AgentAccountsSection(): React.ReactElement {
     setRemoving(undefined);
     setRenamingDefault(undefined);
     setRemovingAgent(undefined);
-    setDetails(undefined);
+    setAccountDialog(undefined);
   }, [accountsNavigation.dismissForms, accountsNavigation.pending]);
   useEffect(() => {
     if (!accountsNavigation.pending) return;
@@ -165,8 +170,8 @@ export function AgentAccountsSection(): React.ReactElement {
   const [chosen, setChosen] = useState<Agent>(agents[0] ?? "claude");
   // The tab in view: the chosen one unless its agent has left the list.
   const selected = agents.includes(chosen) ? chosen : agents[0];
-  // An account Settings was asked to show: its agent's tab comes forward and its details open with the sharing switch
-  // focused.
+  // An account Settings was asked to show: its agent's tab comes forward and its settings open with the sharing
+  // switch focused.
   useEffect(() => {
     const id = accountsNavigation.account;
     if (id === undefined) return;
@@ -179,7 +184,7 @@ export function AgentAccountsSection(): React.ReactElement {
       return;
     }
     setChosen(account.agent);
-    setDetails({ agent: account.agent, account: account.id, focusSharing: true });
+    setAccountDialog({ view: "settings", agent: account.agent, account: account.id, focusSharing: true });
   }, [accountsNavigation.account]);
   // Bumped when a removal has gone through: the menu item that was chosen goes with its account or agent and the
   // confirmation closes with it, so focus has to be sent back to the section's tab. Cancelling removes no control,
@@ -201,6 +206,21 @@ export function AgentAccountsSection(): React.ReactElement {
     // keeps them current, so a failed request has nothing to report.
     void request({ type: "refresh_account_quotas" }).catch(() => {});
   }, [request]);
+
+  const renderAccountDialog = (open: NonNullable<typeof accountDialog>) => {
+    const closeAccountDialog = () => {
+      setAccountDialog(undefined);
+      // Opened from a row's menu, the dialog closes onto that menu's button, whichever way the menu left focus, or
+      // onto the section's tab when the row has gone with its account.
+      const row = open.account === null ? `default:${open.agent}` : open.account;
+      if (open.fromRow) handFocusOnceClosed(() => rowActionsTrigger(row) ?? focusSectionTab());
+      else returnToSectionTab();
+    };
+    const key = `${open.view}:${open.account ?? `default:${open.agent}`}`;
+    return open.view === "details"
+      ? <AccountDetailsDialog key={key} agent={open.agent} account={open.account} onClose={closeAccountDialog} />
+      : <AccountSettingsDialog key={key} agent={open.agent} account={open.account} focusSharing={open.focusSharing} onClose={closeAccountDialog} />;
+  };
 
   return (
     <>
@@ -260,7 +280,7 @@ export function AgentAccountsSection(): React.ReactElement {
               onEdit={setEditing}
               onRemove={setRemoving}
               onRenameDefault={setRenamingDefault}
-              onDetails={(account) => setDetails({ agent, account, fromRow: true })}
+              onOpenAccount={(view, account) => setAccountDialog({ view, agent, account, fromRow: true })}
               onLogin={(agent, account, returnFocus) => setLoggingIn({ agent, account, start: true, returnFocus })}
             />
           ))}
@@ -279,23 +299,7 @@ export function AgentAccountsSection(): React.ReactElement {
       ))}
       {editing !== undefined && <AccountDialog account={editing ?? undefined} agent={selected ?? "claude"} onClose={() => setEditing(undefined)} />}
       {renamingDefault && <AccountDialog agent={renamingDefault} renameDefault onClose={() => setRenamingDefault(undefined)} />}
-      {details && (
-        <AccountDetailsDialog
-          key={details.account ?? `default:${details.agent}`}
-          agent={details.agent}
-          account={details.account}
-          focusSharing={details.focusSharing}
-          onLogin={(returnFocus) => setLoggingIn({ agent: details.agent, account: details.account, start: true, returnFocus })}
-          onClose={() => {
-            setDetails(undefined);
-            // Opened from a row's menu, the dialog closes onto that menu's button, whichever way the menu left focus,
-            // or onto the section's tab when the row has gone with its account.
-            const row = details.account === null ? `default:${details.agent}` : details.account;
-            if (details.fromRow) handFocusOnceClosed(() => rowActionsTrigger(row) ?? focusSectionTab());
-            else returnToSectionTab();
-          }}
-        />
-      )}
+      {accountDialog && renderAccountDialog(accountDialog)}
       {loggingIn && (
         <AccountLoginDialog
           agent={loggingIn.agent}
@@ -358,12 +362,12 @@ interface AgentAccountsPanelProps {
   onEdit: (account: Account) => void;
   onRemove: (account: Account) => void;
   onRenameDefault: (agent: Agent) => void;
-  onDetails: (account: string | null) => void;
+  onOpenAccount: (view: AccountView, account: string | null) => void;
   onLogin: (agent: Agent, account: string | null, returnFocus?: ReturnLoginFocus) => void;
 }
 
 /** Pending writes stay with the tab's wrapper; drag cleanup follows the panel's mounted content instead. */
-function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, onDetails, onLogin, order }: AgentAccountsPanelProps & { order: ReturnType<typeof useAccountOrder> }): React.ReactElement {
+function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, onOpenAccount, onLogin, order }: AgentAccountsPanelProps & { order: ReturnType<typeof useAccountOrder> }): React.ReactElement {
   const t = useT();
   const logins = useDaemonStore((s) => s.accountLogins);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
@@ -376,16 +380,18 @@ function AgentAccountsPanelContent({ agent, onEdit, onRemove, onRenameDefault, o
     const row = account?.id ?? `default:${agent}`;
     // Whatever the login state, so an account that is logged in can log in again; focus goes back to the menu's button.
     const login = { label: t("settings.accounts.login"), icon: LogIn, disabled: loginIsActive(accountLoginOf(logins, agent, account?.id ?? null)), onClick: () => onLogin(agent, account?.id ?? null, () => handFocusOnceClosed(() => rowActionsTrigger(row))) };
-    const details = { label: t("settings.accounts.settingsItem"), icon: Settings, onClick: () => onDetails(account?.id ?? null) };
+    const details = { label: t("settings.accounts.detailsItem"), icon: Info, onClick: () => onOpenAccount("details", account?.id ?? null) };
+    const settings = { label: t("settings.accounts.settingsItem"), icon: Settings, onClick: () => onOpenAccount("settings", account?.id ?? null) };
     const index = order.ids.indexOf(account?.id ?? null);
     const moves: ActionMenuEntry[] = [
       "separator",
       { label: t("settings.accounts.moveEarlier"), icon: ArrowUp, disabled: order.busy || index <= 0, onClick: () => order.move(account?.id ?? null, -1) },
       { label: t("settings.accounts.moveLater"), icon: ArrowDown, disabled: order.busy || index >= order.ids.length - 1, onClick: () => order.move(account?.id ?? null, 1) },
     ];
-    if (!account) return [details, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login, ...moves];
+    if (!account) return [details, settings, { label: t("settings.accounts.renameDefault"), icon: Pencil, onClick: () => onRenameDefault(agent) }, login, ...moves];
     return [
       details,
+      settings,
       { label: t("common.edit"), icon: Pencil, onClick: () => onEdit(account) },
       login,
       ...moves,

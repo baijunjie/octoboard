@@ -226,7 +226,7 @@ A hand Octoboard raised for a waiting session request is answered in that reques
 addressed to such a session is not held (see "Waiting for the answer" in `docs/product/session-requests.md`).
 
 Where Codex's effective approval mode enables **automatic approval review** (`auto_review`) — from the explicit choice
-made for Codex or the account's own configuration (see "Approval modes" in `docs/product/agent-accounts.md`) — a
+made for Codex or the account's own configuration (see "Approval modes" in `docs/product/per-agent-settings.md`) — a
 permission event alone raises no hand: requests Codex resolves itself keep the session reading as *working*. If a manual
 prompt does reach the terminal, its `Action Required` title raises the hand, including a prompt labelled as belonging to
 a Codex subagent. Messages addressed to the session are held while that signal is present. When Codex changes the title

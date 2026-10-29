@@ -149,9 +149,8 @@ async function openRowMenu(container: ParentNode, id: string): Promise<HTMLEleme
   return trigger;
 }
 
-/** Chooses the Settings entry (`entry` is its word in another language), which opens the account's `AccountDetailsDialog`,
- * from the actions menu of an account's row and returns the modal it opens. */
-export async function openDetailsOf(container: ParentNode, id: string, entry = "Settings"): Promise<HTMLElement> {
+/** Chooses the entry named `entry` from the actions menu of an account's row and returns the modal it opens. */
+async function openAccountDialog(container: ParentNode, id: string, entry: string): Promise<HTMLElement> {
   // One that is open is closed first: it holds the rest of the window inert.
   const open = document.body.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Close"]');
   if (open) {
@@ -168,13 +167,21 @@ export async function openDetailsOf(container: ParentNode, id: string, entry = "
   return document.body.querySelector<HTMLElement>('[role="dialog"]')!;
 }
 
+/** Chooses the Details entry (`entry` is its word in another language), which opens the account's
+ * `AccountDetailsDialog`, from the actions menu of an account's row and returns the modal it opens. */
+export const openDetailsOf = (container: ParentNode, id: string, entry = "Details") => openAccountDialog(container, id, entry);
+
+/** Chooses the Settings entry (`entry` is its word in another language), which opens the account's
+ * `AccountSettingsDialog`, from the actions menu of an account's row and returns the modal it opens. */
+export const openSettingsOf = (container: ParentNode, id: string, entry = "Settings") => openAccountDialog(container, id, entry);
+
 const ACCOUNT_OF_TAB: Record<string, string> = { "Claude Code": "claude-work", Codex: "codex-work", "Grok Build": "grok-work" };
 
-/** `mount` with the details of the tab's owned account open, whose controls are then found in the modal rather than
+/** `mount` with the settings of the tab's owned account open, whose controls are then found in the modal rather than
  * in the section: `container` is the modal, and `section` the section's own. */
-export async function mountDetails(tab: string, strict = false) {
+export async function mountSettings(tab: string, strict = false) {
   const mounted = mount(tab, strict);
-  const dialog = await openDetailsOf(mounted.container, ACCOUNT_OF_TAB[tab]!);
+  const dialog = await openSettingsOf(mounted.container, ACCOUNT_OF_TAB[tab]!);
   return { ...mounted, container: dialog, section: mounted.container, dialog };
 }
 

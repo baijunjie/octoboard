@@ -20,8 +20,8 @@ agent.
 | The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
 | The role description | `--append-system-prompt`, added to Claude Code's own system prompt | `-c developer_instructions=…`, a developer message added beside Codex's own prompt, which stays as it is | `--rules`, appended to Grok's system prompt |
 | The model and reasoning effort | `--model`, `--effort` | `-c model=…`, `-c model_reasoning_effort=…` | `--model`, `--reasoning-effort` |
-| An explicit approval choice (see "Approval modes" in `docs/product/agent-accounts.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me** | Not applicable |
-| Claude compatibility while on (see "Claude compatibility" in `docs/product/agent-accounts.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" below) | `GROK_CLAUDE_*_ENABLED=true` in the environment (see "Claude compatibility for Grok Build" below) |
+| An explicit approval choice (see "Approval modes" in `docs/product/per-agent-settings.md`) | `--permission-mode`: `auto` for **Automatic**, `default` for **Ask me**, `bypassPermissions` for **Approve everything** | `-c approvals_reviewer=…`: `auto_review` for **Automatic review**, `user` for **Ask me** | Not applicable |
+| Claude compatibility while on (see "Claude compatibility" in `docs/product/per-agent-settings.md`) | Not applicable | A section appended to the `developer_instructions` text, and Claude Code's MCP servers as `-c mcp_servers.<name>.…` overrides (see "Claude compatibility for Codex" below) | `GROK_CLAUDE_*_ENABLED=true` in the environment (see "Claude compatibility for Grok Build" below) |
 | Anything else | The status line, and under **Approve everything** the acceptance of Claude Code's warning, in the `--settings` JSON | The overrides listed under "Codex" below | Nothing else |
 
 The 660 seconds are Octoboard's own 10-minute limit on a forwarded call plus a minute (see "The time limit on
@@ -61,7 +61,7 @@ included, as the permission mode Claude Code starts in; following each account's
 account's `settings.json` decides. Under **Approve everything**, every launch also tells Claude Code that its own
 warning for that mode has been accepted, so the blocking screen it would otherwise raise on a config directory's first
 use of the mode never appears; this holds for that launch alone, and nothing is written into the account's configuration
-files. The choices are in "Approval modes" in `docs/product/agent-accounts.md`.
+files. The choices are in "Approval modes" in `docs/product/per-agent-settings.md`.
 
 Octoboard's own tools are pre-approved for the session on every launch, a resume included, under every approval mode,
 following the account's configuration included, so a session's calls to them, a console session's orchestration
@@ -118,13 +118,13 @@ accounts, a resume included. When the setting follows each account's configurati
 requests by itself is read from `config.toml` in the Codex home that launch uses: the session's Codex config directory,
 else a `CODEX_HOME` the user's shell exports, else `~/.codex`. A trusted project's own `.codex/config.toml`, which Codex
 itself layers over that file, is not consulted for this. The choices and their lifetime rules are in "Approval modes" in
-`docs/product/agent-accounts.md`.
+`docs/product/per-agent-settings.md`.
 
 ### Claude compatibility for Codex
 
-While Codex's Claude compatibility is on (see "Claude compatibility" in `docs/product/agent-accounts.md`), every launch,
-a resume and an account switch included, gives Codex two things; while it is off, it gives neither. Nothing is written
-into any of Claude Code's or Codex's files for it.
+While Codex's Claude compatibility is on (see "Claude compatibility" in `docs/product/per-agent-settings.md`), every
+launch, a resume and an account switch included, gives Codex two things; while it is off, it gives neither. Nothing is
+written into any of Claude Code's or Codex's files for it.
 
 **A "Claude Code compatibility" section** is appended to the developer instructions Octoboard already passes (after the
 role description). It names the user-level Claude Code configuration directory — the directory of Claude Code's default
@@ -292,8 +292,8 @@ the appearance.
 ### Claude compatibility for Grok Build
 
 Grok Build has Claude Code support of its own, for Claude Code's skills, rules, agents, MCP servers and hooks. While
-Grok Build's Claude compatibility is on (see "Claude compatibility" in `docs/product/agent-accounts.md`), every launch, a
-resume and an account switch included, sets `GROK_CLAUDE_SKILLS_ENABLED`, `GROK_CLAUDE_RULES_ENABLED`,
+Grok Build's Claude compatibility is on (see "Claude compatibility" in `docs/product/per-agent-settings.md`), every
+launch, a resume and an account switch included, sets `GROK_CLAUDE_SKILLS_ENABLED`, `GROK_CLAUDE_RULES_ENABLED`,
 `GROK_CLAUDE_AGENTS_ENABLED`, `GROK_CLAUDE_MCPS_ENABLED` and `GROK_CLAUDE_HOOKS_ENABLED` to `true`, which outrank a
 `false` for any of them in Grok's configuration file or the user's shell. While it is off, none of them is set by
 Octoboard, and Grok follows its own configuration and whatever the user's shell exports. Nothing is written into the

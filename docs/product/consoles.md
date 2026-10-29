@@ -223,7 +223,7 @@ tool; that copies the conversation into the target's directory and reads that ac
 explicit model and reasoning effort choices (see `docs/product/switching-session-accounts.md`). A session opened on the
 default account holds no directory and resumes under whatever the user's shell exports at that moment. Codex's or Claude
 Code's permission approval setting is looked up again for each launch; keeping a directory does not freeze that choice
-(see "Approval modes" in `docs/product/agent-accounts.md`).
+(see "Approval modes" in `docs/product/per-agent-settings.md`).
 
 If a session's directory no longer exists when it is launched or resumed, the launch is refused rather than started —
 but only for a session that has a conversation on the agent's side to resume. A session with none yet — a new one, or

@@ -207,6 +207,7 @@ mod tests {
             account: account.map(str::to_string),
             fetched_at: 1_000,
             plan: Some("max".to_string()),
+            email: None,
             windows,
             unavailable: None,
         }

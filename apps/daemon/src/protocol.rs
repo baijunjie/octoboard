@@ -3111,6 +3111,10 @@ pub struct AccountQuota {
     pub fetched_at: i64,
     /// The plan as the agent names it (`max`, `plus`, `SuperGrok`), if it says.
     pub plan: Option<String>,
+    /// The email the account is signed in with, if the agent's sign-in record gives one. Read
+    /// whether or not the quota could be; `None` for an account that is not signed in or whose
+    /// configuration directory is missing.
+    pub email: Option<String>,
     /// Empty when the account has never been read. After a failed re-read, the last good windows
     /// stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed.
     pub windows: Vec<QuotaWindow>,
@@ -4526,6 +4530,7 @@ mod tests {
             account: None,
             fetched_at: 7,
             plan: Some("max".to_string()),
+            email: Some("me@example.com".to_string()),
             windows: vec![
                 quota(super::QuotaWindowKind::Session, None),
                 quota(super::QuotaWindowKind::Weekly, None),
@@ -4550,6 +4555,7 @@ mod tests {
                 "account": null,
                 "fetched_at": 7,
                 "plan": "max",
+                "email": "me@example.com",
                 "windows": [
                     {"kind": "session", "label": null, "used_percent": 27.5,
                      "resets_at": 1_792_258_799_899_i64, "window_minutes": 300},

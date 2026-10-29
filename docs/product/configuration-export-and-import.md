@@ -251,7 +251,7 @@ to choose, and an import places what it clones under it (see "Default clone dire
 No console and no project carries its stored id. Codex's and Claude Code's permission approval settings also stay
 local: exports omit them and imports leave the importing machine's choices unchanged, since importing them could
 silently turn on **Approve everything**, which on its own machine is saved only after a confirmation (see "Approval
-modes" in `docs/product/agent-accounts.md`). So do the list of added agents, each agent's account display order, the
+modes" in `docs/product/per-agent-settings.md`). So do the list of added agents, each agent's account display order, the
 names the user gave the default accounts and which accounts are turned off (see "Added agents", "Reordering accounts",
 "The default account" and "Turning an account off" in `docs/product/agent-accounts.md`). Account quota readings are not
 stored at all and are in no document either (see
@@ -303,7 +303,7 @@ settings leaves it as the importing daemon holds it.
   Applying the document's settings sets all four to the document's values, and a document without it, or with `null`
   there, leaves them as they are. The import review and its result each have one line for all four (see "In the window"
   above).
-- **Claude compatibility** (see "Claude compatibility" in `docs/product/agent-accounts.md`), under
+- **Claude compatibility** (see "Claude compatibility" in `docs/product/per-agent-settings.md`), under
   `claude_compatibility`, an object keyed by agent (`codex`, `grok`) holding `true` or `false`. It carries only the
   choices the user made: an agent never chosen for is absent, so on the importing machine it keeps following that
   machine's default — an unset Codex there follows whether Claude Code is added there — and an export where no choice

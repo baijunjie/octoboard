@@ -1,5 +1,6 @@
 import React from "react";
 
+import { DotStatusBadge } from "../components/DotStatusBadge";
 import { StatusBadge } from "../components/StatusBadge";
 import { codedMessageNode, CodedFailureBody } from "../components/errorParts";
 import { StatusMark } from "../components/StatusMark";
@@ -31,16 +32,16 @@ export function QuotaPlan({ quota }: { quota: QuotaReading }): React.ReactElemen
 }
 
 /** The badge of an account's login state: "Logged in" or "Not logged in" as its reading says (`loginStateOf`); nothing
- * while that is not known. It carries its state in words and a dot, not in colour alone. */
-export function LoginStateBadge({ quota }: { quota: QuotaReading }): React.ReactElement | null {
+ * while that is not known. It carries its state in words and a dot, not in colour alone. `separated` is as
+ * `StatusBadge`'s: false where the badge opens its cell. */
+export function LoginStateBadge({ quota, separated }: { quota: QuotaReading; separated?: boolean }): React.ReactElement | null {
   const t = useT();
   const state = loginStateOf(quota);
   if (!state) return null;
   return (
-    <StatusBadge variant="soft" color={state === "in" ? "success" : "warning"} className="inline-flex items-center gap-1.5">
-      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+    <DotStatusBadge color={state === "in" ? "success" : "warning"} separated={separated}>
       {t(state === "in" ? "settings.accounts.loggedIn" : "settings.accounts.notLoggedIn")}
-    </StatusBadge>
+    </DotStatusBadge>
   );
 }
 

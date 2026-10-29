@@ -209,7 +209,7 @@ fn wildcard_matches(pattern: &str, text: &str) -> bool {
 /// The global config file this launch's Claude Code will read: inside the configuration directory
 /// when one is in effect — the session's, else one the user's own shell exports — and
 /// `~/.claude.json` otherwise. `shell_env` is the launch's shell snapshot.
-pub(in crate::adapter) fn global_config_file(
+pub(crate) fn global_config_file(
     shell_env: &HashMap<String, String>,
     pinned: Option<&Path>,
 ) -> PathBuf {

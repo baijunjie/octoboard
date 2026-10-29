@@ -600,6 +600,9 @@ export interface AccountQuota {
   fetched_at: number;
   /** The plan as the agent names it (`max`, `plus`, `SuperGrok`), if it says. */
   plan: string | null;
+  /** The email the account is signed in with, if the agent's sign-in record gives one; read whether or not the quota
+   * could be, and null for an account that is not signed in. */
+  email?: string | null;
   /** Empty when the account has never been read. After a failed re-read the last good windows
    * stay (with their `fetched_at`) and `unavailable` says why the newer attempt failed, so they
    * can be shown as stale. */

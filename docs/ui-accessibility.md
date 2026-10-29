@@ -149,7 +149,9 @@ its text below AA.
 A disabled account is left out of that panel and of the menu bar icon's quota submenus, except the one the selected
 session is running on. That row is drawn like any other, its name, meters and bars unmuted, since the account is in use,
 and a warning-coloured "Disabled" badge after its plan says in words why it is listed; the submenu's heading for it
-ends in "Disabled" after its quota state. The submenu heading carries the state in words only.
+ends in "Disabled" after its quota state. The submenu heading carries the state in words only. In the Settings page's
+accounts table a turned-off account's Status cell says "Disabled" in a neutral badge in place of its login state; the
+badge opens the cell, so it has no screen-reader comma before it.
 
 A kept shortfall of that panel: while the mouse is on the rail's **Account quota** button, every account row but the
 button's own is covered by the sidebar's inactive-project veil (`INACTIVE_VEIL_CLASS` in
@@ -536,11 +538,11 @@ focus back to it: React Aria restores focus to what held it when the dialog open
 accessibility activation or a `preventFocusOnPress` press, and finds nothing that takes it when the control is disabled
 or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on.
 Three hand-offs repair it. The login hand-off (`useLoginFocusReturn` in
-`packages/ui/src/settings/AgentAccountsSection.tsx`): the row's own Log in button is shown only while the account reads
-as signed out and is disabled while a login runs, so after a success focus goes to the row's actions, and after a cancel
-to the Log in button once it is enabled again, else to the actions. The console dialog's Settings
-(`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener that opened it, so closing Settings by its
-backdrop returns focus there even when Manage accounts was activated without taking focus. A Shell terminal closed
+`packages/ui/src/settings/AccountLoginButton.tsx`): the row's own Log in button is shown only while the account reads as
+signed out and is not turned off, and is disabled while a login runs, so after a success focus goes to the row's
+actions, and after a cancel to the Log in button once it is enabled again, else to the actions. The console dialog's
+Settings (`packages/ui/src/dialogs/ConsoleDialog.tsx`) is handed the exact opener that opened it, so closing Settings by
+its backdrop returns focus there even when Manage accounts was activated without taking focus. A Shell terminal closed
 through its busy confirmation is repaired once the confirmation goes (`focusAfterConfirmedClose` in
 `packages/ui/src/terminal/ShellTerminalPanel.tsx`): when the terminal's tab or view that the dialog gave focus back to
 has gone with it, focus goes to the shown tab after a close asked from a menu, or to the shown terminal after one asked
@@ -1871,10 +1873,10 @@ Under a right-to-left language the window mirrors, and what mirrors with it is s
 WCAG 2.2 A 1.3.2, since a value read in the wrong order says something else.
 
 **Prose follows the interface; a value keeps its own order.** A sentence takes the document's direction. A value that is
-not prose — a path, a URL, a branch name, a commit id, a shell command, a port, a keyboard shortcut, a count written as
-`1 / 12`, a literal to type, a diagram, a formula — reads left to right in every language, and the element that *draws*
-it says so with `dir="ltr"`. `TextFieldDescription` puts only the count/limit ratio inside an LTR `bdi`, leaving the
-translated unit outside it.
+not prose — a path, a URL, an email address, a branch name, a commit id, a shell command, a port, a keyboard shortcut, a
+count written as `1 / 12`, a literal to type, a diagram, a formula — reads left to right in every language, and the
+element that *draws* it says so with `dir="ltr"`. `TextFieldDescription` puts only the count/limit ratio inside an LTR
+`bdi`, leaving the translated unit outside it.
 
 An inline formula sits inside a paragraph, so that element is also a bidi isolate: `dir` on it is not always enough
 once a utility class resets `unicode-bidi`, and Tailwind's `isolate` does not do this job (`isolation: isolate` is a
@@ -1884,7 +1886,10 @@ stacking context). The formula sets `unicode-bidi: isolate` itself (`FormulaView
   `dir` on the group: with it on the input alone, the affix stays on the mirrored side and the text pulls away from it,
   and the two stop reading as one control (`packages/ui/src/settings/CloneDirSetting.tsx`).
 - `dir` sets direction, not alignment. It does not override an inherited `text-align`, so an element that needs both
-  keeps its alignment class as well.
+  keeps its alignment class as well. The default `text-align: start`, though, resolves against the element's own
+  direction, so a value drawn on a line of its own with `dir="ltr"` inside right-to-left UI lines up on the opposite
+  edge from its siblings; it takes `align-match-parent` (in `packages/ui/src/style.css`) to line up with its parent,
+  which `FadeOverflow` adds whenever it is given a `dir`.
 - A tooltip is portalled out of the element it describes, so it inherits the window's direction, not the value's. A
   tooltip that is the value itself in full — a clipped path's or branch name's — says `dir="ltr"` again on the value
   inside it: `FadeOverflow` does so for a plain-string tooltip on an `ltr` label, which is why a sentence goes in as a

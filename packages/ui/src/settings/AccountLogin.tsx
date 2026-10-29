@@ -19,6 +19,13 @@ export function accountLoginOf(logins: AccountLogin[], agent: Agent, account: st
   return logins.find((login) => login.agent === agent && login.account === account);
 }
 
+/** The login of an account (`null` for an agent's default account) when it has succeeded, read from the store as it is
+ * now: what the account's `AccountLoginAnnouncer` is given. */
+export function useSucceededAccountLogin(agent: Agent, account: string | null): AccountLogin | undefined {
+  const login = useDaemonStore((s) => accountLoginOf(s.accountLogins, agent, account));
+  return login?.status === "succeeded" ? login : undefined;
+}
+
 /** Whether the login has not ended: the CLI is running and the user may cancel it. */
 export function loginIsActive(login: AccountLogin | undefined): boolean {
   return login !== undefined && (login.status === "starting" || login.status === "waiting");

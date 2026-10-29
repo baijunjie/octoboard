@@ -19,13 +19,14 @@ export type ReturnLoginFocus = (succeeded: boolean, cancelling?: Promise<void>) 
 
 /**
  * Where focus goes once the login dialog a Log in button opened has closed, which React Aria's restore alone does not
- * settle: it puts focus back on that button, and the button is not always there to take it. A login that succeeded can
- * take the button away (the row's is shown only while the account reads as signed out), before or after the restore,
- * so focus goes to `fallback` instead; so it does when a cancelled login turns out to have succeeded first. Closing the
- * dialog otherwise cancels a login still running, and the button is unavailable while the daemon has a login running —
- * including one it registers only after the dialog has gone. Focus goes to the button once the cancel has been
- * answered and the button is available again, or to `fallback` if it has gone. Either way focus would otherwise end on
- * `<body>`, where VoiceOver reads the whole web area and does not speak the row's status.
+ * settle: it puts focus back on that button, and the button is not always there to take it. A login that succeeded, or
+ * the account being turned off, can take the button away (the row's is shown only while the account reads as signed out
+ * and is on), before or after the restore, so focus goes to `fallback` instead; so it does when a cancelled login turns
+ * out to have succeeded first. Closing the dialog otherwise cancels a login still running, and the button is
+ * unavailable while the daemon has a login running — including one it registers only after the dialog has gone. Focus
+ * goes to the button once the cancel has been answered and the button is available again, or to `fallback` if it has
+ * gone. Either way focus would otherwise end on `<body>`, where VoiceOver reads the whole web area and does not speak
+ * the row's status.
  *
  * The move waits a frame past the restore, which runs in the frame after the dialog unmounts, and acts only where the
  * restore left focus on `<body>` or on a button that is going: a restore that landed right, or on another control,
@@ -67,17 +68,18 @@ function useLoginFocusReturn(
 const UNAVAILABLE_CLASS = `${ICON_TRIGGER_BASE_CLASS} bg-transparent pointer-events-auto data-[pressed=true]:[transform:none] active:[transform:none]`;
 
 /** The Log in button of an account: an icon with a tooltip and a name that says whose account, looking as the row's
- * actions menu button does, shown in the table row's Status cell and on the details dialog's first body line while the
- * account reads as not logged in, and nothing otherwise. While a login of the account runs it is unavailable, not
- * natively disabled: it keeps focus, is marked `aria-disabled`, takes no hover tint or press shrink, gives "Logging
- * in…" as its tooltip and its description (its name stays the action), and a press does nothing (see "Buttons" in
- * `docs/ui-accessibility.md`). Focus comes back after the login dialog closes as `useLoginFocusReturn` settles it
- * (`fallback` is where it goes when the button is gone). */
-export function AccountLoginButton({ agent, account, name, quota, onLogin, fallback }: {
+ * actions menu button does, shown in the table row's Status cell while the account reads as not logged in and is not
+ * turned off (`turnedOff`, where the cell says "Disabled" instead), and nothing otherwise. While a login of the account
+ * runs it is unavailable, not natively disabled: it keeps focus, is marked `aria-disabled`, takes no hover tint or
+ * press shrink, gives "Logging in…" as its tooltip and its description (its name stays the action), and a press does
+ * nothing (see "Buttons" in `docs/ui-accessibility.md`). Focus comes back after the login dialog closes as
+ * `useLoginFocusReturn` settles it (`fallback` is where it goes when the button is gone). */
+export function AccountLoginButton({ agent, account, name, quota, turnedOff, onLogin, fallback }: {
   agent: Agent;
   account: string | null;
   name: string;
   quota: QuotaReading;
+  turnedOff: boolean;
   onLogin: (returnFocus: ReturnLoginFocus) => void;
   fallback: () => HTMLElement | null | undefined;
 }): React.ReactElement | null {
@@ -87,7 +89,7 @@ export function AccountLoginButton({ agent, account, name, quota, onLogin, fallb
   const button = useRef<HTMLButtonElement>(null);
   const reasonId = useId();
   const returnFocus = useLoginFocusReturn(button, fallback, { active, succeeded: login?.status === "succeeded" });
-  if (loginStateOf(quota) !== "out") return null;
+  if (turnedOff || loginStateOf(quota) !== "out") return null;
   return (
     <TitledControl title={active ? t("settings.accounts.login.starting") : t("settings.accounts.login")}>
       <Button

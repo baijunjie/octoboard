@@ -36,6 +36,14 @@ drives may be refused by something else first, and the test then passes with the
 `git branch -f` on a branch checked out in a worktree before any hook runs, so a hook test that drives it proves
 nothing about the hook.
 
+A jsdom lookup that finds nothing does not fail either: `find(...)!` checks nothing at runtime, and a negative
+assertion on what it returned holds whatever the markup — `parent.contains(undefined)` is `false`, so "the email is not
+inside the name's element" passed with the email anywhere. Such a lookup comes back empty unnoticed under a stand-in
+that renders its children as bare text, as the `AgentAccountsSection` tests' `FadeOverflow` and `MarkedPath` stand-ins
+(`packages/ui/src/settings/agentAccountsSectionTestState.tsx`) do: the text they draw has no element of its own.
+Assert that the lookup found something before asserting about it, or assert on the text of an element the markup
+still has (the row, the name line) rather than on a leaf found by its text.
+
 ## Never write a fresh executable per test — share one that has already been exec'd
 
 Applies to any test that needs a script of its own to run as a program: a fake shell, a fake agent

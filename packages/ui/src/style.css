@@ -1005,8 +1005,8 @@ html.pane-resizing * {
   user-select: none !important;
 }
 
-/* Text laid out in a direction of its own (`FadeOverflow`'s `dir`) still aligns the way its surroundings do. Chromium
-   understands only the prefixed value, so it comes first and the standard one overrides it where supported. */
+/* An element with a `dir` of its own that should still align the way its parent does. Chromium understands only the
+   prefixed value, so it comes first and the standard one overrides it where supported. */
 .align-match-parent {
   text-align: -webkit-match-parent;
   text-align: match-parent;
