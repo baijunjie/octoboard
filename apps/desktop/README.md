@@ -140,7 +140,7 @@ version goes to, names, addresses, the manifest) are `scripts/release-manifest.m
 ### Releasing by tag
 
 Pushing a tag `v<version>` runs `.github/workflows/release.yml`, which does the two steps above on a macOS runner after the
-full checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and `publish-release` path above stays
+application checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and `publish-release` path above stays
 available. The workflow:
 
 1. `validate` runs `.github/release-notes.sh`: the tag must equal `v<version>` from `tauri.conf.json` and be an annotated

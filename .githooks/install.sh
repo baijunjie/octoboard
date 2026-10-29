@@ -1,5 +1,5 @@
 #!/bin/sh
-# Enable the revert gate in this clone: sh .githooks/install.sh [--branches-only|--pr-only] [<resident-guarded-branch>...]
+# Enable staged formatting, push verification and the revert gate in this clone: sh .githooks/install.sh [--branches-only|--pr-only] [<resident-guarded-branch>...]
 # The resident guarded branches (usually the main branch) are written to this clone's git config as
 # revert-gate.branch, replacing any existing list; the target branch recorded by each worktree branch is
 # guarded automatically on top of that. Branch arguments are used when given; otherwise the committed
@@ -46,7 +46,7 @@ list="${root}/.githooks/branches"
 # and leave the gate silently inactive.
 hookspath=$(env -u GIT_CONFIG_COUNT -u GIT_CONFIG_PARAMETERS git config core.hooksPath || true)
 if [ "${hooks_too}" = 1 ] && [ -n "${hookspath}" ]; then
-  echo "core.hooksPath is set to ${hookspath}, so the common hooks directory will not take effect; call sh .githooks/hook.sh <reference-transaction|pre-push> \"\$@\" from within that hook system. Run sh .githooks/install.sh --branches-only afterward if resident guarded branches need writing; nothing further is needed for a repo with only the PR flow installed." >&2
+  echo "core.hooksPath is set to ${hookspath}, so the common hooks directory will not take effect; call sh .githooks/hook.sh <pre-commit|reference-transaction|pre-push> \"\$@\" from within that hook system. Run sh .githooks/install.sh --branches-only afterward if resident guarded branches need writing; nothing further is needed for a repo with only the PR flow installed." >&2
   exit 1
 fi
 
@@ -84,7 +84,7 @@ fi
 if [ "${hooks_too}" = 1 ]; then
   # Check everything before writing anything: bailing out halfway would leave half-installed hooks and
   # unwritten resident guarded branches.
-  for name in reference-transaction pre-push; do
+  for name in pre-commit reference-transaction pre-push; do
     target="${hooks}/${name}"
     if [ -e "${target}" ] && ! grep -q '^# revert-gate hook entry' "${target}"; then
       echo "${target} already exists and is not a gate entry point; nothing was installed. Call sh .githooks/hook.sh ${name} \"\$@\" from inside it." >&2
@@ -93,7 +93,7 @@ if [ "${hooks_too}" = 1 ]; then
   done
 
   mkdir -p "${hooks}"
-  for name in reference-transaction pre-push; do
+  for name in pre-commit reference-transaction pre-push; do
     target="${hooks}/${name}"
     cp "${root}/.githooks/hook.sh" "${target}"
     chmod +x "${target}"
@@ -103,7 +103,7 @@ fi
 if [ "${branches_too}" = 0 ]; then
   # --pr-only leaves revert-gate.branch untouched: the worktree flow in the same repository may already
   # have written it.
-  echo "Revert gate enabled (hooks only; no resident guarded branches written, existing ones left untouched)."
+  echo "Repository hooks enabled: staged formatting, push verification and revert gate (hooks only; no resident guarded branches written, existing ones left untouched)."
   echo "Pushing a branch that records a target branch triggers a content check; the gate script is read from the committed version on the target branch (falling back to its remote-tracking branch if the branch does not exist locally, and skipping the check if neither exists)."
   # Right after the script is copied into the working tree but before it is committed, the gate cannot
   # fetch it and silently lets things through, so check HEAD once for real.
@@ -118,7 +118,7 @@ for branch in "$@"; do
 done
 
 if [ "${hooks_too}" = 1 ]; then
-  echo "Revert gate enabled. Resident guarded: $*; the target branch recorded by each worktree branch is guarded as well, and pushing a branch that records a PR target branch triggers a content check."
+  echo "Repository hooks enabled: staged formatting, push verification and revert gate. Resident guarded: $*; the target branch recorded by each worktree branch is guarded as well, and pushing a branch that records a PR target branch triggers a content check."
 else
   echo "Resident guarded branches written: $* (no hooks installed; the existing hook system calls .githooks/hook.sh)."
 fi

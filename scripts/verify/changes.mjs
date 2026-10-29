@@ -1,29 +1,24 @@
-// What a branch changed, for the command that decides what to run from it (`pnpm verify`). The changes
-// are those since the branch's current merge base with its recorded target branch
-// (`branch.<name>.targetBranch`): the target branch is taken as already checked, so what a rebase or
-// merge brought in from it is not counted, while the branch's own changes, conflict resolutions included, are.
-//
-// `git` is a function taking git's arguments and returning its trimmed output, or null when git
-// fails; each caller owns how it runs git.
-
-// The commit the changes are taken from: `baseArg` if given, else the merge base of HEAD and the
-// checked-out branch's recorded target branch. `{ reason }` says why there is none: for `baseArg`, a
-// base git cannot read or one that is not an ancestor of HEAD; otherwise no target branch recorded
-// (the target branch itself and a detached HEAD included, which also sets `noTarget`), or no merge
-// base with it (a target branch since deleted, or unrelated history).
+// Remote changes are measured from the exact base commit, including force pushes. The pre-push
+// hook supplies the destination's live tip explicitly; manual runs fetch the upstream first.
 export function resolveBase(git, baseArg) {
   if (baseArg) {
     const commit = git("rev-parse", "--verify", "--quiet", `${baseArg}^{commit}`);
     if (!commit) return { reason: `base ${baseArg} is not readable` };
-    if (git("merge-base", "--is-ancestor", commit, "HEAD") == null) return { reason: `base ${baseArg} is not an ancestor of HEAD` };
     return { commit };
   }
   const branch = git("symbolic-ref", "--quiet", "--short", "HEAD");
-  const target = branch ? git("config", "--get", `branch.${branch}.targetBranch`) : null;
-  if (!target) return { reason: "no recorded target branch", noTarget: true };
-  const commit = git("merge-base", "HEAD", `refs/heads/${target}`);
-  if (!commit) return { reason: `no merge base with the target branch ${target}` };
-  return { commit };
+  const upstream = (name) => {
+    if (!name) return null;
+    const remote = git("config", "--get", `branch.${name}.remote`);
+    const ref = git("config", "--get", `branch.${name}.merge`);
+    return remote && remote !== "." && ref ? { remote, ref } : null;
+  };
+  const target = branch && git("config", "--get", `branch.${branch}.targetBranch`);
+  const source = upstream(branch) ?? upstream(target);
+  if (!source) return { reason: "no remote upstream or remote target branch", noTarget: true };
+  if (git("fetch", "--no-tags", source.remote, source.ref) == null) return { reason: `cannot fetch ${source.remote} ${source.ref}` };
+  const commit = git("rev-parse", "--verify", "FETCH_HEAD^{commit}");
+  return commit ? { commit } : { reason: "cannot read fetched remote tip" };
 }
 
 // The paths that differ between `base` and `tree` (a tree object, such as `workingTree`'s), or null
@@ -31,4 +26,12 @@ export function resolveBase(git, baseArg) {
 export function changedFiles(git, base, tree) {
   const out = git("diff-tree", "-r", "-z", "--name-only", "--no-renames", base, tree);
   return out == null ? null : out.split("\0").filter(Boolean);
+}
+
+// Checks read the current checkout, so it must exactly represent the commit being pushed.
+export function requirePushedTree(git, head, tree) {
+  const pushed = git("rev-parse", "--verify", `${head}^{commit}`);
+  if (!pushed || git("rev-parse", "HEAD") !== pushed || git("rev-parse", `${pushed}^{tree}`) !== tree) {
+    throw new Error("push checks require the pushed commit checked out with a clean working tree; commit your changes or push from its clean checkout; when one push updates several branches, push each branch separately from a clean checkout of its commit");
+  }
 }
