@@ -163,20 +163,26 @@ A notice toast (HeroUI's accent variant) tints its indicator with the title's `-
 does itself for its success, warning and danger toasts, instead of leaving it in the plain foreground under an accent
 title.
 
-A tooltip over a dialog in dark takes `--tooltip-on-dialog`, a step lighter than the dialog (1.30:1), instead of
-HeroUI's `--overlay`: HeroUI draws both on that one colour and gives the tooltip no edge in dark but a faint inset
-line, so it cannot be told from the dialog under it. In light it keeps HeroUI's own surface, whose drop shadow already
-sets it apart. The rule is the `.tooltip` one under `html:has(.modal__backdrop, …)` in `packages/ui/src/style.css`.
+A tooltip over any surface drawn on `--overlay` (a dialog, a menu or submenu, a select's or combo box's list, a
+popover) takes `--tooltip-on-overlay` in dark, a step lighter than that surface (1.30:1), instead of HeroUI's
+`--overlay`: HeroUI draws the surface and the tooltip on that one colour and gives the tooltip no edge in dark but a
+faint inset line, so a tooltip, such as the full label of a clipped menu item, cannot be told from the surface under
+it. In light it keeps HeroUI's own surface, whose drop shadow already sets it apart. The rule is the `.tooltip` one
+under `html:has(.modal__backdrop, …)` in `packages/ui/src/style.css`, which lists the surfaces; a new kind of overlay
+drawn on `--overlay` that can carry a tooltip joins that list. A surface drawn as a tooltip (`Hint`'s touch and hover
+popovers, among them the rail's account quota panel) cannot join it, since listing it would lift the surface itself:
+a status mark's popover opened over the quota panel keeps the panel's colour.
 
 A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
 dialog around its trigger carries, and a control drawn from `--default` inside it, a secondary button or a ghost
 button's hover, would sit at about 1.19:1 against its `--overlay` surface. The shared tooltip and popover components
 (`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`, and the touch popover they open, which is drawn as a tooltip)
-therefore carry `control-fills` themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark tooltip over a dialog
-sits a step lighter, so it takes its own fill (`--tooltip-on-dialog-fill`, 1.27:1) from the same `.tooltip` rule as
-`--tooltip-on-dialog`. A new tooltip or popover that can hold a control drawn from `--default` carries `control-fills`
-too. The project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave the
-field's `--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching its fill.
+therefore carry `control-fills` themselves, giving 1.27:1 in light and 1.45:1 in dark. A dark tooltip over such a
+surface sits a step lighter, so it takes its own fill (`--tooltip-on-overlay-fill`, 1.27:1) from the same `.tooltip`
+rule as `--tooltip-on-overlay`. A new tooltip or popover that can hold a control drawn from `--default` carries
+`control-fills` too. The project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap
+would leave the field's `--field-border` and `--field-focus`, computed from the root's `--default`, no longer matching
+its fill.
 
 A dialog's Advanced section opens from a small ghost button (`AdvancedSection` in
 `packages/ui/src/dialogs/AdvancedSection.tsx`) whose label is in `--app-muted` at rest and the foreground on hover and
@@ -755,13 +761,13 @@ with a trackpad gets what the input it used answers:
 - a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
 - a touch or pen press opens the same content in a **touch popover**, where the shape allows it. The popover is drawn
   like the tooltip, from the one definition: it carries HeroUI's own `tooltip` class (surface, padding, text size, width
-  cap, word breaking, and the dialog fills of `style.css`) and the same `control-fills`, rather than a copy of them. It
-  is modal, as a popover is: an outside tap or Escape closes it, and focus, which it takes, goes back to what held it.
-  Being modal it hides its trigger from assistive technology while open, so it is not linked to the trigger as a
-  description, as the tooltip is; its dialog is named by the trigger's name, or by the generic word Hint where the
-  trigger has none or its name is the tooltip's own text: a dialog is never named by the text it holds, which VoiceOver
-  would read twice as it takes focus. The tooltip is closed and held back while it is open, as a pen can hover before it
-  presses and an open tooltip would swallow Escape ahead of the popover.
+  cap, word breaking, and the fills it takes over an overlay surface in `style.css`) and the same `control-fills`,
+  rather than a copy of them. It is modal, as a popover is: an outside tap or Escape closes it, and focus, which it
+  takes, goes back to what held it. Being modal it hides its trigger from assistive technology while open, so it is not
+  linked to the trigger as a description, as the tooltip is; its dialog is named by the trigger's name, or by the
+  generic word Hint where the trigger has none or its name is the tooltip's own text: a dialog is never named by the
+  text it holds, which VoiceOver would read twice as it takes focus. The tooltip is closed and held back while it is
+  open, as a pen can hover before it presses and an open tooltip would swallow Escape ahead of the popover.
 
 Whether a shape opens it is a parameter, not a guess. Recognising from the DOM or from props whether a trigger "is a
 button" is unreliable: a react-aria control hides its press handling in its own hooks, a mark's own trigger is a

@@ -584,9 +584,9 @@ html {
   --sidebar-fill-hover: oklch(0 0 0 / 0.12);
   --control-fill: oklch(0.92 0.004 286);
   --control-fill-hover: oklch(0.89 0.004 286);
-  --tooltip-on-dialog: var(--overlay);
-  --tooltip-on-dialog-fill: var(--control-fill);
-  --tooltip-on-dialog-fill-hover: var(--control-fill-hover);
+  --tooltip-on-overlay: var(--overlay);
+  --tooltip-on-overlay-fill: var(--control-fill);
+  --tooltip-on-overlay-fill-hover: var(--control-fill-hover);
 }
 
 .dark,
@@ -610,9 +610,9 @@ html {
   --sidebar-fill-hover: oklch(1 0 0 / 0.11);
   --control-fill: oklch(0.33 0.006 286);
   --control-fill-hover: oklch(0.36 0.006 286);
-  --tooltip-on-dialog: oklch(0.3 0.006 286);
-  --tooltip-on-dialog-fill: oklch(0.36 0.006 286);
-  --tooltip-on-dialog-fill-hover: oklch(0.39 0.006 286);
+  --tooltip-on-overlay: oklch(0.3 0.006 286);
+  --tooltip-on-overlay-fill: oklch(0.36 0.006 286);
+  --tooltip-on-overlay-fill-hover: oklch(0.39 0.006 286);
 }
 
 /* The fills of HeroUI's `--default` family inside the sidebar and report panel. A ghost button's hover and pressed
@@ -651,13 +651,14 @@ html {
 
    A tooltip or popover is portalled to the end of `<body>`, outside the pane or dialog that carries
    this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
-   visual choices" in docs/ui-accessibility.md); a tooltip over a dialog then takes its own fills in
-   `--tooltip-on-dialog-fill`, below. Everything a dialog, the pane or such a tooltip or popover (also
-   on `--overlay`) draws from `--default` takes the fills: a secondary button, a tab
-   list, a ghost button's hover, a toggle button, a search field and a select in their secondary
-   variant, and the file viewer's image checkerboard (`.viewer-checkerboard`), whose squares step
-   1.10:1 from its ground in light and 1.28:1 in dark (1.04:1 and 1.05:1 on HeroUI's own fill),
-   inside the viewer's frame surface like every other frame. */
+   visual choices" in docs/ui-accessibility.md); a tooltip over a dialog, a menu, a select's or
+   combo box's list or a popover then takes its own fills in `--tooltip-on-overlay-fill`, below.
+   Everything a dialog, the pane or such a tooltip or popover (also on `--overlay`) draws from
+   `--default` takes the fills: a secondary button, a tab list, a ghost button's hover, a toggle
+   button, a search field and a select in their secondary variant, and the file viewer's image
+   checkerboard (`.viewer-checkerboard`), whose squares step 1.10:1 from its ground in light and
+   1.28:1 in dark (1.04:1 and 1.05:1 on HeroUI's own fill), inside the viewer's frame surface like
+   every other frame. */
 .control-fills {
   --default: var(--control-fill);
   --default-hover: var(--control-fill-hover);
@@ -906,31 +907,40 @@ html {
   }
 }
 
-/* A tooltip over a dialog: HeroUI draws both on `--overlay`, so the tooltip lands on its own colour
-   and only `--overlay-shadow` marks its edge. In light that shadow is a real drop shadow and is
-   left alone; in dark it is a faint inset line and nothing else, so the tooltip takes a step off
-   the dialog's surface there (`--tooltip-on-dialog`, 1.30:1 against a dark dialog). This is a
-   deliberate departure from HeroUI's look, kept in docs/ui-accessibility.md's "Confirmed visual
-   choices" section. Setting `--overlay` on the tooltip reaches its arrow too, which HeroUI fills
-   from the same token. Light's `--tooltip-on-dialog` is `var(--overlay)`, which resolves to the
-   plain surface where it is declared, on the root, before the tooltip inherits it; declared on the
-   tooltip itself, beside the `--overlay` this rule sets, the two would form a cycle and the tooltip
-   would lose its background. A tooltip is portalled to the document's end rather than drawn
-   inside the dialog, so the dialog is found from the root. While a modal is open, everything
-   outside it but the toast region and the connection banner is inert; a tooltip on those sits on
-   the same colour in dark, so the step fits it as well.
+/* A tooltip over a dialog, a menu, a select's or combo box's list or a popover: HeroUI draws each of
+   those and the tooltip on `--overlay`, so the tooltip lands on its own colour and only
+   `--overlay-shadow` marks its edge. In light that shadow is a real drop shadow and is left alone;
+   in dark it is a faint inset line and nothing else, so the tooltip takes a step off the surface
+   there (`--tooltip-on-overlay`, 1.30:1 against dark `--overlay`). This is a deliberate departure
+   from HeroUI's look, kept in docs/ui-accessibility.md's "Confirmed visual choices" section.
+   Setting `--overlay` on the tooltip reaches its arrow too, which HeroUI fills from the same token.
+   Light's `--tooltip-on-overlay` is `var(--overlay)`, which resolves to the plain surface where it
+   is declared, on the root, before the tooltip inherits it; declared on the tooltip itself, beside
+   the `--overlay` this rule sets, the two would form a cycle and the tooltip would lose its
+   background.
+
+   A tooltip is portalled to the document's end rather than drawn inside the surface under it, so
+   the surface is found from the root, and the step holds for every tooltip while one of those
+   surfaces is open. Such a tooltip all but always belongs to the surface: each of them but the
+   combo box's list is modal and makes everything outside it inert (under a dialog, everything but
+   the toast region and the connection banner). A tooltip elsewhere while a combo box's list is open
+   takes the step too, which still sets it apart from what it sits on. Opening or closing one of
+   these surfaces flips what the root matches, but WebKit then re-matches only the `.tooltip`
+   elements, a small fraction of the `inert` toggle the same overlay already makes. The touch and
+   hint popovers are drawn as a tooltip (`.tooltip`, not `.popover`), so one of them open lifts
+   neither the others nor a tooltip over it.
 
    The `--default` family moves with the surface: the dark step above leaves `--control-fill`
    (L 0.33) only 1.12:1 from the tooltip (1.04:1 on HeroUI's own), against 1.45:1 on the plain
-   `--overlay`. `--tooltip-on-dialog-fill` is the control fill one hover step lighter (L 0.36,
+   `--overlay`. `--tooltip-on-overlay-fill` is the control fill one hover step lighter (L 0.36,
    hovered 0.39), 1.27:1 resting, which is what the light fill gives on either surface. This rule
    outranks the `.control-fills` a tooltip carries. */
-html:has(.modal__backdrop, .alert-dialog__backdrop) .tooltip {
-  --overlay: var(--tooltip-on-dialog);
-  --default: var(--tooltip-on-dialog-fill);
-  --default-hover: var(--tooltip-on-dialog-fill-hover);
-  --default-soft: var(--tooltip-on-dialog-fill);
-  --default-soft-hover: var(--tooltip-on-dialog-fill-hover);
+html:has(.modal__backdrop, .alert-dialog__backdrop, .dropdown__popover, .select__popover, .combo-box__popover, .popover) .tooltip {
+  --overlay: var(--tooltip-on-overlay);
+  --default: var(--tooltip-on-overlay-fill);
+  --default-hover: var(--tooltip-on-overlay-fill-hover);
+  --default-soft: var(--tooltip-on-overlay-fill);
+  --default-soft-hover: var(--tooltip-on-overlay-fill-hover);
 }
 
 /* A checkbox's box sits on its label's first line, centred in that line, whether the label wraps or
