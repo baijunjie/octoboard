@@ -32,12 +32,14 @@ product docs name for parts of the window:
 - Paths always read left to right, in the fields that take one and in the settings list. So does a branch name shown
   on its own, as a label — in a project's branch badge, in the Git mode's branch selector, its current choice and its
   listed options alike, and in the project menu's Switch branch submenu — whatever characters it starts with, so a
-  name opening with Arabic letters still reads from the left. Where such a path or branch name is cut, the tooltip
-  giving its full text reads left to right too (see "Names too long for their space" in
-  `docs/product/labels-and-tooltips.md`). Settings' Default clone directory field reads left to right as one control:
-  its folder mark stays beside the path at the field's left edge, rather than sitting at the field's leading edge with
-  the path pushed away from it (see "Default clone directory" in `docs/product/settings.md`). The Browse button beside
-  the field keeps to the reading direction's end, so it is at the field's left.
+  name opening with Arabic letters still reads from the left. So does an account's sign-in email. Where such a path,
+  branch name or email is cut, the tooltip giving its full text reads left to right too, as one left-to-right block
+  whose wrapped lines all start at the tooltip's left edge (see "Names too long for their space" and "How a tooltip
+  behaves" in `docs/product/labels-and-tooltips.md`). Settings' Default clone directory field reads left to right as
+  one control: its folder mark stays beside the path at the field's left edge, rather than sitting at the field's
+  leading edge with the path pushed away from it, and the tooltip giving the full path the field abbreviates reads left
+  to right the same way, its leading `/` at the left (see "Default clone directory" in `docs/product/settings.md`). The
+  Browse button beside the field keeps to the reading direction's end, so it is at the field's left.
 - **A value named inside a sentence keeps its own order**, wherever that sentence appears — a message, a tooltip, a
   `title`, a toast or an accessible name. A path, a branch name, a commit id, a `git` or operating-system message quoted
   inside localized wording (see "What follows the language" in `docs/product/language.md`) and a name the user typed all

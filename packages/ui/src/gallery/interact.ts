@@ -420,6 +420,10 @@ export interface Ui {
   /** Focuses the text field named `label` (its `aria-label`, or its label's text as assistive technology
    * reads it), waiting for it to appear, so `type` has one to fill. */
   focus: (label: string) => Promise<void>;
+  /** Moves the pointer onto the text field named `label` (found as `focus` finds it) and leaves it there, for a
+   * tooltip the field shows while hovered, anchored to it and portalled out as in `hoverAnchored`. It fails unless
+   * the tooltip that opens reads `tooltip`, which also catches a field drawn without one. */
+  hoverField: (label: string, tooltip: string) => Promise<void>;
   /** Types `text` into the focused field, waiting for a field to take focus, and replaces what it holds. */
   type: (text: string) => Promise<void>;
   /** Waits for `ms`, for an animation to settle. */
@@ -567,6 +571,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     // The press's own effects (a menu opening, a dialog mounting) land on the next frames.
     await wait(150);
   };
+
+  /** The text field named `label`: its `aria-label`, or the text of its label as assistive technology reads it. */
+  const findTextField = (label: string): HTMLInputElement | HTMLTextAreaElement | undefined =>
+    Array.from(doc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")).find((input) =>
+      [input.getAttribute("aria-label"), input.labels?.[0] ? accessibleText(input.labels[0]) : null].some(
+        (name) => name != null && withoutIsolates(name).trim() === label,
+      ),
+    );
 
   const findAll = (matcher: Matcher, root: ParentNode = doc): HTMLElement[] => {
     inClosedDrawer = false;
@@ -856,18 +868,11 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await wait(150);
     },
     async focus(label) {
-      const field = await waitFor(
-        () =>
-          Array.from(doc.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")).find(
-            (input) =>
-              // The accessible name: the `aria-label`, or the text of the label as a screen reader reads it.
-              [input.getAttribute("aria-label"), input.labels?.[0] ? accessibleText(input.labels[0]) : null].some(
-                (name) => name != null && withoutIsolates(name).trim() === label,
-              ),
-          ),
-        `No text field labelled ${label}`,
-      );
-      field.focus();
+      (await waitFor(() => findTextField(label), `No text field labelled ${label}`)).focus();
+    },
+    async hoverField(label, tooltip) {
+      await hover(() => findTextField(label), `No text field labelled ${label} to hover`);
+      await expectAnchoredTooltip(`The text field labelled ${label}`, tooltip);
     },
     async hoverIndicator(host) {
       await hover(() => find(host)?.querySelector<HTMLElement>("[role=img]"), `Nothing to hover an indicator of, matching ${String(host)}`);

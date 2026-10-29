@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
+import { ValueTooltipText } from "../components/ValueTooltipText";
 import type { HoveredTerminalLink } from "./terminalLinks";
 
 /**
@@ -35,11 +36,10 @@ export function TerminalLinkTooltip({
         className="pointer-events-none fixed"
         style={{ left: link.left, top: link.top, width: link.width, height: link.height }}
       />
-      {/* Keyed so a move straight from one link to another places the tooltip afresh. A URI reads
-          left to right whatever the interface's direction. */}
+      {/* Keyed so a move straight from one link to another places the tooltip afresh. */}
       <AnchoredTooltip
         key={`${link.uri}\n${link.left},${link.top}`}
-        tooltip={<span dir="ltr">{link.uri}</span>}
+        tooltip={<ValueTooltipText>{link.uri}</ValueTooltipText>}
         anchor={anchor}
         hovered
       />

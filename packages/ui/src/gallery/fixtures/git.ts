@@ -221,7 +221,7 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-switch-branch", group: "Projects", category: "normal",
     title: "Local branch menu",
-    description: "The third menu lists local branches and checks the current one. A long branch name is clipped at the menu's edge and, with the pointer resting on it, a tooltip carries the full name. Selecting feature/search-ranking switches immediately.",
+    description: "The third menu lists local branches and checks the current one. A long branch name is clipped at the menu's edge and, with the pointer resting on it, a tooltip carries the full name, long enough to wrap onto a second line. Under a right-to-left language the menu reads right to left but the branch name stays left to right: both lines of the tooltip start at its left edge, reading as one left-to-right block, not the second line sitting at the right. Selecting feature/search-ranking switches immediately.",
     ...switchFixture,
     steps: [...openSwitch, (ui) => ui.hoverMenuLabel(longBranch, longBranch)],
   },

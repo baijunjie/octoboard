@@ -202,7 +202,7 @@ it("gives a clipped label the whole of its text as a tooltip while the pointer i
 });
 
 it.each([
-  ["a left-to-right label lays its plain-text tooltip out left to right too", "ltr" as const, "ltr"],
+  ["a left-to-right label lays its plain-text tooltip out left to right too, as a block of its own", "ltr" as const, "ltr"],
   ["a label of any other direction leaves its tooltip to the window's", "auto" as const, null],
 ])("%s", (_, dir, tooltipDir) => {
   // Starts with right-to-left characters, which a tooltip left to the window's direction would
@@ -211,8 +211,11 @@ it.each([
   const { enter, settle, finish } = mount({ dir, clip: "start", titleWhenClipped: name, children: name }, true);
   enter();
   settle();
-  const value = [...tooltip()!.querySelectorAll("span")].find((span) => span.textContent === name);
+  const value = tooltip()!.querySelector("[dir]");
   expect(value?.getAttribute("dir") ?? null).toBe(tooltipDir);
+  // A block, not a run in the tooltip's own line: under a right-to-left window a run's wrapped
+  // lines would align to the right, a left-to-right block's all align to its left.
+  if (value) expect(getComputedStyle(value).display).toBe("block");
   finish();
 });
 

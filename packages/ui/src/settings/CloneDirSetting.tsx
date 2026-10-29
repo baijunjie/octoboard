@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../components/Button";
 import { AnchoredTooltip } from "../components/AnchoredTooltip";
+import { ValueTooltipText } from "../components/ValueTooltipText";
 import { useLatest } from "../components/useLatest";
 import { errorPresentation } from "../errorPresentation";
 import { DirectoryPicker } from "../dialogs/DirectoryPicker";
@@ -88,7 +89,7 @@ export function CloneDirSetting(): React.ReactElement {
           </TextField>
           {/* The field says the whole path while the pointer is on it, the hover being the group's
               and the tooltip anchored to the input inside it. */}
-          {stored !== storedFull && <AnchoredTooltip tooltip={storedFull} anchor={input} hovered={hovered} />}
+          {stored !== storedFull && <AnchoredTooltip tooltip={<ValueTooltipText>{storedFull}</ValueTooltipText>} anchor={input} hovered={hovered} />}
           {/* Not taking focus on a mouse press keeps the field from losing it, and so from sending
               what is typed, just to open the picker. */}
           <div onMouseDown={(event) => event.preventDefault()}>

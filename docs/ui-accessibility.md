@@ -1907,9 +1907,12 @@ stacking context). The formula sets `unicode-bidi: isolate` itself (`FormulaView
   edge from its siblings; it takes `align-match-parent` (in `packages/ui/src/style.css`) to line up with its parent,
   which `FadeOverflow` adds whenever it is given a `dir`.
 - A tooltip is portalled out of the element it describes, so it inherits the window's direction, not the value's. A
-  tooltip that is the value itself in full — a clipped path's or branch name's — says `dir="ltr"` again on the value
-  inside it: `FadeOverflow` does so for a plain-string tooltip on an `ltr` label, which is why a sentence goes in as a
-  node there.
+  tooltip that is the value itself in full — a clipped path's or branch name's, a field's expanded path, a terminal
+  link's URI — says `dir="ltr"` again on the value inside it, and on a block of its own (`ValueTooltipText`): as a run
+  inside the tooltip's right-to-left paragraph, a value long enough to wrap starts its second line at the right, so it
+  no longer reads as one left-to-right value. As a block every line starts at the left. `FadeOverflow` does this for a
+  plain-string tooltip on an `ltr` label, which is why a sentence goes in as a node there; a sentence tooltip keeps
+  the window's direction and alignment.
 
 **A value substituted into a sentence is isolated.** Without it the bidi algorithm reorders the value against the
 sentence around it: `“/Users/dev/app”` reads as `”Users/dev/app/“`, and a trailing full stop or a closing parenthesis

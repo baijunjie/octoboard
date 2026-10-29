@@ -825,6 +825,35 @@ it("hoverAnchored fails where the tooltip that opens is not the one named", asyn
   release(document.querySelector('[aria-label="Codex (not installed)"]')!);
 });
 
+/** A text field in a group whose hover opens a tooltip anchored to the input, as the clone directory field's does. */
+function FieldWithTip({ tip }: { tip?: string }): React.ReactElement {
+  const ref = React.useRef<HTMLInputElement>(null);
+  const { hoverProps, isHovered } = useHover({});
+  return (
+    <div {...hoverProps}>
+      <input ref={ref} aria-label="Directory" defaultValue="~/Projects" />
+      {tip !== undefined && <AnchoredTooltip tooltip={tip} anchor={ref} hovered={isHovered} />}
+    </div>
+  );
+}
+
+it("hoverField puts up the tooltip of the text field it names", async () => {
+  mountForTooltip(<FieldWithTip tip="/Users/dev/Projects" />);
+  await settledLive(createUi(document, "en").hoverField("Directory", "/Users/dev/Projects"));
+  expect(openTooltip()?.textContent).toBe("/Users/dev/Projects");
+  release(document.querySelector("input")!);
+});
+
+it("hoverField fails for a text field with no tooltip", async () => {
+  mountForTooltip(<FieldWithTip />);
+  const done = expect(createUi(document, "en").hoverField("Directory", "/Users/dev/Projects")).rejects.toThrow(
+    /has no tooltip "\/Users\/dev\/Projects": its anchored tooltip is none/,
+  );
+  await vi.advanceTimersByTimeAsync(9000);
+  await done;
+  expect(openTooltip()).toBeNull();
+});
+
 /** A menu item whose label's content (not the item) carries the anchored tooltip, as a clipped menu label does. */
 function ItemWithLabelTip({ tip, disabled }: { tip: string; disabled?: boolean }): React.ReactElement {
   const ref = React.useRef<HTMLSpanElement>(null);
