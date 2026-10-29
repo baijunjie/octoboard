@@ -104,7 +104,7 @@ export function DaemonFailedScreen({ error }: { error: string }): React.ReactEle
       recovery: "none",
       title: <Message id="startup.daemonFailed.title" />,
       content: <div className="flex flex-col gap-4"><p><Message id="startup.daemonFailed.description" /></p><p><Message id="startup.daemonFailed.remedy" /></p></div>,
-      details: <DiagnosticBlock wrap>{error}</DiagnosticBlock>,
+      details: <DiagnosticBlock wrap tall>{error}</DiagnosticBlock>,
     });
   }, [error]);
   return (
