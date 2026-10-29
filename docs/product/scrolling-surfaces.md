@@ -80,10 +80,10 @@ Once it holds more than it can show, each of these fades at its edge:
 - the **screens shown before there is anything to show** (see "The window chrome and the content panel" in
   `docs/product/window-layout.md`): the column of content of each of them;
 - an **empty-state failure** (see "Failures shown on the screen" in `docs/product/error-alerts.md`) taller than the
-  pane, panel or dialog body it fills, and each block of raw text on an empty-state failure's details surface — the
-  stack trace on the screen for a UI that failed and the daemon's message on the screen for a daemon that could not
-  start among them — once it is taller than the height it is held to (see "Names and diagnostic details" in
-  `docs/product/error-alerts.md`).
+  pane, panel or dialog body it fills, and each block of raw text held to a height — on an empty-state failure's
+  details surface, the stack trace on the screen for a UI that failed and the daemon's message on the screen for a
+  daemon that could not start among them, and under **Error details** in the error alerts opened over those two
+  screens — once it is taller than that height (see "Names and diagnostic details" in `docs/product/error-alerts.md`).
 
 Three kinds of scrolling show no fade:
 
@@ -114,10 +114,12 @@ covers. These are:
   buttons sit at the end of that content and the window itself never scrolls, so a long message — the instructions
   of the screen with no daemon address, say — would otherwise leave nothing between those buttons and the top of the
   screen to take focus. In Tab order it comes before the buttons it holds.
-- **a block of raw text on an empty-state failure's details surface** — the stack trace on the screen for a UI that
-  failed and the daemon's message on the screen for a daemon that could not start among them — named "Error details",
-  or by the heading over it where several blocks stand together. Nothing in the block takes focus, so without it the
-  fade at the block's edge would be saying there is more where a keyboard could not go.
+- **a block of raw text held to a height**: one on an empty-state failure's details surface — the stack trace on the
+  screen for a UI that failed and the daemon's message on the screen for a daemon that could not start among them —
+  named "Error details", or by the heading over it where several blocks stand together; and the one under **Error
+  details** in the error alerts opened over those two screens, named by that disclosure's summary, "Error details".
+  Nothing in the block takes focus, and the dialog body around an alert's block scrolls the body, not the block, so
+  without it the fade at the block's edge would be saying there is more where a keyboard could not go.
 - **an empty-state failure taller than the pane, panel or dialog body it fills**, named by its heading. Nothing around
   it scrolls, and its lines and details hold little or nothing that takes focus, so without it what is scrolled out of
   view there would be out of the keyboard's reach.

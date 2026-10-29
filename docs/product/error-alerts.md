@@ -404,12 +404,12 @@ went wrong — and the cause's own text is the raw text. The output retains its 
 order. Long lines scroll horizontally, with a labelled region reachable from the keyboard. Raw text that stands as a
 block of its own — in an alert's body, behind **Error details** or **Details**, on an empty-state failure's details
 surface, or in a mark's popover — sits on a tinted surface of its own rather than directly on what holds it, with
-whatever names it (the disclosure's summary, a heading) outside that surface. A crash's stack trace, which can be
-taller than its room, also scrolls vertically within its block. A daemon's startup failure, written in lines of prose,
-wraps its long lines instead of scrolling sideways. On an empty-state failure's details surface, every block of raw
-text wraps its long lines instead of scrolling sideways, and is at most 40% of the window's height, scrolling
-vertically within itself beyond that; while it does, it is a region named "Error details" (or by the heading over it,
-where several blocks stand together) that the keyboard can reach and scroll. A reason Octoboard words itself remains part of the explanation; it is not turned into a
+whatever names it (the disclosure's summary, a heading) outside that surface. Under **Error details** in the error
+alert for a crash, its stack trace, and in the one for a daemon's startup failure, the daemon's text, wrap their long
+lines instead of scrolling sideways, and the block is at most 40% of the window's height, scrolling vertically within
+itself beyond that; while it does, it is a region named "Error details" that the keyboard can reach and scroll. On an
+empty-state failure's details surface, every block of raw text does the same, its region named "Error details" or, where
+several blocks stand together, by the heading over it. A reason Octoboard words itself remains part of the explanation; it is not turned into a
 diagnostic block simply because it accompanies an error. Unrecognized daemon messages retain the daemon's own readable
 wording as their raw text, after the sentence of an uncatalogued failure (see "Failures shown on the screen" above).
 These rules hold wherever the failure is shown: in an error alert, where such output is under Error details, in a
