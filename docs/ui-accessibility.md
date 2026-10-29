@@ -949,8 +949,9 @@ the surface around it does not forbid selection. It is accepted there because th
 Every tab strip, including agent tabs, uses its content width and is start-aligned in the current reading direction.
 Constrain the painted strip as well as the list and individual tab allocation; tabs do not stretch to fill the row.
 The strip is bounded by its available width and scrolls when its content does not fit. A surrounding pinned header
-and its end actions may span the section while the transparent tab list keeps its content width. Keep the scrolling
-and focus-ring clearance specified under "Visible focus".
+and its end actions, or the divider drawn under the strip (the agent tabs of the rail's quota panel), may span the
+section while the transparent tab list keeps its content width. Keep the scrolling and focus-ring clearance specified
+under "Visible focus".
 
 ### Progress of a long operation
 

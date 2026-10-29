@@ -43,7 +43,7 @@ available width, and begin at the reading direction's start. Each tab keeps its 
 fill the row; a filled tab list's background ends with the list. Overflow scrolls sideways, and arrow-key navigation
 reveals the focused tab with clearance for its focus ring. Settings' agent header spans the section with its opaque
 pinned surface, divider and actions at the end; its transparent tab list occupies only the space its contents need
-within it.
+within it. The divider under the rail quota panel's agent tabs likewise spans the whole panel.
 
 ## The surfaces that fade
 
