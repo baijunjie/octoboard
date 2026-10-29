@@ -219,6 +219,36 @@ it.each([
   finish();
 });
 
+it.each([
+  ["a monospace left-to-right label's plain-text tooltip is monospace too", "ltr" as const],
+  ["a monospace label of any other direction gives its plain-text tooltip its font too", "auto" as const],
+])("%s", (_, dir) => {
+  // The label's font comes from a class, as `font-mono` gives it, not from anything passed to the
+  // label: the tooltip has to find it on the label itself.
+  const sheet = document.head.appendChild(document.createElement("style"));
+  sheet.textContent = ".mono { font-family: ui-monospace, monospace; }";
+  onTestFinished(() => sheet.remove());
+  const id = "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0";
+  const { enter, settle, finish } = mount({ dir, className: "mono", titleWhenClipped: id, children: id }, true);
+  enter();
+  settle();
+  const text = [...tooltip()!.querySelectorAll("*")].find((element) => element.textContent === id && element.children.length === 0);
+  expect(text && getComputedStyle(text).fontFamily).toBe("ui-monospace, monospace");
+  finish();
+});
+
+it("leaves a sentence tooltip, passed as a node, in the tooltip's own font", () => {
+  const sheet = document.head.appendChild(document.createElement("style"));
+  sheet.textContent = ".mono { font-family: ui-monospace, monospace; }";
+  onTestFinished(() => sheet.remove());
+  const { enter, settle, finish } = mount({ dir: "ltr", className: "mono", titleWhenClipped: <span>Copy the session ID</span>, children: "0f1e2d3c" }, true);
+  enter();
+  settle();
+  const sentence = [...tooltip()!.querySelectorAll("span")].find((element) => element.textContent === "Copy the session ID");
+  expect(sentence && getComputedStyle(sentence).fontFamily).not.toBe("ui-monospace, monospace");
+  finish();
+});
+
 it("gives a label that fits no tooltip repeating what it already shows", () => {
   const { enter, settle, finish } = mount({ titleWhenClipped: "short", children: "short" }, false);
   enter();

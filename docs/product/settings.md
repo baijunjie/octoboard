@@ -202,7 +202,8 @@ directories" in `docs/product/projects.md`), showing the directory a repository 
 from a git URL and no other directory is named. It is `~/Projects` until the user sets one. The field shows the
 directory in a monospace font, with the daemon host's home directory written as `~` under the same rules as in "How
 paths are shown" above, and the full path as the field's tooltip, while the pointer is on the field, whenever the two
-differ; it reads left to right in every language (see "How a tooltip behaves" in
+differ; the tooltip is in monospace like the field and reads left to right in every language (see "How a tooltip
+behaves" in
 `docs/product/labels-and-tooltips.md`). The daemon stores the
 directory expanded, as an absolute path without a trailing slash; a leading `~/` in what is sent is expanded again. The
 value is sent when the field loses focus or Enter is pressed, and at once when a directory is picked; a value equal to

@@ -278,8 +278,7 @@ interface FadeOverflowProps {
   /** The element's text direction, for content whose direction is not the UI's: `ltr` for a path or
    * a branch name, `auto` for a name the user typed. The fade follows the direction the element
    * resolves to, while text that fits stays aligned the way its surroundings are. On an `ltr` label
-   * a plain-string tooltip is laid out left to right too, so it is the value itself; a sentence
-   * goes in as a node. */
+   * a plain-string tooltip is laid out left to right too. */
   dir?: "ltr" | "rtl" | "auto";
   /** Language of the text when it differs from the surrounding UI. */
   lang?: string;
@@ -288,11 +287,15 @@ interface FadeOverflowProps {
    * readable, a branch name whose last segment is what tells it from its siblings). */
   clip?: "start" | "end";
   /** The tooltip the text carries only while an edge is clipped, so a name that fits does not
-   * grow a tooltip repeating itself. `null`, `false` and `undefined` mean none. */
+   * grow a tooltip repeating itself. `null`, `false` and `undefined` mean none. A plain string is
+   * taken for the label's value in full and drawn as one (see `ValueTooltipText`), in the label's
+   * font family and, on an `ltr` label, left to right; a sentence goes in as a node, which keeps the
+   * tooltip's own font and the window's direction. */
   titleWhenClipped?: React.ReactNode;
   /** The tooltip the text carries whatever is clipped, for text that stands for something longer
    * than it shows even while it fits (an abbreviated path); takes the place of
-   * `titleWhenClipped`. `null`, `false` and `undefined` mean none. */
+   * `titleWhenClipped`, and a plain string is drawn as it is there. `null`, `false` and `undefined`
+   * mean none. */
   title?: React.ReactNode;
   /** Off to keep a clipped label still on hover (see `useMarquee`); on by default. */
   marquee?: boolean;
@@ -401,9 +404,9 @@ export function FadeOverflow({
   const mask = maskImage(fade, clipped);
   const shownTitle = hasTitle(title) ? title : clipped.start || clipped.end ? titleWhenClipped : undefined;
   // A plain-text tooltip is the label's own value in full, and the tooltip surface is portalled out
-  // of the label, so a left-to-right value (a path, a branch name) carries its direction over
-  // rather than taking the window's.
-  const tooltip = dir === "ltr" && typeof shownTitle === "string" ? <ValueTooltipText>{shownTitle}</ValueTooltipText> : shownTitle;
+  // of the label, so it carries the label's font over, and a left-to-right value (a path, a branch
+  // name) its direction too, rather than taking the window's.
+  const tooltip = typeof shownTitle === "string" ? <ValueTooltipText label={ref} dir={dir === "ltr" ? "ltr" : undefined}>{shownTitle}</ValueTooltipText> : shownTitle;
   // The pointer is followed only where a tooltip was asked for, and from the prop rather than from
   // what is clipped right now, so that a label clipped while the pointer is already on it cannot
   // be left hovered for good.
