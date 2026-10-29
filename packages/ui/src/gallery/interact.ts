@@ -309,8 +309,10 @@ export interface Ui {
    * `[data-slot=label]` holds), not to the item: the tooltip is that content's, and a real pointer
    * reaches it only where the label lets it through. The tooltip is the anchored shape, found as in
    * `hoverAnchored`, and the step fails unless it reads `tooltip`, which also catches a label that is
-   * not clipped (nothing opens). */
-  hoverMenuLabel: (item: Matcher, tooltip: string) => Promise<void>;
+   * not clipped (nothing opens). A label that holds more than one line (a title with an identifier beneath
+   * it) has the tooltip on one of them: `line` names it by its text, and the pointer goes to the innermost
+   * element of the label that reads exactly that, as a real pointer lands on the line itself. */
+  hoverMenuLabel: (item: Matcher, tooltip: string, line?: Matcher) => Promise<void>;
   /** Moves the pointer onto the status letter of the change row named `row` and leaves it there, as
    * `hoverIndicator` does, for the tooltip that names `status`. The letter is `aria-hidden` and its
    * tooltip is the anchored shape, which is mounted only while the pointer is on the letter and is
@@ -896,11 +898,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       await hover(() => find(host), `Nothing to hover matching ${String(host)}`);
       await expectAnchoredTooltip(`The control matching ${String(host)}`, tooltip);
     },
-    async hoverMenuLabel(item, tooltip) {
-      await hover(
-        () => findMenuItem(item)?.querySelector<HTMLElement>("[data-slot=label] > *") ?? undefined,
-        `Nothing to hover in the label of the menu item matching ${String(item)}`,
-      );
+    async hoverMenuLabel(item, tooltip, line) {
+      await hover(() => {
+        const label = findMenuItem(item)?.querySelector<HTMLElement>("[data-slot=label]");
+        if (!label) return undefined;
+        if (line === undefined) return label.firstElementChild as HTMLElement | null;
+        const reading = Array.from(label.querySelectorAll<HTMLElement>("*")).filter((element) =>
+          matches(line, withoutIsolates(element.textContent ?? "").trim()),
+        );
+        return reading.find((element) => !reading.some((other) => other !== element && element.contains(other)));
+      }, `Nothing to hover in the label of the menu item matching ${String(item)}${line === undefined ? "" : ` that reads ${String(line)}`}`);
       await expectAnchoredTooltip(`The label of the menu item matching ${String(item)}`, tooltip);
     },
     async floatPane(toggle) {

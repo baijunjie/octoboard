@@ -662,10 +662,10 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Menu of a session that was never used",
-    description: "Dividers separate Lock and Pin, Rename and Copy session ID, Hand off, and the final Delete, with no group headings. Lock, Pin and Copy session ID show their platform modifier + Shift keyboard shortcuts at the right edge; Delete has no archive shortcut hint. Copy session ID stays directly after Rename, with the UUID in smaller muted monospace text on one line beneath its label; overflow fades at the end without wrapping, and hovering the ID line scrolls it while the label and icon stay still, inside the same clickable item. The last entry is the destructive Delete in place of Archive. Close the menu and hover or focus the unused row: its Delete shortcut sits immediately before the actions menu, and the untouched Claude Code, Codex and Grok sessions all delete immediately, moving any native records to the Trash without confirmation.",
+    description: "Dividers separate Lock and Pin, Rename and Copy session ID, Hand off, and the final Delete, with no group headings. Lock, Pin and Copy session ID show their platform modifier + Shift keyboard shortcuts at the right edge; Delete has no archive shortcut hint. Copy session ID stays directly after Rename, with the UUID in smaller muted monospace text on one line beneath its label; overflow fades at the end without wrapping, and the pointer rests on the ID line, whose tooltip shows the full ID, left to right (hovering the line also scrolls it while the label and icon stay still, inside the same clickable item). The last entry is the destructive Delete in place of Archive. Close the menu and hover or focus the unused row: its Delete shortcut sits immediately before the actions menu, and the untouched Claude Code, Codex and Grok sessions all delete immediately, moving any native records to the Trash without confirmation.",
     state: unusedState,
     sessionRecords: { [unusedSession.id]: "absent", [unusedCodex.id]: "unknown", [unusedGrok.id]: "present" },
-    steps: [openUnusedMenu],
+    steps: [openUnusedMenu, (ui) => ui.hoverMenuLabel(ui.t("sidebar.session.copyId"), unusedSession.id, unusedSession.id)],
   },
   {
     id: "dialog-switch-account",

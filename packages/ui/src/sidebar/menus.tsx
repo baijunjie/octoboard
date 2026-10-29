@@ -300,9 +300,10 @@ export function sessionMenu(
       content: (
         <span className="flex min-w-0 max-w-full flex-col">
           <span>{t("sidebar.session.copyId")}</span>
-          {/* The ID runs as a marquee under the pointer on it alone, not on the whole item. */}
+          {/* The ID runs as a marquee under the pointer on it alone, not on the whole item. An ID is known by
+              its beginning, so it is cut at its end. */}
           <span aria-hidden="true" data-marquee-scope className="min-w-0">
-            <FadeOverflow as="span" dir="ltr" className="block font-mono text-xs text-app-muted">{session.id}</FadeOverflow>
+            <FadeOverflow as="span" dir="ltr" className="block font-mono text-xs text-app-muted" titleWhenClipped={session.id}>{session.id}</FadeOverflow>
           </span>
         </span>
       ),
