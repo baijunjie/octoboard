@@ -168,10 +168,18 @@ export interface Scenario {
   title: string;
   /** Said under the title in the gallery; what to look at. */
   description?: string;
-  /** The window width the gallery page opens it at, over a width chosen for an earlier scenario; the
-   * `docked` breakpoint is 1168. Left out for `DEFAULT_WIDTH`; see "The UI state gallery" in
-   * `packages/ui/README.md` for when a scenario earns a width of its own. */
+  /** The window width the gallery page opens it at, over a width chosen for an earlier scenario; the `docked`
+   * breakpoint is 1168. Left out for `DEFAULT_WIDTH`. Only for a target that can be reached in a band of widths the
+   * default is outside of, where the steps cannot get there at whatever width the page's control picks (a swipe, the
+   * open drawer card itself): a width inside that band, and the title or description says what it buys. Never for the
+   * same state seen at another width, which the control shows; see "The UI state gallery" in
+   * `packages/ui/README.md`. */
   width?: number;
+  /** The narrowest window its target exists in: a width chosen with the page's control, or by the sweep's `--width`,
+   * below it is raised to it. For what exists only in a docked window (a card floated in by hovering a toggle, a
+   * pane's width handle, Maximize panel, the hidden docked sidebar), which no width chosen below it shows. A
+   * comment beside it says why. A scenario carries this or `width`, not both. */
+  minWidth?: number;
   /** The window height the gallery page opens it at, as `width` is for the width; left out for a
    * window that fits the page. For a scenario that rests on a window too short for its dialog,
    * whose body then scrolls: that cannot be left to the height of whatever browser opens it. */

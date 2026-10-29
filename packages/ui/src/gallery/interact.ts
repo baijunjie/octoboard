@@ -2,6 +2,7 @@ import { AGENT_OPTIONS } from "../agents";
 import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../gitStatusLabel";
 import { format, type MessageArgs, type MessageKey } from "../i18n/catalog";
 import type { Language } from "../i18n/languages";
+import { minWidthQuery } from "../layout/breakpoint";
 import { panelId, type PanelKind } from "../panels/stackState";
 import { DORMANT_STATUSES, LIVE_STATUSES, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type GitStatus } from "../protocol";
 import { activityLabel, statusLabel } from "../sessionLabel";
@@ -125,6 +126,13 @@ const TOOLTIP_TRIGGER = "[data-slot=tooltip-trigger]";
 const AGENT_TERMINAL = '[data-region="terminal"]';
 
 const POLL_MS = 50;
+/** What the sidebar's drawer is given to finish sliding in, after its toggle is pressed. */
+const DRAWER_SETTLE_MS = 300;
+/** How long a lookup that finds only a same-named control in the closed drawer waits before opening it: the control it
+ * names may merely be slow to render outside the drawer, and the drawer must not open for it. */
+const DRAWER_REACH_AFTER_MS = 200;
+/** What the sidebar's closed drawer holds inert: the sidebar itself and, below the phone breakpoint, the rail. */
+const DRAWER_REGIONS = '[data-region="sidebar"], [data-region="rail"]';
 const TIMEOUT_MS = 5000;
 /** For a dialog that opens a file in the viewer, whose code is loaded the first time one is shown (a lazy
  * chunk the gallery's dev server serves unbundled): on a heavily loaded machine that takes seconds. */
@@ -173,6 +181,17 @@ export interface Ui {
    * returns once that popover is up, and fails if none opens, which also catches a control with no touch
    * popover. */
   touchPress: (matcher: Matcher) => Promise<void>;
+  /** Brings the right-pane panel of the toggle `kind` names into view where it is not yet: below the phone breakpoint
+   * its panels float and none is open until its toggle is pressed, where a docked window has it open already, so this
+   * presses the "Show" toggle when there is one and does nothing when the panel is shown. A step that presses a control
+   * in a panel starts with it, after the session is selected, so that the scenario runs at any width the page's
+   * control picks; a closed panel's content is not in the page, so nothing else finds it. */
+  showPanel: (kind: "files" | "terminal" | "report") => Promise<void>;
+  /** Closes the sidebar's drawer if it is open: below the docked breakpoint, where the toggle reads "Hide sessions"
+   * while the drawer is up. In a docked window, where the sidebar is not a drawer, and with the drawer already closed,
+   * it does nothing. Called right after a pick whose target is in the terminal area: a pick closes the drawer below
+   * the phone breakpoint but leaves it up above it, over the terminal's left side. */
+  closeDrawer: () => Promise<void>;
   /** Swipes a finger sideways across the middle of the window, `toward` the edge at the start or the end of the
    * line (the left or the right edge in left-to-right text, the other way round in right-to-left, as the document's
    * `dir` says): the touch
@@ -485,13 +504,41 @@ export async function settleMotion(doc: Document, limit: number): Promise<void> 
 export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+  /** Whether the window is narrower than `breakpoint`. A document whose stylesheet does not declare the breakpoint (a
+   * unit test's) is never narrow. */
+  const below = (breakpoint: "docked" | "phone"): boolean => {
+    try {
+      return !(doc.defaultView ?? window).matchMedia(minWidthQuery(breakpoint)).matches;
+    } catch {
+      return false;
+    }
+  };
+
+  /** Whether the last lookup (`findAll`) found nothing it could press but did find, in the sidebar's closed drawer,
+   * what it was looking for. Below the docked breakpoint the sidebar's session rows are in the drawer and, below the
+   * phone one, the rail too, both inert until the drawer is open; a step names such a control as it would in a docked
+   * window, and `waitFor` then opens the drawer, as the person pressing the toggle first would, so that no step needs
+   * to know the window's width. It does so only once the lookup has found nothing else for `DRAWER_REACH_AFTER_MS`,
+   * so a control that is merely slow to render is not met by a drawer opened for a same-named one inside it. */
+  let inClosedDrawer = false;
+
+  /** Presses the sidebar toggle that opens the drawer, if the window has it closed. */
+  const openDrawer = async (): Promise<void> => {
+    inClosedDrawer = false;
+    const show = t("titleBar.sidebar.show");
+    await clickWhenFound(() => find(show), `The drawer holds a control to press, but nothing is named ${show} to bring it in`);
+    // The drawer slides in over the 240ms of its transition; a pointer put on a control still moving opens no tooltip.
+    await wait(DRAWER_SETTLE_MS);
+  };
+
   /** Polls for what `look` finds, up to the timeout, so a step can name something a press or a
    * render has not yet brought into the page. */
   const waitFor = async <T>(look: () => T | undefined, missing: string, timeout = TIMEOUT_MS): Promise<T> => {
     for (let waited = 0; waited <= timeout; waited += POLL_MS) {
       const found = look();
       if (found !== undefined) return found;
-      await wait(POLL_MS);
+      if (inClosedDrawer && waited >= DRAWER_REACH_AFTER_MS) await openDrawer();
+      else await wait(POLL_MS);
     }
     throw new Error(missing);
   };
@@ -522,7 +569,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
   };
 
   const findAll = (matcher: Matcher, root: ParentNode = doc): HTMLElement[] => {
+    inClosedDrawer = false;
     const named = Array.from(root.querySelectorAll<HTMLElement>(PRESSABLE)).filter((element) => isEnabled(element) && matches(matcher, nameOf(element)));
+    if (named.length === 0 && root === doc) {
+      if (below("docked")) {
+        inClosedDrawer = Array.from(root.querySelectorAll<HTMLElement>(PRESSABLE)).some((element) => {
+          const away = element.closest("[inert]");
+          return away !== null && away.matches(DRAWER_REGIONS) && !element.hasAttribute("disabled") && matches(matcher, nameOf(element));
+        });
+      }
+    }
     // A control that stands inside another of the same name is the one to press: a section heading
     // is a `role="row"` band holding the button that folds it, and the band does nothing.
     return named.filter((element) => !named.some((other) => other !== element && element.contains(other)));
@@ -547,8 +603,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       if (!view) return undefined;
       for (let y = 0; y < view.rows(); y++) {
         const col = view.row(y).indexOf(text);
-        if (col >= 0) return { view, col, y };
+        if (col >= 0) return { view, col, y, length: text.length };
       }
+      // In a narrow window the text wraps: a row is a screen's width of cells, so the rows read end to end say where it
+      // begins, and the pointer goes on its first row, where the link starts.
+      const cols = view.cols();
+      const joined = Array.from({ length: view.rows() }, (_, y) => view.row(y)).join("");
+      const at = joined.indexOf(text);
+      if (at >= 0) return { view, col: at % cols, y: Math.floor(at / cols), length: Math.min(text.length, cols - (at % cols)) };
       return undefined;
     }, `No terminal row holds ${text}`);
     const screen = doc.querySelector(`${AGENT_TERMINAL} .xterm-screen`);
@@ -556,7 +618,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     const box = screen.getBoundingClientRect();
     const cellWidth = box.width / found.view.cols();
     const cellHeight = box.height / found.view.rows();
-    const at = { clientX: box.x + (found.col + text.length / 2) * cellWidth, clientY: box.y + (found.y + 0.5) * cellHeight };
+    const at = { clientX: box.x + (found.col + found.length / 2) * cellWidth, clientY: box.y + (found.y + 0.5) * cellHeight };
     const rows = Array.from({ length: found.view.rows() }, (_, y) => y).filter((y) => y !== found.y);
     const blank = rows.filter((y) => found.view.row(y).trim() === "").sort((a, b) => Math.abs(a - found.y) - Math.abs(b - found.y))[0];
     const awayRow = blank ?? (found.y > 0 ? found.y - 1 : found.y + 1);
@@ -989,7 +1051,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
       }
     },
     async hoverTerminalLink(text) {
-      await pointTerminalText(text);
+      // Until xterm has the link, a hover over it is nothing: a busy page is slow to have it, so wait for its cursor
+      // first.
+      await pointOnTerminalLink(text);
       await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
       await waitFor(
         () => doc.querySelector("[data-anchored-tooltip]") ?? undefined,
@@ -1119,6 +1183,17 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon): Ui
     },
     async pressMenuItem(matcher) {
       await clickWhenFound(() => findAll(matcher).find((element) => element.matches('[role="menuitem"]')), `No menu item matching ${String(matcher)}`);
+    },
+    async showPanel(kind) {
+      const [show, hide] = [t(`titleBar.${kind}.show`), t(`titleBar.${kind}.hide`)];
+      const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to bring the panel in with`);
+      if (nameOf(toggle) === show) await clickWhenFound(() => toggle, "");
+    },
+    async closeDrawer() {
+      if (!below("docked")) return;
+      const [show, hide] = [t("titleBar.sidebar.show"), t("titleBar.sidebar.hide")];
+      const toggle = await waitFor(() => find((name) => name === show || name === hide), `Nothing is named ${show} or ${hide} to close the drawer with`);
+      if (nameOf(toggle) === hide) await clickWhenFound(() => toggle, "");
     },
     async swipe(toward) {
       const view = doc.defaultView!;

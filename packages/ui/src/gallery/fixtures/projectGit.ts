@@ -697,6 +697,7 @@ const preferences = gitMode();
 /** Selects a session of the project, whose browser then shows the Changes tab. */
 const selecting = (session: { title: string }) => [
   (ui: Ui) => ui.press(ui.session(session.title)),
+  (ui: Ui) => ui.showPanel("files"),
   (ui: Ui) => ui.wait(600),
 ];
 const openGit = selecting(sessions[1]);
@@ -723,21 +724,10 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "The project folder's branch",
-    description: "The branch selector starts on main, the branch checked out where the project's folder is, and the line above the list says it forked from origin/main at the very commit it is at, so nothing is unpushed and Committed has no rows. Staged, unstaged and untracked changes share the list, with server.ts selected and its rounded highlight spaced like Files rows. Collapse a section to watch the following rows slide into place, and right-click a row for Copy path and the Open in submenu, which groups File manager and Default application. The header reads the project name, the Files and Changes tabs, then the icon buttons and Close panel.",
+    description: "The branch selector starts on main, the branch checked out where the project's folder is, and the line above the list says it forked from origin/main at the very commit it is at, so nothing is unpushed and Committed has no rows. Staged, unstaged and untracked changes share the list, with server.ts selected and its rounded highlight spaced like Files rows. Collapse a section to watch the following rows slide into place, and right-click a row for Copy path and the Open in submenu, which groups File manager and Default application. The header reads the project name, the Files and Changes tabs, then the icon buttons and Close panel. Choose the Docked width (1168px, the narrowest docked window, which leaves the pane its 320px minimum) to inspect the header: Files and Changes stay fully visible beside Close panel, the project name gives up its space first, and when the remaining icon controls no longer fit they fade at the clipped edge and scroll horizontally without moving the tabs or Close panel.",
     state,
     preferences,
     steps: [...openGit, (ui) => ui.press(ui.changeRow("server.ts", "modified")), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
-  },
-  {
-    id: "git-changes-narrow-header",
-    group: GROUP,
-    category: "normal",
-    title: "Project pane header at the narrowest docked width",
-    width: 1168,
-    description: "The 1168px minimum window width leaves the docked project pane its 320px minimum. Files and Changes stay fully visible beside Close panel. The project name gives up its space first; when the remaining icon controls no longer fit, they fade at the clipped edge and scroll horizontally without moving the tabs or Close panel.",
-    state,
-    preferences,
-    steps: [...openGit, (ui) => ui.wait(300)],
   },
   {
     id: "git-changes-conflicts",
@@ -1207,6 +1197,7 @@ const reviewScenarios: Scenario[] = [
     steps: [
       // The row is named as the sidebar names a session with a task, which is also what the badge says.
       (ui) => ui.press(ui.session(ui.t("session.displayTitle", { title: RANKING_TASK, name: rankingSession.title }))),
+      (ui) => ui.showPanel("files"),
       (ui) => ui.wait(600),
       (ui) => ui.press("feature/ranking-experiments"),
       (ui) => ui.wait(400),

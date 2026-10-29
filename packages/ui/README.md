@@ -85,9 +85,22 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   file name. Keep failed subjects out of normal navigation.
 - `state` is built with `snapshotState` from `builders.ts`, so a protocol change breaks it at typecheck. State that
   lives in a component rather than the store (a dialog, the archive view, the selected session) is reached with the
-  shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; a control inside an `[inert]` subtree, like the rail below `phone`, cannot be pressed; `ui.confirm()`
-  presses a dialog's confirming button, `ui.contextMenu` opens a row's right-click menu, `ui.touchPress` and `ui.tapTopBarStatus` press with a finger,
-  for the popover a touch opens in place of a tooltip; `ui.swipe` swipes a finger across the window (the touch events `useSwipe` reads) to open or close a phone-width drawer or floating panel; `ui.hoverStatusMark` rests the mouse on a status mark and waits for its non-modal popover, where `ui.touchPressStatusMark` opens the press form with focus inside; `ui.openGitFailure` does the same for a git badge's failure mark, in a given sidebar row or in focus mode's header; a raw-text disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`).
+  shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`; `ui.confirm()`
+  presses a dialog's confirming button, `ui.contextMenu` opens a row's right-click menu, `ui.touchPress` and
+  `ui.tapTopBarStatus` press with a finger, for the popover a touch opens in place of a tooltip; `ui.swipe` swipes a
+  finger across the window (the touch events `useSwipe` reads) to open or close a phone-width drawer or floating panel;
+  `ui.hoverStatusMark` rests the mouse on a status mark and waits for its non-modal popover, where
+  `ui.touchPressStatusMark` opens the press form with focus inside; `ui.openGitFailure` does the same for a git badge's
+  failure mark, in a given sidebar row or in focus mode's header; a raw-text disclosure of an error alert is opened with
+  `ui.press(ui.t("error.diagnostics"))`).
+- Steps run at any width the page's width control picks (the frame reloads at the chosen width), so they name controls
+  as they would in a docked window. A session row or rail control that sits only in the sidebar's closed drawer (inert
+  below `docked` for the rows, below `phone` for the rail) makes the lookup press the drawer's toggle first, once the
+  control has not shown up anywhere else for a moment. A panel of the right pane is not reached so: below `phone` the
+  panels float, none is open and a closed one is not in the page, so a step that presses a control in one calls
+  `ui.showPanel("files" | "terminal" | "report")` after selecting the session, which presses the panel's Show toggle and
+  does nothing where its Hide toggle shows. Where a session pick leaves the drawer up over the terminal area the target
+  is in (from 782px up to 1168px), follow the pick with `ui.closeDrawer()`, before the step that acts on the target.
 - Other fields of the scenario type (`scenario.ts`) include `preferences` (what the app persists), `toasts` (a toast's `message` may be a function of `t`, worded in the viewing language; kind `"session_notice"` is routed as the daemon's own notice is),
   `sessionOpenError`, `terminal: "refuse"`, `clipboard: "unavailable"` (a plain browser over insecure http),
   `shellTerminal` (how the Terminal panel's shell terminals behave: `"shell"` at its prompt by default, or `"refuse"`; an exited shell
@@ -154,12 +167,19 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
   fixture daemon refuses an import result that does not follow from what the steps asked for. Like the real daemon, it echoes the document's `keyboard_shortcuts` in a result's `settings_applied` (the client applies them
   itself), so a result is written without them.
   `fixtures/configuration.test.ts` holds the written results to the daemon's rules.
-- Write no `width` unless the window itself is part of the scenario (the page opens at 1440): set one where steps open
-  a drawer (the sidebar's, which exists only below the breakpoint) or the layout under test is about a single width, and say in the
-  title or description what that width buys. Write a `height` only where a step needs the window too short for a
-  dialog's body, which then scrolls (`ui.tabToRegion` finds none in a tall window). A scenario that merely wants to be
-  seen narrow or short uses the page's width and height controls; a copy differing only by width earns nothing. A
-  chosen width stays on scenarios that carry none, and is dropped on picking one that carries its own.
+- Write no `width` unless the window itself is part of the scenario (the page opens at 1440). A copy of a scenario made
+  to open the drawer first, or because its layout differs at a width, earns nothing: choose the width with the control,
+  and write the pointer ("choose 560px to see the rows stack") in the description of the scenario that shows the state.
+  Set a `width` only where the target can be reached only in a band of widths the default 1440 is outside of, and steps
+  cannot get there at whatever width the control picks: a swipe, or the open drawer card itself, where pressing the
+  drawer's toggle is fine because the open drawer is the target (`focus-console-session-drawer`,
+  `focus-project-drawer`). Pick a width inside that band, and say in the title or description what it buys. What exists
+  only in a docked window (a card floated in by hovering a toggle, a pane's width handle, Maximize panel, the hidden
+  docked sidebar) states `minWidth` instead, the narrowest window it exists in, which a width chosen with the control or
+  by `--width` is raised to; a scenario carries one or the other, and a comment beside `minWidth` says why. Write a
+  `height` only where a step needs the window too short for a dialog's body, which then scrolls (`ui.tabToRegion` finds
+  none in a tall window). A scenario that merely wants to be seen narrow or short uses the page's width and height
+  controls. A chosen width stays on scenarios that carry none, and is dropped on picking one that carries its own.
 - `held: true` opens a scenario with the shortcut modifier held, for a view that exists only while it is held: the
   new-session "+" buttons' quick form. The viewer can still choose Released with the page's Modifier control, and like
   a width that choice stays on scenarios that carry none and is dropped on picking one that carries its own. The
@@ -219,9 +239,11 @@ fixture daemon (`src/gallery/fixtureDaemon.ts`). `pnpm gallery` serves it on por
 #### Sweeping the gallery
 
 `pnpm gallery:sweep [ids or patterns]` loads the selected scenarios (all by default) in a headless browser and fails on
-any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--lang`, `--theme`, `--list`, `--url`,
-...). It loads the scenarios it is given, every time; run it on the scenarios just written or changed and the ones shown
-for confirmation.
+any gallery failure; `pnpm gallery:sweep --help` lists the flags (`--group`, `--lang`, `--theme`, `--width`, `--list`,
+`--url`, ...). `--width 420,800` loads each scenario that carries no width of its own at those widths, as the page's
+width control would, to prove that its steps hold in a narrow window. It loads the scenarios it is given, every time;
+run it on the scenarios just written or changed, at the default width and again with `--width 420,800`, and on the ones
+shown for confirmation.
 
 Playwright installs no browser: run `pnpm exec playwright install chromium` from `packages/ui` once, or point
 `--chromium <path>` / `OCTOBOARD_CHROMIUM` (or `--playwright <dir>` / `OCTOBOARD_PLAYWRIGHT`) at an existing one.

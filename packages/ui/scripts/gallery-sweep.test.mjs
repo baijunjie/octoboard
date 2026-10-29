@@ -100,6 +100,15 @@ test("a language the app does not offer stops the sweep", async () => {
   expect(result.output).toContain("--lang names no such language: fr");
 });
 
+test("--width loads each scenario at every width named, and rejects a width that is no pixel count", async () => {
+  const widths = await run("normal", ["--width", "420,800"]);
+  expect(widths).toMatchObject({ code: 0 });
+  expect(widths.output).toContain("1 scenario x en x light x 420, 800px = 2 loads");
+  const bad = await run("normal", ["--width", "narrow"]);
+  expect(bad.code).toBe(2);
+  expect(bad.output).toContain("--width is a comma-separated list of positive whole numbers");
+}, 40_000);
+
 test("a page load waits while every heavy-step slot is held", async () => {
   const state = newState();
   const { acquireSlot } = await import("../../../scripts/verify/lock.mjs");
