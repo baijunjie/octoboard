@@ -30,7 +30,9 @@ const REVEAL_QUIET_MS = 100;
  * is called with the whole new order and the agent moved when one is dropped elsewhere; the order itself
  * stays the caller's, and the tabs fall back to `agents` until it changes, so the caller shows the new
  * order at once. Tabs added, removed or reordered while the strip is shown move with the shared list motion.
- * `trailing` is a control at the end of the strip, flush with the container's end.
+ * `trailing` is a control at the end of the strip, flush with the container's end. With a trailing control, or with
+ * `spanning` when there is none (for a divider drawn under it), the container spans its row; the tabs keep their
+ * content width either way.
  * The container is padded at its end (`trailingWidth`, a Tailwind end-padding class) so the tabs scroll clear of it,
  * and HeroUI's scroll-forward chevron, which would sit under it, is moved to just before it.
  * `tabActions` gives each agent a control of its own at the end of its tab (see `useTabActionPlaces`): a tab is itself
@@ -47,6 +49,7 @@ export function AgentTabList({
   onReorder,
   trailing,
   trailingWidth = "pe-14",
+  spanning,
   tabActions,
   ...container
 }: {
@@ -58,6 +61,7 @@ export function AgentTabList({
   onReorder?: (agents: Agent[], moved: Agent) => void;
   trailing?: React.ReactNode;
   trailingWidth?: string;
+  spanning?: boolean;
   tabActions?: (agent: Agent) => React.ReactNode;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, "children">): React.ReactElement {
   const tabScrollLabels = useTabScrollLabels();
@@ -95,7 +99,7 @@ export function AgentTabList({
     <Tabs.ListContainer
       {...container}
       data-trailing-control={trailing ? "" : undefined}
-      className={`min-w-0 max-w-full ${trailing ? trailingWidth : "w-max self-start"} ${container.className ?? ""}`}
+      className={`min-w-0 max-w-full ${trailing ? trailingWidth : spanning ? "" : "w-max self-start"} ${container.className ?? ""}`}
       render={(props) => (
         <div {...props}>
           {tabScrollLabels(props.children)}

@@ -295,6 +295,7 @@ function QuotaPanel({ shownAgent, shownAccount, inUse, focusSelectedTab, emphasi
             agents={listed.map(({ agent }) => agent)}
             label={t("rail.quota.agents")}
             tabRef={(agent) => (focusSelectedTab && agent === selected ? focusOnce : undefined)}
+            spanning
             className="groove-b"
           />
           {/* The panel is anchored by its bottom edge to the rail's button and closes once the pointer
