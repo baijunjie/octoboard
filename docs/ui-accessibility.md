@@ -1872,6 +1872,10 @@ stacking context). The formula sets `unicode-bidi: isolate` itself (`FormulaView
   and the two stop reading as one control (`packages/ui/src/settings/CloneDirSetting.tsx`).
 - `dir` sets direction, not alignment. It does not override an inherited `text-align`, so an element that needs both
   keeps its alignment class as well.
+- A tooltip is portalled out of the element it describes, so it inherits the window's direction, not the value's. A
+  tooltip that is the value itself in full — a clipped path's or branch name's — says `dir="ltr"` again on the value
+  inside it: `FadeOverflow` does so for a plain-string tooltip on an `ltr` label, which is why a sentence goes in as a
+  node there.
 
 **A value substituted into a sentence is isolated.** Without it the bidi algorithm reorders the value against the
 sentence around it: `“/Users/dev/app”` reads as `”Users/dev/app/“`, and a trailing full stop or a closing parenthesis
@@ -1896,7 +1900,7 @@ Two cases take no isolate, and putting one there breaks something:
   content, so only a value going into a *string* needs `isolate`. A string wholly wrapped in an isolate also has no
   strong character left for `dir="auto"` to read, which can lay the element out left to right.
 
-`packages/ui/src/browser/BranchSelect.tsx` keeps the branch name plain for `textValue` and its LTR primary label.
+`packages/ui/src/browser/BranchSelect.tsx` keeps the branch name plain for `textValue` and lays it out LTR on the trigger and in every option alike.
 Gone status is a separate badge; the clipped tooltip uses a technical chip in its sentence.
 `packages/ui/src/browser/GitView.tsx` likewise uses a technical chip in the visible comparing notice, while its
 plain announcement isolates the branch name where it enters the sentence.

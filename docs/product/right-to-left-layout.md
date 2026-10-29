@@ -29,16 +29,21 @@ product docs name for parts of the window:
   laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge. A path
   and a branch name fade where they begin instead (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`).
-- Paths always read left to right, in the fields that take one and in the settings list. Settings' Default clone
-  directory field reads left to right as one control: its folder mark stays beside the path at the field's left edge,
-  rather than sitting at the field's leading edge with the path pushed away from it (see "Default clone directory" in
-  `docs/product/settings.md`). The Browse button beside the field keeps to the reading direction's end, so it is at the
-  field's left.
+- Paths always read left to right, in the fields that take one and in the settings list. So does a branch name shown
+  on its own, as a label — in a project's branch badge, in the Git mode's branch selector, its current choice and its
+  listed options alike, and in the project menu's Switch branch submenu — whatever characters it starts with, so a
+  name opening with Arabic letters still reads from the left. Where such a path or branch name is cut, the tooltip
+  giving its full text reads left to right too (see "Names too long for their space" in
+  `docs/product/labels-and-tooltips.md`). Settings' Default clone directory field reads left to right as one control:
+  its folder mark stays beside the path at the field's left edge, rather than sitting at the field's leading edge with
+  the path pushed away from it (see "Default clone directory" in `docs/product/settings.md`). The Browse button beside
+  the field keeps to the reading direction's end, so it is at the field's left.
 - **A value named inside a sentence keeps its own order**, wherever that sentence appears — a message, a tooltip, a
   `title`, a toast or an accessible name. A path, a branch name, a commit id, a `git` or operating-system message quoted
   inside localized wording (see "What follows the language" in `docs/product/language.md`) and a name the user typed all
-  read in the direction of their own text inside right-to-left prose, and the quotation marks, parentheses and full stop
-  the sentence puts around them stay where the sentence puts them.
+  read in the direction of their own text inside right-to-left prose — one the sentence sets as code reads left to
+  right — and the quotation marks, parentheses and full stop the sentence puts around them stay where the sentence
+  puts them.
 - The rail's waiting count carries its badge at the hand glyph's top left rather than its top right, so the badge points
   into the content panel and the overflow pill stays clear of the window's edge, the rail being down the window's right
   edge (see "The rail" in `docs/product/window-layout.md`).
@@ -74,12 +79,12 @@ product docs name for parts of the window:
 - **A file's content in the file viewer**: code, a diff — whose split layout keeps the old side on the left — the file's
   name and path, and the paths a change names, read left to right, and a binary change's sizes run from before to after
   left to right; only the viewer around them is mirrored. A file or folder name in the file tree, a name and what
-  follows it in the Git mode's change list, a branch's name in the Git mode — in the viewer's subtitle too, where a
-  committed change names the branches it is read from (see "Opening a change" in
-  `docs/product/project-pane-git-change-viewer.md`) — and the text of the separator a diff shows where it collapsed
-  unchanged lines (see "Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`), are laid
-  out in the direction of their own text, as a name the user typed is, and so is a commit's subject on its commit row; a
-  commit's id reads left to right.
+  follows it in the Git mode's change list and the text of the separator a diff shows where it collapsed unchanged
+  lines (see "Expanding the collapsed lines" in `docs/product/project-pane-git-change-viewer.md`) are laid out in the
+  direction of their own text, as a name the user typed is, and so is a commit's subject on its commit row; a commit's
+  id reads left to right. The viewer's subtitle, where a committed change names the branches and commits it is read
+  from, is a sentence, so those values follow "a value named inside a sentence keeps its own order" under "What is
+  mirrored" above (see "Opening a change" in `docs/product/project-pane-git-change-viewer.md`).
 - **A rendered Markdown document in the file viewer** (see `docs/product/markdown-documents.md`), which is laid out in
   the direction of its own text, block by block: each paragraph, heading, list, quote and table takes the direction of
   its own first strong character, so a right-to-left passage in a left-to-right document reads from its own side, with

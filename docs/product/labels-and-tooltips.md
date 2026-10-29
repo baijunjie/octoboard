@@ -357,6 +357,12 @@ saying the repository has no commits yet and the branch selector's placeholder a
 like every other label. Everything this section says holds for a label cut at its start, mirrored: it rests pinned to
 its end, fades at its start, and carries its full text as its tooltip while it is cut.
 
+**A label that reads left to right whatever the language** — a path, a branch name, the file viewer's file name (see
+"What is mirrored" and "What is not mirrored" in `docs/product/right-to-left-layout.md`) — gives its full text in its tooltip left to right too, under a right-to-left
+language as well, so the tooltip shows the same value the label does; where that tooltip wraps, its lines still sit
+on the window's reading side. A tooltip that is a sentence rather than the value itself reads in the window's
+direction as usual.
+
 A project's branch name in its branch badge also follows these fade and marquee rules. The badge's tooltip is not
 one of this section's, though: the whole badge carries one tooltip describing the branch and its counts, shown whether
 or not the branch name is cut (see "The branch badge" in `docs/product/project-git-status.md`).

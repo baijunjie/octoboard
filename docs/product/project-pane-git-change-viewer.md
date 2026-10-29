@@ -35,9 +35,10 @@ title, each commit by its first seven characters:
   the parent it is compared with — "Commit 9e8d7c6, compared with its parent 4f2a9c1" — or, for a commit with no
   parent, that it has none.
 
-The full wording is that line's tooltip where it is cut off (see "The header" in `docs/product/file-viewer.md`), and
-each branch name in it is laid out in the direction of its own text (see `docs/product/right-to-left-layout.md`). An
-uncommitted change has no such line.
+The full wording is that line's tooltip where it is cut off (see "The header" in `docs/product/file-viewer.md`). The
+line is a sentence, and the branch names and commits in it are values named inside it: on the line they are set as
+code and read left to right, and in its tooltip, which is plain text, each keeps its own order within the sentence
+(see "What is mirrored" in `docs/product/right-to-left-layout.md`). An uncommitted change has no such line.
 
 Under that are the change's details, laid out as the viewer lays out any subject's (see "The header" in
 `docs/product/file-viewer.md`): the path within the project and, for a rename, the path it was renamed from.
