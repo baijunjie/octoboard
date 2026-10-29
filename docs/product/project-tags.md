@@ -14,8 +14,8 @@ entered. Leaving that input empty adds nothing and keeps any tags already picked
 ## Picked tags
 
 A tag the user has picked and can remove, in a project's Tags field, looks and behaves as follows. The sidebar's
-Projects heading shows the tags of a filter in force as plain text, where none of this applies (see "Filtering the
-project list" in `docs/product/sidebar.md`).
+Projects heading uses the same tag appearance in a read-only form; its layout and interactions are described in
+"Filtering the project list" in `docs/product/sidebar.md`.
 
 - It is filled with a light accent tint and has accent-coloured text.
 - Its label is always one line. A label too long for its space fades out at its cut end and, while the mouse pointer is

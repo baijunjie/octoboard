@@ -1,4 +1,4 @@
-import { Popover, SearchField, Tag, TagGroup } from "@heroui/react";
+import { Popover, SearchField, Tag as HeroUITag, TagGroup } from "@heroui/react";
 import { Check, Funnel, FunnelX, Tags } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -6,6 +6,7 @@ import { Button } from "../components/Button";
 import { EmptyPanel } from "../components/EmptyPanel";
 import { FadeOverflow } from "../components/FadeOverflow";
 import { openingFocus } from "../components/regionFocus";
+import { Tag } from "../components/Tag";
 import { TitledControl } from "../components/TitledControl";
 import { useListMotion } from "../components/useListMotion";
 import { usePointerFocusReturn } from "../components/usePointerFocusReturn";
@@ -212,7 +213,7 @@ function TagPicker({
           would wait for it forever. */}
       <TagGroup.List {...fade}>
         {vocabulary.map((tag) => (
-          <Tag key={tag} id={tag} textValue={tag} data-list-motion={tag}>
+          <HeroUITag key={tag} id={tag} textValue={tag} data-list-motion={tag}>
             {({ isSelected }) => (
               <>
                 {/* Picked is shown by a glyph too, not by the fill alone. */}
@@ -222,25 +223,11 @@ function TagPicker({
                 <span dir="auto">{tag}</span>
               </>
             )}
-          </Tag>
+          </HeroUITag>
         ))}
       </TagGroup.List>
     </TagGroup>
   );
-}
-
-/** How a token takes its width: kept whole on the heading's line, where the line clips it, or
- * shrunk to the tooltip's line, where a long one breaks inside itself. */
-const TOKEN_FIT_CLASS = { whole: "shrink-0 whitespace-nowrap", wrapping: "min-w-0 max-w-full [overflow-wrap:anywhere]" };
-
-/** One condition of the filter, the keyword or a picked tag, as plain text in the style of the line it
- * stands in: a token of a filter is a value shown on its own, not a reference within copy. */
-function Token({ fit, children, motionKey }: {
-  fit: keyof typeof TOKEN_FIT_CLASS;
-  children: string;
-  motionKey?: string;
-}): React.ReactElement {
-  return <span data-list-motion={motionKey} dir="auto" className={TOKEN_FIT_CLASS[fit]}>{children}</span>;
 }
 
 /** The whole filter as a tooltip: the same tokens as the heading's line, wrapped onto as many lines
@@ -250,14 +237,14 @@ function ProjectFilterTooltip({ filter }: { filter: ProjectFilter }): React.Reac
   const listRef = useListMotion<HTMLDivElement>();
   return (
     <div ref={listRef} className="relative flex flex-wrap gap-1.5">
-      {filter.keyword !== "" && <Token fit="wrapping" motionKey="keyword">{filter.keyword}</Token>}
-      {filter.tags.map((tag) => <Token key={tag} fit="wrapping" motionKey={`tag:${tag}`}>{tag}</Token>)}
+      {filter.keyword !== "" && <Tag isReadOnly tone="neutral" wrap motionKey="keyword" tag={filter.keyword} />}
+      {filter.tags.map((tag) => <Tag key={tag} isReadOnly wrap motionKey={`tag:${tag}`} tag={tag} />)}
     </div>
   );
 }
 
 /** The filter in force, on the Projects heading's line between its label and its controls: the
- * keyword first, then the picked tags, each as plain text. Nothing here is interactive; the heading's
+ * keyword first in neutral grey, then the picked tags in accent colour. Nothing here is interactive; the heading's
  * Funnel X clears the filter. The conditions are one label to the pointer: clipped at the line's end,
  * they fade there and run as one marquee while the pointer is over them, carrying the whole filter as
  * a tooltip. Each kind is a named group, so a screen reader hears what the words are. */
@@ -268,13 +255,13 @@ export function ProjectFilterSummary({ filter }: { filter: ProjectFilter }): Rea
     <FadeOverflow ref={listRef} className="relative flex min-w-0 flex-1 items-center gap-1.5" titleWhenClipped={<ProjectFilterTooltip filter={filter} />}>
       {filter.keyword !== "" && (
         <span role="group" aria-label={t("sidebar.filter.keyword")} className="inline-flex shrink-0">
-          <Token fit="whole" motionKey="keyword">{filter.keyword}</Token>
+          <Tag isReadOnly tone="neutral" motionKey="keyword" tag={filter.keyword} />
         </span>
       )}
       {filter.tags.length > 0 && (
         <span role="group" aria-label={t("sidebar.filter.picked")} className="inline-flex shrink-0 gap-1.5">
           {filter.tags.map((tag) => (
-            <Token key={tag} fit="whole" motionKey={`tag:${tag}`}>{tag}</Token>
+            <Tag key={tag} isReadOnly motionKey={`tag:${tag}`} tag={tag} />
           ))}
         </span>
       )}

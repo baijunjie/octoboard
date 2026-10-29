@@ -48,10 +48,11 @@ const scrollingMatchState = {
 };
 
 // A tag longer than any line the filter's tooltip can give it, on the project the other long tag is on.
-const VERY_LONG_TAG = "a-tag-far-longer-than-the-tooltip-so-its-chip-has-to-break-inside-itself-to-stay-within-one-line";
+const VERY_LONG_TAG = "a-tag-far-longer-than-the-tooltip-so-its-label-has-to-break-inside-itself-to-stay-within-one-line";
+const CJK_TAG = "\u6587\u6863\u7ffb\u8bd1\u4e0e\u591a\u8bed\u8a00\u754c\u9762\u5e03\u5c40\u68c0\u67e5".repeat(3);
 const overflowingState = {
   ...state,
-  projects: new Map([...state.projects!].map(([id, project]) => [id, id === "p-4" ? { ...project, tags: [...project.tags, VERY_LONG_TAG] } : project])),
+  projects: new Map([...state.projects!].map(([id, project]) => [id, id === "p-4" ? { ...project, tags: [...project.tags, VERY_LONG_TAG, CJK_TAG] } : project])),
 };
 
 const openFilter = (ui: Ui) => ui.press(ui.t("sidebar.filter.open"));
@@ -62,7 +63,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project filter",
-    description: "Selected tags have checkmarks and the normal vocabulary fits without scrolling. The popover stays open as conditions are picked: the conditions on the heading (plain text) fade in from the left and out to the right while the others slide, and matching projects enter and exit as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
+    description: "Selected tags have checkmarks and the normal vocabulary fits without scrolling. The popover stays open as conditions are picked: the read-only tags on the heading fade in from the left and out to the right while the others slide, and matching projects enter and exit as the sidebar reorders. After closing it, the heading's Funnel X clears all conditions.",
     state,
     preferences: { sidebarConsole: console_.id },
     steps: [
@@ -76,7 +77,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Matching projects",
-    description: "Projects (1) counts the single matching project. The keyword and the tag sit beside the heading as plain text, between its label and the Funnel X, which clears them together; they are not interactive. Scroll the project sessions: the heading and its conditions stay pinned.",
+    description: "Projects (1) counts the single matching project. The gray keyword and accent-colored category use the same tag shape as picked tags in project settings, without remove buttons or keyboard stops. They sit between the heading and the Funnel X, which clears them together. Scroll the project sessions: the heading and its conditions stay pinned.",
     state: scrollingMatchState,
     preferences: { sidebarConsole: console_.id },
     steps: [
@@ -91,7 +92,7 @@ export const filterScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Conditions wider than the heading",
-    description: "The keyword and four tags do not fit beside the Projects label: they stay on one line at full width, fade at the clipped end and run as one marquee when the strip is hovered with a real pointer. Its tooltip shows the whole filter as the same plain-text conditions as the heading, wrapped onto as many lines as it needs, the longest tag shrinking to the tooltip's width and breaking inside itself.",
+    description: "The gray keyword and five accent-colored tags do not fit beside the Projects label: they stay on one line at full width, fade at the clipped end and run as one marquee when the strip is hovered with a real pointer. Its tooltip shows the same read-only tags, wrapping between tags and inside the long Latin and CJK labels to stay within its width.",
     state: overflowingState,
     preferences: { sidebarConsole: console_.id },
     steps: [
@@ -101,6 +102,7 @@ export const filterScenarios: Scenario[] = [
       (ui) => ui.press("docs"),
       (ui) => ui.press("a-long-tag-for-checking-project-interface-layout"),
       (ui) => ui.press(VERY_LONG_TAG),
+      (ui) => ui.press(CJK_TAG),
       (ui) => ui.key("Escape"),
       (ui) => ui.hoverFilterConditions(),
     ],

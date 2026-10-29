@@ -219,7 +219,7 @@ exactly. So a collection whose rows hold tabbable controls also takes `useCollec
 (`packages/ui/src/components/collectionOptionTab.ts`) on its element, which makes the same moves for the Option
 variants; the Files tree and the change list do.
 
-A picked tag's remove button (`PickedTag`) is out of the tab order (`excludeFromTabOrder`), so a tag group is one tab
+A picked tag's remove button (`Tag`) is out of the tab order (`excludeFromTabOrder`), so a tag group is one tab
 stop and arrows move between its tags: react-aria's tag group would otherwise send Tab from a tag into its button. The
 keyboard removes a tag with Delete or Backspace on the tag, which react-aria describes on it.
 
@@ -1325,7 +1325,7 @@ its own is plain text.
   stands without quotation marks, and is bare in its plain-text form.
 - **A name shown on its own takes no chip.** A name or value displayed by itself rather than inside a sentence —
   a row's title, a list entry, a heading that is just the name, a label naming its control, a value on a line of its
-  own, a token in a filter field — is plain text in the style of where it sits (a technical value keeps the
+  own — is plain text in the style of where it sits (a technical value keeps the
   monospace font, without a chip). So is a run of names joined only by a connector such as `・` or `｜`, with no
   words around them. When such a joined run is itself referenced within a sentence, it is one reference and takes
   one chip around the whole run, never one chip per name.
@@ -1335,6 +1335,12 @@ its own is plain text.
   string the card's accessible name ends with; the account is not repeated there, the name already carrying it with the
   agent. So is the agent's name heading the agent mark's tooltip: it names the mark rather than being referenced within
   prose.
+
+Project filter conditions are tags rather than references in copy: the heading summary and its overflow tooltip
+use the same `Tag` component as picked project tags, in its read-only form without remove buttons, selection or
+keyboard focus. The keyword takes the neutral grey tone and categories take the accent tone. The heading keeps one
+line and owns clipping and its marquee as a whole; the tooltip wraps tags and breaks a label longer than its width.
+Read-only tags keep the resting appearance of picked tags without a disabled appearance or interactive hover states.
 
 Plain-text surfaces, including accessible names, native labels, announcements and system notifications, retain readable
 text without chip markup. Isolate references at the sentence boundary where needed, as specified under "Text direction";
