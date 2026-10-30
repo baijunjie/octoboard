@@ -84,6 +84,19 @@ text entry, selection and scrolling intact. Devices without hover show no fade.
 The standalone link opens the selected scene and language in a new tab at `preview/website-preview.html`, relative
 to the site's deployment root. The standalone preview displays its sample-data label above the application.
 
+The embedded preview never takes keyboard focus by itself. While focus is elsewhere on the homepage, the application's
+own focus moves, such as its agent terminal focusing itself as the preview loads or the steps that set up a scene,
+leave focus where it is. Focus enters the preview only when the visitor tabs into it or presses (clicks or taps)
+inside it; a press inside gives the preview focus as a click in any frame does, and from then on the application moves
+focus inside it as usual. Tab and Shift+Tab, with or without Option, move through the preview's controls and, from its
+first or last control, leave it for the homepage's previous or next control, so keyboard visitors can reach the rest of
+the homepage, including the footer and the analytics consent prompt. This holds in the preview's terminals too, where
+Tab moves focus instead of reaching the terminal as it does in the application (see "Typing and the mouse" in
+`docs/product/session-terminal.md`), and in the code-review scene's diff viewer, an open modal dialog, where Tab at
+its first or last control leaves the preview instead of wrapping around within the dialog. A menu or list box the
+visitor opens inside the preview keeps the application's Tab behavior, and Escape closes it. Tab combined with Ctrl or
+Meta keeps its application meaning. The standalone preview keeps the application's own focus and Tab behavior.
+
 On devices whose primary pointer is touch, both previews keep text-entry fields read-only so tapping or automatically
 focusing the terminal or another text field does not open the software keyboard. Buttons, menus, selection and scrolling
 remain interactive. Devices whose primary pointer is a mouse or trackpad retain keyboard text entry, including

@@ -1,5 +1,6 @@
 import { installPreviewStorage } from "./storage";
 import { installPreviewKeyboardGuard } from "./keyboard";
+import { installPreviewFocusGuard } from "./focus";
 import { installPreviewInteractionBridge, withReportInteractionBridge } from "./interactionBridge";
 import { installPreviewScrollBridge, withReportScrollBridge } from "./scrollBridge";
 import { isLanguage, type Language } from "../i18n/languages";
@@ -11,11 +12,14 @@ import { copyFor, createPreviewScenario, type PreviewScene } from "./scenarios";
 installPreviewStorage();
 const removeScrollBridge = installPreviewScrollBridge();
 const removeKeyboardGuard = installPreviewKeyboardGuard();
+// Ahead of the focus guard, so the homepage still hears of a Tab the guard keeps from the application.
 const removeInteractionBridge = installPreviewInteractionBridge();
+const removeFocusGuard = installPreviewFocusGuard();
 window.addEventListener("pagehide", (event) => {
   if (!event.persisted) {
     removeScrollBridge();
     removeKeyboardGuard();
+    removeFocusGuard();
     removeInteractionBridge();
   }
 });
