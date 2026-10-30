@@ -7,13 +7,15 @@ import { classifyError } from "./errorRecovery";
 import { format } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 
+const records = { consoles: new Map(), projects: new Map(), sessions: new Map() };
+
 it.each(["en", "zh-Hans"] as const)("distinguishes automatic submit retry from legacy manual recovery in %s", (language) => {
   const agent = "Claude Code";
   const params = { agent, submit_retry: "once" };
-  expect(daemonMessage(language, "message_not_sent", params, "diagnostic")).toBe(
+  expect(daemonMessage(language, "message_not_sent", params, "diagnostic", records)).toBe(
     format(language, "daemon.message_not_sent.retry", { agent: isolate(agent) }),
   );
-  expect(daemonMessage(language, "message_not_sent", { agent }, "diagnostic")).toBe(
+  expect(daemonMessage(language, "message_not_sent", { agent }, "diagnostic", records)).toBe(
     format(language, "daemon.message_not_sent", { agent: isolate(agent) }),
   );
   expect(classifyError(new DaemonRequestError("", "message_not_sent", params))).toEqual({
