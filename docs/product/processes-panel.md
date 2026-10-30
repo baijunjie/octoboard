@@ -16,8 +16,9 @@ panel; for assistive technology the panel is a region named "Processes".
 
 ## What it lists
 
-Only while there are trees to list, a note leads the list, saying that processes started by a session stop
-automatically when the session ends. It is absent while loading and in the empty state.
+Only while the displayed list includes a session's trees, a note leads the list, saying that processes started by a
+session stop automatically when the session ends. It is absent when only project processes are listed, while loading,
+and in the empty state.
 
 **In a project's panel with no session filtered on** (see "The session filter" below), the trees are grouped:
 

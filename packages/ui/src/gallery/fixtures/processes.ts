@@ -131,7 +131,7 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Processes of a project, only project processes",
-    description: "No running session of the project has a process, so Project processes is the only group, with no session heading above it. Its note says they are never stopped automatically, which is what the general message above it has to hold for them too.",
+    description: "No running session of the project has a process, so Project processes is the only group, with no session heading or session automatic-stop note above it. Its own note says these processes belong to no session, are never stopped automatically and only you can stop them.",
     state,
     preferences: panelPreferences,
     processes: { projectProcesses: { [web.id]: projectProcesses } },
