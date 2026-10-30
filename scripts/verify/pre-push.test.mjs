@@ -136,7 +136,7 @@ test("passes each distinct update to verify in order and propagates refusal", ()
   });
 });
 
-test("installed hook dispatch resolves the current worktree and cannot skip verification without gate config", () => {
+test("installed hook dispatch resolves the current worktree and passes the pushed lines to the verification", () => {
   fixture(({ root, git, base, head }) => {
     const bin = path.join(root, "bin");
     mkdirSync(bin);
@@ -163,17 +163,33 @@ test("installed hook dispatch resolves the current worktree and cannot skip veri
     assert.match(readFileSync(marker, "utf8"), /linked\/scripts\/pre-push.mjs/);
     assert.equal(invoke(["pre-commit"]).status, 0);
     assert.match(readFileSync(marker, "utf8"), /scripts\/format-staged.mjs/);
+    // hook.sh dispatches only pre-commit and pre-push; any other hook name passes without running anything,
+    // even outside a work tree.
+    rmSync(marker);
+    const reference = path.join(root, ".git/hooks/reference-transaction");
+    copyFileSync(hook, reference);
+    const skipped = spawnSync("sh", [reference, "prepared"], {
+      cwd: root, input: "", encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MARKER: marker },
+    });
+    assert.equal(skipped.status, 0);
+    assert.equal(existsSync(marker), false);
+    const outside = spawnSync("sh", [reference, "prepared"], {
+      cwd: path.join(root, ".git"), input: "", encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, MARKER: marker },
+    });
+    assert.equal(outside.status, 0, outside.stderr);
+    assert.equal(existsSync(marker), false);
   });
 });
 
-test("installer includes pre-commit and refuses external hooks or configured hook paths before writing", () => {
+test("installer installs pre-commit and pre-push, refuses external hooks, configured hook paths and old flags before writing, and migrates", () => {
   fixture(({ root, git }) => {
     mkdirSync(path.join(root, ".githooks"));
     for (const name of ["install.sh", "hook.sh"]) {
       copyFileSync(new URL(`../../.githooks/${name}`, import.meta.url), path.join(root, ".githooks", name));
     }
-    const invoke = () => spawnSync("sh", [".githooks/install.sh", "--pr-only"], { cwd: root, encoding: "utf8" });
-    const external = path.join(root, ".git/hooks/pre-commit");
+    const hooks = path.join(root, ".git/hooks");
+    const invoke = (args = [], extra = {}) => spawnSync("sh", [".githooks/install.sh", ...args], { cwd: root, encoding: "utf8", env: { ...process.env, ...extra } });
+    const external = path.join(hooks, "pre-commit");
     writeFileSync(external, "#!/bin/sh\n# external hook\n");
     assert.equal(invoke().status, 1);
     assert.equal(readFileSync(external, "utf8"), "#!/bin/sh\n# external hook\n");
@@ -181,10 +197,42 @@ test("installer includes pre-commit and refuses external hooks or configured hoo
     git("config", "core.hooksPath", "external-hooks");
     assert.equal(invoke().status, 1);
     git("config", "--unset", "core.hooksPath");
-    assert.equal(invoke().status, 0);
-    for (const name of ["pre-commit", "pre-push", "reference-transaction"]) {
-      assert.match(readFileSync(path.join(root, ".git/hooks", name), "utf8"), /revert-gate hook entry/);
+    for (const flag of ["--pr-only", "--branches-only", "main"]) {
+      const old = invoke([flag]);
+      assert.equal(old.status, 1);
+      assert.match(old.stderr, /takes no arguments/);
+      for (const name of ["pre-commit", "pre-push", "reference-transaction"]) assert.equal(existsSync(path.join(hooks, name)), false, flag);
     }
+    // A core.hooksPath injected for one process tree does not count.
+    const injected = invoke([], { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "external-hooks" });
+    assert.equal(injected.status, 0, injected.stderr);
+    for (const name of ["pre-commit", "pre-push"]) {
+      assert.match(readFileSync(path.join(hooks, name), "utf8"), /^# octoboard repository hook entry/m);
+    }
+    assert.equal(existsSync(path.join(hooks, "reference-transaction")), false);
+
+    // The earlier revert-gate entry point is overwritten; its reference-transaction hook and config go.
+    for (const name of ["pre-commit", "pre-push", "reference-transaction"]) {
+      writeFileSync(path.join(hooks, name), "#!/bin/sh\n# revert-gate hook entry\n");
+    }
+    git("config", "--add", "revert-gate.branch", "main");
+    git("config", "--add", "revert-gate.branch", "other");
+    const migrated = invoke();
+    assert.equal(migrated.status, 0, migrated.stderr);
+    assert.match(migrated.stdout, /Removed the reference-transaction hook/);
+    assert.match(migrated.stdout, /Unset the revert-gate\.branch/);
+    for (const name of ["pre-commit", "pre-push"]) {
+      assert.match(readFileSync(path.join(hooks, name), "utf8"), /octoboard repository hook entry/);
+    }
+    assert.equal(existsSync(path.join(hooks, "reference-transaction")), false);
+    assert.equal(git("config", "--get-all", "revert-gate.branch"), null);
+
+    // A foreign reference-transaction hook is left alone, with a note.
+    writeFileSync(path.join(hooks, "reference-transaction"), "#!/bin/sh\n# mine\n");
+    const foreign = invoke();
+    assert.equal(foreign.status, 0);
+    assert.match(foreign.stderr, /left alone/);
+    assert.equal(readFileSync(path.join(hooks, "reference-transaction"), "utf8"), "#!/bin/sh\n# mine\n");
     assert.equal(invoke().status, 0);
   });
 });
@@ -195,7 +243,6 @@ test("pnpm install's hook installer installs on the main branch of the main work
     for (const name of ["auto-install.sh", "install.sh", "hook.sh"]) {
       copyFileSync(new URL(`../../.githooks/${name}`, import.meta.url), path.join(root, ".githooks", name));
     }
-    writeFileSync(path.join(root, ".githooks/branches"), "# resident guarded branches\nmain\n");
     const hooks = path.join(root, ".git/hooks");
     const hook = path.join(hooks, "pre-commit");
     const env = { ...process.env };
@@ -210,18 +257,30 @@ test("pnpm install's hook installer installs on the main branch of the main work
     assert.equal(invoke(path.join(root, "linked")).status, 0);
     assert.equal(existsSync(hook), false);
 
-    // A fresh clone gets the committed resident guarded branches.
+    // No remote names a default branch: the main branch falls back to `main`.
     const fresh = invoke();
     assert.equal(fresh.status, 0, fresh.stderr);
-    assert.match(readFileSync(hook, "utf8"), /revert-gate hook entry/);
-    assert.equal(git("config", "--get-all", "revert-gate.branch"), "main");
+    assert.match(readFileSync(hook, "utf8"), /octoboard repository hook entry/);
 
-    // Configured branches are kept.
+    // The remote's default branch is the main branch: with another branch checked out nothing is installed,
+    // and with it checked out the hooks are.
     clear();
-    git("config", "--add", "revert-gate.branch", "kept");
+    git("checkout", "-q", "-b", "trunk");
+    git("update-ref", "refs/remotes/origin/trunk", "HEAD");
+    git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
     assert.equal(invoke().status, 0);
-    assert.match(readFileSync(hook, "utf8"), /revert-gate hook entry/);
-    assert.equal(git("config", "--get-all", "revert-gate.branch"), "main\nkept");
+    assert.match(readFileSync(hook, "utf8"), /octoboard repository hook entry/);
+    clear();
+    git("checkout", "-q", "main");
+    assert.equal(invoke().status, 0);
+    assert.equal(existsSync(hook), false);
+    // The first remote's HEAD is used when origin has none.
+    git("symbolic-ref", "--delete", "refs/remotes/origin/HEAD");
+    git("update-ref", "refs/remotes/destination/main", "HEAD");
+    git("symbolic-ref", "refs/remotes/destination/HEAD", "refs/remotes/destination/main");
+    assert.equal(invoke().status, 0);
+    assert.match(readFileSync(hook, "utf8"), /octoboard repository hook entry/);
+    git("symbolic-ref", "--delete", "refs/remotes/destination/HEAD");
 
     // Another revision checked out would install its own, possibly older, hook.sh.
     clear();
@@ -242,48 +301,8 @@ test("pnpm install's hook installer installs on the main branch of the main work
     writeFileSync(hook, "#!/bin/sh\n# external hook\n");
     const refused = invoke();
     assert.equal(refused.status, 0);
-    assert.match(refused.stderr, /were not installed; fix the cause and run sh \.githooks\/install\.sh --pr-only/);
+    assert.match(refused.stderr, /were not installed; fix the cause and run pnpm hooks:install/);
     assert.equal(readFileSync(hook, "utf8"), "#!/bin/sh\n# external hook\n");
-  });
-});
-
-test("when the revert gate and the push verification both run, each receives the pushed lines and refusals propagate", () => {
-  fixture(({ root, git, base, head }) => {
-    const bin = path.join(root, "bin");
-    mkdirSync(bin);
-    const order = path.join(root, "order");
-    const gateInput = path.join(root, "gate-input");
-    const node = path.join(bin, "node");
-    writeFileSync(node, '#!/bin/sh\necho verify >> "$ORDER"\ncat > "$VERIFY_INPUT"\nexit "${REFUSE_VERIFY:-0}"\n');
-    // A stand-in `python3` that records its stdin, as the gate reads the pushed lines from it.
-    writeFileSync(path.join(bin, "python3"), '#!/bin/sh\necho gate >> "$ORDER"\ncat > "$GATE_INPUT"\nexit "${GATE_EXIT:-0}"\n');
-    chmodSync(node, 0o755);
-    chmodSync(path.join(bin, "python3"), 0o755);
-    // The gate only runs for a pushed branch that records a target, and reads its script from the target.
-    git("config", "branch.main.targetBranch", "main");
-    git("config", "revert-gate.branch", "main");
-    mkdirSync(path.join(root, ".githooks"));
-    writeFileSync(path.join(root, ".githooks/revert-gate.py"), "# stand-in\n");
-    git("add", ".");
-    git("-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "gate script");
-    mkdirSync(path.join(root, "scripts"));
-    writeFileSync(path.join(root, "scripts/pre-push.mjs"), "");
-    const hook = path.join(root, ".git/hooks/pre-push");
-    copyFileSync(new URL("../../.githooks/hook.sh", import.meta.url), hook);
-    const input = update(head, base);
-    const verifyInput = path.join(root, "verify-input");
-    const invoke = (extra = {}) => spawnSync("sh", [hook, "destination", "url"], {
-      cwd: root, input, encoding: "utf8",
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, ORDER: order, GATE_INPUT: gateInput, VERIFY_INPUT: verifyInput, ...extra },
-    });
-    assert.equal(invoke().status, 0);
-    assert.equal(readFileSync(gateInput, "utf8"), input);
-    assert.equal(readFileSync(verifyInput, "utf8"), input);
-    assert.equal(readFileSync(order, "utf8"), "gate\nverify\n");
-    rmSync(order);
-    assert.equal(invoke({ GATE_EXIT: "3" }).status, 1);
-    assert.equal(existsSync(order) && readFileSync(order, "utf8"), "gate\n", "a refusal by the gate comes before the verification");
-    assert.equal(invoke({ REFUSE_VERIFY: "1" }).status, 1);
   });
 });
 

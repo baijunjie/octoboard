@@ -58,12 +58,14 @@ then start Tauri.
 
 ### Code quality
 
-Install the workspace; in the main working copy with the main branch checked out, this also installs the
-repository hooks, keeping any resident guarded branches already configured (CI, linked worktrees and other
-checkouts skip it, as does a clone whose `core.hooksPath` hands hooks to another hook system; a hook that cannot
-be installed is reported as a warning). After hook changes land in the main branch, run `pnpm install` there again
-to refresh them; `pnpm hooks:install` installs them explicitly and also resets the resident guarded branches to
-`.githooks/branches`:
+Install the workspace; in the main working copy with the main branch (the remote's default branch) checked out,
+this also installs the repository hooks (staged formatting on commit, verification on push). CI, linked
+worktrees and other checkouts skip it, as does a clone whose `core.hooksPath` hands hooks to another hook system,
+which then calls `sh .githooks/hook.sh <pre-commit|pre-push> "$@"`; a hook that cannot be installed is reported as
+a warning. After hook changes land in the main branch, run `pnpm install` there again to refresh them;
+`pnpm hooks:install` installs them explicitly. The revert gate is not one of these hooks: it is Octoboard's
+built-in gate ([revert gate](docs/product/revert-gate.md)), which applies when its `revert_gate` git workflow
+setting is on (off by default) and only to git run inside Octoboard project sessions:
 
 ```sh
 pnpm install
