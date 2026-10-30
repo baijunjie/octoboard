@@ -94,7 +94,7 @@ function renderReport(pageCount = 2) {
       });
     }),
     remove: (...ids: string[]) => act(async () => {
-      applyDaemonEvent(store, { type: "pages_deleted", console_session_id: "console-session", pages: ids });
+      applyDaemonEvent(store, { type: "pages_deleted", session_id: "console-session", pages: ids });
     }),
   };
 }
@@ -153,7 +153,7 @@ it("lands a tap's focus on the page, and F6's or a pointer's on the header's fir
 });
 
 it("shows a failed page listing in the panel with its reason and Try again, and opens no error alert dialog", async () => {
-  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack", id: null });
   const toastError = vi.fn();
   const store = createStateStore({ connectionState: "open" });
   const daemon: Daemon = {
@@ -224,7 +224,7 @@ const popoverRetry = () => [...document.querySelectorAll('[role="dialog"] button
 const announcement = (container: HTMLElement) => container.querySelector('[role="status"].sr-only')?.textContent ?? "";
 
 it("marks a failed refresh of the listed pages at the panel title with its reason and Try again in the popover, with no Alert or loose text", async () => {
-  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack", id: null });
   const container = await renderListed(request);
   const mark = container.querySelector<HTMLButtonElement>(MARK)!;
   expect(mark).not.toBeNull();
@@ -245,7 +245,7 @@ it("marks a failed refresh of the listed pages at the panel title with its reaso
 });
 
 it("says a failed refresh of the listed pages once through the panel's status region", async () => {
-  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack" });
+  const request = vi.fn().mockRejectedValueOnce(new Error("Daemon busy")).mockResolvedValue({ type: "ack", id: null });
   const container = await renderListed(request);
   await act(() => new Promise((resolve) => setTimeout(resolve, 150)));
   expect(announcement(container)).toBe("Could not load the pages of this session");
@@ -269,7 +269,7 @@ it("does not say the listing failure again when pages arrive after the whole car
 });
 
 it("hands focus on from the mark to a header control when the listing succeeds and the mark goes", async () => {
-  let answer!: (event: { type: "ack" }) => void;
+  let answer!: (event: { type: "ack"; id: null }) => void;
   const request = vi
     .fn()
     .mockRejectedValueOnce(new Error("Daemon busy"))
@@ -283,7 +283,7 @@ it("hands focus on from the mark to a header control when the listing succeeds a
   await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
   act(() => mark.focus());
   expect(document.activeElement).toBe(mark);
-  await act(async () => answer({ type: "ack" }));
+  await act(async () => answer({ type: "ack", id: null }));
   expect(container.querySelector(MARK)).toBeNull();
   expect(document.activeElement).not.toBe(document.body);
   expect(container.contains(document.activeElement)).toBe(true);

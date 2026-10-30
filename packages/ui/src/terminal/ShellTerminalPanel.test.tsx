@@ -57,9 +57,9 @@ function mount(terminals: ShellTerminal[], { holdCreate, eventFirst = true, fram
     if (body.type === "create_shell_terminal") {
       await holdCreate;
       if (eventFirst) broadcast();
-      return { type: "shell_terminal_created", shell_terminal: shell("new", 99) };
+      return { type: "shell_terminal_created", id: null, shell_terminal: shell("new", 99) };
     }
-    return { type: "ack" } as Event;
+    return { type: "ack", id: null } as Event;
   });
   const daemon: Daemon = {
     store,
@@ -290,7 +290,7 @@ it("joins the earlier start still pending when the later one has already settled
     if (body.type === "create_shell_terminal") holds.push(resolve);
   }));
   const daemon = { store, request, toastError: vi.fn() } as unknown as Daemon;
-  const created = (id: string) => ({ type: "shell_terminal_created", shell_terminal: shell(id, 1) }) as Event;
+  const created = (id: string) => ({ type: "shell_terminal_created", id: null, shell_terminal: shell(id, 1) }) as Event;
   const first = startShellTerminal(daemon, "p");
   const second = startShellTerminal(daemon, "p");
   holds[1]!(created("second"));
@@ -417,7 +417,7 @@ it("leaves focus where the user put it after the tab that held it has gone", asy
 function closesAtOnce(panel: ReturnType<typeof mount>) {
   panel.request.mockImplementation(async (body: RequestBody): Promise<Event> => {
     if (body.type === "close_shell_terminal") remove(panel, body.shell_terminal);
-    return { type: "ack" } as Event;
+    return { type: "ack", id: null } as Event;
   });
 }
 
@@ -490,7 +490,7 @@ it("leaves focus where the confirmation put it back, with no ring, when the daem
   const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
   panel.request.mockImplementation(async (body: RequestBody): Promise<Event> => {
     if (body.type === "close_shell_terminal") throw new Error("refused");
-    return { type: "ack" } as Event;
+    return { type: "ack", id: null } as Event;
   });
   const view = panel.container.querySelector<HTMLElement>("[data-view=b]")!;
   act(() => view.focus());

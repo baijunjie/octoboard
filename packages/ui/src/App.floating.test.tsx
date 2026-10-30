@@ -114,7 +114,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
       ...snapshotState({ consoles: [console_], projects: [project], sessions }),
       ...(agents ? { agentAvailability: new Map(ALL_AGENTS.map((agent) => [agent, { agent, availability: "available" as const, default_account_dir: `/Users/dev/.${agent}` }])) } : {}),
     }),
-    request: vi.fn(async (body: RequestBody) => body.type === "list_processes" ? { type: "processes_listed", trees: [] } : { type: "ack" }) as Daemon["request"],
+    request: vi.fn(async (body: RequestBody) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null }) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
@@ -658,7 +658,7 @@ it("skips empty process and terminal panels on swipes while their topbar toggles
 
 it("keeps a process panel reachable by swipe while its list is loading or failed", async () => {
   const { daemon } = mountApp(390, true);
-  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? new Promise<never>(() => {}) : { type: "ack" });
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? new Promise<never>(() => {}) : { type: "ack", id: null });
   await selectProjectSession();
   await swipe(-120);
   await swipe(-120);
@@ -672,8 +672,9 @@ it("updates swipe availability with the selected session's filtered processes", 
   await act(async () => daemon.store.setState((state) => ({ sessions: new Map([...state.sessions, [other.id, other]]) })));
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
     type: "processes_listed",
+    id: null,
     trees: [{ id: "1", session_id: "s-site", command: "vite", cwd: "/app", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
-  } : { type: "ack" });
+  } : { type: "ack", id: null });
   await selectProjectSession();
   await swipe(-120);
   expect(cards()).toEqual(["panel-files"]);
@@ -691,8 +692,9 @@ it("shows all project processes when opened from a project with no session selec
   const { daemon } = mountApp(1400);
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
     type: "processes_listed",
+    id: null,
     trees: [{ id: "all-tree", session_id: "s-site", command: "vite all sessions", cwd: "/app", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
-  } : { type: "ack" });
+  } : { type: "ack", id: null });
   await pressElement(byLabel(`Actions for project ${isolate("Website")}`));
   await pressMenuItem("Open panel");
   await pressMenuItem("Files");

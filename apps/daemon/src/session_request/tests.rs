@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use super::*;
 use crate::branch_origin::{self, repo_key, repository_of};
 use crate::protocol::{
-    Console, Origin, Project, ProjectAccount, ProjectSource, SessionRequestAction, SessionStatus,
+    Console, OrchestrationRole, Origin, Project, ProjectSource, SessionRequestAction, SessionStatus,
 };
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
@@ -33,7 +33,7 @@ fn project_session(id: &str) -> Session {
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
-        orchestration_role: None,
+        orchestration_role: OrchestrationRole::Coordinator,
         context: None,
         observed_model: None,
         observed_effort: None,
@@ -41,7 +41,6 @@ fn project_session(id: &str) -> Session {
         effort: None,
         has_conversation: true,
         bound_to: None,
-        lead: false,
         colour: None,
         ordinal: None,
         account_id: None,
@@ -60,21 +59,9 @@ fn console(id: &str, dir: &ScratchDir) -> Console {
         workdir: dir.join(id).to_string_lossy().into_owned(),
         default_agent: Agent::Claude,
         project_session_agent: None,
-        claude_project_session_model: None,
-        claude_project_session_effort: None,
-        codex_project_session_model: None,
-        codex_project_session_effort: None,
-        grok_project_session_model: None,
-        grok_project_session_effort: None,
-        claude_account_id: None,
-        codex_account_id: None,
-        grok_account_id: None,
-        claude_console_session_model: None,
-        claude_console_session_effort: None,
-        codex_console_session_model: None,
-        codex_console_session_effort: None,
-        grok_console_session_model: None,
-        grok_console_session_effort: None,
+        accounts: Default::default(),
+        launch: Default::default(),
+        project_session_launch: Default::default(),
         icon: None,
         console_session_prompt: None,
         created_at: 0,
@@ -91,15 +78,8 @@ fn project(id: &str, console_id: &str, name: &str) -> Project {
         default_agent: None,
         source: ProjectSource::Local,
         remote_url: None,
-        claude_account_id: ProjectAccount::Inherit,
-        codex_account_id: ProjectAccount::Inherit,
-        grok_account_id: ProjectAccount::Inherit,
-        claude_session_model: None,
-        claude_session_effort: None,
-        codex_session_model: None,
-        codex_session_effort: None,
-        grok_session_model: None,
-        grok_session_effort: None,
+        accounts: Default::default(),
+        launch: Default::default(),
         trust_consent: false,
         pinned: false,
         tags: Vec::new(),
@@ -516,6 +496,7 @@ async fn an_owner_is_told_that_its_session_waits_on_a_request() {
         .store
         .insert_session(&Session {
             bound_to: Some("hub".to_string()),
+            orchestration_role: OrchestrationRole::Worker,
             ..project_session("worker")
         })
         .unwrap();

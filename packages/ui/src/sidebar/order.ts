@@ -13,10 +13,9 @@ export const STATUS_RANK: Record<StatusKind, number> = {
   archived: 5,
 };
 
-/** Whether the sidebar ranks sessions and projects by status (`Settings.sidebar_order_by_status`);
- * a daemon that does not send the setting leaves it on. */
+/** Whether the sidebar ranks sessions and projects by status (`Settings.sidebar_order_by_status`). */
 export function ordersByStatus(settings: Pick<Settings, "sidebar_order_by_status">): boolean {
-  return settings.sidebar_order_by_status !== false;
+  return settings.sidebar_order_by_status;
 }
 
 /** Whether a session has work under way, including work left running between turns. */

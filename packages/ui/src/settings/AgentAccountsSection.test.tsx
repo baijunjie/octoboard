@@ -166,7 +166,7 @@ it("shows one agent at a time, opening on the first and switching by tab", () =>
 });
 
 it("marks an agent that is not installed in its tab, not in its panel", () => {
-  availability.set("grok", { agent: "grok", availability: "unavailable" });
+  availability.set("grok", { agent: "grok", availability: "unavailable", default_account_dir: null });
   const { container } = mount("Grok Build");
   const tabs = [...container.querySelectorAll('[role="tab"]')];
   expect(tabs.map((tab) => tab.getAttribute("aria-label"))).toEqual([null, null, "Grok Build (not installed)"]);
@@ -175,7 +175,7 @@ it("marks an agent that is not installed in its tab, not in its panel", () => {
 });
 
 it("marks no tab while an agent's availability is not determined", () => {
-  availability.set("codex", { agent: "codex", availability: "not_determined" });
+  availability.set("codex", { agent: "codex", availability: "not_determined", default_account_dir: null });
   const { container } = mount();
   expect(container.querySelector("svg.lucide-triangle-alert")).toBeNull();
   expect(container.querySelector('[role="tab"][aria-label]')).toBeNull();
@@ -216,7 +216,7 @@ function notInstalledTab(container: HTMLElement) {
 it("shows what the not-installed icon means in a tooltip when its tab takes keyboard focus", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("keyboard"));
@@ -230,7 +230,7 @@ it("shows what the not-installed icon means in a tooltip when its tab takes keyb
 it("does not show the not-installed tooltip for a tab focused by a press", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("pointer"));
@@ -252,7 +252,7 @@ function pointTo(tab: HTMLElement, on: boolean) {
 it("opens the not-installed tooltip again as keyboard focus arrives after a key closed the one the pointer opened", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   pointTo(tab, true);
@@ -269,7 +269,7 @@ it("opens the not-installed tooltip again as keyboard focus arrives after a key 
 it("keeps the not-installed tooltip closed on a blur while the pointer stays on the tab after a key closed it", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   pointTo(tab, true);
@@ -287,7 +287,7 @@ it("keeps the not-installed tooltip closed on a blur while the pointer stays on 
 it("holds the not-installed tooltip back while the scroll that reveals a focused tab goes on, and opens it once that stops", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   const scroll = () => act(() => void tab.parentElement!.dispatchEvent(new Event("scroll")));
@@ -307,7 +307,7 @@ it("holds the not-installed tooltip back while the scroll that reveals a focused
 it("opens the not-installed tooltip within a moment of keyboard focus when nothing scrolls", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   act(() => setInteractionModality("keyboard"));
   act(() => notInstalledTab(container).focus());
@@ -318,7 +318,7 @@ it("opens the not-installed tooltip within a moment of keyboard focus when nothi
 it("cancels the not-installed tooltip's pending open when a key or a press comes before the scroll has settled", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("keyboard"));
@@ -337,7 +337,7 @@ it("cancels the not-installed tooltip's pending open when a key or a press comes
 it("keeps a cancelled not-installed tooltip away when the pointer crosses the tab while it keeps focus", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("keyboard"));
@@ -352,7 +352,7 @@ it("keeps a cancelled not-installed tooltip away when the pointer crosses the ta
 it("shows the not-installed tooltip on hover again once a cancelled one's tab has lost focus", () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   const tab = notInstalledTab(container);
   act(() => setInteractionModality("keyboard"));
@@ -559,8 +559,8 @@ it("focuses the section's tab when the account to show is unknown", async () => 
 
 it("flags only an added agent that is not installed", () => {
   settings.added_agents = ["claude", "grok"];
-  availability.set("codex", { agent: "codex", availability: "unavailable" });
-  availability.set("grok", { agent: "grok", availability: "unavailable" });
+  availability.set("codex", { agent: "codex", availability: "unavailable", default_account_dir: null });
+  availability.set("grok", { agent: "grok", availability: "unavailable", default_account_dir: null });
   const { container } = mount();
   expect(tabNames(container)).toEqual(["Claude Code", "Grok Build"]);
   expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.getAttribute("aria-label"))).toEqual([null, "Grok Build (not installed)"]);

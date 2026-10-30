@@ -1,17 +1,11 @@
 import type { Translate } from "./i18n/catalog";
 import type {
   Account,
-  AccountField,
   Agent,
   AgentAvailability,
   Console,
+  Launch,
   Project,
-  ConsoleEffortField,
-  ConsoleModelField,
-  ConsoleProjectEffortField,
-  ConsoleProjectModelField,
-  ProjectEffortField,
-  ProjectModelField,
   Settings,
 } from "./protocol";
 
@@ -48,52 +42,6 @@ export const AGENT_DEFAULT_CONFIG_DIR: Record<Agent, string> = {
   codex: "~/.codex",
   grok: "~/.grok",
 };
-
-/** The console field holding each agent's account reference. */
-export const AGENT_ACCOUNT_FIELD: Record<Agent, AccountField> = {
-  claude: "claude_account_id",
-  codex: "codex_account_id",
-  grok: "grok_account_id",
-};
-
-/** The console fields holding each agent's console-session model and reasoning effort. */
-export const AGENT_CONSOLE_MODEL_FIELD = {
-  claude: "claude_console_session_model",
-  codex: "codex_console_session_model",
-  grok: "grok_console_session_model",
-} as const satisfies Record<Agent, ConsoleModelField>;
-
-export const AGENT_CONSOLE_EFFORT_FIELD = {
-  claude: "claude_console_session_effort",
-  codex: "codex_console_session_effort",
-  grok: "grok_console_session_effort",
-} as const satisfies Record<Agent, ConsoleEffortField>;
-
-/** The console fields holding each agent's model and reasoning effort for project sessions. */
-export const AGENT_CONSOLE_PROJECT_MODEL_FIELD = {
-  claude: "claude_project_session_model",
-  codex: "codex_project_session_model",
-  grok: "grok_project_session_model",
-} as const satisfies Record<Agent, ConsoleProjectModelField>;
-
-export const AGENT_CONSOLE_PROJECT_EFFORT_FIELD = {
-  claude: "claude_project_session_effort",
-  codex: "codex_project_session_effort",
-  grok: "grok_project_session_effort",
-} as const satisfies Record<Agent, ConsoleProjectEffortField>;
-
-/** The project fields holding each agent's model and reasoning effort for the project's sessions. */
-export const AGENT_PROJECT_MODEL_FIELD = {
-  claude: "claude_session_model",
-  codex: "codex_session_model",
-  grok: "grok_session_model",
-} as const satisfies Record<Agent, ProjectModelField>;
-
-export const AGENT_PROJECT_EFFORT_FIELD = {
-  claude: "claude_session_effort",
-  codex: "codex_session_effort",
-  grok: "grok_session_effort",
-} as const satisfies Record<Agent, ProjectEffortField>;
 
 /** Whether availability has been determined and found `agent` missing — never while it has not
  * yet been determined, which must not be read as "not installed". */
@@ -187,46 +135,37 @@ export function agentPickerOptions(
   );
 }
 
-/** One pair's model and reasoning effort, each `null` while unset. */
-export type LaunchPair = { model: string | null; effort: string | null };
-
 /** The model and reasoning effort a project session of `agent` takes from its console when
  * neither it nor its project names one: the console's project session pair, `null` for the agent's
  * own default. */
-export function consoleProjectLaunch(owner: Console, agent: Agent): LaunchPair {
-  return {
-    model: owner[AGENT_CONSOLE_PROJECT_MODEL_FIELD[agent]] ?? null,
-    effort: owner[AGENT_CONSOLE_PROJECT_EFFORT_FIELD[agent]] ?? null,
-  };
+export function consoleProjectLaunch(owner: Console, agent: Agent): Launch {
+  return owner.project_session_launch[agent];
 }
 
 /** The model and reasoning effort a project session of `agent` runs with when it chose neither,
  * each value taken from the project, else from the console's project session pair, else `null`,
  * the agent's own default. */
-export function projectSessionLaunch(owner: Console, project: Project, agent: Agent): LaunchPair {
+export function projectSessionLaunch(owner: Console, project: Project, agent: Agent): Launch {
   const fallback = consoleProjectLaunch(owner, agent);
   return {
-    model: project[AGENT_PROJECT_MODEL_FIELD[agent]] ?? fallback.model,
-    effort: project[AGENT_PROJECT_EFFORT_FIELD[agent]] ?? fallback.effort,
+    model: project.launch[agent].model ?? fallback.model,
+    effort: project.launch[agent].effort ?? fallback.effort,
   };
 }
 
 /** What a session of `agent` takes when it chooses nothing: a project session's project value,
  * else its console's project session one; a console session's console session one. */
-export function inheritedSessionLaunch(owner: Console, project: Project | undefined, agent: Agent): LaunchPair {
+export function inheritedSessionLaunch(owner: Console, project: Project | undefined, agent: Agent): Launch {
   if (project) return projectSessionLaunch(owner, project, agent);
-  return {
-    model: owner[AGENT_CONSOLE_MODEL_FIELD[agent]] ?? null,
-    effort: owner[AGENT_CONSOLE_EFFORT_FIELD[agent]] ?? null,
-  };
+  return owner.launch[agent];
 }
 
 /** `inherited` with each value an override sets: absent follows `inherited`, `null` is the agent's
  * own default. */
 export function launchWithOverrides(
-  inherited: LaunchPair,
+  inherited: Launch,
   overrides: { model?: string | null; effort?: string | null } | undefined,
-): LaunchPair {
+): Launch {
   return {
     model: overrides?.model === undefined ? inherited.model : overrides.model,
     effort: overrides?.effort === undefined ? inherited.effort : overrides.effort,
@@ -269,11 +208,11 @@ export function accountsByAgent(
 }
 
 /** The name an agent's default account is shown under: the one the user gave it, else the current language's word. */
-export function defaultAccountName(t: Translate, names: Settings["default_account_names"], agent: Agent): string {
+export function defaultAccountName(t: Translate, names: Settings["default_account_names"] | undefined, agent: Agent): string {
   return isDefaultAccountRenamed(names, agent) ? names![agent]!.trim() : t("settings.accounts.defaultName");
 }
 
 /** Whether the user has given an agent's default account a name of its own. */
-export function isDefaultAccountRenamed(names: Settings["default_account_names"], agent: Agent): boolean {
+export function isDefaultAccountRenamed(names: Settings["default_account_names"] | undefined, agent: Agent): boolean {
   return !!names?.[agent]?.trim();
 }

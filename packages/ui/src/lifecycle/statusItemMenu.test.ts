@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
@@ -119,7 +119,7 @@ describe("buildStatusItemMenu quota submenus", () => {
     plan: "max",
     windows: [window({}), window({ kind: "weekly", used_percent: 5, resets_at: null })],
     unavailable: null,
-    ...patch,
+    email: null, ...patch,
   });
   const source = (patch: Partial<StatusItemQuotaSource>): StatusItemQuotaSource => ({ ...NO_QUOTA, ...patch });
   /** Each line as the text it shows: a header's title and detail, a window's name and detail, a note's text. */
@@ -154,19 +154,19 @@ describe("buildStatusItemMenu quota submenus", () => {
   });
 
   it("lists quota accounts in the saved order with the default account movable", () => {
-    const work: Account = { id: "work", agent: "claude", name: "Work", config_dir: "/work" };
+    const work: Account = accountOf("work", "claude", "Work", "/work");
     const [submenu] = buildQuotaSubmenus(t, source({ accounts: [work], accountOrder: { claude: ["work", null] }, agentAvailability: available("claude") }));
     expect(submenu.items.filter((item) => item.kind === "header").map((item) => item.title.replace(/[\u2068\u2069]/g, ""))).toEqual(["Work", "Default"]);
   });
 
   it("has no submenu for an agent that is not available", () => {
-    expect(menuOf([], source({ agentAvailability: new Map([["codex", { agent: "codex", availability: "unavailable" } as never]]) })).submenus).toEqual([]);
+    expect(menuOf([], source({ agentAvailability: new Map([["codex", { agent: "codex", availability: "unavailable", default_account_dir: null } as never]]) })).submenus).toEqual([]);
     expect(menuOf([]).submenus).toEqual([]);
   });
 
   it("leaves out an account that is turned off, the default one by its agent, and the submenu of an agent with none left", () => {
-    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w", disabled: true } as Account;
-    const home = { id: "home", agent: "claude", name: "Home", config_dir: "/h" } as Account;
+    const work = accountOf("work", "claude", "Work", "/w", { disabled: true });
+    const home = accountOf("home", "claude", "Home", "/h");
     const titles = (submenus: ReturnType<typeof buildQuotaSubmenus>) => submenus.flatMap((submenu) => submenu.items.filter((item) => item.kind === "header").map((item) => (item as { title: string }).title.replace(/[\u2068\u2069]/g, "")));
     const base = source({ accounts: [work, home], agentAvailability: available("claude") });
     expect(titles(buildQuotaSubmenus(t, base))).toEqual(expect.arrayContaining(["Default", "Home"]));
@@ -269,7 +269,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   });
 
   it("groups the owned accounts after the default one, each set off by a separator", () => {
-    const owned: Account[] = [{ id: "a1", agent: "codex", name: "Work", config_dir: "/w" }];
+    const owned: Account[] = [accountOf("a1", "codex", "Work", "/w")];
     const menu = menuOf([], source({
       accounts: owned,
       agentAvailability: available("codex"),
@@ -299,7 +299,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   it("marks a used-up account's two-layer item used up, and no other account's", () => {
     const used = quotaOf("claude", null, { windows: [window({ used_percent: 100 }), window({ kind: "weekly", used_percent: 5, resets_at: null })] });
     const other = quotaOf("claude", "a1", {});
-    const owned: Account[] = [{ id: "a1", agent: "claude", name: "Work", config_dir: "/w" }];
+    const owned: Account[] = [accountOf("a1", "claude", "Work", "/w")];
     const items = menuOf([], source({ agentAvailability: available("claude"), accounts: owned, accountQuotas: [used, other] })).submenus[0].items;
     expect(items.filter((row) => row.kind === "meter").map((row) => "used_up" in row && row.used_up)).toEqual([true, false]);
   });
@@ -353,10 +353,10 @@ describe("buildStatusItemMenu quota submenus", () => {
   });
 
   it("draws no bar or account name on the opener when the current console's account is turned off", () => {
-    const home = { id: "home", agent: "claude", name: "Home", config_dir: "/h" } as Account;
-    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w" } as Account;
+    const home = accountOf("home", "claude", "Home", "/h");
+    const work = accountOf("work", "claude", "Work", "/w");
     const accountQuotas = [quotaOf("claude", null), quotaOf("claude", "home"), quotaOf("claude", "work")];
-    const onWork = consoleOf("c", "Main", { claude_account_id: "work" });
+    const onWork = consoleOf("c", "Main", { accounts: { claude: "work" } });
     const [on] = buildQuotaSubmenus(t, source({ accounts: [home, work], agentAvailability: available("claude"), accountQuotas }), onWork);
     expect(on!.quota_label).toContain("Work");
     const [off] = buildQuotaSubmenus(t, source({ accounts: [home, { ...work, disabled: true }], agentAvailability: available("claude"), accountQuotas }), onWork);
@@ -373,7 +373,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   });
 
   it("lists a turned-off account in the submenu, marked Disabled, only while the selected session runs on it", () => {
-    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w", disabled: true } as Account;
+    const work = accountOf("work", "claude", "Work", "/w", { disabled: true });
     const quota = source({ accounts: [work], disabledDefaultAccounts: ["claude"], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {
@@ -388,7 +388,7 @@ describe("buildStatusItemMenu quota submenus", () => {
   });
 
   it("draws the icon capsule for a turned-off account only while the selected session runs on it", () => {
-    const work = { id: "work", agent: "claude", name: "Work", config_dir: "/w", disabled: true } as Account;
+    const work = accountOf("work", "claude", "Work", "/w", { disabled: true });
     const quota = source({ accounts: [work], agentAvailability: available("claude"), accountQuotas: [quotaOf("claude", null), quotaOf("claude", "work")] });
     const on = (status: SessionStatus) => ({ ...inProject("s", status), account_id: "work", config_dir: "/w" });
     const menu = (status: SessionStatus) => buildStatusItemMenu(t, {

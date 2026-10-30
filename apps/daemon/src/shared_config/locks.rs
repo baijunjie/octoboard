@@ -5,30 +5,18 @@
 
 use tokio::sync::{Mutex, MutexGuard};
 
-use crate::protocol::Agent;
+use crate::protocol::{Agent, PerAgent};
 
 #[derive(Default)]
-pub struct Locks {
-    claude: Mutex<()>,
-    codex: Mutex<()>,
-    grok: Mutex<()>,
-}
+pub struct Locks(PerAgent<Mutex<()>>);
 
 impl Locks {
     pub async fn lock(&self, agent: Agent) -> MutexGuard<'_, ()> {
-        match agent {
-            Agent::Claude => self.claude.lock().await,
-            Agent::Codex => self.codex.lock().await,
-            Agent::Grok => self.grok.lock().await,
-        }
+        self.0.get(agent).lock().await
     }
 
     /// The agent's lock if no one holds it now.
     pub fn try_lock(&self, agent: Agent) -> Option<MutexGuard<'_, ()>> {
-        match agent {
-            Agent::Claude => self.claude.try_lock().ok(),
-            Agent::Codex => self.codex.try_lock().ok(),
-            Agent::Grok => self.grok.try_lock().ok(),
-        }
+        self.0.get(agent).try_lock().ok()
     }
 }

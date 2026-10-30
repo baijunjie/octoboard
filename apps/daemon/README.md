@@ -45,7 +45,7 @@ once; `pnpm test:rust` from the root runs both crates' tests without it.
 - `octoboardd status-line --session <id> --port <port> --key <key> --cwd <dir> --config-dir <dir>` — CLI mode that is the status
   line the Claude Code adapter injects; posts the context window from stdin to `POST /context-window/:session` and
   runs the user's own status line with the same input, passing its output and exit status on.
-- `octoboardd mcp --session <id> --role <role> [--bound] --port <port> --key <key> --token <token>` — CLI mode that is the MCP
+- `octoboardd mcp --session <id> --role <role> [--worker] --port <port> --key <key> --token <token>` — CLI mode that is the MCP
   server each adapter registers for a session; speaks MCP on stdin/stdout and forwards tool calls to
   `POST /mcp/:token`.
 
@@ -62,7 +62,8 @@ screens, terminal titles and session records the tests replay.
 | `build.rs` | Exposes the app name from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` |
 | `src/main.rs` | CLI entry point: parses the seven modes, generates the launch key, opens the store, binds the port, prints the handshake line (port and key) the application waits for, runs the server |
 | `src/server.rs`, `src/access.rs` | The HTTP/WebSocket router described in `PROTOCOL.md` (the control, terminal, MCP, hook, git-ref, revert-gate and context-window routes), terminal input dispatch through one background writer per connection with bounded deferred input and priority for query replies, and the middleware refusing with `403` a request whose `Host` or `Origin` is not a local client's or the application's own UI's and with `401` one without the launch key (`generate_key`) |
-| `src/protocol.rs` | Rust types for the wire protocol (kept in sync by hand with `PROTOCOL.md` and `packages/ui/src/protocol.ts`), the console session colours, `Session::orchestration_role` and `Session::is_worker` (derived coordinator or worker capability), and the one mapping from a failure to an `error` reply |
+| `src/protocol.rs` | Rust types for the wire protocol (described in `PROTOCOL.md`; the UI's hand-written `packages/ui/src/protocol.ts` is checked against them through `protocol/bindings.rs`), the console session colours, `Session::orchestration_role` and `Session::is_worker` (the session's stored coordinator or worker capability), and the one mapping from a failure to an `error` reply |
+| `src/protocol/bindings.rs` | Test-only contract check: renders the wire types as TypeScript into the committed `packages/ui/src/protocol.generated.ts` and fails when that file is stale; the same test regenerates it when run with `OCTOBOARD_WRITE_BINDINGS=1` |
 | `src/git_ref_mode.rs`, `src/gate_hook_mode.rs`, `src/status_line_mode.rs`, `src/hook_mode.rs`, `src/loopback.rs` | The `git-ref`, `gate-hook`, `status-line` and `hook` CLI modes, and the minimal HTTP client for the daemon's own loopback address they share (`mcp` is `src/mcp/stdio.rs`, `revert-gate` is `src/revert_gate/`) |
 
 ### Coordinator role
@@ -86,10 +87,10 @@ screens, terminal titles and session records the tests replay.
 
 | Path | Role |
 |---|---|
-| `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts and their choices, the added agents list, owed parent-change notices, messages kept for interrupted sessions (shared information, and the reports and notices for a parent session; table `pending_info`), branch origins, trusted folders, user settings and the host table |
+| `src/store.rs` | The coordinator's SQLite storage: consoles, projects, sessions, pages, agent accounts and their choices, the added agents list, owed parent-change notices, messages kept for interrupted sessions (shared information, and the reports and notices for a parent session; table `kept_messages`), branch origins, trusted folders, user settings and the host table |
 | `src/state.rs` | Shared daemon state (`AppState`): session status and turn bookkeeping, the shell terminal registry, each project's live git status, pending session requests, launch claims, agent availability, the model cache, account quotas and logins, pending quota recovery waits, and the hook queues; `shown_status` is the status a client is shown |
 | `src/outbox.rs` | The per-session ordered queue every message Octoboard writes into an agent passes through, stable message identities, and drain outcomes for dialogs, partial writes, pending draft recovery and uncertain native submissions |
-| `src/config_export.rs`, `src/config_import/`, `src/config_upgrade.rs` | Building the configuration document `export_configuration` answers with, reading one back (`inspect` and `apply`; `mod.rs` for the document, projects and settings, `accounts.rs` for its accounts), and upgrading an older document before an import reads it |
+| `src/config_export.rs`, `src/config_import/` | Building the configuration document `export_configuration` answers with, reading one back (`inspect` and `apply`; `mod.rs` for the document, projects and settings, `accounts.rs` for its accounts) |
 | `src/launch_settings.rs`, `src/agent_models.rs` | Normalising and checking a model and reasoning effort, and listing the models an agent offers for an account (`ModelCache`) |
 | `src/paths.rs`, `src/instance_lock.rs` | Where Octoboard keeps its files under `~/.octoboard`, and one daemon per data directory |
 | `src/log_file.rs` | The size-rotated `daemon.log` under `paths::logs_dir()` that the daemon's logging writes to besides stderr, enabled only once the instance lock is held |

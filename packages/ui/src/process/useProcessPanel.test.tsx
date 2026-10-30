@@ -46,7 +46,7 @@ async function mount(request: (body: RequestBody) => Promise<Event>, initialSele
 }
 
 it("defaults to all project trees, follows sidebar changes, and preserves a manual filter until the next change", async () => {
-  const panel = await mount(async () => ({ type: "processes_listed", trees: [tree("1", first.id), tree("2", second.id), tree("3")] }));
+  const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [tree("1", first.id), tree("2", second.id), tree("3")] }));
   expect(panel.data().trees).toHaveLength(3);
   await panel.select(first.id);
   expect(panel.data().trees?.map((item) => item.id)).toEqual(["1"]);
@@ -70,7 +70,7 @@ it("does not render again for an unchanged refresh failure, but shows changed di
       error.stack = failure.stack;
       throw error;
     }
-    return { type: "processes_listed", trees: [tree("1", first.id)] };
+    return { type: "processes_listed", id: null, trees: [tree("1", first.id)] };
   });
   const poll = () => act(async () => void vi.advanceTimersByTime(3000));
   failure = { message: "unavailable", code: "unexpected_error", params: { detail: "offline" }, stack: "trace-a" };
@@ -103,7 +103,7 @@ it("does not render again for an unchanged refresh failure, but shows changed di
 });
 
 it("falls back to all when a manually selected session is deleted", async () => {
-  const panel = await mount(async () => ({ type: "processes_listed", trees: [tree("1", first.id), tree("2")] }));
+  const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [tree("1", first.id), tree("2")] }));
   await act(async () => panel.data().selectSession(first.id));
   await act(async () => panel.daemon.store.setState({ sessions: new Map([[second.id, second]]) }));
   expect(panel.data().sessionId).toBeUndefined();
@@ -114,11 +114,11 @@ it("stops polling when inactive, resumes when active, and ignores late answers f
   let finish!: (answer: Event) => void;
   const panel = await mount(async (body) => body.type === "list_processes" && "project_id" in body
     ? new Promise<Event>((resolve) => { finish = resolve; })
-    : { type: "processes_listed", trees: [tree("console", "console")] });
+    : { type: "processes_listed", id: null, trees: [tree("console", "console")] });
   expect(panel.data().trees).toBeUndefined();
   await panel.owner({ kind: "report", consoleSession: "console" });
   expect(panel.data().trees?.map((item) => item.id)).toEqual(["console"]);
-  await act(async () => finish({ type: "processes_listed", trees: [tree("stale", first.id)] }));
+  await act(async () => finish({ type: "processes_listed", id: null, trees: [tree("stale", first.id)] }));
   expect(panel.data().trees?.map((item) => item.id)).toEqual(["console"]);
   await panel.polling("off");
   const calls = vi.mocked(panel.daemon.request).mock.calls.length;
@@ -129,13 +129,13 @@ it("stops polling when inactive, resumes when active, and ignores late answers f
 });
 
 it("initializes the filter from an already selected session", async () => {
-  const panel = await mount(async () => ({ type: "processes_listed", trees: [tree("1", first.id), tree("2", second.id)] }), first.id);
+  const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [tree("1", first.id), tree("2", second.id)] }), first.id);
   expect(panel.data().sessionId).toBe(first.id);
   expect(panel.data().trees?.map((item) => item.id)).toEqual(["1"]);
 });
 
 it("lists every session of a project it is told to show all of, though the selected session belongs to it", async () => {
-  const panel = await mount(async () => ({ type: "processes_listed", trees: [tree("1", first.id), tree("2", second.id)] }), first.id);
+  const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [tree("1", first.id), tree("2", second.id)] }), first.id);
   expect(panel.data().sessionId).toBe(first.id);
   await act(async () => panel.data().showAllOf(project.id));
   expect(panel.data().sessionId).toBeUndefined();
@@ -145,7 +145,7 @@ it("lists every session of a project it is told to show all of, though the selec
 });
 
 it("polls every 15 seconds in the background and every 3 while live", async () => {
-  const panel = await mount(async () => ({ type: "processes_listed", trees: [] }));
+  const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [] }));
   await panel.polling("background");
   const calls = () => vi.mocked(panel.daemon.request).mock.calls.length;
   const before = calls();
@@ -160,7 +160,7 @@ it("polls every 15 seconds in the background and every 3 while live", async () =
 });
 
 it("pauses while the document is hidden and asks at once when it is shown again", async () => {
-  const panel = await mount(async () => ({ type: "processes_listed", trees: [] }));
+  const panel = await mount(async () => ({ type: "processes_listed", id: null, trees: [] }));
   const calls = () => vi.mocked(panel.daemon.request).mock.calls.length;
   let hidden = true;
   vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);

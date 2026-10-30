@@ -17,6 +17,7 @@ fn params(pairs: &[(&str, &str)]) -> Params {
         .collect()
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Agent {
@@ -61,6 +62,143 @@ impl Agent {
     }
 }
 
+/// One value for each [`Agent`], serialised as `{"claude": …, "codex": …, "grok": …}`. A struct
+/// rather than a map, so that adding an agent fails to compile everywhere a value is built or
+/// looked up instead of defaulting silently. A key left out when reading is the default value.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PerAgent<T> {
+    pub claude: T,
+    pub codex: T,
+    pub grok: T,
+}
+
+impl<T> PerAgent<T> {
+    pub fn from_fn(mut f: impl FnMut(Agent) -> T) -> Self {
+        Self {
+            claude: f(Agent::Claude),
+            codex: f(Agent::Codex),
+            grok: f(Agent::Grok),
+        }
+    }
+
+    /// As [`Self::from_fn`], for a value that can fail to build, such as a store row.
+    pub fn try_from_fn<E>(mut f: impl FnMut(Agent) -> Result<T, E>) -> Result<Self, E> {
+        Ok(Self {
+            claude: f(Agent::Claude)?,
+            codex: f(Agent::Codex)?,
+            grok: f(Agent::Grok)?,
+        })
+    }
+
+    pub fn get(&self, agent: Agent) -> &T {
+        match agent {
+            Agent::Claude => &self.claude,
+            Agent::Codex => &self.codex,
+            Agent::Grok => &self.grok,
+        }
+    }
+
+    pub fn get_mut(&mut self, agent: Agent) -> &mut T {
+        match agent {
+            Agent::Claude => &mut self.claude,
+            Agent::Codex => &mut self.codex,
+            Agent::Grok => &mut self.grok,
+        }
+    }
+
+    /// In [`Agent::ALL`] order.
+    pub fn iter(&self) -> impl Iterator<Item = (Agent, &T)> {
+        [
+            (Agent::Claude, &self.claude),
+            (Agent::Codex, &self.codex),
+            (Agent::Grok, &self.grok),
+        ]
+        .into_iter()
+    }
+
+    /// In [`Agent::ALL`] order.
+    pub fn into_iter(self) -> impl Iterator<Item = (Agent, T)> {
+        [
+            (Agent::Claude, self.claude),
+            (Agent::Codex, self.codex),
+            (Agent::Grok, self.grok),
+        ]
+        .into_iter()
+    }
+
+    pub fn map<U>(self, mut f: impl FnMut(Agent, T) -> U) -> PerAgent<U> {
+        PerAgent {
+            claude: f(Agent::Claude, self.claude),
+            codex: f(Agent::Codex, self.codex),
+            grok: f(Agent::Grok, self.grok),
+        }
+    }
+}
+
+/// The model and reasoning effort an agent's sessions are launched with, in the agent's own
+/// spelling. `null` leaves the choice to the agent.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Launch {
+    pub model: Option<String>,
+    pub effort: Option<String>,
+}
+
+/// One agent's value in an update request: the key absent, an explicit `null`, or a value.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Change<T> {
+    /// The key was not sent: leave the setting alone.
+    #[default]
+    Keep,
+    /// An explicit `null`: back to the default.
+    Clear,
+    Set(T),
+}
+
+impl<T> Change<T> {
+    /// The change as the in-memory changes carry it: `None` to leave the setting alone,
+    /// `Some(None)` to clear it.
+    pub fn into_present(self) -> Present<T> {
+        match self {
+            Change::Keep => None,
+            Change::Clear => Some(None),
+            Change::Set(value) => Some(Some(value)),
+        }
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Change<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(match Option::<T>::deserialize(deserializer)? {
+            None => Change::Clear,
+            Some(value) => Change::Set(value),
+        })
+    }
+}
+
+/// A change to one agent's model and effort: each absent for "leave it alone", `null` or a
+/// blank string for the agent's own default.
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[derive(Debug, Default, Deserialize)]
+pub struct LaunchChange {
+    #[serde(default, deserialize_with = "present_option")]
+    #[cfg_attr(test, ts(optional))]
+    pub model: Present<String>,
+    #[serde(default, deserialize_with = "present_option")]
+    #[cfg_attr(test, ts(optional))]
+    pub effort: Present<String>,
+}
+
+impl LaunchChange {
+    /// Whether the change touches neither field.
+    pub fn is_keep(&self) -> bool {
+        self.model.is_none() && self.effort.is_none()
+    }
+}
+
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
@@ -78,6 +216,7 @@ impl Role {
     }
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
@@ -91,6 +230,7 @@ pub enum Origin {
 /// around; what each one looks like in the light and the dark appearance is the UI's own
 /// (`packages/ui/src/sessionColours.ts`), not here. A stored label must stay readable, so one is
 /// renamed or removed only together with a schema version step (`SCHEMA_VERSION` in `store.rs`).
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConsoleSessionColour {
@@ -134,6 +274,7 @@ impl ConsoleSessionColour {
     ];
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
@@ -158,6 +299,7 @@ impl SessionStatus {
     }
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostKind {
@@ -165,6 +307,7 @@ pub enum HostKind {
     Ssh,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectSource {
@@ -174,6 +317,7 @@ pub enum ProjectSource {
     Git,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Host {
     pub id: String,
@@ -182,6 +326,7 @@ pub struct Host {
     pub ssh_config: Option<String>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Console {
     pub id: String,
@@ -193,45 +338,20 @@ pub struct Console {
     /// `default_agent`. Read it through [`Console::project_session_default`].
     pub project_session_agent: Option<Agent>,
     /// The account each agent's sessions opened in this console read, by id; one setting per
-    /// agent, and a session reads only its own agent's. `None` means that agent's default account
+    /// agent, and a session reads only its own agent's. `null` means that agent's default account
     /// — the state of pinning nothing. What a referenced account resolves to at launch is
     /// `Account.config_dir`, read through `crate::store`, not carried here.
-    pub claude_account_id: Option<String>,
-    /// Codex's own reference; see `claude_account_id`.
-    pub codex_account_id: Option<String>,
-    /// Grok's own reference; see `claude_account_id`.
-    pub grok_account_id: Option<String>,
-    /// The model a console session of this console is launched with, in Claude Code's own
-    /// spelling; one setting per agent, and a session reads only its own agent's. `None` leaves
-    /// the choice to the agent. Read when a console session is opened or resumed, so one already
-    /// running keeps what it started with; a project session never reads it.
-    pub claude_console_session_model: Option<String>,
-    /// The reasoning effort a console session is launched with; see
-    /// `claude_console_session_model`.
-    pub claude_console_session_effort: Option<String>,
-    /// Codex's own model; see `claude_console_session_model`.
-    pub codex_console_session_model: Option<String>,
-    /// Codex's own effort; see `claude_console_session_effort`.
-    pub codex_console_session_effort: Option<String>,
-    /// Grok's own model; see `claude_console_session_model`.
-    pub grok_console_session_model: Option<String>,
-    /// Grok's own effort; see `claude_console_session_effort`.
-    pub grok_console_session_effort: Option<String>,
+    pub accounts: PerAgent<Option<String>>,
+    /// The model and reasoning effort a console session of this console is launched with, in the
+    /// agent's own spelling; one pair per agent, and a session reads only its own agent's. `null`
+    /// leaves the choice to the agent. Read when a console session is opened or resumed, so one
+    /// already running keeps what it started with; a project session never reads it.
+    pub launch: PerAgent<Launch>,
     /// The model and reasoning effort a project session of this console is launched with when
     /// neither the session nor its project names one, in the agent's own spelling; one pair per
-    /// agent, as for the console session pair. `None` leaves the choice to the agent. Read at every
+    /// agent, as for the console session pair. `null` leaves the choice to the agent. Read at every
     /// launch, so a session already running keeps what it started with.
-    pub claude_project_session_model: Option<String>,
-    /// Claude Code's own effort; see `claude_project_session_model`.
-    pub claude_project_session_effort: Option<String>,
-    /// Codex's own model; see `claude_project_session_model`.
-    pub codex_project_session_model: Option<String>,
-    /// Codex's own effort; see `claude_project_session_model`.
-    pub codex_project_session_effort: Option<String>,
-    /// Grok's own model; see `claude_project_session_model`.
-    pub grok_project_session_model: Option<String>,
-    /// Grok's own effort; see `claude_project_session_model`.
-    pub grok_project_session_effort: Option<String>,
+    pub project_session_launch: PerAgent<Launch>,
     /// A custom avatar as an `image/*` `data:` URL of at most 256 KiB; unset shows the default
     /// glyph.
     pub icon: Option<String>,
@@ -248,96 +368,6 @@ impl Console {
         self.project_session_agent.unwrap_or(self.default_agent)
     }
 
-    /// The account this console references for `agent`; `None` is the agent's default account.
-    pub fn account(&self, agent: Agent) -> &Option<String> {
-        match agent {
-            Agent::Claude => &self.claude_account_id,
-            Agent::Codex => &self.codex_account_id,
-            Agent::Grok => &self.grok_account_id,
-        }
-    }
-
-    pub fn account_mut(&mut self, agent: Agent) -> &mut Option<String> {
-        match agent {
-            Agent::Claude => &mut self.claude_account_id,
-            Agent::Codex => &mut self.codex_account_id,
-            Agent::Grok => &mut self.grok_account_id,
-        }
-    }
-
-    /// `agent`'s project session model and effort.
-    pub fn project_launch(&self, agent: Agent) -> (&Option<String>, &Option<String>) {
-        match agent {
-            Agent::Claude => (
-                &self.claude_project_session_model,
-                &self.claude_project_session_effort,
-            ),
-            Agent::Codex => (
-                &self.codex_project_session_model,
-                &self.codex_project_session_effort,
-            ),
-            Agent::Grok => (
-                &self.grok_project_session_model,
-                &self.grok_project_session_effort,
-            ),
-        }
-    }
-
-    pub fn project_launch_mut(
-        &mut self,
-        agent: Agent,
-    ) -> (&mut Option<String>, &mut Option<String>) {
-        match agent {
-            Agent::Claude => (
-                &mut self.claude_project_session_model,
-                &mut self.claude_project_session_effort,
-            ),
-            Agent::Codex => (
-                &mut self.codex_project_session_model,
-                &mut self.codex_project_session_effort,
-            ),
-            Agent::Grok => (
-                &mut self.grok_project_session_model,
-                &mut self.grok_project_session_effort,
-            ),
-        }
-    }
-
-    /// `agent`'s console session model and effort.
-    pub fn launch(&self, agent: Agent) -> (&Option<String>, &Option<String>) {
-        match agent {
-            Agent::Claude => (
-                &self.claude_console_session_model,
-                &self.claude_console_session_effort,
-            ),
-            Agent::Codex => (
-                &self.codex_console_session_model,
-                &self.codex_console_session_effort,
-            ),
-            Agent::Grok => (
-                &self.grok_console_session_model,
-                &self.grok_console_session_effort,
-            ),
-        }
-    }
-
-    pub fn launch_mut(&mut self, agent: Agent) -> (&mut Option<String>, &mut Option<String>) {
-        match agent {
-            Agent::Claude => (
-                &mut self.claude_console_session_model,
-                &mut self.claude_console_session_effort,
-            ),
-            Agent::Codex => (
-                &mut self.codex_console_session_model,
-                &mut self.codex_console_session_effort,
-            ),
-            Agent::Grok => (
-                &mut self.grok_console_session_model,
-                &mut self.grok_console_session_effort,
-            ),
-        }
-    }
-
     /// The account id a project's `setting` for `agent` resolves to under this console: its own
     /// account, `None` for the agent's default, and this console's reference when it inherits.
     pub fn resolve_project_account(
@@ -348,12 +378,13 @@ impl Console {
         match setting {
             ProjectAccount::Account { id } => Some(id.clone()),
             ProjectAccount::Default => None,
-            ProjectAccount::Inherit => self.account(agent).clone(),
+            ProjectAccount::Inherit => self.accounts.get(agent).clone(),
         }
     }
 }
 
 /// Who resolves Codex approval requests. An absent override follows the account configuration.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApprovalReviewer {
@@ -363,6 +394,7 @@ pub enum ApprovalReviewer {
 
 /// The permission mode a Claude Code launch is asked for. An absent override follows the account
 /// configuration and passes no flag.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ClaudeApprovalMode {
@@ -376,6 +408,7 @@ pub enum ClaudeApprovalMode {
 
 /// The appearance a client has resolved for its window, sent with a launch so Grok's theme matches
 /// the terminal that will show it. It is not stored: a later launch sends its own.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalAppearance {
@@ -389,6 +422,7 @@ pub enum TerminalAppearance {
 /// of pinning nothing. Its name is [`DEFAULT_ACCOUNT_NAME`] until the user gives it one of their
 /// own (`Settings::default_account_names`, set by `set_default_account_name`), and it cannot be
 /// created or removed.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     pub id: String,
@@ -429,6 +463,7 @@ pub struct Account {
 /// [`NotDetermined`](Availability::NotDetermined) is where every run of the daemon starts, and
 /// only a completed login-shell snapshot ever moves an agent out of it — a snapshot that times out
 /// or fails leaves it there, rather than being read as [`Unavailable`](Availability::Unavailable).
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Availability {
@@ -444,6 +479,7 @@ pub enum Availability {
 /// `Event::Snapshot` and `Event::AgentAvailabilityUpdated`, one entry per agent, always three of
 /// them: the not-yet-determined state is carried by `availability` itself rather than by the
 /// entry's absence.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AgentAvailability {
     pub agent: Agent,
@@ -476,6 +512,7 @@ pub fn default_account_name_in(
 /// What a project says about one agent's account, which is one more state than a console's
 /// reference has: a console's is an account or the agent's default account, while a project can
 /// also decline to say and leave the choice to its console.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ProjectAccount {
@@ -501,6 +538,7 @@ impl ProjectAccount {
     }
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub id: String,
@@ -514,30 +552,14 @@ pub struct Project {
     /// The account each agent's sessions opened in this project read; one setting per agent, and
     /// a session reads only its own agent's. See [`ProjectAccount`] for the three states.
     #[serde(default)]
-    pub claude_account_id: ProjectAccount,
-    /// Codex's own reference; see `claude_account_id`.
+    pub accounts: PerAgent<ProjectAccount>,
+    /// The model and reasoning effort a session of this project is launched with, in the agent's
+    /// own spelling; one pair per agent, and a session reads only its own agent's. `null` leaves
+    /// the choice to the agent: there is no console-level fallback, the console's own pairs being
+    /// for its console sessions alone. Read when a session is opened or resumed, so one already
+    /// running keeps what it started with.
     #[serde(default)]
-    pub codex_account_id: ProjectAccount,
-    /// Grok's own reference; see `claude_account_id`.
-    #[serde(default)]
-    pub grok_account_id: ProjectAccount,
-    /// The model a session of this project is launched with, in Claude Code's own spelling; one
-    /// setting per agent, and a session reads only its own agent's. `None` leaves the choice to
-    /// the agent: there is no console-level fallback, the console's own pair being for its console
-    /// sessions alone. Read when a session is opened or resumed, so one already running keeps what
-    /// it started with.
-    pub claude_session_model: Option<String>,
-    /// The reasoning effort a session of this project is launched with; see
-    /// `claude_session_model`.
-    pub claude_session_effort: Option<String>,
-    /// Codex's own model; see `claude_session_model`.
-    pub codex_session_model: Option<String>,
-    /// Codex's own effort; see `claude_session_effort`.
-    pub codex_session_effort: Option<String>,
-    /// Grok's own model; see `claude_session_model`.
-    pub grok_session_model: Option<String>,
-    /// Grok's own effort; see `claude_session_effort`.
-    pub grok_session_effort: Option<String>,
+    pub launch: PerAgent<Launch>,
     /// The user has agreed that Octoboard may press an agent's own trust confirmation for this
     /// project's directory without asking, by sending the keystrokes that accept it (see
     /// `crate::trust`). The project form of the one auto-trust permission every agent shares, a
@@ -562,50 +584,9 @@ pub struct Project {
     pub git_workflow: crate::git_workflow::GitWorkflowOverride,
 }
 
-impl Project {
-    /// The account setting for `agent`.
-    pub fn account(&self, agent: Agent) -> &ProjectAccount {
-        match agent {
-            Agent::Claude => &self.claude_account_id,
-            Agent::Codex => &self.codex_account_id,
-            Agent::Grok => &self.grok_account_id,
-        }
-    }
-
-    pub fn account_mut(&mut self, agent: Agent) -> &mut ProjectAccount {
-        match agent {
-            Agent::Claude => &mut self.claude_account_id,
-            Agent::Codex => &mut self.codex_account_id,
-            Agent::Grok => &mut self.grok_account_id,
-        }
-    }
-
-    /// `agent`'s session model and effort.
-    pub fn launch(&self, agent: Agent) -> (&Option<String>, &Option<String>) {
-        match agent {
-            Agent::Claude => (&self.claude_session_model, &self.claude_session_effort),
-            Agent::Codex => (&self.codex_session_model, &self.codex_session_effort),
-            Agent::Grok => (&self.grok_session_model, &self.grok_session_effort),
-        }
-    }
-
-    pub fn launch_mut(&mut self, agent: Agent) -> (&mut Option<String>, &mut Option<String>) {
-        match agent {
-            Agent::Claude => (
-                &mut self.claude_session_model,
-                &mut self.claude_session_effort,
-            ),
-            Agent::Codex => (
-                &mut self.codex_session_model,
-                &mut self.codex_session_effort,
-            ),
-            Agent::Grok => (&mut self.grok_session_model, &mut self.grok_session_effort),
-        }
-    }
-}
-
 /// How much the main conversation's latest request carried, as the agent's own session record
 /// shows it: a gauge of whether continuing the session is getting expensive, not a running total.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionContext {
     pub tokens: u64,
@@ -620,6 +601,7 @@ pub struct SessionContext {
 
 /// One piece of work a session's agent left running in the background when its turn ended: a
 /// shell command, a monitor, an MCP call or an agent, as the agent itself lists it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackgroundTask {
     /// The agent's id for the task; the same id its completion notification names.
@@ -632,6 +614,7 @@ pub struct BackgroundTask {
     pub description: Option<String>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OrchestrationRole {
@@ -639,6 +622,7 @@ pub enum OrchestrationRole {
     Worker,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
@@ -648,10 +632,14 @@ pub struct Session {
     pub project_id: Option<String>,
     pub host_id: String,
     pub role: Role,
-    /// Derived capability, independent of the parent session in `bound_to`. Never stored; filled
-    /// in by `AppState::wire_session`. Authorization derives it from the stored binding instead.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub orchestration_role: Option<OrchestrationRole>,
+    /// Whether the session may own sessions (`Coordinator`) or reports to one and may not
+    /// (`Worker`), independent of the parent in `bound_to`: a project coordinator under a console
+    /// session keeps the coordinator role, including when it has no children. A console session
+    /// and a session with no parent are always coordinators, and a session created with a parent
+    /// starts as a worker. Binding an independent coordinator to a console session keeps it a
+    /// coordinator, and a transfer to another console session preserves that; a transfer to a
+    /// project session makes it a worker, and a release makes it a coordinator again.
+    pub orchestration_role: OrchestrationRole,
     pub origin: Origin,
     pub title: String,
     /// Last title emitted by the terminal, retained when its process ends. The store keeps it as
@@ -705,13 +693,6 @@ pub struct Session {
     /// Console sessions have no parent. Reports route directly by this id, since a console can
     /// have several console sessions. The storage and wire field retain their existing name.
     pub bound_to: Option<String>,
-    /// Legacy stored flag preserving coordinator capability under a console parent, including
-    /// when the session has no children. Binding an independent coordinator to a console sets
-    /// it; transfer to another console preserves it; transfer to a project or release clears it.
-    /// Sessions created with a parent start as workers. This flag is not sent to clients;
-    /// callers use `orchestration_role()` for capability and `bound_to` for reporting.
-    #[serde(skip)]
-    pub lead: bool,
     /// A console session's badge colour, assigned on creation and changed afterwards only by
     /// `set_session_colour` (see `ConsoleSessionColour`). `None` for a project session, which
     /// carries no colour of its own.
@@ -738,6 +719,7 @@ pub struct Session {
         deserialize_with = "present_option",
         skip_serializing_if = "Option::is_none"
     )]
+    #[cfg_attr(test, ts(optional))]
     pub model: Option<Option<String>>,
     /// The reasoning effort override, with the same inheritance rule as `model`.
     #[serde(
@@ -745,6 +727,7 @@ pub struct Session {
         deserialize_with = "present_option",
         skip_serializing_if = "Option::is_none"
     )]
+    #[cfg_attr(test, ts(optional))]
     pub effort: Option<Option<String>>,
     /// The user pinned this session to the top of its list. Only `set_session_pinned` changes it,
     /// and a pinned session stays pinned across archiving and resuming.
@@ -757,31 +740,22 @@ pub struct Session {
 }
 
 impl Session {
-    /// Capability follows stored state, never the wire-only role field. A parent does not imply
-    /// worker capability: the legacy `lead` flag preserves a coordinator under a console parent.
-    pub fn orchestration_role(&self) -> OrchestrationRole {
-        if self.bound_to.is_some() && !self.lead {
-            OrchestrationRole::Worker
-        } else {
-            OrchestrationRole::Coordinator
-        }
-    }
-
     pub fn is_worker(&self) -> bool {
-        self.orchestration_role() == OrchestrationRole::Worker
+        self.orchestration_role == OrchestrationRole::Worker
     }
 }
 
 /// One page a session pushed to its report panel: a console session, or a project session that
 /// faces the user (`show_page`). It belongs to that session, not to its console or project:
-/// `console_session_id` is the session that pushed it, of either kind. Every page is kept, so the
+/// `session_id` is the session that pushed it, of either kind. Every page is kept, so the
 /// panel can be paged back through; `anchor_message_id` records the conversation position the page
 /// was pushed at and is stored only (see "Data model" in `docs/architecture.md`), and no agent
 /// exposes a message id to put in it yet.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Page {
     pub id: String,
-    pub console_session_id: String,
+    pub session_id: String,
     pub html: String,
     pub anchor_message_id: Option<String>,
     pub created_at: i64,
@@ -789,6 +763,7 @@ pub struct Page {
 
 /// One entry of a directory listing. Only directories are ever listed — a project is a directory —
 /// so there is no "is this a directory" field to carry.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct DirEntry {
     pub name: String,
@@ -796,6 +771,7 @@ pub struct DirEntry {
     pub is_git_repo: bool,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GitActivity {
@@ -811,6 +787,7 @@ pub enum GitActivity {
 /// `refresh_git_status` asks for it, with the local branch header also re-read when the project's
 /// refs change — the daemon keeps no timer of its own for this (see `apps/daemon/PROTOCOL.md`'s
 /// "Daemon behaviour, per project").
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct GitStatus {
     pub project: String,
@@ -834,6 +811,7 @@ pub struct GitStatus {
 }
 
 /// Whether a shell terminal's shell is still running.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ShellTerminalState {
@@ -846,6 +824,7 @@ pub enum ShellTerminalState {
 /// A plain shell the daemon runs in a project's directory, beside its agent sessions. Live state
 /// held in memory only, never stored in SQLite: the shell is a process of this daemon's and ends
 /// with it, so the record does too.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShellTerminal {
     pub id: String,
@@ -874,6 +853,7 @@ pub struct ShellTerminal {
 /// The app-wide user settings the daemon stores, and the account list alongside them: a record
 /// that already grows without a new request shape or a new event for every addition, which is
 /// why the accounts live here rather than in a record of their own.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct Settings {
     pub auto_pull_repositories: bool,
@@ -933,6 +913,7 @@ pub struct Settings {
     /// The user's order of each agent's accounts, by agent wire name, which clients list them in
     /// and automatic account selection takes them in; null entries represent the default account.
     /// Missing accounts are appended and stale IDs are ignored. Kept local to this machine.
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, Array<string | null>>>"))]
     pub account_order: std::collections::BTreeMap<String, Vec<Option<String>>>,
     /// The agents the user has added, in the order the user set; a newly added agent goes last. Only these are offered for a
     /// new choice; removing one leaves its accounts here. `null` while the daemon has not yet
@@ -950,12 +931,15 @@ pub struct Settings {
     /// sessions: one value per agent, whichever account a session uses. It is the value in effect:
     /// the user's choice for the agent, else on for Grok Build and, for Codex, on while Claude Code
     /// is an added agent. Read when a session starts, resumes or switches account.
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
     pub claude_compatibility: std::collections::BTreeMap<String, bool>,
     /// The name the user gave an agent's default account, by agent; an agent without an entry shows
     /// the client's own word for it. Not an account row and not carried by an export.
+    #[cfg_attr(test, ts(type = "Partial<Record<Agent, string>>"))]
     pub default_account_names: std::collections::BTreeMap<String, String>,
     /// The agents, by wire name, whose default account the user turned off for new work, as
     /// `Account::disabled` does for an account row. Not carried by an export.
+    #[cfg_attr(test, ts(type = "Array<Agent>"))]
     pub disabled_default_accounts: std::collections::BTreeSet<String>,
     /// The application-wide git workflow settings; a project may override each item (see
     /// `Project::git_workflow`).
@@ -994,6 +978,7 @@ impl Default for Settings {
 
 /// Where a project's files are read from, as `project_source` reports it. See "Project sources" in
 /// `apps/daemon/PROTOCOL.md`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ProjectSourceInfo {
     pub project: String,
@@ -1010,6 +995,7 @@ pub struct ProjectSourceInfo {
     pub git_error: Option<String>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct GitSourceInfo {
     /// The repository's identity: that of its common git directory.
@@ -1022,6 +1008,7 @@ pub struct GitSourceInfo {
     pub worktrees: Vec<WorktreeInfo>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct WorktreeInfo {
     pub id: String,
@@ -1036,10 +1023,12 @@ pub struct WorktreeInfo {
     /// Why it does not: `source_unavailable`'s `cause`, or `permission_denied` for a read the system
     /// denied; absent while it does.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub scope_cause: Option<&'static str>,
 }
 
 /// One entry of a project directory listing.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct BrowseEntry {
     /// The entry's name, as a wire path.
@@ -1054,9 +1043,11 @@ pub struct BrowseEntry {
     pub target: Option<LinkTarget>,
     /// Whether Git ignores the entry; sent only when true. See `browse::ignored`.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[cfg_attr(test, ts(optional = nullable))]
     pub ignored: bool,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EntryKind {
@@ -1067,6 +1058,7 @@ pub enum EntryKind {
     Other,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LinkTarget {
@@ -1080,6 +1072,7 @@ pub enum LinkTarget {
 }
 
 /// Which content a `read_project_file` reads. Absent means `live`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ReadFrom {
@@ -1097,6 +1090,7 @@ pub enum ReadFrom {
 }
 
 /// What a file body was actually read from, so a reply identifies the content it carries.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ContentSource {
@@ -1114,6 +1108,7 @@ pub enum ContentSource {
     },
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentKind {
@@ -1124,6 +1119,7 @@ pub enum ContentKind {
 }
 
 /// A file body. Exactly one of `text` and `data` is set, by `kind`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct FileContent {
     pub size: u64,
@@ -1137,6 +1133,7 @@ pub struct FileContent {
 /// Which of a worktree's uncommitted changes an entry is: `HEAD` against the index (`staged`), the
 /// index against the files on disk (`unstaged`), or a file on disk Git does not track and does not
 /// ignore (`untracked`). Part of a change's identity, so one path can be a change in two groups.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangeGroup {
@@ -1146,6 +1143,7 @@ pub enum ChangeGroup {
 }
 
 /// What one side of a change is.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SideKind {
@@ -1156,6 +1154,7 @@ pub enum SideKind {
 
 /// One side of a change in a change listing. See "Changes and comparisons" in
 /// `apps/daemon/PROTOCOL.md`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum ChangeSide {
@@ -1173,6 +1172,7 @@ pub enum ChangeSide {
 }
 
 /// How a path is in conflict, as `git status` tells the stages apart.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConflictKind {
@@ -1187,6 +1187,7 @@ pub enum ConflictKind {
 
 /// The lines a change adds and removes, as `git diff --numstat` counts them. See "Changes and
 /// comparisons" in `apps/daemon/PROTOCOL.md`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct LineStats {
     pub added: u64,
@@ -1196,6 +1197,7 @@ pub struct LineStats {
 /// One entry of a change listing: a change between two sides, or a path in conflict, which is
 /// not a two-sided change at all. `stats` is what the change adds and removes, absent where the
 /// daemon does not count it (see "Changes and comparisons" in `apps/daemon/PROTOCOL.md`).
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "group", rename_all = "snake_case")]
 pub enum ChangeEntry {
@@ -1203,18 +1205,21 @@ pub enum ChangeEntry {
         old: ChangeSide,
         new: ChangeSide,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         stats: Option<LineStats>,
     },
     Unstaged {
         old: ChangeSide,
         new: ChangeSide,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         stats: Option<LineStats>,
     },
     Untracked {
         old: ChangeSide,
         new: ChangeSide,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         stats: Option<LineStats>,
     },
     /// `path` is a wire path relative to the project's directory.
@@ -1228,12 +1233,14 @@ pub enum ChangeEntry {
         old: ChangeSide,
         new: ChangeSide,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         stats: Option<LineStats>,
     },
 }
 
 /// How a `read_project_change` or a `read_project_comparison_change` names one side of the
 /// change to read.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideRef {
@@ -1246,6 +1253,7 @@ pub enum SideRef {
 }
 
 /// The change a `read_project_change` reads: its group and its two sides, as the listing gave them.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ChangeRef {
     pub group: ChangeGroup,
@@ -1256,6 +1264,7 @@ pub struct ChangeRef {
 /// One local branch of a project's repository, as `list_project_branches` lists it: its name below
 /// `refs/heads/`, as a wire path, and the object id its reference named when it was listed — the
 /// commit at its tip, unless the branch is broken (a missing object, or not a commit).
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchInfo {
     pub name: String,
@@ -1266,14 +1275,17 @@ pub struct BranchInfo {
     /// reference. A branch whose upstream is another local branch, or whose upstream reference is
     /// gone, is treated as having no upstream; absent when neither exists.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub upstream: Option<UpstreamInfo>,
     /// The session responsible for the branch, when the daemon can name one; absent otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub origin: Option<BranchOriginInfo>,
 }
 
 /// A branch's upstream: the remote-tracking branch, as a wire path below `refs/remotes/` (such as
 /// `origin/main`), and the object id its reference names.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct UpstreamInfo {
     pub name: String,
@@ -1282,6 +1294,7 @@ pub struct UpstreamInfo {
 
 /// The session working on a branch now, with the title that session had when it became
 /// responsible — the record outlives the session, which a project's deletion takes with it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BranchOriginInfo {
     /// The session working on the branch: the one whose own git reported creating it until the
@@ -1298,6 +1311,7 @@ pub struct BranchOriginInfo {
 /// resolved to. A comparison reply reports both; a read of one of its changes names both back, with
 /// the comparison's `base`, and the commits alone decide what is read. `remote` says the branch is
 /// a remote-tracking one, named below `refs/remotes/`, rather than a local one.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComparisonEndpoint {
     pub branch: String,
@@ -1322,6 +1336,7 @@ fn is_true(value: &bool) -> bool {
 /// first parent's (`None` for a commit with no parent, whose changes are against the empty tree),
 /// its subject line, and its changes against that parent that touch the project, each in the
 /// `committed` group.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CommitChanges {
     pub commit: String,
@@ -1332,6 +1347,7 @@ pub struct CommitChanges {
 
 /// The change a `read_project_comparison_change` or a `read_project_commit_change` reads: its two
 /// sides, as the listing gave them.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct ComparedChangeRef {
     pub old: SideRef,
@@ -1340,6 +1356,7 @@ pub struct ComparedChangeRef {
 
 /// The version of one side of a change as a diff reply reported it, which a body request names back
 /// so the bodies are read only from the sides the patch was made from.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideVersion {
@@ -1348,6 +1365,7 @@ pub enum SideVersion {
 }
 
 /// One side of a change as `read_project_change` or `read_project_comparison_change` read it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
 pub enum SideRead {
@@ -1372,11 +1390,14 @@ pub enum SideRead {
 /// older one in, and the request itself. Kept apart from [`Request`] because these are served
 /// under their own budgets and on their own outbound lane — see "Browsing a project" in
 /// `apps/daemon/PROTOCOL.md`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 pub struct BrowseRequest {
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub id: Option<String>,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub slot: Option<String>,
     #[serde(flatten)]
     pub body: BrowseBody,
@@ -1400,6 +1421,7 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "read_project_commit_change_bodies",
 ];
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BrowseBody {
@@ -1409,6 +1431,7 @@ pub enum BrowseBody {
     ListProjectDir {
         project: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
         path: String,
     },
@@ -1417,24 +1440,29 @@ pub enum BrowseBody {
         query: String,
         /// Whether files Git ignores, and what is inside ignored folders, can match.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         include_ignored: bool,
     },
     ReadProjectFile {
         project: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
         path: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         from: ReadFrom,
     },
     ListProjectChanges {
         project: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
     },
     ReadProjectChange {
         project: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
         change: ChangeRef,
     },
@@ -1449,8 +1477,10 @@ pub enum BrowseBody {
         project: String,
         left: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         left_remote: bool,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         left_empty: bool,
         right: String,
     },
@@ -1467,6 +1497,7 @@ pub enum BrowseBody {
     ReadProjectChangeBodies {
         project: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
         change: ChangeRef,
         old: SideVersion,
@@ -1495,6 +1526,7 @@ pub enum BrowseBody {
         project: String,
         commit: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         parent: Option<String>,
         change: ComparedChangeRef,
     },
@@ -1503,6 +1535,7 @@ pub enum BrowseBody {
         project: String,
         commit: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         parent: Option<String>,
         change: ComparedChangeRef,
         old: SideVersion,
@@ -1518,14 +1551,17 @@ pub enum BrowseBody {
 /// `console`, `project`, `session` — because one flattened object carries both: a request field
 /// named `id` would collide with the envelope's and silently lose one of the two, leaving the
 /// daemon acting on the request id as if it were a record id.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 pub struct Request {
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub id: Option<String>,
     #[serde(flatten)]
     pub body: RequestBody,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RequestBody {
@@ -1534,100 +1570,66 @@ pub enum RequestBody {
         default_agent: Agent,
         /// Absent means project sessions follow `default_agent`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         project_session_agent: Option<Agent>,
-        /// Each agent's account, by id; absent means that agent's default account. A reference
-        /// that names no account of that agent is refused with `unknown_account`.
+        /// Each agent's account, by id; an agent left out, or `null`, has its default account. A
+        /// reference that names no account of that agent is refused with `unknown_account`.
         #[serde(default)]
-        claude_account_id: Option<String>,
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<String>"))]
+        accounts: PerAgent<Option<String>>,
+        /// Each agent's model and reasoning effort for the console's console sessions; an agent
+        /// or a field left out, or blank, means the agent's own default.
         #[serde(default)]
-        codex_account_id: Option<String>,
-        #[serde(default)]
-        grok_account_id: Option<String>,
-        /// Each agent's model and reasoning effort for the console's console sessions; absent or
-        /// blank means the agent's own default.
-        #[serde(default)]
-        claude_console_session_model: Option<String>,
-        #[serde(default)]
-        claude_console_session_effort: Option<String>,
-        #[serde(default)]
-        codex_console_session_model: Option<String>,
-        #[serde(default)]
-        codex_console_session_effort: Option<String>,
-        #[serde(default)]
-        grok_console_session_model: Option<String>,
-        #[serde(default)]
-        grok_console_session_effort: Option<String>,
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<bindings::LaunchRequest>"))]
+        launch: PerAgent<Launch>,
         /// Each agent's model and reasoning effort for the console's project sessions whose
-        /// project and session name none; absent or blank means the agent's own default.
+        /// project and session name none, with the same rule as `launch`.
         #[serde(default)]
-        claude_project_session_model: Option<String>,
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<bindings::LaunchRequest>"))]
+        project_session_launch: PerAgent<Launch>,
         #[serde(default)]
-        claude_project_session_effort: Option<String>,
-        #[serde(default)]
-        codex_project_session_model: Option<String>,
-        #[serde(default)]
-        codex_project_session_effort: Option<String>,
-        #[serde(default)]
-        grok_project_session_model: Option<String>,
-        #[serde(default)]
-        grok_project_session_effort: Option<String>,
-        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         icon: Option<String>,
         /// Absent or blank means no addition to the console session's instructions.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         console_session_prompt: Option<String>,
     },
     UpdateConsole {
         console: String,
+        #[cfg_attr(test, ts(optional))]
         name: Option<String>,
+        #[cfg_attr(test, ts(optional))]
         default_agent: Option<Agent>,
         /// Absent leaves the setting alone; an explicit `null` makes project sessions follow
         /// `default_agent` again.
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         project_session_agent: Option<Option<Agent>>,
-        /// Each agent's account: absent leaves the setting alone; an explicit `null` clears it
+        /// Each agent's account: an agent left out is left alone; an explicit `null` clears it
         /// back to that agent's default account. A reference that names no account of that agent
         /// is refused with `unknown_account`.
-        #[serde(default, deserialize_with = "present_option")]
-        claude_account_id: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_account_id: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_account_id: Option<Option<String>>,
-        /// Each agent's console session model and effort: absent leaves the setting alone; an
-        /// explicit `null` (or a blank string) clears it back to the agent's own default.
-        #[serde(default, deserialize_with = "present_option")]
-        claude_console_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        claude_console_session_effort: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_console_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_console_session_effort: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_console_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_console_session_effort: Option<Option<String>>,
-        /// Each agent's project session model and effort, with the same absent / `null` / blank
-        /// rule as the console session ones.
-        #[serde(default, deserialize_with = "present_option")]
-        claude_project_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        claude_project_session_effort: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_project_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_project_session_effort: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_project_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_project_session_effort: Option<Option<String>>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<Change<String>>"))]
+        accounts: PerAgent<Change<String>>,
+        /// Each agent's console session model and effort: an agent or a field left out is left
+        /// alone; an explicit `null` (or a blank string) clears it back to the agent's own
+        /// default.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<LaunchChange>"))]
+        launch: PerAgent<LaunchChange>,
+        /// Each agent's project session model and effort, with the same rule as `launch`.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<LaunchChange>"))]
+        project_session_launch: PerAgent<LaunchChange>,
         /// Absent leaves the avatar alone; an explicit `null` (or a blank string) clears it back
         /// to the default glyph.
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         icon: Option<Option<String>>,
         /// Absent leaves the addition alone; an explicit `null` (or a blank string) clears it.
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         console_session_prompt: Option<Option<String>>,
     },
     DeleteConsole {
@@ -1636,54 +1638,51 @@ pub enum RequestBody {
     AddProject {
         console_id: String,
         source: ProjectSource,
+        #[cfg_attr(test, ts(optional))]
         path: Option<String>,
+        #[cfg_attr(test, ts(optional))]
         remote_url: Option<String>,
+        #[cfg_attr(test, ts(optional))]
         name: Option<String>,
+        #[cfg_attr(test, ts(optional))]
         default_agent: Option<Agent>,
-        /// Each agent's account as a [`ProjectAccount`]; absent or `null` means inheriting the
-        /// console's reference for that agent. An account that names none of that agent's is
-        /// refused with `unknown_account`.
+        /// Each agent's account as a [`ProjectAccount`]; an agent left out, or `null`, inherits
+        /// the console's reference. An account that names none of that agent's is refused with
+        /// `unknown_account`.
         #[serde(default)]
-        claude_account_id: Option<ProjectAccount>,
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<ProjectAccount>"))]
+        accounts: PerAgent<Option<ProjectAccount>>,
+        /// Each agent's model and reasoning effort for the project's sessions; an agent or a
+        /// field left out, or blank, means the agent's own default.
         #[serde(default)]
-        codex_account_id: Option<ProjectAccount>,
-        #[serde(default)]
-        grok_account_id: Option<ProjectAccount>,
-        /// Each agent's model and reasoning effort for the project's sessions; absent or blank
-        /// means the agent's own default.
-        #[serde(default)]
-        claude_session_model: Option<String>,
-        #[serde(default)]
-        claude_session_effort: Option<String>,
-        #[serde(default)]
-        codex_session_model: Option<String>,
-        #[serde(default)]
-        codex_session_effort: Option<String>,
-        #[serde(default)]
-        grok_session_model: Option<String>,
-        #[serde(default)]
-        grok_session_effort: Option<String>,
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<bindings::LaunchRequest>"))]
+        launch: PerAgent<Launch>,
         /// Whether an absent `default_agent` is filled in from the directory's marker files (see
         /// `hostfs::detect_agent`). Absent is true; a client that has already shown the user the
         /// detection, and so sends what it showed, sends false to have "inherit from console"
         /// kept as chosen.
         #[serde(default = "default_true")]
+        #[cfg_attr(test, ts(optional = nullable))]
         detect_default_agent: bool,
         /// Absent means no tags.
+        #[cfg_attr(test, ts(optional))]
         tags: Option<Vec<String>>,
         /// Absent or blank means no description. Ignored when a parent directory adds more than
         /// one project, as `name` is.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         description: Option<String>,
         /// The project's own git workflow settings; the object, or an item in it, absent or `null`
         /// follows the application-wide value. A parent directory gives the same values to every
         /// project it adds. A `development` that is none of `in_place`, `branch` or `worktree`, or
         /// a `delivery` that is none of `ask`, `merge` or `pull_request`, is refused.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional, type = "Partial<GitWorkflowOverride>"))]
         git_workflow: Option<crate::git_workflow::GitWorkflowOverride>,
     },
     UpdateProject {
         project: String,
+        #[cfg_attr(test, ts(optional))]
         name: Option<String>,
         /// Absent leaves the project's default agent alone; an explicit `null` clears it, which is
         /// how the project goes back to following the console's project session agent (else its
@@ -1691,41 +1690,35 @@ pub enum RequestBody {
         /// present `null` into the outer `Option` as `None`, exactly as if the field had not been
         /// sent.
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         default_agent: Option<Option<Agent>>,
-        /// Each agent's account as a [`ProjectAccount`]: absent leaves the setting alone; an
+        /// Each agent's account as a [`ProjectAccount`]: an agent left out is left alone; an
         /// explicit `null` puts it back to inheriting the console's reference. An account that
         /// names none of that agent's is refused with `unknown_account`.
-        #[serde(default, deserialize_with = "present_option")]
-        claude_account_id: Option<Option<ProjectAccount>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_account_id: Option<Option<ProjectAccount>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_account_id: Option<Option<ProjectAccount>>,
-        /// Each agent's model and effort for the project's sessions: absent leaves the setting
-        /// alone; an explicit `null` (or a blank string) clears it back to the agent's own default.
-        #[serde(default, deserialize_with = "present_option")]
-        claude_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        claude_session_effort: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        codex_session_effort: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_session_model: Option<Option<String>>,
-        #[serde(default, deserialize_with = "present_option")]
-        grok_session_effort: Option<Option<String>>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<Change<ProjectAccount>>"))]
+        accounts: PerAgent<Change<ProjectAccount>>,
+        /// Each agent's model and effort for the project's sessions: an agent or a field left out
+        /// is left alone; an explicit `null` (or a blank string) clears it back to the agent's own
+        /// default.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable, as = "bindings::PartialPerAgent<LaunchChange>"))]
+        launch: PerAgent<LaunchChange>,
         /// Absent leaves the project's pin alone.
+        #[cfg_attr(test, ts(optional))]
         pinned: Option<bool>,
         /// Absent leaves the project's tags alone; a present array replaces them wholesale.
+        #[cfg_attr(test, ts(optional))]
         tags: Option<Vec<String>>,
         /// Absent leaves the description alone; an explicit `null` (or a blank string) clears it.
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         description: Option<Option<String>>,
         /// Absent leaves the project's git workflow settings alone. Within it, per item: absent
         /// leaves it alone, an explicit `null` goes back to following the application-wide value,
         /// and a value sets the project's own. An unknown `development` or `delivery` is refused.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         git_workflow: Option<crate::git_workflow::GitWorkflowOverrideChanges>,
     },
     DeleteProject {
@@ -1733,18 +1726,22 @@ pub enum RequestBody {
         /// Ends the project's running sessions first, as `archive_session` does, instead of
         /// refusing while there are any. Absent is false.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         stop_sessions: bool,
         /// Moves the project's directory to the system Trash once its sessions are stopped,
         /// and removes the project only if that worked. Absent is false.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         trash_directory: bool,
         /// With `trash_directory`, the locked worktrees to take along as well (see
         /// `inspect_project_removal`); absent means none.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         force_remove: Vec<SessionBranchTarget>,
         /// With `trash_directory`, the `inspection` token of the `inspect_project_removal`
         /// refusal this removal was confirmed after, which it then repeats; absent means none.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         inspection: Option<String>,
     },
     ListDir {
@@ -1768,6 +1765,7 @@ pub enum RequestBody {
     ListAgentModels {
         agent: Agent,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         account: Option<String>,
     },
     /// Where the conversation `agent_session_id` (an id the agent wrote, as `open_session`'s
@@ -1798,14 +1796,19 @@ pub enum RequestBody {
     /// project path of this machine. An account directory is always written, whatever it says.
     ExportConfiguration {
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         console: Option<String>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         consoles: Option<crate::config_export::ExportedConsoles>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         include_settings: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         include_accounts: Option<bool>,
         #[serde(default = "default_true")]
+        #[cfg_attr(test, ts(optional = nullable))]
         include_paths: bool,
     },
     /// Reads a configuration document and answers with `configuration_inspected`: for each project
@@ -1818,6 +1821,7 @@ pub enum RequestBody {
     /// reads, or a body that cannot be read is refused with `configuration_not_recognised`,
     /// `configuration_version_unsupported` or `configuration_unreadable`.
     InspectConfiguration {
+        #[cfg_attr(test, ts(type = "unknown"))]
         document: serde_json::Value,
     },
     /// Applies a configuration document and answers with `configuration_imported`: creates a new
@@ -1832,34 +1836,42 @@ pub enum RequestBody {
     /// projects' account references bind to them, then the consoles and projects, then the
     /// settings. `account_resolutions` give a document account another directory or leave it out.
     ImportConfiguration {
+        #[cfg_attr(test, ts(type = "unknown"))]
         document: serde_json::Value,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         resolutions: Vec<crate::config_import::ProjectResolution>,
         /// Whether to apply the document's application settings to this machine; absent means
         /// false. Asking for them of a document that carries none is refused with
         /// `import_settings_missing`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         apply_settings: bool,
         /// Whether to create the document's accounts on this machine; absent means false. Asking
         /// for them of a document that carries none is refused with `import_accounts_missing`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         apply_accounts: bool,
         /// The choices for document accounts; one that names an account the document lacks,
         /// names one twice, gives both or neither of `directory` and `leave_out`, or gives a
         /// `directory` that is neither an absolute path nor starts with `~/`, is refused with
         /// `import_resolution_invalid`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         account_resolutions: Vec<crate::config_import::AccountResolution>,
         /// Whether to create the document's consoles and projects; absent means true. Without
         /// them no console or project is created and `resolutions` are not read.
         #[serde(default = "default_true")]
+        #[cfg_attr(test, ts(optional = nullable))]
         apply_consoles: bool,
     },
     OpenSession {
         console_id: String,
+        #[cfg_attr(test, ts(optional))]
         project_id: Option<String>,
         /// The session's agent; absent takes the project's default, else the console's project
         /// session agent, else its `default_agent`.
+        #[cfg_attr(test, ts(optional))]
         agent: Option<Agent>,
         /// The account this session's agent reads, by id. Absent leaves the choice to the
         /// project's reference for that agent, else the console's, else the default account; an
@@ -1867,14 +1879,19 @@ pub enum RequestBody {
         /// refers to. A reference that names no account of the session's agent is refused with
         /// `unknown_account`.
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         account: Option<Option<String>>,
         /// Absent inherits the project's (or console's) current setting; null or blank uses the
         /// agent's own default. A string is trimmed and kept for every later launch.
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
+        #[cfg_attr(test, ts(optional))]
         task: Option<String>,
+        #[cfg_attr(test, ts(optional))]
         title: Option<String>,
         /// The session this (project) session should report to. Absent means none: a session the
         /// user opens by hand stays outside the orchestration unless they choose one. Ignored for
@@ -1882,6 +1899,7 @@ pub enum RequestBody {
         /// `console_id`, or an unbound project session of `project_id`, or the request is refused
         /// with `unknown_session`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         bound_to: Option<String>,
         /// The agent's own id of a conversation started outside Octoboard, to continue in this
         /// session. Trimmed, blank meaning absent. Only a project session takes one, never
@@ -1890,17 +1908,20 @@ pub enum RequestBody {
         /// code of its own (see `apps/daemon/PROTOCOL.md`'s "Coded messages" section) and leaves
         /// no session behind.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         resume_agent_session_id: Option<String>,
         /// The appearance the asking client's terminal is showing. Absent (a session an agent
         /// opens, or a client that does not send it) leaves Grok following the operating system.
         /// Not recorded on the session.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         terminal_appearance: Option<TerminalAppearance>,
     },
     ResumeSession {
         session: String,
         /// See `OpenSession::terminal_appearance`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         terminal_appearance: Option<TerminalAppearance>,
     },
     ArchiveSession {
@@ -1908,15 +1929,18 @@ pub enum RequestBody {
         /// Bound branches and worktrees to remove even though git would refuse it (see
         /// `SessionBranchTarget`); absent means none.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         force_remove: Vec<SessionBranchTarget>,
         /// The ones the confirmation listed as refused and the user chose to keep, as they were
         /// listed: one left in that state is not reported. Absent means none.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         keep: Vec<SessionBranchTarget>,
         /// The ids of process trees (see `ProcessTree`) the confirmation listed and the user chose
         /// to keep running: they are made the user's before the processes are ended, and never
         /// stopped by the daemon. Absent means none.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         keep_process_ids: Vec<String>,
     },
     /// Moves a session to another account of its own agent: ends its process, copies its
@@ -1926,9 +1950,11 @@ pub enum RequestBody {
     SwitchSessionAccount {
         session: String,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(type = "string | null"))]
         account: Option<Option<String>>,
         /// See `OpenSession::terminal_appearance`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         terminal_appearance: Option<TerminalAppearance>,
     },
     /// Changes the model and reasoning effort of a session that is not archived, as its own
@@ -1940,11 +1966,14 @@ pub enum RequestBody {
     SetSessionModel {
         session: String,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
         /// See `OpenSession::terminal_appearance`.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         terminal_appearance: Option<TerminalAppearance>,
     },
     /// Hands a session off to a new session of another agent, which takes its whole place: kind,
@@ -1958,13 +1987,17 @@ pub enum RequestBody {
         session: String,
         agent: Agent,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         account: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
         /// See `OpenSession::terminal_appearance`. Applied to the receiving session's launch.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         terminal_appearance: Option<TerminalAppearance>,
     },
     /// Fresh native-record presence for exactly the supplied sessions, aggregated across accounts.
@@ -1990,6 +2023,7 @@ pub enum RequestBody {
         /// Also answer with the process trees of these sessions that an archive would stop and
         /// that have run long enough to ask about (`crate::process_requests::ASK_AFTER`).
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         processes: bool,
     },
     /// The process trees a session's launch started, or those of every running session of a
@@ -2021,14 +2055,18 @@ pub enum RequestBody {
         /// Requires the atomic unused-session delete, including when the session is archived.
         /// Never falls back to an archived-session cascade.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         only_if_unused: bool,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         trash_agent_records: bool,
         /// As `ArchiveSession`'s.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         force_remove: Vec<SessionBranchTarget>,
         /// As `ArchiveSession`'s.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         keep: Vec<SessionBranchTarget>,
     },
     /// Removes every archived session of `project`, or every archived session under
@@ -2037,17 +2075,22 @@ pub enum RequestBody {
     /// unreadable.
     DeleteArchivedSessions {
         console: String,
+        #[cfg_attr(test, ts(optional))]
         project: Option<String>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         console_session: Option<String>,
         /// Moves native records to the Trash for every session deleted; defaults to false.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         trash_agent_records: bool,
         /// As `ArchiveSession`'s.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         force_remove: Vec<SessionBranchTarget>,
         /// As `ArchiveSession`'s.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         keep: Vec<SessionBranchTarget>,
     },
     SetSessionPinned {
@@ -2081,10 +2124,10 @@ pub enum RequestBody {
     ReleaseSession {
         session: String,
     },
-    /// The pages a session pushed. `console_session` is the session that pushed them, a console
-    /// session or a project session.
+    /// The pages a session pushed. `session` is the session that pushed them, a console session
+    /// or a project session.
     ListPages {
-        console_session: String,
+        session: String,
     },
     /// What a report panel form was submitted with. The page it came from is named rather than the
     /// console session, because that is what the panel knows and it is also what decides whether the
@@ -2092,6 +2135,7 @@ pub enum RequestBody {
     /// names the console session the submission is delivered to.
     SubmitPage {
         page: String,
+        #[cfg_attr(test, ts(type = "unknown"))]
         data: serde_json::Value,
     },
     /// The user's answer to a `trust_prompt`: Octoboard may press that session's trust
@@ -2104,6 +2148,7 @@ pub enum RequestBody {
         session: String,
         remember: bool,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         trust_parent_dir: bool,
     },
     /// Stops trusting a directory. Projects' own consents are left as they are.
@@ -2124,50 +2169,70 @@ pub enum RequestBody {
         request_id: String,
         approve: bool,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         agent: Option<Agent>,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         account: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         model: Option<Option<String>>,
         #[serde(default, deserialize_with = "present_option")]
+        #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
     },
     /// Each settable field absent means "leave it alone". Broadcasts `settings_updated` only when
     /// something actually changed, as `remove_trusted_directory` does.
     UpdateSettings {
+        #[cfg_attr(test, ts(optional))]
         auto_pull_repositories: Option<bool>,
+        #[cfg_attr(test, ts(optional))]
         auto_delete_unresumable_archives: Option<bool>,
+        #[cfg_attr(test, ts(optional))]
         auto_approve_session_requests: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         auto_approve_resume_requests: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         auto_approve_account_switches: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         auto_approve_handoffs: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         ask_questions_as_choices: Option<bool>,
         /// A tag the interface offers (`interface_language::display_name` knows it); any other
         /// is refused.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         interface_language: Option<String>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         auto_select_account: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         auto_switch_on_usage_limit: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         sidebar_order_by_status: Option<bool>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         auto_start_quota_windows: Option<bool>,
         /// A blank value goes back to the built-in default.
+        #[cfg_attr(test, ts(optional))]
         default_clone_dir: Option<String>,
         /// Absent leaves the git workflow settings alone; within it, each item absent is left
         /// alone.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         git_workflow: Option<crate::git_workflow::GitWorkflowSettingsChanges>,
         /// Per agent other than Claude Code, by wire name: whether its sessions load Claude Code's
         /// instructions and skills. An agent left out is left alone; Claude Code or an unknown
         /// name is refused.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(type = "Partial<Record<Agent, boolean>>"))]
         claude_compatibility: Option<std::collections::BTreeMap<String, bool>>,
     },
     /// Both fields are required: an account always has a name and a directory. Broadcasts
@@ -2181,7 +2246,9 @@ pub enum RequestBody {
     /// alone. Broadcasts `settings_updated`.
     UpdateAccount {
         account: String,
+        #[cfg_attr(test, ts(optional))]
         name: Option<String>,
+        #[cfg_attr(test, ts(optional))]
         config_dir: Option<String>,
     },
     /// Clears the reference of every console that refers to this account, which puts each one back
@@ -2203,6 +2270,7 @@ pub enum RequestBody {
         account: String,
         /// Absent is false: only the record goes.
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         trash_directory: bool,
     },
     /// What `delete_account` with `trash_directory` would do with the account's config directory
@@ -2254,17 +2322,20 @@ pub enum RequestBody {
     /// account are not affected.
     SetAccountDisabled {
         agent: Agent,
+        #[cfg_attr(test, ts(type = "string | null"))]
         account: Option<String>,
         disabled: bool,
     },
     /// Sets the approval reviewer of every Codex account. A null reviewer follows each account's
     /// configuration. Takes effect on the next launch or resume.
     SetCodexApprovalReviewer {
+        #[cfg_attr(test, ts(type = "ApprovalReviewer | null"))]
         reviewer: Option<ApprovalReviewer>,
     },
     /// Sets the approval mode of every Claude Code account. A null mode follows each account's
     /// configuration. Takes effect on the next launch or resume.
     SetClaudeApprovalMode {
+        #[cfg_attr(test, ts(type = "ClaudeApprovalMode | null"))]
         mode: Option<ClaudeApprovalMode>,
     },
     /// Sets whether an account shares the agent's default configuration. A null account names
@@ -2272,6 +2343,7 @@ pub enum RequestBody {
     /// it ends, or refused: while sessions of the account run or start, or it is being signed in
     /// (`account_in_use`), and while a change of it already runs (`account_sharing_in_progress`).
     SetAccountSharing {
+        #[cfg_attr(test, ts(type = "string | null"))]
         account: Option<String>,
         share: bool,
     },
@@ -2283,8 +2355,10 @@ pub enum RequestBody {
     /// finishes follows as `account_quotas_updated`.
     RefreshAccountQuotas {
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         agent: Option<Agent>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         account: Option<String>,
     },
     /// Signs an account in with its agent's own CLI, run in the background against the account's
@@ -2301,6 +2375,7 @@ pub enum RequestBody {
     StartAccountLogin {
         agent: Agent,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,
     },
     /// Ends the login of an account that is being signed in, and its CLI with it. Answered with
@@ -2308,6 +2383,7 @@ pub enum RequestBody {
     CancelAccountLogin {
         agent: Agent,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         account: Option<String>,
     },
     /// Checks every project of this console's current git status against its remote, concurrently.
@@ -2333,8 +2409,10 @@ pub enum RequestBody {
     CreateShellTerminal {
         project: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
         path: String,
     },
     /// Renames a shell terminal; from then on the shell's own titles no longer change it. The
@@ -2369,6 +2447,7 @@ pub enum RequestBody {
         project: String,
         path: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
     },
     /// Opens an existing live path with its default application on the daemon host.
@@ -2376,12 +2455,14 @@ pub enum RequestBody {
         project: String,
         path: String,
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         worktree: Option<String>,
     },
     /// Asks what each of `paths` names on the daemon host: a file, a folder or nothing reachable
     /// (see `path_links.rs`). Answered with `path_links`.
     ProbePathLinks {
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         project: Option<String>,
         paths: Vec<String>,
     },
@@ -2389,6 +2470,7 @@ pub enum RequestBody {
     /// folder opens in the file manager.
     OpenPathLink {
         #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
         project: Option<String>,
         path: String,
     },
@@ -2415,6 +2497,7 @@ pub enum RequestBody {
     Shutdown,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRecordPresence {
@@ -2424,6 +2507,7 @@ pub enum SessionRecordPresence {
 }
 
 /// Who said a message in a session's history.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HistorySpeaker {
@@ -2436,6 +2520,7 @@ pub enum HistorySpeaker {
 }
 
 /// One message of a session's history, as `read_session_history` returns it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct HistoryMessage {
     pub speaker: HistorySpeaker,
@@ -2445,10 +2530,12 @@ pub struct HistoryMessage {
     pub turn: u32,
     /// When the record dated it, in milliseconds since the Unix epoch.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub at: Option<i64>,
 }
 
 /// What a `list_processes` asks about: one session, or one project.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum ProcessTarget {
@@ -2463,6 +2550,7 @@ pub enum ProcessTarget {
 /// is, or a linked worktree with such a branch checked out. What `inspect_session_branches`
 /// reports, and what an archive or a deletion leaves behind. A project's removal also takes
 /// worktrees bound to no session (`inspect_project_removal`).
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SessionBranchItem {
     pub kind: SessionBranchKind,
@@ -2487,10 +2575,12 @@ pub struct SessionBranchItem {
     /// Why a `failed` item is left, where a client words that itself; `detail` then says it in
     /// English.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub cause: Option<SessionBranchCause>,
 }
 
 /// Why a `failed` [`SessionBranchItem`] is left, as a client words it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionBranchCause {
@@ -2501,6 +2591,7 @@ pub enum SessionBranchCause {
     ProtectedFolder,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionBranchKind {
@@ -2510,6 +2601,7 @@ pub enum SessionBranchKind {
 
 /// Where a bound item stands. `uncommitted_changes`, `submodules`, `unmerged` and `locked` are what
 /// a forced removal takes; `checked_out`, `project_folder` and `failed` are left whatever is asked.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionBranchState {
@@ -2535,21 +2627,26 @@ pub enum SessionBranchState {
 
 /// A bound item a request names, as `SessionBranchItem` names it and in the state the user was
 /// shown it in: a forced removal goes only while the item still stands that way.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct SessionBranchTarget {
     pub kind: SessionBranchKind,
     pub repository: String,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
     pub branch: Option<String>,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
     pub path: Option<String>,
     pub state: SessionBranchState,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
     pub uncommitted: bool,
 }
 
 /// What `delete_account` with `trash_directory` would do with an account's config directory, as
 /// `inspect_account_trash` answers.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum AccountTrashOutcome {
@@ -2566,8 +2663,10 @@ pub enum AccountTrashOutcome {
     Shared {
         kind: AccountTrashSharing,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         name: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         agent: Option<String>,
     },
     /// A path that decides it could not be looked at at once (`account_directory_trash_failed`):
@@ -2576,6 +2675,8 @@ pub enum AccountTrashOutcome {
     /// `cause` `other_unlooked`.
     Unlookable {
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
+        #[cfg_attr(test, ts(type = "\"unreadable\" | \"other_unlooked\""))]
         cause: Option<String>,
     },
     /// A look did not answer within the short time the inspection allows: nothing is said against
@@ -2584,6 +2685,7 @@ pub enum AccountTrashOutcome {
 }
 
 /// What `AccountTrashOutcome::Shared` shares the directory with.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountTrashSharing {
@@ -2593,6 +2695,7 @@ pub enum AccountTrashSharing {
 }
 
 /// What a path asked about in `probe_path_links` names.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PathLinkKind {
@@ -2601,6 +2704,7 @@ pub enum PathLinkKind {
     None,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct PathLink {
     /// The path as asked.
@@ -2611,24 +2715,29 @@ pub struct PathLink {
     /// absent for anything else. Whether the viewer can show it is for the client to find out by
     /// reading it.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub view: Option<PathLinkView>,
     /// A file the system could launch: it is for the viewer to show, and `open_path_link` refuses it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[cfg_attr(test, ts(optional = nullable))]
     pub viewer_only: bool,
 }
 
 /// A file in the project, as `read_project_file` names it: the file a path link names, or the one
 /// a directory link shows.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PathLinkView {
     /// The worktree it is in; absent for the project's own directory.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub worktree: Option<String>,
     /// Its wire path below that directory.
     pub path: String,
 }
 
 /// What a `set_session_model` did (`Event::SessionModelSet`).
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelChangeOutcome {
@@ -2640,6 +2749,7 @@ pub enum ModelChangeOutcome {
     Restarted,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
@@ -2659,6 +2769,7 @@ pub enum Event {
         session: String,
         outcome: ModelChangeOutcome,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         continued: Option<bool>,
     },
     SessionHistory {
@@ -2666,6 +2777,7 @@ pub enum Event {
         session: String,
         messages: Vec<HistoryMessage>,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
+        #[cfg_attr(test, ts(optional = nullable))]
         unavailable: bool,
     },
     SessionRecordsInspected {
@@ -2677,6 +2789,7 @@ pub enum Event {
         items: Vec<SessionBranchItem>,
         /// Only for an `inspect_session_branches` that asked for `processes`.
         #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[cfg_attr(test, ts(optional = nullable))]
         processes: Vec<crate::process_ledger::ProcessTree>,
     },
     ProcessesListed {
@@ -2704,6 +2817,7 @@ pub enum Event {
         /// The token the worktrees it held back are kept under, for `delete_project` to send back
         /// (`crate::branch_origin::cleanup::project`); absent when it held none back.
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         inspection: Option<String>,
     },
     Snapshot {
@@ -2879,8 +2993,10 @@ pub enum Event {
         /// For `handoff`: the model and effort the call asked for, as `Session::model` states an
         /// override: absent when the call left it out, null for the agent's own default.
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         model: Option<Option<String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         effort: Option<Option<String>>,
         /// Milliseconds since the epoch, which is what orders several requests oldest first.
         requested_at: i64,
@@ -2959,18 +3075,17 @@ pub enum Event {
     /// already has, so nothing else tells it that its list is now short.
     PageList {
         id: Option<String>,
-        console_session_id: String,
+        session_id: String,
         pages: Vec<Page>,
     },
     /// A page a session just pushed. The panel showing that session refreshes to it.
     PageCreated {
         page: Page,
     },
-    /// Pages a session withdrew with `delete_pages`, by id. `console_session_id` names the session
-    /// that pushed them (the field's name is the wire's, though a project session can push pages
-    /// too). The panel showing that session drops them.
+    /// Pages a session withdrew with `delete_pages`, by id. `session_id` names the session that
+    /// pushed them. The panel showing that session drops them.
     PagesDeleted {
-        console_session_id: String,
+        session_id: String,
         pages: Vec<String>,
     },
     /// The reply to `probe_path_links`: one entry per asked path, in the order asked.
@@ -3002,6 +3117,7 @@ pub enum Event {
         paths: Vec<String>,
         /// The `paths` Git ignores, sent only when there are any; see `browse::ignored`.
         #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[cfg_attr(test, ts(optional = nullable))]
         ignored: Vec<String>,
         complete: bool,
     },
@@ -3048,10 +3164,12 @@ pub enum Event {
         /// Absent when true; false when the upstream lookup was past a budget, so that the main
         /// working copy's branch may lack its `upstream` or `default_branch` though it has one.
         #[serde(skip_serializing_if = "is_true")]
+        #[cfg_attr(test, ts(optional = nullable))]
         upstreams_complete: bool,
         /// The remote branch the repository's remote default branch points at, when the main
         /// working copy's branch has no `upstream`; absent when there is none to give.
         #[serde(skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         default_branch: Option<UpstreamInfo>,
     },
     /// The reply to `compare_project_branches`: the two branches with the commits they were
@@ -3172,6 +3290,7 @@ impl Event {
 }
 
 /// Where a conversation is held, as `locate_conversation_to_resume` reports it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ConversationLocation {
@@ -3193,6 +3312,7 @@ pub enum ConversationLocation {
 }
 
 /// One model an agent offers, as `list_agent_models` reports it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AgentModel {
     /// What Octoboard passes to the agent as its model: an alias Claude Code resolves itself, or
@@ -3211,6 +3331,7 @@ pub struct AgentModel {
 
 /// Why `list_agent_models` has no list, as a coded message of the same shape as an `error`. It
 /// travels inside a reply because failing to ask the agent must never fail the form that asked.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ModelsUnavailable {
     pub code: Code,
@@ -3230,6 +3351,7 @@ impl ModelsUnavailable {
 
 /// The kind of a quota window. Not every agent has every kind: Claude Code has `session`,
 /// `weekly` and `weekly_model`, Codex `session` and `weekly`, Grok Build `credit_period`.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum QuotaWindowKind {
@@ -3256,6 +3378,7 @@ impl QuotaWindowKind {
 }
 
 /// One window of an account's plan quota.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct QuotaWindow {
     pub kind: QuotaWindowKind,
@@ -3279,6 +3402,7 @@ impl QuotaWindow {
 
 /// Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
 /// is part of the reading rather than a failure of anything else.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct QuotaUnavailable {
     pub code: Code,
@@ -3298,6 +3422,7 @@ impl QuotaUnavailable {
 
 /// The plan quota of one account as the agent's own CLI last reported it. Runtime state of the
 /// daemon: never stored and never part of an exported configuration.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountQuota {
     pub agent: Agent,
@@ -3318,6 +3443,7 @@ pub struct AccountQuota {
 }
 
 /// Where an account's login is.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LoginStatus {
@@ -3337,6 +3463,7 @@ pub enum LoginStatus {
 }
 
 /// An account's login as the daemon last saw it. Runtime state: never stored.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountLogin {
     pub agent: Agent,
@@ -3357,11 +3484,13 @@ pub struct AccountLogin {
 }
 
 /// An owned account's sharing state as the daemon holds it now. Runtime state: never stored.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AccountSharing {
     pub account: String,
     /// What refuses a change now; absent when nothing does.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub in_use: Option<AccountInUse>,
     /// How many of the account's sessions are idle — at their prompt, waiting for the user's next
     /// message, with nothing left running in the background. They do not refuse a change: it ends
@@ -3370,14 +3499,17 @@ pub struct AccountSharing {
     pub idle_sessions: usize,
     /// The change running now; absent when none is.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub progress: Option<SharingProgress>,
     /// The last change that failed since the daemon started, until the next one records its
     /// choice.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub failure: Option<SharingFailure>,
 }
 
 /// What runs under an account's directory that a change of its sharing must not move files under.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct AccountInUse {
     /// The account's sessions working under its directory: in the middle of a turn, with
@@ -3390,6 +3522,7 @@ pub struct AccountInUse {
 }
 
 /// How far a change of an account's sharing has got.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SharingProgress {
     /// The direction: turning sharing on, or off.
@@ -3403,6 +3536,7 @@ pub struct SharingProgress {
     /// the agent's id of a conversation being taken back. Present only while `changing`, from
     /// the first entry on: absent while the change waits for short CLI reads.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub item: Option<String>,
 }
 
@@ -3410,6 +3544,7 @@ pub struct SharingProgress {
 /// the same agent changes, then ending the account's idle sessions, changing the entries, and
 /// resuming those sessions. `waiting` and `stopping` are left out when there is nothing to wait
 /// for or stop, and `resuming` when nothing was stopped.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SharingPhase {
@@ -3425,6 +3560,7 @@ fn is_zero(count: &usize) -> bool {
 
 /// A change of an account's sharing that did not complete, in the form `account_sharing_failed`
 /// gives it.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct SharingFailure {
     /// The direction of the change.
@@ -3438,6 +3574,7 @@ pub struct SharingFailure {
 }
 
 /// Why a login failed.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct LoginFailure {
     pub code: Code,
@@ -3485,6 +3622,7 @@ impl Notice {
 }
 
 /// What approving a `session_request` does.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRequestAction {
@@ -3505,6 +3643,7 @@ pub enum SessionRequestAction {
 }
 
 /// Why a `session_request` stopped waiting.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionRequestEnding {
@@ -3520,6 +3659,7 @@ pub enum SessionRequestEnding {
 
 /// Client-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY input
 /// and never reach this type.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TermControl {
@@ -3539,6 +3679,7 @@ pub enum TermControl {
 }
 
 /// Daemon-sent text frame on `/ws/term/:session`. Binary frames on that socket are raw PTY output.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TermEvent {
@@ -3854,7 +3995,7 @@ pub mod error_code {
     /// not one.
     pub const CONFIGURATION_NOT_RECOGNISED: Code = Code("configuration_not_recognised");
     /// A configuration document is of a `version` this daemon does not read. `params` names the
-    /// `version` and the newest it `supported`.
+    /// `version` and the one it `supported`.
     pub const CONFIGURATION_VERSION_UNSUPPORTED: Code = Code("configuration_version_unsupported");
     /// A configuration document could not be read. `params` names the `detail`.
     pub const CONFIGURATION_UNREADABLE: Code = Code("configuration_unreadable");
@@ -4314,10 +4455,13 @@ pub fn now_millis() -> i64 {
 }
 
 #[cfg(test)]
+mod bindings;
+
+#[cfg(test)]
 mod tests {
     use super::{
-        AccountTrashOutcome, AccountTrashSharing, Event, HistoryMessage, HistorySpeaker,
-        ProjectAccount, ProjectSource, Request, RequestBody, SessionStatus,
+        AccountTrashOutcome, AccountTrashSharing, Change, Event, HistoryMessage, HistorySpeaker,
+        Launch, PerAgent, ProjectAccount, ProjectSource, Request, RequestBody, SessionStatus,
     };
 
     #[test]
@@ -4679,9 +4823,9 @@ mod tests {
                 },
             ),
             (
-                r#"{"type":"list_pages","id":"request-1","console_session":"session-7"}"#,
+                r#"{"type":"list_pages","id":"request-1","session":"session-7"}"#,
                 |body| match body {
-                    RequestBody::ListPages { console_session } => Some(console_session),
+                    RequestBody::ListPages { session } => Some(session),
                     _ => None,
                 },
             ),
@@ -5190,74 +5334,64 @@ mod tests {
         );
     }
 
-    /// A project's accounts, models and efforts are cleared the same way as a console's: absent
-    /// leaves one alone, `null` clears it (an account back to inheriting), and each agent's is
-    /// independent; a create request carries a model as a plain optional string and an account as
-    /// a [`ProjectAccount`], absent or `null` being inheriting there too.
+    /// A project's accounts, models and efforts are cleared the same way as a console's: an agent
+    /// left out is left alone, `null` clears an account (back to inheriting) or a launch field,
+    /// and each agent's is independent; a create request carries a model as a plain optional
+    /// string and an account as a [`ProjectAccount`], an agent left out or `null` being
+    /// inheriting there too.
     #[test]
     fn clearing_a_projects_settings_is_distinguishable_from_leaving_them() {
         let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
             RequestBody::UpdateProject {
-                claude_account_id,
-                grok_account_id,
-                claude_session_model,
-                codex_session_effort,
-                ..
-            } => (
-                claude_account_id,
-                grok_account_id,
-                claude_session_model,
-                codex_session_effort,
-            ),
+                accounts, launch, ..
+            } => (accounts, launch),
             _ => panic!("parses as update_project"),
         };
-        assert_eq!(
-            parse(r#"{"type":"update_project","project":"p"}"#),
-            (None, None, None, None)
+        let (accounts, launch) = parse(r#"{"type":"update_project","project":"p"}"#);
+        assert_eq!(accounts, PerAgent::default());
+        assert!(launch.claude.is_keep() && launch.codex.is_keep() && launch.grok.is_keep());
+
+        let (accounts, launch) = parse(
+            r#"{"type":"update_project","project":"p","accounts":{"claude":null,
+                "grok":{"kind":"account","id":"acct-1"}},
+                "launch":{"claude":{"model":"opus"},"codex":{"effort":null}}}"#,
         );
+        assert_eq!(accounts.claude, Change::Clear);
+        assert_eq!(accounts.codex, Change::Keep);
         assert_eq!(
-            parse(
-                r#"{"type":"update_project","project":"p","claude_account_id":null,
-                    "grok_account_id":{"kind":"account","id":"acct-1"},
-                    "claude_session_model":"opus","codex_session_effort":null}"#
-            ),
-            (
-                Some(None),
-                Some(Some(ProjectAccount::Account {
-                    id: "acct-1".to_string()
-                })),
-                Some(Some("opus".to_string())),
-                Some(None)
-            )
+            accounts.grok,
+            Change::Set(ProjectAccount::Account {
+                id: "acct-1".to_string()
+            })
         );
+        assert_eq!(launch.claude.model, Some(Some("opus".to_string())));
+        assert_eq!(launch.claude.effort, None);
+        assert_eq!(launch.codex.model, None);
+        assert_eq!(launch.codex.effort, Some(None));
+        assert!(launch.grok.is_keep());
 
         let RequestBody::AddProject {
-            claude_account_id,
-            codex_account_id,
-            grok_account_id,
-            grok_session_model,
-            claude_session_effort,
-            ..
+            accounts, launch, ..
         } = serde_json::from_str::<Request>(
             r#"{"type":"add_project","console_id":"c","source":"local","path":"/p",
-                "codex_account_id":{"kind":"account","id":"acct-2"},
-                "grok_account_id":{"kind":"default"},"grok_session_model":"grok-4"}"#,
+                "accounts":{"codex":{"kind":"account","id":"acct-2"},"grok":{"kind":"default"}},
+                "launch":{"grok":{"model":"grok-4"}}}"#,
         )
         .unwrap()
         .body
         else {
             panic!("parses as add_project");
         };
-        assert_eq!(claude_account_id, None);
+        assert_eq!(accounts.claude, None);
         assert_eq!(
-            codex_account_id,
+            accounts.codex,
             Some(ProjectAccount::Account {
                 id: "acct-2".to_string()
             })
         );
-        assert_eq!(grok_account_id, Some(ProjectAccount::Default));
-        assert_eq!(grok_session_model.as_deref(), Some("grok-4"));
-        assert_eq!(claude_session_effort, None);
+        assert_eq!(accounts.grok, Some(ProjectAccount::Default));
+        assert_eq!(launch.grok.model.as_deref(), Some("grok-4"));
+        assert_eq!(launch.claude, Launch::default());
     }
 
     /// `add_project` takes a project's own git workflow values: an item absent or `null` follows
@@ -5294,65 +5428,68 @@ mod tests {
     }
 
     /// A project's account takes all three states on an update: `null` is inheriting, and an
-    /// object says the agent's default account or a named one; absent leaves it alone.
+    /// object says the agent's default account or a named one; an agent left out is left alone.
     #[test]
     fn a_projects_account_is_inherit_default_or_named_on_an_update() {
         let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
-            RequestBody::UpdateProject {
-                claude_account_id, ..
-            } => claude_account_id,
+            RequestBody::UpdateProject { accounts, .. } => accounts.claude,
             _ => panic!("parses as update_project"),
         };
         let update = |field: &str| format!(r#"{{"type":"update_project","project":"p"{field}}}"#);
-        assert_eq!(parse(&update("")), None);
-        assert_eq!(parse(&update(r#","claude_account_id":null"#)), Some(None));
+        assert_eq!(parse(&update("")), Change::Keep);
         assert_eq!(
-            parse(&update(r#","claude_account_id":{"kind":"inherit"}"#)),
-            Some(Some(ProjectAccount::Inherit))
+            parse(&update(r#","accounts":{"claude":null}"#)),
+            Change::Clear
         );
         assert_eq!(
-            parse(&update(r#","claude_account_id":{"kind":"default"}"#)),
-            Some(Some(ProjectAccount::Default))
+            parse(&update(r#","accounts":{"claude":{"kind":"inherit"}}"#)),
+            Change::Set(ProjectAccount::Inherit)
+        );
+        assert_eq!(
+            parse(&update(r#","accounts":{"claude":{"kind":"default"}}"#)),
+            Change::Set(ProjectAccount::Default)
         );
         assert_eq!(
             parse(&update(
-                r#","claude_account_id":{"kind":"account","id":"a"}"#
+                r#","accounts":{"claude":{"kind":"account","id":"a"}}"#
             )),
-            Some(Some(ProjectAccount::Account {
+            Change::Set(ProjectAccount::Account {
                 id: "a".to_string()
-            }))
+            })
         );
         // A bare string is not an account any more: nothing reads an id without saying what it is.
-        assert!(serde_json::from_str::<Request>(&update(r#","claude_account_id":"a""#)).is_err());
+        assert!(serde_json::from_str::<Request>(&update(r#","accounts":{"claude":"a"}"#)).is_err());
     }
 
-    /// Absent versus null is the only way a console's account can be cleared as well as set, and
-    /// each agent's is independent of the others.
+    /// A key left out versus `null` is the only way a console's account can be cleared as well as
+    /// set, and each agent's is independent of the others.
     #[test]
     fn clearing_a_consoles_account_is_distinguishable_from_leaving_it() {
         let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
-            RequestBody::UpdateConsole {
-                claude_account_id,
-                codex_account_id,
-                grok_account_id,
-                ..
-            } => (claude_account_id, codex_account_id, grok_account_id),
+            RequestBody::UpdateConsole { accounts, .. } => accounts,
             _ => panic!("parses as update_console"),
         };
         assert_eq!(
             parse(r#"{"type":"update_console","console":"c"}"#),
-            (None, None, None)
+            PerAgent::default()
         );
         assert_eq!(
             parse(
-                r#"{"type":"update_console","console":"c","claude_account_id":null,
-                    "codex_account_id":"acct-1"}"#
+                r#"{"type":"update_console","console":"c","accounts":{"claude":null,
+                    "codex":"acct-1"}}"#
             ),
-            (Some(None), Some(Some("acct-1".to_string())), None)
+            PerAgent {
+                claude: Change::Clear,
+                codex: Change::Set("acct-1".to_string()),
+                grok: Change::Keep,
+            }
         );
         assert_eq!(
-            parse(r#"{"type":"update_console","console":"c","grok_account_id":"acct-2"}"#),
-            (None, None, Some(Some("acct-2".to_string())))
+            parse(r#"{"type":"update_console","console":"c","accounts":{"grok":"acct-2"}}"#),
+            PerAgent {
+                grok: Change::Set("acct-2".to_string()),
+                ..PerAgent::default()
+            }
         );
     }
 
@@ -5418,7 +5555,8 @@ mod tests {
             let json = format!(
                 r#"{{"id":"s","agent":"claude","agent_session_id":null,
                 "console_id":"c","project_id":null,"host_id":"local","role":"console",
-                "origin":"user","title":"Hub","status":"idle","has_conversation":false,
+                "origin":"user","title":"Hub","status":"idle","orchestration_role":"coordinator",
+                "has_conversation":false,
                 "bound_to":null,"colour":null,"ordinal":null,"account_id":null,"config_dir":null,
                 "pinned":false,"started_at":0,"ended_at":null{fields}}}"#
             );
@@ -5452,31 +5590,37 @@ mod tests {
         );
     }
 
-    /// A console session's model is cleared the same way, and each agent's is independent.
+    /// A console's console session and project session launch settings are cleared the same way:
+    /// within one agent's pair, a field left out is left alone, `null` clears it and a string
+    /// sets it, and each agent's is independent.
     #[test]
-    fn clearing_a_console_session_model_is_distinguishable_from_leaving_it() {
+    fn clearing_a_consoles_launch_setting_is_distinguishable_from_leaving_it() {
         let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
             RequestBody::UpdateConsole {
-                claude_console_session_model,
-                codex_console_session_model,
+                launch,
+                project_session_launch,
                 ..
-            } => (claude_console_session_model, codex_console_session_model),
+            } => (launch, project_session_launch),
             _ => panic!("parses as update_console"),
         };
-        assert_eq!(
-            parse(r#"{"type":"update_console","console":"c"}"#),
-            (None, None)
+        let (launch, project_session_launch) = parse(r#"{"type":"update_console","console":"c"}"#);
+        assert!(launch.claude.is_keep() && launch.codex.is_keep() && launch.grok.is_keep());
+        assert!(project_session_launch.claude.is_keep());
+
+        let (launch, project_session_launch) = parse(
+            r#"{"type":"update_console","console":"c",
+                "launch":{"claude":{"model":null},"codex":{"model":"gpt-5"}},
+                "project_session_launch":{"grok":{"effort":"low"}}}"#,
         );
+        assert_eq!(launch.claude.model, Some(None));
+        assert_eq!(launch.claude.effort, None);
+        assert_eq!(launch.codex.model, Some(Some("gpt-5".to_string())));
+        assert!(launch.grok.is_keep());
         assert_eq!(
-            parse(r#"{"type":"update_console","console":"c","claude_console_session_model":null}"#),
-            (Some(None), None)
+            project_session_launch.grok.effort,
+            Some(Some("low".to_string()))
         );
-        assert_eq!(
-            parse(
-                r#"{"type":"update_console","console":"c","codex_console_session_model":"gpt-5"}"#
-            ),
-            (None, Some(Some("gpt-5".to_string())))
-        );
+        assert!(project_session_launch.claude.is_keep());
     }
 
     /// A model change keeps an absent value, gives an explicit `null` back to the agent and pins
@@ -5563,22 +5707,58 @@ mod tests {
     }
 
     #[test]
-    fn creating_a_console_needs_no_account() {
+    fn creating_a_console_needs_no_account_or_launch_setting() {
         let request: Request =
             serde_json::from_str(r#"{"type":"create_console","name":"n","default_agent":"codex"}"#)
                 .unwrap();
         match request.body {
             RequestBody::CreateConsole {
-                claude_account_id,
-                codex_account_id,
-                grok_account_id,
+                accounts,
+                launch,
+                project_session_launch,
                 ..
-            } => assert_eq!(
-                (claude_account_id, codex_account_id, grok_account_id),
-                (None, None, None)
-            ),
+            } => {
+                assert_eq!(accounts, PerAgent::default());
+                assert_eq!(launch, PerAgent::default());
+                assert_eq!(project_session_launch, PerAgent::default());
+            }
             _ => panic!("parses as create_console"),
         }
+    }
+
+    /// A create request names only the agents it sets: a key left out, or `null`, is unset, and
+    /// a value is kept for that agent alone.
+    #[test]
+    fn creating_a_console_reads_each_agents_account_and_launch_pair() {
+        let request: Request = serde_json::from_str(
+            r#"{"type":"create_console","name":"n","default_agent":"codex",
+                "accounts":{"claude":"acct-1","codex":null},
+                "launch":{"claude":{"model":"opus","effort":"high"}},
+                "project_session_launch":{"codex":{"model":"gpt-5"}}}"#,
+        )
+        .unwrap();
+        let RequestBody::CreateConsole {
+            accounts,
+            launch,
+            project_session_launch,
+            ..
+        } = request.body
+        else {
+            panic!("parses as create_console");
+        };
+        assert_eq!(accounts.claude.as_deref(), Some("acct-1"));
+        assert_eq!(accounts.codex, None);
+        assert_eq!(accounts.grok, None);
+        assert_eq!(
+            launch.claude,
+            Launch {
+                model: Some("opus".to_string()),
+                effort: Some("high".to_string())
+            }
+        );
+        assert_eq!(launch.codex, Launch::default());
+        assert_eq!(project_session_launch.codex.model.as_deref(), Some("gpt-5"));
+        assert_eq!(project_session_launch.codex.effort, None);
     }
 
     /// `trust_parent_dir` is newer than `remember`, so a request without it still reads, as "this

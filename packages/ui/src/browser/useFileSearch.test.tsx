@@ -28,7 +28,7 @@ it("searches only while the caller enables it, and does not search again on a ti
     await act(async () => root.render(<DaemonProvider value={daemon}><Search active /></DaemonProvider>));
     await act(async () => { vi.advanceTimersByTime(250); });
     expect(request).toHaveBeenCalledWith({ type: "search_project_files", project: "all-files", query: "ts", slot: "file-search:all-files" });
-    await act(async () => resolve({ type: "project_file_matches", project: "all-files", query: "ts", paths: ["nested/file.ts"], complete: true }));
+    await act(async () => resolve({ type: "project_file_matches", id: null, project: "all-files", query: "ts", paths: ["nested/file.ts"], complete: true }));
     expect(result).toEqual({ state: "loaded", paths: ["nested/file.ts"], ignored: new Set(), complete: true });
     await act(async () => { vi.advanceTimersByTime(60_000); });
     expect(request).toHaveBeenCalledTimes(1);
@@ -49,6 +49,7 @@ it("repeats the search at once when ignored files are included, and tells which 
   let result!: FileSearch;
   const request = vi.fn(async (body: { include_ignored?: boolean }): Promise<Event> => ({
     type: "project_file_matches",
+    id: null,
     project: "all-files",
     query: "ts",
     paths: body.include_ignored ? ["dist/a.ts", "src/b.ts"] : ["src/b.ts"],
@@ -83,7 +84,7 @@ it("repeats the search at once on a toggle under StrictMode, whose effects run t
   vi.useFakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const request = vi.fn(async (): Promise<Event> => ({ type: "project_file_matches", project: "all-files", query: "ts", paths: ["src/b.ts"], complete: true }));
+  const request = vi.fn(async (): Promise<Event> => ({ type: "project_file_matches", id: null, project: "all-files", query: "ts", paths: ["src/b.ts"], complete: true }));
   const daemon = { store: createStateStore({ connectionState: "open", snapshotEpoch: 1 }), request } as unknown as Daemon;
   function Search({ includeIgnored }: { includeIgnored: boolean }) {
     useFileSearch("all-files", "ts", true, includeIgnored);

@@ -69,7 +69,7 @@ function mountApp(narrow = false, clipboard?: { writeText: (text: string) => Pro
   const sessions = withSession ? [sessionOf("s-archive", console_.id, "p-actions", "Fix bug", "idle")] : [];
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_], projects, sessions })),
-    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
+    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
@@ -225,8 +225,9 @@ it.each([false, true])("opens the project's Processes panel from Open panel, lis
   const tree = (id: string, command: string, session_id: string | undefined) => ({ id, session_id, command, cwd: "/p", cwd_missing: false, kept: session_id === undefined, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] });
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
     type: "processes_listed",
+    id: null,
     trees: [tree("t1", "vite of the selected", "s-archive"), tree("t2", "vite of another", "s-other"), tree("t3", "vite of the project", undefined)],
-  } : { type: "ack" });
+  } : { type: "ack", id: null });
   if (narrow) await press("Show sessions");
   const row = Array.from(document.querySelectorAll<HTMLElement>("[aria-label]")).find((element) => element.getAttribute("aria-label")!.includes("Fix bug") && !element.getAttribute("aria-label")!.startsWith("Actions for"));
   expect(row, "the session's row").toBeDefined();
@@ -303,8 +304,8 @@ async function openRestoreConfirmation() {
   const { daemon, project } = mounted;
   await act(async () => daemon.store.setState((state) => ({
     gitStatuses: new Map(state.gitStatuses).set(project.id, {
-      project: project.id, repository: true, branch: "main", detached: false,
-      ahead: 0, behind: 0, activity: "idle",
+      project: project.id, repository: true, branch: "main", detached: false, upstream: null,
+      ahead: 0, behind: 0, activity: "idle", error: null,
     }),
   })));
   await openProjectMenu(project.name);
@@ -335,13 +336,13 @@ it("says a truncated branch list is limited, as a muted note after the branches 
   const { daemon, project } = mountApp();
   await act(async () => daemon.store.setState((state) => ({
     gitStatuses: new Map(state.gitStatuses).set(project.id, {
-      project: project.id, repository: true, branch: "main", detached: false,
-      ahead: 0, behind: 0, activity: "idle",
+      project: project.id, repository: true, branch: "main", detached: false, upstream: null,
+      ahead: 0, behind: 0, activity: "idle", error: null,
     }),
   })));
   vi.mocked(daemon.request).mockImplementation((async (body: { type: string }) => body.type === "list_project_branches"
-    ? { type: "project_branches", project: project.id, branches: [{ name: "alpha" }, { name: "beta" }], complete: false }
-    : { type: "ack" }) as never);
+    ? { type: "project_branches", id: null, project: project.id, branches: [{ name: "alpha" }, { name: "beta" }], complete: false }
+    : { type: "ack", id: null }) as never);
   await openProjectMenu(project.name);
   await press("Git");
   await press("Switch branch");
@@ -392,9 +393,9 @@ function mountWithPendingInspection(items: unknown[] = []) {
   let answer!: () => void;
   const answered = new Promise<void>((done) => { answer = done; });
   vi.mocked(mounted.daemon.request).mockImplementation(async (body) => {
-    if (body.type !== "inspect_session_branches") return { type: "ack" };
+    if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
     await answered;
-    return { type: "session_branches_inspected", items } as never;
+    return { type: "session_branches_inspected", id: null, items } as never;
   });
   return { ...mounted, answer: () => act(async () => answer()) };
 }
@@ -443,14 +444,15 @@ it("reinspects the expanded archive scope when a child binds during the prefligh
   const original = new Promise<void>((resolve) => { answerOriginal = resolve; });
   const expanded = new Promise<void>((resolve) => { answerExpanded = resolve; });
   vi.mocked(daemon.request).mockImplementation(async (body) => {
-    if (body.type !== "inspect_session_branches") return { type: "ack" };
+    if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
     if (body.sessions.length === 1) {
       await original;
-      return { type: "session_branches_inspected", items: [], processes: [TREE] };
+      return { type: "session_branches_inspected", id: null, items: [], processes: [TREE] };
     }
     await expanded;
     return {
       type: "session_branches_inspected",
+      id: null,
       items: [{
         kind: "branch", repository: "/r/.git", branch: "child-feature", path: null, project: "p-actions",
         session: "s-bound", state: "unmerged", uncommitted: false, detail: null,
@@ -503,7 +505,7 @@ it("archives an idle session at once when what is bound to it cannot be inspecte
   const { daemon } = mountApp(false, undefined, true);
   vi.mocked(daemon.request).mockImplementation(async (body) => {
     if (body.type === "inspect_session_branches") throw new Error("Connection lost");
-    return { type: "ack" };
+    return { type: "ack", id: null };
   });
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Archive");
@@ -516,12 +518,13 @@ it("asks before archiving an idle session that has a bound worktree git refuses 
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "inspect_session_branches"
     ? {
       type: "session_branches_inspected",
+      id: null,
       items: [{
         kind: "worktree", repository: "/r/.git", branch: "feature", path: "/r-feature", project: "p-actions",
         session: "s-archive", state: "uncommitted_changes", uncommitted: true, detail: null,
       }],
     }
-    : { type: "ack" });
+    : { type: "ack", id: null });
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Archive");
   expect(daemon.request).toHaveBeenCalledWith({ type: "inspect_session_branches", sessions: ["s-archive"], processes: true });
@@ -538,8 +541,8 @@ const TREE = {
 it("asks before archiving an idle session that has left a process running, and sends the ones kept", async () => {
   const { daemon } = mountApp(false, undefined, true);
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "inspect_session_branches"
-    ? { type: "session_branches_inspected", items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] }
-    : { type: "ack" });
+    ? { type: "session_branches_inspected", id: null, items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] }
+    : { type: "ack", id: null });
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Archive");
   expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "archive_session" }));
@@ -561,9 +564,9 @@ it("inspects again for the confirmation the session's turning busy opened over a
   const failed = new Promise<void>((_, reject) => { fail = () => reject(new Error("Connection lost")); });
   failed.catch(() => {});
   vi.mocked(daemon.request).mockImplementation(async (body) => {
-    if (body.type !== "inspect_session_branches") return { type: "ack" };
+    if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
     if (++inspections === 1) await failed;
-    return { type: "session_branches_inspected", items: [], processes: [TREE] } as never;
+    return { type: "session_branches_inspected", id: null, items: [], processes: [TREE] } as never;
   });
   await archiveFromMenu();
   await act(async () => daemon.store.setState((state) => ({
@@ -577,8 +580,8 @@ it("inspects again for the confirmation the session's turning busy opened over a
 it("archives an idle session at once when no process it left running has run long enough to ask about", async () => {
   const { daemon } = mountApp(false, undefined, true);
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "inspect_session_branches"
-    ? { type: "session_branches_inspected", items: [] }
-    : { type: "ack" });
+    ? { type: "session_branches_inspected", id: null, items: [] }
+    : { type: "ack", id: null });
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Archive");
   expect(daemon.request).toHaveBeenCalledWith({ type: "archive_session", session: "s-archive" });
@@ -608,7 +611,7 @@ async function pickSonnetInChangeModel(answer: (body: { type: string }) => unkno
   const mounted = mountApp(false, undefined, true);
   vi.mocked(mounted.daemon.request).mockImplementation((async (body: { type: string; agent?: string }) => {
     if (body.type === "list_agent_models") {
-      return { type: "agent_models", agent: body.agent, account: null, unavailable: null, models: [
+      return { type: "agent_models", id: null, agent: body.agent, account: null, unavailable: null, models: [
         { id: "opus", name: "Opus", efforts: ["low", "high"] },
         { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
       ] };
@@ -633,7 +636,7 @@ const passTime = (ms: number) => act(async () => { await vi.advanceTimersByTimeA
 
 it("sends only the edited values when a model is changed, and announces the restart", async () => {
   windowAttention();
-  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "restarted", continued: true }));
+  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "restarted", continued: true }));
   expect(sentOf(daemon, "set_session_model")).toEqual([[
     { type: "set_session_model", session: "s-archive", model: "sonnet", terminal_appearance: expect.stringMatching(/^(light|dark)$/) },
   ]]);
@@ -645,7 +648,7 @@ it("sends only the edited values when a model is changed, and announces the rest
 
 it("announces values recorded for the next resume after the focus move", async () => {
   windowAttention();
-  await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "recorded" }));
+  await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" }));
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
   expect(said()).toBeUndefined();
   await passTime(200);
@@ -656,7 +659,7 @@ it("names the session by its title at the time of the reply", async () => {
   windowAttention();
   let reply!: () => void;
   const { daemon } = await pickSonnetInChangeModel(() => new Promise((resolve) => {
-    reply = () => resolve({ type: "session_model_set", session: "s-archive", outcome: "recorded" });
+    reply = () => resolve({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" });
   }));
   await act(async () => daemon.store.setState((state) => ({
     sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, title: "Renamed" }),
@@ -669,7 +672,7 @@ it("names the session by its title at the time of the reply", async () => {
 it("holds an announcement while the window is not attended, then says it after the focus-move wait", async () => {
   const attend = windowAttention();
   attend(false);
-  await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "recorded" }));
+  await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" }));
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS * 3);
   expect(said()).toBeUndefined();
   attend(true);
@@ -681,7 +684,7 @@ it("holds an announcement while the window is not attended, then says it after t
 
 it("holds an announcement while a modal is open over the window", async () => {
   windowAttention();
-  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "recorded" }));
+  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" }));
   await act(async () => errorAlerts.report({ message: "Something else failed.", recovery: "none" }));
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS * 3);
   expect(said()).toBeUndefined();
@@ -693,7 +696,7 @@ it("holds an announcement while a modal is open over the window", async () => {
 
 it("announces nothing when the session had the model settings already", async () => {
   windowAttention();
-  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "unchanged" }));
+  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", id: null, session: "s-archive", outcome: "unchanged" }));
   await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
   expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
   expect(daemon.toastError).not.toHaveBeenCalled();
@@ -703,7 +706,7 @@ it("points a launch setting the agent does not offer back to Change model", asyn
   const error = new DaemonRequestError("No.", "invalid_launch_setting", { field: "model", value: "sonnet", agent: "Codex" });
   const { daemon } = await pickSonnetInChangeModel((body) => {
     if (body.type === "set_session_model") throw error;
-    return { type: "ack" };
+    return { type: "ack", id: null };
   });
   expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(error, "s-archive", "Could not change the model", "changeModelSetting");
 });
@@ -725,7 +728,7 @@ it("reports a refused model change under its own title for the session", async (
   const error = new DaemonRequestError("Did not stop.", "model_change_did_not_stop", { session: "s-archive" });
   const { daemon } = await pickSonnetInChangeModel((body) => {
     if (body.type === "set_session_model") throw error;
-    return { type: "ack" };
+    return { type: "ack", id: null };
   });
   expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ code: "model_change_did_not_stop" }), "s-archive", "Could not change the model", undefined);
   expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
@@ -735,7 +738,7 @@ it("keeps a reply unheard and unexpired while a FileViewer covers the status reg
   windowAttention();
   let reply!: () => void;
   const { daemon, container: app } = await pickSonnetInChangeModel(() => new Promise((resolve) => {
-    reply = () => resolve({ type: "session_model_set", session: "s-archive", outcome: "recorded" });
+    reply = () => resolve({ type: "session_model_set", id: null, session: "s-archive", outcome: "recorded" });
   }));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

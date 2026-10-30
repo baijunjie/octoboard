@@ -209,14 +209,14 @@ fn same_standing(a: &Session, b: &Session) -> bool {
         a.status,
         a.pinned,
         a.locked,
-        a.lead,
+        a.orchestration_role,
         a.has_conversation,
     ) == (
         b.id.as_str(),
         b.status,
         b.pinned,
         b.locked,
-        b.lead,
+        b.orchestration_role,
         b.has_conversation,
     ) && a.agent == b.agent
         && a.agent_session_id == b.agent_session_id
@@ -269,7 +269,7 @@ fn delete_judged(state: &Arc<AppState>, judged: &[&Session]) -> Result<Judged> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::protocol::{Agent, Event, Role};
+    use crate::protocol::{Agent, Event, OrchestrationRole, Role};
     use crate::test_support::{
         console_with_project_and_accounts, project_session, session_ids, PATIENCE,
     };
@@ -337,6 +337,11 @@ mod tests {
                 ),
                 has_conversation: true,
                 bound_to: owner.map(str::to_owned),
+                orchestration_role: if owner.is_some() {
+                    OrchestrationRole::Worker
+                } else {
+                    OrchestrationRole::Coordinator
+                },
                 ..project_session(id, Agent::Claude, SessionStatus::Archived)
             }
         }
@@ -350,10 +355,10 @@ mod tests {
             }
         }
 
-        /// A lead session of the console session `hub`.
+        /// A coordinator under the console session `hub`.
         fn lead(&self, id: &str, hub: &str) -> Session {
             Session {
-                lead: true,
+                orchestration_role: OrchestrationRole::Coordinator,
                 ..self.session(id, Some(hub))
             }
         }

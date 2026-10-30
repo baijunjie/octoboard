@@ -19,7 +19,7 @@ const quotaOf = (agent: Account["agent"], account: string | null, patch: Partial
   plan: "plus",
   windows: [{ kind: "session", label: null, used_percent: 18, resets_at: null, window_minutes: 300 }],
   unavailable: null,
-  ...patch,
+  email: null, ...patch,
 });
 
 it("shows the email an account is signed in with under its name in its row", () => {

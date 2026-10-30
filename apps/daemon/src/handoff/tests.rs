@@ -4,7 +4,7 @@ use std::path::Path;
 use super::operation::{tell, Moved};
 use super::*;
 use crate::branch_origin::session_branches::{self, Worktree};
-use crate::protocol::SessionStatus;
+use crate::protocol::{OrchestrationRole, SessionStatus};
 use crate::test_support::{
     app_state, branch_made_by, console, git, insert_project, repo_with, ScratchDir,
 };
@@ -22,7 +22,8 @@ fn session(id: &str, agent: Agent, config_dir: Option<&Path>) -> Session {
         "id": id, "agent": "claude", "agent_session_id": AGENT_ID, "console_id": "console-1",
         "project_id": "p1", "host_id": crate::store::LOCAL_HOST_ID, "role": "project",
         "origin": "user", "title": format!("Session {id}"), "status": "idle",
-        "has_conversation": true, "pinned": false, "started_at": 0}))
+        "orchestration_role": "coordinator", "has_conversation": true, "pinned": false,
+        "started_at": 0}))
     .unwrap();
     session.agent = agent;
     session.config_dir = config_dir.map(|dir| dir.to_string_lossy().into_owned());
@@ -198,9 +199,11 @@ fn the_package_names_the_session_its_owner_and_the_sessions_it_owns() {
     owner.agent_session_id = None;
     let mut original = session("original", Agent::Claude, Some(&dir.join("account")));
     original.bound_to = Some("owner".to_owned());
+    original.orchestration_role = OrchestrationRole::Worker;
     let mut child = session("child", Agent::Claude, None);
     child.agent_session_id = None;
     child.bound_to = Some("original".to_owned());
+    child.orchestration_role = OrchestrationRole::Worker;
     child.status = SessionStatus::Archived;
     for stored in [&owner, &original, &child] {
         state.store.insert_session(stored).unwrap();
@@ -501,9 +504,11 @@ async fn a_moved_session_without_a_process_is_left_owed_the_notice_of_its_owner(
     let receiving = session("receiving", Agent::Codex, None);
     let mut asleep = session("asleep", Agent::Claude, None);
     asleep.bound_to = Some("receiving".to_owned());
+    asleep.orchestration_role = OrchestrationRole::Worker;
     asleep.status = SessionStatus::Interrupted;
     let mut archived = session("archived", Agent::Claude, None);
     archived.bound_to = Some("receiving".to_owned());
+    archived.orchestration_role = OrchestrationRole::Worker;
     archived.status = SessionStatus::Archived;
     for stored in [&original, &receiving, &asleep, &archived] {
         state.store.insert_session(stored).unwrap();

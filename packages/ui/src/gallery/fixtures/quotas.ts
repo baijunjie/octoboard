@@ -1,5 +1,5 @@
 import type { Account, AccountQuota, Agent, QuotaUnavailable, QuotaWindow, QuotaWindowKind } from "../../protocol";
-import { minutesAgo, minutesFromNow } from "./builders";
+import { accountOf, minutesAgo, minutesFromNow } from "./builders";
 
 /** The length of each kind of window as the agents give it, in minutes. */
 const WINDOW_MINUTES: Record<QuotaWindowKind, number> = {
@@ -25,7 +25,7 @@ export function quotaWindow(kind: QuotaWindowKind, used: number, resetsIn: numbe
 /** An account's reading, taken a minute before the page loaded unless `patch` says otherwise;
  * `account` is `null` for the agent's default account. */
 export function quotaOf(agent: Agent, account: string | null, plan: string | null, windows: QuotaWindow[], patch: Partial<AccountQuota> = {}): AccountQuota {
-  return { agent, account, fetched_at: minutesAgo(1), plan, windows, unavailable: null, ...patch };
+  return { agent, account, fetched_at: minutesAgo(1), plan, email: null, windows, unavailable: null, ...patch };
 }
 
 /** A coded reason a reading failed; `message` is the daemon's own wording, which the app words
@@ -40,7 +40,7 @@ const MANY_CLAUDE_ACCOUNT_NAMES = ["Research", "Billing", "Support", "Docs", "St
  * a different age, so every row is as tall as a real one. */
 export function manyClaudeAccounts(): { accounts: Account[]; quotas: AccountQuota[] } {
   return {
-    accounts: MANY_CLAUDE_ACCOUNT_NAMES.map((name) => ({ id: `a-${name.toLowerCase()}`, agent: "claude", name, config_dir: `/Users/dev/.claude-${name.toLowerCase()}` })),
+    accounts: MANY_CLAUDE_ACCOUNT_NAMES.map((name) => accountOf(`a-${name.toLowerCase()}`, "claude", name, `/Users/dev/.claude-${name.toLowerCase()}`)),
     quotas: MANY_CLAUDE_ACCOUNT_NAMES.map((name, index) =>
       quotaOf("claude", `a-${name.toLowerCase()}`, index % 3 === 0 ? "max" : "pro", [
         quotaWindow("session", (index * 23 + 11) % 100, 30 + index * 31),
@@ -56,10 +56,10 @@ export function manyClaudeAccounts(): { accounts: Account[]; quotas: AccountQuot
  * `accounts`; its reading is the first of `quotas`. */
 export const USED_UP_MIX: { accounts: Account[]; quotas: AccountQuota[] } = {
   accounts: [
-    { id: "a-work", agent: "claude", name: "Work", config_dir: "/Users/dev/.claude-work" },
-    { id: "a-second", agent: "claude", name: "Second", config_dir: "/Users/dev/.claude-second" },
-    { id: "a-third", agent: "claude", name: "Third", config_dir: "/Users/dev/.claude-third" },
-    { id: "a-fourth", agent: "claude", name: "Fourth", config_dir: "/Users/dev/.claude-fourth" },
+    accountOf("a-work", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("a-second", "claude", "Second", "/Users/dev/.claude-second"),
+    accountOf("a-third", "claude", "Third", "/Users/dev/.claude-third"),
+    accountOf("a-fourth", "claude", "Fourth", "/Users/dev/.claude-fourth"),
   ],
   quotas: [
     quotaOf("claude", null, "max", [quotaWindow("session", 28, 117), quotaWindow("weekly", 25, 3 * 24 * 60 + 4 * 60)]),

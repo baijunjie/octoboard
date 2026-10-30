@@ -40,7 +40,7 @@ describe("accountOption", () => {
 
   it("gives the used-up quota as the reason when a sharing change runs as well", () => {
     const exhaustedBy = { kind: "session", label: null, used_percent: 100, resets_at: null, window_minutes: 300 } as const;
-    const option = accountOption(t, entry({ changingSharing: true, exhaustedBy, quota: { agent: "claude", account: "w", fetched_at: 0, plan: null, unavailable: null, windows: [{ ...exhaustedBy }] } }), 0, false);
+    const option = accountOption(t, entry({ changingSharing: true, exhaustedBy, quota: { agent: "claude", account: "w", fetched_at: 0, plan: null, unavailable: null, windows: [{ ...exhaustedBy }], email: null } }), 0, false);
     expect(option.isDisabled).toBe(true);
     expect(option.reason).toEqual({ state: "Limit reached" });
   });

@@ -4,17 +4,13 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { vi } from "vitest";
 
+import { DEFAULT_SETTINGS } from "../defaultSettings";
+import { accountOf } from "../gallery/fixtures/builders";
 import type { Account, AccountLogin, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, Session, Settings } from "../protocol";
-import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
 
 export const request = vi.fn(() => Promise.resolve({}));
 export const toastError = vi.fn();
-export const settings: Settings = {
-  auto_pull_repositories: false,
-  auto_delete_unresumable_archives: true,
-  added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
-  accounts: [],
-};
+export const settings: Settings = { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/home/dev/Projects" };
 export const accountQuotas: AccountQuota[] = [];
 export const accountLogins: AccountLogin[] = [];
 export const accountSharing = new Map<string, AccountSharing>();
@@ -44,7 +40,7 @@ const state = () => ({ settings, agentAvailability: availability, accountQuotas,
 // What a section does when focus is lost, with the Settings dialog's section entry stood in for by a button.
 export const sectionEntry = { current: null as HTMLElement | null };
 
-export const account = (id: string, agent: Account["agent"]): Account => ({ id, agent, name: id, config_dir: `/home/dev/.${id}` });
+export const account = (id: string, agent: Account["agent"]): Account => accountOf(id, agent, id, `/home/dev/.${id}`);
 
 /** `../store` reading `state()`, with `request` and `toastError` as the daemon's. */
 export const storeStandIn = (original: typeof import("../store")) => ({

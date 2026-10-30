@@ -53,6 +53,7 @@ const worktreeInfo = (w: Tree): WorktreeInfo => ({ id: w.id, root: `/${w.id}`, m
 const source = (id: string, worktrees: Tree[], own = "m"): Replies => ({
   get_project_source: () => ({
     type: "project_source",
+    id: null,
     source: {
       project: id,
       root: "/r",
@@ -66,6 +67,7 @@ const source = (id: string, worktrees: Tree[], own = "m"): Replies => ({
 const branchList = (id: string, branches: Made[]): Replies => ({
   list_project_branches: () => ({
     type: "project_branches",
+    id: null,
     project: id,
     branches: branches.map((b) => ({
       name: b.name,
@@ -84,6 +86,7 @@ const live = (path: string, version = "1"): ChangeEntry => ({
 const changeList = (id: string, changes: ChangeEntry[] = []): Replies => ({
   list_project_changes: (body) => ({
     type: "project_changes",
+    id: null,
     project: id,
     worktree: body.type === "list_project_changes" ? (body.worktree ?? null) : null,
     head: "c1",
@@ -102,6 +105,7 @@ const comparison = (id: string, tip: string, paths: string[], base = "c1"): Repl
     if (body.type !== "compare_project_branches") throw new Error(body.type);
     return {
       type: "project_comparison",
+      id: null,
       project: id,
       left: body.left_empty ? { branch: "", commit: base, empty: true } : { branch: body.left, commit: base, ...(body.left_remote ? { remote: true } : {}) },
       right: { branch: body.right, commit: tip },
@@ -114,14 +118,14 @@ const comparison = (id: string, tip: string, paths: string[], base = "c1"): Repl
 const commitList = (id: string, commits: CommitChanges[]): Replies => ({
   list_project_commits: (body) => {
     if (body.type !== "list_project_commits") throw new Error(body.type);
-    return { type: "project_commits", project: id, base: body.base, tip: body.tip, commits, complete: true, commits_complete: true };
+    return { type: "project_commits", id: null, project: id, base: body.base, tip: body.tip, commits, complete: true, commits_complete: true };
   },
 });
 const absent = { state: "absent" } as const;
 const readBack: Replies = {
   read_project_change: (body) => {
     if (body.type !== "read_project_change") throw new Error(body.type);
-    return { type: "project_change", project: body.project, worktree: body.worktree ?? null, group: body.change.group, head: null, old: absent, new: absent, patch: null };
+    return { type: "project_change", id: null, project: body.project, worktree: body.worktree ?? null, group: body.change.group, head: null, old: absent, new: absent, patch: null };
   },
 };
 
@@ -300,7 +304,7 @@ it("lists the committed changes by commit, newest first, and reads a commit's ch
     const read = asked("read_project_commit_change")[0];
     expect(read).toMatchObject({ commit: "c2", parent: "c1", change: { new: { state: "present", path: "a.txt" } } });
     await h.settle({
-      read_project_commit_change: () => ({ type: "project_commit_change", project: "p4", commit: "c2", parent: "c1", old: absent, new: absent, patch: null }),
+      read_project_commit_change: () => ({ type: "project_commit_change", id: null, project: "p4", commit: "c2", parent: "c1", old: absent, new: absent, patch: null }),
     });
     expect(h.latest.git.viewer?.subject.sourceText).toContain("c2");
     // A committed change has no file on disk to show or open.
@@ -462,7 +466,7 @@ it("follows a comparison made again with the change still in it, and closes on o
   const read: Replies = {
     read_project_comparison_change: (body) => {
       if (body.type !== "read_project_comparison_change") throw new Error(body.type);
-      return { type: "project_comparison_change", project: "p5", left: body.left, right: body.right, base: body.base, old: absent, new: absent, patch: null };
+      return { type: "project_comparison_change", id: null, project: "p5", left: body.left, right: body.right, base: body.base, old: absent, new: absent, patch: null };
     },
   };
   expect(asked("read_project_comparison_change")).toMatchObject([{ right: { commit: "c2" } }]);

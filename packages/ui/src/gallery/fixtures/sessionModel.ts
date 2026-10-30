@@ -2,7 +2,7 @@ import { AGENT_LABEL } from "../../agents";
 import type { Session } from "../../protocol";
 import { describing, type Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
+import { accountOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 import type { FixtureError } from "./projectFiles";
 
 const GROUP = "Sidebar sessions";
@@ -29,7 +29,7 @@ const waiting = sessionOf("s-model-waiting", console_.id, web.id, "Approve the i
 const state = snapshotState({ consoles: [console_], projects: [web], sessions: [running, interrupted, starting, switching] });
 const menuState = {
   ...state,
-  settings: { ...state.settings!, accounts: [{ id: "a-model-work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }] },
+  settings: { ...state.settings!, accounts: [accountOf("a-model-work", "claude", "Work", "/Users/dev/.claude-work")] },
 };
 const switchingState = switchingAccount(menuState, [switching.id]);
 

@@ -27,6 +27,7 @@ const LISTINGS_LIMIT: usize = 1024;
 
 /// A group of one launch's processes as the user sees it: a top process — one whose parent is not
 /// the same launch's — and its descendants of that launch.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProcessTree {
     /// The top process, as `<pid>:<start>`: what a stop or a keep names the tree by.
@@ -34,6 +35,7 @@ pub struct ProcessTree {
     /// The session whose launch the tree belongs to; absent for a tree no session owns: one left
     /// behind, or one the user kept.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub session_id: Option<String>,
     /// The user kept the tree: no session owns it and nothing stops it unless the user asks.
     pub kept: bool,

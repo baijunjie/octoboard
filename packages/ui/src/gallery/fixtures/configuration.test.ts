@@ -5,7 +5,7 @@ import type { Inspection } from "../../configuration/importPlan";
 import { DEFAULT_ACCOUNT_NAME, type AccountFallback } from "../../protocol";
 import { SCENARIOS } from ".";
 import { effectiveClaudeCompatibility } from "./builders";
-import { DEFAULT_CLONE_DIR, resolvedAccountDirectory } from "./configuration";
+import { carriedSettings, DEFAULT_CLONE_DIR, resolvedAccountDirectory } from "./configuration";
 
 type Shown<T> = { id: string; machine: NonNullable<NonNullable<(typeof SCENARIOS)[number]["state"]>["settings"]> | undefined } & T;
 
@@ -68,39 +68,20 @@ it("reports the setting this machine has now as the scenario's own state has it"
   const withSettings = inspected.filter(({ inspection }) => inspection.settings);
   expect(withSettings.length).toBeGreaterThan(0);
   for (const { id, machine, inspection } of withSettings) {
-    expect(inspection.settings!.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
-    expect(inspection.settings!.current_auto_delete_unresumable_archives, id).toBe(machine!.auto_delete_unresumable_archives);
-    if (typeof inspection.settings!.auto_select_account === "boolean") {
-      expect(inspection.settings!.current_auto_select_account, id).toBe(machine!.auto_select_account ?? false);
-    }
-    if (typeof inspection.settings!.auto_switch_on_usage_limit === "boolean") {
-      expect(inspection.settings!.current_auto_switch_on_usage_limit, id).toBe(machine!.auto_switch_on_usage_limit ?? false);
-    }
-    if (typeof inspection.settings!.sidebar_order_by_status === "boolean") {
-      expect(inspection.settings!.current_sidebar_order_by_status, id).toBe(machine!.sidebar_order_by_status ?? true);
-    }
-    if (typeof inspection.settings!.auto_start_quota_windows === "boolean") {
-      expect(inspection.settings!.current_auto_start_quota_windows, id).toBe(machine!.auto_start_quota_windows ?? false);
-    }
-    if (typeof inspection.settings!.auto_approve_session_requests === "boolean") {
-      expect(inspection.settings!.current_auto_approve_session_requests, id).toBe(machine!.auto_approve_session_requests ?? false);
-    }
-    if (typeof inspection.settings!.auto_approve_resume_requests === "boolean") {
-      expect(inspection.settings!.current_auto_approve_resume_requests, id).toBe(machine!.auto_approve_resume_requests ?? false);
-    }
-    if (typeof inspection.settings!.auto_approve_account_switches === "boolean") {
-      expect(inspection.settings!.current_auto_approve_account_switches, id).toBe(machine!.auto_approve_account_switches ?? false);
-    }
-    if (typeof inspection.settings!.auto_approve_handoffs === "boolean") {
-      expect(inspection.settings!.current_auto_approve_handoffs, id).toBe(machine!.auto_approve_handoffs ?? false);
-    }
-    if (inspection.settings!.git_workflow) {
-      expect(inspection.settings!.current_git_workflow, id).toEqual(machine!.git_workflow);
-    }
-    if (inspection.settings!.claude_compatibility) {
-      // The values in effect on this machine, not its explicit choices alone.
-      expect(inspection.settings!.current_claude_compatibility, id).toEqual(effectiveClaudeCompatibility(machine!.claude_compatibility ?? {}, machine!.added_agents));
-    }
+    const settings = inspection.settings!;
+    expect(settings.current_auto_pull_repositories, id).toBe(machine!.auto_pull_repositories);
+    expect(settings.current_auto_delete_unresumable_archives, id).toBe(machine!.auto_delete_unresumable_archives);
+    expect(settings.current_auto_select_account, id).toBe(machine!.auto_select_account ?? false);
+    expect(settings.current_auto_switch_on_usage_limit, id).toBe(machine!.auto_switch_on_usage_limit ?? false);
+    expect(settings.current_sidebar_order_by_status, id).toBe(machine!.sidebar_order_by_status ?? true);
+    expect(settings.current_auto_start_quota_windows, id).toBe(machine!.auto_start_quota_windows ?? false);
+    expect(settings.current_auto_approve_session_requests, id).toBe(machine!.auto_approve_session_requests ?? false);
+    expect(settings.current_auto_approve_resume_requests, id).toBe(machine!.auto_approve_resume_requests ?? false);
+    expect(settings.current_auto_approve_account_switches, id).toBe(machine!.auto_approve_account_switches ?? false);
+    expect(settings.current_auto_approve_handoffs, id).toBe(machine!.auto_approve_handoffs ?? false);
+    expect(settings.current_git_workflow, id).toEqual(machine!.git_workflow);
+    // The values in effect on this machine, not its explicit choices alone.
+    expect(settings.current_claude_compatibility, id).toEqual(effectiveClaudeCompatibility(machine!.claude_compatibility ?? {}, machine!.added_agents));
   }
 });
 
@@ -254,38 +235,8 @@ it("reports application settings only for a document that carries them", () => {
       expect(result.settings_applied ?? null, id).toBeNull();
       expect(result.settings_error ?? null, id).toBeNull();
     } else if (result.settings_applied) {
-      expect(result.settings_applied.auto_pull_repositories, id).toBe(inspection.settings.auto_pull_repositories);
-      expect(result.settings_applied.auto_delete_unresumable_archives, id).toBe(inspection.settings.auto_delete_unresumable_archives);
-      if (typeof inspection.settings.auto_select_account === "boolean") {
-        expect(result.settings_applied.auto_select_account, id).toBe(inspection.settings.auto_select_account);
-      }
-      if (typeof inspection.settings.auto_switch_on_usage_limit === "boolean") {
-        expect(result.settings_applied.auto_switch_on_usage_limit, id).toBe(inspection.settings.auto_switch_on_usage_limit);
-      }
-      if (typeof inspection.settings.sidebar_order_by_status === "boolean") {
-        expect(result.settings_applied.sidebar_order_by_status, id).toBe(inspection.settings.sidebar_order_by_status);
-      }
-      if (typeof inspection.settings.auto_start_quota_windows === "boolean") {
-        expect(result.settings_applied.auto_start_quota_windows, id).toBe(inspection.settings.auto_start_quota_windows);
-      }
-      if (typeof inspection.settings.auto_approve_session_requests === "boolean") {
-        expect(result.settings_applied.auto_approve_session_requests, id).toBe(inspection.settings.auto_approve_session_requests);
-      }
-      if (typeof inspection.settings.auto_approve_resume_requests === "boolean") {
-        expect(result.settings_applied.auto_approve_resume_requests, id).toBe(inspection.settings.auto_approve_resume_requests);
-      }
-      if (typeof inspection.settings.auto_approve_account_switches === "boolean") {
-        expect(result.settings_applied.auto_approve_account_switches, id).toBe(inspection.settings.auto_approve_account_switches);
-      }
-      if (typeof inspection.settings.auto_approve_handoffs === "boolean") {
-        expect(result.settings_applied.auto_approve_handoffs, id).toBe(inspection.settings.auto_approve_handoffs);
-      }
-      if (inspection.settings.git_workflow) {
-        expect(result.settings_applied.git_workflow, id).toEqual(inspection.settings.git_workflow);
-      }
-      if (inspection.settings.claude_compatibility) {
-        expect(result.settings_applied.claude_compatibility, id).toEqual(inspection.settings.claude_compatibility);
-      }
+      const { keyboard_shortcuts: _shortcuts, ...applied } = result.settings_applied;
+      expect(applied, id).toEqual(carriedSettings(inspection.settings));
     }
   }
 });

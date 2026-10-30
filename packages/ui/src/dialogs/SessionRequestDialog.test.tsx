@@ -4,7 +4,7 @@ import { expect, it, onTestFinished } from "vitest";
 
 import { DaemonRequestError } from "../daemon-client";
 import { setLanguage } from "../i18n/language";
-import { consoleOf, projectOf, sessionOf, snapshotState } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../gallery/fixtures/builders";
 import { SESSION_REQUEST_NOT_WAITING } from "../protocol";
 import type { SessionRequest, TrustPrompt } from "../store";
 import { press } from "../components/detailsTestSupport";
@@ -26,7 +26,7 @@ const request: SessionRequest = {
 
 const consoleRequest: SessionRequest = { ...request, requestId: "r-console", session: "s-2", role: "console", project: null, requestedAt: 1 };
 
-const ack = () => Promise.resolve({ type: "ack" });
+const ack = () => Promise.resolve({ type: "ack", id: null });
 
 const mount = (reply = ack) => mountPendingQuestionDialog({ sessionRequests: [request] }, reply);
 
@@ -218,7 +218,7 @@ it.each([
   const dialog = mountPendingQuestionDialog({
     ...snapshotState({ sessions: [held, boss] }),
     ...names,
-    settings: { ...snapshotState({}).settings!, accounts: [{ id: "a-work", agent: "codex", name: "Work", config_dir: "/a/work" }] },
+    settings: { ...snapshotState({}).settings!, accounts: [accountOf("a-work", "codex", "Work", "/a/work")] },
     sessionRequests: [asked],
   }, ack);
   expect(document.body.querySelector("[role=alertdialog] [slot=title]")?.textContent).toBe(title);
@@ -256,7 +256,7 @@ it.each([
   { name: "a record's account", asked: { ...request, action: "resume_record" as const, account: "a-half", conversation: "x" } },
 ])("marks the account whose last sharing change did not finish, in the sentence: $name", ({ asked }) => {
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
-  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true };
+  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
   mountPendingQuestionDialog({
     ...snapshotState({ sessions: [held] }),
     ...names,
@@ -280,7 +280,7 @@ it.each([
 
 it("does not warn while the account's sharing change is running", () => {
   const held = sessionOf("s-held", "c-1", "p-1", "Old work", "archived", { account_id: "a-half" });
-  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true };
+  const half = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
   mountPendingQuestionDialog({
     ...snapshotState({ sessions: [held], accountSharing: [{ account: "a-half", progress: { share: true, phase: "changing", done: 1, total: 3 } }] }),
     ...names,
@@ -290,7 +290,7 @@ it("does not warn while the account's sharing change is running", () => {
   expect(incompleteMark()).toBeNull();
 });
 
-const halfCodex = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true };
+const halfCodex = { id: "a-half", agent: "codex" as const, name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: true, disabled: false };
 const settingsWith = (accounts: unknown[]) => ({ ...snapshotState({}).settings!, accounts: accounts as never });
 const statusTexts = () => [...document.body.querySelectorAll('[role="status"]')].map((node) => node.textContent).filter(Boolean);
 
@@ -355,8 +355,8 @@ it("does not say an unfinished sharing change of the request that comes up after
 // and nothing it was not asked to change.
 const owned = sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" });
 const claudeAccounts = [
-  { id: "a-one", agent: "claude" as const, name: "One", config_dir: "/a/one" },
-  { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two" },
+  accountOf("a-one", "claude", "One", "/a/one"),
+  accountOf("a-two", "claude", "Two", "/a/two"),
 ];
 const switching: SessionRequest = { ...request, action: "switch", agent: "claude", target: "s-held", account: "a-two" };
 
@@ -452,7 +452,7 @@ it("a switch to an account that is not logged in cannot be confirmed", () => {
     ...snapshotState({ sessions: [owned] }),
     ...names,
     settings: { ...snapshotState({}).settings!, accounts: claudeAccounts },
-    accountQuotas: [{ agent: "claude", account: "a-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }],
+    accountQuotas: [{ agent: "claude", account: "a-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null }],
     sessionRequests: [switching],
   }, ack);
   expect(dialogText()).toContain("is not logged in, so a session cannot use it");
@@ -463,7 +463,7 @@ it("a switch to an account that is not logged in cannot be confirmed", () => {
   expect(findButton("Switch account")?.disabled).toBe(true);
 });
 
-const half = { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two", share_default_config: true, share_default_config_incomplete: true };
+const half = { id: "a-two", agent: "claude" as const, name: "Two", config_dir: "/a/two", share_default_config: true, share_default_config_incomplete: true, disabled: false };
 const mountWith = (asked: SessionRequest, session = owned, accounts: typeof claudeAccounts | (typeof claudeAccounts[number] | typeof half)[] = claudeAccounts, extra: Parameters<typeof mountPendingQuestionDialog>[0] = {}, reply = ack) => mountPendingQuestionDialog({
   ...snapshotState({ sessions: [session] }),
   ...names,
@@ -479,7 +479,7 @@ const pickOption = async (text: string, which = 0) => {
 };
 
 it("a switch leaves out a turned-off account that is neither the session's nor the one chosen", async () => {
-  const three = { id: "a-three", agent: "claude" as const, name: "Three", config_dir: "/a/three", disabled: true };
+  const three = accountOf("a-three", "claude", "Three", "/a/three", { disabled: true });
   mountWith(switching, owned, [...claudeAccounts, three] as never);
   const trigger = document.body.querySelector<HTMLElement>('[role=alertdialog] [data-slot="select-trigger"]');
   await act(async () => trigger?.click());
@@ -490,7 +490,7 @@ it("a switch leaves out a turned-off account that is neither the session's nor t
 
 it("a switch lists an account that is not logged in with why, in short under its name and in full as its description", async () => {
   mountWith({ ...switching, account: null }, owned, claudeAccounts, {
-    accountQuotas: [{ agent: "claude", account: "a-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }],
+    accountQuotas: [{ agent: "claude", account: "a-two", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null }],
   });
   const trigger = document.body.querySelector<HTMLElement>('[role=alertdialog] [data-slot="select-trigger"]');
   await act(async () => trigger?.click());

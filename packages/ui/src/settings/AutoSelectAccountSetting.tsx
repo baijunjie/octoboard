@@ -11,7 +11,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function AutoSelectAccountSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.auto_select_account ?? false);
+  const enabled = useDaemonStore((s) => s.settings.auto_select_account);
   const description = t(enabled ? "settings.autoSelect.description.on" : "settings.autoSelect.description.off");
 
   const setEnabled = (value: boolean) =>

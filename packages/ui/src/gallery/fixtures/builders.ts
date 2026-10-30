@@ -1,7 +1,8 @@
-import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
+import { FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
 import type { PlainMessageKey, Translate } from "../../i18n/catalog";
 import { hasClaudeCompatibility } from "../../settings/claudeCompatibility";
-import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, ProcessTree, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
+import type { Account, AccountQuota, AccountSharing, Agent, Console, FileContent, Launch, GitStatus, Host, Page, PerAgent, ProcessTree, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 /** Every agent, as the list of added agents of a user who has added them all (in the default order). */
@@ -22,36 +23,91 @@ export function minutesFromNow(minutes: number): number {
 /** A text file's content as the daemon reads it. */
 export const text = (body: string): FileContent => ({ size: new TextEncoder().encode(body).length, kind: "text", media_type: null, text: body, data: null });
 
-const LOCAL_HOST: Host = { id: "local", name: "This Mac", kind: "local" };
+const LOCAL_HOST: Host = { id: "local", name: "This Mac", kind: "local", ssh_config: null };
 
-export function consoleOf(id: string, name: string, extra: Partial<Console> = {}): Console {
+const NO_LAUNCH: Launch = { model: null, effort: null };
+
+/** One group per agent with the settings an extra names laid over the ones it has. */
+function layered<T extends object>(base: PerAgent<T>, over: Partial<PerAgent<Partial<T>>> = {}): PerAgent<T> {
+  return Object.fromEntries(ALL_AGENTS.map((agent) => [agent, { ...base[agent], ...over[agent] }])) as PerAgent<T>;
+}
+
+/** What a test or scenario may set on a console: the per-agent settings may name only the agents (and launch fields) they set. */
+export type ConsoleExtra = Partial<Omit<Console, "accounts" | "launch" | "project_session_launch">> & {
+  accounts?: Partial<PerAgent<string | null>>;
+  launch?: Partial<PerAgent<Partial<Launch>>>;
+  project_session_launch?: Partial<PerAgent<Partial<Launch>>>;
+};
+
+/** What a test or scenario may set on a project, likewise. */
+export type ProjectExtra = Partial<Omit<Project, "accounts" | "launch">> & {
+  accounts?: Partial<Project["accounts"]>;
+  launch?: Partial<PerAgent<Partial<Launch>>>;
+};
+
+/** `base` with what `extra` sets laid over it: a per-agent group changes only the agents (and launch fields) it names. */
+export function consoleWith(base: Console, extra: ConsoleExtra): Console {
+  const { accounts, launch, project_session_launch, ...rest } = extra;
   return {
+    ...base,
+    ...rest,
+    accounts: { ...base.accounts, ...accounts },
+    launch: layered(base.launch, launch),
+    project_session_launch: layered(base.project_session_launch, project_session_launch),
+  };
+}
+
+/** `base` with what `extra` sets laid over it, as `consoleWith` does for a console. */
+export function projectWith(base: Project, extra: ProjectExtra): Project {
+  const { accounts, launch, ...rest } = extra;
+  return {
+    ...base,
+    ...rest,
+    accounts: { ...base.accounts, ...accounts },
+    launch: layered(base.launch, launch),
+  };
+}
+
+/** An account of `agent` in `config_dir` that is not shared with the default configuration and not turned off; `extra`
+ * sets what a scenario shows otherwise. */
+export function accountOf(id: string, agent: Agent, name: string, config_dir: string, extra: Partial<Account> = {}): Account {
+  return { id, agent, name, config_dir, share_default_config: false, share_default_config_incomplete: false, disabled: false, ...extra };
+}
+
+export function consoleOf(id: string, name: string, extra: ConsoleExtra = {}): Console {
+  return consoleWith({
     id,
     name,
     workdir: `/Users/dev/octoboard/${id}`,
     default_agent: "claude",
+    project_session_agent: null,
+    accounts: { claude: null, codex: null, grok: null },
+    launch: { claude: NO_LAUNCH, codex: NO_LAUNCH, grok: NO_LAUNCH },
+    project_session_launch: { claude: NO_LAUNCH, codex: NO_LAUNCH, grok: NO_LAUNCH },
+    icon: null,
+    console_session_prompt: null,
     created_at: minutesAgo(60 * 24 * 30),
-    ...extra,
-  };
+  }, extra);
 }
 
-export function projectOf(id: string, consoleId: string, name: string, extra: Partial<Project> = {}): Project {
-  return {
+export function projectOf(id: string, consoleId: string, name: string, extra: ProjectExtra = {}): Project {
+  return projectWith({
     id,
     console_id: consoleId,
     host_id: LOCAL_HOST.id,
     name,
     path: `/Users/dev/code/${name.toLowerCase().replaceAll(" ", "-")}`,
+    default_agent: null,
     source: "local",
+    remote_url: null,
     trust_consent: false,
     pinned: false,
     tags: [],
-    claude_account_id: { kind: "inherit" },
-    codex_account_id: { kind: "inherit" },
-    grok_account_id: { kind: "inherit" },
+    description: null,
+    accounts: { claude: { kind: "inherit" }, codex: { kind: "inherit" }, grok: { kind: "inherit" } },
+    launch: { claude: NO_LAUNCH, codex: NO_LAUNCH, grok: NO_LAUNCH },
     git_workflow: FOLLOWING_GIT_WORKFLOW,
-    ...extra,
-  };
+  }, extra);
 }
 
 /** A context size with its window and the share of it the daemon reports. */
@@ -70,8 +126,9 @@ export function sessionOf(
   return {
     id,
     agent: "claude" satisfies Agent,
+    agent_session_id: null,
     console_id: consoleId,
-    project_id: projectId,
+    project_id: projectId ?? null,
     host_id: LOCAL_HOST.id,
     role: projectId ? "project" : "console",
     origin: projectId ? "user" : "console",
@@ -81,8 +138,15 @@ export function sessionOf(
     pinned: false,
     locked: false,
     started_at: minutesAgo(90),
-    ...(status === "archived" ? { ended_at: minutesAgo(30) } : {}),
+    bound_to: null,
+    colour: null,
+    ordinal: null,
+    account_id: null,
+    config_dir: null,
+    ended_at: status === "archived" ? minutesAgo(30) : null,
     ...extra,
+    // A session with a parent it reports to is a worker; one without is a coordinator.
+    orchestration_role: extra.orchestration_role ?? (extra.bound_to ? "worker" : "coordinator"),
   };
 }
 
@@ -167,8 +231,8 @@ export function keptOf(
   return leftoverOf(id, command, minutes, { kept: true, cwd: "/Users/dev/code/website", cwd_missing: false, ...extra });
 }
 
-export function pageOf(id: string, consoleSessionId: string, html: string, minutes: number): Page {
-  return { id, console_session_id: consoleSessionId, html, created_at: minutesAgo(minutes) };
+export function pageOf(id: string, sessionId: string, html: string, minutes: number): Page {
+  return { id, session_id: sessionId, html, anchor_message_id: null, created_at: minutesAgo(minutes) };
 }
 
 export function gitStatusOf(projectId: string, extra: Partial<GitStatus> = {}): GitStatus {
@@ -223,7 +287,7 @@ export function snapshotState(parts: {
     trustedDirectories: parts.trustedDirectories ?? [],
     sessionRequests: parts.sessionRequests ?? [],
     gitStatuses: new Map((parts.gitStatuses ?? []).map((g) => [g.project, g])),
-    settings: parts.settings ?? { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] },
+    settings: parts.settings ?? { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects" },
     accountQuotas: parts.accountQuotas ?? [],
     accountSharing: accountSharingOf(parts.accountSharing ?? []),
     homeDir: "/Users/dev",

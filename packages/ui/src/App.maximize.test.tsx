@@ -78,7 +78,7 @@ function mountApp() {
   const sessions = [sessionOf("s-site", console_.id, project.id, "Fix header", "idle"), sessionOf("s-console", console_.id, undefined, "Plan release", "idle"), sessionOf("s-old", console_.id, project.id, "Old work", "archived")];
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_], projects: [project], sessions })),
-    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
+    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };

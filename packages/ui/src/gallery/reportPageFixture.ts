@@ -9,12 +9,12 @@ export function installReportPageFixture(document: Document, daemon: Daemon, sce
     const page: unknown = (event as CustomEvent<unknown>).detail;
     if (!page || typeof page !== "object") return;
     const candidate = page as Partial<Page>;
-    if (typeof candidate.id !== "string" || typeof candidate.console_session_id !== "string"
+    if (typeof candidate.id !== "string" || typeof candidate.session_id !== "string"
       || typeof candidate.html !== "string" || typeof candidate.created_at !== "number"
       || !Number.isFinite(candidate.created_at)) return;
     const state = daemon.store.getState();
-    if (!state.pages.has(candidate.console_session_id) || !state.sessions.has(candidate.console_session_id)
-      || state.pages.get(candidate.console_session_id)?.some((existing) => existing.id === candidate.id)) return;
+    if (!state.pages.has(candidate.session_id) || !state.sessions.has(candidate.session_id)
+      || state.pages.get(candidate.session_id)?.some((existing) => existing.id === candidate.id)) return;
     applyDaemonEvent(daemon.store, { type: "page_created", page: candidate as Page });
   };
   document.addEventListener("gallery:report-page-created", receive);

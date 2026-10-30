@@ -1151,11 +1151,11 @@ async fn mcp_call(
             // why its call did not work.
             Err(err) => serde_json::json!({ "ok": false, "error": format!("{err:#}") }),
         };
-    // Whether the session has a bound session's tools as it stands after the call, which its
-    // binding changing while it runs can have changed: the child announces the catalogue this
-    // names, and tells the agent when it differs from the one it announced.
+    // Whether the session has a worker's tools as it stands after the call, which its binding
+    // changing while it runs can have changed: the child announces the catalogue this names, and
+    // tells the agent when it differs from the one it announced.
     if let Ok(session) = state.session_record(&session_id) {
-        answer["bound"] = serde_json::json!(session.is_worker());
+        answer["worker"] = serde_json::json!(session.is_worker());
     }
     axum::Json(answer)
 }
@@ -1174,6 +1174,7 @@ mod tests {
 
     use super::*;
     use crate::outbox::Drain;
+    use crate::protocol::OrchestrationRole;
     use crate::state::WriteHold;
     use crate::test_support::{app_state, PATIENCE, TEST_KEY};
 
@@ -2216,6 +2217,7 @@ mod tests {
             .store
             .insert_session(&crate::protocol::Session {
                 bound_to: Some("s".to_string()),
+                orchestration_role: OrchestrationRole::Worker,
                 status: SessionStatus::Idle,
                 ..worker
             })

@@ -78,7 +78,7 @@ it.each(["file_not_found", "permission_denied", "unexpected_error"])("marks a pr
 
 it("marks a document image whose data cannot be decoded, with no error alert dialog", async () => {
   await mount(
-    <ViewerHost request={async () => ({ type: "project_file", project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "binary", text: null, size: 3, media_type: "image/png", data: "AAEC" } })}>
+    <ViewerHost request={async () => ({ type: "project_file", id: null, project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "binary", text: null, size: 3, media_type: "image/png", data: "AAEC" } })}>
       <p id="paragraph"><DaemonImageFixture /></p>
     </ViewerHost>,
   );
@@ -93,7 +93,7 @@ function DaemonImageFixture(): React.ReactElement {
 
 it("stands a failed image in the paragraph as a named glyph, with no sentence of error text", async () => {
   await mount(
-    <ViewerHost request={async () => ({ type: "project_file", project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "text", text: "not an image", size: 12, media_type: null, data: null } })}>
+    <ViewerHost request={async () => ({ type: "project_file", id: null, project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "text", text: "not an image", size: 12, media_type: null, data: null } })}>
       <p id="paragraph"><DocumentImage src="image.png" alt="Diagram" documentPath="README.md" project="project" overBudget={false} /></p>
     </ViewerHost>,
   );
@@ -109,7 +109,7 @@ it("stands a failed image in the paragraph as a named glyph, with no sentence of
 async function mountLinkedFailedImage() {
   const opened: string[] = [];
   await mount(
-    <ViewerHost request={async () => ({ type: "project_file", project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "text", text: "not an image", size: 12, media_type: null, data: null } })}>
+    <ViewerHost request={async () => ({ type: "project_file", id: null, project: "project", worktree: null, source: { kind: "live", root_id: "root", version: "version" }, path: "image.png", file: { kind: "text", text: "not an image", size: 12, media_type: null, data: null } })}>
       <MarkdownDocument
         text="[![Diagram](image.png)](other.md)"
         path="README.md"

@@ -1,7 +1,7 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Agent } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { branchItemOf, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
+import { accountOf, branchItemOf, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "./builders";
 
 const GROUP = "Archive view";
 
@@ -110,14 +110,19 @@ const preservedTaskTitles: Record<string, string> = {
 };
 const archiveState = {
   ...state,
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude" as const, "codex" as const], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
-    { id: "a-long", agent: "claude" as const, name: "Release coordination across every production environment, regional deployment pipeline and supported customer account for the next scheduled release", config_dir: "/Users/dev/.claude-release" },
-    { id: "a-release", agent: "claude" as const, name: "Production release coordination and regression review account for regional deployment pipelines and customer support, for the next scheduled regional release", config_dir: "/Users/dev/.claude-regression" },
-  ] },
+  settings: {
+    ...DEFAULT_SETTINGS,
+    added_agents: ["claude" as const, "codex" as const],
+    default_clone_dir: "/Users/dev/Projects",
+    accounts: [
+      accountOf("a-long", "claude", "Release coordination across every production environment, regional deployment pipeline and supported customer account for the next scheduled release", "/Users/dev/.claude-release"),
+      accountOf("a-release", "claude", "Production release coordination and regression review account for regional deployment pipelines and customer support, for the next scheduled regional release", "/Users/dev/.claude-regression"),
+    ],
+  },
   projects: new Map([...state.projects!, [boundProject.id, boundProject]]),
   sessions: new Map([
     ...state.sessions!,
-    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, terminal_title: preservedTaskTitles[session.id] ?? session.terminal_title, project_id: session.project_id === undefined ? undefined : boundProject.id, account_id: session.id === otherOwnerArchived.id ? "a-long" : session.id === unboundArchived.id ? "a-release" : session.account_id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu, covering release coordination across all production environments and regional deployment pipelines" : session.id === unboundArchived.id ? "Coordinate the next regional deployment across all production pipelines and review customer support migration records before the scheduled release" : session.title }] as const),
+    ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, terminal_title: preservedTaskTitles[session.id] ?? session.terminal_title, project_id: session.project_id === null ? null : boundProject.id, account_id: session.id === otherOwnerArchived.id ? "a-long" : session.id === unboundArchived.id ? "a-release" : session.account_id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu, covering release coordination across all production environments and regional deployment pipelines" : session.id === unboundArchived.id ? "Coordinate the next regional deployment across all production pipelines and review customer support migration records before the scheduled release" : session.title }] as const),
   ]),
 };
 

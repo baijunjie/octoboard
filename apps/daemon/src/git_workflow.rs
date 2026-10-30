@@ -14,6 +14,7 @@ use crate::protocol::{present_option, Project};
 use crate::store::Store;
 
 /// How finished work leaves its branch.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Delivery {
@@ -26,6 +27,7 @@ pub enum Delivery {
 }
 
 /// Where a project session is asked to develop.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Development {
@@ -47,13 +49,13 @@ pub const ITEMS: [&str; 5] = [
 ];
 
 /// The values the git workflow settings take, application-wide or resolved for a project.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitWorkflowSettings {
     pub development: Development,
     /// Whether commits are consolidated into independently meaningful, revertible commits before
     /// delivering finished work by merge, push or pull request. Moot while `development` is
     /// `InPlace`.
-    #[serde(default)]
     pub squash_before_delivery: bool,
     /// Whether a branch is rebased onto its target branch before delivery (merge, push or pull
     /// request). The wire name is kept for compatibility. Moot while `development` is `InPlace`.
@@ -79,6 +81,7 @@ impl Default for GitWorkflowSettings {
 }
 
 /// A project's own choices; an item left `None` follows the application-wide value.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GitWorkflowOverride {
     pub development: Option<Development>,
@@ -89,17 +92,23 @@ pub struct GitWorkflowOverride {
 }
 
 /// A change to the application-wide values: an item left `None` is left alone.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 pub struct GitWorkflowSettingsChanges {
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub development: Option<Development>,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub squash_before_delivery: Option<bool>,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub rebase_before_merge: Option<bool>,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub delivery: Option<Delivery>,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub revert_gate: Option<bool>,
 }
 
@@ -134,17 +143,23 @@ impl From<GitWorkflowSettings> for GitWorkflowSettingsChanges {
 
 /// A change to a project's override. Per item, absent leaves it alone, an explicit `null` goes
 /// back to following the application-wide value, and a value sets the project's own.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 pub struct GitWorkflowOverrideChanges {
     #[serde(default, deserialize_with = "present_option")]
+    #[cfg_attr(test, ts(optional))]
     pub development: Option<Option<Development>>,
     #[serde(default, deserialize_with = "present_option")]
+    #[cfg_attr(test, ts(optional))]
     pub squash_before_delivery: Option<Option<bool>>,
     #[serde(default, deserialize_with = "present_option")]
+    #[cfg_attr(test, ts(optional))]
     pub rebase_before_merge: Option<Option<bool>>,
     #[serde(default, deserialize_with = "present_option")]
+    #[cfg_attr(test, ts(optional))]
     pub delivery: Option<Option<Delivery>>,
     #[serde(default, deserialize_with = "present_option")]
+    #[cfg_attr(test, ts(optional))]
     pub revert_gate: Option<Option<bool>>,
 }
 
@@ -264,17 +279,6 @@ mod tests {
         let off: GitWorkflowSettingsChanges =
             serde_json::from_str(r#"{"squash_before_delivery":false}"#).unwrap();
         assert!(!off.applied_to(global).squash_before_delivery);
-    }
-
-    #[test]
-    fn older_configuration_defaults_squash_off_and_projects_to_inheriting() {
-        let settings: GitWorkflowSettings = serde_json::from_str(
-            r#"{"development":"worktree","rebase_before_merge":true,"delivery":"ask","revert_gate":false}"#,
-        )
-        .unwrap();
-        assert!(!settings.squash_before_delivery);
-        let own: GitWorkflowOverride = serde_json::from_str("{}").unwrap();
-        assert_eq!(own.squash_before_delivery, None);
     }
 
     #[test]

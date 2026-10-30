@@ -5,10 +5,10 @@ import { DaemonRequestError } from "../daemon-client";
 import { openPathTarget } from "./openPathTarget";
 
 const file = (over: object) => ({ size: 1, kind: "text", media_type: null, text: "x", data: null, ...over });
-const readReply = (over: object = {}) => ({ type: "project_file", project: "p", worktree: null, path: "a.ts", source: { kind: "live", version: "1" }, file: file(over) });
+const readReply = (over: object = {}) => ({ type: "project_file", id: null, project: "p", worktree: null, path: "a.ts", source: { kind: "live", version: "1" }, file: file(over) });
 
 function click(target: Parameters<typeof openPathTarget>[0]["target"], answer: () => Promise<unknown>, viewFile: Parameters<typeof openPathTarget>[0]["viewFile"] = vi.fn()) {
-  const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? answer() : { type: "ack" })) as never;
+  const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? answer() : { type: "ack", id: null })) as never;
   const toastError = vi.fn();
   return { done: openPathTarget({ target, project: "p", request, viewFile, toastError }), request: request as unknown as ReturnType<typeof vi.fn>, viewFile, toastError };
 }
@@ -64,7 +64,7 @@ it("shows a file the system could launch in the viewer unread, and never opens i
 });
 
 it("does nothing for a file the system could launch when there is no viewer to show it", async () => {
-  const request = vi.fn(async () => ({ type: "ack" })) as never;
+  const request = vi.fn(async () => ({ type: "ack", id: null })) as never;
   await openPathTarget({ target: { ...target, viewerOnly: true }, project: "p", request, viewFile: undefined, toastError: vi.fn() });
   expect(request).not.toHaveBeenCalled();
 });
@@ -101,7 +101,7 @@ it("opens the folder itself on the host when its entry file cannot be shown or r
 });
 
 it("opens a folder on the host without reading its entry file when asked to, but not a file", async () => {
-  const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? readReply() : { type: "ack" })) as never;
+  const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? readReply() : { type: "ack", id: null })) as never;
   const viewFile = vi.fn();
   await openPathTarget({ target: folder, onHost: true, project: "p", request, viewFile, toastError: vi.fn() });
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "open_path_link", project: "p", path: "/r/docs" });
@@ -112,7 +112,7 @@ it("opens a folder on the host without reading its entry file when asked to, but
 
 it("reports a path gone since it was probed, with the remedy of finding it in the project's files only for one in the project", async () => {
   const gone = (root?: string) => () => Promise.reject(new DaemonRequestError("gone", "file_not_found", { path: "x", ...(root && { root }) }));
-  const onHost = (answer: () => Promise<unknown>) => vi.fn((body: { type: string }) => (body.type === "open_path_link" ? answer() : Promise.resolve({ type: "ack" }))) as never;
+  const onHost = (answer: () => Promise<unknown>) => vi.fn((body: { type: string }) => (body.type === "open_path_link" ? answer() : Promise.resolve({ type: "ack", id: null }))) as never;
   const temporary = vi.fn();
   await openPathTarget({ target: { path: "/tmp/x.log", line: undefined }, project: "p", request: onHost(gone("temporary")), viewFile: vi.fn(), toastError: temporary });
   expect(temporary.mock.calls[0][3]).toBe("none");

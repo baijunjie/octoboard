@@ -57,7 +57,7 @@ const CONSOLES: Inspection["consoles"] = [
   },
 ];
 
-const IMPORTED: Event = { type: "configuration_imported", consoles: [] };
+const IMPORTED: Event = { type: "configuration_imported", id: null, consoles: [], settings_applied: null, settings_error: null, accounts: null };
 
 function mount(inspection: Omit<Inspection, "type">, sent?: (body: RequestBody) => Event) {
   const mounted = mountDialog(
@@ -68,7 +68,7 @@ function mount(inspection: Omit<Inspection, "type">, sent?: (body: RequestBody) 
   return mounted;
 }
 
-async function reviewing(inspection: Omit<Inspection, "type"> = { accounts: ACCOUNTS, consoles: CONSOLES }) {
+async function reviewing(inspection: Omit<Inspection, "type"> = { accounts: ACCOUNTS, consoles: CONSOLES, id: null, settings: null }) {
   const mounted = mount(inspection);
   await press("Choose file");
   return mounted;
@@ -104,7 +104,7 @@ function type(input: HTMLInputElement, value: string): void {
 }
 
 it("has a tab for each region the document carries, and the accounts tab says it needs attention", async () => {
-  await reviewing({ accounts: ACCOUNTS, consoles: CONSOLES, settings: undefined });
+  await reviewing({ accounts: ACCOUNTS, consoles: CONSOLES, settings: null, id: null });
   expect(tabs()).toEqual(["Consoles and projects, needs attention", "Accounts, needs attention"]);
 });
 
@@ -128,7 +128,7 @@ it("says each console is created as a new one at the top of the consoles panel, 
 });
 
 it("has no tab bar when the document carries only one region", async () => {
-  await reviewing({ accounts: ACCOUNTS, consoles: [] });
+  await reviewing({ accounts: ACCOUNTS, consoles: [], id: null, settings: null });
   expect(document.body.querySelector("[role=tab]")).toBeNull();
   // Importing that file is importing that region: nothing to check.
   expect(document.body.querySelector("input[type=checkbox]")).toBeNull();
@@ -174,7 +174,7 @@ it("words the default account that holds a directory in the current language", a
   onTestFinished(() => setLanguage("en"));
   const [claude] = ACCOUNTS.agents;
   const inUse = account({ name: "Team", status: "directory_in_use", in_use_by: DEFAULT_ACCOUNT_NAME });
-  await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...claude, accounts: [inUse] }] }, consoles: [] });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [{ ...claude, accounts: [inUse] }] }, consoles: [], id: null, settings: null });
   await act(async () => setLanguage("zh-Hans"));
   const { text } = await markPopover(row("Team"));
   expect(text).toContain("该目录已被 默认 使用。");
@@ -187,7 +187,7 @@ it("offers only Leave out for an account whose name is the problem, and words th
   const codex = ACCOUNTS.agents[1];
   const dup = account({ name: "Dup", status: "invalid", error: NAME_TAKEN });
   const odd = account({ name: "Bad", status: "invalid", error: { code: "path_not_absolute", params: { path: "rel", tilde: "~" }, message: "m" } });
-  await reviewing({ accounts: { ...ACCOUNTS, agents: [ACCOUNTS.agents[0], { ...codex, accounts: [dup, odd] }] }, consoles: [] });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [ACCOUNTS.agents[0], { ...codex, accounts: [dup, odd] }] }, consoles: [], id: null, settings: null });
   await act(async () => row("Dup").querySelector<HTMLButtonElement>("button[aria-haspopup=listbox]")!.click());
   expect(Array.from(document.body.querySelectorAll("[role=option]")).map((o) => o.textContent)).toEqual(["Leave out"]);
   await act(async () => document.body.querySelector<HTMLElement>("[role=option]")!.click());
@@ -202,7 +202,7 @@ it("offers only Leave out for an account whose name is the problem, and words th
 
 it("keeps the fallback mark of a reference to an account that cannot be created for its name", async () => {
   const claude = { ...ACCOUNTS.agents[0], accounts: [account({ name: "Work", status: "invalid", error: NAME_TAKEN })] };
-  await reviewing({ accounts: { ...ACCOUNTS, agents: [claude] }, consoles: CONSOLES });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [claude] }, consoles: CONSOLES, id: null, settings: null });
   const marks = () => Array.from(document.body.querySelectorAll("button[data-status-mark]")).map((mark) => mark.getAttribute("aria-label"));
   expect(marks()).toEqual(["Accounts not set up for ⁨Laptop⁩", "Accounts not set up for ⁨Site⁩"]);
 });
@@ -292,9 +292,10 @@ it("tells of each account's outcome in the result, with a note that the new ones
     (body) =>
       Promise.resolve(
         body.type === "inspect_configuration"
-          ? { type: "configuration_inspected", accounts: ACCOUNTS, consoles: [] }
+          ? { type: "configuration_inspected", id: null, accounts: ACCOUNTS, consoles: [], settings: null }
           : ({
             type: "configuration_imported",
+            id: null,
             consoles: [],
             accounts: {
               agents_added: ["codex"],
@@ -310,7 +311,7 @@ it("tells of each account's outcome in the result, with a note that the new ones
                   ],
                 },
               ],
-            },
+            }, settings_applied: null, settings_error: null,
           } as Event),
       ),
     { save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text: JSON.stringify(DOCUMENT) })) },

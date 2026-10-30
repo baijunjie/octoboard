@@ -55,6 +55,7 @@ describe("the website's eight independent repository fixtures", () => {
       });
       expect(source).toMatchObject({
         type: "project_source",
+        id: null,
         source: {
           project: id,
           root: repository.root,
@@ -155,6 +156,7 @@ describe("the website's eight independent repository fixtures", () => {
         });
         expect(bodies).toMatchObject({
           type: "project_change_bodies",
+          id: null,
           new: { file: { text: live.file.text } },
         });
       }
@@ -177,6 +179,7 @@ describe("the website's eight independent repository fixtures", () => {
       });
       expect(current).toMatchObject({
         type: "project_file",
+        id: null,
         project: id,
         path: primaryFiles[id],
         file: { text: expected.text },
@@ -221,6 +224,7 @@ describe("the website's eight independent repository fixtures", () => {
       });
       expect(index).toMatchObject({
         type: "project_file",
+        id: null,
         source: { kind: "index", worktree: repository.git.worktrees[0].id },
       });
       const committed = await api.request({
@@ -231,6 +235,7 @@ describe("the website's eight independent repository fixtures", () => {
       });
       expect(committed).toMatchObject({
         type: "project_file",
+        id: null,
         file: { text: repository.committed[path] },
         source: { kind: "commit", commit: repository.head },
       });
@@ -343,7 +348,7 @@ describe("the website's eight independent repository fixtures", () => {
       const main = worktrees.find((w) => w.main)!;
       await expect(
         api.request({ type: "list_project_changes", project: id, worktree: main.id }),
-      ).resolves.toMatchObject({ type: "project_changes", changes: [] });
+      ).resolves.toMatchObject({ type: "project_changes", id: null, changes: [] });
     },
   );
 

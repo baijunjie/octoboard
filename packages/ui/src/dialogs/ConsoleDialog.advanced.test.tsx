@@ -17,14 +17,14 @@ it("opens the Advanced section on the console session agent, with a tab for each
 });
 
 it("holds the console session and project session values apart for the agent shown", async () => {
-  render(consoleOf("c-1", "Main", { claude_console_session_model: "alpha", claude_project_session_model: "beta" }));
+  render(consoleOf("c-1", "Main", { launch: { claude: { model: "alpha" } }, project_session_launch: { claude: { model: "beta" } } }));
   await openAdvanced();
   expect(groupPicker("Console sessions", "Model").textContent).toContain("Alpha");
   expect(groupPicker("Project sessions", "Model").textContent).toContain("Beta");
 });
 
 it("keeps the edits of every agent while switching tabs, and saves only what changed", async () => {
-  const request = render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }));
+  const request = render(consoleOf("c-1", "Main", { project_session_launch: { codex: { model: "kept" } } }));
   await openAdvanced();
   await click(groupPicker("Project sessions", "Model"));
   await choose("Alpha");
@@ -41,8 +41,7 @@ it("keeps the edits of every agent while switching tabs, and saves only what cha
       console: "c-1",
       name: "Main",
       default_agent: "claude",
-      claude_project_session_model: "alpha",
-      codex_console_session_effort: "high",
+      project_session_launch: { claude: { model: "alpha" } }, launch: { codex: { effort: "high" } },
     },
   ]);
 });
@@ -57,20 +56,20 @@ it("creates with the project session pair that was set", async () => {
   await choose("max");
   await clickButton("Create");
   expect(sent(request)).toEqual([
-    { type: "create_console", name: "Main", default_agent: "claude", claude_project_session_model: "beta", claude_project_session_effort: "max" },
+    { type: "create_console", name: "Main", default_agent: "claude", project_session_launch: { claude: { model: "beta", effort: "max" } } },
   ]);
 });
 
 it("sends an explicit null when a project session value is cleared", async () => {
-  const request = render(consoleOf("c-1", "Main", { claude_project_session_model: "alpha" }));
+  const request = render(consoleOf("c-1", "Main", { project_session_launch: { claude: { model: "alpha" } } }));
   await openAdvanced();
   await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", claude_project_session_model: null }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", project_session_launch: { claude: { model: null } } }]);
 });
 
 it("leaves a missing agent without a tab unless the console stores a value for it, and drops it once cleared", async () => {
-  render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, { codex: "unavailable", grok: "unavailable" });
+  render(consoleOf("c-1", "Main", { project_session_launch: { codex: { model: "kept" } } }), [], undefined, { codex: "unavailable", grok: "unavailable" });
   await openAdvanced();
   expect(tabNames()).toEqual(["Claude Code", "Codex, Not installed"]);
   await clickTab("Codex, Not installed");
@@ -95,12 +94,12 @@ it("follows the console session agent in the Advanced section until a tab is pic
 });
 
 it("does not take the view back to an agent picked earlier that comes back", async () => {
-  render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, { codex: "unavailable" });
+  render(consoleOf("c-1", "Main", { project_session_launch: { codex: { model: "kept" } } }), [], undefined, { codex: "unavailable" });
   await openAdvanced();
   await clickTab("Codex, Not installed");
   await click(groupPicker("Project sessions", "Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]'));
   expect(selectedTab()).toBe("Claude Code");
-  await act(async () => lastStore.setState({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available" }], ["codex", { agent: "codex", availability: "available" }], ["grok", { agent: "grok", availability: "available" }]]) }));
+  await act(async () => lastStore.setState({ agentAvailability: new Map([["claude", { agent: "claude", availability: "available", default_account_dir: null }], ["codex", { agent: "codex", availability: "available", default_account_dir: null }], ["grok", { agent: "grok", availability: "available", default_account_dir: null }]]) }));
   expect(tabNames()).toEqual(["Claude Code", "Codex", "Grok Build"]);
   expect(selectedTab()).toBe("Claude Code");
 });
@@ -156,7 +155,7 @@ it("moves the Advanced tabs that come and go, none as the section opens, and han
   await clickTab("Grok Build");
   await act(async () => grok.focus());
   expect(selectedTab()).toBe("Grok Build");
-  const availability = (grokState: AgentAvailability["availability"]) => new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: agent === "grok" ? grokState : "available" }]));
+  const availability = (grokState: AgentAvailability["availability"]) => new Map((["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: agent === "grok" ? grokState : "available", default_account_dir: null }]));
   await act(async () => lastStore.setState({ agentAvailability: availability("unavailable") }));
   expect(motion.played().map(({ frames }) => presence(frames))).toEqual(["exit"]);
   const copy = document.body.querySelector("[data-list-motion-exit]")!;

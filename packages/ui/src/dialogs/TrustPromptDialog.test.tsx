@@ -21,7 +21,7 @@ const prompt: TrustPrompt = {
   trustDir: "/Users/dev/code",
 };
 
-const ack = () => Promise.resolve({ type: "ack" });
+const ack = () => Promise.resolve({ type: "ack", id: null });
 
 const mount = (prompts: TrustPrompt[], reply = ack) =>
   mountPendingQuestionDialog({ trustPrompts: prompts, homeDir: "/Users/dev" }, reply);

@@ -115,7 +115,7 @@ export function SettingLine({ label, badge, tone = "default", children }: { labe
 
 /** The document's settings that are a switch, picked by their type so a setting of another kind
  * cannot be listed below. */
-type BooleanField = { [K in keyof DocumentSettings]-?: NonNullable<DocumentSettings[K]> extends boolean ? K : never }[keyof DocumentSettings];
+type BooleanField = { [K in keyof DocumentSettings]-?: DocumentSettings[K] extends boolean ? K : never }[keyof DocumentSettings];
 
 /** The application settings that are a switch, in the order the cards list them: the name the
  * settings page gives each, its field in the document and what turning it on means. */

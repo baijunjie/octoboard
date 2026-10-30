@@ -57,7 +57,7 @@ const checkRing = (value) => {
 const append = async (session = "s-hub-2") => {
   const id = `focus-probe-${++serial}`;
   await page.evaluate(({ id, session }) => document.dispatchEvent(new CustomEvent("gallery:report-page-created", {
-    detail: { id, console_session_id: session, html: `<!doctype html><html><body><h1>${id}</h1><label>Version <input value="2.0"></label><button>Continue</button></body></html>`, created_at: Date.now() },
+    detail: { id, session_id: session, html: `<!doctype html><html><body><h1>${id}</h1><label>Version <input value="2.0"></label><button>Continue</button></body></html>`, created_at: Date.now() },
   })), { id, session });
   return id;
 };

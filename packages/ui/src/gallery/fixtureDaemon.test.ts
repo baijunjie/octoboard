@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -14,7 +15,7 @@ import { RESTORE_FILES, RESTORE_GIT, RESTORED_PROJECT } from "./fixtures/restore
 import type { FixtureFile } from "./fixtures/projectFiles";
 import { SAMPLE_GIT } from "./fixtures/projectGit";
 import { quotaFailure, quotaOf, quotaWindow } from "./fixtures/quotas";
-import { accountSharingOf, branchItemOf, consoleOf, gitStatusOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
+import { accountOf, accountSharingOf, branchItemOf, consoleOf, gitStatusOf, leftoverOf, pageOf, processTreeOf, projectOf, sessionOf, shellTerminalOf, snapshotState, worktreeItemOf } from "./fixtures/builders";
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 
 describe("the fixture daemon's session archiving", () => {
@@ -48,7 +49,7 @@ describe("the fixture daemon's conversation lookup", () => {
     createFixtureDaemon({ id: "locate", group: "Sidebar sessions", category: "normal", title: "", conversationLocation }).request({ type: "locate_conversation_to_resume", project: "p", agent_session_id: ID });
 
   it("answers with the location the scenario gives, and not found by default", async () => {
-    await expect(ask({ kind: "record", agent: "codex", account: null })).resolves.toEqual({ type: "conversation_located", location: { kind: "record", agent: "codex", account: null } });
+    await expect(ask({ kind: "record", agent: "codex", account: null })).resolves.toEqual({ type: "conversation_located", id: null, location: { kind: "record", agent: "codex", account: null } });
     await expect(ask()).resolves.toMatchObject({ type: "conversation_located", location: { kind: "not_found" } });
   });
 
@@ -75,9 +76,9 @@ describe("the fixture daemon's listings that the scenario refuses", () => {
     const hub = sessionOf("hub", "c", undefined, "Hub", "idle");
     const other = sessionOf("other", "c", undefined, "Other", "idle");
     const daemon = createFixtureDaemon({ id: "pages", group: "Report panel", category: "exceptional", title: "", state: snapshotState({ sessions: [hub, other] }), pageListErrors: { [hub.id]: error } });
-    await expect(daemon.request({ type: "list_pages", console_session: hub.id })).rejects.toMatchObject({ code: "permission_denied" });
+    await expect(daemon.request({ type: "list_pages", session: hub.id })).rejects.toMatchObject({ code: "permission_denied" });
     expect(daemon.store.getState().pages.has(hub.id)).toBe(false);
-    await expect(daemon.request({ type: "list_pages", console_session: other.id })).resolves.toMatchObject({ type: "page_list", pages: [] });
+    await expect(daemon.request({ type: "list_pages", session: other.id })).resolves.toMatchObject({ type: "page_list", pages: [] });
   });
 });
 
@@ -87,9 +88,9 @@ describe("the fixture daemon's session reopening", () => {
     const lead = sessionOf("lead", "c", "p", "Lead", "archived", { bound_to: owner.id, ended_at: 20 });
     const child = sessionOf("child", "c", "p", "Child", "archived", { bound_to: lead.id, ended_at: 30 });
     const daemon = createFixtureDaemon({ id: "reopen", group: "Focus mode", category: "normal", title: "", state: snapshotState({ sessions: [owner, lead, child] }) });
-    await expect(daemon.request({ type: "resume_session", session: lead.id })).resolves.toEqual({ type: "ack" });
-    expect(daemon.store.getState().sessions.get(lead.id)).toEqual({ ...lead, status: "idle", ended_at: undefined });
-    expect(daemon.store.getState().sessions.get(owner.id)).toEqual({ ...owner, status: "idle", ended_at: undefined });
+    await expect(daemon.request({ type: "resume_session", session: lead.id })).resolves.toEqual({ type: "ack", id: null });
+    expect(daemon.store.getState().sessions.get(lead.id)).toEqual({ ...lead, status: "idle", ended_at: null });
+    expect(daemon.store.getState().sessions.get(owner.id)).toEqual({ ...owner, status: "idle", ended_at: null });
     expect(daemon.store.getState().sessions.get(child.id)).toEqual(child);
     await expect(daemon.request({ type: "resume_session", session: lead.id })).rejects.toMatchObject({ code: "session_already_running" });
     await expect(daemon.request({ type: "resume_session", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
@@ -156,17 +157,20 @@ describe("the fixture daemon's session handoff", () => {
 
 describe("the fixture daemon's account order", () => {
   const setup = () => createFixtureDaemon({ id: "account-order", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: {
-    auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW,
+    ...DEFAULT_SETTINGS,
+    added_agents: ["claude", "codex"],
+    default_clone_dir: "/Users/dev/Projects",
     accounts: [
-      { id: "work", agent: "claude", name: "Work", config_dir: "/work" },
-      { id: "personal", agent: "claude", name: "Personal", config_dir: "/personal" },
-      { id: "codex", agent: "codex", name: "Codex", config_dir: "/codex" },
-    ], account_order: { claude: ["removed", "work", null], codex: ["codex", null] },
+      accountOf("work", "claude", "Work", "/work"),
+      accountOf("personal", "claude", "Personal", "/personal"),
+      accountOf("codex", "codex", "Codex", "/codex"),
+    ],
+    account_order: { claude: ["removed", "work", null], codex: ["codex", null] },
   } }) });
 
   it("saves a complete order including Default and preserves other agents", async () => {
     const daemon = setup();
-    await expect(daemon.request({ type: "reorder_accounts", agent: "claude", accounts: ["personal", null, "work"] })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "reorder_accounts", agent: "claude", accounts: ["personal", null, "work"] })).resolves.toEqual({ type: "ack", id: null });
     expect(daemon.store.getState().settings.account_order).toEqual({ claude: ["personal", null, "work"], codex: ["codex", null] });
   });
 
@@ -220,7 +224,7 @@ describe("the fixture daemon's system directory action", () => {
 
   it("acknowledges a known project without opening a host application and refuses an unknown one", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "open_project_directory", project: project.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "open_project_directory", project: project.id })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon.request({ type: "open_project_directory", project: "missing" })).rejects.toMatchObject({ code: "unknown_project", params: { project: "missing" } });
     expect(daemon.store.getState().projects.get(project.id)).toEqual(project);
   });
@@ -243,7 +247,7 @@ describe("the fixture daemon's system terminal and push actions", () => {
 
   it.each(actions)("acknowledges $type for a known project and refuses an unknown one", async ({ type }) => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type, project: project.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type, project: project.id })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon.request({ type, project: "missing" })).rejects.toMatchObject({ code: "unknown_project", params: { project: "missing" } });
   });
 
@@ -262,15 +266,15 @@ describe("the fixture daemon's project removal", () => {
 
   it("refuses only a removal that asks for the folder to be moved to the Trash", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "delete_project", project: project.id })).resolves.toEqual({ type: "ack" });
-    await expect(daemon.request({ type: "delete_project", project: project.id, trash_directory: false })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "delete_project", project: project.id })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon.request({ type: "delete_project", project: project.id, trash_directory: false })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon.request({ type: "delete_project", project: project.id, trash_directory: true })).rejects.toMatchObject({ code: error.code, params: error.params });
     await expect(daemon.request({ type: "delete_project", project: "missing", trash_directory: true })).rejects.toMatchObject({ code: "unknown_project" });
   });
 });
 
 describe("the fixture daemon's account removal", () => {
-  const account = { id: "a", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
+  const account = accountOf("a", "claude", "Work", "/Users/dev/.claude-work");
   const error = { code: "account_directory_protected", params: { path: account.config_dir }, message: "protected" };
   const base = snapshotState({});
   const scenario = { id: "account-removal", group: "Settings" as const, category: "exceptional" as const, title: "", state: { ...base, settings: { ...base.settings!, accounts: [account] } }, accountDeleteError: error };
@@ -278,7 +282,7 @@ describe("the fixture daemon's account removal", () => {
   it("refuses only a removal that asks for the directory to be moved to the Trash", async () => {
     await expect(createFixtureDaemon(scenario).request({ type: "delete_account", account: account.id, trash_directory: true })).rejects.toMatchObject({ code: error.code, params: error.params });
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "delete_account", account: account.id, trash_directory: false })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "delete_account", account: account.id, trash_directory: false })).resolves.toEqual({ type: "ack", id: null });
     expect(daemon.store.getState().settings.accounts).toEqual([]);
     await expect(createFixtureDaemon(scenario).request({ type: "delete_account", account: "missing", trash_directory: true })).rejects.toMatchObject({ code: "unknown_account" });
   });
@@ -291,7 +295,7 @@ describe("the fixture daemon's session colour", () => {
 
   it("acknowledges a colour for a known session and refuses an unknown one", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "set_session_colour", session: hub.id, colour: "blue" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "set_session_colour", session: hub.id, colour: "blue" })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon.request({ type: "set_session_colour", session: "missing", colour: "blue" })).rejects.toMatchObject({ code: "unknown_session" });
   });
 });
@@ -312,7 +316,7 @@ describe("the fixture daemon's project file trees", () => {
       },
     });
     await expect(daemon.request({ type: "search_project_files", project: "web", query: " SERVER " })).resolves.toEqual({
-      type: "project_file_matches", project: "web", query: " SERVER ", paths: ["Server.md", "src/server.ts"], complete: true,
+      type: "project_file_matches", id: null, project: "web", query: " SERVER ", paths: ["Server.md", "src/server.ts"], complete: true,
     });
     await expect(daemon.request({ type: "search_project_files", project: "web", query: "missing" })).resolves.toMatchObject({ paths: [], complete: true });
     await expect(daemon.request({ type: "search_project_files", project: "web", query: "" })).resolves.toMatchObject({
@@ -349,10 +353,10 @@ describe("the fixture daemon's project file trees", () => {
     const root = await daemon.request({ type: "list_project_dir", project: "web", path: "" });
     expect(root.type === "project_dir" && root.entries.map((entry) => [entry.name, entry.ignored === true])).toEqual([[".env", true], ["dist", true], ["server.ts", false]]);
     await expect(daemon.request({ type: "search_project_files", project: "web", query: "server" })).resolves.toEqual({
-      type: "project_file_matches", project: "web", query: "server", paths: ["server.ts"], complete: true,
+      type: "project_file_matches", id: null, project: "web", query: "server", paths: ["server.ts"], complete: true,
     });
     await expect(daemon.request({ type: "search_project_files", project: "web", query: "server", include_ignored: true })).resolves.toEqual({
-      type: "project_file_matches", project: "web", query: "server", paths: ["dist/lib/server.map", "dist/server.js", "server.ts"],
+      type: "project_file_matches", id: null, project: "web", query: "server", paths: ["dist/lib/server.map", "dist/server.js", "server.ts"],
       ignored: ["dist/lib/server.map", "dist/server.js"], complete: true,
     });
   });
@@ -420,23 +424,23 @@ describe("the fixture daemon's session creation", () => {
   });
 
   it("honors a console session's explicit agent, account, name and launch overrides", async () => {
-    const owner = consoleOf("c", "Release", { default_agent: "claude", codex_account_id: "work", codex_console_session_model: "inherited-model", codex_console_session_effort: "high" });
+    const owner = consoleOf("c", "Release", { default_agent: "claude", accounts: { codex: "work" }, launch: { codex: { model: "inherited-model", effort: "high" } } });
     const project = projectOf("p", owner.id, "Website");
     const existing = sessionOf("hub", owner.id, undefined, "Renamed release coordinator", "archived", { ordinal: 6 });
-    const accounts = [{ id: "work", agent: "codex" as const, name: "Work", config_dir: "/Users/dev/.codex-work" }];
-    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts } }) });
+    const accounts = [accountOf("work", "codex", "Work", "/Users/dev/.codex-work")];
+    const daemon = createFixtureDaemon({ id: "open", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner], projects: [project], sessions: [existing], settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts } }) });
     await daemon.request({ type: "delete_archived_sessions", console: owner.id });
     expect(daemon.store.getState().sessions.size).toBe(0);
     const reply = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", title: "Coordinate release", model: "chosen-model", effort: "xhigh", bound_to: "ignored-console-binding" });
     expect(reply.type).toBe("session_opened");
     if (reply.type !== "session_opened") throw new Error("Missing opened session");
     expect(reply.session).toMatchObject({ agent: "codex", role: "console", origin: "user", status: "idle", title: "Coordinate release", account_id: "work", config_dir: accounts[0].config_dir, model: "chosen-model", effort: "xhigh", ordinal: 7 });
-    expect(reply.session.bound_to).toBeUndefined();
+    expect(reply.session.bound_to).toBeNull();
     expect(daemon.store.getState().sessions.get(reply.session.id)).toEqual(reply.session);
     const defaults = await daemon.request({ type: "open_session", console_id: owner.id, agent: "codex", account: null, model: null, effort: null });
     expect(defaults).toMatchObject({ type: "session_opened", session: { title: owner.name, ordinal: 8, model: null, effort: null } });
     if (defaults.type !== "session_opened") throw new Error("Missing default session");
-    expect(defaults.session.account_id).toBeUndefined();
+    expect(defaults.session.account_id).toBeNull();
     const blank = await daemon.request({ type: "open_session", console_id: owner.id, title: "", task: "" });
     expect(blank).toMatchObject({ type: "session_opened", session: { origin: "user", status: "working", title: owner.name, ordinal: 9 } });
     const projectReply = await daemon.request({ type: "open_session", console_id: owner.id, project_id: project.id });
@@ -462,7 +466,7 @@ describe("the fixture daemon's session pins", () => {
     const first = sessionOf("first", "c-1", "p-1", "Pinned work", "working", { pinned: true, bound_to: "hub" });
     const second = sessionOf("second", "c-1", "p-1", "Other work", "idle");
     const daemon = createFixtureDaemon({ id: "pins", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ sessions: [first, second] }) });
-    await expect(daemon.request({ type: "set_session_pinned", session: first.id, pinned: false })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "set_session_pinned", session: first.id, pinned: false })).resolves.toEqual({ type: "ack", id: null });
     expect(daemon.store.getState().sessions.get(first.id)).toEqual({ ...first, pinned: false });
     expect(daemon.store.getState().sessions.get(second.id)).toEqual(second);
     await daemon.request({ type: "set_session_pinned", session: first.id, pinned: true });
@@ -477,7 +481,7 @@ describe("the fixture daemon's session locks", () => {
     const first = sessionOf("first", "c", "p", "First", "idle", { pinned: true });
     const second = sessionOf("second", "c", "p", "Second", "archived", { locked: true });
     const daemon = createFixtureDaemon({ id: "locks", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ sessions: [first, second] }) });
-    await expect(daemon.request({ type: "set_session_locked", session: first.id, locked: true })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "set_session_locked", session: first.id, locked: true })).resolves.toEqual({ type: "ack", id: null });
     expect([...daemon.store.getState().sessions]).toEqual([[first.id, { ...first, locked: true }], [second.id, second]]);
     await daemon.request({ type: "set_session_locked", session: first.id, locked: false });
     expect(daemon.store.getState().sessions.get(first.id)).toEqual(first);
@@ -490,7 +494,7 @@ describe("the fixture daemon's session locks", () => {
     const daemon = createFixtureDaemon({ id: "locks-archived", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ sessions: [archived, stale] }) });
     await expect(daemon.request({ type: "set_session_locked", session: archived.id, locked: true })).rejects.toMatchObject({ code: "session_archived" });
     expect(daemon.store.getState().sessions.get(archived.id)).toEqual(archived);
-    await expect(daemon.request({ type: "set_session_locked", session: stale.id, locked: false })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "set_session_locked", session: stale.id, locked: false })).resolves.toEqual({ type: "ack", id: null });
     expect(daemon.store.getState().sessions.get(stale.id)).toEqual({ ...stale, locked: false });
   });
 
@@ -577,19 +581,19 @@ describe("the fixture daemon's deletion of archived sessions", () => {
 
 describe("the fixture daemon's settings and trusted folders", () => {
   it("applies a settings request atomically, preserves accounts, and reaches an empty trust list by removal", async () => {
-    const accounts = [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }];
-    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts }, trustedDirectories: ["/Users/dev/code"] }) });
+    const accounts = [accountOf("work", "claude", "Work", "/Users/dev/.claude-work")];
+    const daemon = createFixtureDaemon({ id: "settings-contract", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts }, trustedDirectories: ["/Users/dev/code"] }) });
     await expect(daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "relative" })).rejects.toThrow();
     expect(daemon.store.getState().settings.auto_pull_repositories).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true, default_clone_dir: "~/work/../repos" });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: true, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/repos", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, claude_compatibility: { codex: false, grok: true } });
+    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, auto_pull_repositories: true, added_agents: [], default_clone_dir: "/Users/dev/repos", accounts, claude_compatibility: { codex: false, grok: true } });
     await daemon.request({ type: "update_settings", auto_pull_repositories: false, default_clone_dir: " " });
-    expect(daemon.store.getState().settings).toEqual({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, claude_compatibility: { codex: false, grok: true } });
+    expect(daemon.store.getState().settings).toEqual({ ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts, claude_compatibility: { codex: false, grok: true } });
     await daemon.request({ type: "update_settings", auto_delete_unresumable_archives: false });
     expect(daemon.store.getState().settings.auto_delete_unresumable_archives).toBe(false);
-    expect(daemon.store.getState().settings.auto_approve_session_requests).toBeUndefined();
-    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_approve_session_requests");
-    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_approve_resume_requests");
+    expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_approve_session_requests).toBe(false);
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_approve_resume_requests).toBe(false);
     await daemon.request({ type: "update_settings", auto_approve_session_requests: true });
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
@@ -597,7 +601,7 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(exportedDocument(daemon.store.getState()).settings?.auto_approve_session_requests).toBe(true);
     await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
-    expect(daemon.store.getState().settings.auto_approve_resume_requests).toBeUndefined();
+    expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(false);
     await daemon.request({ type: "update_settings", auto_approve_resume_requests: true });
     expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(true);
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(false);
@@ -608,36 +612,36 @@ describe("the fixture daemon's settings and trusted folders", () => {
     expect(daemon.store.getState().settings.auto_approve_session_requests).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings?.auto_approve_resume_requests).toBe(false);
     for (const [setting, other] of [["auto_approve_account_switches", "auto_approve_handoffs"], ["auto_approve_handoffs", "auto_approve_account_switches"]] as const) {
-      expect(daemon.store.getState().settings[setting]).toBeUndefined();
-      expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty(setting);
+      expect(daemon.store.getState().settings[setting]).toBe(false);
+      expect(exportedDocument(daemon.store.getState()).settings?.[setting]).toBe(false);
       await daemon.request({ type: "update_settings", [setting]: true });
       expect(daemon.store.getState().settings[setting]).toBe(true);
-      // Setting one never moves the other: absent before the first turns on, as it was left for the second.
-      expect(daemon.store.getState().settings[other]).toBe(setting === "auto_approve_account_switches" ? undefined : true);
+      // Setting one never moves the other: off before the first turns on, as it was left for the second.
+      expect(daemon.store.getState().settings[other]).toBe(setting === "auto_approve_account_switches" ? false : true);
       expect(daemon.store.getState().settings.auto_approve_resume_requests).toBe(false);
       expect(exportedDocument(daemon.store.getState()).settings?.[setting]).toBe(true);
       await daemon.request({ type: "update_settings", auto_approve_session_requests: false });
       expect(daemon.store.getState().settings[setting]).toBe(true);
     }
-    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_select_account");
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_select_account).toBe(DEFAULT_SETTINGS.auto_select_account);
     await daemon.request({ type: "update_settings", auto_select_account: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.auto_select_account).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings?.auto_select_account).toBe(true);
-    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_switch_on_usage_limit");
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_switch_on_usage_limit).toBe(DEFAULT_SETTINGS.auto_switch_on_usage_limit);
     await daemon.request({ type: "update_settings", auto_switch_on_usage_limit: true });
     expect(daemon.store.getState().settings.auto_switch_on_usage_limit).toBe(true);
     await daemon.request({ type: "update_settings", auto_select_account: false });
     expect(daemon.store.getState().settings.auto_switch_on_usage_limit).toBe(true);
     expect(exportedDocument(daemon.store.getState()).settings?.auto_switch_on_usage_limit).toBe(true);
-    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("sidebar_order_by_status");
+    expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(DEFAULT_SETTINGS.sidebar_order_by_status);
     await daemon.request({ type: "update_settings", sidebar_order_by_status: false });
     expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
     expect(daemon.store.getState().settings.sidebar_order_by_status).toBe(false);
     expect(exportedDocument(daemon.store.getState()).settings?.sidebar_order_by_status).toBe(false);
-    expect(exportedDocument(daemon.store.getState()).settings).not.toHaveProperty("auto_start_quota_windows");
+    expect(exportedDocument(daemon.store.getState()).settings?.auto_start_quota_windows).toBe(DEFAULT_SETTINGS.auto_start_quota_windows);
     await daemon.request({ type: "update_settings", auto_start_quota_windows: true });
     expect(daemon.store.getState().settings.auto_start_quota_windows).toBe(true);
     await daemon.request({ type: "update_settings", auto_pull_repositories: true });
@@ -648,7 +652,7 @@ describe("the fixture daemon's settings and trusted folders", () => {
   });
 
   it("exports only the Claude compatibility the user chose, refuses a name that has none and leaves the request unapplied", async () => {
-    const daemon = createFixtureDaemon({ id: "claude-compat-export", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] } }) });
+    const daemon = createFixtureDaemon({ id: "claude-compat-export", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) });
     const exported = async () => ((await daemon.request({ type: "export_configuration" })) as { document: ReturnType<typeof exportedDocument> }).document.settings?.claude_compatibility;
     // The values in effect follow the added agents; none has been chosen, so the export carries none.
     expect(daemon.store.getState().settings.claude_compatibility).toEqual({ codex: true, grok: true });
@@ -669,9 +673,9 @@ describe("the fixture daemon's settings and trusted folders", () => {
 
 
 describe("the fixture daemon's account directories", () => {
-  const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
+  const work = accountOf("work", "claude", "Work", "/Users/dev/.claude-work");
   const state = {
-    ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [work, { ...work, id: "codex-work", agent: "codex" as const }] } }),
+    ...snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex-work", agent: "codex" as const }] } }),
     agentAvailability: new Map([["claude" as const, { agent: "claude" as const, availability: "available" as const, default_account_dir: "/Users/dev/.claude" }]]),
   };
   const daemon = () => createFixtureDaemon({ id: "dirs", title: "", group: "Settings", category: "normal", state });
@@ -683,9 +687,9 @@ describe("the fixture daemon's account directories", () => {
   });
 
   it("accepts another agent's path, an account's own directory and a new one", async () => {
-    await expect(daemon().request({ type: "create_account", agent: "grok", name: "Studio", config_dir: "/Users/dev/.claude-work" })).resolves.toEqual({ type: "ack" });
-    await expect(daemon().request({ type: "update_account", account: "work", name: "Renamed", config_dir: "/Users/dev/.claude-work" })).resolves.toEqual({ type: "ack" });
-    await expect(daemon().request({ type: "create_account", agent: "claude", name: "Studio", config_dir: "/Users/dev/.claude-studio" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "create_account", agent: "grok", name: "Studio", config_dir: "/Users/dev/.claude-work" })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon().request({ type: "update_account", account: "work", name: "Renamed", config_dir: "/Users/dev/.claude-work" })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon().request({ type: "create_account", agent: "claude", name: "Studio", config_dir: "/Users/dev/.claude-studio" })).resolves.toEqual({ type: "ack", id: null });
   });
 });
 
@@ -701,11 +705,11 @@ describe("the fixture daemon's session release", () => {
 
   it("unbinds the session in any state, leaving what it owns bound to it", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "release_session", session: lead.id })).resolves.toEqual({ type: "ack" });
-    await expect(daemon.request({ type: "release_session", session: archived.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "release_session", session: lead.id })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon.request({ type: "release_session", session: archived.id })).resolves.toEqual({ type: "ack", id: null });
     const { sessions } = daemon.store.getState();
-    expect(sessions.get(lead.id)).toMatchObject({ status: "working", pinned: true, bound_to: undefined });
-    expect(sessions.get(archived.id)).toMatchObject({ status: "archived", bound_to: undefined });
+    expect(sessions.get(lead.id)).toMatchObject({ status: "working", pinned: true, bound_to: null });
+    expect(sessions.get(archived.id)).toMatchObject({ status: "archived", bound_to: null });
     expect(sessions.get(child.id)?.bound_to).toBe(lead.id);
   });
 
@@ -733,18 +737,18 @@ describe("the fixture daemon's session release", () => {
 });
 
 describe("the fixture daemon's account switches", () => {
-  const work = { id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
+  const work = accountOf("work", "claude", "Work", "/Users/dev/.claude-work");
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });
-  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
+  const state = snapshotState({ sessions: [session, { ...session, id: "archived", status: "archived" }], settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [work, { ...work, id: "codex", agent: "codex" }] } });
   const scenario = { id: "switch", title: "", group: "Sidebar sessions" as const, category: "normal" as const, state };
 
   it("records the new account while keeping session launch settings, and clears it for the default account", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).resolves.toEqual({ type: "ack", id: null });
     expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, account_id: work.id, config_dir: work.config_dir });
     await expect(daemon.request({ type: "switch_session_account", session: "s", account: "work" })).rejects.toMatchObject({ code: "session_already_on_account" });
     await daemon.request({ type: "switch_session_account", session: "s", account: null });
-    expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, account_id: undefined, config_dir: undefined });
+    expect(daemon.store.getState().sessions.get("s")).toEqual({ ...session, account_id: null, config_dir: null });
   });
 
   it("broadcasts the session as switching while the switch holds it, and as it rests once the switch ends", async () => {
@@ -787,7 +791,7 @@ describe("the fixture daemon's model changes", () => {
 
   it("records the values on a running session and forgets what its records showed", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "set_session_model", session: "s", model: "opus" })).resolves.toEqual({ type: "session_model_set", session: "s", outcome: "restarted", continued: true });
+    await expect(daemon.request({ type: "set_session_model", session: "s", model: "opus" })).resolves.toEqual({ type: "session_model_set", id: null, session: "s", outcome: "restarted", continued: true });
     expect(daemon.store.getState().sessions.get("s")).toEqual({ ...forgotten, model: "opus", effort: "medium" });
     await daemon.request({ type: "set_session_model", session: "s", effort: " " });
     expect(daemon.store.getState().sessions.get("s")).toMatchObject({ model: "opus", effort: null });
@@ -795,10 +799,10 @@ describe("the fixture daemon's model changes", () => {
 
   it("only records the values of an interrupted session, and leaves one that already has them alone", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "set_session_model", session: "down", model: "opus", effort: "high" })).resolves.toEqual({ type: "session_model_set", session: "down", outcome: "recorded" });
+    await expect(daemon.request({ type: "set_session_model", session: "down", model: "opus", effort: "high" })).resolves.toEqual({ type: "session_model_set", id: null, session: "down", outcome: "recorded" });
     expect(daemon.store.getState().sessions.get("down")).toEqual({ ...interrupted, model: "opus", effort: "high" });
     const before = daemon.store.getState().sessions;
-    await expect(daemon.request({ type: "set_session_model", session: "s", model: "sonnet", effort: "medium" })).resolves.toEqual({ type: "session_model_set", session: "s", outcome: "unchanged" });
+    await expect(daemon.request({ type: "set_session_model", session: "s", model: "sonnet", effort: "medium" })).resolves.toEqual({ type: "session_model_set", id: null, session: "s", outcome: "unchanged" });
     expect(daemon.store.getState().sessions).toBe(before);
   });
 
@@ -833,7 +837,7 @@ describe("the fixture daemon's project restore", () => {
   it("uses the restored snapshot for only the requested project and never mutates shared fixtures", async () => {
     const daemon = createFixtureDaemon({ ...scenario, projectRestores: { [project.id]: RESTORED_PROJECT } });
     await expect(daemon.request({ type: "restore_project_changes", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
-    await expect(daemon.request({ type: "restore_project_changes", project: project.id })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "restore_project_changes", project: project.id })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon.request({ type: "list_project_changes", project: project.id })).resolves.toMatchObject({ changes: [{ group: "untracked" }] });
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Search API\n" } });
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "new.txt" })).rejects.toMatchObject({ code: "file_not_found" });
@@ -862,7 +866,7 @@ describe("the fixture daemon's local branch switches", () => {
   it("applies the supplied branch snapshot and badge to only the requested project", async () => {
     const daemon = createFixtureDaemon({ ...scenario, projectBranchSwitches: { [project.id]: { "feature/search": { ...RESTORED_PROJECT, status } } } });
     await expect(daemon.request({ type: "switch_project_branch", project: "missing", branch: "feature/search" })).rejects.toMatchObject({ code: "unknown_project" });
-    await expect(daemon.request({ type: "switch_project_branch", project: project.id, branch: "feature/search" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "switch_project_branch", project: project.id, branch: "feature/search" })).resolves.toEqual({ type: "ack", id: null });
     expect(daemon.store.getState().gitStatuses.get(project.id)).toEqual(status);
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Search API\n" } });
     await expect(daemon.request({ type: "read_project_file", project: other.id, path: "README.md" })).resolves.toMatchObject({ file: { text: "# Working edit\n" } });
@@ -878,7 +882,7 @@ describe("the fixture daemon's local branch switches", () => {
 });
 
 describe("the fixture daemon's console saving", () => {
-  const owner = consoleOf("c", "Release", { console_session_prompt: "Be brief.", codex_console_session_model: "gpt-x" });
+  const owner = consoleOf("c", "Release", { console_session_prompt: "Be brief.", launch: { codex: { model: "gpt-x" } } });
   const daemon = () => createFixtureDaemon({ id: "console-save", group: "Sidebar sessions", category: "normal", title: "", state: snapshotState({ consoles: [owner] }) });
 
   it("keeps what a created console is given, the instructions trimmed and a blank one as none", async () => {
@@ -887,8 +891,11 @@ describe("the fixture daemon's console saving", () => {
       await d.request(body);
       return Array.from(d.store.getState().consoles.values()).find((c) => c.id !== owner.id);
     };
-    expect(await created({ type: "create_console", name: " Ops ", default_agent: "codex", codex_account_id: "work", codex_console_session_effort: "high", console_session_prompt: "  Answer in Japanese.  " })).toMatchObject({
-      name: "Ops", codex_account_id: "work", codex_console_session_effort: "high", console_session_prompt: "Answer in Japanese.",
+    expect(await created({ type: "create_console", name: " Ops ", default_agent: "codex", accounts: { codex: "work" }, launch: { codex: { effort: " high " } }, console_session_prompt: "  Answer in Japanese.  " })).toMatchObject({
+      name: "Ops",
+      accounts: { claude: null, codex: "work", grok: null },
+      launch: { claude: { model: null, effort: null }, codex: { model: null, effort: "high" }, grok: { model: null, effort: null } },
+      console_session_prompt: "Answer in Japanese.",
     });
     expect((await created({ type: "create_console", name: "Plain", default_agent: "claude", console_session_prompt: "   " }))?.console_session_prompt).toBeNull();
   });
@@ -896,14 +903,14 @@ describe("the fixture daemon's console saving", () => {
   it("leaves the instructions alone when absent, clears them with null or blank and exports what is saved", async () => {
     const d = daemon();
     await d.request({ type: "update_console", console: owner.id, name: "Renamed" });
-    expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ name: "Renamed", console_session_prompt: "Be brief.", codex_console_session_model: "gpt-x" });
+    expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ name: "Renamed", console_session_prompt: "Be brief.", launch: { codex: { model: "gpt-x" } } });
     await d.request({ type: "update_console", console: owner.id, console_session_prompt: " Use tables. " });
     expect(exportedDocument(d.store.getState()).consoles[0]?.console_session_prompt).toBe("Use tables.");
     await d.request({ type: "update_console", console: owner.id, console_session_prompt: null });
     expect(d.store.getState().consoles.get(owner.id)?.console_session_prompt).toBeNull();
     await d.request({ type: "update_console", console: owner.id, console_session_prompt: "x" });
-    await d.request({ type: "update_console", console: owner.id, console_session_prompt: "  ", codex_console_session_model: null });
-    expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ console_session_prompt: null, codex_console_session_model: null });
+    await d.request({ type: "update_console", console: owner.id, console_session_prompt: "  ", launch: { codex: { model: null } } });
+    expect(d.store.getState().consoles.get(owner.id)).toMatchObject({ console_session_prompt: null, launch: { codex: { model: null, effort: null } } });
   });
 });
 
@@ -926,7 +933,7 @@ describe("the fixture daemon's bound branches and worktrees", () => {
 
   it("finds what is bound to exactly the sessions asked about that still exist", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "inspect_session_branches", sessions: [owner.id, "missing"] })).resolves.toEqual({ type: "session_branches_inspected", items: [worktree] });
+    await expect(daemon.request({ type: "inspect_session_branches", sessions: [owner.id, "missing"] })).resolves.toEqual({ type: "session_branches_inspected", id: null, items: [worktree] });
     // A worktree bound to no session belongs to no inspection of sessions.
     await expect(daemon.request({ type: "inspect_session_branches", sessions: [owner.id, other.id] })).resolves.toMatchObject({ items: [worktree, branch] });
     await expect(createFixtureDaemon({ ...scenario, sessionBranches: undefined }).request({ type: "inspect_session_branches", sessions: [owner.id] })).resolves.toMatchObject({ items: [] });
@@ -934,7 +941,7 @@ describe("the fixture daemon's bound branches and worktrees", () => {
 
   it("answers a project removal per project and refuses an unknown one", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, unbound], processes: [] });
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", id: null, items: [worktree, unbound], processes: [] });
     await expect(createFixtureDaemon({ ...scenario, projectRemovalBranches: undefined }).request({ type: "inspect_project_removal", project: project.id })).resolves.toMatchObject({ items: [] });
     await expect(daemon.request({ type: "inspect_project_removal", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
   });
@@ -942,7 +949,7 @@ describe("the fixture daemon's bound branches and worktrees", () => {
   it("hands a project inspection's token over with the items it held back", async () => {
     const held = { ...unbound, state: "failed" as const, uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" as const };
     const daemon = createFixtureDaemon({ ...scenario, projectRemovalBranches: { [project.id]: { items: [worktree, held], inspection: "token-2" } } });
-    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", items: [worktree, held], processes: [], inspection: "token-2" });
+    await expect(daemon.request({ type: "inspect_project_removal", project: project.id })).resolves.toEqual({ type: "project_removal_inspected", id: null, items: [worktree, held], processes: [], inspection: "token-2" });
   });
 
   it("carries the project's processes in a removal's inspection, the oldest first", async () => {
@@ -1112,17 +1119,17 @@ describe("the fixture daemon's error titles", () => {
 
 describe("the fixture daemon's settings and rail removals", () => {
   it("clears deleted account references while preserving explicit defaults and existing session directories", async () => {
-    const account = { id: "a", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
-    const console_ = consoleOf("c", "Main", { claude_account_id: account.id });
-    const project = projectOf("p", console_.id, "Website", { claude_account_id: { kind: "account", id: account.id }, codex_account_id: { kind: "default" } });
+    const account = accountOf("a", "claude", "Work", "/Users/dev/.claude-work");
+    const console_ = consoleOf("c", "Main", { accounts: { claude: account.id } });
+    const project = projectOf("p", console_.id, "Website", { accounts: { claude: { kind: "account", id: account.id }, codex: { kind: "default" } } });
     const session = sessionOf("s", console_.id, project.id, "Work", "idle", { account_id: account.id, config_dir: account.config_dir });
-    const daemon = createFixtureDaemon({ id: "account-removal", group: "Settings", category: "normal", title: "", state: { ...snapshotState({ consoles: [console_], projects: [project], sessions: [session] }), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [account] } } });
+    const daemon = createFixtureDaemon({ id: "account-removal", group: "Settings", category: "normal", title: "", state: { ...snapshotState({ consoles: [console_], projects: [project], sessions: [session] }), settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "", accounts: [account] } } });
     await daemon.request({ type: "delete_account", account: account.id });
     const current = daemon.store.getState();
     expect(current.settings.accounts).toEqual([]);
-    expect(current.consoles.get(console_.id)?.claude_account_id).toBeNull();
-    expect(current.projects.get(project.id)?.claude_account_id).toEqual({ kind: "inherit" });
-    expect(current.projects.get(project.id)?.codex_account_id).toEqual({ kind: "default" });
+    expect(current.consoles.get(console_.id)?.accounts.claude).toBeNull();
+    expect(current.projects.get(project.id)?.accounts.claude).toEqual({ kind: "inherit" });
+    expect(current.projects.get(project.id)?.accounts.codex).toEqual({ kind: "default" });
     expect(current.sessions.get(session.id)).toEqual(session);
     await expect(daemon.request({ type: "delete_account", account: account.id })).rejects.toMatchObject({ code: "unknown_account" });
   });
@@ -1147,7 +1154,7 @@ describe("the fixture daemon's settings and rail removals", () => {
 });
 
 describe("the fixture daemon's permission approval", () => {
-  const scenario = { id: "agent-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] } }) };
+  const scenario = { id: "agent-approval", group: "Settings" as const, category: "normal" as const, title: "", state: snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts: [] } }) };
 
   it("saves and clears Codex's reviewer and Claude Code's mode, one for the agent, without changing other settings", async () => {
     const daemon = createFixtureDaemon(scenario);
@@ -1170,7 +1177,7 @@ describe("the fixture daemon's permission approval", () => {
 });
 
 describe("the fixture daemon's Claude compatibility", () => {
-  const settings = (added_agents: Agent[], claude_compatibility?: Partial<Record<Agent, boolean>>) => ({ auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [], ...(claude_compatibility && { claude_compatibility }) });
+  const settings = (added_agents: Agent[], claude_compatibility?: Partial<Record<Agent, boolean>>) => ({ ...DEFAULT_SETTINGS, added_agents, default_clone_dir: "/Users/dev/Projects", accounts: [], ...(claude_compatibility && { claude_compatibility }) });
   const daemonOf = (added: Agent[], choices?: Partial<Record<Agent, boolean>>) => createFixtureDaemon({ id: "claude-compat", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: settings(added, choices) }) });
 
   it("reports Codex on only while Claude Code is added, and Grok Build on, until the user chooses", () => {
@@ -1195,9 +1202,9 @@ describe("the fixture daemon's Claude compatibility", () => {
 
 describe("the fixture daemon's account sharing", () => {
   const accounts = [
-    { id: "claude", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
-    { id: "same", agent: "claude" as const, name: "Mirror", config_dir: "/Users/dev/.claude/" },
-    { id: "codex", agent: "codex" as const, name: "Personal", config_dir: "/Users/dev/.codex-personal" },
+    accountOf("claude", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("same", "claude", "Mirror", "/Users/dev/.claude/"),
+    accountOf("codex", "codex", "Personal", "/Users/dev/.codex-personal"),
   ];
   const scenario = {
     id: "account-sharing",
@@ -1205,7 +1212,7 @@ describe("the fixture daemon's account sharing", () => {
     category: "normal" as const,
     title: "",
     state: {
-      ...snapshotState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts } }),
+      ...snapshotState({ settings: { ...DEFAULT_SETTINGS, added_agents: [], default_clone_dir: "/Users/dev/Projects", accounts } }),
       agentAvailability: new Map([
         ["claude" as const, { agent: "claude" as const, availability: "available" as const, default_account_dir: "/Users/dev/.claude" }],
         ["codex" as const, { agent: "codex" as const, availability: "available" as const, default_account_dir: "/Users/dev/.codex" }],
@@ -1234,7 +1241,7 @@ describe("the fixture daemon's account sharing", () => {
       ...scenario,
       state: {
         ...scenario.state,
-        accountSharing: accountSharingOf([{ account: "claude", failure: { share: true, items: [{ item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" }], detail: "`skills/` left unchanged" } }]),
+        accountSharing: accountSharingOf([{ account: "claude", failure: { share: true, cause: "permission_denied", items: [{ item: "skills/", left: "unchanged", cause: "permission_denied", detail: "permission denied" }], detail: "`skills/` left unchanged" } }]),
       },
     });
     daemon.store.setState({
@@ -1380,6 +1387,7 @@ describe("the fixture daemon's path link probe", () => {
       daemon.request({ type: "probe_path_links", project: project.id, paths: ["src/a.ts", "~/notes", "./src/../src/a.ts", "src/b.ts", `${project.path}/src/a.ts`] }),
     ).resolves.toEqual({
       type: "path_links",
+      id: null,
       links: [
         { path: "src/a.ts", kind: "file" },
         { path: "~/notes", kind: "directory" },
@@ -1388,7 +1396,7 @@ describe("the fixture daemon's path link probe", () => {
         { path: `${project.path}/src/a.ts`, kind: "file" },
       ],
     });
-    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).resolves.toEqual({ type: "ack", id: null });
   });
 
   it("opens what the probe found, but refuses one gone since with file_not_found, the path as given and the kind of root it was in", async () => {
@@ -1404,6 +1412,7 @@ describe("the fixture daemon's path link probe", () => {
     });
     await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["/private/tmp/sheet.png", "docs"] })).resolves.toEqual({
       type: "path_links",
+      id: null,
       links: [
         { path: "/private/tmp/sheet.png", kind: "file" },
         { path: "docs", kind: "directory" },
@@ -1436,6 +1445,7 @@ describe("the fixture daemon's path link probe", () => {
     });
     await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["docs", "bin/helper", "/private/tmp/sheet.png"] })).resolves.toEqual({
       type: "path_links",
+      id: null,
       links: [
         { path: "docs", kind: "directory" },
         { path: "bin/helper", kind: "file", view: { path: "bin/helper" } },
@@ -1464,6 +1474,7 @@ describe("the fixture daemon's path link probe", () => {
     // A path that lies outside every root now is refused as outside_scope for an open, which words no remedy.
     await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["/private/tmp/sheet4.png"] })).resolves.toEqual({
       type: "path_links",
+      id: null,
       links: [{ path: "/private/tmp/sheet4.png", kind: "file" }],
     });
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/private/tmp/sheet4.png" })).rejects.toMatchObject({
@@ -1493,6 +1504,7 @@ describe("the fixture daemon's path link probe", () => {
     });
     await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["a.ts", "/Users/dev/side/a.ts", "/tmp/b.png", "c.ts", "bin/tool", "docs/plan"] })).resolves.toEqual({
       type: "path_links",
+      id: null,
       links: [
         { path: "a.ts", kind: "file", view: { path: "a.ts" } },
         { path: "/Users/dev/side/a.ts", kind: "file", view: { worktree: "wt-side", path: "a.ts" } },
@@ -1510,10 +1522,10 @@ describe("the fixture daemon's path link probe", () => {
 });
 
 describe("the fixture daemon's added agents", () => {
-  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] };
+  const settings = { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects", accounts: [] };
   const daemonWith = (added: ("claude" | "codex" | "grok")[] | null, availability: [("claude" | "codex" | "grok"), "available" | "unavailable" | "not_determined"][]) => {
     const daemon = createFixtureDaemon({ id: "added-agents", group: "Settings", category: "normal", title: "", state: snapshotState({ settings: { ...settings, added_agents: added } }) });
-    daemon.store.setState({ agentAvailability: new Map(availability.map(([agent, state]) => [agent, { agent, availability: state }])) });
+    daemon.store.setState({ agentAvailability: new Map(availability.map(([agent, state]) => [agent, { agent, availability: state, default_account_dir: null }])) });
     return daemon;
   };
   const added = (daemon: ReturnType<typeof daemonWith>) => daemon.store.getState().settings.added_agents;
@@ -1549,7 +1561,7 @@ describe("the fixture daemon's added agents", () => {
   it("refuses every change to the list with the error a scenario names, leaving the list as it was", async () => {
     const refusal = { code: "agent_order_invalid", params: {}, message: "the new order must name each added agent exactly once" };
     const daemon = createFixtureDaemon({ id: "added-agents-refused", group: "Settings", category: "normal", title: "", agentListError: refusal, state: snapshotState({ settings: { ...settings, added_agents: ["claude", "codex"] } }) });
-    daemon.store.setState({ agentAvailability: new Map([["grok" as const, { agent: "grok" as const, availability: "available" as const }]]) });
+    daemon.store.setState({ agentAvailability: new Map([["grok" as const, { agent: "grok" as const, availability: "available" as const, default_account_dir: null }]]) });
     const bodies: Parameters<typeof daemon.request>[0][] = [{ type: "add_agent", agent: "grok" }, { type: "remove_agent", agent: "claude" }, { type: "reorder_agents", agents: ["codex", "claude"] }];
     for (const body of bodies) {
       await expect(daemon.request(body)).rejects.toMatchObject({ code: "agent_order_invalid" });
@@ -1574,13 +1586,13 @@ describe("the fixture daemon's trust answers", () => {
   });
 
   it("acknowledges a go-ahead for the project alone", async () => {
-    await expect(daemon().request({ type: "confirm_trust", session: "s", remember: true, trust_parent_dir: false })).resolves.toEqual({ type: "ack" });
-    await expect(daemon().request({ type: "confirm_trust", session: "s", remember: true })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "confirm_trust", session: "s", remember: true, trust_parent_dir: false })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon().request({ type: "confirm_trust", session: "s", remember: true })).resolves.toEqual({ type: "ack", id: null });
   });
 });
 
 describe("the fixture daemon's account login and default account name", () => {
-  const settings = { auto_pull_repositories: false, auto_delete_unresumable_archives: true, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, added_agents: ["claude", "grok"] as ("claude" | "grok")[], accounts: [{ id: "work", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" }] };
+  const settings = { ...DEFAULT_SETTINGS, default_clone_dir: "/Users/dev/Projects", added_agents: ["claude", "grok"] as ("claude" | "grok")[], accounts: [accountOf("work", "claude", "Work", "/Users/dev/.claude-work")] };
   const daemonWith = (outcome?: "succeeded" | "failed" | "timed_out") => createFixtureDaemon({ id: "login", group: "Settings", category: "normal", title: "", state: snapshotState({ settings }), loginOutcome: outcome });
   const login = (daemon: ReturnType<typeof daemonWith>, agent: string, account: string | null) =>
     daemon.store.getState().accountLogins.find((held) => held.agent === agent && held.account === account);
@@ -1756,11 +1768,11 @@ describe("the fixture daemon's shell terminals", () => {
 
 describe("the fixture daemon's quota gate", () => {
   const accounts = [
-    { id: "a-spent", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
-    { id: "a-free", agent: "claude" as const, name: "Personal", config_dir: "/Users/dev/.claude-personal" },
-    { id: "a-unread", agent: "claude" as const, name: "Client", config_dir: "/Users/dev/.claude-client" },
-    { id: "a-model", agent: "claude" as const, name: "Model", config_dir: "/Users/dev/.claude-model" },
-    { id: "a-stale", agent: "claude" as const, name: "Stale", config_dir: "/Users/dev/.claude-stale" },
+    accountOf("a-spent", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("a-free", "claude", "Personal", "/Users/dev/.claude-personal"),
+    accountOf("a-unread", "claude", "Client", "/Users/dev/.claude-client"),
+    accountOf("a-model", "claude", "Model", "/Users/dev/.claude-model"),
+    accountOf("a-stale", "claude", "Stale", "/Users/dev/.claude-stale"),
   ];
   const readings = [
     quotaOf("claude", "a-spent", "pro", [quotaWindow("session", 100, 30), quotaWindow("weekly", 100, 90)]),
@@ -1775,7 +1787,7 @@ describe("the fixture daemon's quota gate", () => {
       consoles: [consoleOf("c", "Main")],
       projects: [projectOf("p", "c", "Website")],
       sessions: [sessionOf("s", "c", "p", "Work", "idle")],
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: withAccounts },
+      settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/Users/dev/Projects", accounts: withAccounts },
       accountQuotas: withReadings,
     }),
   });
@@ -1830,7 +1842,7 @@ describe("the fixture daemon's quota gate", () => {
 
   it("refuses a switch to a used-up account and a handoff onto one, with the same code", async () => {
     await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-spent" })).rejects.toMatchObject({ code: "account_quota_exhausted" });
-    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-free" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-free" })).resolves.toEqual({ type: "ack", id: null });
     const grok = [quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 100, 60)])];
     await expect(daemon([], grok).request({ type: "hand_off_session", session: "s", agent: "grok" })).rejects.toMatchObject({ code: "account_quota_exhausted", params: { window: "Weekly", window_kind: "credit_period", window_minutes: "10080" } });
   });
@@ -1838,9 +1850,9 @@ describe("the fixture daemon's quota gate", () => {
 
 describe("the fixture daemon's disabled accounts", () => {
   const accounts = [
-    { id: "a-off", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work", disabled: true },
-    { id: "a-on", agent: "claude" as const, name: "Personal", config_dir: "/Users/dev/.claude-personal" },
-    { id: "a-codex", agent: "codex" as const, name: "Team", config_dir: "/Users/dev/.codex-team" },
+    accountOf("a-off", "claude", "Work", "/Users/dev/.claude-work", { disabled: true }),
+    accountOf("a-on", "claude", "Personal", "/Users/dev/.claude-personal"),
+    accountOf("a-codex", "codex", "Team", "/Users/dev/.codex-team"),
   ];
   const daemon = (disabledDefaults?: Agent[]) => createFixtureDaemon({
     id: "account-disabled", group: "Settings", category: "normal", title: "",
@@ -1848,7 +1860,7 @@ describe("the fixture daemon's disabled accounts", () => {
       consoles: [consoleOf("c", "Main")],
       projects: [projectOf("p", "c", "Website")],
       sessions: [sessionOf("s", "c", "p", "Work", "idle", { account_id: "a-off", config_dir: "/Users/dev/.claude-work" })],
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts, ...(disabledDefaults && { disabled_default_accounts: disabledDefaults }) },
+      settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts, ...(disabledDefaults && { disabled_default_accounts: disabledDefaults }) },
     }),
   });
 
@@ -1867,7 +1879,7 @@ describe("the fixture daemon's disabled accounts", () => {
 
   it("refuses a switch to an account that is off and a handoff onto one, and lets the running session's own account be left", async () => {
     await expect(daemon(["codex"]).request({ type: "hand_off_session", session: "s", agent: "codex", account: null })).rejects.toMatchObject({ code: "account_disabled", params: { agent: "Codex" } });
-    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-on" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-on" })).resolves.toEqual({ type: "ack", id: null });
     await expect(daemon(["claude"]).request({ type: "switch_session_account", session: "s", account: null })).rejects.toMatchObject({ code: "account_disabled" });
   });
 
@@ -1889,10 +1901,10 @@ describe("the fixture daemon's disabled accounts", () => {
 
 describe("the fixture daemon's accounts that are not logged in", () => {
   const accounts = [
-    { id: "a-out", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" },
-    { id: "a-new", agent: "claude" as const, name: "Client", config_dir: "/Users/dev/.claude-client" },
-    { id: "a-slow", agent: "claude" as const, name: "Personal", config_dir: "/Users/dev/.claude-personal" },
-    { id: "a-team", agent: "codex" as const, name: "Team", config_dir: "/Users/dev/.codex-team" },
+    accountOf("a-out", "claude", "Work", "/Users/dev/.claude-work"),
+    accountOf("a-new", "claude", "Client", "/Users/dev/.claude-client"),
+    accountOf("a-slow", "claude", "Personal", "/Users/dev/.claude-personal"),
+    accountOf("a-team", "codex", "Team", "/Users/dev/.codex-team"),
   ];
   const daemon = () => createFixtureDaemon({
     id: "account-not-signed-in", group: "Settings", category: "normal", title: "",
@@ -1900,7 +1912,7 @@ describe("the fixture daemon's accounts that are not logged in", () => {
       consoles: [consoleOf("c", "Main")],
       projects: [projectOf("p", "c", "Website")],
       sessions: [sessionOf("s", "c", "p", "Default", "idle")],
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+      settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex"], default_clone_dir: "/Users/dev/Projects", accounts },
       accountQuotas: [
         quotaOf("codex", "a-team", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "not signed in") }),
         quotaOf("claude", "a-out", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Claude Code" }, "not signed in") }),
@@ -1924,7 +1936,7 @@ describe("the fixture daemon's accounts that are not logged in", () => {
 
   it("lets a reading that failed for another reason through", async () => {
     await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-slow" })).resolves.toMatchObject({ type: "session_opened" });
-    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-slow" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-slow" })).resolves.toEqual({ type: "ack", id: null });
   });
 });
 
@@ -1935,8 +1947,8 @@ describe("the fixture daemon's session history", () => {
 
   it("answers a session's messages, an empty history for one not listed, and unavailable for a record it cannot read", async () => {
     const request = { type: "read_session_history" as const, session: archived.id };
-    await expect(createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: messages } }).request(request)).resolves.toEqual({ type: "session_history", session: archived.id, messages });
-    await expect(createFixtureDaemon(base).request(request)).resolves.toEqual({ type: "session_history", session: archived.id, messages: [] });
+    await expect(createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: messages } }).request(request)).resolves.toEqual({ type: "session_history", id: null, session: archived.id, messages });
+    await expect(createFixtureDaemon(base).request(request)).resolves.toEqual({ type: "session_history", id: null, session: archived.id, messages: [] });
     await expect(createFixtureDaemon({ ...base, sessionHistory: { [archived.id]: "unavailable" } }).request(request)).resolves.toMatchObject({ messages: [], unavailable: true });
     await expect(createFixtureDaemon(base).request({ type: "read_session_history", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
   });
@@ -1949,7 +1961,7 @@ describe("the fixture daemon's session history", () => {
     await expect(daemon.request(request)).rejects.toMatchObject(error);
     expect(daemon.store.getState().sessions.get(archived.id)?.status).toBe("archived");
     sessionHistory[archived.id] = messages;
-    await expect(daemon.request(request)).resolves.toEqual({ type: "session_history", session: archived.id, messages });
+    await expect(daemon.request(request)).resolves.toEqual({ type: "session_history", id: null, session: archived.id, messages });
   });
 
   it("can leave a read, and a reopen, unanswered", async () => {
@@ -2005,7 +2017,7 @@ describe("the fixture daemon's configuration export", () => {
   });
 
   describe("regions", () => {
-    const account = (id: string, agent: Agent, name: string, config_dir: string, extra: { share_default_config?: boolean; disabled?: boolean } = {}) => ({ id, agent, name, config_dir, ...extra });
+    const account = accountOf;
     const daemon = createFixtureDaemon({
       id: "export-regions",
       group: "Configuration",
@@ -2015,11 +2027,9 @@ describe("the fixture daemon's configuration export", () => {
         consoles: [consoleOf("c-1", "Work"), consoleOf("c-2", "Home")],
         projects: [projectOf("p-1", "c-1", "Website")],
         settings: {
-          auto_pull_repositories: false,
-          auto_delete_unresumable_archives: true,
+          ...DEFAULT_SETTINGS,
           added_agents: ["codex", "claude"],
           default_clone_dir: "/Users/dev/Projects",
-          git_workflow: DEFAULT_GIT_WORKFLOW,
           accounts: [
             account("a-1", "claude", "Work", "/Users/dev/.claude-work", { share_default_config: true }),
             account("a-2", "claude", "Studio", "/Volumes/Shared/claude-studio", { disabled: true }),
@@ -2040,7 +2050,7 @@ describe("the fixture daemon's configuration export", () => {
       expect(everything).not.toHaveProperty("accounts");
       const one = await exported({ console: "c-1" });
       expect(one.consoles.map((console) => console.name)).toEqual(["Work"]);
-      expect(one).not.toHaveProperty("settings");
+      expect(one.settings).toBeNull();
       expect(one).not.toHaveProperty("accounts");
     });
 
@@ -2054,7 +2064,7 @@ describe("the fixture daemon's configuration export", () => {
       expect(oneWithSettings.accounts).toBeDefined();
       const allWithoutSettings = await exported({ consoles: "all", include_settings: false });
       expect(allWithoutSettings.consoles).toHaveLength(2);
-      expect(allWithoutSettings).not.toHaveProperty("settings");
+      expect(allWithoutSettings.settings).toBeNull();
     });
 
     it("refuses an export of nothing, one of a console with none named, and one of a console it does not have", async () => {
@@ -2174,13 +2184,13 @@ describe("the fixture daemon's process ledger", () => {
 
   it("stops the trees that still qualify, and leaves out the ones that do not", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "stop_processes", ids: ["1:1", "5:1", "6:1", "nope"] })).resolves.toEqual({ type: "processes_stopped", ids: ["1:1", "6:1"] });
+    await expect(daemon.request({ type: "stop_processes", ids: ["1:1", "5:1", "6:1", "nope"] })).resolves.toEqual({ type: "processes_stopped", id: null, ids: ["1:1", "6:1"] });
     await expect(list(daemon, { project_id: project.id })).resolves.toEqual(["2:1", "3:1"]);
   });
 
   it("keeps the trees of a running session that still qualify, which then stay listed as the project's, and nothing of a project process", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "keep_processes", ids: ["1:1", "5:1", "6:1"] })).resolves.toEqual({ type: "processes_kept", ids: ["1:1"] });
+    await expect(daemon.request({ type: "keep_processes", ids: ["1:1", "5:1", "6:1"] })).resolves.toEqual({ type: "processes_kept", id: null, ids: ["1:1"] });
     await expect(list(daemon, { project_id: project.id })).resolves.toEqual(["2:1", "3:1", "6:1", "1:1"]);
     await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["2:1"]);
     const kept = await daemon.request({ type: "list_processes", project_id: project.id });
@@ -2191,7 +2201,7 @@ describe("the fixture daemon's process ledger", () => {
     const hub = sessionOf("hub", "c", undefined, "Hub", "idle");
     const own = processTreeOf("7:1", hub, "caddy run", 30);
     const daemon = createFixtureDaemon({ ...scenario, state: snapshotState({ consoles: [consoleOf("c", "Main")], projects: [project], sessions: [hub] }), processes: { trees: [own] } });
-    await expect(daemon.request({ type: "keep_processes", ids: ["7:1"] })).resolves.toEqual({ type: "processes_kept", ids: [] });
+    await expect(daemon.request({ type: "keep_processes", ids: ["7:1"] })).resolves.toEqual({ type: "processes_kept", id: null, ids: [] });
     await expect(list(daemon, { session_id: hub.id })).resolves.toEqual(["7:1"]);
   });
 

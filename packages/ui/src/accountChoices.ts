@@ -1,5 +1,5 @@
 import { orderedAccounts } from "./accountOrder";
-import { accountsByAgent, agentsInListingOrder, AGENT_ACCOUNT_FIELD, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
+import { accountsByAgent, agentsInListingOrder, defaultAccountName, isAgentPickable, projectSessionAgent, selectableAgent } from "./agents";
 import type { Translate } from "./i18n/catalog";
 import type { Account, AccountQuota, AccountSharing, Agent, AgentAvailability, Console, Project, ProjectAccount, QuotaWindow, Session, Settings } from "./protocol";
 import { accountQuotaOf } from "./quota/accountQuotaOf";
@@ -55,7 +55,7 @@ export function sharingChangeRuns(sharing: Map<string, AccountSharing> | undefin
  * launch. `null`, the default account, and an unknown id have none. */
 export function incompleteAccount(accounts: Account[], sharing: Map<string, AccountSharing> | undefined, account: string | null | undefined): Account | undefined {
   if (account === null || account === undefined || sharingChangeRuns(sharing, account)) return undefined;
-  return accounts.find((item) => item.id === account && item.share_default_config_incomplete === true);
+  return accounts.find((item) => item.id === account && item.share_default_config_incomplete);
 }
 
 /** Whether the reading of an account says the agent is not logged in there, which keeps a session off it. */
@@ -97,7 +97,7 @@ export interface QuotaReadings {
 /** Whether the user turned `account` of `agent` off for new sessions. `null`, the default account, is looked up in
  * `disabledDefaults`, the agents whose default account is. */
 export function accountDisabled(accounts: Account[], disabledDefaults: readonly Agent[] | undefined, agent: Agent, account: string | null): boolean {
-  return account === null ? disabledDefaults?.includes(agent) === true : accounts.some((item) => item.id === account && item.disabled === true);
+  return account === null ? disabledDefaults?.includes(agent) === true : accounts.some((item) => item.id === account && item.disabled);
 }
 
 /** Every agent's group, built from the stored accounts (`added` is the user's added agents, `null` while
@@ -142,7 +142,7 @@ export function storedAccount(id: string | null | undefined, agent: Agent, accou
 
 /** The account the console refers to for `agent`, `null` (the default account) when none. */
 export function consoleAccount(owner: Console, agent: Agent, accounts: Account[]): string | null {
-  return storedAccount(owner[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
+  return storedAccount(owner.accounts[agent], agent, accounts);
 }
 
 /** `reference`, a project's setting for `agent`'s account, as the daemon reads it: one to an account
@@ -153,7 +153,7 @@ export function settledProjectAccount(reference: ProjectAccount, agent: Agent, a
 
 /** What the project says about `agent`'s account. */
 export function projectAccount(project: Project, agent: Agent, accounts: Account[]): ProjectAccount {
-  return settledProjectAccount(project[AGENT_ACCOUNT_FIELD[agent]], agent, accounts);
+  return settledProjectAccount(project.accounts[agent], agent, accounts);
 }
 
 /** The account a project session of `agent` runs under when none is chosen for it, as the daemon

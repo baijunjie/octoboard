@@ -10,13 +10,13 @@ import type { SavedConfigurationFile } from "../platform";
 import type { ConfigurationDocument, Event, RequestBody } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
 import { ExportConfigurationDialog, exportFileName } from "./ExportConfigurationDialog";
-import { mountDialog, press } from "./testSupport";
+import { documentSettings, mountDialog, press } from "./testSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const main = consoleOf("c-main", "Main");
-const DOCUMENT: ConfigurationDocument = { format: "octoboard-configuration", version: 1, consoles: [] };
-const exported = (_body: RequestBody): Promise<Event> => Promise.resolve({ type: "configuration_exported", document: DOCUMENT });
+const DOCUMENT: ConfigurationDocument = { format: "octoboard-configuration", version: 1, exported_by: null, settings: null, consoles: [] };
+const exported = (_body: RequestBody): Promise<Event> => Promise.resolve({ type: "configuration_exported", id: null, document: DOCUMENT });
 
 type Save = (name: string, text: string) => Promise<SavedConfigurationFile | undefined>;
 
@@ -193,11 +193,11 @@ it("adds this client's changed keyboard shortcuts to a full export, and to nothi
   const lock = { code: "KeyK", primary: true, shift: true };
   shortcutOverrides.set({ lock });
   onTestFinished(() => shortcutOverrides.set({}));
-  const full: ConfigurationDocument = { ...DOCUMENT, settings: { auto_pull_repositories: true } };
+  const full: ConfigurationDocument = { ...DOCUMENT, settings: documentSettings({ auto_pull_repositories: true }) };
   const save = vi.fn<Save>(async (name) => ({ kind: "saved", name }));
-  mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", document: full }), { save, open: vi.fn() });
+  mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", id: null, document: full }), { save, open: vi.fn() });
   await press("Export");
-  expect(JSON.parse(save.mock.calls[0][1]).settings).toEqual({ auto_pull_repositories: true, keyboard_shortcuts: { lock } });
+  expect(JSON.parse(save.mock.calls[0][1]).settings).toEqual({ ...full.settings, keyboard_shortcuts: { lock } });
 });
 
 it("leaves a single console's export as the daemon sent it, whatever shortcuts this client has changed", async () => {

@@ -293,13 +293,10 @@ are in `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind
 
 The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store.rs`), and a new database gets the
 whole current schema at once. A file at the current version is used as is, and a file with no tables is initialized in
-place. Supported older versions upgrade in place to the current version 3, preserving the existing data: version 1
-gains the nullable account display order (added in version 2), and versions 1 and 2 gain the sessions' private
-observation boundary of the agent-record collector (added in version 3). An older file with tables and no supported
-upgrade is moved aside as
-`<name>.superseded-<unix seconds>` (never deleted, with a warning logged) while a fresh database starts. A file of a
-newer version, or one that is not SQLite, is refused and left untouched. Each later schema change adds a step from
-version N to N+1.
+place. The current version is 1 and has no upgrade steps, since no build has been released: a file with tables and no
+version (the only older state) is moved aside as `<name>.superseded-<unix seconds>` (never deleted, with a warning
+logged) while a fresh database starts. A file of a newer version, or one that is not SQLite, is refused and left
+untouched. Once a version is released, a schema change from it adds a step from version N to N+1.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
@@ -310,13 +307,12 @@ version N to N+1.
 - `Session.bound_to` is the id of a session's parent — a console session or a project coordinator of the same
   project — or unset for an independent session. `new_session` sets it to the creating session; `transfer_session`
   changes the parent; `bind_to_session` sets a parent for an independent project coordinator; and `release_session`
-  clears it and `lead`, leaving an independent coordinator. A coordinator that sets a console session as its parent
-  keeps its children and its ability to manage them. `Session.lead` (stored, never sent to clients) preserves that
+  clears it and makes the session a coordinator again, leaving an independent coordinator. A coordinator that sets a
+  console session as its parent keeps its children and its ability to manage them. `Session.orchestration_role`
+  (`coordinator` or `worker`, stored and sent to clients and MCP records, separately from the parent id) preserves that
   capability even when it has no children; a project session created with a parent instead starts as a worker.
-  `Session::orchestration_role()` derives `coordinator` or `worker` from that stored state; capability checks use
-  `Session::is_worker()`. The wire-only `Session.orchestration_role` field carries the derived role to client and MCP
-  records, separately from the parent id; it is not stored and never authorizes a request. A console session is always
-  an independent coordinator.
+  Capability checks use `Session::is_worker()`, which reads the stored role, so every write that sets or clears
+  `bound_to` writes the role with it: a console session and a session with no parent are always coordinators.
   A project session reporting to another project session is always a worker, so orchestration has at most two levels
   of reporting relationships. Reports route directly to the parent id because a console may hold several console
   sessions at once.
@@ -329,8 +325,8 @@ version N to N+1.
   Whether two paths name the same directory, or a trusted folder covers a project, is decided from where they really
   are on disk (device and inode, links followed), not from the stored text.
 - `Account` is a named config directory of one agent, kept once for the whole application. A console refers to one
-  account per agent by id (`claude_account_id` and its two siblings), rather than holding a path directly; `None`
-  means that agent's default account, the state of pinning nothing. A project carries the same three fields with one
+  account per agent by id (`accounts`, an entry for each agent), rather than holding a path directly; `None`
+  means that agent's default account, the state of pinning nothing. A project carries the same entries with one
   state more — inherit its console's reference, the agent's default account, or a named account — since pinning
   nothing is a choice of its own that a project may make against a console that names an account. It travels as a
   tagged value, and in storage the id column still only ever holds an account id, the default state living in a
@@ -346,10 +342,9 @@ version N to N+1.
   stale with every agent release.
 - Every project and session carries a `host_id` while the host table holds a single local record, so going remote needs
   no data migration. Trusted-folder entries ignore `host_id`, which is harmless while every host is local.
-- `Page.console_session_id` is the coordinator that pushed the page — a console session or a project coordinator —
-  not its console or project: each session has its own page history, and the column keeps its name for either
-  kind. Deleting a session deletes its pages in the database, and deleting its project or console therefore deletes them
-  too.
+- `Page.session_id` is the coordinator that pushed the page — a console session or a project coordinator —
+  not its console or project: each session has its own page history. Deleting a session deletes its pages in the
+  database, and deleting its project or console therefore deletes them too.
 - `Page.anchor_message_id` records the conversation position a page was pushed at. It is stored and never read; a
   linkage that hid pages after the user rewinds the agent's conversation would read it, but no agent exposes a message
   id to put in it yet.

@@ -12,7 +12,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function AutoSwitchOnUsageLimitSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.auto_switch_on_usage_limit ?? false);
+  const enabled = useDaemonStore((s) => s.settings.auto_switch_on_usage_limit);
   const description = t(enabled ? "settings.autoSwitch.description.on" : "settings.autoSwitch.description.off");
 
   const setEnabled = (value: boolean) =>

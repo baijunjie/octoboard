@@ -2,24 +2,27 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { accountOf } from "../gallery/fixtures/builders";
 import type { Daemon } from "../store";
 import { parentConsole, renderDialog, hub1, buttons, optionElements, pickerNamed } from "./sessionDialogTestSupport";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
+
 
 vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
 function answerSessionModels(daemon: Daemon) {
   vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_agent_models"
-    ? { type: "agent_models", agent: body.agent, account: body.account ?? null, models: [
+    ? { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models: [
       { id: "opus", name: "Opus", efforts: ["low", "high"] },
       { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
     ], unavailable: null }
-    : { type: "ack" });
+    : { type: "ack", id: null });
 }
 
 it.each(["inherit", "pick", "clear"] as const)("opens with session launch settings: %s", async (mode) => {
   const { container, root, daemon } = renderDialog([], {}, {}, { kind: "unbound" }, {
-    claude_session_model: "opus", claude_session_effort: "high",
+    launch: { claude: { model: "opus", effort: "high" } },
   });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   answerSessionModels(daemon);
@@ -50,10 +53,10 @@ it.each(["inherit", "pick", "clear"] as const)("opens with session launch settin
 
 it("queries the selected account and keeps overrides separate when changing agents", async () => {
   const { container, root, daemon, pastMountRefocus } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
-      { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
+      accountOf("a-work", "claude", "Work", "/accounts/work"),
     ] },
-  }, { claude_account_id: "a-work" }, { kind: "unbound" }, { codex_session_model: "codex-project" });
+  }, { accounts: { claude: "a-work" } }, { kind: "unbound" }, { launch: { codex: { model: "codex-project" } } });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   await pastMountRefocus();
   answerSessionModels(daemon);
@@ -86,8 +89,8 @@ it("queries the selected account and keeps overrides separate when changing agen
 
 it("keeps the selected agent and the account picker when the last named account is removed", async () => {
   const { container, root, daemon, pastMountRefocus } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
-      { id: "a-work", agent: "claude", name: "Work", config_dir: "/accounts/work" },
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
+      accountOf("a-work", "claude", "Work", "/accounts/work"),
     ] },
   }, { default_agent: "codex" });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -97,7 +100,7 @@ it("keeps the selected agent and the account picker when the last named account 
   await act(async () => pickerNamed("Claude Code account").click());
   await act(async () => optionElements().find((option) => option.textContent === "Work")!.click());
   const agentTrigger = pickerNamed("Agent");
-  act(() => daemon.store.setState({ settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] } }));
+  act(() => daemon.store.setState({ settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [] } }));
   expect(pickerNamed("Agent")).toBe(agentTrigger);
   expect(agentTrigger.textContent).toContain("Claude Code");
   expect(pickerNamed("Claude Code account").textContent).toContain("Default");
@@ -105,13 +108,12 @@ it("keeps the selected agent and the account picker when the last named account 
 
 it.each(["inherit", "pick", "clear"] as const)("opens console sessions with console launch settings: %s", async (mode) => {
   const { container, root, daemon } = renderDialog([hub1], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
-      { id: "a-console", agent: "claude", name: "Console account", config_dir: "/accounts/console" },
-      { id: "a-codex", agent: "codex", name: "Codex work", config_dir: "/accounts/codex" },
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
+      accountOf("a-console", "claude", "Console account", "/accounts/console"),
+      accountOf("a-codex", "codex", "Codex work", "/accounts/codex"),
     ] },
   }, {
-    claude_account_id: "a-console", claude_console_session_model: "opus", claude_console_session_effort: "high",
-    codex_account_id: "a-codex", codex_console_session_model: "codex-console", codex_console_session_effort: "medium",
+    accounts: { claude: "a-console", codex: "a-codex" }, launch: { claude: { model: "opus", effort: "high" }, codex: { model: "codex-console", effort: "medium" } },
   }, { kind: "choose" }, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   answerSessionModels(daemon);
@@ -166,12 +168,12 @@ it.each(["inherit", "pick", "clear"] as const)("opens console sessions with cons
 
 it("opens console sessions on the console's default agent and its account", async () => {
   const { container, root, daemon } = renderDialog([], {
-    settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
-      { id: "a-codex", agent: "codex", name: "Work", config_dir: "/accounts/codex" },
+    settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [
+      accountOf("a-codex", "codex", "Work", "/accounts/codex"),
     ] },
-  }, { default_agent: "codex", codex_account_id: "a-codex" }, undefined, null);
+  }, { default_agent: "codex", accounts: { codex: "a-codex" } }, undefined, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
-  vi.mocked(daemon.request).mockResolvedValue({ type: "ack" });
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null });
   expect(pickerNamed("Agent").textContent).toContain("Codex");
   expect(pickerNamed("Codex account").textContent).toContain("Work");
   await act(async () => buttons().find((button) => button.textContent === "Open")!.click());
@@ -189,7 +191,7 @@ it("uses the localized default name as its placeholder and submitted title", asy
 });
 
 it.each(["Backspace", "Delete"])("clears a launch choice with %s only while its list is closed", async (key) => {
-  const { container, root, daemon, pastMountRefocus } = renderDialog([], {}, {}, undefined, { claude_session_model: "opus" });
+  const { container, root, daemon, pastMountRefocus } = renderDialog([], {}, {}, undefined, { launch: { claude: { model: "opus" } } });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   await pastMountRefocus();
   answerSessionModels(daemon);
@@ -208,9 +210,9 @@ it.each(["Backspace", "Delete"])("clears a launch choice with %s only while its 
 });
 
 it.each([
-  ["the project's own value over the console's project session one", { claude_session_model: "opus" }, { claude_project_session_model: "sonnet" }, "Opus", "The agent's own setting"],
-  ["the console's project session values where the project sets none", {}, { claude_project_session_model: "sonnet", claude_project_session_effort: "low" }, "Sonnet", "low"],
-  ["each value from the project, else from the console", { claude_session_effort: "high" }, { claude_project_session_model: "sonnet", claude_project_session_effort: "low" }, "Sonnet", "high"],
+  ["the project's own value over the console's project session one", { launch: { claude: { model: "opus" } } }, { project_session_launch: { claude: { model: "sonnet" } } }, "Opus", "The agent's own setting"],
+  ["the console's project session values where the project sets none", {}, { project_session_launch: { claude: { model: "sonnet", effort: "low" } } }, "Sonnet", "low"],
+  ["each value from the project, else from the console", { launch: { claude: { effort: "high" } } }, { project_session_launch: { claude: { model: "sonnet", effort: "low" } } }, "Sonnet", "high"],
 ] as const)("opens a project session on %s", async (_, projectValues, consoleValues, model, effort) => {
   const { container, root, daemon } = renderDialog([], {}, consoleValues, { kind: "unbound" }, projectValues);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -221,7 +223,7 @@ it.each([
 });
 
 it("opens a console session on the console session value, not the project session one", async () => {
-  const { container, root, daemon } = renderDialog([], {}, { claude_console_session_model: "opus", claude_project_session_model: "sonnet" }, { kind: "unbound" }, null);
+  const { container, root, daemon } = renderDialog([], {}, { launch: { claude: { model: "opus" } }, project_session_launch: { claude: { model: "sonnet" } } }, { kind: "unbound" }, null);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
   answerSessionModels(daemon);
   await act(async () => buttons().find((button) => button.textContent === "Advanced")!.click());
@@ -236,9 +238,9 @@ it("keeps the Name hint visible", () => {
 
 it("lists an account whose sharing change runs as unavailable, without a reason, in the account picker", async () => {
   const { container, root } = renderDialog([], {
-    settings: {
+    settings: { ...DEFAULT_SETTINGS,
       auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
-      accounts: [{ id: "a-1", agent: "claude", name: "Work", config_dir: "/home/me/.claude-work" }],
+      accounts: [accountOf("a-1", "claude", "Work", "/home/me/.claude-work")],
     },
     accountSharing: new Map([["a-1", { account: "a-1", progress: { share: true, phase: "changing" as const, done: 0, total: 3 } }]]),
   });
@@ -259,7 +261,7 @@ it("shows the account picker with the agent's only account, its usage drawn in t
   const { container, root } = renderDialog([], {
     accountQuotas: [{
       agent: "claude", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
-      windows: [{ kind: "session", label: null, used_percent: 30, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+      windows: [{ kind: "session", label: null, used_percent: 30, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
     }],
   });
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });

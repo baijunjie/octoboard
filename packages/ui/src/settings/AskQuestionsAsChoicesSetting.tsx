@@ -11,7 +11,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function AskQuestionsAsChoicesSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.ask_questions_as_choices ?? true);
+  const enabled = useDaemonStore((s) => s.settings.ask_questions_as_choices);
   const description = t(enabled ? "settings.askQuestionsAsChoices.description.on" : "settings.askQuestionsAsChoices.description.off");
 
   const setEnabled = (value: boolean) =>

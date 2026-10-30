@@ -1,8 +1,8 @@
 import React from "react";
 
-import { AGENT_LABEL, type LaunchPair } from "../agents";
+import { AGENT_LABEL } from "../agents";
 import { useT } from "../i18n/react";
-import type { Account, Session, Settings } from "../protocol";
+import type { Account, Launch, Session, Settings } from "../protocol";
 import { sessionAccount } from "../sessionLabel";
 import { sessionModelValues } from "../sessionModel";
 import { AgentIcon } from "./AgentIcon";
@@ -18,7 +18,7 @@ export function SessionAgentTooltip({ session, accounts, defaultNames, launch }:
   session: Session;
   accounts: Account[];
   defaultNames: Settings["default_account_names"];
-  launch?: LaunchPair;
+  launch?: Launch;
 }): React.ReactElement {
   const t = useT();
   const account = sessionAccount(t, session, accounts, defaultNames);
@@ -59,7 +59,7 @@ export function SessionAgentIcon(props: {
   session: Session;
   accounts: Account[];
   defaultNames: Settings["default_account_names"];
-  launch?: LaunchPair;
+  launch?: Launch;
   /** Whether a tap opens the tooltip's content in a popover; off inside a pressable row, whose tap it is. */
   touchPopover?: boolean;
 }): React.ReactElement {

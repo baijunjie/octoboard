@@ -6,7 +6,9 @@ use serde_json::Map;
 
 use super::*;
 use crate::branch_origin::repository_of;
-use crate::protocol::{error_code, now_millis, Agent, Event, Origin, RequestBody, Role};
+use crate::protocol::{
+    error_code, now_millis, Agent, Event, OrchestrationRole, Origin, RequestBody, Role,
+};
 use crate::store::LOCAL_HOST_ID;
 use crate::test_support::{
     app_state, branch_made_by, console, fixture_git, git, host_tools, insert_project, repo_with,
@@ -31,7 +33,7 @@ fn session(id: &str, status: SessionStatus) -> Session {
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
-        orchestration_role: None,
+        orchestration_role: OrchestrationRole::Coordinator,
         context: None,
         observed_model: None,
         observed_effort: None,
@@ -39,7 +41,6 @@ fn session(id: &str, status: SessionStatus) -> Session {
         effort: None,
         has_conversation: true,
         bound_to: None,
-        lead: false,
         colour: None,
         ordinal: None,
         account_id: None,
@@ -1584,6 +1585,7 @@ fn agent_fixture(label: &str) -> (Fixture, PathBuf) {
     fixture.store("owner", SessionStatus::Idle);
     let worker = Session {
         bound_to: Some("owner".to_string()),
+        orchestration_role: OrchestrationRole::Worker,
         ..session("worker", SessionStatus::Idle)
     };
     fixture.state.store.insert_session(&worker).unwrap();

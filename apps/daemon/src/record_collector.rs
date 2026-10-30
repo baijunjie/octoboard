@@ -709,21 +709,9 @@ mod tests {
             workdir: directory.join("console").to_string_lossy().into_owned(),
             default_agent: Agent::Claude,
             project_session_agent: None,
-            claude_project_session_model: None,
-            claude_project_session_effort: None,
-            codex_project_session_model: None,
-            codex_project_session_effort: None,
-            grok_project_session_model: None,
-            grok_project_session_effort: None,
-            claude_account_id: None,
-            codex_account_id: None,
-            grok_account_id: None,
-            claude_console_session_model: None,
-            claude_console_session_effort: None,
-            codex_console_session_model: None,
-            codex_console_session_effort: None,
-            grok_console_session_model: None,
-            grok_console_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
+            project_session_launch: Default::default(),
             icon: None,
             console_session_prompt: None,
             created_at: 0,
@@ -735,7 +723,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"claude","agent_session_id":"native","console_id":"console",
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -796,7 +784,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"claude","agent_session_id":"native","console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"idle","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -851,7 +839,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"codex","agent_session_id":"thread-1","console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -906,7 +894,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -944,7 +932,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"idle","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -1198,7 +1186,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"claude","agent_session_id":ID,"console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"idle","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":directory.join("a").to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -1282,7 +1270,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"idle","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -1330,7 +1318,7 @@ mod tests {
             let session: crate::protocol::Session = serde_json::from_value(json!({
                 "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
                 "host_id":"local","role":"console","origin":"user","title":"Session",
-                "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+                "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
                 "config_dir":root.to_string_lossy()}))
             .unwrap();
             state.store.insert_session(&session).unwrap();
@@ -1508,7 +1496,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"codex","agent_session_id":ID,"console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -1593,7 +1581,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"codex","agent_session_id":id,"console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -1685,7 +1673,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"grok","agent_session_id":"native","console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"archived","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();
@@ -1748,7 +1736,7 @@ mod tests {
         let session: crate::protocol::Session = serde_json::from_value(json!({
             "id":"s","agent":"grok","agent_session_id":"native","console_id":console_id,
             "host_id":"local","role":"console","origin":"user","title":"Session",
-            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "status":"idle","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0,
             "config_dir":root.to_string_lossy()}))
         .unwrap();
         state.store.insert_session(&session).unwrap();

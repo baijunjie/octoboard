@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { press } from "../components/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import type { AccountQuota, Agent, AgentAvailability, Session, SessionBranchItem, Settings } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon, type State } from "../store";
@@ -33,16 +33,16 @@ function mount(session: Session, others: Session[] = [], branches: SessionBranch
   store.setState({
     settings: { ...store.getState().settings, added_agents: added, ...settings },
     accountQuotas,
-    agentAvailability: new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state } as AgentAvailability])),
+    agentAvailability: new Map((Object.entries(availability) as [Agent, AgentAvailability["availability"]][]).map(([agent, state]) => [agent, { agent, availability: state, default_account_dir: null } as AgentAvailability])),
   });
   let inspections = 0;
   const request = vi.fn(async (body: { type: string }) => {
     if (body.type === "inspect_session_branches" && branches === "failTwice" && ++inspections <= 2) throw new Error("git failed");
-    if (body.type === "inspect_session_branches" && branches === "failTwice") return { type: "session_branches_inspected", items: [] };
+    if (body.type === "inspect_session_branches" && branches === "failTwice") return { type: "session_branches_inspected", id: null, items: [] };
     if (body.type === "inspect_session_branches" && branches === "fail") throw new Error("git failed");
-    if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", items: branches };
-    if (body.type === "hand_off_session") return { type: "session_opened", session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
-    return { type: "ack" };
+    if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", id: null, items: branches };
+    if (body.type === "hand_off_session") return { type: "session_opened", id: null, session: sessionOf("s-new", parentConsole.id, session.project_id ?? undefined, session.title, "working", { agent: "codex" }) };
+    return { type: "ack", id: null };
   });
   const daemon = { store, request, toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const onClose = vi.fn();
@@ -89,11 +89,11 @@ it.each([
   const { request } = mount(session, [], [], {}, null, [
     {
       agent: "codex", account: "soon", fetched_at: now, plan: null, unavailable: null,
-      windows: [{ kind: "weekly", label: null, used_percent: 1, resets_at: now + 3_600_000, window_minutes: 7 * 24 * 60 }],
+      windows: [{ kind: "weekly", label: null, used_percent: 1, resets_at: now + 3_600_000, window_minutes: 7 * 24 * 60 }], email: null,
     },
   ], {
     auto_select_account: autoSelect,
-    accounts: [{ id: "soon", agent: "codex", name: "Soon", config_dir: "/tmp/codex-soon" }],
+    accounts: [accountOf("soon", "codex", "Soon", "/tmp/codex-soon")],
   });
   await settle();
   await act(async () => buttons().find((button) => button.textContent === "Hand off")?.click());
@@ -203,7 +203,7 @@ it("shows the receiving agent's only account in an account picker, its usage dra
   const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
   const quota: AccountQuota = {
     agent: "codex", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
-    windows: [{ kind: "session", label: null, used_percent: 30, resets_at: Date.now() + 3_600_000, window_minutes: 300 }],
+    windows: [{ kind: "session", label: null, used_percent: 30, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
   };
   mount(session, [], [], { claude: "available", codex: "available", grok: "unavailable" }, null, [quota]);
   await settle();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { projectOf, sessionOf } from "./gallery/fixtures/builders";
+import { accountOf, projectOf, sessionOf } from "./gallery/fixtures/builders";
 import { format } from "./i18n/catalog";
 import { displayColumns } from "./i18n/displayColumns";
 import type { Translate } from "./i18n/catalog";
@@ -9,7 +9,7 @@ import type { Account } from "./protocol";
 import { sessionChoiceTitle, sessionAgentLabel, sessionAriaLabel, sessionDisplayTitle, sessionShownStatusKind, sessionStatusKind, sessionWithLocation } from "./sessionLabel";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
-const accounts: Account[] = [{ id: "w", agent: "claude", name: "Work", config_dir: "/home/w" }];
+const accounts: Account[] = [accountOf("w", "claude", "Work", "/home/w")];
 
 describe("sessionAgentLabel", () => {
   it.each([
@@ -18,7 +18,7 @@ describe("sessionAgentLabel", () => {
     ["a removed account by the directory it recorded", { account_id: "gone", config_dir: "/home/old" }, `Claude Code (${isolate("/home/old")})`],
     ["a removed account that recorded no directory by the agent alone", { account_id: "gone" }, "Claude Code"],
   ] as const)("names %s", (_, extra, expected) => {
-    expect(sessionAgentLabel(t, sessionOf("s", "c", "p", "Title", "idle", extra), accounts, undefined)).toBe(expected);
+    expect(sessionAgentLabel(t, sessionOf("s", "c", "p", "Title", "idle", extra), accounts, {})).toBe(expected);
   });
 });
 
@@ -42,7 +42,7 @@ describe("sessionStatusKind", () => {
 
   it("puts the name into the row's accessible name", () => {
     const session = sessionOf("s", "c", "p", "T", "idle", { background_tasks: [{ id: "b1" }] });
-    expect(sessionAriaLabel(t, "en", session, accounts, undefined, undefined)).toContain("Working in background");
+    expect(sessionAriaLabel(t, "en", session, accounts, undefined, {})).toContain("Working in background");
   });
 });
 
@@ -56,7 +56,7 @@ describe("sessionDisplayTitle", () => {
     const session = sessionOf("s", "c", "p", "octoboard", "working", { terminal_title: "  شرح المعرض  " });
     const title = `${isolate("شرح المعرض")}｜${isolate("octoboard")}`;
     expect(sessionDisplayTitle(t, session)).toBe(title);
-    expect(sessionAriaLabel(t, "en", session, [], undefined, undefined)).toContain(isolate(title));
+    expect(sessionAriaLabel(t, "en", session, [], undefined, {})).toContain(isolate(title));
     expect(sessionWithLocation(t, session, new Map(), new Map())).toContain(isolate(title));
     const zh: Translate = ((key: string, ...args: unknown[]) => format("zh-Hans", key as never, args[0] as never)) as Translate;
     expect(sessionDisplayTitle(zh, session)).toBe(title);

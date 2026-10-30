@@ -714,11 +714,11 @@ mod tests {
             assert!(console_session.contains(&qualified_tool_name(agent, "new_session")));
             assert!(project_session.contains(&qualified_tool_name(agent, "report")));
             // Every tool each kind is offered is named in its text, by that agent's name for it.
-            for (text, bound) in [(&project_session, true), (&unbound_session, false)] {
-                for tool in crate::mcp::tools_for(Role::Project, bound) {
+            for (text, worker) in [(&project_session, true), (&unbound_session, false)] {
+                for tool in crate::mcp::tools_for(Role::Project, worker) {
                     assert!(
                         text.contains(&qualified_tool_name(agent, tool.name)),
-                        "{} (bound: {bound})",
+                        "{} (worker: {worker})",
                         tool.name
                     );
                 }
@@ -735,7 +735,7 @@ mod tests {
 
     /// A project session's text names no tool it is not offered, and none by a bare name: a
     /// backticked token with that agent's prefix is a tool the kind is offered, and one without it
-    /// is no tool's bare name (argument names and statuses are not tool names). A bound session,
+    /// is no tool's bare name (argument names and statuses are not tool names). A worker,
     /// which cannot start sessions of its own, is not offered the child session it would direct.
     #[test]
     fn a_project_sessions_text_names_only_the_tools_it_is_offered() {
@@ -755,27 +755,27 @@ mod tests {
             );
             let unbound_session =
                 role_description(Role::Project, None, agent, &RoleOptions::default());
-            for (text, bound) in [(&project_session, true), (&unbound_session, false)] {
+            for (text, worker) in [(&project_session, true), (&unbound_session, false)] {
                 assert_eq!(
                     text.matches('`').count() % 2,
                     0,
-                    "unbalanced backticks (bound: {bound})"
+                    "unbalanced backticks (worker: {worker})"
                 );
                 assert_eq!(
                     text.contains("a child session you direct"),
-                    !bound,
-                    "child session option (bound: {bound})"
+                    !worker,
+                    "child session option (worker: {worker})"
                 );
-                let catalogue = crate::mcp::tools_for(Role::Project, bound);
+                let catalogue = crate::mcp::tools_for(Role::Project, worker);
                 for token in text.split('`').skip(1).step_by(2) {
                     match token.strip_prefix(&prefix) {
                         Some(name) => assert!(
                             catalogue.iter().any(|tool| tool.name == name),
-                            "`{name}` is named but not offered (bound: {bound})"
+                            "`{name}` is named but not offered (worker: {worker})"
                         ),
                         None => assert!(
                             every_tool.iter().all(|tool| tool.name != token),
-                            "`{token}` is a tool named without its prefix (bound: {bound})"
+                            "`{token}` is a tool named without its prefix (worker: {worker})"
                         ),
                     }
                 }

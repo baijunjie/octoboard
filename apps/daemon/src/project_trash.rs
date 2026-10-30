@@ -319,7 +319,7 @@ mod tests {
 
     use super::*;
     use crate::hostfs::lexically_normalise;
-    use crate::protocol::{ProjectAccount, ProjectSource};
+    use crate::protocol::ProjectSource;
     use crate::store::LOCAL_HOST_ID;
     use crate::test_support::{app_state, git, repo_with, second_real_path};
 
@@ -334,15 +334,8 @@ mod tests {
             default_agent: None,
             source: ProjectSource::Local,
             remote_url: None,
-            claude_account_id: ProjectAccount::Inherit,
-            codex_account_id: ProjectAccount::Inherit,
-            grok_account_id: ProjectAccount::Inherit,
-            claude_session_model: None,
-            claude_session_effort: None,
-            codex_session_model: None,
-            codex_session_effort: None,
-            grok_session_model: None,
-            grok_session_effort: None,
+            accounts: Default::default(),
+            launch: Default::default(),
             trust_consent: false,
             pinned: false,
             tags: Vec::new(),

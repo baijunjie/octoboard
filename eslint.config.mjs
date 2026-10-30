@@ -24,6 +24,8 @@ export default defineConfig(
     "**/coverage/**",
     "**/target/**",
     "packages/ui/.bench/**",
+    // Written by a daemon test from the Rust types; its bytes are the test's to decide.
+    "packages/ui/src/protocol.generated.ts",
     ".claude/**",
     ".agents/**",
     ".codex/**",

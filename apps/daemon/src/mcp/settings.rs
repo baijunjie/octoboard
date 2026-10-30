@@ -22,9 +22,9 @@ use super::args::{
 use crate::coordinator::{self, ConsoleChanges, ProjectChanges, SettingsChanges};
 use crate::git_remote;
 use crate::git_workflow;
-use crate::launch_settings::LaunchChange;
 use crate::protocol::{
-    default_account_name_in, Agent, CodedError, Console, Project, ProjectAccount, Session,
+    default_account_name_in, Agent, CodedError, Console, LaunchChange, Project, ProjectAccount,
+    Session,
 };
 use crate::state::AppState;
 
@@ -425,29 +425,24 @@ pub(super) fn describe_project(state: &Arc<AppState>, project: &Project) -> Resu
         "pinned": project.pinned,
         "tags": project.tags,
         "trust_consent": project.trust_consent,
-        "accounts": per_agent_object(|agent| match project.account(agent) {
+        "accounts": per_agent_object(|agent| match project.accounts.get(agent) {
             ProjectAccount::Inherit => json!("inherit"),
             ProjectAccount::Default => json!("default"),
             ProjectAccount::Account { id } => json!(id),
         }),
-        "launch": per_agent_object(|agent| {
-            let (model, effort) = project.launch(agent);
-            json!({ "model": model, "effort": effort })
-        }),
+        "launch": per_agent_object(|agent| json!(project.launch.get(agent))),
         // The same resolution a launch makes, so that what an agent reads is what a session
         // started in this project gets when nothing names otherwise.
         "effective": {
             "default_agent": coordinator::session_agent(None, Some(project), &console),
             "accounts": per_agent_object(|agent| {
                 json!(console
-                    .resolve_project_account(agent, project.account(agent))
+                    .resolve_project_account(agent, project.accounts.get(agent))
                     .as_deref()
                     .unwrap_or("default"))
             }),
             "launch": per_agent_object(|agent| {
-                let (model, effort) =
-                    coordinator::project_launch_settings(project, &console, agent);
-                json!({ "model": model, "effort": effort })
+                json!(coordinator::project_launch_settings(project, &console, agent))
             }),
         },
         "git_workflow": {
@@ -467,15 +462,11 @@ pub(super) fn describe_console(console: &Console) -> Value {
         "default_agent": console.default_agent,
         "project_session_agent": console.project_session_agent,
         "accounts": per_agent_object(|agent| {
-            json!(console.account(agent).as_deref().unwrap_or("default"))
+            json!(console.accounts.get(agent).as_deref().unwrap_or("default"))
         }),
-        "launch": per_agent_object(|agent| {
-            let (model, effort) = console.launch(agent);
-            json!({ "model": model, "effort": effort })
-        }),
+        "launch": per_agent_object(|agent| json!(console.launch.get(agent))),
         "project_session_launch": per_agent_object(|agent| {
-            let (model, effort) = console.project_launch(agent);
-            json!({ "model": model, "effort": effort })
+            json!(console.project_session_launch.get(agent))
         }),
         "has_icon": console.icon.is_some(),
         "workdir": console.workdir,

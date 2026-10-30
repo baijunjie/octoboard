@@ -343,10 +343,9 @@ export function shortcutsReview(shortcuts: Record<string, unknown>, current: Ove
 }
 
 /** Whether a document's Claude compatibility choices say anything: an empty object is a machine where the user
- * chose for no agent, an absent one a document that predates the setting, and a key for an agent without the
- * setting counts for nothing. */
-export function hasClaudeCompatibilityChoices(choices: Partial<Record<Agent, boolean>> | null | undefined): choices is Partial<Record<Agent, boolean>> {
-  return choices != null && Object.keys(choices).some(hasClaudeCompatibility);
+ * chose for no agent, and a key for an agent without the setting counts for nothing. */
+export function hasClaudeCompatibilityChoices(choices: Partial<Record<Agent, boolean>>): boolean {
+  return Object.keys(choices).some(hasClaudeCompatibility);
 }
 
 /** Whether applying a document's Claude compatibility `wanted` would change a value here. Only an agent that has

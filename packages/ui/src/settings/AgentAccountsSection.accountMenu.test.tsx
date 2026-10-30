@@ -463,7 +463,7 @@ describe("an account's actions menu", () => {
   function inspectionAnswers(outcome?: AccountTrashOutcome) {
     const waiting: ((outcome: AccountTrashOutcome) => void)[] = [];
     request.mockImplementation(((body: { type: string }) => body.type === "inspect_account_trash"
-      ? outcome ? Promise.resolve({ type: "account_trash_inspected", outcome }) : new Promise((resolve) => waiting.push((answer) => resolve({ type: "account_trash_inspected", outcome: answer })))
+      ? outcome ? Promise.resolve({ type: "account_trash_inspected", id: null, outcome }) : new Promise((resolve) => waiting.push((answer) => resolve({ type: "account_trash_inspected", id: null, outcome: answer })))
       : Promise.resolve({})) as never);
     return (answer: AccountTrashOutcome) => waiting.shift()!(answer);
   }
@@ -568,7 +568,7 @@ describe("an account's actions menu", () => {
   it("shows an alert and disables Remove when the inspection itself fails, and asks again from Try again", async () => {
     let failing = true;
     request.mockImplementation(((body: { type: string }) => body.type === "inspect_account_trash"
-      ? failing ? Promise.reject(new Error("connection lost")) : Promise.resolve({ type: "account_trash_inspected", outcome: { status: "ok" } })
+      ? failing ? Promise.reject(new Error("connection lost")) : Promise.resolve({ type: "account_trash_inspected", id: null, outcome: { status: "ok" } })
       : Promise.resolve({})) as never);
     const { container } = mount();
     await openRemoval(container);
@@ -607,7 +607,7 @@ describe("an account's actions menu", () => {
     expect(document.activeElement).toBe(retry());
     expect(retry().getAttribute("aria-disabled") === "true" || retry().disabled).toBe(true);
     expect(removeHeld()).toBe(true);
-    await act(async () => waiting.shift()!(() => Promise.resolve({ type: "account_trash_inspected", outcome: { status: "ok" } })));
+    await act(async () => waiting.shift()!(() => Promise.resolve({ type: "account_trash_inspected", id: null, outcome: { status: "ok" } })));
     expect(removeDialog().textContent).not.toContain("Could not check whether");
     expect(removeDialog().contains(document.activeElement)).toBe(true);
     expect(document.activeElement).not.toBe(document.body);
@@ -623,7 +623,7 @@ describe("an account's actions menu", () => {
     let release = () => {};
     let inspected: AccountTrashOutcome = { status: "ok" };
     request.mockImplementation(((body: { type: string }) => {
-      if (body.type === "inspect_account_trash") return hold ? new Promise((resolve) => { release = () => resolve({ type: "account_trash_inspected", outcome: inspected }); }) : Promise.resolve({ type: "account_trash_inspected", outcome: inspected });
+      if (body.type === "inspect_account_trash") return hold ? new Promise((resolve) => { release = () => resolve({ type: "account_trash_inspected", id: null, outcome: inspected }); }) : Promise.resolve({ type: "account_trash_inspected", id: null, outcome: inspected });
       if (body.type === "delete_account" && refusing) return Promise.reject(new DaemonRequestError("refused", code, { path: "/a", detail: "x" }));
       return Promise.resolve({});
     }) as never);
@@ -664,7 +664,7 @@ describe("an account's actions menu", () => {
     await act(async () => trashOption().click());
     request.mockImplementation(((body: { type: string }) => body.type === "delete_account"
       ? Promise.reject(new DaemonRequestError("refused", "account_has_running_sessions", { name: "Work", sessions: "1" }))
-      : Promise.resolve({ type: "account_trash_inspected", outcome: { status: "ok" } })) as never);
+      : Promise.resolve({ type: "account_trash_inspected", id: null, outcome: { status: "ok" } })) as never);
     await act(async () => buttonNamed(removeDialog(), "Remove")!.click());
     expect(inspections()).toBe(1);
   });

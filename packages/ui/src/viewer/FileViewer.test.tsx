@@ -1061,7 +1061,7 @@ const textFile = (path: string, text: string, host?: ViewerSubject["host"]): Vie
 });
 
 it("offers File manager and Default application last in the controls, on a subject with a place on the host", async () => {
-  const request = vi.fn(async () => ({ type: "ack" }) as never);
+  const request = vi.fn(async () => ({ type: "ack", id: null }) as never);
   show(textFile("src/a.ts", "x", { project: "p", worktree: "w", path: "src/a.ts" }), undefined, { clipboard: { writeText: async () => {} }, request });
   await settled();
   const group = dialog()!.querySelector("[data-viewer-description] .float-end")!;
@@ -1076,7 +1076,7 @@ it("offers File manager and Default application last in the controls, on a subje
 });
 
 it("sends no worktree for a file of the project's own directory, and offers the buttons for nothing without a host path", async () => {
-  const request = vi.fn(async () => ({ type: "ack" }) as never);
+  const request = vi.fn(async () => ({ type: "ack", id: null }) as never);
   show(textFile("a.ts", "x", { project: "p", path: "a.ts" }), undefined, { request });
   await settled();
   act(() => button("Open in default application").click());

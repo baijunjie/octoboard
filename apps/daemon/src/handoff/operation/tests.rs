@@ -5,32 +5,38 @@ use serde_json::json;
 use super::*;
 use crate::branch_origin::{repo_key, repository_of};
 use crate::mcp::Owner;
-use crate::protocol::{Account, Availability, Role};
+use crate::protocol::{Account, Availability, OrchestrationRole, Role};
 use crate::test_support::{
     app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
     output_containing, repo_with, running, stand_in_launch, Launched, ScratchDir, StandIn,
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
-/// a console session. `bound_to` and `lead` are its binding.
+/// a console session. `bound_to` is its parent, and `lead` says it keeps the coordinator role under
+/// it; a session with a parent and no `lead` is a worker.
 fn session(id: &str, project: bool, status: &str, bound_to: Option<&str>, lead: bool) -> Session {
-    let mut session: Session = serde_json::from_value(json!({
+    let orchestration_role = if bound_to.is_none() || lead {
+        OrchestrationRole::Coordinator
+    } else {
+        OrchestrationRole::Worker
+    };
+    let session: Session = serde_json::from_value(json!({
         "id": id, "agent": "claude", "agent_session_id": null, "console_id": "console-1",
         "project_id": project.then_some("p1"), "host_id": crate::store::LOCAL_HOST_ID,
         "role": if project { "project" } else { "console" }, "origin": "user",
         "title": format!("Session {id}"), "status": status, "has_conversation": true,
         "pinned": false, "started_at": 0, "bound_to": bound_to,
+        "orchestration_role": orchestration_role,
         "colour": (!project).then_some("pink"), "ordinal": (!project).then_some(1),
     }))
     .unwrap();
-    session.lead = lead;
     session
 }
 
 /// What a handoff must leave alone when it is refused or fails: each session's status, owner and
-/// lead mark, who is responsible for the test branches, and the packages on disk.
+/// role, who is responsible for the test branches, and the packages on disk.
 type Snapshot = (
-    Vec<(String, SessionStatus, Option<String>, bool)>,
+    Vec<(String, SessionStatus, Option<String>, OrchestrationRole)>,
     Vec<String>,
     Vec<std::path::PathBuf>,
 );
@@ -149,7 +155,14 @@ impl Fixture {
             .list_sessions()
             .unwrap()
             .into_iter()
-            .map(|session| (session.id, session.status, session.bound_to, session.lead))
+            .map(|session| {
+                (
+                    session.id,
+                    session.status,
+                    session.bound_to,
+                    session.orchestration_role,
+                )
+            })
             .collect();
         sessions.sort_by(|a, b| a.0.cmp(&b.0));
         let branches = ["one", "two"]
@@ -215,9 +228,14 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
             stored.role,
             stored.project_id.as_deref(),
             stored.bound_to.as_deref(),
-            stored.lead
+            stored.orchestration_role
         ),
-        (Role::Project, Some("p1"), None, false)
+        (
+            Role::Project,
+            Some("p1"),
+            None,
+            OrchestrationRole::Coordinator
+        )
     );
     let launches = fixture.launches.lock().unwrap();
     let (_, owner, task) = &launches[0];
@@ -289,12 +307,12 @@ async fn a_lead_session_is_replaced_by_a_lead_session_of_the_same_console_sessio
 
     let stored = fixture.stored(&receiving.id);
     assert_eq!(stored.bound_to.as_deref(), Some("hub"));
-    assert!(stored.lead && !stored.is_worker());
+    assert_eq!(stored.orchestration_role, OrchestrationRole::Coordinator);
     assert_eq!(
         fixture.stored("worker").bound_to.as_deref(),
         Some(receiving.id.as_str())
     );
-    assert!(!fixture.stored("worker").lead);
+    assert!(fixture.stored("worker").is_worker());
     assert_eq!(fixture.responsible("one"), receiving.id);
     // It launched as an unbound session does, with that session's tools.
     assert_eq!(fixture.launches.lock().unwrap()[0].1, None);
@@ -337,8 +355,8 @@ async fn a_bound_session_is_replaced_by_a_session_bound_to_the_same_owner() {
         "with no task title, the original's name alone"
     );
     assert_eq!(
-        (stored.bound_to.as_deref(), stored.lead),
-        (Some("boss"), false)
+        (stored.bound_to.as_deref(), stored.orchestration_role),
+        (Some("boss"), OrchestrationRole::Worker)
     );
     assert_eq!(
         fixture.launches.lock().unwrap()[0].1,
@@ -402,7 +420,10 @@ async fn a_console_session_hands_the_sessions_it_owns_to_the_receiving_console_s
             Some(receiving.id.as_str())
         );
     }
-    assert!(fixture.stored("lead").lead);
+    assert_eq!(
+        fixture.stored("lead").orchestration_role,
+        OrchestrationRole::Coordinator
+    );
     let told = output_containing(&lead, "your parent session has changed");
     assert!(told.contains(&receiving.id), "{told}");
     assert_eq!(fixture.stored("original").status, SessionStatus::Archived);

@@ -296,7 +296,7 @@ describe("the sample repository's changes", () => {
     const compare = { type: "compare_project_branches", project: "p-1", left: "main", right: "feature/ranking-experiments" } as const;
     await expect(daemon.request(compare)).resolves.toMatchObject({ type: "project_comparison" });
     const remaining = SAMPLE_GIT.branches?.filter((b) => b.name !== "feature/ranking-experiments");
-    await expect(daemon.request({ type: "list_project_branches", project: "p-1" })).resolves.toEqual({ type: "project_branches", project: "p-1", branches: remaining, complete: true });
+    await expect(daemon.request({ type: "list_project_branches", project: "p-1" })).resolves.toEqual({ type: "project_branches", id: null, project: "p-1", branches: remaining, complete: true });
     await expect(daemon.request(compare)).rejects.toMatchObject({ code: "unknown_branch", params: { branch: "feature/ranking-experiments" } });
   });
 

@@ -50,7 +50,7 @@ function mount(initial: Partial<State> = {}, shortcut = false) {
   return { button, key, click, onOpen, onQuickCreate };
 }
 
-const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const }]));
+const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
 
 it("does not register creation shortcuts outside a focus header", () => {
   const { onOpen, onQuickCreate } = mount();
@@ -107,10 +107,10 @@ it("is a disabled \"+\" that opens nothing, even on a modified press, with no ag
   expect(onQuickCreate).not.toHaveBeenCalled();
 });
 
-const available = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "available" as const }]));
+const available = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "available" as const, default_account_dir: null }]));
 const spent = AGENT_OPTIONS.map(({ value }) => ({
   agent: value, account: null, fetched_at: 0, plan: null, unavailable: null,
-  windows: [{ kind: "weekly" as const, label: null, used_percent: 100, resets_at: null, window_minutes: null }],
+  windows: [{ kind: "weekly" as const, label: null, used_percent: 100, resets_at: null, window_minutes: null }], email: null,
 }));
 
 it("keeps the quick form focusable, named for the action and described by why it cannot create, when every account is used up", () => {

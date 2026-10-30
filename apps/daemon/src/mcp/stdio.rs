@@ -45,7 +45,7 @@ pub(crate) const CALL_TIMEOUT: Duration = Duration::from_secs(600);
 pub fn run(
     session: String,
     role: Role,
-    bound: bool,
+    worker: bool,
     port: u16,
     key: String,
     token: String,
@@ -57,7 +57,7 @@ pub fn run(
         let server = OctoboardMcp {
             session: Arc::new(session),
             role,
-            bound: Arc::new(AtomicBool::new(bound)),
+            worker: Arc::new(AtomicBool::new(worker)),
             port,
             key: Arc::new(key),
             token: Arc::new(token),
@@ -75,10 +75,9 @@ struct OctoboardMcp {
     /// on a session other than its own.
     session: Arc<String>,
     role: Role,
-    /// Whether the session has the role of one bound to an owner, which decides the catalogue
-    /// along with the role: the launch argument at first, then what the daemon's latest answer
-    /// said.
-    bound: Arc<AtomicBool>,
+    /// Whether the session is a worker, which decides the catalogue along with the role: the
+    /// launch argument at first, then what the daemon's latest answer said.
+    worker: Arc<AtomicBool>,
     port: u16,
     /// The daemon's key, which every connection to it has to carry; the token only says which
     /// session a call is for.
@@ -114,7 +113,7 @@ impl ServerHandler for OctoboardMcp {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let tools = super::tools_for(self.role, self.bound.load(Ordering::Relaxed))
+        let tools = super::tools_for(self.role, self.worker.load(Ordering::Relaxed))
             .iter()
             .map(|tool| {
                 Tool::new(
@@ -177,7 +176,7 @@ impl ServerHandler for OctoboardMcp {
 
         let result = match response {
             Ok(body) => {
-                if self.follow_binding(&body) {
+                if self.follow_capability(&body) {
                     // Best effort: an agent that ignores it still has every call checked by the
                     // daemon against the binding as it stands.
                     let _ = context.peer.notify_tool_list_changed().await;
@@ -197,23 +196,24 @@ impl ServerHandler for OctoboardMcp {
 }
 
 impl OctoboardMcp {
-    /// Whether `name` is a tool of this role's catalogue for either binding. Only a project
-    /// session's binding changes while it runs; for any other role the two are the same.
+    /// Whether `name` is a tool of this role's catalogue for either capability. Only a project
+    /// session's capability changes while it runs; for any other role the two are the same.
     fn is_known_tool(&self, name: &str) -> bool {
         [true, false]
             .into_iter()
-            .any(|bound| super::tool_by_name(self.role, bound, name).is_some())
+            .any(|worker| super::tool_by_name(self.role, worker, name).is_some())
     }
 
-    /// Takes the binding the daemon's answer reports, and says whether it changed the catalogue.
-    fn follow_binding(&self, body: &[u8]) -> bool {
-        let Some(bound) = serde_json::from_slice::<Value>(body)
+    /// Takes the capability the daemon's answer reports, and says whether it changed the
+    /// catalogue.
+    fn follow_capability(&self, body: &[u8]) -> bool {
+        let Some(worker) = serde_json::from_slice::<Value>(body)
             .ok()
-            .and_then(|outcome| outcome.get("bound").and_then(Value::as_bool))
+            .and_then(|outcome| outcome.get("worker").and_then(Value::as_bool))
         else {
             return false;
         };
-        self.role == Role::Project && self.bound.swap(bound, Ordering::Relaxed) != bound
+        self.role == Role::Project && self.worker.swap(worker, Ordering::Relaxed) != worker
     }
 }
 
@@ -380,37 +380,37 @@ mod tests {
         assert!(refused.contains("could not be reached for session s-1"));
     }
 
-    fn server(role: Role, bound: bool) -> OctoboardMcp {
+    fn server(role: Role, worker: bool) -> OctoboardMcp {
         OctoboardMcp {
             session: Arc::new("s-1".to_string()),
             role,
-            bound: Arc::new(AtomicBool::new(bound)),
+            worker: Arc::new(AtomicBool::new(worker)),
             port: 0,
             key: Arc::new("k".to_string()),
             token: Arc::new("t".to_string()),
         }
     }
 
-    /// The catalogue follows the binding each answer reports, and only a change of it is one the
-    /// agent is told of; a console session's never changes.
+    /// The catalogue follows the capability each answer reports, and only a change of it is one
+    /// the agent is told of; a console session's never changes.
     #[test]
-    fn the_catalogue_follows_the_binding_the_daemon_reports() {
+    fn the_catalogue_follows_the_capability_the_daemon_reports() {
         let project = server(Role::Project, false);
-        let bound = br#"{"ok":true,"result":{},"bound":true}"#;
-        assert!(project.follow_binding(bound));
-        assert!(!project.follow_binding(bound));
-        assert!(project.bound.load(Ordering::Relaxed));
-        assert!(!project.follow_binding(br#"{"ok":false,"error":"x"}"#));
-        assert!(!server(Role::Console, false).follow_binding(bound));
+        let worker = br#"{"ok":true,"result":{},"worker":true}"#;
+        assert!(project.follow_capability(worker));
+        assert!(!project.follow_capability(worker));
+        assert!(project.worker.load(Ordering::Relaxed));
+        assert!(!project.follow_capability(br#"{"ok":false,"error":"x"}"#));
+        assert!(!server(Role::Console, false).follow_capability(worker));
     }
 
     /// A session released from its owner is told of tools its child's catalogue does not have yet,
     /// and following that notice has to reach the daemon, whose answer then updates the catalogue;
     /// a name no catalogue of the role has stays a protocol error.
     #[test]
-    fn a_tool_of_the_other_binding_is_forwarded_but_an_unknown_one_is_not() {
-        for bound in [true, false] {
-            let project = server(Role::Project, bound);
+    fn a_tool_of_the_other_capability_is_forwarded_but_an_unknown_one_is_not() {
+        for worker in [true, false] {
+            let project = server(Role::Project, worker);
             assert!(project.is_known_tool("report"));
             assert!(project.is_known_tool("new_session"));
             assert!(!project.is_known_tool("no_such_tool"));

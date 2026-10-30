@@ -15,7 +15,7 @@ function daemon() {
   return { sent, request };
 }
 
-const file = (path: string) => ({ type: "project_file", path }) as unknown as Event;
+const file = (path: string) => ({ type: "project_file", id: null, path }) as unknown as Event;
 const settle = () => new Promise((resolve) => setTimeout(resolve));
 
 it("reads one image at a time across the window, in order", async () => {

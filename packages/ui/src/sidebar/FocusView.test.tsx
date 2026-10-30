@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AGENT_OPTIONS } from "../agents";
 import { expectIndependentMarquees, stubMarquee } from "../components/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import type { Agent, AgentAvailability, Session } from "../protocol";
 import { PREFERENCE_KEYS } from "../preferenceKeys";
 import { sessionColourHex } from "../sessionColours";
@@ -16,6 +16,7 @@ import { ConsoleSessionFocusView, ProjectFocusView } from "./FocusView";
 import { projectFocusIncludeConsoleSessions } from "./projectFocusPreference";
 import type { SidebarHandlers } from "./types";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -54,7 +55,7 @@ const withTeams = [...sessions, lead, underLead, underFree];
  * project groups read themselves. */
 function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon: Daemon = {
-    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [{ id: "work", agent: "claude", name: "Work", config_dir: "/w" }] } }),
+    store: createStateStore({ ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")] } }),
     request: vi.fn(),
     toastError: vi.fn(),
     toastNotice: vi.fn(),
@@ -172,7 +173,7 @@ it("a console session's focus mode shows only its projects and sessions", () => 
 });
 
 const hold = () => act(() => void window.dispatchEvent(new KeyboardEvent("keydown", IS_MAC ? { metaKey: true } : { ctrlKey: true })));
-const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const }]));
+const noAgent = new Map(AGENT_OPTIONS.map(({ value }) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
 const bound = { kind: "bound", to: hub1 } as const;
 
 function createShortcut(quick = false, repeat = false): KeyboardEvent {

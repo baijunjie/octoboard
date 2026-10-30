@@ -127,7 +127,7 @@ it("orders account-wide windows before models without mutating or reordering mod
 });
 
 const reading = (windows: QuotaWindow[], patch: Partial<AccountQuota> = {}): AccountQuota => ({
-  agent: "claude", account: null, fetched_at: NOW, plan: null, windows, unavailable: null, ...patch,
+  agent: "claude", account: null, fetched_at: NOW, plan: null, windows, unavailable: null, email: null, ...patch,
 });
 
 describe("exhaustedQuotaWindow", () => {

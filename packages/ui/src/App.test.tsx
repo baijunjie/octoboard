@@ -39,7 +39,7 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
   const console_ = consoleOf("c-main", "Main");
   const daemon: Daemon = {
     store: createStateStore(snapshotState({ consoles: [console_] })),
-    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
+    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };

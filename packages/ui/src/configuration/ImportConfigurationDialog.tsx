@@ -176,7 +176,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         document: stage.document,
         resolutions: importingConsoles ? resolutionsOf(review) : [],
         apply_settings: regions.includes("settings"),
-        // Absent means true for a daemon that predates the choice, so only a refusal is spelled out.
+        // Absent means true, so only a refusal is spelled out.
         ...(inFile.includes("consoles") && !importingConsoles && { apply_consoles: false }),
         ...(creatingAccounts && { apply_accounts: true, account_resolutions: accountResolutionsOf(accounts, accountReview) }),
       })) as Imported;

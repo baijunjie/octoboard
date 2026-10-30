@@ -18,7 +18,7 @@ it("opens with focus in the path field", async () => {
   act(() => setInteractionModality("pointer"));
   const daemon: Daemon = {
     store: createStateStore(),
-    request: vi.fn(async () => ({ type: "dir_listing", path: "/home", entries: [] })) as Daemon["request"],
+    request: vi.fn(async () => ({ type: "dir_listing", id: null, path: "/home", entries: [] })) as Daemon["request"],
     toastError: vi.fn(),
     toastNotice: vi.fn(),
     onToast: () => () => {},
@@ -47,7 +47,7 @@ it("opens with focus in the path field", async () => {
 it("shows a listing failure in an Alert with its reason and Try again, and opens no error alert dialog", async () => {
   vi.useFakeTimers();
   onTestFinished(() => void vi.useRealTimers());
-  const request = vi.fn().mockRejectedValueOnce(new Error("Permission denied")).mockResolvedValue({ type: "dir_listing", path: "/home", entries: [] });
+  const request = vi.fn().mockRejectedValueOnce(new Error("Permission denied")).mockResolvedValue({ type: "dir_listing", id: null, path: "/home", entries: [] });
   const daemon = { store: createStateStore(), request } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -163,7 +163,7 @@ async function failLaterNavigation(navigate: () => void | Promise<void>) {
   onTestFinished(() => report.mockRestore());
   const entries = [{ name: "code", path: "/home/me/code", is_git_repo: false }];
   const request = vi.fn()
-    .mockResolvedValueOnce({ type: "dir_listing", path: "/home/me", entries })
+    .mockResolvedValueOnce({ type: "dir_listing", id: null, path: "/home/me", entries })
     .mockRejectedValueOnce(new Error("Permission denied"));
   const daemon = { store: createStateStore(), request } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
@@ -199,7 +199,7 @@ it("reports a failed later navigation to the parent row in the error alert dialo
   failLaterNavigation(() => option("Parent directory")!.click()));
 
 async function mountListing(path: string, entries: unknown[]): Promise<HTMLElement> {
-  const request = vi.fn(async () => ({ type: "dir_listing", path, entries }));
+  const request = vi.fn(async () => ({ type: "dir_listing", id: null, path, entries }));
   const daemon = { store: createStateStore(), request } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -236,7 +236,7 @@ it("keeps the latest listing when an earlier one answers after it", async () => 
   let answerFirst!: (event: unknown) => void;
   const request = vi.fn()
     .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
-    .mockResolvedValue({ type: "dir_listing", path: "/later", entries: [] });
+    .mockResolvedValue({ type: "dir_listing", id: null, path: "/later", entries: [] });
   const daemon = { store: createStateStore(), request } as unknown as Daemon;
   const onPick = vi.fn();
   const container = document.body.appendChild(document.createElement("div"));
@@ -247,7 +247,7 @@ it("keeps the latest listing when an earlier one answers after it", async () => 
   });
   await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" initialPath="/slow" onPick={onPick} onClose={() => {}} /></DaemonProvider>));
   await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
-  await act(async () => answerFirst({ type: "dir_listing", path: "/slow", entries: [] }));
+  await act(async () => answerFirst({ type: "dir_listing", id: null, path: "/slow", entries: [] }));
   expect((document.querySelector('[aria-label="Directory path"]') as HTMLInputElement).value).toBe("/later");
   await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Select this directory")!.click());
   expect(onPick).toHaveBeenCalledWith("/later");
@@ -275,7 +275,7 @@ it("takes an earlier listing that answers after a later one failed, which change
   });
   await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
   expect(report).toHaveBeenCalledOnce();
-  await act(async () => answerFirst({ type: "dir_listing", path: "/slow", entries: [{ name: "listed-late", path: "/slow/listed-late", is_git_repo: false }] }));
+  await act(async () => answerFirst({ type: "dir_listing", id: null, path: "/slow", entries: [{ name: "listed-late", path: "/slow/listed-late", is_git_repo: false }] }));
   expect(document.body.textContent).toContain("listed-late");
   expect(field.value).toBe("/denied");
   expect([...document.querySelectorAll("button")].find((button) => button.textContent === "Select this directory")?.hasAttribute("disabled")).toBe(true);
@@ -287,7 +287,7 @@ it("keeps the user's navigation when the opening listing's walk up to an ancesto
   const request = vi.fn()
     .mockReturnValueOnce(new Promise((_, reject) => (failFirst = reject)))
     .mockReturnValueOnce(new Promise((resolve) => (answerGo = resolve)))
-    .mockResolvedValue({ type: "dir_listing", path: "/", entries: [] });
+    .mockResolvedValue({ type: "dir_listing", id: null, path: "/", entries: [] });
   const daemon = { store: createStateStore(), request } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -299,6 +299,6 @@ it("keeps the user's navigation when the opening listing's walk up to an ancesto
   await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
   await act(async () => failFirst(new DaemonRequestError("missing", "path_not_found", {})));
   expect(request).toHaveBeenCalledTimes(3);
-  await act(async () => answerGo({ type: "dir_listing", path: "/later", entries: [] }));
+  await act(async () => answerGo({ type: "dir_listing", id: null, path: "/later", entries: [] }));
   expect((document.querySelector('[aria-label="Directory path"]') as HTMLInputElement).value).toBe("/later");
 });

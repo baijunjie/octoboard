@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { enter, leave, mountForTooltip, openTooltip, withFakeTimers } from "../components/tooltipTestSupport";
-import { consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf } from "../gallery/fixtures/builders";
 import { errorAlerts } from "../errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";
@@ -14,13 +14,14 @@ import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Search API");
 const owner = sessionOf("s-owner", console_.id, project.id, "Owner", "idle");
-const account: Account = { id: "a-1", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
+const account: Account = accountOf("a-1", "claude", "Work", "/home/dev/.claude-work");
 
 /** Mounts the dialog for `dialog` over a store holding `sessions` and `accounts`. */
 function mount(
@@ -33,7 +34,7 @@ function mount(
     store: createStateStore({
       sessions: new Map(sessions.map((s) => [s.id, s])),
       projects: new Map((callbacks.projects ?? []).map((p) => [p.id, p])),
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+      settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: [], default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
     }),
     request: vi.fn(callbacks.request) as never,
     toastError: vi.fn(),
@@ -192,7 +193,7 @@ it("lists every bound descendant before archiving and refreshes the list while o
   const elsewhere = sessionOf("elsewhere", console_.id, project.id, "Unbound session", "working");
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "archive-session", session: hub }, [hub, manual, lead, nested, archived, elsewhere], [], {
-    onClose, request: async () => ({ type: "ack" }),
+    onClose, request: async () => ({ type: "ack", id: null }),
   });
   const titles = () => [...document.querySelectorAll("[role=alertdialog] li")].map((row) => row.textContent);
   expect(titles()).toHaveLength(3);
@@ -265,10 +266,10 @@ it.each(TRASH_CONFIRMATIONS)("gives confirming %s its label for a ticked Trash o
   const { daemon } = mount(dialog, sessions, [], {
     // Inspections settle; the deletion itself never does, so the dialog stays busy.
     request: async (body) => {
-      if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", items: [] };
-      if (body.type === "inspect_session_records") return { type: "session_records_inspected", presence: "present" };
-      if (body.type === "inspect_project_removal") return { type: "project_removal_inspected", items: [], processes: [] };
-      if (body.type === "list_processes") return { type: "processes_listed", trees: [] };
+      if (body.type === "inspect_session_branches") return { type: "session_branches_inspected", id: null, items: [] };
+      if (body.type === "inspect_session_records") return { type: "session_records_inspected", id: null, presence: "present" };
+      if (body.type === "inspect_project_removal") return { type: "project_removal_inspected", id: null, items: [], processes: [] };
+      if (body.type === "list_processes") return { type: "processes_listed", id: null, trees: [] };
       return new Promise(() => {});
     },
   });
@@ -290,8 +291,8 @@ it.each<[string, DialogRequest, Session[], string, string]>([
 ])("labels confirming %s for a ticked force option, and back once it is unticked", async (_, dialog, sessions, plain, ticked) => {
   mount(dialog, sessions, [], {
     request: async (body) => body.type === "inspect_session_branches"
-      ? { type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED] }
-      : { type: "session_records_inspected", presence: "absent" },
+      ? { type: "session_branches_inspected", id: null, items: [UNCOMMITTED, UNMERGED] }
+      : { type: "session_records_inspected", id: null, presence: "absent" },
   });
   await act(async () => {});
   expect(confirmText()).toBe(plain);
@@ -304,7 +305,7 @@ it.each<[string, DialogRequest, Session[], string, string]>([
 
 it("draws the confirm button of archiving in the danger colour only while a deletion option is ticked", async () => {
   mount({ kind: "archive-session", session: owner }, [owner], [], {
-    request: async () => ({ type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED] }),
+    request: async () => ({ type: "session_branches_inspected", id: null, items: [UNCOMMITTED, UNMERGED] }),
   });
   await act(async () => {});
   const danger = () => confirmButton()!.className.includes("danger");
@@ -317,7 +318,7 @@ it("draws the confirm button of archiving in the danger colour only while a dele
 
 it("labels archiving for deletion when only locked worktrees are ticked", async () => {
   mount({ kind: "archive-session", session: owner }, [owner], [], {
-    request: async () => ({ type: "session_branches_inspected", items: [LOCKED] }),
+    request: async () => ({ type: "session_branches_inspected", id: null, items: [LOCKED] }),
   });
   await act(async () => {});
   checkAll();
@@ -378,12 +379,12 @@ it("switches every eligible session of the agent in the console when that scope 
 });
 
 it.each(["claude", "codex", "grok"] as const)("deletes an unused %s session and its records without inspection or confirmation", async (agent) => {
-  const unused = { ...owner, agent, has_conversation: false, agent_session_id: agent === "codex" ? undefined : owner.agent_session_id };
+  const unused = { ...owner, agent, has_conversation: false, agent_session_id: agent === "codex" ? null : owner.agent_session_id };
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
     onClose,
     strict: true,
-    request: async () => ({ type: "ack" }),
+    request: async () => ({ type: "ack", id: null }),
   });
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
   await act(async () => {});
@@ -396,7 +397,7 @@ it("also deletes an archived unused session without confirmation", async () => {
   const unused = { ...owner, status: "archived" as const, has_conversation: false };
   const onClose = vi.fn();
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
-    onClose, request: async () => ({ type: "ack" }),
+    onClose, request: async () => ({ type: "ack", id: null }),
   });
   await act(async () => {});
   expect(daemon.request).toHaveBeenCalledExactlyOnceWith({ type: "delete_session", session: unused.id, only_if_unused: true });
@@ -407,7 +408,7 @@ it("also deletes an archived unused session without confirmation", async () => {
 it("keeps the confirmation for a used archived session but hides cleanup when no files exist", async () => {
   const archived = { ...owner, status: "archived" as const };
   mount({ kind: "delete-session", session: archived }, [archived], [], {
-    request: async () => ({ type: "session_records_inspected", presence: "absent" }),
+    request: async () => ({ type: "session_records_inspected", id: null, presence: "absent" }),
   });
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog]")).not.toBeNull();
@@ -432,7 +433,7 @@ it("checks the native records of archived children as well as their owner", asyn
   const archived = { ...owner, status: "archived" as const };
   const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
   const { daemon } = mount({ kind: "delete-session", session: archived }, [archived, child], [], {
-    request: async () => ({ type: "session_records_inspected", presence: "present" }),
+    request: async () => ({ type: "session_records_inspected", id: null, presence: "present" }),
   });
   await act(async () => {});
   expect(daemon.request).toHaveBeenCalledWith({ type: "inspect_session_records", sessions: [child.id, owner.id].sort() });
@@ -443,7 +444,7 @@ it("checks the native records of archived children as well as their owner", asyn
 it("keeps the bulk deletion confirmation but removes cleanup for a file-free scope", async () => {
   const archived = { ...owner, status: "archived" as const };
   const { daemon } = mount({ kind: "delete-archived", console: console_, project, count: 1 }, [archived], [], {
-    request: async () => ({ type: "session_records_inspected", presence: "absent" }),
+    request: async () => ({ type: "session_records_inspected", id: null, presence: "absent" }),
   });
   await act(async () => {});
   expect(daemon.request).toHaveBeenCalledWith({ type: "inspect_session_records", sessions: [archived.id] });
@@ -465,8 +466,8 @@ it("retains confirmation and cleanup when inspecting records fails", async () =>
 
 it.each(["single", "bulk"] as const)("keeps keyboard focus in the %s confirmation when cleanup disappears", async (kind) => {
   const archived = { ...owner, status: "archived" as const };
-  let resolve!: (value: { type: "session_records_inspected"; presence: "absent" }) => void;
-  const waiting = new Promise<{ type: "session_records_inspected"; presence: "absent" }>((done) => { resolve = done; });
+  let resolve!: (value: { type: "session_records_inspected"; id: null; presence: "absent" }) => void;
+  const waiting = new Promise<{ type: "session_records_inspected"; id: null; presence: "absent" }>((done) => { resolve = done; });
   mount(kind === "single"
     ? { kind: "delete-session", session: archived }
     : { kind: "delete-archived", console: console_, project, count: 1 }, [archived], [], {
@@ -475,7 +476,7 @@ it.each(["single", "bulk"] as const)("keeps keyboard focus in the %s confirmatio
   const option = checkbox();
   act(() => option.focus());
   expect(document.activeElement).toBe(option);
-  await act(async () => { resolve({ type: "session_records_inspected", presence: "absent" }); });
+  await act(async () => { resolve({ type: "session_records_inspected", id: null, presence: "absent" }); });
   expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).toBeNull();
   expect(document.activeElement).toBe(document.querySelector("[role=alertdialog]"));
 });
@@ -487,8 +488,8 @@ it("does not close a used session's confirmation when an earlier direct deletion
   const { daemon } = mount({ kind: "delete-session", session: unused }, [unused], [], {
     onClose,
     request: async (body) => {
-      if (body.type === "delete_session") { await waiting.promise; return { type: "ack" }; }
-      return { type: "session_records_inspected", presence: "absent" };
+      if (body.type === "delete_session") { await waiting.promise; return { type: "ack", id: null }; }
+      return { type: "session_records_inspected", id: null, presence: "absent" };
     },
   });
   act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner]]) }));
@@ -536,8 +537,8 @@ it.each(BRANCH_CONFIRMATIONS)("lists what git refuses to remove when %s and forc
   const archived = { ...owner, status: "archived" as const };
   const { daemon } = mount(dialog, [dialog.kind === "archive-session" ? owner : archived], [], {
     request: async (sentBody) => sentBody.type === "inspect_session_branches"
-      ? { type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED, KEPT] }
-      : { type: "session_records_inspected", presence: "absent" },
+      ? { type: "session_branches_inspected", id: null, items: [UNCOMMITTED, UNMERGED, KEPT] }
+      : { type: "session_records_inspected", id: null, presence: "absent" },
   });
   await act(async () => {});
   // Only an archive asks for the processes it would stop.
@@ -633,9 +634,9 @@ it("preserves process choices through another inspection and selects newly found
   const answer = deferred();
   const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [TREE] } }, [owner], [], {
     request: async (body) => {
-      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
       await answer.promise;
-      return { type: "session_branches_inspected", items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] };
+      return { type: "session_branches_inspected", id: null, items: [], processes: [TREE, { ...TREE, id: "4300:2", command: "tail -f log" }] };
     },
   });
   await act(async () => {});
@@ -655,11 +656,11 @@ it.each(["rejection", "unexpected reply", "empty success"] as const)("preserves 
   const answer = deferred();
   const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id, child.id], items: [UNMERGED], processes: [TREE, childTree] } }, [owner, child], [], {
     request: async (body) => {
-      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
       await answer.promise;
       if (outcome === "rejection") throw new Error("Inspection unavailable");
-      if (outcome === "unexpected reply") return { type: "ack" };
-      return { type: "session_branches_inspected", items: [], processes: [] };
+      if (outcome === "unexpected reply") return { type: "ack", id: null };
+      return { type: "session_branches_inspected", id: null, items: [], processes: [] };
     },
   });
   await act(async () => {});
@@ -718,7 +719,7 @@ it("keeps a process's working directory and facts, not its command, in a Details
 
 it("offers no choice of processes when the archive finds none", async () => {
   const { daemon } = mount({ kind: "archive-session", session: owner }, [owner], [], {
-    request: async () => ({ type: "session_branches_inspected", items: [] }),
+    request: async () => ({ type: "session_branches_inspected", id: null, items: [] }),
   });
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).toBeNull();
@@ -728,7 +729,7 @@ it("offers no choice of processes when the archive finds none", async () => {
 
 it("offers nothing to force when everything bound can go or has to stay", async () => {
   mount({ kind: "archive-session", session: owner }, [owner], [], {
-    request: async () => ({ type: "session_branches_inspected", items: [{ ...UNMERGED, state: "removable" }, KEPT] }),
+    request: async () => ({ type: "session_branches_inspected", id: null, items: [{ ...UNMERGED, state: "removable" }, KEPT] }),
   });
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog] input[type=checkbox]")).toBeNull();
@@ -736,7 +737,7 @@ it("offers nothing to force when everything bound can go or has to stay", async 
 
 it("lists locked worktrees apart, with their changes, under a checkbox of their own that forces them alone", async () => {
   const { daemon } = mount({ kind: "archive-session", session: owner }, [owner], [], {
-    request: async () => ({ type: "session_branches_inspected", items: [UNMERGED, { ...LOCKED, uncommitted: true }] }),
+    request: async () => ({ type: "session_branches_inspected", id: null, items: [UNMERGED, { ...LOCKED, uncommitted: true }] }),
   });
   await act(async () => {});
   expect(boxes()).toHaveLength(2);
@@ -754,10 +755,10 @@ it("unchecks a choice once the list it was made over changes, and keeps the list
   const second = deferred();
   const { daemon } = mount({ kind: "archive-session", session: { ...owner, status: "working" } }, [owner], [], {
     request: async (body) => {
-      if (body.type !== "inspect_session_branches") return { type: "ack" };
-      if (body.sessions.length === 1) return { type: "session_branches_inspected", items: [UNMERGED] };
+      if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
+      if (body.sessions.length === 1) return { type: "session_branches_inspected", id: null, items: [UNMERGED] };
       await second.promise;
-      return { type: "session_branches_inspected", items: [UNMERGED, { ...UNMERGED, branch: "late" }] };
+      return { type: "session_branches_inspected", id: null, items: [UNMERGED, { ...UNMERGED, branch: "late" }] };
     },
   });
   await act(async () => {});
@@ -778,12 +779,12 @@ it("drops an answer that arrives after a newer question", async () => {
   const first = deferred();
   const { daemon } = mount({ kind: "archive-session", session: { ...owner, status: "working" } }, [owner], [], {
     request: async (body) => {
-      if (body.type !== "inspect_session_branches") return { type: "ack" };
+      if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
       if (body.sessions.length === 1) {
         await first.promise;
-        return { type: "session_branches_inspected", items: [{ ...UNMERGED, branch: "stale" }] };
+        return { type: "session_branches_inspected", id: null, items: [{ ...UNMERGED, branch: "stale" }] };
       }
-      return { type: "session_branches_inspected", items: [UNMERGED] };
+      return { type: "session_branches_inspected", id: null, items: [UNMERGED] };
     },
   });
   act(() => daemon.store.setState({ sessions: new Map([[owner.id, owner], [late.id, late]]) }));
@@ -795,7 +796,7 @@ it("drops an answer that arrives after a newer question", async () => {
 
 it("lists what goes along with a project's folder, asked afresh each time moving it to the Trash is chosen", async () => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED], processes: [] }),
+    request: async () => ({ type: "project_removal_inspected", id: null, items: [UNCOMMITTED, UNMERGED], processes: [] }),
   });
   await act(async () => {});
   expect(sent(daemon, "inspect_project_removal")).toEqual([]);
@@ -818,7 +819,7 @@ const projectProcessesGroup = () => [...document.querySelectorAll("[role=alertdi
 it("lists the project processes a removal stops from the project's process list as rows under their own heading, and shows no section when there are none", async () => {
   const kept = { ...TREE, session_id: undefined, kept: true };
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
-    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [kept, { ...TREE, id: "4300:2", session_id: undefined }, TREE] } : { type: "ack" },
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [kept, { ...TREE, id: "4300:2", session_id: undefined }, TREE] } : { type: "ack", id: null },
   });
   await act(async () => {});
   expect(sent(daemon, "list_processes")).toEqual([{ type: "list_processes", project_id: project.id }]);
@@ -835,7 +836,7 @@ it("lists the project processes a console's deletion stops, one request per proj
   const stray = { ...TREE, id: "4300:2", session_id: undefined };
   const { daemon } = mount({ kind: "delete-console", console: console_ }, [], [], {
     projects: [project, second, elsewhere],
-    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: "project_id" in body && body.project_id === second.id ? [{ ...stray, id: "4300:9" }, stray] : [stray, TREE] } : { type: "ack" },
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: "project_id" in body && body.project_id === second.id ? [{ ...stray, id: "4300:9" }, stray] : [stray, TREE] } : { type: "ack", id: null },
   });
   await act(async () => {});
   expect((sent(daemon, "list_processes") as { project_id: string }[]).map((body) => body.project_id).sort()).toEqual(["p-1", "p-2"]);
@@ -849,7 +850,7 @@ it("lists the project processes a console's deletion stops, one request per proj
 it("shows no project processes section in a console's deletion when none of its projects has any", async () => {
   mount({ kind: "delete-console", console: console_ }, [], [], {
     projects: [project, projectOf("p-2", console_.id, "Docs")],
-    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [TREE] } : { type: "ack" },
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [TREE] } : { type: "ack", id: null },
   });
   await act(async () => {});
   expect(document.querySelector("[role=alertdialog] [role=group]")).toBeNull();
@@ -860,9 +861,9 @@ it("says in a console's deletion that a project's processes could not be listed,
   mount({ kind: "delete-console", console: console_ }, [], [], {
     projects: [project, projectOf("p-2", console_.id, "Docs")],
     request: async (body) => {
-      if (body.type !== "list_processes") return { type: "ack" };
+      if (body.type !== "list_processes") return { type: "ack", id: null };
       if ("project_id" in body && body.project_id === "p-2") throw new Error("gone");
-      return { type: "processes_listed", trees: [stray] };
+      return { type: "processes_listed", id: null, trees: [stray] };
     },
   });
   await act(async () => {});
@@ -874,7 +875,7 @@ it("says in a console's deletion that a project's processes could not be listed,
 
 it("says in a project's removal that its project processes could not be listed, in place of the section reading as none", async () => {
   mount({ kind: "delete-project", project }, [], [], {
-    request: async (body) => { if (body.type === "list_processes") throw new Error("gone"); return { type: "ack" }; },
+    request: async (body) => { if (body.type === "list_processes") throw new Error("gone"); return { type: "ack", id: null }; },
   });
   await act(async () => {});
   const group = projectProcessesGroup()!;
@@ -887,7 +888,7 @@ it("says in a project's removal that its project processes could not be listed, 
 it("announces the failed project process list once the dialog's focus has settled, not as it mounts", async () => {
   const settle = withFakeTimers();
   mount({ kind: "delete-project", project }, [], [], {
-    request: async (body) => { if (body.type === "list_processes") throw new Error("gone"); return { type: "ack" }; },
+    request: async (body) => { if (body.type === "list_processes") throw new Error("gone"); return { type: "ack", id: null }; },
   });
   await act(async () => {});
   const group = projectProcessesGroup()!;
@@ -905,9 +906,9 @@ it.each<[string, DialogRequest]>([
   const { daemon } = mount(request, [], [], {
     projects: [project],
     request: async (body) => {
-      if (body.type !== "list_processes") return { type: "ack" };
+      if (body.type !== "list_processes") return { type: "ack", id: null };
       await answer.promise;
-      return { type: "processes_listed", trees: [{ ...TREE, session_id: undefined }] };
+      return { type: "processes_listed", id: null, trees: [{ ...TREE, session_id: undefined }] };
     },
   });
   await act(async () => document.body.querySelector("[role=alertdialog] form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
@@ -920,7 +921,7 @@ it.each<[string, DialogRequest]>([
 it("heads a project's removal by its running sessions, its folder and its project processes, a divider only between the sections shown", async () => {
   const running = { ...owner, status: "working" as const };
   mount({ kind: "delete-project", project }, [running], [], {
-    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [{ ...TREE, session_id: undefined }] } : { type: "ack" },
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [{ ...TREE, session_id: undefined }] } : { type: "ack", id: null },
   });
   await act(async () => {});
   const dialog = document.querySelector("[role=alertdialog]")!;
@@ -931,7 +932,7 @@ it("heads a project's removal by its running sessions, its folder and its projec
 });
 
 it("shows only the project folder section for a project with nothing running", async () => {
-  mount({ kind: "delete-project", project }, [], [], { request: async () => ({ type: "processes_listed", trees: [] }) });
+  mount({ kind: "delete-project", project }, [], [], { request: async () => ({ type: "processes_listed", id: null, trees: [] }) });
   await act(async () => {});
   const dialog = document.querySelector("[role=alertdialog]")!;
   expect([...dialog.querySelectorAll("[role=group] > h3")].map((h) => h.textContent)).toEqual(["Project folder"]);
@@ -940,7 +941,7 @@ it("shows only the project folder section for a project with nothing running", a
 
 it("shows no Project processes section when the project has none", async () => {
   mount({ kind: "delete-project", project }, [], [], {
-    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", trees: [TREE] } : { type: "ack" },
+    request: async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [TREE] } : { type: "ack", id: null },
   });
   await act(async () => {});
   expect(projectProcessesGroup()).toBeNull();
@@ -950,7 +951,7 @@ it("holds a project's removal while what goes along is asked, and says more may 
   const answer = deferred();
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
-      if (body.type !== "inspect_project_removal") return { type: "ack" };
+      if (body.type !== "inspect_project_removal") return { type: "ack", id: null };
       await answer.promise;
       throw new Error("Connection lost");
     },
@@ -967,7 +968,7 @@ it("holds a project's removal while what goes along is asked, and says more may 
 
 it("takes a locked worktree, and the branch it has checked out, along with a project only when chosen", async () => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED], processes: [] }),
+    request: async () => ({ type: "project_removal_inspected", id: null, items: [UNCOMMITTED, LOCKED, PINNED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
@@ -989,8 +990,8 @@ it("lists the worktrees an inspection held back as staying, and sends back its t
   const held = { ...UNCOMMITTED, path: "/r-held", branch: "held", state: "failed" as const, uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" as const };
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => body.type === "inspect_project_removal"
-      ? { type: "project_removal_inspected", items: [UNCOMMITTED, held], processes: [], inspection: "token-2" }
-      : { type: "ack" },
+      ? { type: "project_removal_inspected", id: null, items: [UNCOMMITTED, held], processes: [], inspection: "token-2" }
+      : { type: "ack", id: null },
   });
   checkAll();
   await act(async () => {});
@@ -1019,10 +1020,10 @@ it("asks again what goes along once a project's removal with its folder is refus
         inspections += 1;
         if (inspections === 1) throw new DaemonRequestError("refused", "project_directory_trash_failed", { ...refusal, inspection: "token-1" });
         await second.promise;
-        return { type: "project_removal_inspected", items: [UNCOMMITTED], processes: [] };
+        return { type: "project_removal_inspected", id: null, items: [UNCOMMITTED], processes: [] };
       }
       if (body.type === "delete_project" && body.inspection) throw new DaemonRequestError("refused", "project_directory_trash_failed", refusal);
-      return { type: "ack" };
+      return { type: "ack", id: null };
     },
   });
   try {
@@ -1057,7 +1058,7 @@ it("marks that more may go along with a project beside the Trash option, outside
   mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
       if (body.type === "inspect_project_removal") throw new Error("Connection lost");
-      return body.type === "list_processes" ? { type: "processes_listed", trees: [] } : { type: "ack" };
+      return body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null };
     },
   });
   expect(unknownMark()).toBeNull();
@@ -1080,8 +1081,8 @@ it("adds what a ticked option does as body text after the list, which holds no c
   const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
   mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
     request: async (body) => body.type === "inspect_session_branches"
-      ? { type: "session_branches_inspected", items: [UNCOMMITTED, UNMERGED, LOCKED] }
-      : { type: "session_records_inspected", presence: "absent" },
+      ? { type: "session_branches_inspected", id: null, items: [UNCOMMITTED, UNMERGED, LOCKED] }
+      : { type: "session_records_inspected", id: null, presence: "absent" },
   });
   await act(async () => {});
   const dialog = document.querySelector("[role=alertdialog]")!;
@@ -1106,7 +1107,7 @@ it("adds what a ticked option does as body text after the list, which holds no c
 
 it("shows consequence text only once an option is ticked where the confirmation has none of its own", async () => {
   mount({ kind: "archive-session", session: owner }, [owner], [], {
-    request: async () => ({ type: "session_branches_inspected", items: [UNMERGED] }),
+    request: async () => ({ type: "session_branches_inspected", id: null, items: [UNMERGED] }),
   });
   await act(async () => {});
   expect(dialogParagraph("Also permanently deletes")).toBeUndefined();
@@ -1135,7 +1136,7 @@ it.each(CONFIRMATIONS)("is a warning modal when %s: the warning icon in the head
 
 it("forces no locked worktree once the Trash option is unticked after the locked one was ticked", async () => {
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [LOCKED], processes: [] }),
+    request: async () => ({ type: "project_removal_inspected", id: null, items: [LOCKED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
@@ -1154,7 +1155,7 @@ it.each([
   const { daemon } = mount({ kind: "delete-project", project }, [], [], {
     request: async (body) => {
       if (body.type === "inspect_project_removal") throw new DaemonRequestError("refused", code, params);
-      return { type: "ack" };
+      return { type: "ack", id: null };
     },
   });
   checkAll();
@@ -1175,8 +1176,8 @@ it("folds what an option covers under a Details button described by its option, 
   const late = sessionOf("s-late", console_.id, project.id, "Late", "idle", { bound_to: owner.id });
   const { daemon } = mount({ kind: "archive-session", session: { ...owner, status: "working" } }, [owner], [], {
     request: async (body) => {
-      if (body.type !== "inspect_session_branches") return { type: "ack" };
-      return { type: "session_branches_inspected", items: body.sessions.length === 1 ? [UNMERGED, LOCKED] : [UNMERGED, LOCKED, { ...UNMERGED, branch: "late" }] };
+      if (body.type !== "inspect_session_branches") return { type: "ack", id: null };
+      return { type: "session_branches_inspected", id: null, items: body.sessions.length === 1 ? [UNMERGED, LOCKED] : [UNMERGED, LOCKED, { ...UNMERGED, branch: "late" }] };
     },
   });
   await act(async () => {});
@@ -1198,7 +1199,7 @@ it("folds what an option covers under a Details button described by its option, 
 
 it("folds what goes with a project's folder under the Trash option, counting it", async () => {
   mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, UNMERGED], processes: [] }),
+    request: async () => ({ type: "project_removal_inspected", id: null, items: [UNCOMMITTED, UNMERGED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
@@ -1211,7 +1212,7 @@ it("folds what goes with a project's folder under the Trash option, counting it"
 
 it("leaves what goes with a project's folder open when the locked option changes what it lists", async () => {
   mount({ kind: "delete-project", project }, [], [], {
-    request: async () => ({ type: "project_removal_inspected", items: [UNCOMMITTED, LOCKED, PINNED], processes: [] }),
+    request: async () => ({ type: "project_removal_inspected", id: null, items: [UNCOMMITTED, LOCKED, PINNED], processes: [] }),
   });
   checkAll();
   await act(async () => {});
@@ -1224,8 +1225,8 @@ it("puts the consequences under the options, so a line they gain moves no checkb
   const child = sessionOf("s-child", console_.id, project.id, "Child", "archived", { bound_to: owner.id });
   mount({ kind: "delete-session", session: { ...owner, status: "archived" } }, [owner, child], [], {
     request: async (body) => body.type === "inspect_session_branches"
-      ? { type: "session_branches_inspected", items: [UNMERGED] }
-      : { type: "session_records_inspected", presence: "present" },
+      ? { type: "session_branches_inspected", id: null, items: [UNMERGED] }
+      : { type: "session_records_inspected", id: null, presence: "present" },
   });
   await act(async () => {});
   const list = sessionList("Child");
@@ -1260,7 +1261,7 @@ const cancelButton = () => document.body.querySelector("[data-slot=alert-dialog-
 
 it("names the session and its owner in the unbind confirmation and releases only on confirm", async () => {
   const onClose = vi.fn();
-  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], { onClose, request: async () => ({ type: "ack" }) });
+  const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], { onClose, request: async () => ({ type: "ack", id: null }) });
   const text = document.querySelector("[role=alertdialog]")!.textContent!.replace(/[\u2066-\u2069]/g, "");
   expect(text).toContain("Unbind session");
   expect(text).toContain("Worker will no longer report to Hub");
@@ -1351,7 +1352,7 @@ it("closes the unbind confirmation silently on session_binding_changed when the 
   const { daemon } = mount({ kind: "unbind-session", session: unbindable }, [unbindOwner, unbindable], [], {
     onClose,
     request: async () => {
-      daemon.store.setState({ sessions: new Map([unbindOwner, { ...unbindable, bound_to: undefined }].map((s) => [s.id, s])) });
+      daemon.store.setState({ sessions: new Map([unbindOwner, { ...unbindable, bound_to: null }].map((s) => [s.id, s])) });
       throw new DaemonRequestError("raw daemon text", "session_binding_changed", { session: unbindable.id });
     },
   });
@@ -1383,7 +1384,7 @@ it.each([
 });
 
 it.each([
-  ["released elsewhere", { ...unbindable, bound_to: undefined }],
+  ["released elsewhere", { ...unbindable, bound_to: null }],
   ["archived", { ...unbindable, status: "archived" as const }],
   ["deleted", undefined],
   ["left without its owner", "ownerGone" as const],

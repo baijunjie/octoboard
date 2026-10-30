@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use super::*;
-use crate::protocol::{Console, Origin, ProjectAccount, ProjectSource, SessionStatus};
+use crate::protocol::{Console, OrchestrationRole, Origin, ProjectSource, SessionStatus};
 use crate::session::spawn_reader_thread;
 use crate::state::WriteHold;
 use crate::store::LOCAL_HOST_ID;
@@ -428,21 +428,9 @@ fn console() -> Console {
         workdir: "/tmp/console-1".to_string(),
         default_agent: Agent::Claude,
         project_session_agent: None,
-        claude_project_session_model: None,
-        claude_project_session_effort: None,
-        codex_project_session_model: None,
-        codex_project_session_effort: None,
-        grok_project_session_model: None,
-        grok_project_session_effort: None,
-        claude_account_id: None,
-        codex_account_id: None,
-        grok_account_id: None,
-        claude_console_session_model: None,
-        claude_console_session_effort: None,
-        codex_console_session_model: None,
-        codex_console_session_effort: None,
-        grok_console_session_model: None,
-        grok_console_session_effort: None,
+        accounts: Default::default(),
+        launch: Default::default(),
+        project_session_launch: Default::default(),
         icon: None,
         console_session_prompt: None,
         created_at: 0,
@@ -459,15 +447,8 @@ fn project(consent: bool) -> Project {
         default_agent: None,
         source: ProjectSource::Local,
         remote_url: None,
-        claude_account_id: ProjectAccount::Inherit,
-        codex_account_id: ProjectAccount::Inherit,
-        grok_account_id: ProjectAccount::Inherit,
-        claude_session_model: None,
-        claude_session_effort: None,
-        codex_session_model: None,
-        codex_session_effort: None,
-        grok_session_model: None,
-        grok_session_effort: None,
+        accounts: Default::default(),
+        launch: Default::default(),
         trust_consent: consent,
         pinned: false,
         tags: Vec::new(),
@@ -493,7 +474,7 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         background_tasks: Vec::new(),
         switching_account: false,
         default_effort: None,
-        orchestration_role: None,
+        orchestration_role: OrchestrationRole::Coordinator,
         context: None,
         observed_model: None,
         observed_effort: None,
@@ -501,7 +482,6 @@ fn session(id: &str, agent: Agent, role: Role, project_id: Option<&str>) -> Sess
         effort: None,
         has_conversation: false,
         bound_to: None,
-        lead: false,
         colour: None,
         ordinal: None,
         account_id: None,
@@ -2296,6 +2276,7 @@ async fn an_owner_is_told_that_its_session_waits_on_a_trust_confirmation() {
         let hub = crate::test_support::running(&state, "hub");
         let mut record = session("s", Agent::Claude, Role::Project, Some("project-1"));
         record.bound_to = Some("hub".to_string());
+        record.orchestration_role = OrchestrationRole::Worker;
         let (live, _) = start(&state, &dir, record, "sleep 30");
 
         if answer_fails {

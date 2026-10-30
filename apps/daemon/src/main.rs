@@ -20,7 +20,6 @@ mod browse;
 mod codex_transport;
 mod config_export;
 mod config_import;
-mod config_upgrade;
 mod coordinator;
 mod crash_cleanup;
 mod default_effort;
@@ -198,9 +197,9 @@ enum Command {
         session: String,
         #[arg(long)]
         role: McpRole,
-        /// The session reports to another session, which narrows what it is offered.
+        /// The session is a worker, which narrows what it is offered.
         #[arg(long)]
-        bound: bool,
+        worker: bool,
         #[arg(long)]
         port: u16,
         /// The key the daemon requires of every connection.
@@ -279,13 +278,13 @@ fn main() -> Result<()> {
     if let Some(Command::Mcp {
         session,
         role,
-        bound,
+        worker,
         port,
         key,
         token,
     }) = cli.command
     {
-        return mcp::stdio::run(session, role.into(), bound, port, key, token);
+        return mcp::stdio::run(session, role.into(), worker, port, key, token);
     }
 
     // While this is still the only thread.

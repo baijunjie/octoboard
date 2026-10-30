@@ -1099,7 +1099,7 @@ mod tests {
         let mut session: Session = serde_json::from_value(serde_json::json!({
             "id":"s","agent":"claude","agent_session_id":agent_id,"console_id":"console",
             "host_id":"local","role":"project","origin":"user","title":"Session",
-            "status":"archived","has_conversation":true,"pinned":false,"started_at":0}))
+            "status":"archived","orchestration_role":"coordinator","has_conversation":true,"pinned":false,"started_at":0}))
         .unwrap();
         session.agent = agent;
         session.config_dir = config_dir.map(|dir| dir.to_string_lossy().into_owned());

@@ -13,12 +13,12 @@ import { SettingRow, SettingSwitch } from "./SettingRow";
 /** An agent's Claude compatibility row, above its accounts table: one switch that applies to every account of the
  * agent (see "Claude compatibility" in `docs/product/per-agent-settings.md`). Nothing for Claude Code, which has no
  * such setting. Shows the value the daemon carries in `settings.claude_compatibility`, which is the one in effect (an
- * unset Codex follows whether Claude Code is added); "on" is only the fallback when the daemon reports none. Saved when
+ * unset Codex follows whether Claude Code is added); "on" is the fallback for an agent with no entry. Saved when
  * toggled, and the switch stays unavailable while the save is unanswered. */
 export function AgentClaudeCompatibilitySetting({ agent }: { agent: Agent }): React.ReactElement | null {
   const t = useT();
   const { request } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.claude_compatibility?.[agent] ?? true);
+  const enabled = useDaemonStore((s) => s.settings.claude_compatibility[agent] ?? true);
   const [busy, setBusy] = useState(false);
   if (!hasClaudeCompatibility(agent)) return null;
   const descriptionId = agent === "codex" ? "settings.accounts.claudeCompat.codexDescription" : "settings.accounts.claudeCompat.grokDescription";

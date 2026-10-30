@@ -119,7 +119,7 @@ it.each([
   { layout: "flat", worktree: "w" },
   { layout: "tree", worktree: "w" },
 ] as const)("$layout: committed row host actions use worktree $worktree, falling back to the project directory", async ({ layout, worktree }) => {
-  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
   const onOpen = vi.fn();
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p", worktree }}>
@@ -146,7 +146,7 @@ it.each([
 });
 
 it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with the live scope and wire path even without a clipboard", async (type) => {
-  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p", worktree: "w" }}>
       <RowActions path="src/caf%C3%A9.ts" name="café.ts" />
@@ -167,7 +167,7 @@ it.each(["open_project_path", "reveal_project_path"] as const)("sends %s with th
 const openInItems = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((entry) => entry.textContent);
 
 it.each([undefined, "w"])("offers a folder File manager and Terminal in worktree %s, and no Default application", async (worktree) => {
-  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
   const openTerminal = vi.fn();
   const container = mountRows(
     <OpenShellTerminal.Provider value={openTerminal}>
@@ -185,7 +185,7 @@ it.each([undefined, "w"])("offers a folder File manager and Terminal in worktree
 });
 
 it("sends reveal_project_path for a folder's File manager", async () => {
-  const request = vi.fn(async () => ({ type: "ack" as const }));
+  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
   const container = mountRows(
     <RowPathScope.Provider value={{ project: "p" }}><RowActions path="src/ui" name="ui" directory /></RowPathScope.Provider>,
     { request, toasts },

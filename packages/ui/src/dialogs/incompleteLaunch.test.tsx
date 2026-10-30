@@ -20,11 +20,11 @@ vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }))
 /** The confirmation about an account whose last sharing change did not finish. */
 const ASKING = '[role="alertdialog"]';
 
-const half = (agent: Agent): Account => ({ id: `${agent}-half`, agent, name: "Half", config_dir: `/a/${agent}`, share_default_config: true, share_default_config_incomplete: true });
+const half = (agent: Agent): Account => ({ id: `${agent}-half`, agent, name: "Half", config_dir: `/a/${agent}`, share_default_config: true, share_default_config_incomplete: true, disabled: false });
 const complete = (agent: Agent): Account => ({ ...half(agent), share_default_config_incomplete: false });
 
 /** A console whose new sessions of every agent open on that agent's `account`. */
-const consoleOn = (accounts: Account[]) => consoleOf("c-1", "Main", Object.fromEntries(accounts.map((account) => [`${account.agent}_account_id`, account.id])));
+const consoleOn = (accounts: Account[]) => consoleOf("c-1", "Main", { accounts: Object.fromEntries(accounts.map((account) => [account.agent, account.id])) });
 const project = projectOf("p-1", "c-1", "Search API");
 
 function render(accounts: Account[], ui: (daemon: Daemon) => React.ReactElement, sessions: Session[] = []) {
@@ -36,8 +36,8 @@ function render(accounts: Account[], ui: (daemon: Daemon) => React.ReactElement,
   });
   store.setState({ settings: { ...store.getState().settings, accounts } });
   const request = vi.fn(async (body: { type: string }) => {
-    if (body.type === "locate_conversation_to_resume") return { type: "conversation_located", location: { kind: "archived_session", session: "s-old" } };
-    return body.type === "ack" ? { type: "ack" } : { type: "session_opened", session: sessionOf("s-new", parent.id, undefined, "", "idle") };
+    if (body.type === "locate_conversation_to_resume") return { type: "conversation_located", id: null, location: { kind: "archived_session", session: "s-old" } };
+    return body.type === "ack" ? { type: "ack", id: null } : { type: "session_opened", id: null, session: sessionOf("s-new", parent.id, undefined, "", "idle") };
   });
   const daemon = { store, request, toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const container = document.body.appendChild(document.createElement("div"));

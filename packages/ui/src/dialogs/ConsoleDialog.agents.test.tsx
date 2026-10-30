@@ -2,12 +2,12 @@
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { consoleOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf } from "../gallery/fixtures/builders";
 import type { Account } from "../protocol";
 import { trackMountRefocus } from "./dialogTestSupport";
 import { work, lastStore, render, buttons, click, clickButton, choose, sent, asked, type, openAdvanced, clickTab, groupPicker, optionTexts, picker, tabNames } from "./consoleDialogTestSupport";
 
-const codexWork: Account = { id: "a-codex", agent: "codex", name: "Codex work", config_dir: "/home/dev/.codex-work" };
+const codexWork: Account = accountOf("a-codex", "codex", "Codex work", "/home/dev/.codex-work");
 
 it("names the agent project sessions follow on the Same as entry, and keeps it current", async () => {
   render(consoleOf("c-1", "Main", { default_agent: "codex" }));
@@ -60,7 +60,7 @@ it("follows the console session agent in the Advanced section, not the project s
 });
 
 it("shows one row per agent in the accounts table, each with its own account", async () => {
-  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork]);
+  render(consoleOf("c-1", "Main", { accounts: { codex: "a-codex" } }), [work, codexWork]);
   expect(picker("Claude Code account").textContent).toContain("Default");
   expect(picker("Codex account").textContent).toContain("Codex work");
   // Grok has only its default account, as the one option of its picker; the one way to Settings is for the whole
@@ -84,7 +84,7 @@ it("sends an account chosen for an agent that is not the console session agent",
   await click(picker("Codex account"));
   await choose("Codex work");
   await clickButton("Save");
-  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", codex_account_id: "a-codex" }]);
+  expect(sent(request)).toEqual([{ type: "update_console", console: "c-1", name: "Main", default_agent: "claude", accounts: { codex: "a-codex" } }]);
 });
 
 it("opens Settings at the agent accounts from the section's Manage accounts button", async () => {
@@ -192,7 +192,7 @@ it("keeps the stored agent in its picker as not installed while it is the value,
 });
 
 it("keeps a missing agent's row while the console pins a named account for it, and drops it once moved off", async () => {
-  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork], undefined, { codex: "unavailable" });
+  render(consoleOf("c-1", "Main", { accounts: { codex: "a-codex" } }), [work, codexWork], undefined, { codex: "unavailable" });
   expect(picker("Codex account").textContent).toContain("Codex work");
   expect(document.body.textContent).toContain("Codex, Not installed");
   await click(picker("Codex account"));
@@ -230,7 +230,7 @@ it("keeps the stored agent in its picker as not added while it is the value, and
 });
 
 it("keeps the row of an agent that is not added while the console pins a named account for it, marked, and drops it once moved off", async () => {
-  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork], undefined, {}, ["claude"]);
+  render(consoleOf("c-1", "Main", { accounts: { codex: "a-codex" } }), [work, codexWork], undefined, {}, ["claude"]);
   expect(picker("Codex account").textContent).toContain("Codex work");
   expect(document.body.textContent).toContain("Codex, Not added");
   await click(picker("Codex account"));
@@ -239,7 +239,7 @@ it("keeps the row of an agent that is not added while the console pins a named a
 });
 
 it("shows the badge after the name of a row that may not be picked, with the row dimmed, and none on the others", () => {
-  render(consoleOf("c-1", "Main", { codex_account_id: "a-codex" }), [work, codexWork], undefined, {}, ["claude"]);
+  render(consoleOf("c-1", "Main", { accounts: { codex: "a-codex" } }), [work, codexWork], undefined, {}, ["claude"]);
   const names = Array.from(document.body.querySelectorAll<HTMLElement>('[aria-hidden="true"].text-sm')).filter((el) => /^(Claude Code|Codex)/.test(el.textContent ?? ""));
   const codex = names.find((el) => el.textContent?.startsWith("Codex"))!;
   const claude = names.find((el) => el.textContent?.startsWith("Claude Code"))!;
@@ -250,7 +250,7 @@ it("shows the badge after the name of a row that may not be picked, with the row
 });
 
 it("keeps the Advanced tab of an agent that is not added while the console stores a value for it, marked, and drops it once cleared", async () => {
-  render(consoleOf("c-1", "Main", { codex_project_session_model: "kept" }), [], undefined, {}, ["claude"]);
+  render(consoleOf("c-1", "Main", { project_session_launch: { codex: { model: "kept" } } }), [], undefined, {}, ["claude"]);
   await openAdvanced();
   expect(tabNames()).toEqual(["Claude Code", "Codex, Not added"]);
   await clickTab("Codex, Not added");

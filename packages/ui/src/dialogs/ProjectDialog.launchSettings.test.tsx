@@ -25,6 +25,7 @@ const answerModels = (pending: Pending[], unavailable: ModelsUnavailable | null 
     const body = asked.body as { agent: Agent; account?: string };
     asked.resolve({
       type: "agent_models",
+      id: null,
       agent: body.agent,
       account: body.account ?? null,
       models: unavailable ? [] : [{ id: "alpha", name: "Alpha", efforts: ["low", "high"] }, { id: "beta", name: "Beta", efforts: [] }],
@@ -38,7 +39,7 @@ it("adds without an account or launch settings when none is set", async () => {
   await click(buttonText("Add"));
   const added = sentOf(pending, "add_project");
   expect(added).toMatchObject({ type: "add_project", source: "local" });
-  for (const field of ["claude_account_id", "claude_session_model", "claude_session_effort"]) expect(added).not.toHaveProperty(field);
+  for (const field of ["accounts.claude", "launch.claude.model", "launch.claude.effort"]) expect(added).not.toHaveProperty(field);
 });
 
 it("adds with the account, model and effort that were set", async () => {
@@ -54,9 +55,7 @@ it("adds with the account, model and effort that were set", async () => {
   await choose("high");
   await click(buttonText("Add"));
   expect(sentOf(pending, "add_project")).toMatchObject({
-    claude_account_id: { kind: "account", id: "a-personal" },
-    claude_session_model: "alpha",
-    claude_session_effort: "high",
+    accounts: { claude: { kind: "account", id: "a-personal" } }, launch: { claude: { model: "alpha", effort: "high" } },
   });
 });
 
@@ -88,7 +87,7 @@ it("sends only what changed when editing", async () => {
     project: "p-1",
     name: "Site",
     default_agent: "claude",
-    claude_session_effort: "low",
+    launch: { claude: { effort: "low" } },
     tags: [],
   });
 });
@@ -102,12 +101,12 @@ it("sends an explicit null when a picker is returned to inherit or unset", async
   await click(clearButton("Model") ?? undefined);
   expect(pickerNamed("Model").textContent).toContain(PLACEHOLDER);
   await click(buttonText("Save"));
-  expect(sentOf(pending, "update_project")).toMatchObject({ claude_account_id: null, claude_session_model: null });
-  expect(sentOf(pending, "update_project")).not.toHaveProperty("claude_session_effort");
+  expect(sentOf(pending, "update_project")).toMatchObject({ accounts: { claude: null }, launch: { claude: { model: null } } });
+  expect(sentOf(pending, "update_project")).not.toHaveProperty("launch.claude.effort");
 });
 
 // The console refers to the first account, "Work".
-const stateOf = (claude_account_id?: ProjectAccount) => projectOf("p-3", "c-1", "Site", { default_agent: "claude", claude_account_id });
+const stateOf = (claude?: ProjectAccount) => projectOf("p-3", "c-1", "Site", { default_agent: "claude", accounts: claude && { claude } });
 
 it("lists inheriting the console's, the default account, then the named accounts", async () => {
   render(undefined, [work, personal]);
@@ -156,7 +155,7 @@ it("sends the default account on create, over a console that pins a named one", 
   await click(accountPicker());
   await choose("Default");
   await click(buttonText("Add"));
-  expect(sentOf(pending, "add_project")).toMatchObject({ claude_account_id: { kind: "default" } });
+  expect(sentOf(pending, "add_project")).toMatchObject({ accounts: { claude: { kind: "default" } } });
 });
 
 it("sends a named account on create as the account kind", async () => {
@@ -165,7 +164,7 @@ it("sends a named account on create as the account kind", async () => {
   await click(accountPicker());
   await choose("Personal");
   await click(buttonText("Add"));
-  expect(sentOf(pending, "add_project")).toMatchObject({ claude_account_id: { kind: "account", id: "a-personal" } });
+  expect(sentOf(pending, "add_project")).toMatchObject({ accounts: { claude: { kind: "account", id: "a-personal" } } });
 });
 
 it("omits the account on create when it is left inheriting, even after being picked and put back", async () => {
@@ -176,7 +175,7 @@ it("omits the account on create when it is left inheriting, even after being pic
   await click(accountPicker());
   await choose("Same as console, Work");
   await click(buttonText("Add"));
-  expect(sentOf(pending, "add_project")).not.toHaveProperty("claude_account_id");
+  expect(sentOf(pending, "add_project")).not.toHaveProperty("accounts.claude");
 });
 
 it.each([
@@ -189,13 +188,13 @@ it.each([
   await click(accountPicker());
   await choose(pick);
   await click(buttonText("Save"));
-  expect(sentOf(pending, "update_project")).toMatchObject({ claude_account_id: sent });
+  expect(sentOf(pending, "update_project")).toMatchObject({ accounts: { claude: sent } });
 });
 
 it("leaves the account out of an update that does not touch it, whatever state it is in", async () => {
   const pending = render(stateOf({ kind: "default" }), [work, personal]);
   await click(buttonText("Save"));
-  expect(sentOf(pending, "update_project")).not.toHaveProperty("claude_account_id");
+  expect(sentOf(pending, "update_project")).not.toHaveProperty("accounts.claude");
 });
 
 it("keeps an edit to an agent that is no longer the selected one", async () => {
@@ -210,7 +209,7 @@ it("keeps an edit to an agent that is no longer the selected one", async () => {
     project: "p-1",
     name: "Site",
     default_agent: "codex",
-    claude_account_id: { kind: "account", id: "a-personal" },
+    accounts: { claude: { kind: "account", id: "a-personal" } },
     tags: [],
   });
 });
@@ -291,7 +290,7 @@ it("offers no account and no launch settings while the source is a parent direct
   expect(pickerNamed("Where sessions develop")).toBeDefined();
   await click(buttonText("Add"));
   // What was set before is out of sight and not sent.
-  expect(sentOf(pending, "add_project")).not.toHaveProperty("claude_account_id");
+  expect(sentOf(pending, "add_project")).not.toHaveProperty("accounts.claude");
 });
 
 it("keeps Advanced open as the source moves between Detect from files and a single agent", async () => {
@@ -392,7 +391,7 @@ it("asks again when the project's own account is chosen, and for the default acc
 });
 
 it("keeps a stored model the list lacks, and says why when there is no list", async () => {
-  const pending = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude", claude_session_model: "retired" }));
+  const pending = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude", launch: { claude: { model: "retired" } } }));
   await click(buttonText("Advanced"));
   await answerModels(pending);
   await click(pickerNamed("Model"));
@@ -400,7 +399,7 @@ it("keeps a stored model the list lacks, and says why when there is no list", as
 });
 
 it("offers the stored model alone and the reason when the agent cannot list its models", async () => {
-  const pending = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude", claude_session_model: "retired" }));
+  const pending = render(projectOf("p-2", "c-1", "Site", { default_agent: "claude", launch: { claude: { model: "retired" } } }));
   await click(buttonText("Advanced"));
   expect(document.body.textContent).toContain("Loading the models this agent offers");
   await answerModels(pending, { code: "models_timed_out", params: { agent: "claude" }, message: "" });
@@ -426,7 +425,7 @@ it("offers the stored model alone and the reason when the agent cannot list its 
 });
 
 it("names the console's project session value on the unset launch pickers, each value on its own", async () => {
-  render(projectOf("p-2", "c-1", "Site"), [], { claude_project_session_model: "opus" });
+  render(projectOf("p-2", "c-1", "Site"), [], { project_session_launch: { claude: { model: "opus" } } });
   await click(buttonText("Advanced"));
   expect(pickerNamed("Model").textContent).toContain("Same as console, opus");
   expect(pickerNamed("Reasoning effort").textContent).toContain("Same as console, The agent's own setting");
@@ -434,9 +433,9 @@ it("names the console's project session value on the unset launch pickers, each 
 
 it("lets the project's own value replace the inherited one and names the console's pair for the agent shown", async () => {
   render(
-    projectOf("p-2", "c-1", "Site", { claude_session_effort: "high" }),
+    projectOf("p-2", "c-1", "Site", { launch: { claude: { effort: "high" } } }),
     [],
-    { claude_project_session_effort: "low", codex_project_session_model: "gpt-x" },
+    { project_session_launch: { claude: { effort: "low" }, codex: { model: "gpt-x" } } },
   );
   await click(buttonText("Advanced"));
   expect(pickerNamed("Reasoning effort").textContent).toContain("high");

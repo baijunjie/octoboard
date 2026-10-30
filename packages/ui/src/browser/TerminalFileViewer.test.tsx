@@ -28,6 +28,7 @@ afterEach(() => {
 
 const reply = (file: ViewedFile) => ({
   type: "project_file",
+  id: null,
   project: file.project,
   worktree: file.worktree ?? null,
   path: file.path,

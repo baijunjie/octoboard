@@ -11,7 +11,7 @@ use anyhow::Result;
 use serde_json::{json, Map, Value};
 
 use crate::coordinator::{self, Released};
-use crate::protocol::{Agent, Role, Session};
+use crate::protocol::{Agent, OrchestrationRole, Role, Session};
 use crate::reporting::{self, Delivery, ReportStatus, WhenBlocked, NOTICE_PREFIX};
 use crate::sharing;
 use crate::state::AppState;
@@ -22,10 +22,10 @@ use super::exec::resolve_owned_session;
 /// The most characters of the parting note of a `release_session`.
 const MAX_NOTE_CHARS: usize = 4000;
 
-/// The tools a project session has, with the role of a bound one or not, by the names its agent
-/// shows them, for telling a session whose binding has just changed what it has.
-fn project_tools(agent: Agent, bound: bool) -> String {
-    super::tools_for(Role::Project, bound)
+/// The tools a project session has, as a worker or not, by the names its agent shows them, for
+/// telling a session whose binding has just changed what it has.
+fn project_tools(agent: Agent, worker: bool) -> String {
+    super::tools_for(Role::Project, worker)
         .iter()
         .map(|tool| format!("`{}`", super::qualified_tool_name(agent, tool.name)))
         .collect::<Vec<_>>()
@@ -178,7 +178,7 @@ pub(super) async fn transfer_session(
         from_id = caller.id,
     );
     let owner_tool = |name: &str| super::qualified_tool_name(owner.agent, name);
-    let lead = if moved.lead {
+    let role_note = if moved.orchestration_role == OrchestrationRole::Coordinator {
         " Its role is coordinator. It keeps its child sessions, which you can read but not drive."
     } else {
         " Its role is worker and it cannot manage child sessions."
@@ -186,7 +186,7 @@ pub(super) async fn transfer_session(
     let to_owner = format!(
         "{NOTICE_PREFIX}: {from} handed its session `{id}` (\"{title}\"){place} over to \
          you. It is yours from now on: it reports to you, and you drive it like any session of \
-         yours, with `{instruct_session}`, `{archive_session}` and `{reopen_session}`.{lead} The \
+         yours, with `{instruct_session}`, `{archive_session}` and `{reopen_session}`.{role_note} The \
          handover note:\n\n{note}\n— end of the handover note —",
         from = sharing::named_session(caller),
         id = moved.id,
@@ -221,7 +221,7 @@ pub(super) async fn transfer_session(
         "session": moved.id,
         "owner": owner.id,
         "owner_kind": owner.role.kind(),
-        "orchestration_role": moved.orchestration_role(),
+        "orchestration_role": moved.orchestration_role,
         "note": result_note,
     }))
 }
@@ -329,7 +329,7 @@ pub(super) async fn release_session(
     let delivery = tell_released(state, &released, running, note.as_deref()).await;
     Ok(json!({
         "session": released.id,
-        "orchestration_role": released.orchestration_role(),
+        "orchestration_role": released.orchestration_role,
         "note": format!(
             "Released: `{id}` has no parent session now and is no longer yours. It is the \
              user's own session; you no longer instruct or drive it and it does not report to \
@@ -353,9 +353,9 @@ pub(super) async fn bind_to_session(
     let owner_id = required_str(arguments, "owner")?;
     let summary = required_str(arguments, "summary")?;
     let (bound, owner) = coordinator::bind_session(state, &caller.id, owner_id)?;
-    let lead = bound.lead;
+    let coordinator = bound.orchestration_role == OrchestrationRole::Coordinator;
 
-    let first_report = if lead {
+    let first_report = if coordinator {
         format!(
             "This project coordinator set you as its parent session: it is yours to drive from \
              now on, and reports to you. It keeps the sessions it started in its own project \
@@ -403,7 +403,7 @@ pub(super) async fn bind_to_session(
             tool("report")
         ),
     };
-    let what_now = if lead {
+    let what_now = if coordinator {
         format!(
             "`done` with no open items archives this session, and is refused while a session you \
              started is not archived; `needs_decision` or open items leave it running. You keep \
@@ -425,14 +425,14 @@ pub(super) async fn bind_to_session(
          about being independent and not calling `{report}`. {what_now} You have a parent \
          session now, so do not call `{bind}` again.",
         owner = sharing::named_session(&owner),
-        role = if lead { "coordinator" } else { "worker" },
+        role = if coordinator { "coordinator" } else { "worker" },
         report = tool("report"),
         bind = tool("bind_to_session"),
     );
     Ok(json!({
         "owner": owner.id,
         "owner_kind": owner.role.kind(),
-        "orchestration_role": bound.orchestration_role(),
+        "orchestration_role": bound.orchestration_role,
         "note": note,
     }))
 }
@@ -592,9 +592,9 @@ mod tests {
         let released = state.store.get_session("of-a").unwrap().unwrap();
         assert_eq!(
             state.wire_session(released.clone()).orchestration_role,
-            Some(crate::protocol::OrchestrationRole::Coordinator)
+            OrchestrationRole::Coordinator
         );
-        assert_eq!((released.bound_to, released.lead), (None, false));
+        assert_eq!(released.bound_to, None);
         let told = output_containing(&of_a, "you have no parent session now");
         assert!(told.contains("`mcp__octoboard__new_session`"), "{told}");
         assert!(
@@ -633,7 +633,14 @@ mod tests {
         let (state, _dir) = peer_state("release-note");
         state
             .store
-            .set_binding("other-project", None, "a", false, false, false)
+            .set_binding(
+                "other-project",
+                None,
+                "a",
+                OrchestrationRole::Worker,
+                false,
+                false,
+            )
             .unwrap()
             .unwrap();
         // A terminal holds no more than 1024 bytes of input that nothing reads, which this message
@@ -757,12 +764,8 @@ mod tests {
         assert!(state.store.list_pages("loose").unwrap().is_empty());
         let mut withdrawn = Vec::new();
         while let Ok(event) = events.try_recv() {
-            if let crate::protocol::Event::PagesDeleted {
-                console_session_id,
-                pages,
-            } = event
-            {
-                assert_eq!(console_session_id, "loose");
+            if let crate::protocol::Event::PagesDeleted { session_id, pages } = event {
+                assert_eq!(session_id, "loose");
                 withdrawn.extend(pages);
             }
         }

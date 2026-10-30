@@ -1,18 +1,18 @@
+import { DEFAULT_SETTINGS } from "../../defaultSettings";
 import type { Scenario } from "../scenario";
 import type { PlainMessageKey } from "../../i18n/catalog";
-import { consoleOf, failureTitle, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
-import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
+import { accountOf, consoleOf, failureTitle, pageOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
 
 const console_ = consoleOf("c-errors", "الإصدار Release coordination");
 const project = projectOf("p-errors", console_.id, "البحث Search API");
 const session = sessionOf("s-errors", console_.id, project.id, "مراجعة Review index", "idle");
 const hub = sessionOf("s-error-hub", console_.id, undefined, "Hub", "idle");
 const shell = shellTerminalOf("shell-errors", project, "بناء Build shell", 0);
-const account = { id: "account-errors", agent: "claude" as const, name: "العمل Work", config_dir: "/Users/dev/.claude-work" };
+const account = accountOf("account-errors", "claude", "العمل Work", "/Users/dev/.claude-work");
 const state = snapshotState({
   consoles: [console_], projects: [project], sessions: [session, hub], shellTerminals: [shell],
   pages: { [hub.id]: [pageOf("page-errors", hub.id, "<p>Report</p>", 1)] },
-  settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/Users/dev/Projects", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [account] },
+  settings: { ...DEFAULT_SETTINGS, added_agents: null, default_clone_dir: "/Users/dev/Projects", accounts: [account] },
 });
 
 /** The browser producer forwards Git stderr verbatim, including its leading spaces and newlines. */

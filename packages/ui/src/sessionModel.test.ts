@@ -51,8 +51,8 @@ describe("sessionModelEffort", () => {
 
 describe("inheritedLaunch", () => {
   it("reads a project session from its project, then the console, and a console session from the console", () => {
-    const owner = consoleOf("c", "Console", { claude_project_session_model: "sonnet", claude_project_session_effort: "low", claude_console_session_model: "opus", claude_console_session_effort: "high" });
-    const project = projectOf("p", "c", "Project", { claude_session_model: "haiku" });
+    const owner = consoleOf("c", "Console", { project_session_launch: { claude: { model: "sonnet", effort: "low" } }, launch: { claude: { model: "opus", effort: "high" } } });
+    const project = projectOf("p", "c", "Project", { launch: { claude: { model: "haiku" } } });
     const consoles = new Map([["c", owner]]);
     const projects = new Map([["p", project]]);
     expect(inheritedLaunch(sessionOf("s", "c", "p", "T", "idle"), consoles, projects)).toEqual({ model: "haiku", effort: "low" });
@@ -61,7 +61,7 @@ describe("inheritedLaunch", () => {
   });
 
   it("gives a project session whose project is not in the store the console's project session pair", () => {
-    const owner = consoleOf("c", "Console", { claude_project_session_model: "sonnet", claude_project_session_effort: "low" });
+    const owner = consoleOf("c", "Console", { project_session_launch: { claude: { model: "sonnet", effort: "low" } } });
     expect(inheritedLaunch(sessionOf("s", "c", "p", "T", "idle"), new Map([["c", owner]]), new Map())).toEqual({ model: "sonnet", effort: "low" });
   });
 });

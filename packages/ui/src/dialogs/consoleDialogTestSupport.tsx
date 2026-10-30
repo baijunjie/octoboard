@@ -3,16 +3,17 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, vi } from "vitest";
 
-import { consoleOf } from "../gallery/fixtures/builders";
+import { accountOf, consoleOf } from "../gallery/fixtures/builders";
 import type { Account, Agent, AgentAvailability, AgentModel, Console, Event, ModelsUnavailable, RequestBody } from "../protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "../store";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
+import { DEFAULT_SETTINGS } from "../defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-export const work: Account = { id: "a-work", agent: "claude", name: "Work", config_dir: "/home/dev/.claude-work" };
-export const personal: Account = { id: "a-personal", agent: "claude", name: "Personal", config_dir: "/home/dev/.claude-personal" };
+export const work: Account = accountOf("a-work", "claude", "Work", "/home/dev/.claude-work");
+export const personal: Account = accountOf("a-personal", "claude", "Personal", "/home/dev/.claude-personal");
 
 export const MODELS: AgentModel[] = [
   { id: "alpha", name: "Alpha", efforts: ["low", "high"] },
@@ -23,6 +24,7 @@ export const MODELS: AgentModel[] = [
 /** The reply to a `list_agent_models` request: `models` as listed, or why there are none. */
 export const listing = (body: RequestBody, models: AgentModel[], unavailable: ModelsUnavailable | null = null): Event => ({
   type: "agent_models",
+  id: null,
   agent: (body as { agent: "claude" }).agent,
   account: (body as { account?: string }).account ?? null,
   models,
@@ -41,12 +43,12 @@ export function render(
   availability: Partial<Record<Agent, AgentAvailability["availability"]>> = {},
   added: Agent[] | null = null,
 ) {
-  const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack" } as Event)));
+  const request = vi.fn((body: RequestBody) => respond?.(body) ?? Promise.resolve(body.type === "list_agent_models" ? listing(body, MODELS) : ({ type: "ack", id: null } as Event)));
   const daemon: Daemon = {
     store: createStateStore({
-      settings: { auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
+      settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: added, default_clone_dir: "", git_workflow: DEFAULT_GIT_WORKFLOW, accounts },
       agentAvailability: new Map(
-        (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined" }]),
+        (["claude", "codex", "grok"] as Agent[]).map((agent) => [agent, { agent, availability: availability[agent] ?? "not_determined", default_account_dir: null }]),
       ),
     }),
     request,
@@ -121,9 +123,7 @@ export const pickerNamed = (name: string) => groupPicker("Console sessions", nam
 export const clearButton = (name: string) => pickerNamed(name).querySelector<HTMLElement>('[data-slot="select-clear-button"]');
 
 export const stored = consoleOf("c-1", "Main", {
-  claude_console_session_model: "alpha",
-  claude_console_session_effort: "high",
-  codex_console_session_model: "retired",
+  launch: { claude: { model: "alpha", effort: "high" }, codex: { model: "retired" } },
 });
 
 export const optionTexts = () => Array.from(document.body.querySelectorAll('[role="option"]')).map((o) => o.textContent);

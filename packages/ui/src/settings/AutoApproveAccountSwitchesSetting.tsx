@@ -11,7 +11,7 @@ import { SwitchSettingRow } from "./SettingRow";
 export function AutoApproveAccountSwitchesSetting(): React.ReactElement {
   const t = useT();
   const { request, toastError } = useDaemon();
-  const enabled = useDaemonStore((s) => s.settings.auto_approve_account_switches ?? false);
+  const enabled = useDaemonStore((s) => s.settings.auto_approve_account_switches);
   const description = t(enabled ? "settings.autoApproveAccountSwitches.description.on" : "settings.autoApproveAccountSwitches.description.off");
 
   const setEnabled = (value: boolean) =>

@@ -25,7 +25,7 @@ const quotaOf = (agent: Account["agent"], account: string | null, patch: Partial
     { kind: "weekly_model", label: "Fable", used_percent: 0, resets_at: null, window_minutes: 10_080 },
   ],
   unavailable: null,
-  ...patch,
+  email: null, ...patch,
 });
 
 const disableSwitch = (scope: ParentNode) => [...scope.querySelectorAll<HTMLInputElement>('input[role="switch"]')].find((input) => input.getAttribute("aria-label")?.startsWith("Disable "))!;

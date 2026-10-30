@@ -258,7 +258,7 @@ const echoing = (settings: Record<string, unknown> = {}) => (body: RequestBody):
   if (body.type !== "import_configuration") return reply(body);
   const carried = (body.document as { settings?: { keyboard_shortcuts?: unknown } }).settings?.keyboard_shortcuts;
   const applied = { ...MIXED_RESULT.settings_applied!, ...(carried !== undefined && carried !== null && { keyboard_shortcuts: carried as never }), ...settings };
-  return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings ? applied : undefined });
+  return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings ? applied : null });
 };
 const PIN = { code: "KeyJ", primary: true, shift: true };
 const withShortcuts = (shortcuts: unknown) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, keyboard_shortcuts: shortcuts } });
@@ -368,7 +368,7 @@ it("keeps Import unavailable while no region is checked", async () => {
 });
 
 it("shows no checkbox for a file that carries one region, and imports that region", async () => {
-  const only = { ...REVIEW, consoles: [], accounts: undefined };
+  const only = { ...REVIEW, consoles: [], accounts: null };
   const mounted = await reviewing({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...only }) : reply(body)) });
   expect(document.body.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
   expect(text()).toContain("Automatically pull repositories");
@@ -424,34 +424,10 @@ it("states what turning on asking questions as choices does", async () => {
   expect(settingLines()["Ask questions as choices"]).toEqual({ badge: "Turns on", note: "Octoboard asks sessions started afterwards to put a question that needs your decision as options you can pick." });
 });
 
-it("leaves out the automatic approvals when the file does not carry them", async () => {
-  const without = {
-    ...REVIEW,
-    settings: {
-      ...REVIEW.settings!,
-      auto_approve_session_requests: null,
-      auto_approve_resume_requests: null,
-      auto_approve_account_switches: null,
-      auto_approve_handoffs: null,
-    },
-  };
-  await reviewingSettings({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...without }) : reply(body)) });
-  expect(text()).not.toContain("Automatically approve");
-});
-
-it("leaves out the setting a file from before it existed does not carry", async () => {
-  const older = { ...REVIEW, settings: { ...REVIEW.settings!, auto_delete_unresumable_archives: null, auto_select_account: null } };
-  await reviewingSettings({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...older }) : reply(body)) });
-  expect(settingLines()["Automatically pull repositories"]?.badge).toBe("Turns on");
-  expect(text()).not.toContain("archived sessions whose conversation is gone");
-  expect(text()).not.toContain("Automatically select an account");
-});
-
 describe("the git workflow settings", () => {
   const FILE: GitWorkflowSettings = { development: "in_place", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true };
-  const inspecting = (git_workflow: Omit<typeof FILE, "squash_before_delivery"> & { squash_before_delivery?: boolean | null } | undefined, current: typeof FILE | undefined) => {
-    const { git_workflow: _, current_git_workflow: __, ...rest } = REVIEW.settings!;
-    const settings = { ...rest, ...(git_workflow && { git_workflow }), ...(current && { current_git_workflow: current }) };
+  const inspecting = (git_workflow: GitWorkflowSettings, current: typeof FILE) => {
+    const settings = { ...REVIEW.settings!, git_workflow, current_git_workflow: current };
     return (body: RequestBody) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings }) : reply(body));
   };
 
@@ -463,17 +439,6 @@ describe("the git workflow settings", () => {
   it("notes that applying changes nothing when they are the same", async () => {
     await reviewingSettings({ reply: inspecting(FILE, FILE) });
     expect(settingLines()["Git workflow"]).toEqual({ badge: "No change" });
-  });
-
-  it("keeps the current squash value when an older workflow omits it", async () => {
-    const { squash_before_delivery: _, ...older } = FILE;
-    await reviewingSettings({ reply: inspecting(older, { ...FILE, squash_before_delivery: true }) });
-    expect(settingLines()["Git workflow"]).toEqual({ badge: "No change" });
-  });
-
-  it("leaves them out when the file does not carry them", async () => {
-    await reviewingSettings({ reply: inspecting(undefined, FILE) });
-    expect(text()).not.toContain("Git workflow");
   });
 });
 

@@ -44,7 +44,7 @@ export function agentAvailability(id: string, label: string, agent: Agent, avail
     ui.daemonEvents((state) => ({
       type: "agent_availability_updated",
       agent_availability: ALL_AGENTS.map((each): AgentAvailability => {
-        const held = state.agentAvailability.get(each) ?? { agent: each, availability: "not_determined" };
+        const held = state.agentAvailability.get(each) ?? { agent: each, availability: "not_determined", default_account_dir: null };
         return each === agent ? { ...held, availability } : held;
       }),
     }));
@@ -62,14 +62,14 @@ export function terminalClosed(id: string, label: string, terminal: string): Liv
 }
 
 // A session's report pages are not in the snapshot, so these act on the pages the store holds for it. The protocol
-// names the session `console_session_id` in both events, whichever kind of session pushed them.
+// names the session `session_id` in both events, whichever kind of session pushed them.
 
 /** `page` pushed to its session, appended as the daemon's `page_created` does; does nothing (no event) while a page of
  * that id is there. The next push after the page is deleted brings it back. */
 export function pagePushed(id: string, label: string, page: Page): LiveChange {
   const step: Step = (ui) =>
     ui.daemonEvents((state): DaemonEvent | null =>
-      state.pages.get(page.console_session_id)?.some(({ id: held }) => held === page.id) ? null : { type: "page_created", page });
+      state.pages.get(page.session_id)?.some(({ id: held }) => held === page.id) ? null : { type: "page_created", page });
   return { id, label, steps: [step] };
 }
 
@@ -78,7 +78,7 @@ export function pagePushed(id: string, label: string, page: Page): LiveChange {
 const pagesDeleted = (session: string, chosen: (held: Page[]) => Page[]): Step => (ui) =>
   ui.daemonEvents((state): DaemonEvent | null => {
     const pages = chosen(state.pages.get(session) ?? []).map((page) => page.id);
-    return pages.length > 0 ? { type: "pages_deleted", console_session_id: session, pages } : null;
+    return pages.length > 0 ? { type: "pages_deleted", session_id: session, pages } : null;
   });
 
 /** The newest page of `session` withdrawn with `delete_pages`, whichever it is by then. */

@@ -52,9 +52,10 @@ async function answer(type: RequestBody["type"], event: Event): Promise<void> {
   await act(async () => request.resolve(event));
 }
 
-const dir = (project: string): Event => ({ type: "project_dir", project, worktree: null, path: "", root_id: "r", entries: [], complete: true });
+const dir = (project: string): Event => ({ type: "project_dir", id: null, project, worktree: null, path: "", root_id: "r", entries: [], complete: true });
 const source = (project: string): Event => ({
   type: "project_source",
+  id: null,
   source: {
     project,
     root: "/r",
@@ -70,8 +71,8 @@ const source = (project: string): Event => ({
     },
   },
 });
-const branches = (project: string): Event => ({ type: "project_branches", project, branches: [], complete: true });
-const changes = (project: string): Event => ({ type: "project_changes", project, worktree: null, head: null, changes: [], complete: true });
+const branches = (project: string): Event => ({ type: "project_branches", id: null, project, branches: [], complete: true });
+const changes = (project: string): Event => ({ type: "project_changes", id: null, project, worktree: null, head: null, changes: [], complete: true });
 
 /** Mounts the browser of project `id` in `mode` and returns its Refresh button's icon. */
 async function mount(id: string, mode: "files" | "git"): Promise<() => Element> {
@@ -324,7 +325,7 @@ it("opens the Files filter, narrows rows, and clears it when hidden", async () =
   });
   await wait(250);
   expect(pending.find((request) => request.body.type === "search_project_files")?.body).toMatchObject({ query: "ALPHA", project: "files-filter" });
-  await answer("search_project_files", { type: "project_file_matches", project: "files-filter", query: "ALPHA", paths: ["alpha.md", "nested/alpha.md"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "files-filter", query: "ALPHA", paths: ["alpha.md", "nested/alpha.md"], complete: true });
   expect(document.querySelector('[data-key="path:nested/alpha.md"]')).not.toBeNull();
   // Results are in their folders, as the tree is without a filter.
   expect(document.querySelector('[data-key="path:beta.ts"]')).toBeNull();
@@ -349,10 +350,10 @@ it("debounces whole-project searches and ignores an older query's reply", async 
   expect(pending.some((request) => request.body.type === "search_project_files")).toBe(false);
   await wait(150);
   await type("new");
-  await answer("search_project_files", { type: "project_file_matches", project: "search-races", query: "old", paths: ["old.ts"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "search-races", query: "old", paths: ["old.ts"], complete: true });
   expect(document.querySelector('[data-key="path:old.ts"]')).toBeNull();
   await wait(250);
-  await answer("search_project_files", { type: "project_file_matches", project: "search-races", query: "new", paths: [], complete: false });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "search-races", query: "new", paths: [], complete: false });
   expect(document.body.textContent).toContain("No matching files");
   // The incomplete search is a warning mark inside the field, not a loose line in the pane.
   const mark = document.body.querySelector<HTMLElement>("button[aria-label='The search is incomplete']")!;
@@ -397,13 +398,13 @@ it("lists every ancestor of an unopened search match so its viewer can notice fi
     input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
   await wait(250);
-  await answer("search_project_files", { type: "project_file_matches", project: "search-viewer", query: "target", paths: ["src/nested/target.txt"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "search-viewer", query: "target", paths: ["src/nested/target.txt"], complete: true });
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src/nested/target.txt"]')!.click());
   expect(pending.some((request) => request.body.type === "read_project_file")).toBe(true);
   expect(pending.filter((request) => request.body.type === "list_project_dir").map((request) => (request.body as { path: string }).path)).toEqual(["src", "src/nested"]);
   await answer("list_project_dir", { ...dir("search-viewer"), path: "src", entries: [{ name: "nested", kind: "directory", size: null, version: null, target: null }] } as Event);
   await answer("list_project_dir", { ...dir("search-viewer"), path: "src/nested", entries: [{ name: "target.txt", kind: "file", size: 5, version: "v1", target: null }] } as Event);
-  await answer("read_project_file", { type: "project_file", project: "search-viewer", worktree: null, path: "src/nested/target.txt", source: { kind: "live", root_id: "r", version: "v1" }, file: { size: 5, kind: "text", text: "hello", data: null, media_type: null } });
+  await answer("read_project_file", { type: "project_file", id: null, project: "search-viewer", worktree: null, path: "src/nested/target.txt", source: { kind: "live", root_id: "r", version: "v1" }, file: { size: 5, kind: "text", text: "hello", data: null, media_type: null } });
   await wait(10_000);
   expect(pending.filter((request) => request.body.type === "list_project_dir").map((request) => (request.body as { path: string }).path)).toEqual(["", "src", "src/nested"]);
   await answer("list_project_dir", { ...dir("search-viewer"), entries: [{ name: "src", kind: "directory", size: null, version: null, target: null }] } as Event);
@@ -461,7 +462,7 @@ it("keeps Files result folders collapsed through tab switches", async () => {
     input.dispatchEvent(new window.Event("input", { bubbles: true }));
   });
   await wait(250);
-  await answer("search_project_files", { type: "project_file_matches", project: "files-folds", query: "target", paths: ["src/nested/target.txt"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "files-folds", query: "target", paths: ["src/nested/target.txt"], complete: true });
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
   expect(document.querySelector('[data-key="path:src/nested/target.txt"]')).toBeNull();
   await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="changes"]')!.click());
@@ -571,7 +572,7 @@ it("folds every folder of the filter's results, and keeps the button out of the 
   await act(async () => labelled("Filter by file name").click());
   await typeKeyword("target");
   await wait(250);
-  await answer("search_project_files", { type: "project_file_matches", project: "collapse-results", query: "target", paths: ["src/nested/target.txt", "docs/target.md"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "collapse-results", query: "target", paths: ["src/nested/target.txt", "docs/target.md"], complete: true });
   expect(rowKeys()).toEqual(["path:docs", "path:docs/target.md", "path:src", "path:src/nested", "path:src/nested/target.txt"]);
   await act(async () => labelled("Collapse all folders").click());
   expect(rowKeys()).toEqual(["path:docs", "path:src"]);
@@ -588,7 +589,7 @@ it("keeps Collapse all disabled over the filter's results when only a folder und
   await act(async () => labelled("Filter by file name").click());
   await typeKeyword("target");
   await wait(250);
-  await answer("search_project_files", { type: "project_file_matches", project: "collapse-results-hidden", query: "target", paths: ["src/nested/target.txt"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "collapse-results-hidden", query: "target", paths: ["src/nested/target.txt"], complete: true });
   expect(labelled("Collapse all folders").disabled).toBe(false);
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
   expect(rowKeys()).toEqual(["path:src"]);
@@ -606,14 +607,14 @@ it("leaves ignored files out of the search until the toggle beside the field inc
   await typeKeyword("app");
   await wait(250);
   expect(pending.find((request) => request.body.type === "search_project_files")?.body).not.toHaveProperty("include_ignored");
-  await answer("search_project_files", { type: "project_file_matches", project: "include-ignored", query: "app", paths: ["src/app.ts"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "include-ignored", query: "app", paths: ["src/app.ts"], complete: true });
   // The toggle repeats the search at once, with no debounce to wait out.
   await act(async () => toggle().click());
   await wait(0);
   expect(toggle().getAttribute("aria-label")).toBe("Exclude ignored files");
   expect(toggle().getAttribute("aria-pressed")).toBe("true");
   expect(pending.find((request) => request.body.type === "search_project_files")?.body).toMatchObject({ query: "app", include_ignored: true });
-  await answer("search_project_files", { type: "project_file_matches", project: "include-ignored", query: "app", paths: ["dist/app.js", "src/app.ts"], ignored: ["dist/app.js"], complete: true });
+  await answer("search_project_files", { type: "project_file_matches", id: null, project: "include-ignored", query: "app", paths: ["dist/app.js", "src/app.ts"], ignored: ["dist/app.js"], complete: true });
   const row = (path: string) => document.querySelector<HTMLElement>(`[data-key="path:${path}"]`)!;
   expect(row("dist/app.js").getAttribute("aria-label")).toBe(`${isolate("app.js")}, ignored`);
   expect(row("dist").getAttribute("aria-label")).toBe(`${isolate("dist")}, ignored`);

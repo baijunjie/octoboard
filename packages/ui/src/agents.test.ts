@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { accountOf } from "./gallery/fixtures/builders";
 import { accountsByAgent, agentChoiceBadge, agentPickerOptions, defaultAccountName, listedPickerAgents, noAgentState, projectSessionAgent, selectableAgent } from "./agents";
 import { format } from "./i18n/catalog";
 import type { Translate } from "./i18n/catalog";
@@ -9,13 +10,13 @@ import type { Account, Agent, AgentAvailability } from "./protocol";
 // caught here too.
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
 
-const acct = (id: string, agent: Agent, name: string): Account => ({ id, agent, name, config_dir: `/home/${id}` });
+const acct = (id: string, agent: Agent, name: string): Account => accountOf(id, agent, name, `/home/${id}`);
 
 const availability = (entries: Partial<Record<Agent, AgentAvailability["availability"]>>): Map<Agent, AgentAvailability> =>
   new Map(
     (["claude", "codex", "grok"] as Agent[]).map((agent) => [
       agent,
-      { agent, availability: entries[agent] ?? "not_determined" },
+      { agent, availability: entries[agent] ?? "not_determined", default_account_dir: null },
     ]),
   );
 
@@ -120,7 +121,7 @@ describe("agentChoiceBadge", () => {
 
 describe("projectSessionAgent", () => {
   it("follows the console session agent unless the console names one of its own", () => {
-    expect(projectSessionAgent({ default_agent: "claude" })).toBe("claude");
+    expect(projectSessionAgent({ default_agent: "claude", project_session_agent: null })).toBe("claude");
     expect(projectSessionAgent({ default_agent: "claude", project_session_agent: null })).toBe("claude");
     expect(projectSessionAgent({ default_agent: "claude", project_session_agent: "grok" })).toBe("grok");
   });

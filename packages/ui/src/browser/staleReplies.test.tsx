@@ -75,6 +75,7 @@ afterEach(async () => {
 
 const listing = (path: string, rootId: string, names: string[]): Event => ({
   type: "project_dir",
+  id: null,
   project: "p",
   worktree: null,
   path,
@@ -105,7 +106,7 @@ it("takes a directory's latest listing only, and drops what was held when the pr
 
 const file = (path: string, text: string, version = "1"): Event => {
   const content: FileContent = { size: text.length, kind: "text", media_type: null, text, data: null };
-  return { type: "project_file", project: "p", worktree: null, path, source: { kind: "live", root_id: "r", version }, file: content };
+  return { type: "project_file", id: null, project: "p", worktree: null, path, source: { kind: "live", root_id: "r", version }, file: content };
 };
 
 it("shows the file moved to loading until its own reply, whatever the earlier reads answer", async () => {
@@ -170,6 +171,7 @@ function mountWith<A, T>(daemon: Daemon, initial: A, use: (args: A) => T): { cur
 
 const changes = (worktree: string | null, path: string): Event => ({
   type: "project_changes",
+  id: null,
   project: "p",
   worktree,
   head: "c1",
@@ -202,6 +204,7 @@ const item = (path: string, group: ChangeGroup = "unstaged"): ChangeItem =>
   changeItem({ group, old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } }, new: { state: "absent" } });
 const change = (path: string, patch: string): Event => ({
   type: "project_change",
+  id: null,
   project: "p",
   worktree: null,
   group: "unstaged",
@@ -297,6 +300,7 @@ it("sends a request replacing one in its own slot at once, past the window's bou
 const endpoint = (branch: string, commit: string) => ({ branch, commit });
 const comparison = (left: string, right: string, rightCommit: string, path: string): Event => ({
   type: "project_comparison",
+  id: null,
   project: "p",
   left: endpoint(left, "c-left"),
   right: endpoint(right, rightCommit),
@@ -344,6 +348,7 @@ it("reads a compared change from the comparison's two commits, and never takes a
   expect(second.body).toMatchObject({ type: "read_project_comparison_change", slot: "viewer", left: { commit: "c1" }, right: { commit: "c3" }, base: "c0" });
   const reply = (rightCommit: string, patch: string): Event => ({
     type: "project_comparison_change",
+    id: null,
     project: "p",
     left: endpoint("main", "c1"),
     right: endpoint("topic", rightCommit),
@@ -372,6 +377,7 @@ it("reads a commit's change between it and its parent, never takes another commi
   expect(second.body).toMatchObject({ type: "read_project_commit_change", slot: "viewer", commit: "c3", parent: "c2", change: { old: { path: "a.ts" } } });
   const reply = (commit: string, parent: string, patch: string): Event => ({
     type: "project_commit_change",
+    id: null,
     project: "p",
     commit,
     parent,
@@ -389,13 +395,14 @@ it("reads a commit's change between it and its parent, never takes another commi
   if (content?.state !== "change" || !content.change.loadBodies) throw new Error("no bodies to load");
   const bodies = content.change.loadBodies();
   expect(pending[0].body).toMatchObject({ type: "read_project_commit_change_bodies", slot: "viewer-bodies", commit: "c3", parent: "c2" });
-  await act(async () => pending.splice(0)[0].resolve({ type: "project_commit_change_bodies", project: "p", commit: "c3", parent: "c2", old: { ...commitSide("c2", "o"), file: { size: 1, kind: "text", media_type: null, text: "o", data: null }, lines: 1 }, new: { ...commitSide("c3", "n"), file: { size: 1, kind: "text", media_type: null, text: "n", data: null }, lines: 1 } }));
+  await act(async () => pending.splice(0)[0].resolve({ type: "project_commit_change_bodies", id: null, project: "p", commit: "c3", parent: "c2", old: { ...commitSide("c2", "o"), file: { size: 1, kind: "text", media_type: null, text: "o", data: null }, lines: 1 }, new: { ...commitSide("c3", "n"), file: { size: 1, kind: "text", media_type: null, text: "n", data: null }, lines: 1 } }));
   await expect(bodies).resolves.toEqual({ old: "o", new: "n" });
 });
 
 const indexSide = (blob: string) => ({ state: "present", path: "a.ts", kind: "file", source: { kind: "index", worktree: "w", blob }, lines: null }) as const;
 const bodiesOf = (text: (side: "old" | "new") => string): Event => ({
   type: "project_change_bodies",
+  id: null,
   project: "p",
   worktree: null,
   group: "staged",
@@ -412,6 +419,7 @@ async function openedChange(onWorktreeGone?: () => void) {
   await act(async () =>
     pending.splice(0)[0].resolve({
       type: "project_change",
+      id: null,
       project: "p",
       worktree: null,
       group: "staged",
@@ -498,6 +506,6 @@ it("counts branch lists and comparisons in the window's bound of two Git list re
   mount(daemon, () => useBranchComparison("b", "main", "local", "topic", true));
   mount(daemon, () => useChangeList("c", undefined, true));
   expect(pending.map((p) => p.body.type)).toEqual(["list_project_branches", "compare_project_branches"]);
-  await act(async () => pending.splice(0, 1)[0].resolve({ type: "project_branches", project: "a", branches: [], complete: true }));
+  await act(async () => pending.splice(0, 1)[0].resolve({ type: "project_branches", id: null, project: "a", branches: [], complete: true }));
   expect(pending.map((p) => p.body.type)).toEqual(["compare_project_branches", "list_project_changes"]);
 });

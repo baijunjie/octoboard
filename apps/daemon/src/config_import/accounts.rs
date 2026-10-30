@@ -19,6 +19,7 @@ use crate::state::AppState;
 
 /// The choice made for one account of the document when applying: another directory, or leaving
 /// the account out. Exactly one of the two is given.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Deserialize)]
 pub struct AccountResolution {
     pub agent: Agent,
@@ -26,12 +27,15 @@ pub struct AccountResolution {
     pub account: usize,
     /// An absolute path or one starting with `~/`.
     #[serde(default)]
+    #[cfg_attr(test, ts(optional))]
     pub directory: Option<String>,
     #[serde(default)]
+    #[cfg_attr(test, ts(optional = nullable))]
     pub leave_out: bool,
 }
 
 /// What importing one account of the document would do.
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountStatus {
@@ -46,6 +50,7 @@ pub enum AccountStatus {
     Invalid,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAccount {
     pub name: String,
@@ -63,6 +68,7 @@ pub struct InspectedAccount {
     pub disabled: bool,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAgentAccounts {
     pub agent: Agent,
@@ -75,6 +81,7 @@ pub struct InspectedAgentAccounts {
     pub default_name_applies: bool,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct InspectedAccounts {
     /// The agents of the document not yet on this machine's added agents, which importing would
@@ -83,6 +90,7 @@ pub struct InspectedAccounts {
     pub agents: Vec<InspectedAgentAccounts>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountOutcome {
@@ -95,6 +103,7 @@ pub enum AccountOutcome {
     Failed,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAccount {
     pub name: String,
@@ -107,6 +116,7 @@ pub struct ImportedAccount {
     pub sharing_warning: Option<ImportFailure>,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAgentAccounts {
     pub agent: Agent,
@@ -115,6 +125,7 @@ pub struct ImportedAgentAccounts {
     pub default_name_applied: bool,
 }
 
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[derive(Debug, Clone, Serialize)]
 pub struct ImportedAccounts {
     /// The agents appended to the added agents, in the order they were.
@@ -783,17 +794,17 @@ mod tests {
         let (state, _state_dir) = account_state("import-inspect-references", &area);
         claude_account(&state, "claude-work", "Work", &area.join("work"));
         let mut hub = project("p", "/p");
-        hub.claude_account = ProjectAccountRef::Account {
+        hub.accounts.claude = ProjectAccountRef::Account {
             name: "work".to_string(),
         };
-        hub.codex_account = ProjectAccountRef::Account {
+        hub.accounts.codex = ProjectAccountRef::Account {
             name: "Fresh".to_string(),
         };
-        hub.grok_account = ProjectAccountRef::Account {
+        hub.accounts.grok = ProjectAccountRef::Account {
             name: "Nowhere".to_string(),
         };
         let mut hub = console("Hub", vec![hub]);
-        hub.codex_account = Some(AccountName {
+        hub.accounts.codex = Some(AccountName {
             name: "fresh".to_string(),
         });
         let document = with_accounts(
@@ -858,14 +869,14 @@ mod tests {
         let mut disabled = doc_account("New", &path_text(&area.join("new")));
         disabled["disabled"] = json!(true);
         let mut project_using = project("p", &path_text(&directory(&area, "p")));
-        project_using.claude_account = ProjectAccountRef::Account {
+        project_using.accounts.claude = ProjectAccountRef::Account {
             name: "new".to_string(),
         };
-        project_using.codex_account = ProjectAccountRef::Account {
+        project_using.accounts.codex = ProjectAccountRef::Account {
             name: "Left".to_string(),
         };
         let mut hub = console("Hub", vec![project_using]);
-        hub.claude_account = Some(AccountName {
+        hub.accounts.claude = Some(AccountName {
             name: "NEW".to_string(),
         });
         let document = with_accounts(
@@ -972,15 +983,15 @@ mod tests {
         // fell back, and is reported so.
         let console = &state.store.list_consoles().unwrap()[0];
         assert_eq!(
-            console.claude_account_id.as_deref(),
+            console.accounts.claude.as_deref(),
             Some(created.id.as_str())
         );
         let project = &stored_projects(&state)[0];
         assert_eq!(
-            project.claude_account_id,
+            project.accounts.claude,
             ProjectAccount::Account { id: created.id }
         );
-        assert_eq!(project.codex_account_id, ProjectAccount::Default);
+        assert_eq!(project.accounts.codex, ProjectAccount::Default);
         assert_eq!(imported.consoles[0].account_fallbacks, []);
         assert_eq!(
             imported.consoles[0].projects[0].account_fallbacks,

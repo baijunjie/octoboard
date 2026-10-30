@@ -27,7 +27,7 @@ vi.mock("./terminal/TerminalController", () => ({
 }));
 
 const ASKING = '[role="alertdialog"]';
-const account = (incomplete: boolean): Account => ({ id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: incomplete });
+const account = (incomplete: boolean): Account => ({ id: "a-half", agent: "claude", name: "Half", config_dir: "/a/half", share_default_config: true, share_default_config_incomplete: incomplete, disabled: false });
 
 function mountWith(incomplete: boolean) {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: media.startsWith("(min-width:"), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
@@ -40,7 +40,7 @@ function mountWith(incomplete: boolean) {
   document.documentElement.style.setProperty("--rail-width", "48px");
   document.documentElement.style.setProperty("--breakpoint-docked", "1168px");
   document.documentElement.style.setProperty("--breakpoint-phone", "782px");
-  const console_ = consoleOf("c-main", "Main", { claude_account_id: "a-half" });
+  const console_ = consoleOf("c-main", "Main", { accounts: { claude: "a-half" } });
   const state = snapshotState({
     consoles: [console_],
     projects: [projectOf("p-1", console_.id, "Search API")],
@@ -50,7 +50,7 @@ function mountWith(incomplete: boolean) {
   store.setState({ settings: { ...store.getState().settings, accounts: [account(incomplete)] } });
   const daemon: Daemon = {
     store,
-    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
+    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
