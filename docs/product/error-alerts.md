@@ -490,6 +490,10 @@ For example:
     connected, then try again.
 - An account name already in use asks for an unused name for that agent; an occupied destination asks for a different
   destination while preserving the existing folder.
+- A request naming a console, project, shell terminal, report page or commit the daemon no longer has
+  (`unknown_console`, `unknown_project`, `unknown_shell_terminal`, `unknown_page`, `unknown_commit`) — such as closing a
+  shell terminal that is already gone — asks the user to refresh the affected view or select the current project or
+  session again, then retry.
 - A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.
 - A failure of Git — Git could not read something (`git_failed`), or a clone or push failed — asks the user to open the
   project's terminal from its action menu, resolve the Git error, including remote access or an unfinished Git

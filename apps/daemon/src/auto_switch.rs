@@ -1795,7 +1795,7 @@ mod tests {
     /// about.
     fn notices(
         events: &mut tokio::sync::broadcast::Receiver<Event>,
-        code: &str,
+        code: crate::protocol::Code,
     ) -> Vec<(String, crate::protocol::Params)> {
         let mut found = Vec::new();
         while let Ok(event) = events.try_recv() {
@@ -2263,7 +2263,7 @@ mod tests {
             None,
             vec![window(100.0, Some(now_millis() + 60_000))],
             Some(crate::protocol::QuotaUnavailable::new(
-                "timed_out",
+                crate::protocol::quota_unavailable_code::TIMED_OUT,
                 "x",
                 &[("agent", "Claude Code")],
             )),
@@ -2321,7 +2321,7 @@ mod tests {
     async fn no_account_that_is_clearly_unusable_is_chosen() {
         let fixture = Fixture::new("auto-switch-none", SessionStatus::Idle);
         let mut events = fixture.state.subscribe();
-        let unavailable = |code: &'static str| {
+        let unavailable = |code: crate::protocol::Code| {
             Some(crate::protocol::QuotaUnavailable::new(
                 code,
                 "x",

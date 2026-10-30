@@ -85,7 +85,7 @@ export const RULES = [
 
   // Cross-package reads. Each also selects `verify`, whose tests check that the paths named here exist.
   { match: [...WEB_IMPORTS_FROM_UI, ...WEB_PREVIEW_INPUTS], consumers: ["verify", "ui", "web"], why: "the website imports these modules, or builds its preview from them" },
-  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step by hand across the daemon, the UI and the desktop shell" },
+  { match: WIRE_PROTOCOL, consumers: ["verify", "ui", "daemon", "native"], why: "the wire protocol is kept in step by hand across the daemon, the UI and the desktop shell, and a UI test (`daemonCodes.test.ts`) reads the daemon's code registry from `protocol.rs`" },
   { match: DESKTOP_CONTRACT, consumers: ["verify", "ui", "native"], why: "the UI side of the contract with the desktop shell" },
   { match: SWEEP_SHARED, consumers: ["verify", "ui"], why: "the UI's gallery sweep, which its tests run, imports it" },
   { match: DAEMON_READS_UI, consumers: ["verify", "ui", "daemon"], why: "a daemon test parses it" },

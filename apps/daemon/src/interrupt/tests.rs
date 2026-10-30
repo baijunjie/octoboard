@@ -721,7 +721,7 @@ async fn sessions_that_cannot_take_an_interrupt_are_refused() {
         SessionStatus,
         bool,
         Setup,
-        (&'static str, &'static str),
+        (crate::protocol::Code, &'static str),
     );
     let cases: [Case; 11] = [
         (

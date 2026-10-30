@@ -701,7 +701,7 @@ mod tests {
         )
     }
 
-    fn unavailable_code(result: Result<Reading, QuotaUnavailable>) -> String {
+    fn unavailable_code(result: Result<Reading, QuotaUnavailable>) -> crate::protocol::Code {
         result.expect_err("an unavailable quota").code
     }
 

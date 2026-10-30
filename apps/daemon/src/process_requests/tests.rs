@@ -79,7 +79,7 @@ fn project_1() -> ProcessTarget {
     }
 }
 
-fn code_of(err: &anyhow::Error) -> &str {
+fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
     err.downcast_ref::<CodedError>()
         .expect("a coded error")
         .code

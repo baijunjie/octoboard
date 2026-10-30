@@ -434,7 +434,7 @@ mod tests {
         assert!(launches.lock().unwrap().is_empty(), "nothing was launched");
     }
 
-    fn code_of(err: &anyhow::Error) -> &'static str {
+    fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
         err.downcast_ref::<crate::protocol::CodedError>()
             .unwrap_or_else(|| panic!("a coded error: {err:#}"))
             .code

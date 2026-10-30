@@ -28,6 +28,7 @@ export type RecordNames = Pick<State, "consoles" | "projects" | "sessions"> & { 
  * must be given those, never the daemon's raw ones. */
 export const CODE_PARAMS: Record<string, readonly string[]> = {
   git_clone_failed: ["cloneCommand"],
+  invalid_remote_url: ["url"],
   conversation_to_resume_not_found: ["path"],
   resume_id_invalid: ["example"],
   conversation_not_found: ["path"],

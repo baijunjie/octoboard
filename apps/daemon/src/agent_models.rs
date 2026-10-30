@@ -478,8 +478,8 @@ mod tests {
         models.iter().map(|model| model.id.as_str()).collect()
     }
 
-    fn reason(listing: &Listing) -> &str {
-        &listing.unavailable.as_ref().expect("a reason").code
+    fn reason(listing: &Listing) -> crate::protocol::Code {
+        listing.unavailable.as_ref().expect("a reason").code
     }
 
     #[test]

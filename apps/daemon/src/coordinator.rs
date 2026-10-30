@@ -8649,7 +8649,7 @@ mod tests {
         let refusal = |account: Option<&str>| {
             resolve_open(&state, &request(account.map(str::to_string))).err()
         };
-        let coded = |err: &anyhow::Error| -> (&'static str, Params) {
+        let coded = |err: &anyhow::Error| -> (crate::protocol::Code, Params) {
             let coded = err.downcast_ref::<CodedError>().expect("a coded error");
             (coded.code, coded.params.clone())
         };
@@ -10106,10 +10106,7 @@ mod tests {
         };
         assert_eq!(
             refusal(add(Agent::Codex).await),
-            (
-                error_code::AGENT_NOT_INSTALLED.to_string(),
-                Some("Codex".to_string())
-            )
+            (error_code::AGENT_NOT_INSTALLED, Some("Codex".to_string()))
         );
         let mut events = state.subscribe();
         add(Agent::Claude).await.expect("added");
@@ -12572,7 +12569,7 @@ mod tests {
         );
     }
 
-    fn code_of(err: &anyhow::Error) -> &'static str {
+    fn code_of(err: &anyhow::Error) -> crate::protocol::Code {
         err.downcast_ref::<CodedError>()
             .expect("a coded error")
             .code
@@ -15455,7 +15452,12 @@ mod tests {
     }
 
     /// Asserts `err` is the coded refusal `code`, naming `session` (and `owner`, when given).
-    fn assert_busy_refusal(err: &anyhow::Error, code: &str, session: &str, owner: Option<&str>) {
+    fn assert_busy_refusal(
+        err: &anyhow::Error,
+        code: crate::protocol::Code,
+        session: &str,
+        owner: Option<&str>,
+    ) {
         assert_eq!(code_of(err), code);
         let coded = err.downcast_ref::<CodedError>().expect("a coded refusal");
         assert_eq!(
@@ -15565,7 +15567,7 @@ mod tests {
             ("child", Some("hub"), error_code::SESSION_NOT_BOUND_TO_OWNER),
         ] {
             let before = state.store.get_session(session).unwrap().unwrap();
-            let err = release_session(&state, session, owner, None).expect_err(code);
+            let err = release_session(&state, session, owner, None).expect_err(code.as_str());
             assert_eq!(code_of(&err), code, "{session}: {err}");
             let after = state.store.get_session(session).unwrap().unwrap();
             assert_eq!((before.bound_to, before.lead), (after.bound_to, after.lead));

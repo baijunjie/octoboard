@@ -339,7 +339,8 @@ export interface Scenario {
    * listed has none. `{ items, inspection }` is an answer that holds worktrees back (items with a `cause`), carrying the
    * token the removal sends back so that they stay. */
   projectRemovalBranches?: Record<string, SessionBranchItem[] | { items: SessionBranchItem[]; inspection: string } | FixtureError>;
-  /** Per-session account-switch refusals or a request kept pending. Unlisted sessions switch
+  /** Per-session account-switch refusals or a request kept pending. A failure with `switch_did_not_come_up` leaves the
+   * session interrupted on the account it had, any other puts it back as it was. Unlisted sessions switch
    * normally, updating their account and recorded configuration directory. */
   sessionAccountSwitches?: Record<string, FixtureError | "pending">;
   /** Per-session `set_session_model` failures or a request kept pending, ahead of the refusals the fixture

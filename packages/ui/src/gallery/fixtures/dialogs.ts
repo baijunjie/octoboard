@@ -532,6 +532,13 @@ const claudeRelocationFailure = (stage: "copy" | "kept_staging", cause: Relocati
 const codexRelocationFailure = (cause: RelocationCause, detail: string) =>
   relocationFailure("/Users/dev/.codex-work", "thread_record", cause, detail);
 
+/** The daemon's `switch_did_not_come_up`: the session was relaunched under the new account and its process ended at once. */
+const didNotComeUp = (session: string) => ({
+  code: "switch_did_not_come_up",
+  params: { session },
+  message: `${session} ended as soon as it was relaunched under the new account`,
+});
+
 // Three Codex sessions share a console, the second bound to the hub: a Codex account's thread database is what the
 // `thread_record` stage of a switch updates.
 const codexWork = { id: "a-codex-work", agent: "codex" as const, name: "Codex Work", config_dir: "/Users/dev/.codex-work" };
@@ -742,6 +749,19 @@ export const dialogScenarios: Scenario[] = [
       "s-codex-work": codexRelocationFailure("sqlite_home", "`CODEX_SQLITE_HOME` is the relative path `./state`, which depends on the directory the session starts in"),
     },
     steps: submitCodexSwitch,
+  },
+  {
+    id: "dialog-switch-account-did-not-come-up",
+    group: "Sidebar sessions",
+    category: "exceptional",
+    title: "Console account switch, the relaunch ended at once",
+    description: "Two sessions were relaunched under the Work account and their process ended at once, so each row says that session ended as soon as it was relaunched and stays on the account it had (its name a chip in the sentence). The one remedy follows the list once: a session that ended this way is no longer running, so resume it to carry on. There is no paragraph about a bug, no Report issue and no Error details; the footer holds OK alone. The two sessions are interrupted in the sidebar behind the alert.",
+    state: switchAccountState,
+    sessionAccountSwitches: {
+      "s-switch-bound": didNotComeUp("s-switch-bound"),
+      "s-switch-work": didNotComeUp("s-switch-work"),
+    },
+    steps: submitConsoleSwitch,
   },
   {
     id: "dialog-switch-account-shared-recovery",

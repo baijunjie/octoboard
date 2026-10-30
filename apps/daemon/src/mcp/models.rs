@@ -131,7 +131,7 @@ mod tests {
             Listing {
                 models: Vec::new(),
                 unavailable: Some(ModelsUnavailable::new(
-                    "test_down",
+                    crate::protocol::models_unavailable_code::COMMAND_FAILED,
                     "the agent is down",
                     &[],
                 )),
@@ -159,7 +159,7 @@ mod tests {
             assert_eq!(down["models"], json!([]), "{caller}");
             assert_eq!(
                 down["unavailable"],
-                json!({ "code": "test_down", "message": "the agent is down" }),
+                json!({ "code": "models_command_failed", "message": "the agent is down" }),
                 "{caller}"
             );
         }

@@ -248,7 +248,7 @@ pub(super) fn bytes_of(file: &FileContent) -> Vec<u8> {
 }
 
 /// The `code` of the coded error `result` failed with.
-pub(super) fn code<T: std::fmt::Debug>(result: anyhow::Result<T>) -> &'static str {
+pub(super) fn code<T: std::fmt::Debug>(result: anyhow::Result<T>) -> crate::protocol::Code {
     let err = result.expect_err("a refusal");
     err.downcast_ref::<CodedError>()
         .unwrap_or_else(|| panic!("not coded: {err:#}"))
@@ -1048,10 +1048,13 @@ async fn a_burst_of_reads_neither_starves_the_control_socket_nor_outgrows_its_bo
         order.push(id.to_string());
         answered.insert(id.to_string(), event);
     }
-    assert_eq!(answered["ordinary"]["code"], error_code::UNKNOWN_SESSION);
+    assert_eq!(
+        answered["ordinary"]["code"],
+        error_code::UNKNOWN_SESSION.as_str()
+    );
     let refused = answered
         .values()
-        .filter(|event| event["code"] == error_code::LIMIT_EXCEEDED)
+        .filter(|event| event["code"] == error_code::LIMIT_EXCEEDED.as_str())
         .count();
     let served: Vec<_> = answered
         .values()

@@ -372,7 +372,7 @@ pub fn unavailable_cause(err: &anyhow::Error) -> &'static str {
         return OTHER;
     };
     if coded.code == error_code::PERMISSION_DENIED {
-        return error_code::PERMISSION_DENIED;
+        return error_code::PERMISSION_DENIED.as_str();
     }
     if coded.code != error_code::SOURCE_UNAVAILABLE {
         return OTHER;

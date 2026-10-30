@@ -425,8 +425,8 @@ mod tests {
         updates
     }
 
-    fn failure_code(login: &AccountLogin) -> &str {
-        &login.failure.as_ref().expect("a failure").code
+    fn failure_code(login: &AccountLogin) -> crate::protocol::Code {
+        login.failure.as_ref().expect("a failure").code
     }
 
     const CLAUDE_SIGNS_IN: &str = r#"
