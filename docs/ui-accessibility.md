@@ -1085,16 +1085,31 @@ Rules 3 and 4 are "On the screen: an Alert when it matters, a mark at its point 
 The Processes panel keeps a failed refresh visible as a warning Alert above its existing rows and actions. The list
 may be stale, so the warning stays until a refresh succeeds; polling continues while it is shown.
 
-Once a submit has passed the form's own validation, anything that goes wrong afterwards — a refusal from the daemon
-included, even one about a single field's value — is a failure of the user's own action and opens the error alert
-dialog; the form stays open with its values intact, under it. Field validation never opens the dialog, and neither
-does a failure shown on the screen or as a mark: those are the error's only presentation, with three exceptions: a
-startup screen's failure is also shown first in an error alert dialog over it; a check the user pressed for
-(Settings' Check for updates) that does not finish is shown in the dialog and still leaves the setting's mark; and a
-long-running change the user started that ends unfinished, and which its own control retries (an account's sharing
-switch), opens the error alert dialog in the window that asked for it and still leaves the mark at that control as its
-lasting state, the dialog alone speaking it. The same change seen ending unfinished from another window, or found so
-later, is the mark alone. A navigation the user starts in a picker (the directory picker's Go, and its Try again)
+**An error alert is for the exceptional, never for a refusal the window could have foreseen.** An action that cannot go
+ahead in a state the window knows, or can look up quickly, before it is confirmed — a confirmation's option that cannot
+be carried out, a submit whose subject is in use — is prevented, not refused: its confirm or submit button is disabled
+while that state holds, and the reason stands where the action is, as an Alert under the choice that causes it or a
+`FieldError` under the field — or, where the reason is a list of what is in the way (sessions still running), as a line
+of a destructive confirmation's consequences with that list after it. Either way the choice that brought it about names
+the reason in its description and it is announced as it appears. Letting the user confirm only to answer with an error
+alert is not allowed. The error alert dialog is left to what could not be known beforehand: a state that changed between
+the lookup and the confirm, the operation itself failing, and what only a slow check would find. Only quick checks run
+ahead: one that would keep the user waiting (a look that outruns a short deadline, as on a volume that answers slowly)
+is left to the operation, whose refusal then is an error alert. A quick lookup still running holds the button pending,
+quietly, with no error shown. A refusal that comes back from the operation is looked up again once its alert closes, so
+the reason then stands where the action is and the button is disabled, rather than the same alert answering a second
+confirm.
+
+Once a submit has passed the form's own validation, anything that goes wrong afterwards that the window could not
+foresee — a refusal from the daemon included, even one about a single field's value — is a failure of the user's own
+action and opens the error alert dialog; the form stays open with its values intact, under it. Field validation never
+opens the dialog, and neither does a failure shown on the screen or as a mark: those are the error's only presentation,
+with three exceptions: a startup screen's failure is also shown first in an error alert dialog over it; a check the user
+pressed for (Settings' Check for updates) that does not finish is shown in the dialog and still leaves the setting's
+mark; and a long-running change the user started that ends unfinished, and which its own control retries (an account's
+sharing switch), opens the error alert dialog in the window that asked for it and still leaves the mark at that control
+as its lasting state, the dialog alone speaking it. The same change seen ending unfinished from another window, or found
+so later, is the mark alone. A navigation the user starts in a picker (the directory picker's Go, and its Try again)
 that fails is a failure of the user's own action too, even before any listing has been shown: it opens the error alert
 dialog, and the picker's first-listing Alert stays as it was.
 
