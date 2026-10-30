@@ -1,6 +1,7 @@
 //! The `pre-push` path of the gate: a pull request is merged on the remote and its target branch
 //! never moves locally, so what a push is about to publish is checked here (see the module header
-//! of [`super`] for the rules).
+//! of [`super`] for the rules). A pushed branch with no recorded target branch is checked against
+//! the default target branch, the first resident guarded branch, unless it is guarded itself.
 
 use anyhow::Result;
 
@@ -8,10 +9,10 @@ use super::content::find_reverts;
 use super::git::{
     has_commit, is_ancestor, is_null, is_space, lossy, remote_refs, short, upstream_of, Git,
 };
-use super::{check_move, describe, forks_of_others, recorded_forks, Inputs, Route, Verdict};
+use super::{check_move, describe, fork_points_of, forks_of_others, Inputs, Route, Verdict};
 
 /// One ref of a push that the gate has something to say about: a branch being pushed (not
-/// deleted) that is guarded or records a target branch.
+/// deleted) that is guarded or has a target branch, recorded or by default.
 struct Pushed<'a> {
     /// The local branch, where the target branch and the fork point are recorded; `push
     /// <local>:<remote>` can give the two sides different names.
@@ -20,14 +21,15 @@ struct Pushed<'a> {
     branch: &'a str,
     local: &'a str,
     remote: &'a str,
-    /// The target branch `source` records.
+    /// The target branch `source` records, or the default target branch for one that records none
+    /// and is not guarded.
     target: Option<&'a str>,
     /// Whether `branch` is guarded.
     guarded: bool,
 }
 
 /// The refs of a push that the gate has something to say about; none for a push that involves no
-/// guarded branch and no recorded target branch, which is decided here, before any `git` runs.
+/// guarded branch and no target branch, which is decided here, before any `git` runs.
 fn pushed_branches<'a>(inputs: &'a Inputs, stdin: &'a str) -> Vec<Pushed<'a>> {
     let mut pushed = Vec::new();
     for line in stdin.split('\n') {
@@ -45,12 +47,21 @@ fn pushed_branches<'a>(inputs: &'a Inputs, stdin: &'a str) -> Vec<Pushed<'a>> {
             continue;
         }
         let source = source.strip_prefix("refs/heads/").unwrap_or(branch);
+        let guarded = inputs.guarded.contains(branch);
+        // A recorded target branch wins. With none recorded, merging into the default branch is
+        // what a pull request does; a branch that is itself the default target has no one above
+        // it to check against.
         let target = inputs
             .targets
             .get(source)
             .map(String::as_str)
-            .filter(|target| !target.is_empty());
-        let guarded = inputs.guarded.contains(branch);
+            .filter(|target| !target.is_empty())
+            .or_else(|| {
+                inputs
+                    .default_target
+                    .as_deref()
+                    .filter(|target| !guarded && *target != source && *target != branch)
+            });
         if guarded || target.is_some() {
             pushed.push(Pushed {
                 source,
@@ -102,7 +113,9 @@ pub(super) fn decide_push(git: &Git, inputs: &Inputs, stdin: &[u8]) -> Result<Ve
         }
         // As for a transaction: after a fast-forward merge the local value still points at that
         // feature branch, which is how its fork point is found.
-        let forks = forks_of_others(git, inputs, pushed.local, branch)?;
+        let forks = forks_of_others(git, inputs, pushed.local, branch, &|| {
+            Ok(vec![pushed.remote.to_string()])
+        })?;
         if let Some(message) = check_move(
             git,
             Route::Push,
@@ -110,6 +123,7 @@ pub(super) fn decide_push(git: &Git, inputs: &Inputs, stdin: &[u8]) -> Result<Ve
             pushed.remote,
             pushed.local,
             &forks,
+            &[],
         )? {
             verdict.reject(message);
         }
@@ -177,7 +191,9 @@ fn check_pr(
     if is_null(tip) || is_null(new) || tip == new || !is_ancestor(git, tip, new)? {
         return Ok(());
     }
-    let forks = recorded_forks(git, inputs, &[branch.to_string()])?;
+    let forks = fork_points_of(git, inputs, &[branch.to_string()], &|| {
+        Ok(vec![tip.to_string()])
+    })?;
     let findings = find_reverts(git, tip, new, &forks, &forks)?;
     if findings.is_empty() {
         return Ok(());

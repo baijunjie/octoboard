@@ -196,6 +196,98 @@ pub(super) fn branches_at(git: &Git, commit: &str) -> Result<Vec<String>> {
         .collect())
 }
 
+/// A branch pointing at a commit: a local one, or a remote-tracking one under whatever remote.
+#[derive(Clone, PartialEq, Eq)]
+pub(super) struct Tip {
+    /// The name the branch has in this clone, and so the one its records are kept under: a
+    /// remote-tracking branch's without the remote's (`origin/feature/x` is `feature/x`).
+    pub(super) name: String,
+    pub(super) remote: bool,
+}
+
+impl Tip {
+    /// The branch a ref is, or `None` for any other ref and for a remote's `HEAD`.
+    fn of(refname: &str) -> Option<Self> {
+        let refname = refname.rsplit(" -> ").next().unwrap_or(refname);
+        if let Some(name) = refname.strip_prefix("refs/heads/") {
+            return Some(Self {
+                name: name.to_string(),
+                remote: false,
+            });
+        }
+        let (_, name) = refname.strip_prefix("refs/remotes/")?.split_once('/')?;
+        (name != "HEAD").then(|| Self {
+            name: name.to_string(),
+            remote: true,
+        })
+    }
+}
+
+/// The [`Tip`]s among `refnames`, each once.
+fn tips<'a>(refnames: impl IntoIterator<Item = &'a str>) -> Vec<Tip> {
+    let mut found: Vec<Tip> = Vec::new();
+    for tip in refnames.into_iter().filter_map(Tip::of) {
+        if !found.contains(&tip) {
+            found.push(tip);
+        }
+    }
+    found
+}
+
+/// The local and remote-tracking branches pointing at `commit`.
+pub(super) fn tips_at(git: &Git, commit: &str) -> Result<Vec<Tip>> {
+    let out = git.read([
+        "for-each-ref",
+        "--format=%(refname)",
+        &format!("--points-at={commit}"),
+        "refs/heads/",
+        "refs/remotes/",
+    ])?;
+    Ok(tips(lossy(&out).split_whitespace()))
+}
+
+/// The parents of `commit`, and the branches pointing at it (see [`tips_at`]), from one `git`: it
+/// is what an update of a branch costs when it merges nothing. An entry of the decoration list
+/// can be `HEAD -> <ref>` on a `git` that prints it for a filtered list too.
+pub(super) fn parents_and_tips(git: &Git, commit: &str) -> Result<(Vec<String>, Vec<Tip>)> {
+    let out = git.read([
+        "log",
+        "-1",
+        "--no-show-signature",
+        "--format=%P%x00%D",
+        "--decorate=full",
+        "--decorate-refs=refs/heads/",
+        "--decorate-refs=refs/remotes/",
+        commit,
+    ])?;
+    let out = lossy(&out);
+    let (parents, decorations) = out.split_once('\0').unwrap_or((&out, ""));
+    Ok((
+        parents.split_whitespace().map(str::to_string).collect(),
+        tips(decorations.trim().split(", ")),
+    ))
+}
+
+/// The commit the local branch was created at, as its reflog's oldest entry records it. A branch
+/// whose reflog is missing or expired, or whose oldest entry is not its creation, has none:
+/// a later entry would pass for a fork point that is too recent, which would hold the branch's
+/// own changes against it. Whether that commit is where the branch forked from the target branch
+/// is for the caller to judge: a branch can be created on someone else's unmerged work.
+pub(super) fn creation_point(git: &Git, branch: &str) -> Result<Option<String>> {
+    let listing = git.line_lenient([
+        "reflog",
+        "show",
+        "--no-show-signature",
+        "--format=%H %gs",
+        &format!("refs/heads/{branch}"),
+    ])?;
+    let oldest = listing.lines().next_back().unwrap_or_default();
+    Ok(oldest
+        .split_once(' ')
+        .filter(|(oid, why)| is_oid(oid) && why.starts_with("branch: Created from"))
+        .map(|(oid, _)| oid.to_string()))
+}
+
 pub(super) fn is_ancestor(git: &Git, a: &str, b: &str) -> Result<bool> {
     git.succeeds(["merge-base", "--is-ancestor", a, b])
 }
@@ -222,13 +314,55 @@ pub(super) fn remote_refs(git: &Git, branch: &str) -> Result<Vec<String>> {
     Ok(lossy(&out).split_whitespace().map(str::to_string).collect())
 }
 
-pub(super) fn remote_tips(git: &Git, branch: &str) -> Result<Vec<String>> {
+/// The tips of the branch's own remote-tracking branches: the same-named ones, and its upstream,
+/// which is not always one of them (`git switch -c mine --track origin/theirs`). An upstream whose
+/// branch name (without the remote's) `skip_upstream` says is not the branch's own is left out: a
+/// branch cut from `origin/main` has it as its upstream without being published there.
+pub(super) fn remote_tips(
+    git: &Git,
+    branch: &str,
+    skip_upstream: &dyn Fn(&str) -> bool,
+) -> Result<Vec<String>> {
+    // The branch's own line carries its upstream; the remote-tracking ones carry their tips.
     let out = git.read([
         "for-each-ref",
-        "--format=%(objectname)",
+        "--format=%(refname)%09%(objectname)%09%(upstream)",
         &format!("refs/remotes/*/{branch}"),
+        &format!("refs/heads/{branch}"),
     ])?;
-    Ok(lossy(&out).split_whitespace().map(str::to_string).collect())
+    let (mut refs, mut tips) = (Vec::new(), Vec::new());
+    let mut upstream = String::new();
+    for line in lossy(&out).lines() {
+        let mut fields = line.split('\t');
+        let (Some(refname), Some(oid), Some(up)) = (fields.next(), fields.next(), fields.next())
+        else {
+            continue;
+        };
+        if refname.starts_with("refs/remotes/") {
+            refs.push(refname.to_string());
+            if !tips.iter().any(|tip| tip == oid) {
+                tips.push(oid.to_string());
+            }
+        } else {
+            upstream = up.to_string();
+        }
+    }
+    let name = upstream
+        .strip_prefix("refs/remotes/")
+        .and_then(|rest| rest.split_once('/'))
+        .map(|(_, name)| name);
+    if name.is_some_and(|name| !skip_upstream(name)) && !refs.contains(&upstream) {
+        let tip = git.line_lenient([
+            "rev-parse",
+            "--verify",
+            "-q",
+            &format!("{upstream}^{{commit}}"),
+        ])?;
+        if !tip.is_empty() && !tips.contains(&tip) {
+            tips.push(tip);
+        }
+    }
+    Ok(tips)
 }
 
 /// The branch's upstream ref, and how to write it in a hint. With no upstream (or an upstream ref
