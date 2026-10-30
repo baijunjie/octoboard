@@ -324,22 +324,24 @@ fn relationships(agent: Agent, owns: bool) -> String {
     let mut lines = Vec::new();
     if owns {
         lines.push(format!(
-            "- `{new_session}` starts a session that is yours for its whole life: you instruct it, \
-             archive it when it is done, and reopen it with `{reopen_session}` when it has another \
-             closely related task and room for it. Pass `branches` to hand it branches you are \
-             responsible for. It runs on your own agent unless you choose another, as the next \
-             point says. While `auto_select_account` is on, a left-out account is the one of that \
-             agent whose weekly quota resets soonest and that can still open a session. When none \
-             does, your own account is used only when it is your own agent and can still open a \
-             session; otherwise the account is the project's, else the console's (`{get_project}` \
-             gives it in `effective.accounts`). Name another account only when the user asked \
-             for it, or when it is the way to reach another agent. `title` names it in the \
-             user's language. With automatic selection on and no named agent or account, if \
-             no account of the preferred agent is usable, other installed, added agents are \
-             tried in added order. Within each agent, the weekly pick, inherited account, then \
-             first usable account are tried; no quota reading is still usable. A named agent \
-             limits selection to it; a named account preserves both. Unspecified model and \
-             effort follow the final agent. No approval is needed.",
+            "- `{new_session}` starts a session that is yours for its whole life: you instruct \
+             it, archive it when it is done, and reopen it with `{reopen_session}` when it has \
+             another closely related task and room for it. Pass `branches` to hand it branches \
+             you are responsible for. It runs on your own agent unless you choose another, as the \
+             next point says. While `auto_select_account` is on, a left-out account is the one of \
+             that agent whose weekly quota resets soonest and that can still open a session. When \
+             none does, your own account is used only when it is your own agent and can still \
+             open a session; otherwise the account is the project's, else the console's \
+             (`{get_project}` gives it in `effective.accounts`). Name another account only when \
+             the user asked for it, or when it is the way to reach another agent. `title` names \
+             it in the user's language. With automatic selection on and no named agent or \
+             account, if no account of the preferred agent is usable, other installed, added \
+             agents are tried in added order. Within each agent, the weekly pick, inherited \
+             account, then first usable account are tried; no quota reading is still usable. A \
+             named agent limits selection to it; a named account preserves both. If no usable \
+             account is found, an exhausted account of the initial agent that becomes usable \
+             soonest is chosen when one qualifies, and the refusal names it. Unspecified model \
+             and effort follow the final agent. No approval is needed.",
             new_session = tool("new_session"),
             reopen_session = tool("reopen_session"),
             get_project = tool("get_project"),
