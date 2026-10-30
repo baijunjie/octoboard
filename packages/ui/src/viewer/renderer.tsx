@@ -34,9 +34,9 @@ import { separatorLabels } from "./rendererDom";
 // reaches WCAG AA's 4.5:1 on the code background in both appearances.
 const THEMES = { light: CODE_THEMES.light.name, dark: CODE_THEMES.dark.name } as const;
 
-/** The renderer paints inside a shadow root, so its rows need the same fill as their full frame. */
+/** The renderer's shadow root shares the application's monospace stack and its frame's fill. */
 function readingCss(theme: "light" | "dark"): string {
-  return `:host { --diffs-bg: ${CODE_THEMES[theme].background}; }`;
+  return `:host { --diffs-bg: ${CODE_THEMES[theme].background}; --diffs-font-family: var(--font-mono); }`;
 }
 
 const FLUSH_TOP_CSS = "[data-code], [data-diff-type=\"split\"] { padding-top: 0 !important; }";
