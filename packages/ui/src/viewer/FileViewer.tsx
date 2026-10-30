@@ -776,10 +776,10 @@ function ImageSide({
 }): React.ReactElement {
   return (
     <NoticeSlotsProvider>
-      <section aria-label={label} className="flex min-h-0 min-w-0 flex-col gap-1">
+      <section aria-label={label} className="flex min-h-0 min-w-0 flex-col">
         {/* The notices of this side's content stand beside its heading, not in the file's header. The row
             keeps the heading's line height, so a side with marks starts its content where the other side does. */}
-        <div className="flex h-4 min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 items-center gap-1.5 px-3 py-2">
           <h3 className="text-xs font-medium text-app-muted">{label}</h3>
           <NoticeSlotBoxes />
         </div>
@@ -797,10 +797,8 @@ function ImageSide({
 function SideNote({ side }: { side: Exclude<ViewerChangeSide, { state: "out_of_scope" }> }): React.ReactElement {
   const t = useT();
   const message = side.state === "absent" ? t("viewer.change.absent") : t("viewer.change.noContent");
-  // The dashed border, not a centred glyph, is what marks an empty column's extent, so this one
-  // stand-in keeps a shape of its own; its sentence reads in the foreground like every other.
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-separator p-4 text-center text-sm text-foreground">
+    <div className="viewer-checkerboard flex min-h-0 flex-1 items-center justify-center p-4 text-center text-sm text-foreground">
       {message}
     </div>
   );
