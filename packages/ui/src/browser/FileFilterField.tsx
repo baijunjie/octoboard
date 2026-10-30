@@ -5,6 +5,7 @@ import { ButtonContext } from "react-aria-components";
 
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { IconToggle } from "../components/IconToggle";
+import { PaneToolbar } from "../components/PaneToolbar";
 import { StatusMark } from "../components/StatusMark";
 import { useFocusHandoff } from "../components/useFocusHandoff";
 import { useT } from "../i18n/react";
@@ -85,7 +86,7 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
   return (
     <div className="contents" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
       {state.filterOpen && (
-        <div className="flex shrink-0 items-center gap-2 groove-b px-(--pane-inset) py-2" onKeyDownCapture={guardComposition} onBlur={onBlur}>
+        <PaneToolbar onKeyDownCapture={guardComposition} onBlur={onBlur}>
           <SearchField aria-label={label} value={state.filter} onChange={state.onFilterChange} fullWidth variant="secondary" className="min-w-0 flex-1">
             <SearchField.Group>
               <SearchField.SearchIcon />
@@ -113,7 +114,7 @@ export function FileFilterField({ state, label, placeholder, contextKey, ignored
               {state.includeIgnored ? <FileSearch aria-hidden="true" className="size-4" /> : <FileX aria-hidden="true" className="size-4" />}
             </IconToggle>
           )}
-        </div>
+        </PaneToolbar>
       )}
     </div>
   );

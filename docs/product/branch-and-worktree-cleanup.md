@@ -95,12 +95,16 @@ The confirmations for archiving a session, deleting one archived session and del
 each look up what is bound to the whole scope when they open. Their Confirm button shows as pending, and cannot be
 pressed, until the answer arrives. An inspection that fails counts as finding nothing to force.
 
-Each choice the confirmation offers is a plain block of its own, never inside an alert: a checkbox, unchecked by
-default, whose label names what it removes and how many; a short hint; and under them a **Details** disclosure,
-collapsed by default and left as the user sets it while it is shown, over the items it covers grouped by what keeps
-them, each group led by one line saying so (that these worktrees have uncommitted changes, say) over the names.
-Expanded, those groups sit together on a light grey panel, set apart from the option's label and hint. A worktree is
-named by its path, with the home directory written as `~`, and the branch it has checked out (or that its `HEAD` is
+An archive also inspects background processes and offers separate stop or keep choices; these do not keep any branch
+or worktree (see "Processes in an archive confirmation" in `docs/product/background-processes.md`). When an archive's
+scope changes, its confirmation inspects that scope again before it can be confirmed.
+
+Each branch or worktree choice the confirmation offers is a plain block of its own, never inside an alert: a checkbox,
+unchecked by default, whose label names what it removes and how many; a short hint; and under them a **Details**
+disclosure, collapsed by default and left as the user sets it while it is shown, over the items it covers grouped by
+what keeps them, each group led by one line saying so (that these worktrees have uncommitted changes, say) over the
+names. Expanded, those groups sit together on a light grey panel, set apart from the option's label and hint. A worktree
+is named by its path, with the home directory written as `~`, and the branch it has checked out (or that its `HEAD` is
 detached); a branch by its name. Paths and branch names are plain monospace text. Each worktree shows a folder glyph
 before its path, then a branch glyph and branch name on a separate line below it. The glyphs share a column, as do the
 path and branch text; wrapped paths and branch names keep their text indentation. A detached `HEAD` note occupies the
@@ -115,13 +119,16 @@ line below the path, aligned with the path text.
   be recovered. Checked, they are removed past the lock (`git worktree remove` forced twice); the branch one had
   checked out then follows the branch rules above.
 - Neither block is shown while it has nothing to cover.
-- **What a ticked option does is said in the confirmation's consequences**, plain body text below its options and above
-  its buttons, never inside an alert (the confirmation is a warning modal; see "Destructive confirmations" in
-  `docs/product/dialogs.md`). A first line summarizes the sessions archived or deleted along with the session, or how
-  many are deleted along with all the archived sessions, and the list of those sessions, where there is one, follows it.
-  Each option ticked adds a line after the list: that it also permanently deletes that many worktrees and branches Git
-  keeps, or that many locked worktrees, uncommitted changes included. A confirmation with nothing else taken along has
-  no consequences until the first tick, which adds its line; the line goes again when the last option is unticked.
+- **What a ticked option does is said in plain body text**, never inside an alert (the confirmation is a warning modal;
+  see "Destructive confirmations" in `docs/product/dialogs.md`). Each option ticked adds a line: that it also
+  permanently deletes that many worktrees and branches Git keeps, or that many locked worktrees, uncommitted changes
+  included; the line goes again when the option is unticked. In the archive confirmation these lines come right under
+  the options, in its **Worktrees and branches** section, and the sessions archived along are a section of their own
+  (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). In a deletion's
+  confirmation they are its consequences, below its options and above its buttons: a first line summarizes the sessions
+  deleted along with the session, or how many are deleted along with all the archived sessions, the list of those
+  sessions, where there is one, follows it, and the lines of the ticked options come after the list. A deletion's
+  confirmation with nothing else taken along has no consequences until the first tick.
 - **How a ticked option changes the confirm button** — its label, and for archiving its danger colour — is set in "What
   a confirmation's confirm button names" in `docs/product/dialogs.md`.
 - **A choice holds for the list it was made over.** A list that changes while the confirmation is open — a session
@@ -295,17 +302,17 @@ as a plain block of their own, as in "The confirmation" above: the checkbox **Al
 Trash (n)**, its hint, saying they go despite their locks and can be recovered from the Trash, and a Details disclosure
 over them. A branch a locked worktree has checked out is counted among what goes only while that box is checked.
 
-In the confirmation's consequences, after the options (see `docs/product/removing-projects.md` for the running
-sessions listed there, and "The confirmation" above for how the consequences hold their list and lines), a line appears
-while the Trash option is ticked for each kind of item that goes — that it also moves that many worktrees outside the
-folder to the Trash, and that it also permanently deletes that many branches of the project's sessions — and, while the
-locked box is checked, that it also moves that many locked worktrees to the Trash, uncommitted changes included. When
-the lookup fails, no line is added: an amber warning mark named that the other worktrees are unknown follows the Trash
-option's label instead, its popover saying that worktrees of the repository outside the project folder may be moved to
-the Trash with it, and its branches deleted permanently; it appears without being announced. A removal that would be
-refused (see "Moving the project folder to the Trash" in `docs/product/removing-projects.md`), whether as protected,
-as shared, or as a failed move because a folder it depends on could not be looked at or did not answer in time, lists
-nothing, adds no line and shows no unknown mark; confirming it shows the refusal.
+In the confirmation's **Project folder** section, under the options (see `docs/product/removing-projects.md` for the
+confirmation's other sections), a line appears while the Trash option is ticked for each kind of item that goes — that
+it also moves that many worktrees outside the folder to the Trash, and that it also permanently deletes that many
+branches of the project's sessions — and, while the locked box is checked, that it also moves that many locked worktrees
+to the Trash, uncommitted changes included. When the lookup fails, no line is added: an amber warning mark named that
+the other worktrees are unknown follows the Trash option's label instead, its popover saying that worktrees of the
+repository outside the project folder may be moved to the Trash with it, and its branches deleted permanently; it
+appears without being announced. A removal that would be refused (see "Moving the project folder to the Trash" in
+`docs/product/removing-projects.md`), whether as protected, as shared, or as a failed move because a folder it depends
+on could not be looked at or did not answer in time, lists nothing, adds no line and shows no unknown mark; confirming
+it shows the refusal.
 
 **What goes is worked out again when the removal is made**, while the folder is still there, so what changed after the
 confirmation listed it is taken into account — except that a worktree the confirmation's latest lookup held back

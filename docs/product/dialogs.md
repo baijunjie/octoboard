@@ -82,11 +82,11 @@ is ticked:
   options leave it as it is — moving the project folder to the Trash, and the locked worktrees with it — since the
   message then says the folder goes.
 
-What a ticked option adds is said in the confirmation's message and its consequences, not on the button. While the
-action runs, the button either shows as pending under its label or shows one in-progress text naming the single step
-underway — never several actions combined, and never chosen by an option. Archiving a session, deleting a session,
-deleting all archived sessions and removing a project show as pending under their label; restoring a project's file
-changes shows that it is restoring, and switching a session's account that it is switching account.
+What a ticked option adds is said in the confirmation's message and in the lines under its options, not on the button.
+While the action runs, the button either shows as pending under its label or shows one in-progress text naming the
+single step underway — never several actions combined, and never chosen by an option. Archiving a session, deleting a
+session, deleting all archived sessions and removing a project show as pending under their label; restoring a project's
+file changes shows that it is restoring, and switching a session's account that it is switching account.
 
 ## Where keyboard focus starts in a form dialog
 

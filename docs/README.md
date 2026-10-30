@@ -20,6 +20,11 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Session history](product/session-history.md) — the read-only history shown for an archived session.
 - [Archiving and resuming sessions](product/archiving-and-resuming-sessions.md) — how archiving or an interruption ends
   a session's process and how a dormant session comes back.
+- [Background processes](product/background-processes.md) — processes started by agents, automatic cleanup, keeping
+  processes running, carrying them over on a handoff, account switch, model change or change of an account's sharing,
+  moving them between sessions, project processes and process choices when archiving.
+- [Processes panel](product/processes-panel.md) — the right pane's Processes panel: the session filter, project
+  processes, a process's card, Stop and Keep.
 - [Resuming a conversation by its session ID](product/resuming-a-conversation-by-its-session-id.md) — opening a
   project session on an existing conversation found by its ID.
 - [Deleting sessions](product/deleting-sessions.md) — deleting a session for good rather than archiving it.

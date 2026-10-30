@@ -1,7 +1,7 @@
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "./isolate";
-import { joinPhrases } from "./joinPhrases";
+import { joinPhrases, joinValues } from "./joinPhrases";
 
 it.each([
   ["落后 1 个提交", `Git 错误：${isolate("原文Git error")}`, `落后 1 个提交和 Git 错误：${isolate("原文Git error")}`],
@@ -33,4 +33,9 @@ it("keeps punctuation separators and English lists in the runtime's own format",
   onTestFinished(() => parts.mockRestore());
   expect(joinPhrases("zh-Hans", phrases)).toBe("分支 main、落后 1 个提交、Git 错误：fetch failed");
   expect(joinPhrases("en", ["Branch main", "1 commit behind", "Git error: fetch failed"])).toBe("Branch main, 1 commit behind, Git error: fetch failed");
+});
+
+it("joins values inside a phrase with the language's word, which the phrases around them do not use", () => {
+  expect(joinValues("en", ["3000", "5173"])).toBe("3000 and 5173");
+  expect(joinPhrases("en", ["3000", "5173"])).toBe("3000, 5173");
 });

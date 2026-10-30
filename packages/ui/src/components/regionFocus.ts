@@ -172,3 +172,9 @@ export function handFocusToRegionStart(region: Region): void {
     if (document.activeElement === document.body) focusAfterLoss(() => focusFirstIn(region));
   });
 }
+
+/** Whether focus has fallen to the page, as it does when the element holding it goes. */
+export function focusFellToPage(): boolean {
+  const active = document.activeElement;
+  return !active || active === document.body;
+}

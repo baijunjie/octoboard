@@ -1912,6 +1912,11 @@ pub enum RequestBody {
         /// listed: one left in that state is not reported. Absent means none.
         #[serde(default)]
         keep: Vec<SessionBranchTarget>,
+        /// The ids of process trees (see `ProcessTree`) the confirmation listed and the user chose
+        /// to keep running: they are made the user's before the processes are ended, and never
+        /// stopped by the daemon. Absent means none.
+        #[serde(default)]
+        keep_process_ids: Vec<String>,
     },
     /// Moves a session to another account of its own agent: ends its process, copies its
     /// conversation record into the target account's directory, records the account on the
@@ -1981,6 +1986,26 @@ pub enum RequestBody {
     /// or a deletion of them would find them now. See `branch_origin::cleanup`.
     InspectSessionBranches {
         sessions: Vec<String>,
+        /// Also answer with the process trees of these sessions that an archive would stop and
+        /// that have run long enough to ask about (`crate::process_requests::ASK_AFTER`).
+        #[serde(default)]
+        processes: bool,
+    },
+    /// The process trees a session's launch started, or those of every running session of a
+    /// project plus the project's leftovers. See `crate::process_requests`.
+    ListProcesses {
+        #[serde(flatten)]
+        target: ProcessTarget,
+    },
+    /// Stops the process trees `ids` name that the ledger still attributes (or still counts as a
+    /// leftover). See `crate::process_requests`.
+    StopProcesses {
+        ids: Vec<String>,
+    },
+    /// Makes the process trees `ids` name the user's: never listed or stopped by the daemon again.
+    /// See `crate::process_requests`.
+    KeepProcesses {
+        ids: Vec<String>,
     },
     /// Removes Octoboard's record of one session, archived or never used. A session that is not
     /// archived is deleted only while it has had no turn and nothing is bound to it or from it, and
@@ -2395,6 +2420,16 @@ pub struct HistoryMessage {
     pub at: Option<i64>,
 }
 
+/// What a `list_processes` asks about: one session, or one project.
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum ProcessTarget {
+    /// The trees of the session's current launch.
+    Session { session_id: String },
+    /// The trees of every running session of the project, and the project's leftovers.
+    Project { project_id: String },
+}
+
 /// A git branch or a linked worktree bound to a session: a branch whose responsible session it
 /// is, or a linked worktree with such a branch checked out. What `inspect_session_branches`
 /// reports, and what an archive or a deletion leaves behind. A project's removal also takes
@@ -2542,10 +2577,28 @@ pub enum Event {
     SessionBranchesInspected {
         id: Option<String>,
         items: Vec<SessionBranchItem>,
+        /// Only for an `inspect_session_branches` that asked for `processes`.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        processes: Vec<crate::process_ledger::ProcessTree>,
+    },
+    ProcessesListed {
+        id: Option<String>,
+        trees: Vec<crate::process_ledger::ProcessTree>,
+    },
+    ProcessesStopped {
+        id: Option<String>,
+        ids: Vec<String>,
+    },
+    ProcessesKept {
+        id: Option<String>,
+        ids: Vec<String>,
     },
     ProjectRemovalInspected {
         id: Option<String>,
         items: Vec<SessionBranchItem>,
+        /// The project's processes, the trees no session owns (left behind in it, or kept under
+        /// it), which its removal stops, whether or not the folder goes.
+        processes: Vec<crate::process_ledger::ProcessTree>,
         /// The token the worktrees it held back are kept under, for `delete_project` to send back
         /// (`crate::branch_origin::cleanup::project`); absent when it held none back.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -4107,6 +4160,32 @@ mod tests {
             } => assert!(detect_default_agent),
             _ => panic!("not add_project"),
         }
+    }
+
+    /// `list_processes` names a session or a project by its own field, and the envelope's `id`
+    /// stays the request's.
+    #[test]
+    fn list_processes_reads_a_session_or_a_project() {
+        let session = serde_json::from_str::<Request>(
+            r#"{"type":"list_processes","id":"r1","session_id":"s"}"#,
+        )
+        .unwrap();
+        assert_eq!(session.id.as_deref(), Some("r1"));
+        assert!(matches!(
+            session.body,
+            RequestBody::ListProcesses {
+                target: super::ProcessTarget::Session { session_id }
+            } if session_id == "s"
+        ));
+        assert!(matches!(
+            serde_json::from_str::<Request>(r#"{"type":"list_processes","project_id":"p"}"#)
+                .unwrap()
+                .body,
+            RequestBody::ListProcesses {
+                target: super::ProcessTarget::Project { project_id }
+            } if project_id == "p"
+        ));
+        assert!(serde_json::from_str::<Request>(r#"{"type":"list_processes"}"#).is_err());
     }
 
     /// The bound items a request forces or keeps arrive with the state they were shown in, and

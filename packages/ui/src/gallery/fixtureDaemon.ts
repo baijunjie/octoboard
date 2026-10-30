@@ -5,7 +5,7 @@ import { daemonMessage } from "../daemonMessage";
 import { noticeErrorPresentation, noticeKind } from "../errorPresentation";
 import { FOLLOWING_GIT_WORKFLOW } from "../gitWorkflow";
 import { currentLanguage, t } from "../i18n/language";
-import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
+import { CONSOLE_SESSION_COLOURS, DEFAULT_ACCOUNT_NAME, isLive, scopeCause, type Account, type AccountLogin, type AccountSharing, type Agent, type ConsoleSessionColour, type BrowseEntry, type Console, type DirEntry, type Event, type PathLinkKind, type PathLinkView, type ProcessTree, type Project, type QuotaWindow, type RequestBody, type Session, type SharingCause, type SessionRecordsPresence, type ShellTerminal, type GitWorkflowOverride, type GitWorkflowOverrideChanges, type SourceUnavailableCause } from "../protocol";
 import { hasClaudeCompatibility } from "../settings/claudeCompatibility";
 import { accountQuotaOf } from "../quota/accountQuotaOf";
 import { exhaustedQuotaWindow, isNotLoggedIn } from "../quota/quotaFormat";
@@ -51,6 +51,14 @@ const LOGIN_FAILURE_DETAIL = [
   "    authorization endpoint rejected the device code",
   "    /Users/dev/.claude-work/مرحبا/credentials.json: permission denied",
 ].join("\n");
+
+/** How long a tree's top process must have run before an archive's inspection lists it: what started a moment ago is
+ * a command still finishing (the daemon's `ASK_AFTER`, repeated here as the fixture stands on the daemon's side). */
+const PROCESS_ASK_AFTER_MS = 30_000;
+
+/** How long after its first `list_processes` the fixture daemon starts answering with a scenario's `listLater`: past
+ * the moments a dialog asks twice while it mounts (StrictMode), before its next poll. */
+const LIST_LATER_AFTER_MS = 1000;
 
 /** The names the real daemon's file name search skips at every depth, with everything beneath them:
  * Git's metadata and the files an operating system leaves in a folder, matched ignoring ASCII case
@@ -284,6 +292,40 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
 
   const restoredFiles = new Map<string, FixtureFiles>();
   const restoredGit = new Map<string, ReturnType<typeof createGitReplies>>();
+  // The process ledger. A tree of a launch being followed is listed while its session runs; stopping one takes it out
+  // of what the daemon follows, as the real ledger does, and so does the end of its session. Keeping one moves it to
+  // its project's processes, marked kept, which no session stops and which stay listed.
+  let followed = [...(scenario.processes?.trees ?? [])];
+  const projectProcesses = new Map(Object.entries(scenario.processes?.projectProcesses ?? {}).map(([project, trees]) => [project, [...trees]]));
+  const hasProcess = (session: string) => {
+    const record = store.getState().sessions.get(session);
+    return record !== undefined && isLive(record.status);
+  };
+  const oldestFirst = <T extends ProcessTree>(trees: T[]): T[] => [...trees].sort((a, b) => a.started_at - b.started_at);
+  const treesOfSession = (session: string): ProcessTree[] => (hasProcess(session) ? oldestFirst(followed.filter((tree) => tree.session_id === session)) : []);
+  // Stopping a tree names it by its id and takes it from the ledger when it still qualifies: a followed launch's of a
+  // session that runs, or a project process.
+  const stopTrees = (ids: string[]): string[] => {
+    const taken = [
+      ...followed.filter((tree) => ids.includes(tree.id) && hasProcess(tree.session_id)).map((tree) => tree.id),
+      ...[...projectProcesses.values()].flat().filter((tree) => ids.includes(tree.id)).map((tree) => tree.id),
+    ];
+    followed = followed.filter((tree) => !taken.includes(tree.id));
+    for (const [project, trees] of projectProcesses) projectProcesses.set(project, trees.filter((tree) => !taken.includes(tree.id)));
+    return taken;
+  };
+  // Keeping applies to a followed launch's tree of a session that runs in a project: a console session keeps nothing,
+  // and a project process is already beyond every session.
+  const keepTrees = (ids: string[]): string[] => {
+    const kept = followed.flatMap((tree) => {
+      const project = store.getState().sessions.get(tree.session_id)?.project_id;
+      return ids.includes(tree.id) && hasProcess(tree.session_id) && typeof project === "string" ? [{ project, tree }] : [];
+    });
+    followed = followed.filter((tree) => !kept.some((entry) => entry.tree === tree));
+    for (const { project, tree: { session_id: _session, ...rest } } of kept) projectProcesses.set(project, [...(projectProcesses.get(project) ?? []), { ...rest, kept: true }]);
+    return kept.map(({ tree }) => tree.id);
+  };
+  let firstListedAt: number | undefined;
   const projectFiles = (project: string) => restoredFiles.get(project) ?? scenario.filesByProject?.[project] ?? scenario.files ?? SAMPLE_FILES;
   const git = scenario.git === undefined ? SAMPLE_GIT : scenario.git;
   /** The absolute spelling of a path the terminal showed: as given when absolute or home-relative, else under the asking project's folder. */
@@ -436,6 +478,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const current = store.getState();
           const session = current.sessions.get(body.session);
           if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: "Unknown session" });
+          // The trees the user chose to keep are theirs before anything else happens, so a refusal leaves them kept.
+          keepTrees(body.keep_process_ids ?? []);
           if (scenario.sessionArchiveError) return fail(scenario.sessionArchiveError);
           // Match coordinator::team over the valid fixture hierarchy: owners reach two levels.
           const childrenOf = (owner: Session) => [...current.sessions.values()].filter((child) => child.bound_to === owner.id);
@@ -447,6 +491,9 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           const ended_at = Date.now();
           for (const record of [...descendants, session]) sessions.set(record.id, { ...record, status: "archived", ended_at });
           store.setState({ sessions });
+          // The processes of the sessions archived end with them.
+          const ended = new Set([...descendants, session].map((record) => record.id));
+          followed = followed.filter((tree) => !ended.has(tree.session_id));
           return { type: "ack" };
         }
         case "resume_session": {
@@ -1161,13 +1208,45 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           if (scenario.sessionBranches && !Array.isArray(scenario.sessionBranches)) return fail(scenario.sessionBranches);
           const sessions = store.getState().sessions;
           const asked = new Set(body.sessions.filter((id) => sessions.has(id)));
-          return { type: "session_branches_inspected", items: (scenario.sessionBranches ?? []).filter((item) => item.session !== null && asked.has(item.session)) };
+          const items = (scenario.sessionBranches ?? []).filter((item) => item.session !== null && asked.has(item.session));
+          if (!body.processes) return { type: "session_branches_inspected", items };
+          const oldest = Date.now() - PROCESS_ASK_AFTER_MS;
+          const processes = oldestFirst([...asked].flatMap(treesOfSession)).filter((tree) => tree.started_at <= oldest);
+          return { type: "session_branches_inspected", items, ...(processes.length > 0 ? { processes } : {}) };
+        }
+        case "list_processes": {
+          if (scenario.processes?.list === "pending") return new Promise<Event>(() => {});
+          if (scenario.processes?.list) return fail(scenario.processes.list);
+          firstListedAt ??= Date.now();
+          if (scenario.processes?.listLater && Date.now() - firstListedAt >= LIST_LATER_AFTER_MS) return fail(scenario.processes.listLater);
+          if ("session_id" in body) {
+            if (!store.getState().sessions.has(body.session_id)) return fail({ code: "unknown_session", params: { session: body.session_id }, message: `unknown session ${body.session_id}` });
+            if (!hasProcess(body.session_id)) return fail({ code: "session_not_running", params: { session: body.session_id }, message: `session ${body.session_id} has no running process` });
+            return { type: "processes_listed", trees: treesOfSession(body.session_id) };
+          }
+          refuseUnknownProject(body.project_id);
+          const refused = scenario.processes?.projectList?.[body.project_id];
+          if (refused) return fail(refused);
+          const running = [...store.getState().sessions.values()].filter((session) => session.project_id === body.project_id && hasProcess(session.id));
+          return { type: "processes_listed", trees: [...running.flatMap((session) => treesOfSession(session.id)), ...oldestFirst(projectProcesses.get(body.project_id) ?? [])] };
+        }
+        case "stop_processes": {
+          if (scenario.processes?.stop === "pending") return new Promise<Event>(() => {});
+          if (scenario.processes?.stop) return fail(scenario.processes.stop);
+          return { type: "processes_stopped", ids: stopTrees(body.ids) };
+        }
+        case "keep_processes": {
+          if (scenario.processes?.keep === "pending") return new Promise<Event>(() => {});
+          if (scenario.processes?.keep) return fail(scenario.processes.keep);
+          return { type: "processes_kept", ids: keepTrees(body.ids) };
         }
         case "inspect_project_removal": {
           refuseUnknownProject(body.project);
           const found = scenario.projectRemovalBranches?.[body.project] ?? [];
           if ("code" in found) return fail(found);
-          return Array.isArray(found) ? { type: "project_removal_inspected", items: found } : { type: "project_removal_inspected", ...found };
+          // The project's processes its removal stops, whatever it was asked to remove with them.
+          const processes = oldestFirst(projectProcesses.get(body.project) ?? []);
+          return Array.isArray(found) ? { type: "project_removal_inspected", items: found, processes } : { type: "project_removal_inspected", ...found, processes };
         }
         case "delete_session": {
           const all = [...store.getState().sessions.values()];

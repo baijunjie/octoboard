@@ -3,7 +3,7 @@ import type { Agent, AgentAvailability, RelocationCause, Settings } from "../../
 import { describing, type Ui } from "../interact";
 import type { Scenario, Step } from "../scenario";
 import type { FixtureError } from "./projectFiles";
-import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "./builders";
+import { ALL_AGENTS, SAMPLE, branchItemOf, consoleOf, keptOf, leftoverOf, minutesAgo, processTreeOf, projectOf, sessionOf, snapshotState, switchingAccount, unknownFolderWorktreeOf, worktreeItemOf } from "./builders";
 import { agentAvailability } from "./liveChanges";
 import { SAMPLE_CODEX_MODELS } from "./agentModels";
 import { IMAGES } from "./viewerImages";
@@ -553,13 +553,16 @@ const submitCodexSwitch = [
   (ui: Ui) => ui.confirm(),
 ];
 
+/** The refusal of a project's process list, as the daemon answers when it cannot read the process table. */
+const PROJECT_LIST_FAILED: FixtureError = { code: "internal_error", params: { detail: "the process table could not be read" }, message: "the process table could not be read" };
+
 const removeProjectTrash: Scenario = {
   ...dialogFixture,
   id: "dialog-remove-project-trash",
   group: "Projects",
   category: "normal",
   title: "Remove project and move its folder to the Trash",
-  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, consequence lines have appeared because the Trash option is checked: with no sessions to list they stand as plain text, one for the worktrees moved to the Trash and one for the branches deleted permanently.",
+  description: "The Trash option is checked: the message and the hint under the option say the folder goes too, while the confirming button still reads \"Remove\". With no sessions or processes to list, \"Project folder\" is the only section and carries a heading of its own. Under the option, the disclosure \"What goes with it (4)\" is closed, and the locked-worktree option \"Also move the locked worktrees to the Trash (4)\" follows as a plain block, unchecked, with its own closed Details. Under the options, consequence lines have appeared because the Trash option is checked: with no sessions to list they stand as plain text, one for the worktrees moved to the Trash and one for the branches deleted permanently.",
   state: removalState,
   projectRemovalBranches: {
     [tagged[0].id]: [
@@ -583,7 +586,7 @@ const archiveConsoleSession: Scenario = {
   group: "Archive view",
   category: "normal",
   title: "Archive console session and its bound sessions",
-  description: "The confirmation offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\". Under them the plain line \"3 sessions under it are archived with it. Their processes end.\" heads the list of the running manually bound session, the waiting lead and its interrupted child. The header carries a warning icon and the plain title Archive session, and the body's first sentence names the session. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
+  description: "Under the message the dialog is in two sections with a groove between them, each a headed group. \"Archived with it (3)\" lists the running manually bound session, the waiting lead and its interrupted child. \"Worktrees and branches\" offers two plain options, unchecked, each a checkbox with its count in the label, a short note and a closed Details disclosure: \"Also force-remove the worktrees and branches Git keeps (5)\" and \"Also delete the locked worktree\"; no consequence line yet, as nothing is ticked. No section for processes, since none were started. The header carries a warning icon and the plain title Archive session, and the body's first sentence names the session. Confirming stops and archives all of them together. The confirming button reads \"Archive\" in the normal colour until a deletion option is ticked.",
   sessionBranches: [
     worktreeItemOf(web, hubSessions.web, "feat/changelog-tidy", "/Users/dev/worktrees/website-changelog-tidy"),
     worktreeItemOf(web, hubSessions.web, null, "/Users/dev/worktrees/website-changelog-scratch"),
@@ -597,6 +600,25 @@ const archiveConsoleSession: Scenario = {
     (ui) => ui.press(ui.t("sidebar.session.archive")),
   ],
 };
+
+// The processes the Hub 4 archive would stop, one or more for the hub and each running session under it (the
+// interrupted one has none). The second tree's command is empty: the daemon could not read it.
+const hubTrees = [
+  processTreeOf("500:1", cascadeHub, "caddy run --config /Users/dev/Caddyfile --watch", 180, { cwd: "/Users/dev", process_count: 2, memory_bytes: 64_000_000, ports: [2019, 8443] }),
+  processTreeOf("501:1", hubSessions.web, "", 25, { process_count: 2, memory_bytes: 88_000_000 }),
+  processTreeOf("502:1", hubSessions.api, "cargo watch -x check -x test", 50, { cwd: "/Users/dev/code/search-api", process_count: 8, memory_bytes: 540_000_000 }),
+];
+
+// An idle session sitting at its prompt after its turn, with the dev server and the watchers it started still
+// running: nothing else keeps its archive from going through at once.
+const serving = sessionOf("s-web-serving", console_.id, web.id, "Preview the release build", "idle");
+const servingState = snapshotState({ consoles: [console_], projects: [web], sessions: [serving] });
+// The dev server's command is long enough to be cut at the end of its one-line label.
+const servingTrees = [
+  processTreeOf("510:1", serving, "node /Users/dev/code/website/node_modules/.bin/vite --host 0.0.0.0 --port 5173 --config /Users/dev/code/website/vite.config.ts --mode development --clearScreen false --logLevel info", 95, { process_count: 4, memory_bytes: 310_000_000, ports: [5173] }),
+  processTreeOf("511:1", serving, "vitest --watch --reporter=dot", 40, { process_count: 3, memory_bytes: 150_000_000 }),
+  processTreeOf("512:1", serving, "python3 -m http.server 8000", 12, { cwd: "/Users/dev/code/website/dist", memory_bytes: 18_000_000, ports: [8000] }),
+];
 
 // An idle session whose turn ended with a dev server still running, beside one sitting at its prompt
 // with nothing left running, which archives without asking.
@@ -918,6 +940,42 @@ export const dialogScenarios: Scenario[] = [
   },
   {
     ...dialogFixture,
+    id: "dialog-delete-console-processes",
+    group: "Consoles",
+    category: "normal",
+    title: "Delete console with project processes",
+    description: "The confirmation gains a Project processes section under the message, with no groove above it: one plain row for each process no session owns, across every project of the console (the kept one and the two left behind in a deleted directory under Docs Site, the one under Billing Service), each with the stop glyph and a Details disclosure, ending with the line \"4 processes are stopped.\". The section is absent when no project of the console has any (Delete console confirmation).",
+    processes: {
+      projectProcesses: {
+        [tagged[0].id]: [keptOf("610:1", "node scripts/serve-docs.mjs --port 4000", 300, { ports: [4000] }), leftoverOf("611:1", "vite --port 5180", 600), leftoverOf("612:1", "esbuild --service=0.21.5 --ping", 610)],
+        [tagged[1].id]: [keptOf("613:1", "cargo watch -x check", 120, { cwd: "/Users/dev/code/billing" })],
+      },
+    },
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.delete")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-delete-console-processes-partial",
+    group: "Consoles",
+    category: "exceptional",
+    title: "Delete console, one project's processes could not be listed",
+    description: "The Project processes section holds a warning Alert titled \"Could not list all the project processes\", saying any that are running will still be stopped, with a Details disclosure for the daemon's own text, and under it the rows of the project whose list was read (the kept one and the two left behind in a deleted directory under Docs Site), each with the stop glyph and a Details disclosure. No \"processes are stopped\" line ends the section, since a count of only those rows would read as the total.",
+    processes: {
+      projectProcesses: {
+        [tagged[0].id]: [keptOf("620:1", "node scripts/serve-docs.mjs --port 4000", 300, { ports: [4000] }), leftoverOf("621:1", "vite --port 5180", 600), leftoverOf("622:1", "esbuild --service=0.21.5 --ping", 610)],
+      },
+      projectList: { [tagged[1].id]: PROJECT_LIST_FAILED },
+    },
+    steps: [
+      consoleActions,
+      (ui) => ui.press(ui.t("sidebar.console.delete")),
+    ],
+  },
+  {
+    ...dialogFixture,
     id: "dialog-add-project",
     group: "Projects",
     category: "normal",
@@ -1198,9 +1256,23 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Remove project with running sessions",
-    description: "A warning modal (warning icon in the header, the plain title Remove project, the project named in the first sentence of the body). As first opened the Trash option is unchecked, and the confirming button reads \"End and remove\" because sessions are running. Under the option the plain line \"4 sessions are still running and will be ended\" heads the list of them. Default, named and removed-directory account cases coexist in the running-sessions list; hover each agent mark.",
+    description: "A warning modal (warning icon in the header, the plain title Remove project, the project named in the first sentence of the body). The confirming button reads \"End and remove\" because sessions are running. Three sections stand under the message, divided by grooves: \"Sessions that will be ended (4)\" lists the running sessions, where default, named and removed-directory account cases coexist (hover each agent mark); \"Project folder\" holds the Trash option, unchecked as first opened, with no consequence line yet; \"Project processes\" shows one plain row for each process no session owns (one kept, two left behind in a deleted directory), each with the stop glyph and a Details disclosure, and ends with the line \"3 processes are stopped.\".",
+    processes: { projectProcesses: { [web.id]: [keptOf("600:1", "node scripts/serve-docs.mjs --port 4000", 300, { ports: [4000] }), leftoverOf("601:1", "vite --port 5180", 600), leftoverOf("602:1", "esbuild --service=0.21.5 --ping", 610)] } },
     steps: [
       (ui) => projectActions(ui, web.name),
+      (ui) => ui.press(ui.t("sidebar.project.remove")),
+    ],
+  },
+  {
+    ...dialogFixture,
+    id: "dialog-remove-project-processes-failed",
+    group: "Projects",
+    category: "exceptional",
+    title: "Remove project, its processes could not be listed",
+    description: "With no sessions or rows to list, \"Project processes\" holds only a warning Alert titled \"Could not list the project processes\", saying any that are running will still be stopped, with a Details disclosure for the daemon's own text, closed here; no row and no \"processes are stopped\" line stand under it. \"Project folder\" stands above it, and Remove stays available.",
+    processes: { projectList: { [tagged[0].id]: PROJECT_LIST_FAILED } },
+    steps: [
+      (ui) => projectActions(ui, tagged[0].name),
       (ui) => ui.press(ui.t("sidebar.project.remove")),
     ],
   },
@@ -1209,7 +1281,7 @@ export const dialogScenarios: Scenario[] = [
     ...removeProjectTrash,
     id: "dialog-remove-project-trash-expanded",
     title: "Remove project to the Trash, lists opened",
-    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The consequence lines under the options include one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. Wrapped paths stay indented to the text column, and detached HEAD notes start in that same column.",
+    description: "Both disclosures are open (What goes with it, Details), and the locked-worktree option is ticked: in the Project folder section, under the Trash option, the worktrees moved to the Trash with the folder (one on a detached HEAD) and the branches deleted permanently; under the locked option, the four locked worktrees in each wording, those with uncommitted changes ending in a soft warning \"uncommitted changes\" badge. The consequence lines under the options include one for the locked worktrees moved to the Trash; the locked worktree's branch, now going with it, joins the branches. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. Wrapped paths stay indented to the text column, and detached HEAD notes start in that same column.",
     steps: [...removeDocsSite, (ui) => ui.press(ui.t("branchCleanup.along", { count: 4 })), (ui) => ui.pressEach(ui.t("branchCleanup.details")), (ui) => ui.press(ui.t("dialog.removeProject.alongLockedRemove", { count: 4 }))],
   },
   {
@@ -1218,7 +1290,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Remove project to the Trash, a worktree stays",
-    description: "The daemon could not tell whether one worktree is or holds another project's folder, so it is held back and stays. Under the Trash option, \"What goes with it (2)\" is closed and counts only the worktree and the branch that go; below it, \"What stays\" is open, and its lead says this worktree stays as whether it is or holds another project's folder could not be checked, over its path and branch with no git text. The consequence lines count only the worktree that goes, and the branch.",
+    description: "The daemon could not tell whether one worktree is or holds another project's folder, so it is held back and stays. In the Project folder section, under the Trash option, \"What goes with it (2)\" is closed and counts only the worktree and the branch that go; below it, still in the Project folder section, \"What stays\" is open, and its lead says this worktree stays as whether it is or holds another project's folder could not be checked, over its path and branch with no git text. The consequence lines count only the worktree that goes, and the branch.",
     projectRemovalBranches: {
       [tagged[0].id]: {
         items: [
@@ -1237,7 +1309,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Remove project to the Trash, only a worktree stays",
-    description: "Nothing goes along except the folder: the only item the daemon found is a worktree held back because whether it is or holds another project's folder could not be told. Under the Trash option there is no \"What goes with it\" and no consequence line; \"What stays\" alone is open, with its lead over that worktree.",
+    description: "Nothing goes along except the folder: the only item the daemon found is a worktree held back because whether it is or holds another project's folder could not be told. In the Project folder section, under the Trash option, there is no \"What goes with it\" and no consequence line; \"What stays\" alone is open, with its lead over that worktree.",
     projectRemovalBranches: {
       [tagged[0].id]: {
         items: [unknownFolderWorktreeOf(tagged[0], null, null, "/Users/dev/worktrees/docs-site-mounted-share")],
@@ -1255,7 +1327,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Remove project to the Trash, what goes along unknown",
-    description: "The Trash option is checked but the daemon could not say what else goes: a warning mark named \"Other worktrees unknown\" sits beside the option's checkbox, after its label and outside it, and its popover, opened here, says that worktrees of the repository outside the project folder may be moved to the Trash with the project and its branches deleted permanently. There is no disclosure, locked-worktree option or loose line, and Confirm stays available.",
+    description: "The Trash option in the Project folder section is checked but the daemon could not say what else goes: a warning mark named \"Other worktrees unknown\" sits beside the option's checkbox, after its label and outside it, and its popover, opened here, says that worktrees of the repository outside the project folder may be moved to the Trash with the project and its branches deleted permanently. There is no disclosure, locked-worktree option or loose line, and Confirm stays available.",
     steps: [...removeDocsSite, (ui) => ui.hoverStatusMark(ui.t("dialog.removeProject.alongUnknownMark"))],
   },
   {
@@ -1273,7 +1345,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder shared with another project",
-    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along. The daemon refuses to move the folder to the Trash; the error shows in the dialog and nothing is changed.",
+    description: "With Trash checked the Project folder section lists nothing and shows no warning about what goes along. The daemon refuses to move the folder to the Trash; the error shows in the dialog and nothing is changed.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
@@ -1290,7 +1362,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder protected from the Trash",
-    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along. The daemon refuses to move a protected folder (the home directory, the root of a disk, or one holding Octoboard's data); a separate error alert names why, and the project is kept.",
+    description: "With Trash checked the Project folder section lists nothing and shows no warning about what goes along. The daemon refuses to move a protected folder (the home directory, the root of a disk, or one holding Octoboard's data); a separate error alert names why, and the project is kept.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
@@ -1314,7 +1386,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder did not respond in time",
-    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not look at the folder, the home folder or its data folder in time, so it refuses to move the folder to the Trash; a separate error alert says the folder could not be checked and the project was kept, then advises trying again once the volume responds or removing the project without moving its folder to the Trash. The daemon's own text (it did not respond in time) is in the Error details disclosure, closed here, and in no sentence.",
+    description: "With Trash checked the Project folder section lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not look at the folder, the home folder or its data folder in time, so it refuses to move the folder to the Trash; a separate error alert says the folder could not be checked and the project was kept, then advises trying again once the volume responds or removing the project without moving its folder to the Trash. The daemon's own text (it did not respond in time) is in the Error details disclosure, closed here, and in no sentence.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   {
@@ -1324,7 +1396,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Projects",
     category: "exceptional",
     title: "Project folder could not be read",
-    description: "With Trash checked the dialog lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not read the project's own folder, so it refuses to move it to the Trash; a separate error alert says the folder could not be read and the project was kept, then advises checking the folder's permissions and granting access in the system's privacy settings, or removing the project without moving its folder to the Trash. The daemon's own text (it could not be read) is in the Error details disclosure, closed here, and in no sentence.",
+    description: "With Trash checked the Project folder section lists nothing and shows no warning about what goes along, no \"Other worktrees unknown\" mark included. The daemon could not read the project's own folder, so it refuses to move it to the Trash; a separate error alert says the folder could not be read and the project was kept, then advises checking the folder's permissions and granting access in the system's privacy settings, or removing the project without moving its folder to the Trash. The daemon's own text (it could not be read) is in the Error details disclosure, closed here, and in no sentence.",
     steps: [...removeDocsSite, (ui) => ui.confirm()],
   },
   archiveConsoleSession,
@@ -1332,12 +1404,24 @@ export const dialogScenarios: Scenario[] = [
     ...archiveConsoleSession,
     id: "dialog-archive-console-session-expanded",
     title: "Archive console session, lists opened",
-    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (including one on a detached HEAD) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. Under the options the affected sessions are listed first and, under them, a consequence line as plain text for each ticked option says it also permanently deletes them. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. The initialized-submodule worktree has a long path and branch name: both wrap within the text column, where detached HEAD notes also start.",
+    description: "Both Details disclosures are open and both options ticked: under the force-remove option, the worktrees with uncommitted changes and with initialized submodules (including one on a detached HEAD) and the unmerged branch, each group under its lead line; under the locked option, the locked worktree with its row ending in a soft warning \"uncommitted changes\" badge. The \"Archived with it (3)\" section keeps the affected sessions, and the consequence lines, one as plain text for each ticked option saying it also permanently deletes them, stand inside the \"Worktrees and branches\" section directly under its options. The confirming button reads \"Archive and delete\" in the danger colour because deletion options are ticked. The opened lists sit on a light grey panel, and each worktree has a folder icon before its path and a branch icon on the line below, with both icon and text columns aligned. The initialized-submodule worktree has a long path and branch name: both wrap within the text column, where detached HEAD notes also start.",
     steps: [
       ...archiveConsoleSession.steps!,
       (ui) => ui.pressEach(ui.t("branchCleanup.details")),
       (ui) => ui.press(ui.t("dialog.sessionBranches.force", { count: 5 })),
       (ui) => ui.press(ui.t("dialog.lockedWorktrees.remove", { count: 1 })),
+    ],
+  },
+  {
+    ...archiveConsoleSession,
+    id: "dialog-archive-console-session-processes",
+    title: "Archive console session, a process kept running beside a branch cleanup",
+    description: "Three sections, set apart by grooves: \"Archived with it (3)\" over the list of sessions; \"Worktrees and branches\" over the two branch options (Details closed) and, directly under them, the line that the ticked option also permanently deletes them; and \"Background processes\", which holds the three processes the hub and the two running sessions under it started. The line \"Selected processes will be stopped. Uncheck any to keep them running.\" leads the two the project sessions started, each a checkbox labelled by its single-line command alone, with overflow fading (hover a cut one for its tooltip); the one whose command the daemon could not read reads \"Unknown command\" instead. Under them, the line \"A console session's processes are always stopped.\" leads the hub's own, Caddy: no checkbox, a plain row with a danger-coloured PlayOff icon and the command, so there is nothing to uncheck. Each has a closed Details disclosure holding the working directory and facts, not the command again; the interrupted session under the hub started none. The project sessions' options start ticked for stopping, with a danger-coloured PlayOff icon when ticked and a success-green Play icon when unticked; here the cargo watch one is unticked to keep it running, the other stays ticked, and the option to force-remove the worktrees and branches Git keeps is ticked. The consequence lines sit in the section of the options they follow: under the branch options, the branch cleanup's own; under the processes, \"2 processes are stopped.\" (Caddy included) and \"The process you keep stays running.\" The confirming button reads \"Archive and delete\" in the danger colour because a deletion option is ticked.",
+    processes: { trees: hubTrees },
+    steps: [
+      ...archiveConsoleSession.steps!,
+      (ui) => ui.press(ui.t("dialog.sessionBranches.force", { count: 5 })),
+      (ui) => ui.press(hubTrees[2].command),
     ],
   },
   {
@@ -1347,7 +1431,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive confirmation while the bound branches are inspected",
-    description: "The list of sessions is shown at once, but Confirm is pending and cannot be pressed until the inspection of bound branches and worktrees answers, so nothing is archived before the user has seen what would be left. The same hold applies to every archive, delete and remove-project confirmation.",
+    description: "Only the message and the \"Archived with it (3)\" section of sessions are shown at once, with no \"Worktrees and branches\" or \"Background processes\" section while the inspection runs, and Confirm is pending and cannot be pressed until the inspection of bound branches and worktrees answers, so nothing is archived before the user has seen what would be left. The same hold applies to every archive, delete and remove-project confirmation.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Hub 4" })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
@@ -1358,7 +1442,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive a session running in the background",
-    description: "The session is idle, yet archiving it asks first, as it does a working one, and the message adds that the work it is running in the background is stopped: Its process ends, and the work it is running in the background is stopped. You can reopen it later. The row behind the dialog shows the pinging hollow green ring, listed below the idle Fix the summary layout; that one, with nothing running, has an Archive shortcut that archives at once, and this one has none.",
+    description: "The session is idle, yet archiving it asks first, as it does a working one, and the message explains that its background work stops and how to continue the conversation: The work it is running in the background is stopped. To continue the conversation, restore the session from the archive. The row behind the dialog shows the pinging hollow green ring, listed below the idle Fix the summary layout; that one, with nothing running, has an Archive shortcut that archives at once, and this one has none.",
     state: backgroundArchiveState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: watcher.title })),
@@ -1366,11 +1450,40 @@ export const dialogScenarios: Scenario[] = [
     ],
   },
   {
+    id: "dialog-archive-session-processes",
+    group: "Archive view",
+    category: "normal",
+    title: "Archive an idle session that left processes running",
+    description: "The session is idle with nothing else to ask about, yet archiving it opens this confirmation instead of archiving at once, because of the three processes it started. Under the message, a single \"Background processes\" section, with no divider and no other section, has the line \"Selected processes will be stopped. Uncheck any to keep them running.\" over them, oldest first, as checkboxes, each labelled by its single-line command alone; the checkboxes start ticked for stopping, and here the first, the dev server, is unticked to keep it running while the other two remain ticked. Its long command stays on one line and fades at the end (hover it for a tooltip with the whole command), and each option has a closed Details disclosure under it, which holds no command. Selected stop options carry a danger-coloured PlayOff icon, while the unchecked option kept running carries a success-green Play icon. Directly under the options in that section, two consequence lines say that \"2 processes are stopped.\" and that \"The process you keep stays running.\" The confirming button reads \"Archive\" in the normal colour.",
+    state: servingState,
+    processes: { trees: servingTrees },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: serving.title })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+      (ui) => ui.press(servingTrees[0].command),
+    ],
+  },
+  {
+    id: "dialog-archive-session-processes-details",
+    group: "Archive view",
+    category: "normal",
+    title: "Archive an idle session, a process's details opened",
+    description: "The Background processes options as in the archive that leaves processes running, with the Details disclosure of the first, unticked dev server open: on a grey panel under its checkbox, the working directory beside a folder icon and the line of facts (memory, the port it listens on, its age and its several processes), without the command repeated; the whole command is only in the tooltip of the checkbox's one-line label, where the line cuts it. The other two options keep Details closed.",
+    state: servingState,
+    processes: { trees: servingTrees },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: serving.title })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+      (ui) => ui.press(servingTrees[0].command),
+      (ui) => ui.press(ui.t("processes.details")),
+    ],
+  },
+  {
     id: "dialog-archive-session-switching",
     group: "Archive view",
     category: "normal",
     title: "Archive a session switching its account",
-    description: "Release coordinator and its bound session are both mid account switch, as the daemon reports it. The body lists the bound session that goes with the archive, its status glyph the muted turning arc of \"Switching account…\" in place of its waiting status, the same as in its own row and the hub's row behind the dialog.",
+    description: "Release coordinator and its bound session are both mid account switch, as the daemon reports it. The \"Archived with it (1)\" section lists the bound session that goes with the archive, its status glyph the muted turning arc of \"Switching account…\" in place of its waiting status, the same as in its own row and the hub's row behind the dialog.",
     state: switchingAccount(switchAccountState, ["s-switch-hub", "s-switch-bound"]),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: "Release coordinator" })),

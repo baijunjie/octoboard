@@ -32,6 +32,7 @@ mod handover;
 mod history;
 mod models;
 mod pages;
+mod process_handover;
 mod project_branches;
 mod project_browse;
 mod project_changes;
@@ -509,6 +510,7 @@ const CONSOLE_SESSION_TOOLS: &[ToolDef] = &[
     REOPEN_SESSION,
     HANDOFF_SESSION,
     HANDOVER_BRANCHES,
+    HANDOVER_PROCESSES,
     SWITCH_SESSION_ACCOUNT,
     SET_SESSION_MODEL,
     TRANSFER_SESSION,
@@ -840,6 +842,52 @@ const HANDOVER_BRANCHES: ToolDef = ToolDef {
                 },
             }),
             &["branches"],
+        )
+    },
+};
+
+/// How an owner moves process trees between sessions, without the user: which session's end
+/// stops them changes, and they keep running.
+const HANDOVER_PROCESSES: ToolDef = ToolDef {
+    name: "handover_processes",
+    description: "Move process trees a session started (a dev server, a preview, a watcher) from \
+                  one session to another, so that they are stopped when the receiving session's \
+                  process ends (its archive, an interrupt, its agent exiting) instead of the \
+                  giving one's; they keep running meanwhile, and nothing else changes. Use it \
+                  before archiving a session whose server another session of yours still needs, \
+                  say. `from` and `to` are each this session or a session of yours (`yours: \
+                  true`); leave either out for this session. Both must have a process running \
+                  and neither may be archived: an archive stops what a session started, and what \
+                  the user kept is the user's. Name the trees by the `id` that `processes` in \
+                  `get_session` gives for `from`; each must be one `from` holds now. A tree no \
+                  session holds (one the user kept, or one left behind in a project) cannot be \
+                  handed to a session. Needs no approval. \
+                  Refused, changing nothing, while `from` is another session that is working, \
+                  starting or waiting for the user. The answer lists the trees moved as `to` now \
+                  holds them; the sessions concerned other than this one are told. A handoff, an \
+                  account switch, a model change and a change of account sharing carry every \
+                  process over by themselves.",
+    schema: || {
+        object_schema(
+            json!({
+                "processes": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "The ids of the process trees to move, as `processes` in \
+                                    `get_session` gives them. Each must be one `from` holds.",
+                },
+                "from": {
+                    "type": "string",
+                    "description": "The session handing the processes over: this session (the \
+                                    default) or a session of yours with a process running.",
+                },
+                "to": {
+                    "type": "string",
+                    "description": "The session taking the processes: this session (the \
+                                    default) or a session of yours with a process running.",
+                },
+            }),
+            &["processes"],
         )
     },
 };
@@ -1394,7 +1442,11 @@ const GET_SESSION: ToolDef = ToolDef {
          interrupted or archived session also has `resumable`, whether its agent still holds the \
          conversation: `true` when it does, and for a session with no conversation yet, `false` \
          when it is proven gone, so that `reopen_session` would refuse it, `null` when that cannot \
-         be told (`reopen_session` goes ahead then). ",
+         be told (`reopen_session` goes ahead then). Always carries `processes`, the process \
+         trees the session started that are still running (a dev server, a preview, a watcher), \
+         each with its `id`, `command`, `cwd`, `ports` and `started_at`: they are stopped when \
+         its process ends, unless `handover_processes` moves them to another session first; an \
+         empty list for a session with no process running. ",
         session_record_fields!(),
         session_context_field!()
     ),
@@ -2117,6 +2169,7 @@ const COORDINATOR_PROJECT_SESSION_TOOLS: &[ToolDef] = &[
     SET_SESSION_PINNED,
     HANDOFF_SESSION,
     HANDOVER_BRANCHES,
+    HANDOVER_PROCESSES,
     SWITCH_SESSION_ACCOUNT,
     SET_SESSION_MODEL,
     TRANSFER_SESSION,
@@ -2620,6 +2673,7 @@ mod tests {
                 "set_session_pinned",
                 "handoff_session",
                 "handover_branches",
+                "handover_processes",
                 "switch_session_account",
                 "set_session_model",
                 "transfer_session",
@@ -2667,6 +2721,7 @@ mod tests {
                 "reopen_session",
                 "handoff_session",
                 "handover_branches",
+                "handover_processes",
                 "switch_session_account",
                 "set_session_model",
                 "transfer_session",

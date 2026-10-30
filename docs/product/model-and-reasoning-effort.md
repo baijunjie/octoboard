@@ -177,9 +177,12 @@ identifying the session and the failed model change.
 The agent and account stay the same. A running session is restarted, keeping its conversation; one with no conversation
 yet starts fresh. It shows as starting throughout the restart in every window and in session reads. A turn the restart
 cuts off, or one stopped by a usage limit, receives a prompt to continue its task; otherwise the session returns
-awaiting instructions. An interrupted session is not started: the choices are recorded for its next resume. The changed
-values become the session's own choices, persisting as described at the top of this document. The user can change a
-session waiting for the user too; restarting it ends the prompt it was showing.
+awaiting instructions. The processes the session's agent left running in the background are carried over to the
+restarted session rather than stopped, as in an account switch, and kept as project processes when the restart fails
+after it ended the process (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). An
+interrupted session is not started: the choices are recorded for its next resume. The changed values become the
+session's own choices, persisting as described at the top of this document. The user can change a session waiting for
+the user too; restarting it ends the prompt it was showing.
 
 A console session or project coordinator changes a session bound to it with **`set_session_model`**, without asking for
 approval. Workers have no such tool, and an owner cannot change an independent session or another owner's session. The

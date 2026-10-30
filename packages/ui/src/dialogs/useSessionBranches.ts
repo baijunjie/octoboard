@@ -3,17 +3,25 @@ import { useEffect, useState } from "react";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation, type ErrorPresentation } from "../errorPresentation";
 import { useT } from "../i18n/react";
-import type { SessionBranchItem, SessionBranchTarget } from "../protocol";
+import type { ProcessTree, SessionBranchItem, SessionBranchTarget } from "../protocol";
 import { useDaemon, type Daemon } from "../store";
 
-/** The git branches and worktrees bound to `sessionIds`, as the daemon finds them now. A failed
- * inspection reads as none: nothing is then forced, and the daemon still removes what can go. */
-export async function inspectSessionBranches(request: Daemon["request"], sessionIds: string[]): Promise<SessionBranchItem[]> {
+/** What an archive or deletion would find in its scope: the bound branches and worktrees, and, when
+ * the inspection asked for them, the process trees an archive would stop (`ProcessTree`). `sessions`
+ * records the inspected scope so an answer is not reused for a different archive scope; `failed`
+ * distinguishes an unavailable inspection from a successful empty list. */
+export type SessionInspection = { sessions: string[]; items: SessionBranchItem[]; processes: ProcessTree[]; failed?: true };
+
+/** The git branches and worktrees bound to `sessionIds`, as the daemon finds them now, and with
+ * `withProcesses` the process trees that have run long enough for an archive to ask about them. A
+ * failed inspection grants no extra branch-removal permission. A caller with a previous process list
+ * can keep its choices for processes that still belong to the inspected scope. */
+export async function inspectSessionBranches(request: Daemon["request"], sessionIds: string[], withProcesses = false): Promise<SessionInspection> {
   try {
-    const result = await request({ type: "inspect_session_branches", sessions: sessionIds });
-    return result.type === "session_branches_inspected" ? result.items : [];
+    const result = await request({ type: "inspect_session_branches", sessions: sessionIds, ...(withProcesses ? { processes: true } : {}) });
+    return result.type === "session_branches_inspected" ? { sessions: sessionIds, items: result.items, processes: result.processes ?? [] } : { sessions: sessionIds, items: [], processes: [], failed: true };
   } catch {
-    return [];
+    return { sessions: sessionIds, items: [], processes: [], failed: true };
   }
 }
 
@@ -50,23 +58,43 @@ export function branchChoices(forced: SessionBranchItem[], kept: SessionBranchIt
 export type Inspected = { items: SessionBranchItem[]; pending: boolean };
 
 /** Inspects the bound branches and worktrees of the whole archive or deletion scope for its
- * confirmation. `initial` is an answer already in hand for this scope, which is not asked again.
+ * confirmation, and with `withProcesses` (an archive's) the process trees it would stop. `initial` is
+ * an answer already in hand; only an exact match of its inspected sessions is reused.
  * When the scope changes, the last answer stands until the new one arrives, and an answer that
- * arrives after a newer question is dropped. */
-export function useSessionBranches(sessionIds: string[], initial?: SessionBranchItem[]): Inspected {
+ * arrives after a newer question is dropped. A failure clears branch-removal choices but retains
+ * previously listed processes that still belong to the scope, so keep choices are not lost. */
+function useInspection(sessionIds: string[], initial: SessionInspection | undefined, withProcesses: boolean): Inspected & Pick<SessionInspection, "processes"> {
   const { request } = useDaemon();
   const key = JSON.stringify([...sessionIds].sort());
-  const [latest, setLatest] = useState<{ key: string; items: SessionBranchItem[] } | undefined>(() => initial && { key, items: initial });
+  const [latest, setLatest] = useState<(SessionInspection & { key: string }) | undefined>(() => initial && { key: JSON.stringify([...initial.sessions].sort()), ...initial });
   const known = latest?.key === key;
   useEffect(() => {
     if (known) return;
     let active = true;
-    void inspectSessionBranches(request, JSON.parse(key) as string[]).then((items) => {
-      if (active) setLatest({ key, items });
+    void inspectSessionBranches(request, JSON.parse(key) as string[], withProcesses).then((inspection) => {
+      if (active) setLatest((current) => ({
+        key,
+        ...inspection,
+        processes: inspection.failed
+          ? current?.processes.filter((tree) => tree.session_id !== undefined && inspection.sessions.includes(tree.session_id)) ?? []
+          : inspection.processes,
+      }));
     });
     return () => { active = false; };
   }, [key, known, request]);
-  return { items: latest?.items ?? [], pending: !known };
+  return { items: latest?.items ?? [], processes: latest?.processes ?? [], pending: !known };
+}
+
+/** What an archive of `sessionIds` would find (`useInspection`): the bound branches and worktrees,
+ * and the process trees it would stop. `initial` is an inspection already made for this archive. */
+export function useArchiveInspection(sessionIds: string[], initial?: SessionInspection): Inspected & Pick<SessionInspection, "processes"> {
+  return useInspection(sessionIds, initial, true);
+}
+
+/** What a deletion of `sessionIds` would find (`useInspection`): the bound branches and worktrees. */
+export function useSessionBranches(sessionIds: string[]): Inspected {
+  const { items, pending } = useInspection(sessionIds, undefined, false);
+  return { items, pending };
 }
 
 /** The refusals of a project's removal with its folder, which its inspection answers with too: the removal confirmed

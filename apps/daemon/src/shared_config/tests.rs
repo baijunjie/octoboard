@@ -2695,3 +2695,187 @@ async fn the_hold_a_sharing_change_takes_on_a_queue_is_told_apart_from_a_handoff
     assert_eq!(held(&fixture), "handoff");
     drop(hold);
 }
+
+/// The stored session `session` of the account at its prompt, as [`idle_session`] makes one, whose
+/// process has left one process running in a terminal session of its own, as an agent's dev server
+/// is. Answers the session's process and that process's pid.
+fn idle_session_that_started_a_server(
+    fixture: &Fixture,
+    session: Session,
+) -> (test_support::StandIn, i32) {
+    let session = Session {
+        status: SessionStatus::Idle,
+        ..session
+    };
+    fixture.state.store.update_session(&session).unwrap();
+    test_support::running_leaving_one(&fixture.state, &fixture.dir, &session.id)
+}
+
+/// A relaunch that starts a stand-in carrying the request's process tag, as an agent's launch
+/// does, or, when `fails`, refuses.
+fn relaunch_as_a_launch_does(
+    fixture: &Fixture,
+    fails: bool,
+) -> Arc<Mutex<Vec<test_support::StandIn>>> {
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let launches = Arc::new(Mutex::new(Vec::new()));
+    let kept = started.clone();
+    *fixture.state.account_sharing.relaunch.lock().unwrap() = Some(Arc::new(move |request| {
+        if fails {
+            anyhow::bail!("the agent would not start");
+        }
+        (test_support::stand_in_launch(&kept, &launches, || {}))(request)
+    }));
+    started
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_change_of_sharing_carries_what_a_sessions_process_started_over_to_its_relaunch() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    let (first, child) =
+        idle_session_that_started_a_server(&fixture, fixture.session("idle", Agent::Claude));
+    let _guard = test_support::KillOnDrop(vec![child]);
+    let started = relaunch_as_a_launch_does(&fixture, false);
+
+    fixture.share(Agent::Claude, true).await.unwrap();
+
+    assert!(first.poll_exit());
+    let relaunched = fixture.state.live_session("idle").expect("resumed");
+    assert_ne!(relaunched.launch_id, first.launch_id);
+    fixture.state.process_ledger.tick_now();
+    assert!(
+        test_support::is_running(child),
+        "stopped with the process the change restarted"
+    );
+    let trees = fixture
+        .state
+        .process_ledger
+        .trees_of_sessions(&["idle".to_string()], std::time::Duration::ZERO);
+    assert_eq!(trees.len(), 1, "{trees:?}");
+    assert!(trees[0].id.starts_with(&format!("{child}:")));
+
+    // The resumed process stops it when it ends, as any session's.
+    started.lock().unwrap().pop().expect("started").terminate();
+    assert!(
+        test_support::stops_running(&fixture.state, child).await,
+        "kept running past the resumed process"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_change_of_sharing_whose_resume_fails_keeps_what_the_process_started_under_its_project() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    let (_first, child) =
+        idle_session_that_started_a_server(&fixture, fixture.session("idle", Agent::Claude));
+    let _guard = test_support::KillOnDrop(vec![child]);
+    relaunch_as_a_launch_does(&fixture, true);
+    let mut events = fixture.state.subscribe();
+
+    // The change itself goes through; the session it could not resume is told as a notice.
+    fixture.share(Agent::Claude, true).await.unwrap();
+    assert!(std::iter::from_fn(|| events.try_recv().ok()).any(|event| matches!(
+        event,
+        crate::protocol::Event::SessionNotice { code, .. } if code == notice_code::SHARING_RESUME_FAILED
+    )));
+
+    assert_eq!(
+        fixture
+            .state
+            .store
+            .get_session("idle")
+            .unwrap()
+            .unwrap()
+            .status,
+        SessionStatus::Interrupted
+    );
+    fixture.state.process_ledger.tick_now();
+    assert!(
+        test_support::is_running(child),
+        "stopped with the failed resume"
+    );
+    let listed = fixture
+        .state
+        .process_ledger
+        .trees_of_project(&[], "project-1", &[]);
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert!(listed[0].id.starts_with(&format!("{child}:")));
+    assert!(listed[0].kept && listed[0].session_id.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_console_session_whose_resume_fails_after_a_change_of_sharing_stops_what_it_started() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    let console = Session {
+        account_id: Some(account_id(Agent::Claude).to_string()),
+        config_dir: Some(
+            fixture
+                .account(Agent::Claude)
+                .to_string_lossy()
+                .into_owned(),
+        ),
+        ..test_support::console_session("hub", SessionStatus::Idle)
+    };
+    fixture.state.store.insert_session(&console).unwrap();
+    let (_first, child) = idle_session_that_started_a_server(&fixture, console);
+    let _guard = test_support::KillOnDrop(vec![child]);
+    relaunch_as_a_launch_does(&fixture, true);
+
+    fixture.share(Agent::Claude, true).await.unwrap();
+
+    assert!(
+        test_support::stops_running(&fixture.state, child).await,
+        "kept running past the failed resume"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_session_archived_while_the_change_runs_stops_what_its_process_started() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    idle_session(&fixture, "first", Agent::Claude);
+    let (_second, child) =
+        idle_session_that_started_a_server(&fixture, fixture.session("second", Agent::Claude));
+    let _guard = test_support::KillOnDrop(vec![child]);
+    // The user archives the second while the first is being resumed.
+    let state = fixture.state.clone();
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let launches = Arc::new(Mutex::new(Vec::new()));
+    *fixture.state.account_sharing.relaunch.lock().unwrap() = Some(Arc::new(move |request| {
+        let mut second = state.store.get_session("second").unwrap().unwrap();
+        second.status = SessionStatus::Archived;
+        state.store.update_session(&second).unwrap();
+        (test_support::stand_in_launch(&started, &launches, || {}))(request)
+    }));
+
+    fixture.share(Agent::Claude, true).await.unwrap();
+
+    assert!(
+        test_support::stops_running(&fixture.state, child).await,
+        "kept running for an archived session"
+    );
+    assert!(fixture
+        .state
+        .process_ledger
+        .trees_of_project(&[], "project-1", &[])
+        .is_empty());
+}
+
+#[tokio::test]
+async fn a_session_the_change_restarts_cannot_be_claimed_by_a_switch_meanwhile() {
+    let fixture = Fixture::new();
+    claude_setup(&fixture);
+    idle_session(&fixture, "idle", Agent::Claude);
+    let account = fixture.record(Agent::Claude);
+    let (_, mut lock) = fixture
+        .state
+        .lock_account_sharing(&account, |_, _| Ok(()))
+        .unwrap();
+    lock.claim_idle(|_| Ok(vec!["idle".to_string()])).unwrap();
+
+    // What a process handover, a switch or a model change takes first.
+    let err = fixture.state.begin_switch("idle").map(|_| ()).unwrap_err();
+    assert_eq!(code_of(&err), error_code::SESSION_ALREADY_STARTING);
+}

@@ -42,6 +42,7 @@ use crate::launch_settings::{
 use crate::mcp;
 use crate::open_directory;
 use crate::open_terminal;
+use crate::process_ledger::HeldForLaunch;
 use crate::project_trash;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
@@ -271,6 +272,8 @@ async fn handle_inner(
             let project_ids: Vec<&str> =
                 projects.iter().map(|project| project.id.as_str()).collect();
             crate::shell_terminal::close_projects(state, &project_ids).await;
+            // Their processes, which no session owns, go with the projects.
+            crate::process_requests::stop_project_processes(state, &projects).await;
             for session_id in &session_ids {
                 state.forget_saved_output(session_id);
                 state.forget_left_for_limit(session_id);
@@ -461,6 +464,12 @@ async fn handle_inner(
             // tool still writing there by absolute path could recreate the moved folder); one
             // started during the move is ended with the record below.
             crate::shell_terminal::close_project(state, &id).await;
+            // The project's processes, which no session owns, go with it, as the confirmation
+            // said (`inspect_project_removal`'s `processes`), the folder moved or not: stopped
+            // here, before the move, and not after it, since removing the project stops them
+            // whether or not its folder goes to the Trash.
+            crate::process_requests::stop_project_processes(state, std::slice::from_ref(&deleted))
+                .await;
             // The directory goes first, once nothing runs in it, so a failure leaves the project
             // in place for a retry. Without `trash_directory` only the association goes away: the
             // directory is the user's. The repository is found first, as it cannot be once the
@@ -533,6 +542,7 @@ async fn handle_inner(
             // for the removal to repeat, so it takes nothing along either.
             project_trash::inspected(state, &project, &state.store.list_projects()?).await?;
             let id = project.id.clone();
+            let deleted_project = project.clone();
             let planning = Arc::clone(state);
             let (items, held_back) = tokio::task::spawn_blocking(move || {
                 Ok::<_, anyhow::Error>(
@@ -547,6 +557,8 @@ async fn handle_inner(
                 )
             })
             .await??;
+            let processes =
+                crate::process_requests::project_processes(state, &deleted_project).await?;
             // The worktrees it held back, not listed as going, are kept for the removal confirmed
             // after it to hold back too.
             let inspection = if held_back.is_empty() {
@@ -559,6 +571,7 @@ async fn handle_inner(
             Ok(Some(Event::ProjectRemovalInspected {
                 id: request_id,
                 items,
+                processes,
                 inspection,
             }))
         }
@@ -800,7 +813,24 @@ async fn handle_inner(
             session,
             force_remove,
             keep,
+            keep_process_ids,
         } => {
+            // Before the archive ends the processes, which the exit path then stops; kept after
+            // the record is known so an unknown session keeps nothing.
+            if !keep_process_ids.is_empty() {
+                state.session_record(&session)?;
+                let kept = crate::process_requests::keep(state, keep_process_ids.clone()).await?;
+                let missed: Vec<&String> = keep_process_ids
+                    .iter()
+                    .filter(|id| !kept.contains(id))
+                    .collect();
+                if !missed.is_empty() {
+                    tracing::warn!(
+                        session = %session, ids = ?missed,
+                        "process trees the user chose to keep were no longer found, or were a console session's, which keeps none; whatever is left of them is stopped with the session"
+                    );
+                }
+            }
             let archived = archive_session_group(state, &session, true)?;
             remove_branches_once_stopped(state, archived, force_remove, keep);
             Ok(None)
@@ -884,19 +914,59 @@ async fn handle_inner(
             }))
         }
 
-        RequestBody::InspectSessionBranches { sessions } => {
-            let state = Arc::clone(state);
+        RequestBody::InspectSessionBranches {
+            sessions,
+            processes,
+        } => {
+            let ids = processes.then(|| sessions.clone());
+            let inspected = Arc::clone(state);
             let items = tokio::task::spawn_blocking(move || {
                 let mut found = Vec::new();
                 for id in &sessions {
-                    found.extend(state.store.get_session(id)?);
+                    found.extend(inspected.store.get_session(id)?);
                 }
-                branch_origin::cleanup::inspect(&state, &found)
+                branch_origin::cleanup::inspect(&inspected, &found)
             })
             .await??;
+            let processes = match ids {
+                Some(ids) => {
+                    crate::process_requests::long_running(
+                        state,
+                        ids,
+                        crate::process_requests::ask_after(),
+                    )
+                    .await?
+                }
+                None => Vec::new(),
+            };
             Ok(Some(Event::SessionBranchesInspected {
                 id: request_id,
                 items,
+                processes,
+            }))
+        }
+
+        RequestBody::ListProcesses { target } => {
+            let trees = crate::process_requests::list(state, target).await?;
+            Ok(Some(Event::ProcessesListed {
+                id: request_id,
+                trees,
+            }))
+        }
+
+        RequestBody::StopProcesses { ids } => {
+            let ids = crate::process_requests::stop(state, ids).await?;
+            Ok(Some(Event::ProcessesStopped {
+                id: request_id,
+                ids,
+            }))
+        }
+
+        RequestBody::KeepProcesses { ids } => {
+            let ids = crate::process_requests::keep(state, ids).await?;
+            Ok(Some(Event::ProcessesKept {
+                id: request_id,
+                ids,
             }))
         }
 
@@ -3092,7 +3162,7 @@ fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> R
         if record.status == SessionStatus::Archived {
             // Archived while the process was being forked, when there was none to end.
             if let Some(live) = state.live_session(&session.id) {
-                stop_process(live);
+                stop_process(state, live);
             }
         }
         return Ok(record);
@@ -4039,7 +4109,7 @@ pub(crate) async fn relaunch_session_with(
                 // The archive may have landed while the launch was off the runtime, before
                 // there was a registered process for it to end.
                 if let Some(live) = state.live_session(&session.id) {
-                    stop_process(live);
+                    stop_process(state, live);
                 }
                 state.revoke_mcp_tokens(&session.id);
                 state.discard_outbox(&session.id);
@@ -4206,6 +4276,8 @@ async fn start_process(
     for notice in sharing.notices {
         state.broadcast(notice.about(&session.id));
     }
+    // Reserved until the process is registered below, and given up if it never is.
+    let pending_launch = state.process_ledger.begin_launch(&session.id);
     let request = term::LaunchRequest {
         session_id: session.id.clone(),
         agent: session.agent,
@@ -4231,6 +4303,7 @@ async fn start_process(
         // Issued per launch: the previous process is gone, and a token outliving it would let a
         // stale child act on this session.
         mcp_token: state.issue_mcp_token(&session.id),
+        process_tag: pending_launch.tag().clone(),
     };
 
     // Launching snapshots the user's shell environment and forks a process, so it goes off the
@@ -4568,7 +4641,7 @@ fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
     state.forget_left_for_limit(id);
     if let Some(live) = state.live_session(id) {
         // Ending the process waits out the graceful period, which the caller should not.
-        stop_process(live);
+        stop_process(state, live);
     }
     // Messages kept for it to take at a resume are not for it once archived: a later reopen must
     // not be handed them.
@@ -4588,8 +4661,18 @@ fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
 /// `archive_session`'s, which is why a switch of the session's account stops the process through
 /// this and not through archiving. Answers whether it found the process running and stopped it
 /// (see [`LiveSession::end`]), which the exit watcher reads to know the end was asked for.
-pub(crate) fn stop_process(live: Arc<LiveSession>) -> tokio::task::JoinHandle<bool> {
-    tokio::task::spawn_blocking(move || live.end())
+///
+/// The process ledger reads the table first, so that what the agent started a moment ago is
+/// attributed to its launch while its chain through the agent still shows.
+pub(crate) fn stop_process(
+    state: &Arc<AppState>,
+    live: Arc<LiveSession>,
+) -> tokio::task::JoinHandle<bool> {
+    let ledger = Arc::clone(&state.process_ledger);
+    tokio::task::spawn_blocking(move || {
+        ledger.scan_before_ending();
+        live.end()
+    })
 }
 
 /// How long a relaunched session has to stay up before a switch counts it as having come up. An
@@ -4929,12 +5012,7 @@ pub(crate) async fn switch_session_account_if(
             NoLongerDue("the quota recovery was cancelled while preparing the restart").into(),
         );
     }
-    // Whether this switch stopped a running process: one that had exited by itself already, and
-    // is only waiting to be deregistered, is not its doing.
-    let ended_a_process = match state.live_session(id) {
-        Some(live) => stop_process(live).await?,
-        None => false,
-    };
+    let (held_for_relaunch, ended_a_process) = stop_carrying_processes(state, id).await?;
     wait_until_down(state, id).await?;
     // From here the process is down. A failure that follows leaves the session interrupted when
     // this switch ended it, and is marked so; one whose process had ended before is not this
@@ -5030,10 +5108,85 @@ pub(crate) async fn switch_session_account_if(
         }
         Ok(carry_on)
     };
-    after_stop.await.map_err(|error| SwitchFailed {
+    let switched = after_stop.await;
+    give_up_what_a_restart_held(
+        state,
+        id,
+        held_for_relaunch,
+        switched.is_err() && ended_a_process,
+    )
+    .await;
+    switched.map_err(|error| SwitchFailed {
         error,
         ended_process: ended_a_process,
     })
+}
+
+/// Ends the process of `id`, a session about to be restarted by a switch, a change of its model or
+/// a change of its account's sharing, the way archiving ends it, with what the process started
+/// carried over to the relaunch rather than stopped with it: held while the session has no process,
+/// and, where the caller watches the relaunch coming up (a switch and a model change), while it is,
+/// and given up by [`give_up_what_a_restart_held`].
+/// Returns what is held, and whether this stopped a running process: one that had exited by itself
+/// already, and is only waiting to be deregistered, is not the restart's doing.
+pub(crate) async fn stop_carrying_processes(
+    state: &Arc<AppState>,
+    id: &str,
+) -> Result<(HeldForLaunch, bool)> {
+    let held = state.process_ledger.hold_for_launch(id);
+    let ended_a_process = match state.live_session(id) {
+        Some(live) => {
+            state.process_ledger.hand_over(&live.launch_id, id);
+            stop_process(state, live).await?
+        }
+        None => false,
+    };
+    Ok((held, ended_a_process))
+}
+
+/// Gives up what a restart still holds for the relaunch, once the relaunch is over: taken in by
+/// it, or, when it `failed` after the restart had ended the session's process, kept (see
+/// [`keep_what_a_failed_restart_carried`]). On a blocking task: keeping what is held writes the
+/// ledger file.
+pub(crate) async fn give_up_what_a_restart_held(
+    state: &Arc<AppState>,
+    id: &str,
+    held: HeldForLaunch,
+    failed: bool,
+) {
+    let (state_for_hold, session_id) = (state.clone(), id.to_string());
+    let given_up = tokio::task::spawn_blocking(move || {
+        if failed {
+            keep_what_a_failed_restart_carried(&state_for_hold, &session_id, held);
+        } else {
+            drop(held);
+        }
+    })
+    .await;
+    if let Err(err) = given_up {
+        tracing::warn!(session = %id, %err, "giving up what a restart held for the relaunch did not finish");
+    }
+}
+
+/// Gives up what a restart (a switch, a model change or a change of an account's sharing) that
+/// failed after it had ended the session's process still holds for the relaunch: kept for the
+/// user, among the processes of the session's project, as a tree the user keeps is, when the
+/// session is left interrupted in a project; stopped, when it is a console session, which keeps
+/// nothing, or was archived meanwhile, which stops what it started, or when the daemon is shutting
+/// down. A process that had exited by itself is not the restart's doing, so what it left is
+/// stopped as for any agent that exits on its own: the caller does not come here. **Blocks.**
+fn keep_what_a_failed_restart_carried(state: &Arc<AppState>, id: &str, held: HeldForLaunch) {
+    match state.session_record(id) {
+        Ok(session) if session.status != SessionStatus::Archived => {
+            if let Some(project) = session.project_id {
+                held.keep_what_is_held(project);
+            }
+        }
+        Ok(_) => {}
+        Err(err) => {
+            tracing::warn!(session = %id, %err, "reading a session whose restart failed; what it carried is stopped");
+        }
+    }
 }
 
 /// How long a switch for a usage limit waits for the limit to show in the conversation record. An
@@ -5220,10 +5373,13 @@ pub(crate) enum ModelAsker<'a> {
 /// One mechanism serves every agent, the account switch's without the move: a session with a
 /// running process has the process ended the way archiving ends it (archiving nothing), the new
 /// values recorded, and is relaunched on the same account resuming its conversation, as a resume
-/// does. A turn the restart cut off, or one a usage limit had stopped, is sent
-/// [`switch_continue::CONTINUE_PROMPT`] as the relaunch's instruction, as after a switch; otherwise
-/// the session comes back awaiting instructions. A session waiting on a prompt of its agent's has
-/// that prompt ended with the process, unless an owner asks (see [`ModelAsker::Owner`]).
+/// does. What the process started (a dev server, say) is carried over to the relaunch as for a
+/// switch, and kept among the processes of the session's project when the restart fails after it
+/// ended the process (see [`keep_what_a_failed_restart_carried`]). A turn the restart cut off, or
+/// one a usage limit had stopped, is sent [`switch_continue::CONTINUE_PROMPT`] as the relaunch's
+/// instruction, as after a switch; otherwise the session comes back awaiting instructions. A
+/// session waiting on a prompt of its agent's has that prompt ended with the process, unless an
+/// owner asks (see [`ModelAsker::Owner`]).
 ///
 /// Every client is shown the session `starting` from the moment the restart is decided until it is
 /// over (`AppState::mark_model_change`), and the model and effort the agent's records showed are
@@ -5343,10 +5499,7 @@ pub(crate) async fn set_session_model_with(
         ));
     }
     state.mark_model_change(id);
-    let ended_a_process = match state.live_session(id) {
-        Some(live) => stop_process(live).await?,
-        None => false,
-    };
+    let (held_for_relaunch, ended_a_process) = stop_carrying_processes(state, id).await?;
     if let Err(err) = wait_until_down(state, id).await {
         let stopped = err
             .downcast_ref::<CodedError>()
@@ -5361,76 +5514,92 @@ pub(crate) async fn set_session_model_with(
             err
         });
     }
-    // Archiving it meanwhile is the user's later word on the matter. Hooks may also have
-    // learned the conversation's identity while validation or the shell snapshot was pending.
-    let stopped = state.session_record(id)?;
-    if stopped.status == SessionStatus::Archived {
-        return Err(session_archived(id));
-    }
-    let reading_state = state.clone();
-    let shell = shell_env.clone();
-    let (carry_on, boundary) = tokio::task::spawn_blocking(move || {
-        let boundary =
-            crate::record_collector::observed_boundary(&reading_state, &stopped, shell.clone());
-        let carry_on = ended_a_process
-            && resumable_agent_session_id(&stopped).is_some_and(|agent_session_id| {
-                let dir = account_dir(stopped.agent, stopped.config_dir.as_deref(), shell.as_ref());
-                relocate::locate(stopped.agent, &dir, &agent_session_id).is_ok_and(|record| {
-                    switch_continue::should_continue(stopped.agent, &dir.join(record))
-                })
-            });
-        (carry_on, boundary)
-    })
-    .await?;
+    // From here the process is down; a failure that follows is the restart's, whatever it was.
+    let after_stop = async {
+        // Archiving it meanwhile is the user's later word on the matter. Hooks may also have
+        // learned the conversation's identity while validation or the shell snapshot was pending.
+        let stopped = state.session_record(id)?;
+        if stopped.status == SessionStatus::Archived {
+            return Err(session_archived(id));
+        }
+        let reading_state = state.clone();
+        let shell = shell_env.clone();
+        let (carry_on, boundary) = tokio::task::spawn_blocking(move || {
+            let boundary =
+                crate::record_collector::observed_boundary(&reading_state, &stopped, shell.clone());
+            let carry_on = ended_a_process
+                && resumable_agent_session_id(&stopped).is_some_and(|agent_session_id| {
+                    let dir =
+                        account_dir(stopped.agent, stopped.config_dir.as_deref(), shell.as_ref());
+                    relocate::locate(stopped.agent, &dir, &agent_session_id).is_ok_and(|record| {
+                        switch_continue::should_continue(stopped.agent, &dir.join(record))
+                    })
+                });
+            (carry_on, boundary)
+        })
+        .await?;
 
-    let checkpoint = serde_json::to_string(&boundary)?;
-    if !state.store.set_session_launch_overrides_unless_archived(
-        id,
-        &model,
-        &effort,
-        Some(&checkpoint),
-    )? {
-        return Err(session_archived(id));
-    }
-    state.publish_session_by_id(id);
-    let put_back = || {
-        if let Err(revert) = state.set_session_launch_overrides(id, &before.model, &before.effort) {
-            tracing::warn!(
-                session = %id,
-                %revert,
-                "putting the session's model and effort back failed"
-            );
+        let checkpoint = serde_json::to_string(&boundary)?;
+        if !state.store.set_session_launch_overrides_unless_archived(
+            id,
+            &model,
+            &effort,
+            Some(&checkpoint),
+        )? {
+            return Err(session_archived(id));
         }
+        state.publish_session_by_id(id);
+        let put_back = || {
+            if let Err(revert) =
+                state.set_session_launch_overrides(id, &before.model, &before.effort)
+            {
+                tracing::warn!(
+                    session = %id,
+                    %revert,
+                    "putting the session's model and effort back failed"
+                );
+            }
+        };
+        if let Err(err) = relaunch_session_with(
+            state,
+            &claim,
+            id,
+            carry_on.then_some(switch_continue::CONTINUE_PROMPT),
+            false,
+            shell_env,
+            terminal_appearance,
+            launch,
+        )
+        .await
+        {
+            put_back();
+            return Err(err);
+        }
+        if !came_up_under_claim(state, id).await {
+            // Once the exit watcher has recorded it interrupted, so the record put back is the one
+            // every client is left with.
+            if let Err(err) = wait_until_down(state, id).await {
+                tracing::warn!(session = %id, %err, "the relaunched process was not recorded as ended");
+            }
+            put_back();
+            return Err(CodedError::raised(
+                error_code::MODEL_CHANGE_DID_NOT_COME_UP,
+                "the session ended as soon as it was relaunched with the new model, so it keeps the \
+                 model and effort it had",
+                &[("session", id)],
+            ));
+        }
+        Ok(carry_on)
     };
-    if let Err(err) = relaunch_session_with(
+    let restarted = after_stop.await;
+    give_up_what_a_restart_held(
         state,
-        &claim,
         id,
-        carry_on.then_some(switch_continue::CONTINUE_PROMPT),
-        false,
-        shell_env,
-        terminal_appearance,
-        launch,
+        held_for_relaunch,
+        restarted.is_err() && ended_a_process,
     )
-    .await
-    {
-        put_back();
-        return Err(err);
-    }
-    if !came_up_under_claim(state, id).await {
-        // Once the exit watcher has recorded it interrupted, so the record put back is the one
-        // every client is left with.
-        if let Err(err) = wait_until_down(state, id).await {
-            tracing::warn!(session = %id, %err, "the relaunched process was not recorded as ended");
-        }
-        put_back();
-        return Err(CodedError::raised(
-            error_code::MODEL_CHANGE_DID_NOT_COME_UP,
-            "the session ended as soon as it was relaunched with the new model, so it keeps the \
-             model and effort it had",
-            &[("session", id)],
-        ));
-    }
+    .await;
+    let carry_on = restarted?;
     Ok(ModelChange::Restarted {
         continued: carry_on,
     })
@@ -5600,7 +5769,7 @@ fn delete_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>> {
         match state.delete_if_unused(id)? {
             Deletion::Deleted { process, session } => {
                 if let Some(live) = process {
-                    stop_process(live);
+                    stop_process(state, live);
                 }
                 gone.push(*session);
                 true
@@ -5646,7 +5815,7 @@ fn delete_unused_session(state: &Arc<AppState>, id: &str) -> Result<Vec<Session>
     ensure_unlocked([state.session_record(id)?])?;
     if let Deletion::Deleted { process, session } = state.delete_if_unused(id)? {
         if let Some(live) = process {
-            stop_process(live);
+            stop_process(state, live);
         }
         return Ok(vec![*session]);
     }
@@ -13196,6 +13365,7 @@ mod tests {
                 session: "hub".to_string(),
                 force_remove: Vec::new(),
                 keep: Vec::new(),
+                keep_process_ids: Vec::new(),
             },
         )
         .await
@@ -13847,6 +14017,7 @@ mod tests {
             session: "hub".to_string(),
             force_remove: Vec::new(),
             keep: Vec::new(),
+            keep_process_ids: Vec::new(),
         };
         let err = handle(&state, None, request()).await.unwrap_err();
         assert_eq!(code_of(&err), error_code::SESSION_LOCKED);
@@ -16276,5 +16447,371 @@ mod tests {
         );
         assert_eq!(ids(group_in(&sessions, &sessions[0])), ["member"]);
         assert_eq!(ids(group_in(&sessions, &sessions[2])), ["lead", "led"]);
+    }
+
+    /// What the switched session's process started is carried over to its relaunch on the new
+    /// account and keeps running, listed under the session; the relaunched process stops it
+    /// when it ends.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_switch_carries_what_the_process_started_over_to_the_relaunch() {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-carry-over");
+        std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .unwrap();
+        let (first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+        let _guard = crate::test_support::KillOnDrop(vec![child]);
+        let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+        let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+        switch_session_account_with(
+            &state,
+            "s",
+            Some(Some("claude-a".to_string())),
+            None,
+            None,
+            LaunchEdit::default(),
+            || Ok(HashMap::new()),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        let relaunched = state.live_session("s").expect("relaunched");
+        assert_ne!(relaunched.launch_id, first.launch_id);
+        state.process_ledger.tick_now();
+        assert!(
+            crate::test_support::is_running(child),
+            "stopped with the process switched away from"
+        );
+        let trees = state
+            .process_ledger
+            .trees_of_sessions(&["s".to_string()], Duration::ZERO);
+        assert_eq!(trees.len(), 1, "{trees:?}");
+        assert!(trees[0].id.starts_with(&format!("{child}:")));
+
+        stop_process(&state, relaunched).await.unwrap();
+        assert!(
+            crate::test_support::stops_running(&state, child).await,
+            "kept running past the relaunch"
+        );
+    }
+
+    /// A switch that fails once it has ended the session's process — its relaunch does not start,
+    /// or starts and ends at once — leaves the session interrupted, and what its process had
+    /// started running and kept for the user among its project's processes.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_switch_that_fails_keeps_what_the_process_started_under_its_project() {
+        for comes_up_and_dies in [false, true] {
+            let (state, dir) = console_with_project_and_accounts("coordinator-switch-carry-failed");
+            std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+            state
+                .store
+                .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+                .unwrap();
+            let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+            let _guard = crate::test_support::KillOnDrop(vec![child]);
+            let started = Arc::new(std::sync::Mutex::new(
+                Vec::<crate::test_support::StandIn>::new(),
+            ));
+            let kept_alive = started.clone();
+            let launch = move |request: term::LaunchRequest| {
+                if !comes_up_and_dies {
+                    anyhow::bail!("the agent could not be started");
+                }
+                let live = crate::test_support::tagged_live_session(
+                    &request.session_id,
+                    request.agent,
+                    "exit 1",
+                    &request.process_tag,
+                );
+                let process = (*live).clone();
+                kept_alive.lock().unwrap().push(live);
+                Ok(term::Launch {
+                    session: process,
+                    agent_session_id: None,
+                    notice: None,
+                })
+            };
+
+            switch_session_account_with(
+                &state,
+                "s",
+                Some(Some("claude-a".to_string())),
+                None,
+                None,
+                LaunchEdit::default(),
+                || Ok(HashMap::new()),
+                launch,
+            )
+            .await
+            .expect_err("the relaunch failed");
+
+            assert_eq!(status_of(&state, "s"), Some(SessionStatus::Interrupted));
+            state.process_ledger.tick_now();
+            assert!(
+                crate::test_support::is_running(child),
+                "stopped with a failed switch ({comes_up_and_dies})"
+            );
+            let listed = state.process_ledger.trees_of_project(&[], "project-1", &[]);
+            assert_eq!(listed.len(), 1, "{listed:?}");
+            assert!(listed[0].id.starts_with(&format!("{child}:")));
+            assert!(listed[0].kept && listed[0].session_id.is_none());
+        }
+    }
+
+    /// A process that had exited by itself before the switch is not the switch's doing, so when
+    /// the switch fails, what it had started is stopped as for any agent that exits on its own,
+    /// not kept under the project.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_switch_that_fails_stops_what_a_process_that_had_exited_by_itself_started() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-exited-failed");
+        std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .unwrap();
+        let (pid_file, go_file) = (dir.join("s-child"), dir.join("go"));
+        let live = fake_live_session(
+            "s",
+            Agent::Claude,
+            80,
+            24,
+            &format!(
+                "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); {} exec \"/bin/sleep\", \"300\";' &\n\
+                 while [ ! -e {go} ]; do sleep 0.05; done\n\
+                 exit 0",
+                crate::test_support::perl_write(&pid_file, "$$"),
+                go = go_file.display()
+            ),
+        );
+        state.register_live(live.clone());
+        let child = crate::test_support::wait_for_pid(&pid_file);
+        let _guard = crate::test_support::KillOnDrop(vec![child]);
+        // The agent's shell is still there for this read, which attributes what it started.
+        state.process_ledger.scan_before_ending();
+        std::fs::write(&go_file, "").unwrap();
+        let exited = live.clone();
+        assert!(
+            crate::test_support::within(crate::test_support::PATIENCE, move || exited.poll_exit())
+                .await,
+            "the process exits by itself"
+        );
+        // Still registered, as in the moment before the exit watcher deregisters it.
+        let watched = live.clone();
+        let watching = state.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            watching.watch_exit(watched);
+        });
+
+        switch_session_account_with(
+            &state,
+            "s",
+            Some(Some("claude-a".to_string())),
+            None,
+            None,
+            LaunchEdit::default(),
+            || Ok(HashMap::new()),
+            |_| Err(anyhow::anyhow!("the agent could not be started")),
+        )
+        .await
+        .expect_err("the relaunch failed");
+
+        assert!(
+            crate::test_support::stops_running(&state, child).await,
+            "kept past a switch that did not end the process"
+        );
+        assert!(state
+            .process_ledger
+            .trees_of_project(&[], "project-1", &[])
+            .is_empty());
+    }
+
+    /// A session archived while its switch was under way keeps nothing either: what its process
+    /// had started is stopped, as an archive stops it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn what_a_switch_held_for_a_session_archived_meanwhile_is_stopped() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-archived");
+        state
+            .store
+            .insert_session(&project_session(
+                "s",
+                Agent::Claude,
+                SessionStatus::Archived,
+            ))
+            .unwrap();
+        let (first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+        let _guard = crate::test_support::KillOnDrop(vec![child]);
+        let ledger = &state.process_ledger;
+        let held = ledger.hold_for_launch("s");
+        ledger.hand_over(&first.launch_id, "s");
+        ledger.end_launch(&first.launch_id);
+        assert!(crate::test_support::is_running(child));
+
+        keep_what_a_failed_restart_carried(&state, "s", held);
+
+        assert!(
+            crate::test_support::stops_running(&state, child).await,
+            "kept for an archived session"
+        );
+        assert!(ledger.trees_of_project(&[], "project-1", &[]).is_empty());
+    }
+
+    /// A console session keeps nothing: what its process had started is stopped when its switch
+    /// fails, as an interrupted session's is.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_console_session_whose_switch_fails_stops_what_its_process_started() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-switch-console-failed");
+        std::fs::create_dir_all(dir.join("claude-a")).unwrap();
+        state
+            .store
+            .insert_session(&console_session("hub", SessionStatus::Idle))
+            .unwrap();
+        let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "hub");
+        let _guard = crate::test_support::KillOnDrop(vec![child]);
+
+        switch_session_account_with(
+            &state,
+            "hub",
+            Some(Some("claude-a".to_string())),
+            None,
+            None,
+            LaunchEdit::default(),
+            || Ok(HashMap::new()),
+            |_| Err(anyhow::anyhow!("the agent could not be started")),
+        )
+        .await
+        .expect_err("the relaunch failed");
+
+        assert!(
+            crate::test_support::stops_running(&state, child).await,
+            "kept running past the failed switch"
+        );
+    }
+
+    /// What the process of a session whose model is changed started is carried over to the
+    /// relaunch and keeps running, listed under the session.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_model_change_carries_what_the_process_started_over_to_the_relaunch() {
+        use crate::test_support::{stand_in_launch, Launched, StandIn};
+        let (state, dir) = console_with_project_and_accounts("coordinator-model-carry-over");
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .unwrap();
+        let (first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+        let _guard = crate::test_support::KillOnDrop(vec![child]);
+        let started = Arc::new(std::sync::Mutex::new(Vec::<StandIn>::new()));
+        let launches = Arc::new(std::sync::Mutex::new(Vec::<Launched>::new()));
+
+        set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                model: Some(Some("opus".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .unwrap();
+
+        let relaunched = state.live_session("s").expect("relaunched");
+        assert_ne!(relaunched.launch_id, first.launch_id);
+        state.process_ledger.tick_now();
+        assert!(
+            crate::test_support::is_running(child),
+            "stopped with the process restarted"
+        );
+        let trees = state
+            .process_ledger
+            .trees_of_sessions(&["s".to_string()], Duration::ZERO);
+        assert_eq!(trees.len(), 1, "{trees:?}");
+        assert!(trees[0].id.starts_with(&format!("{child}:")));
+
+        stop_process(&state, relaunched).await.unwrap();
+        assert!(
+            crate::test_support::stops_running(&state, child).await,
+            "kept running past the relaunch"
+        );
+    }
+
+    /// A model change that fails once it has ended the session's process leaves the session
+    /// interrupted, and what its process had started running and kept among its project's
+    /// processes.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_model_change_that_fails_keeps_what_the_process_started_under_its_project() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-model-carry-failed");
+        state
+            .store
+            .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
+            .unwrap();
+        let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "s");
+        let _guard = crate::test_support::KillOnDrop(vec![child]);
+
+        set_session_model_with(
+            &state,
+            "s",
+            LaunchEdit {
+                model: Some(Some("opus".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            |_| Err(anyhow::anyhow!("the agent could not be started")),
+        )
+        .await
+        .expect_err("the relaunch failed");
+
+        assert_eq!(status_of(&state, "s"), Some(SessionStatus::Interrupted));
+        state.process_ledger.tick_now();
+        assert!(
+            crate::test_support::is_running(child),
+            "stopped with a failed model change"
+        );
+        let listed = state.process_ledger.trees_of_project(&[], "project-1", &[]);
+        assert_eq!(listed.len(), 1, "{listed:?}");
+        assert!(listed[0].id.starts_with(&format!("{child}:")));
+        assert!(listed[0].kept && listed[0].session_id.is_none());
+    }
+
+    /// A console session keeps nothing: what its process had started is stopped when its model
+    /// change fails.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_console_session_whose_model_change_fails_stops_what_its_process_started() {
+        let (state, dir) = console_with_project_and_accounts("coordinator-model-console-failed");
+        state
+            .store
+            .insert_session(&console_session("hub", SessionStatus::Idle))
+            .unwrap();
+        let (_first, child) = crate::test_support::running_leaving_one(&state, &dir, "hub");
+        let _guard = crate::test_support::KillOnDrop(vec![child]);
+
+        set_session_model_with(
+            &state,
+            "hub",
+            LaunchEdit {
+                model: Some(Some("opus".to_string())),
+                effort: None,
+            },
+            ModelAsker::User,
+            None,
+            shell_env(&dir),
+            |_| Err(anyhow::anyhow!("the agent could not be started")),
+        )
+        .await
+        .expect_err("the relaunch failed");
+
+        assert!(
+            crate::test_support::stops_running(&state, child).await,
+            "kept running past the failed model change"
+        );
     }
 }

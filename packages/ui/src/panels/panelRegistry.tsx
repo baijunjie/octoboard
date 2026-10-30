@@ -7,6 +7,7 @@ import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { AsideOwner } from "../layout/asideOwner";
 import type { PanePeek } from "../layout/usePaneToggles";
+import { ProcessesPanel } from "../process/ProcessesPanel";
 import type { Project } from "../protocol";
 import { ReportPanel } from "../report/ReportPanel";
 import { ShellTerminalPanel } from "../terminal/ShellTerminalPanel";
@@ -81,14 +82,27 @@ function ReportContent({ reportSessionId, peek, frameKeys }: PanelContentProps):
   return reportSessionId ? <ReportPanel key={reportSessionId} sessionId={reportSessionId} peek={peek} {...frameKeys} /> : null;
 }
 
-/** Every kind of panel the stack can hold: a later kind is one more entry here and in
- * `PANEL_KINDS`. */
+/** Every kind of panel the stack can hold, in the order they stack: a later kind is one more entry here and in
+ * `PANEL_KINDS`. `ProcessesPanel` reads its list from `ProcessPanelContext`, not from `PanelContentProps`: the
+ * list is polled by `App`, which has to know whether it is empty to decide what a swipe opens. */
 export const PANEL_ENTRIES: Record<PanelKind, PanelEntry> = {
+  report: {
+    ...PANEL_META.report,
+    toggle: { show: "titleBar.report.show", hide: "titleBar.report.hide" },
+    label: (t) => t("panel.report.name"),
+    Content: ReportContent,
+  },
   files: {
     ...PANEL_META.files,
     toggle: { show: "titleBar.files.show", hide: "titleBar.files.hide" },
     label: (t, project) => t("browser.label", { project: isolate(project?.name ?? "") }),
     Content: FilesContent,
+  },
+  processes: {
+    ...PANEL_META.processes,
+    toggle: { show: "titleBar.processes.show", hide: "titleBar.processes.hide" },
+    label: (t) => t("panel.processes.name"),
+    Content: ProcessesPanel,
   },
   terminal: {
     ...PANEL_META.terminal,
@@ -96,11 +110,5 @@ export const PANEL_ENTRIES: Record<PanelKind, PanelEntry> = {
     label: (t, project) => t("panel.terminal.label", { project: isolate(project?.name ?? "") }),
     maximizable: true,
     Content: TerminalContent,
-  },
-  report: {
-    ...PANEL_META.report,
-    toggle: { show: "titleBar.report.show", hide: "titleBar.report.hide" },
-    label: (t) => t("panel.report.name"),
-    Content: ReportContent,
   },
 };

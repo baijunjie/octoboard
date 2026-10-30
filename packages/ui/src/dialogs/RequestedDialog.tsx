@@ -1,5 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 
+import { ErrorAlert } from "../components/ErrorAlert";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
+import { errorDetails } from "../components/errorParts";
 import { useStableHandler } from "../components/useLatest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
@@ -10,7 +13,7 @@ import { FadeOverflow } from "../components/FadeOverflow";
 import { StatusIcon } from "../components/StatusIcon";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
-import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Project, type Session, type SessionBranchItem } from "../protocol";
+import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Console as ConsoleRecord, type Project, type Session } from "../protocol";
 import { sessionAgentLabel, sessionDisplayTitle, sessionShownStatusKind, sessionStatusKind } from "../sessionLabel";
 import {
   boundArchivedSessions,
@@ -20,6 +23,7 @@ import {
   isUnusedSession,
   ordersByStatus,
 } from "../sidebar/order";
+import { useProjectProcesses } from "../process/useProjectProcesses";
 import { useDaemon, useDaemonStore } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -34,51 +38,140 @@ import { useBranchCleanup, useProjectRemovalCleanup, type ConsequenceLine } from
 import { ConfirmOption } from "./ConfirmOption";
 import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
-import { isRemovalRefusal } from "./useSessionBranches";
+import { StoppedRow, useProcessStopping } from "./ProcessStopOptions";
+import { isRemovalRefusal, useArchiveInspection, useSessionBranches, type SessionInspection } from "./useSessionBranches";
 import { PROJECT_NAME_LIMIT } from "./textLength";
 
-/** What a confirmation says it is about to take along or take away, as body text under its options:
- * `title` when there is one, over the list of sessions when there is one to show — each with its
- * agent's icon and title, plus a status glyph for live sessions; archived sessions are already
- * identified by the wording of the title — and `lines`: further consequences, such as one for each
- * option the user has ticked.
- * Nothing at all when there is neither a title nor a line. */
-function ConfirmConsequences({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: ConsequenceLine[] }): React.ReactElement | null {
+/** The sessions a confirmation names, each with its agent's icon and title, plus a status glyph for live
+ * sessions; archived sessions are already identified by the wording of what heads the list. */
+function SessionList({ sessions }: { sessions: Session[] }): React.ReactElement {
   const t = useT();
   const sessionsRef = useListMotion<HTMLUListElement>();
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
-  const linesRef = useListMotion<HTMLDivElement>();
-  if (!title && lines.length === 0) return null;
   return (
-    <div className="flex min-w-0 flex-col gap-2 text-sm">
-      {title && <p>{title}</p>}
-      {sessions && (
-        <ul ref={sessionsRef} className="relative flex min-w-0 flex-col gap-1">
-          {sessions.map((session) => (
-            <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
-              {/* The list items are not pressable, so a tap on a mark opens the popover. */}
-              {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />}
-              <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
-              {/* The icon is decorative, and nothing else here names the agent. The comma keeps the name apart from the
-                  title when the row is read as one phrase: a hidden element's trailing space is dropped in rendering. */}
-              <span className="sr-only">{`${sessionAgentLabel(t, session, accounts, defaultNames)}, `}</span>
-              <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
-                {sessionDisplayTitle(t, session)}
-              </FadeOverflow>
-            </li>
-          ))}
-        </ul>
-      )}
-      {/* Always mounted, so a line added or removed by an option moves in and out. */}
-      <div ref={linesRef} className="relative flex min-w-0 flex-col gap-1">
-        {lines.map((line) => <p key={line.key} data-list-motion={line.key}>{line.text}</p>)}
-      </div>
+    <ul ref={sessionsRef} className="relative flex min-w-0 flex-col gap-1">
+      {sessions.map((session) => (
+        <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
+          {/* The list items are not pressable, so a tap on a mark opens the popover. */}
+          {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />}
+          <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
+          {/* The icon is decorative, and nothing else here names the agent. The comma keeps the name apart from the
+              title when the row is read as one phrase: a hidden element's trailing space is dropped in rendering. */}
+          <span className="sr-only">{`${sessionAgentLabel(t, session, accounts, defaultNames)}, `}</span>
+          <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
+            {sessionDisplayTitle(t, session)}
+          </FadeOverflow>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The consequence lines of what is ticked, one paragraph each. Always mounted, so a line added or
+ * removed by an option moves in and out. */
+function ConsequenceLines({ lines }: { lines: ConsequenceLine[] }): React.ReactElement {
+  const linesRef = useListMotion<HTMLDivElement>();
+  return (
+    <div ref={linesRef} className="relative flex min-w-0 flex-col gap-1">
+      {lines.map((line) => <p key={line.key} data-list-motion={line.key}>{line.text}</p>)}
     </div>
   );
 }
 
-/** Confirms removing a project. The folder stays on disk unless the user opts in to moving it to
+/** What a confirmation says it is about to take along or take away, as body text under its options:
+ * `title` when there is one, over the list of sessions when there is one to show (`SessionList`),
+ * and `lines`: further consequences, such as one for each option the user has ticked.
+ * Nothing at all when there is neither a title nor a line. */
+function ConfirmConsequences({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: ConsequenceLine[] }): React.ReactElement | null {
+  if (!title && lines.length === 0) return null;
+  return (
+    <div className="flex min-w-0 flex-col gap-2 text-sm">
+      {title && <p>{title}</p>}
+      {sessions && <SessionList sessions={sessions} />}
+      <ConsequenceLines lines={lines} />
+    </div>
+  );
+}
+
+/** One topic of a sectioned confirmation (the archive's, the project removal's): a labelled group whose `<h3>` heading names it (the
+ * dialog's own title is the `<h2>`), under a groove divider when `divided`, i.e. when another section is
+ * shown above it. `shown` false renders nothing but keeps the wrapper mounted, so focus that was
+ * inside when the section went away goes back to the dialog. */
+function ConfirmSection({ heading, shown, divided, children }: {
+  heading: string;
+  shown: boolean;
+  divided: boolean;
+  children: React.ReactNode;
+}): React.ReactElement {
+  const headingId = useId();
+  return (
+    <KeepFocusInDialog>
+      {shown && (
+        <div role="group" aria-labelledby={headingId} className={`flex min-w-0 flex-col gap-2 text-sm${divided ? " groove-t pt-3" : ""}`}>
+          <h3 id={headingId} className="font-semibold">{heading}</h3>
+          {children}
+        </div>
+      )}
+    </KeepFocusInDialog>
+  );
+}
+
+/** The confirmation section of the project processes a removal stops, one `StoppedRow` each and the count. It is
+ * shown when there are any, or when a list could not be read: then a warning Alert in its place says so, since the
+ * processes are stopped all the same. */
+function ProjectProcessesSection({ processes, divided }: { processes: ReturnType<typeof useProjectProcesses>; divided: boolean }): React.ReactElement {
+  const t = useT();
+  const { trees, error } = processes;
+  return (
+    <ConfirmSection heading={t("dialog.projectProcesses.heading")} shown={trees.length > 0 || error !== undefined} divided={divided}>
+      {error && (
+        <ErrorAlert status="warning" title={t(trees.length > 0 ? "dialog.projectProcesses.listPartlyFailedTitle" : "dialog.projectProcesses.listFailedTitle")} details={errorDetails(error)} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}>
+          {t("dialog.projectProcesses.listFailed")}
+        </ErrorAlert>
+      )}
+      {trees.length > 0 && (
+        <>
+          <div className="flex min-w-0 flex-col gap-2">
+            {trees.map((tree) => <StoppedRow key={tree.id} tree={tree} />)}
+          </div>
+          {/* After a failed list the count would read as the total, while the warning says unlisted ones are stopped too. */}
+          {error === undefined && <ConsequenceLines lines={[{ key: "projectProcesses", text: t("dialog.projectProcesses.stopped", { count: trees.length }) }]} />}
+        </>
+      )}
+    </ConfirmSection>
+  );
+}
+
+/** Confirms deleting a console, which the daemon refuses while a session of it runs, so the one thing it lists is
+ * what the deletion stops besides: the project processes of every project under the console. */
+function DeleteConsoleDialog({ console: target, onClose }: { console: ConsoleRecord; onClose: () => void }): React.ReactElement {
+  const t = useT();
+  const { request } = useDaemon();
+  const projects = useDaemonStore((s) => s.projects);
+  const projectProcesses = useProjectProcesses(Array.from(projects.values()).filter((project) => project.console_id === target.id).map((project) => project.id));
+  return (
+    <ConfirmDialog
+      title={t("dialog.deleteConsole.title")}
+      errorTitle={t("dialog.deleteConsole.failedTitle")}
+      subject={<Message id="dialog.deleteConsole.subject" params={{ name: <InlineReference dir="auto" wrap>{target.name}</InlineReference> }} />}
+      message={t("dialog.deleteConsole.message")}
+      extraControl={<ProjectProcessesSection processes={projectProcesses} divided={false} />}
+      confirmLabel={t("common.delete")}
+      waiting={projectProcesses.pending}
+      typeToConfirm={t("dialog.typeToConfirm.delete")}
+      destructive
+      onCancel={onClose}
+      onConfirm={async () => {
+        await request({ type: "delete_console", console: target.id });
+        onClose();
+      }}
+    />
+  );
+}
+
+/** Confirms removing a project. Its project processes are stopped with it, listed in a section of their own.
+ * The folder stays on disk unless the user opts in to moving it to
  * the Trash, which the daemon does before removing the project and refuses (keeping the project)
  * when it cannot. With the folder go the worktrees outside it that the daemon lists and, where the
  * repository outlives the folder, the branches of the project's sessions, listed once the option is
@@ -88,17 +181,29 @@ function DeleteProjectDialog({ project, running, onClose }: { project: Project; 
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
   const cleanup = useProjectRemovalCleanup(project.id, trash, setTrash);
+  const projectProcesses = useProjectProcesses([project.id]);
+  const showRunning = running.length > 0;
   return (
     <ConfirmDialog
       title={t("dialog.removeProject.title")}
       errorTitle={t("dialog.removeProject.failedTitle")}
       subject={<Message id="dialog.removeProject.subject" params={{ name: <InlineReference dir="auto" wrap>{project.name}</InlineReference> }} />}
       message={t(trash ? "dialog.removeProject.messageTrash" : "dialog.removeProject.message")}
-      consequences={<ConfirmConsequences title={running.length > 0 ? t("dialog.removeProject.running", { count: running.length }) : undefined} sessions={running.length > 0 ? running : undefined} lines={cleanup.consequences} />}
       confirmLabel={t(running.length > 0 ? "dialog.removeProject.confirmRunning" : "common.remove")}
       destructive
-      waiting={cleanup.pending}
-      extraControl={cleanup.extraControl}
+      waiting={cleanup.pending || projectProcesses.pending}
+      extraControl={(busy) => (
+        <>
+          <ConfirmSection heading={t("dialog.removeProject.runningHeading", { count: running.length })} shown={showRunning} divided={false}>
+            <SessionList sessions={running} />
+          </ConfirmSection>
+          <ConfirmSection heading={t("dialog.removeProject.folderHeading")} shown divided={showRunning}>
+            {cleanup.extraControl(busy)}
+            <ConsequenceLines lines={cleanup.consequences} />
+          </ConfirmSection>
+          <ProjectProcessesSection processes={projectProcesses} divided />
+        </>
+      )}
       onCancel={onClose}
       onConfirm={async () => {
         try {
@@ -127,31 +232,53 @@ function SessionRecordsTrashOption({ visible, ...props }: React.ComponentProps<t
 }
 
 /** Confirms archiving a session and every unarchived session under it, listing the bound branches
- * and worktrees git refuses to remove with the choice of forcing them. */
-function ArchiveSessionDialog({ session, withIt, branches, onClose }: {
+ * and worktrees git refuses to remove with the choice of forcing them, and the processes the
+ * archive stops with the choice of keeping any of them running, each as a section of its own with
+ * the consequences of its options right under them. */
+function ArchiveSessionDialog({ session, withIt, inspection, onClose }: {
   session: Session;
   withIt: Session[];
-  /** An inspection of the bound branches already made for this archive. */
-  branches?: SessionBranchItem[];
+  /** An inspection already made for this archive. */
+  inspection?: SessionInspection;
   onClose: () => void;
 }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
-  const cleanup = useBranchCleanup([session.id, ...withIt.map((s) => s.id)], branches);
+  const inspected = useArchiveInspection([session.id, ...withIt.map((s) => s.id)], inspection);
+  const cleanup = useBranchCleanup(inspected);
+  const processes = useProcessStopping(inspected.processes);
+  const showBound = withIt.length > 0;
+  const showCleanup = cleanup.offered;
+  const showProcesses = inspected.processes.length > 0;
   return (
     <ConfirmDialog
       title={t("dialog.archiveSession.title")}
       subject={<Message id="dialog.archiveSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}
       message={t(sessionStatusKind(session) === "background" ? "dialog.archiveSession.messageBackground" : "dialog.archiveSession.message")}
-      consequences={<ConfirmConsequences title={withIt.length > 0 ? t("dialog.archiveSession.boundAndEnded", { count: withIt.length }) : undefined} sessions={withIt.length > 0 ? withIt : undefined} lines={cleanup.consequences} />}
+      // Nothing in it: the sections are in `extraControl`, bound sessions first. It stays defined for the warning icon.
+      consequences={null}
       confirmLabel={t(cleanup.forcing ? "dialog.archiveSession.confirmDelete" : "dialog.archiveSession.confirm")}
       destructive={cleanup.forcing}
       waiting={cleanup.pending}
-      extraControl={cleanup.extraControl}
+      extraControl={(busy) => (
+        <>
+          <ConfirmSection heading={t("dialog.archiveSession.boundHeading", { count: withIt.length })} shown={showBound} divided={false}>
+            <SessionList sessions={withIt} />
+          </ConfirmSection>
+          <ConfirmSection heading={t("dialog.archiveSession.branchesHeading")} shown={showCleanup} divided={showBound}>
+            {cleanup.extraControl(busy)}
+            <ConsequenceLines lines={cleanup.consequences} />
+          </ConfirmSection>
+          <ConfirmSection heading={t("dialog.archiveSession.processesHeading")} shown={showProcesses} divided={showBound || showCleanup}>
+            {processes.extraControl(busy)}
+            <ConsequenceLines lines={processes.consequences} />
+          </ConfirmSection>
+        </>
+      )}
       errorTitle={t("dialog.archiveSession.failedTitle")}
       onCancel={onClose}
       onConfirm={async () => {
-        await request({ type: "archive_session", session: session.id, ...cleanup.choices });
+        await request({ type: "archive_session", session: session.id, ...cleanup.choices, ...processes.choices });
         onClose();
       }}
     />
@@ -237,7 +364,7 @@ function DeleteSessionDialog({ session, withIt, onClose }: { session: Session; w
   const [trash, setTrash] = useState(false);
   const scope = [session.id, ...withIt.map((s) => s.id)];
   const presence = useSessionRecords(scope);
-  const cleanup = useBranchCleanup(scope);
+  const cleanup = useBranchCleanup(useSessionBranches(scope));
   const canTrash = presence !== "absent";
   const moveRecords = canTrash && trash;
   return (
@@ -295,7 +422,7 @@ function DeleteArchivedDialog({
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
   const presence = useSessionRecords(targets.map((s) => s.id));
-  const cleanup = useBranchCleanup(targets.map((s) => s.id));
+  const cleanup = useBranchCleanup(useSessionBranches(targets.map((s) => s.id)));
   const canTrash = presence !== "absent";
   const moveRecords = canTrash && trash;
   return (
@@ -380,22 +507,7 @@ export function RequestedDialog({
     case "import-configuration":
       return <ImportConfigurationDialog onClose={onClose} />;
     case "delete-console":
-      return (
-        <ConfirmDialog
-          title={t("dialog.deleteConsole.title")}
-          errorTitle={t("dialog.deleteConsole.failedTitle")}
-          subject={<Message id="dialog.deleteConsole.subject" params={{ name: <InlineReference dir="auto" wrap>{dialog.console.name}</InlineReference> }} />}
-          message={t("dialog.deleteConsole.message")}
-          confirmLabel={t("common.delete")}
-          typeToConfirm={t("dialog.typeToConfirm.delete")}
-          destructive
-          onCancel={onClose}
-          onConfirm={async () => {
-            await request({ type: "delete_console", console: dialog.console.id });
-            onClose();
-          }}
-        />
-      );
+      return <DeleteConsoleDialog console={dialog.console} onClose={onClose} />;
     case "new-project":
       return <ProjectDialog consoleId={dialog.console.id} onClose={onClose} />;
     case "edit-project":
@@ -485,7 +597,7 @@ export function RequestedDialog({
       // the message follows background work starting or finishing in the session itself.
       const withIt = boundSessionsArchivedWith(Array.from(sessions.values()), dialog.session.id);
       const session = sessions.get(dialog.session.id) ?? dialog.session;
-      return <ArchiveSessionDialog session={session} withIt={withIt} branches={dialog.branches} onClose={onClose} />;
+      return <ArchiveSessionDialog session={session} withIt={withIt} inspection={dialog.inspection} onClose={onClose} />;
     }
     case "switch-account":
       return (

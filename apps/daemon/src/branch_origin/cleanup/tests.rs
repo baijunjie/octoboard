@@ -637,6 +637,7 @@ async fn request_for(fixture: &Fixture, kind: &str, forced: Vec<SessionBranchTar
             session: "s1".to_string(),
             force_remove: forced,
             keep: Vec::new(),
+            keep_process_ids: Vec::new(),
         },
         "delete" => RequestBody::DeleteSession {
             session: "s1".to_string(),

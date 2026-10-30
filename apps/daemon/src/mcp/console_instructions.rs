@@ -132,6 +132,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            instance when its account has run out of quota; the new session takes its place.\n\
          - `handover_branches` — move the responsibility for git branches from one session of \
            yours to another, naming both as `from` and `to`; no session is replaced.\n\
+         - `handover_processes` — move process trees (a dev server, say) from one session of \
+           yours to another, so they are stopped when the receiving session ends.\n\
          - `switch_session_account` — move a session of yours to another account of its own \
            agent, keeping its conversation.\n\
          - `set_session_model` — change the model or reasoning effort of a session of yours, \
@@ -224,6 +226,14 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            `to` may not. Nothing changes in git: the answer lists each branch's worktree and \
            whether it holds uncommitted changes. A session that is working or waiting for the \
            user cannot give branches up. It replaces no session; that is `handoff_session`.\n\
+         - `handover_processes` moves process trees a session of yours started (a dev server, a \
+           preview, a watcher) to another session of yours, without asking the user, so they keep \
+           running until the receiving session's process ends instead of the giving one's. \
+           `from` and `to` are each you or a session of yours, and each must have a process \
+           running; name the trees by the ids `get_session` lists in `processes`. A session that \
+           is working or waiting for the user cannot give processes up. A handoff, an account \
+           switch, a model change and a change of account sharing carry a session's processes \
+           over by themselves.\n\
          - `switch_session_account` moves a session of yours to another account of its own agent. \
            The user approves it first and may change the account, model and effort; the call \
            waits for their answer, unless they have chosen to approve account \

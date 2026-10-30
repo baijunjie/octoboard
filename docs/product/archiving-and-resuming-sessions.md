@@ -10,12 +10,10 @@ deleting sessions for good is in `docs/product/deleting-sessions.md`.
 **Archiving** ends the agent's process and keeps the session and its record. The agent is asked to
 exit first (`SIGTERM`) and is killed only if it is still there 3 seconds later.
 
-**Nothing an agent started outlives its process.** However an agent's process ends — it exits on its own, exits when
-asked, or is killed — once it has exited every process still in its terminal session is killed outright (`SIGKILL`):
-its tool subprocesses, including helpers that moved to a process group of their own or ignore the hangup, such as
-background tasks, MCP or REPL helpers and dev servers it started. Work an agent sent off to run in the background
-therefore ends with it. A process that detached into a session of its own (`setsid`) is out of reach and keeps
-running. Shell terminals do not work this way (see "Closing a shell terminal" in `docs/product/shell-terminals.md`);
+**The launch's background processes are stopped too, except those the user kept.** This includes attributed helpers
+that detached into terminal sessions of their own or outlived the command that started them. The stopping rules,
+restart recovery and boundaries are in "Automatic stopping and its boundaries" in `docs/product/background-processes.md`.
+Shell terminals have their own closing rules (see "Closing a shell terminal" in `docs/product/shell-terminals.md`);
 a daemon going down on an internal failure is in "Crashes and forced termination" in
 `docs/product/application-lifecycle.md`.
 
@@ -23,19 +21,29 @@ Archiving is available for a session that is not already archived, including an 
 session" in `docs/product/sessions.md`. A console session is archived from its own row's menu, like any other (see
 "Console sessions and project sessions" in `docs/product/sessions.md`). The user archives a session from its row's menu.
 A session at its prompt or interrupted, with no unarchived session under it, is archived at once, since nothing is cut
-short, unless a branch or worktree bound to it needs the user's word; one starting, at work, waiting for the user,
-working in background, being resumed, or with an unarchived session under it asks for confirmation first. For a session
-working in background the confirmation says that its process ends and the work it is running in the background is
-stopped, and that it can be reopened later; that message follows the session while the confirmation is open, as its
-background work starts or finishes (see "Working in background" in `docs/product/session-statuses.md`). A session that
-has never been used offers **Delete** there instead, unless it is still starting (see "Deleting an unused session" in
-`docs/product/deleting-sessions.md`). An archive confirmed there that fails is reported in an error alert titled "Could
-not archive the session", and the confirmation stays open. Once the processes have ended, an archive removes the git
-branches the archived sessions were working on, and the linked worktrees that have them checked out, where git can do so
-safely; its confirmation lists what git refuses, and locked worktrees, with the choice of taking them along (see
-`docs/product/branch-and-worktree-cleanup.md`). Archiving a session that is still *starting* stands: it is archived at
-once, and its agent's process is ended as soon as it comes up. An archived session keeps its pin, if it had one (see
-"Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`).
+short, unless a branch or worktree bound to it needs the user's word or its process inspection finds a tree old enough
+to offer a keep choice; one starting, at work, waiting for the user, working in background, being resumed, or with an
+unarchived session under it asks for confirmation first. The confirmation says the session is being archived and can
+be restored from the archive if the user wants to continue the conversation, and, for a session working in background,
+that the work it is running in the background is stopped. Under that it has up to three sections, each under its own
+heading, in this order, each shown only while it has something to show and set apart from the one above it by a
+divider:
+
+- **Archived with it (n)**, the sessions under it that are archived along with it (see below);
+- **Worktrees and branches**, the choices of taking along what git refuses to remove and locked worktrees, with the
+  lines saying what a ticked choice does right under them (see "The confirmation" in
+  `docs/product/branch-and-worktree-cleanup.md`);
+- **Background processes**, the processes the archive stops, with the choice of keeping any of them running (see
+  "Processes in an archive confirmation" in `docs/product/background-processes.md`).
+
+A session that has never been used offers **Delete** in the confirmation instead, unless it is still starting (see
+"Deleting an unused session" in `docs/product/deleting-sessions.md`). An archive confirmed there that fails is reported
+in an error alert titled "Could not archive the session", and the confirmation stays open. Once the processes have
+ended, an archive removes the git branches the archived sessions were working on, and the linked worktrees that have
+them checked out, where git can do so safely; its confirmation lists what git refuses, and locked worktrees, with the
+choice of taking them along (see `docs/product/branch-and-worktree-cleanup.md`). Archiving a session that is still
+*starting* stands: it is archived at once, and its agent's process is ended as soon as it comes up. An archived session
+keeps its pin, if it had one (see "Order of projects and sessions" in `docs/product/order-of-projects-and-sessions.md`).
 
 Besides the user, four things archive a session: its owner, explicitly; a project session's own report saying the work
 is finished with nothing left open (see "Automatic archiving" in `docs/product/reporting-to-owners.md`); a console
@@ -51,10 +59,10 @@ coordinator reporting to it, including descendants of an already archived coordi
 session" in `docs/product/hub-orchestration.md`). This includes sessions the user opened and later bound to the owner,
 as well as sessions started by the owner.
 
-- **The user's archive confirmation lists every unarchived session under the owner**, with its current status,
-  and says that their processes will end and they will be archived together. The list follows the current bindings
-  while the confirmation is open. Confirming ends and archives the whole group, even if descendants are starting,
-  working, waiting for the user or at their prompt. It does not require archiving them separately first.
+- **The user's archive confirmation lists every unarchived session under the owner**, with its current status, under its
+  **Archived with it (n)** heading. The list follows the current bindings while the confirmation is open. Confirming
+  ends and archives the whole group, even if descendants are starting, working, waiting for the user or at their prompt.
+  It does not require archiving them separately first.
 - **Agent tools and automatic reports retain the running-session safeguard.** If any descendant has a process
   running, including a launch, resume or account switch in progress, archiving the owner is refused and nothing
   changes. The refusal counts and names those sessions. With none running, the owner and its remaining unarchived

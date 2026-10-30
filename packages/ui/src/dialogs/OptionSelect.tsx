@@ -137,6 +137,7 @@ export function OptionSelect<T extends string>({
   isInvalid,
   mark,
   labelMark,
+  landing,
 }: {
   label: string;
   options: Option<T>[];
@@ -164,6 +165,8 @@ export function OptionSelect<T extends string>({
   /** A `StatusMark` about the whole field, drawn after its visible label (so not with `inline`, `joined` or
    * `hideLabel`), built with the `markId` it is given as `mark` is. */
   labelMark?: (markId: string) => React.ReactElement;
+  /** Makes the trigger where F6 lands in its region (`data-region-landing`). */
+  landing?: boolean;
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
@@ -184,7 +187,7 @@ export function OptionSelect<T extends string>({
     <HandOffOnUnmount from={`[data-status-mark-id="${id}"]`} to={() => queueMicrotask(() => { const target = trigger.current; if (target?.isConnected && !target.disabled && (!document.activeElement || document.activeElement === document.body)) target.focus(); })} />
   );
   return (
-    // HeroUI's variant for a field on a surface: every one of these sits in a dialog.
+    // HeroUI's variant for a field on a surface: in a dialog, or in the Processes panel's toolbar.
     <Select
       variant="secondary"
       fullWidth={!inline && !joined}
@@ -239,6 +242,7 @@ export function OptionSelect<T extends string>({
         <Select.Trigger
           ref={trigger}
           data-marquee-scope
+          data-region-landing={landing || undefined}
           className={
             joined === "start"
               ? "w-full flex-1 rounded-e-none"

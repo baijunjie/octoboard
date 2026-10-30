@@ -67,6 +67,7 @@ import { usePlatform } from "./platform/react";
 import { ALREADY_RUNNING_CODES, type Console, type ConsoleSessionColour, type Project, type Session } from "./protocol";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { PANEL_ENTRIES } from "./panels/panelRegistry";
+import { ProcessPanelProvider, useProcessPanel } from "./process/useProcessPanel";
 import { RightPane } from "./panels/RightPane";
 import { maximizedKind, openPanel, OWNER_KINDS, panelId, panelRegion, restoreStack, shownKinds, shownPanelRegions, stackedKinds, toggleKind, unavailableKinds as unavailableKindsOf, type OwnerKind, type PanelKind } from "./panels/stackState";
 import { useFloatingPanel } from "./panels/useFloatingPanel";
@@ -280,6 +281,15 @@ export function App(): React.ReactElement {
   const panelsKey = panelsOnScreen.join(",");
   const asideProjectId = ownerKind === "project" ? asideProject?.id : undefined;
   const visibleProjectPanels = asideProjectId === undefined ? undefined : { project: asideProjectId, kinds: panelsKey === "" ? [] : panelsKey.split(",") };
+  // Where the pane floats, the list is also kept up to date, slowly, for the swipe to know whether the panel has anything to show.
+  const processPanel = useProcessPanel(asideOwner, selectedSessionId, panelsOnScreen.includes("processes") ? "live" : asideFloats ? "background" : "off");
+  const hasShellTerminals = useDaemonStore((s) => asideOwner?.kind === "project" && Array.from(s.shellTerminals.values()).some((terminal) => terminal.project_id === asideOwner.project));
+  // A swipe opens only a panel with something to show: processes until the list is known to be empty, a terminal once there is one.
+  const swipeable = (kind: PanelKind) => {
+    if (kind === "processes") return processPanel.error !== undefined || processPanel.trees === undefined || processPanel.trees.length > 0;
+    return kind !== "terminal" || hasShellTerminals;
+  };
+  const swipeKinds = availableKinds.filter(swipeable);
   // A panel kind's toggle shows or hides its panel; pressing it while the pane floats in docks it.
   const togglePanel = (kind: PanelKind) => {
     if (!ownerKind || !ownerStack) return;
@@ -681,9 +691,11 @@ export function App(): React.ReactElement {
   };
 
   /** Opens a project's panel as its top-bar toggle opens it: the Terminal panel starts a shell
-   * only when the project has none. */
+   * only when the project has none, and the Processes panel lists the processes of all its sessions. */
   const openProjectPanel = (project: Project, kind: ProjectPanelKind) => {
     if (kind === "files") setProjectBrowserMode(project.id, "files");
+    // Every session's processes, not those of the selected session the panel would follow.
+    if (kind === "processes") processPanel.showAllOf(project.id);
     showProjectPanel(project.id, kind);
     if (kind === "terminal") void startShellTerminal(daemon, project.id, { ifNone: true });
   };
@@ -919,7 +931,8 @@ export function App(): React.ReactElement {
   }, [archivingStatus]);
   // A session being resumed, or switched to another account, still asks: archiving it would cut that
   // short. So does one with a bound branch or worktree git refuses to remove, or a locked worktree,
-  // which only the confirmation can take along; the daemon removes the rest once the process has
+  // which only the confirmation can take along, or with a process that has run for a while, which
+  // only the confirmation can keep running; the daemon removes the rest once the process has
   // ended. Finding that out takes a round trip, during which the session can change, a repeated
   // press is ignored, and a dialog opened meanwhile is left alone.
   const resuming = useLatest(resumingIds);
@@ -936,12 +949,12 @@ export function App(): React.ReactElement {
     }
     if (inspectingArchive.current.has(live.id)) return;
     inspectingArchive.current.add(live.id);
-    void inspectSessionBranches(request, [live.id]).then((branches) => {
+    void inspectSessionBranches(request, [live.id], true).then((inspection) => {
       inspectingArchive.current.delete(live.id);
       const now = store.getState().sessions.get(live.id);
       if (!now || now.status === "archived") return;
-      if (asksBeforeArchiving(now) || forcibleBranches(branches).length > 0 || lockedWorktrees(branches).length > 0) {
-        if (!openedDialog.current && !launchQuestionOpen.current) openDialog({ kind: "archive-session", session: now, branches });
+      if (asksBeforeArchiving(now) || forcibleBranches(inspection.items).length > 0 || lockedWorktrees(inspection.items).length > 0 || inspection.processes.length > 0) {
+        if (!openedDialog.current && !launchQuestionOpen.current) openDialog({ kind: "archive-session", session: now, inspection });
         return;
       }
       setArchivingId(now.id);
@@ -999,7 +1012,8 @@ export function App(): React.ReactElement {
     const action = resolveSwipe(toward, {
       hasDrawer: !noConsoles,
       drawerOpen: panes.sidebarOpen,
-      panelKinds: availableKinds,
+      panelKinds: swipeKinds,
+      panelOrder: ownerOrder,
       panel: floating.kind,
       lastPanel: ownerKind ? floating.lastOpened(ownerKind) : undefined,
     });
@@ -1252,28 +1266,30 @@ export function App(): React.ReactElement {
                 </div>
                 {asideOwner && (
                   <OpenShellTerminal.Provider value={stableOpenShellTerminal}>
-                    <RightPane
-                      owner={asideOwner}
-                      project={asideProject}
-                      layout={asideLayout}
-                      active={paneShown || panes.asidePeek.active}
-                      selectedSessionId={selectedSessionId}
-                      reportSessionId={reportSessionId}
-                      focusTerminal={focusTerminal}
-                      frameKeys={{
-                        onEscape: panes.dismissOverlays,
-                        onCycleRegion: regionCycle.cycle,
-                        onMoveHistory: navigation.moveByShortcut,
-                        onMoveConsoleSession: moveConsoleSession,
-                      }}
-                      peekKind={peekKind}
-                      onViewFile={viewLinkedFile}
-                      onDismiss={() => panes.asidePeek.hide()}
-                      maximizeArea={agentAreaRef}
-                      areaEasing={isDockEasing(sidebarColumnPhase)}
-                      float={asideFloat}
-                      floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
-                    />
+                    <ProcessPanelProvider value={processPanel}>
+                      <RightPane
+                        owner={asideOwner}
+                        project={asideProject}
+                        layout={asideLayout}
+                        active={paneShown || panes.asidePeek.active}
+                        selectedSessionId={selectedSessionId}
+                        reportSessionId={reportSessionId}
+                        focusTerminal={focusTerminal}
+                        frameKeys={{
+                          onEscape: panes.dismissOverlays,
+                          onCycleRegion: regionCycle.cycle,
+                          onMoveHistory: navigation.moveByShortcut,
+                          onMoveConsoleSession: moveConsoleSession,
+                        }}
+                        peekKind={peekKind}
+                        onViewFile={viewLinkedFile}
+                        onDismiss={() => panes.asidePeek.hide()}
+                        maximizeArea={agentAreaRef}
+                        areaEasing={isDockEasing(sidebarColumnPhase)}
+                        float={asideFloat}
+                        floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
+                      />
+                    </ProcessPanelProvider>
                   </OpenShellTerminal.Provider>
                 )}
               </main>

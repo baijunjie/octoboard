@@ -110,8 +110,10 @@ limitations of what the agents expose rather than of this one:
 - A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok Build but not by
   Codex, which has no such event; a Codex session asking that way reads as *working* unless its terminal title signals
   `Action Required`.
-- Work left running in the background is followed for **Claude Code only**. A Grok Build or Codex session whose turn
-  ends with work still running reads as *awaiting instructions*, never *working in background*.
+- For status reporting, work left running in the background is followed for **Claude Code only**. A Grok Build or Codex
+  session whose turn ends with work still running reads as *awaiting instructions*, never *working in background*.
+  Process cleanup follows every agent's launches separately (see "Automatic stopping and its boundaries" in
+  `docs/product/background-processes.md`).
 
 Part of the Grok Build case above is Octoboard's own attribution rule rather than a limit of what the agent exposes.
 Grok Build's turn-end backstop names no turn, so Octoboard attributes it by the clock: a turn that ended on its own, or
@@ -146,9 +148,9 @@ work: `id`, and `type` and `description` where Claude Code gives them.
 - A subagent stop that would leave nothing running takes effect only after about **2 seconds**, so one subagent handing
   over to the next does not make the session flash to *awaiting instructions* in between; a turn end, a subagent
   starting, or another subagent stop within that time decides the list instead.
-- The list goes when the session's process ends — archived, interrupted, switched to another account or handed off — and
-  the work goes with the process, as it does when the agent exits on its own (see "Archiving, interruption and resuming"
-  in `docs/product/archiving-and-resuming-sessions.md`).
+- The list goes when the session's process ends — archived, interrupted, switched to another account or handed off.
+  The launch's background work is stopped except for processes the user kept, under "Automatic stopping and its
+  boundaries" in `docs/product/background-processes.md`.
 - It is given only while the session is at its prompt: in any other status the session shows that status and no list,
   and what was last listed shows again if it comes back to its prompt without a new turn end.
 - Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code 2.1.303),

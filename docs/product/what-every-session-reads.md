@@ -411,6 +411,11 @@ And each record carries what tells sessions apart and what an owner decides on:
   would refuse it; `null` when that cannot be told, which `reopen_session` lets through. It is read in the daemon's own
   environment rather than a launch's, so in rare cases a reopen can find otherwise. A running session's record has no
   `resumable`.
+- `processes`, in `get_session`'s record only: for a session with a process running, the process trees its launch
+  holds (a dev server, a preview, a watcher), each with its `id`, `command`, `cwd`, `ports` and `started_at`, as the
+  process list shows them (see "Process information and actions" in `docs/product/background-processes.md`); an empty
+  list for any other session. These are the trees `handover_processes` names by `id`, and those stopped when the
+  session's process ends.
 - `model` and `effort`, the session's own launch choices (see `docs/product/model-and-reasoning-effort.md`): a key is
   absent when the session follows its project's, else its console's, setting, and `null` when the session leaves the
   value to the agent's own default. They differ from `observed_model` and `observed_effort`, which say what the agent's

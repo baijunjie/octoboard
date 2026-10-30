@@ -292,16 +292,17 @@ focus moves to the terminal, or to the top bar's first enabled control when the 
 
 ## What the right pane shows
 
-The right pane has one **owner** at a time: a console session, whose report panel it holds, or a project, whose Files
-and Terminal panels it holds, together with the selected project session's report panel while that session has pages
-(see `docs/product/right-pane-panels.md`). With no owner there is no right pane at all, no panel toggle in the top bar,
-and its width goes to the terminal. With an owner, the right pane is on screen while one of its owner's panels is open.
-The owner is set only by what the user does, never worked out from whatever else is on screen, so a project's Files
-panel can be shown with no session selected, or beside the terminal of a session of another project.
+The right pane has one **owner** at a time: a console session, whose report panel and Processes panel it holds, or a
+project, whose Files, Processes and Terminal panels it holds, together with the selected project session's report panel
+while that session has pages (see `docs/product/right-pane-panels.md`). With no owner there is no right pane at all, no
+panel toggle in the top bar, and its width goes to the terminal. With an owner, the right pane is on screen while one of
+its owner's panels is open. The owner is set only by what the user does, never worked out from whatever else is on
+screen, so a project's Files panel can be shown with no session selected, or beside the terminal of a session of another
+project.
 
-Each session has a **pane of its own**: a console session its report panel, a project session its project's Files
-and Terminal panels and, while it has pages, its own report panel (see "A project session's Report panel" in
-`docs/product/right-pane-panels.md`).
+Each session has a **pane of its own**: a console session its report panel and Processes panel, a project session its
+project's Files, Processes and Terminal panels and, while it has pages, its own report panel (see "A project session's
+Report panel" in `docs/product/right-pane-panels.md`).
 
 - **Selecting a session** gives the right pane to the session's own owner, whatever the session is selected from (see
   "Selecting a session" in `docs/product/sidebar.md`), a session this window has just opened included. Selecting another

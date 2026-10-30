@@ -19,6 +19,10 @@ accessible names, focus handling and announcements remain required.
 The user has kept a few shortfalls and overrides on purpose, each marked by a comment at its code saying so. Leave one
 that is marked as it is, and do not add a new exception without the user's say.
 
+One such kept shortfall is the Stop button's label on a process card in the dark appearance, below 4.5:1 (4.47:1 at
+rest and 4.2:1 with Stop hovered); see "Hand-built rows and cards". The card is a hand-built surface, so it is a shortfall
+of application-authored styling that the user chose to keep, not an approved departure from a HeroUI component's look.
+
 ### Confirmed visual choices
 
 #### One definition per semantic colour
@@ -219,7 +223,9 @@ while they are typing elsewhere. The latter starts on the dialog again for each 
 starts on the dialog, not on its first control (its close button), also when it comes up over a dialog that a press
 without a pointer opened (an assistive technology's press). A
 destructive confirmation (removing, deleting, archiving) is a warning modal: the warning icon in its header, the
-consequences as its body text (the sessions it ends or takes along listed in that body), its destructive confirm button
+consequences as its body text (the sessions it ends or takes along listed in that body; a confirmation sectioned by
+topic, as archiving, removing a project and deleting a console are, puts each section's consequences under that
+section's options instead, each section an `h3`-headed labelled group), its destructive confirm button
 the danger primary at the trailing edge; it is never an ordinary modal with a warning Alert inside it. A
 confirmation opened by picking a choice in a select returns focus to that select's trigger however it closes (Cancel,
 Escape or the confirm button), and the select shows the old choice until the confirmation succeeds. One that turns
@@ -1076,6 +1082,9 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 
 Rules 3 and 4 are "On the screen: an Alert when it matters, a mark at its point otherwise" below.
 
+The Processes panel keeps a failed refresh visible as a warning Alert above its existing rows and actions. The list
+may be stale, so the warning stays until a refresh succeeds; polling continues while it is shown.
+
 Once a submit has passed the form's own validation, anything that goes wrong afterwards — a refusal from the daemon
 included, even one about a single field's value — is a failure of the user's own action and opens the error alert
 dialog; the form stays open with its values intact, under it. Field validation never opens the dialog, and neither
@@ -1252,7 +1261,8 @@ list's bullets stay beside their text.
 
 Of what is shown on the screen rather than in the error alert dialog (rules 3 and 4 of "Where an error is shown"),
 where an error, a warning or a note is shown follows from whether it matters — not from how much it has to say or how
-busy the layout around it is:
+busy the layout around it is. The Processes panel's refresh warning is the explicit exception in "Where an error is
+shown":
 
 - **An important error from automatic behaviour** — one that blocks what follows (a lookup a form makes on its own
   failing, which stops the form from going on; a reason a dialog cannot proceed), or one a component cannot do its job
@@ -1271,7 +1281,7 @@ busy the layout around it is:
   description still follows its state (see `.claude/skills/knowledge-i18n-copy/SKILL.md`, "Descriptions under toggles")
   and does not repeat the Alert. A warning about the state of something — a check that failed, what could not be read —
   stays a mark, even beside a checkbox. In a destructive confirmation an option's consequence is instead a line of the
-  warning modal's consequences (see "Keyboard"); this Alert is for a form or a confirmation that is not destructive.
+  warning modal's consequences, or of its section's in a sectioned one (see "Keyboard"); this Alert is for a form or a confirmation that is not destructive.
 - **Any other error or warning, and a note** — one that does not block what follows — never takes an Alert where it has
   a point. It is a mark at the point it concerns: `StatusMark`, its glyph right after the name, heading or line it
   qualifies — a row or an item, a name, one section's heading in a list, a page's heading or a pane's or view's title
@@ -1686,18 +1696,28 @@ confirmation and the patterns known not to work.
 Keep HeroUI's default appearance, including its text and placeholder colours, hover opacity and the default fill,
 foreground and shadow of the variant or status chosen for a dialog or popover; the Alert's status background fill and
 the other departures recorded under "Confirmed visual choices" (the dimming of a disabled menu item or select option,
-and the hover and press feedback cancelled on a disabled menu item, among them), and a modal body's foreground text
-colour (see "One definition per semantic colour"), are approved exceptions. A contrast measurement alone does not
-justify changing its colours, theme tokens, borders, frames or outlines, so add no colour or opacity override to make a
-default component pass the custom-style thresholds. Use the component's own supported variants and slots; layout and
-sizing adaptations do not authorize replacing its visual treatment. Application-authored text on a custom surface is
-checked against its actual background in both appearances.
+and the hover and press feedback cancelled on a disabled menu item, among them), the clear buttons' round fill ("Clear
+buttons" below) and a modal body's foreground text colour (see "One definition per semantic colour"), are approved
+exceptions. A contrast measurement alone does not justify changing its colours, theme tokens, borders, frames or
+outlines, so add no colour or opacity override to make a default component pass the custom-style thresholds. Use the
+component's own supported variants and slots; layout and sizing adaptations do not authorize replacing its visual
+treatment. Application-authored text on a custom surface is checked against its actual background in both appearances.
 
 ### Form controls on a surface
 
 A form control on a surface — in a dialog, a popover, a card — takes HeroUI's `variant="secondary"` (`TextField`,
 `Input`, `Select`, `Checkbox` alike), HeroUI's own variant for that case. The default variant leaves it blending into
 the surface in both appearances.
+
+### Clear buttons
+
+The clear button inside a search field and a select (`.search-field__clear-button`, `.select__clear-button` in
+`packages/ui/src/style.css`) keeps HeroUI's look at rest. While the pointer is over the field or the field holds focus,
+its round fill is set a little darker than the field (`--default-hover` mixed 12% towards `--default-foreground`, 20%
+under the pointer or a press): HeroUI's own fill is the field's colour or one step off it, so the circle all but
+vanished against the hovered or focused field. The × keeps HeroUI's colour. One rule covers every such button, so
+none is restyled where it is used. This is an approved departure from HeroUI's default look, by the user's decision
+(see "Do not change how a HeroUI component looks").
 
 ### Hand-built rows and cards
 
@@ -1724,6 +1744,15 @@ hands keyboard focus to the row before the button disappears. Keyboard focus kee
 Focus-mode session cards use the opaque `--panel` surface over the sidebar's `--panel-sidebar`, with the existing
 hover and selected tints on top. Their titles use the shared single-line fading label, including its full-name
 tooltip and hover marquee, rather than an ellipsis or a line clamp.
+
+The Processes panel's process cards are hand-built on `--panel-row`: the surface (white) in light, and in dark
+`oklch(0.29 0.006 286)`, one step above the panel's `oklch(0.27)` so the card still reads as raised, with the panel
+shadow. In dark that leaves a `danger-soft` button's label (the row's Stop) short of 4.5:1 on the card: 4.47:1 at rest and
+4.2:1 with Stop hovered (its fill then deepens to 20% of the danger colour from 15%). A card dark enough to reach 4.5:1
+at rest (about `oklch(0.275)`) no longer stands apart from the panel, and HeroUI's own surface is darker than the panel.
+Keeping the raised card is a kept shortfall by the user's decision (see "Conformance level and exceptions"), marked at
+`--panel-row` in `packages/ui/src/style.css` and at the card in `ProcessesPanel.tsx`; the buttons themselves keep
+HeroUI's look.
 
 ### A colour mark whose meaning is in words
 

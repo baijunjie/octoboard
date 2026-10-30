@@ -58,6 +58,28 @@ export function isProjectFolderUnknown(item: { state: SessionBranchState; cause?
   return item.state === "failed" && item.cause === "project_folder_unknown";
 }
 
+/** A group of one launch's processes: a top process and its attributed descendants, or, with no
+ * `session_id`, a project process: one the user kept, one a failed account switch left, or one left behind
+ * in a removed directory of a project. `id` is what `stop_processes` and `keep_processes` name it by. */
+export interface ProcessTree {
+  id: string;
+  /** The session whose launch the tree belongs to; absent for a project process. */
+  session_id?: string;
+  /** The user kept the tree, or a failed account switch left it: no session stops it. */
+  kept: boolean;
+  /** The top process's arguments joined; empty when they could not be read. */
+  command: string;
+  cwd: string | null;
+  /** The top process's working directory was removed. */
+  cwd_missing: boolean;
+  /** When the top process started, in milliseconds since the Unix epoch. */
+  started_at: number;
+  process_count: number;
+  memory_bytes: number;
+  /** The TCP ports the tree listens on, sorted. */
+  ports: number[];
+}
+
 /** A bound item a request forces or keeps, named as its `SessionBranchItem` names it and in the
  * state the user was shown it in: a forced removal goes only while it still stands so. */
 export type SessionBranchTarget = Pick<SessionBranchItem, "kind" | "repository" | "branch" | "path" | "state" | "uncommitted">;
@@ -1547,8 +1569,9 @@ export type RequestBody =
   }
   /** Bound branches and worktrees go once the archived sessions' processes have ended; those
    * `force_remove` names go although git would refuse them, and those `keep` names, which the
-   * confirmation listed and the user kept, are not reported when they stay. */
-  | { type: "archive_session"; session: string; force_remove?: SessionBranchTarget[]; keep?: SessionBranchTarget[] }
+   * confirmation listed and the user kept, are not reported when they stay. `keep_process_ids` are
+   * process trees the user chose to keep running: kept before the session's processes are ended. */
+  | { type: "archive_session"; session: string; force_remove?: SessionBranchTarget[]; keep?: SessionBranchTarget[]; keep_process_ids?: string[] }
   /** Moves the session to another account of its own agent: its process ends, its conversation is
    * copied into that account's directory, and it is relaunched there. `account` is the target by
    * id, or `null` for the default account; it is always sent. Answered once the relaunched session
@@ -1605,8 +1628,18 @@ export type RequestBody =
   /** Inspects the agent-native files of the entire supplied deletion scope; reads no transcripts. */
   | { type: "inspect_session_records"; sessions: string[] }
   /** The git branches and linked worktrees bound to exactly the supplied sessions, as an archive
-   * or a deletion of them would find them now. */
-  | { type: "inspect_session_branches"; sessions: string[] }
+   * or a deletion of them would find them now. With `processes`, the reply also lists the trees of
+   * these sessions that have run long enough for an archive to ask about them. */
+  | { type: "inspect_session_branches"; sessions: string[]; processes?: boolean }
+  /** With `session_id`, the trees of the session's current launch (refused with
+   * `session_not_running` when it has no process); with `project_id`, those of every running
+   * session of the project, then the project's leftovers. */
+  | { type: "list_processes"; session_id: string }
+  | { type: "list_processes"; project_id: string }
+  /** Stops the trees that are still a followed launch's, or a project's leftovers. */
+  | { type: "stop_processes"; ids: string[] }
+  /** Makes the trees the user's: never listed or stopped by the daemon again. */
+  | { type: "keep_processes"; ids: string[] }
   /** What `delete_project` with `trash_directory` would also remove: the linked worktrees outside
    * its folder (every one when the folder holds the repository, those bound to its sessions
    * otherwise) and, when the repository outlives the folder, the bound branches. Refused as that
@@ -1853,10 +1886,16 @@ export type Event =
   /** `unavailable` is set when the agent's record is not found or cannot be read. */
   | { type: "session_history"; id?: string; session: string; messages: HistoryMessage[]; unavailable?: boolean }
   | { type: "session_records_inspected"; id?: string; presence: SessionRecordsPresence }
-  | { type: "session_branches_inspected"; id?: string; items: SessionBranchItem[] }
-  /** `inspection` is the token the worktrees it held back are kept under, those of which whether they are or hold another
+  | { type: "session_branches_inspected"; id?: string; items: SessionBranchItem[]; processes?: ProcessTree[] }
+  | { type: "processes_listed"; id?: string; trees: ProcessTree[] }
+  /** `ids` are the trees that were stopped. */
+  | { type: "processes_stopped"; id?: string; ids: string[] }
+  /** `ids` are the trees that were kept. */
+  | { type: "processes_kept"; id?: string; ids: string[] }
+  /** `processes` are the project's processes, which its removal stops (`ProcessTree`s with no `session_id`).
+   * `inspection` is the token the worktrees it held back are kept under, those of which whether they are or hold another
    * project's folder could not be told, for `delete_project` to send back so that they stay held back. */
-  | { type: "project_removal_inspected"; id?: string; items: SessionBranchItem[]; inspection?: string }
+  | { type: "project_removal_inspected"; id?: string; items: SessionBranchItem[]; processes: ProcessTree[]; inspection?: string }
   | {
     type: "snapshot";
     hosts: Host[];
@@ -2238,6 +2277,10 @@ export const SESSION_NOT_BOUND = "session_not_bound";
 /** A release of a session that was bound to another owner meanwhile: it is still bound, so the dialog
  * that asked shows the refusal and stays open, naming the owner it now reads. */
 export const SESSION_BINDING_CHANGED = "session_binding_changed";
+
+/** A list of the processes of a session that has none running (it ended meanwhile): the session has
+ * no process left to show, so the list reads as empty and nothing is raised. */
+export const SESSION_NOT_RUNNING = "session_not_running";
 
 /** A browse request given up for a newer one in its slot, as the client asked: nothing is shown. */
 export const REQUEST_SUPERSEDED = "request_superseded";

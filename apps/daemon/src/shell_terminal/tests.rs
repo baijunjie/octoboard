@@ -349,6 +349,7 @@ fn a_shell_starts_in_the_snapshot_or_else_in_the_daemons_environment_without_age
             ("PATH", "/inherited/bin"),
             ("CLAUDECODE", "1"),
             ("OCTOBOARD_SESSION_ID", "s1"),
+            ("OCTOBOARD_PROCESS_TAG", "instance:launch"),
             ("TERM", "dumb"),
         ]
         .into_iter()

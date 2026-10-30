@@ -3,7 +3,7 @@ import type { AsideOwner } from "../layout/asideOwner";
 /** The kinds of panel the right pane can stack, in the order they are stacked top to bottom and the
  * order F6 visits them. A later kind (a browser) is one more entry here and one in
  * `panelRegistry.tsx`. */
-export const PANEL_KINDS = ["report", "files", "terminal"] as const;
+export const PANEL_KINDS = ["report", "files", "processes", "terminal"] as const;
 export type PanelKind = (typeof PANEL_KINDS)[number];
 
 /** Who owns the right pane (`layout/asideOwner.ts`'s kinds): each owner has a stack of its own kinds,
@@ -11,7 +11,7 @@ export type PanelKind = (typeof PANEL_KINDS)[number];
  * the Report panel, which is not the project's but that of the project session selected, and so is
  * kept apart from the stack the project's sessions share (`SESSION_KINDS`, `usePanelStacks.ts`). */
 export type OwnerKind = AsideOwner["kind"];
-export const OWNER_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["report", "files", "terminal"], report: ["report"] };
+export const OWNER_KINDS: Record<OwnerKind, readonly PanelKind[]> = { project: ["report", "files", "processes", "terminal"], report: ["report", "processes"] };
 
 /** The kinds of an owner's stack that belong to a session rather than to the owner: whether one is
  * open is kept per session, not in the stack every session of the owner shares. */

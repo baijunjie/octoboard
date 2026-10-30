@@ -1,8 +1,9 @@
 # Application lifecycle
 
 Octoboard comes in two forms. This document describes the **desktop form**, the macOS application, in full: the agent
-processes are owned by a background daemon that starts and stops with it; nothing keeps running once the application is
-gone. Closing the window quits the application unless the user has turned on keeping it running in the background, a
+processes are owned by a background daemon that starts and stops with it; background processes the user chose to keep
+are managed by the user instead (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`).
+Closing the window quits the application unless the user has turned on keeping it running in the background, a
 setting that is off to begin with (see "Closing the window" below). What the **server form** — the daemon alone, on a
 Linux server without a display, reached by its owner from a browser on another machine — changes is said where it
 applies, and in "The daemon on its own" below. That form is not built yet, so those passages state what already follows
@@ -31,11 +32,13 @@ temporary directory, for a developer attaching to a daemon started by hand (see 
 fits the server form: nothing off the server can reach loopback, and a port that changes on every start cannot be
 bookmarked or written into a tunnel command; the address the daemon listens on there does not exist yet.
 
-Two things happen on every daemon start:
+On every daemon start:
 
-- **Every session a previous run left behind becomes *interrupted*.** None of those processes survived, whatever the
-  stored status said. Archived sessions are left as they are.
+- **Every session a previous run left behind becomes *interrupted*.** No process from that run is adopted as a running
+  session, whatever the stored status said. Archived sessions are left as they are.
 - Per-session scratch space from previous runs is cleared.
+- Saved background-process records are reconciled under "Automatic stopping and its boundaries" in
+  `docs/product/background-processes.md`.
 
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
 processes while sharing one database, so it refuses to start. The application then opens its window anyway, on a screen
@@ -277,10 +280,11 @@ interrupted and resumable.
   daemon on its own" below).
 - Agent processes do not outlive the daemon: it ends them on its way out, including when it is signalled to stop and
   when it goes down on an internal failure.
-- Nothing an agent started outlives it: whatever is left in its terminal session is killed once its process ends
-  (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). When the daemon
-  goes down on an internal failure, it kills every process in each agent's terminal session along with the agent,
-  helpers in process groups of their own included; one that detached into a session of its own is out of reach.
+- A normal process exit stops the launch's attributed background processes, subject to the user's keeps and the
+  boundaries in "Automatic stopping and its boundaries" in `docs/product/background-processes.md`. On an internal
+  failure the daemon also kills every process in each agent's terminal session, helpers in process groups of their
+  own included. At the next daemon start, saved process records allow cleanup of attributed processes that survived
+  outside those terminal sessions, while preserving kept processes.
 - Shell terminals do not outlive the daemon either (see "Closing a shell terminal" in
   `docs/product/shell-terminals.md`).
 - Should a session's process nonetheless survive, the next start still marks every non-archived session interrupted
@@ -324,6 +328,7 @@ server form is the server — with two exceptions, the window's state and the po
 | `~/.octoboard/output/<session id>` | The saved terminal preview shown for an interrupted session (see "Interrupted, archived and dormant sessions" in `docs/product/session-terminal.md` for its capture rules and limits). Written when the process ends, including when the daemon stops it on its way out, but not when the daemon itself goes down on an internal failure. Starting a new process discards it. Removed with the session's record; on daemon start, any left for a session that no longer exists is removed. |
 | `~/.octoboard/handoff/<session id>.md` | The handoff package a session read when it took over another session's place (see "The handoff package" in `docs/product/handing-off-sessions.md`), named for the receiving session. Removed with that session's record; on daemon start, any left for a session that no longer exists, and any half-written one, is removed. |
 | `~/.octoboard/daemon.lock` | Enforces one daemon per data directory. |
+| `~/.octoboard/process-ledger.json` | The launch identities, attributed processes and user keeps used for background-process cleanup across daemon restarts (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). An unreadable file is moved aside as `process-ledger.json.unreadable`; processes identified only by their launch tag are kept rather than stopped without knowing the user's choices. |
 
 The macOS application keeps the window's size, position and maximized state in
 `~/Library/Application Support/dev.octoboard.desktop/window-state.json` (see "The window's size and position across

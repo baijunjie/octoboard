@@ -1,4 +1,3 @@
-import { Disclosure, Surface } from "@heroui/react";
 import React, { useId, useState } from "react";
 
 import { BranchGroups, type BranchGroup, type BranchRow } from "../components/BranchGroups";
@@ -10,7 +9,8 @@ import { useDaemonStore } from "../store";
 import { displayWirePath } from "../wirePath";
 import { ConfirmOption } from "./ConfirmOption";
 import { KeepFocusInDialog } from "./KeepFocusInDialog";
-import { branchChoices, forcibleBranches, lockedWorktrees, useProjectRemovalBranches, useSessionBranches } from "./useSessionBranches";
+import { OptionDetails } from "./OptionDetails";
+import { branchChoices, forcibleBranches, lockedWorktrees, useProjectRemovalBranches, type Inspected } from "./useSessionBranches";
 
 /** A line the dialog's consequences add while an option is ticked: `key` names its kind, so a line
  * whose count changes stays the same line. */
@@ -29,31 +29,16 @@ function useRows(): (items: SessionBranchItem[], tagChanges?: boolean) => Branch
   }));
 }
 
-/** A disclosure, collapsed until asked, over the groups an option covers: a real button with a name
- * that stays put, its state carried by `aria-expanded` and the indicator, described by the option
- * it belongs to (`describedBy`). It is no heading, so several in one dialog add nothing to its
- * outline. The expanded list sits on a secondary `Surface`, which sets the listed items apart from the
- * option's own label and hint as one block the option covers. It stays as the user left it for as long
- * as it is shown. */
+/** The disclosure of the groups an option covers (see `OptionDetails`). */
 function BranchDisclosure({ groups, describedBy, name }: {
   groups: BranchGroup[];
   describedBy: string;
   name: string;
 }): React.ReactElement {
   return (
-    <Disclosure>
-      <Disclosure.Trigger aria-describedby={describedBy} className="flex items-center gap-1 text-sm font-medium text-foreground">
-        {name}
-        <Disclosure.Indicator className="ms-0" />
-      </Disclosure.Trigger>
-      <Disclosure.Content>
-        <Disclosure.Body className="px-0">
-          <Surface variant="secondary" className="rounded-lg px-3 py-2">
-            <BranchGroups groups={groups} animate />
-          </Surface>
-        </Disclosure.Body>
-      </Disclosure.Content>
-    </Disclosure>
+    <OptionDetails describedBy={describedBy} name={name}>
+      <BranchGroups groups={groups} animate />
+    </OptionDetails>
   );
 }
 
@@ -114,17 +99,19 @@ export function useChoiceOver(items: SessionBranchItem[]): [boolean, (selected: 
  * (`force_remove`, and in `keep` what was listed and left unticked), `consequences` are the lines
  * the confirmation's consequence text adds while they are ticked, and `pending` holds Confirm while the
  * scope's inspection is on its way; `forcing` is whether either checkbox is ticked, for a
- * confirmation whose label, and for archiving its colour, say it deletes too. */
-export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchItem[]): {
+ * confirmation whose label, and for archiving its colour, say it deletes too. `inspected` is what the
+ * scope's inspection found (`useArchiveInspection`, `useSessionBranches`). */
+export function useBranchCleanup({ items, pending }: Inspected): {
   choices: ReturnType<typeof branchChoices>;
   pending: boolean;
   forcing: boolean;
+  /** Whether there is a checkbox to show, for a caller that heads them with a section of its own. */
+  offered: boolean;
   consequences: ConsequenceLine[];
   extraControl: (busy: boolean) => React.ReactNode;
 } {
   const t = useT();
   const rows = useRows();
-  const { items, pending } = useSessionBranches(sessionIds, initial);
   const forcible = forcibleBranches(items);
   const locked = lockedWorktrees(items);
   const [force, setForce] = useChoiceOver(forcible);
@@ -139,6 +126,7 @@ export function useBranchCleanup(sessionIds: string[], initial?: SessionBranchIt
     choices: branchChoices(forced, kept),
     pending,
     forcing: forced.length > 0,
+    offered: forcible.length > 0 || locked.length > 0,
     consequences: [
       ...(force ? [{ key: "force", text: <Message id="branchCleanup.consequence.force" params={{ count: forcible.length }} /> }] : []),
       ...(removeLocked ? [{ key: "locked", text: <Message id="branchCleanup.consequence.locked" params={{ count: locked.length }} /> }] : []),

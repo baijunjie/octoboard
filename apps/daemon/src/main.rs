@@ -51,6 +51,8 @@ mod open_terminal;
 mod outbox;
 mod path_links;
 mod paths;
+mod process_ledger;
+mod process_requests;
 mod process_session;
 mod project_trash;
 mod protocol;
@@ -263,6 +265,8 @@ fn main() -> Result<()> {
         return mcp::stdio::run(session, role.into(), bound, port, token);
     }
 
+    // While this is still the only thread.
+    process_ledger::forget_inherited_tag();
     init_logging();
     crash_cleanup::install();
 
@@ -332,6 +336,7 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
         paths::saved_output_dir(),
         paths::consoles_dir(),
         paths::handoff_dir(),
+        process_ledger::ProcessLedger::new(&paths::data_dir()),
     ));
     // Saved output whose session is gone (a daemon that died between deleting the record and the
     // file) or whose write was cut short has nothing else to remove it.
@@ -365,6 +370,10 @@ async fn run_daemon(parent_pid: Option<u32>) -> Result<()> {
     // Likewise off the runtime: it runs `git` in every project's directory, a few at a time.
     git_remote::reconcile_remote_urls(&state);
     git_watch::start(&state);
+    // On a thread of its own: what the previous run's agents left is stopped without holding up
+    // anything else. A launch meanwhile is safe from it, since its launch id is reserved before its
+    // agent starts.
+    state.process_ledger.start(true);
 
     let serve = axum::serve(listener, server::router(state.clone()));
     tokio::select! {

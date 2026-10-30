@@ -400,7 +400,7 @@ export const focusScenarios: Scenario[] = [
     title: "Project focus, header menu",
     state,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `project:${project.id}` },
-    description: "The header's menu has no View archive: the Archived list below the sessions already lists the archive and opens it in full with View all.",
+    description: "The header's menu starts with Open panel. It has no View archive: the Archived list below the sessions already lists the archive and opens it in full with View all.",
     steps: [(ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name }))],
   },
   {
@@ -587,7 +587,7 @@ export const focusScenarios: Scenario[] = [
     title: "Archived session actions",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and ten directly bound archived parents, all shown without View all. The menu offers Reopen, Copy session ID and a destructive Delete after a divider; there is no Hand off. Copy session ID shows the ID beneath its label inside the same item, directly after Reopen. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
+    description: "The headings count zero live sessions and ten directly bound archived parents, all shown without View all. The menu offers Reopen, Copy session ID and a destructive Delete after a divider; there is no Hand off. Processes is a right-panel toggle rather than a session-menu entry. Copy session ID shows the ID beneath its label inside the same item, directly after Reopen. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewLead.title }))],
   },
   {

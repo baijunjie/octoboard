@@ -105,14 +105,14 @@ A session row's action menu offers:
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`). A session at its prompt or interrupted, with no unarchived session
   under it, is archived at once, unless a branch or worktree bound to it needs the user's word (see "The confirmation"
-  in `docs/product/branch-and-worktree-cleanup.md`); any other asks for confirmation first, and so does one still being
-  resumed or shown as switching its account. When the archived row takes keyboard focus with it, focus goes to the
-  terminal. The console session can also archive itself once nothing under it is unarchived (see "A session archiving
-  itself" in `docs/product/hub-orchestration.md`); its confirmation lists the interrupted sessions under it — bound to
-  it, or to a coordinator bound to it (see "Coordinators with a parent session" in `docs/product/hub-orchestration.md`)
-  — in its
-  consequences, under a line giving their number as the ones archived with it, and the archive is refused, with the
-  sessions named, while any session under it has a process running. A project session that has started sessions is
+  in `docs/product/branch-and-worktree-cleanup.md`) or background-process choices need confirmation (see "Processes in
+  an archive confirmation" in `docs/product/background-processes.md`); any other asks for confirmation first, and so
+  does one still being resumed or shown as switching its account. When the archived row takes keyboard focus with it,
+  focus goes to the terminal. The console session can also archive itself once nothing under it is unarchived (see "A
+  session archiving itself" in `docs/product/hub-orchestration.md`); its confirmation lists the interrupted sessions
+  under it — bound to it, or to a coordinator bound to it (see "Coordinators with a parent session" in
+  `docs/product/hub-orchestration.md`) — under its **Archived with it (n)** heading, and the archive is refused, with
+  the sessions named, while any session under it has a process running. A project session that has started sessions is
   archived under the same rule, with the same confirmation while any of them is unarchived.
 - **Delete**, in place of Archive for a session that has never been used and is not still starting (what counts as
   unused is in "Deleting an unused session" in `docs/product/deleting-sessions.md`); it stops the session and deletes
@@ -132,9 +132,9 @@ A row whose menu offers **Archive** instead carries an Archive button while arch
 confirmation: the session is at its prompt or interrupted, no unarchived session is bound to it or to a session bound to
 it, and it has been used. Pressing Archive does what the menu's **Archive** does — a session still being resumed or
 shown as switching its account asks for confirmation first there too, and so does one with a bound branch or worktree
-that needs the user's word — and when the row leaves with keyboard focus, focus goes to the terminal. When the Archive
-conditions stop holding — the session starts working or raises a hand, or a session becomes bound to it — the button
-goes away.
+that needs the user's word or background-process choices — and when the row leaves with keyboard focus, focus goes to
+the terminal. When the Archive conditions stop holding — the session starts working or raises a hand, or a session
+becomes bound to it — the button goes away.
 
 A pinned session's pin button stays before the shortcut. A mouse press on either shortcut neither selects the row
 nor moves keyboard focus. Its tooltip is "Delete" or "Archive", while the name assistive technology announces for it

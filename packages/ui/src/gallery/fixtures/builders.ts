@@ -1,7 +1,7 @@
 import { DEFAULT_GIT_WORKFLOW, FOLLOWING_GIT_WORKFLOW } from "../../gitWorkflow";
 import type { PlainMessageKey, Translate } from "../../i18n/catalog";
 import { hasClaudeCompatibility } from "../../settings/claudeCompatibility";
-import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
+import type { AccountQuota, AccountSharing, Agent, Console, FileContent, GitStatus, Host, Page, ProcessTree, Project, Session, SessionBranchItem, SessionBranchState, SessionContext, SessionStatus, Settings, ShellTerminal } from "../../protocol";
 import type { SessionRequest, State, TrustPrompt } from "../../store";
 
 /** Every agent, as the list of added agents of a user who has added them all (in the default order). */
@@ -131,6 +131,40 @@ export function unknownFolderWorktreeOf(project: Project, session: Session | nul
     detail: "whether it is or holds another project's folder could not be told",
     cause: "project_folder_unknown",
   };
+}
+
+/** A process tree the daemon follows for the launch of `session`: one process started `minutes` ago in `cwd`, with
+ * no ports; `extra` sets what the view needs (its count, memory, ports, or a working directory that is unknown or
+ * deleted). */
+export function processTreeOf(
+  id: string,
+  session: Session,
+  command: string,
+  minutes: number,
+  extra: Partial<Omit<ProcessTree, "id" | "session_id" | "command" | "started_at">> = {},
+): ProcessTree & { session_id: string } {
+  return { id, session_id: session.id, kept: false, command, cwd: "/Users/dev/code/website", cwd_missing: false, started_at: minutesAgo(minutes), process_count: 1, memory_bytes: 48_000_000, ports: [], ...extra };
+}
+
+/** A project process left behind in a removed directory of a project, which belongs to no session. */
+export function leftoverOf(
+  id: string,
+  command: string,
+  minutes: number,
+  extra: Partial<Omit<ProcessTree, "id" | "session_id" | "command" | "started_at">> = {},
+): Omit<ProcessTree, "session_id"> {
+  return { id, kept: false, command, cwd: "/Users/dev/code/website/.worktrees/old-nav", cwd_missing: true, started_at: minutesAgo(minutes), process_count: 1, memory_bytes: 48_000_000, ports: [], ...extra };
+}
+
+/** A project process the user kept past the end of its session (or a failed account switch left): it belongs to no
+ * session, and its directory is still there. */
+export function keptOf(
+  id: string,
+  command: string,
+  minutes: number,
+  extra: Partial<Omit<ProcessTree, "id" | "session_id" | "command" | "started_at">> = {},
+): Omit<ProcessTree, "session_id"> {
+  return leftoverOf(id, command, minutes, { kept: true, cwd: "/Users/dev/code/website", cwd_missing: false, ...extra });
 }
 
 export function pageOf(id: string, consoleSessionId: string, html: string, minutes: number): Page {

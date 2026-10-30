@@ -53,9 +53,10 @@ in** and **Git** submenus; managing the project itself (**Rename**, **Copy proje
   shows only a disabled item saying so. On a project's heading in a console session's focus mode, the submenu covers
   only the project's share of that console session's archive, and its View all opens the console session's archive view
   instead (see "A console session's focus mode" in `docs/product/focus-mode.md`).
-- **Open panel** — a submenu with **Files**, then **Terminal**, which open that panel of the project's right pane
-  inside the window; an entry whose panel is already on screen for the project is left out, and so is the submenu when
-  both are (see "Opening a panel from a project's action menu" in `docs/product/right-pane-panels.md`).
+- **Open panel** — a submenu with **Files**, then **Processes**, then **Terminal**, which open that panel of the
+  project's right pane inside the window; an entry whose panel is already on screen for the project is left out, and so
+  is the submenu when all are (see "Opening a panel from a project's action menu" in
+  `docs/product/right-pane-panels.md`).
 - **Open in** — a submenu with **File manager**, then **System terminal**, then the project's repository host when
   available. File manager opens the project's directory on the daemon's host (see "Opening the system file manager"
   below). System terminal opens the operating system's terminal application at that directory (see "Opening a project

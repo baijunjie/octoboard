@@ -55,6 +55,7 @@ use super::handover::{self, branch_names, held_by};
 use super::history;
 use super::models;
 use super::pages;
+use super::process_handover;
 use super::project_branches;
 use super::project_changes;
 use super::quotas;
@@ -108,6 +109,9 @@ pub async fn call(
             .await
         }
         "handover_branches" => handover::handover_branches(state, &session, arguments).await,
+        "handover_processes" => {
+            process_handover::handover_processes(state, &session, arguments).await
+        }
         "handoff_session" => {
             handoff::handoff_session(state, &session, arguments, crate::term::launch).await
         }

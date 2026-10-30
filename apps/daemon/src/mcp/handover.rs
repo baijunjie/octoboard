@@ -226,7 +226,7 @@ pub(super) async fn handover_branches(
 
 /// The session `key` names — the caller itself when it is left out — as the caller may act on
 /// it: itself, or a session it owns.
-fn party(
+pub(super) fn party(
     state: &Arc<AppState>,
     caller: &Session,
     arguments: &Map<String, Value>,
@@ -288,31 +288,33 @@ async fn refuse_unless_in_the_repository(
 /// count: a prompt the agent shows (Codex's "Action Required" terminal title) can be seen before
 /// the record has caught up with it.
 fn refuse_if_at_work(state: &Arc<AppState>, from: &Session) -> Result<()> {
-    let busy = [from.status, state.agent_status(from)]
-        .into_iter()
-        .find(|status| {
-            matches!(
-                status,
-                SessionStatus::Working | SessionStatus::Starting | SessionStatus::WaitingUser
-            )
-        });
-    let Some(status) = busy else {
+    let Some(busy) = busy_phrase(state, from) else {
         return Ok(());
     };
     Err(CodedError::raised(
         error_code::SESSION_WORKING,
         format!(
-            "{} is {}: a session in the middle of a turn goes on writing to the worktrees of its \
-             branches. Hand them over once it is awaiting instructions, or has been interrupted",
+            "{} is {busy}: a session in the middle of a turn goes on writing to the worktrees of \
+             its branches. Hand them over once it is awaiting instructions, or has been \
+             interrupted",
             named_session(from),
-            match status {
-                SessionStatus::Working => "in the middle of a turn",
-                SessionStatus::Starting => "still starting",
-                _ => "waiting for the user, so in the middle of a turn",
-            }
         ),
         &[("session", &from.id)],
     ))
+}
+
+/// How `session` is occupied when it is in the middle of a turn, as a phrase after "is", or
+/// `None` when it is not: working, starting, or held up for the user. Both the record and the
+/// status the agent is at count.
+pub(super) fn busy_phrase(state: &Arc<AppState>, session: &Session) -> Option<&'static str> {
+    [session.status, state.agent_status(session)]
+        .into_iter()
+        .find_map(|status| match status {
+            SessionStatus::Working => Some("in the middle of a turn"),
+            SessionStatus::Starting => Some("still starting"),
+            SessionStatus::WaitingUser => Some("waiting for the user, so in the middle of a turn"),
+            _ => None,
+        })
 }
 
 /// Where each of `branches` is checked out now, as its wire path, its name as text and its

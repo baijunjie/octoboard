@@ -78,8 +78,8 @@ both run, in the same session.
 
 ## What is injected on every launch
 
-Three things, and for Claude Code a status line besides (see "Claude Code's status line" below), and nothing else,
-besides the variables a project session's agent is given for its git (see "The launch environment" below):
+The following capabilities, and for Claude Code a status line besides (see "Claude Code's status line" below), plus
+the launch environment described below:
 
 - **Status hooks** — the events the session statuses in `docs/product/session-statuses.md` are derived from.
 - **Octoboard's own MCP server** — the tools described in `docs/product/hub-orchestration.md`. It is a child process of
@@ -359,6 +359,9 @@ Two groups of variables are removed from that snapshot:
 
 Besides the terminal type, the variables set over the snapshot are:
 
+- `OCTOBOARD_PROCESS_TAG`, a fresh identity for every launch, including resumes and account switches, inherited by its
+  subprocesses so Octoboard can follow and clean up the launch's background work (see "Automatic stopping and its
+  boundaries" in `docs/product/background-processes.md`). An inherited tag from the environment snapshot is removed;
 - `HOME`, when the user's shell leaves it unset, empty or relative: the daemon's own home directory (`HOME` when
   absolute, else the user's entry in the system user database, else `/`), so that every directory an agent or
   Octoboard takes from it is one place rather than one relative to the session's working directory;

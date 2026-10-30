@@ -19,7 +19,7 @@ export type ArchiveScope = { console: string } &
   );
 
 /** The panels of a project's right pane that a project menu can open. */
-export type ProjectPanelKind = Extract<PanelKind, "files" | "terminal">;
+export type ProjectPanelKind = Extract<PanelKind, "files" | "processes" | "terminal">;
 
 /** What focus mode is given over to: one project, or one console session. */
 export type FocusTarget = { project: Project } | { consoleSession: Session };

@@ -299,6 +299,9 @@ pub struct AppState {
     /// The removal inspections' refusals that a path that could not be resolved decided, by token
     /// (`crate::project_trash`). Held in memory only. Dropped with their project.
     pub unresolved_removals: crate::project_trash::UnresolvedRemovals,
+    /// The processes each agent launch started outside its terminal session, stopped when the
+    /// launch ends (`crate::process_ledger`).
+    pub process_ledger: Arc<crate::process_ledger::ProcessLedger>,
 }
 
 /// Blocking work that outran its deadline and whose thread is still stuck, one per key — a console
@@ -637,6 +640,7 @@ impl AppState {
         saved_output_dir: std::path::PathBuf,
         consoles_dir: std::path::PathBuf,
         handoff_dir: std::path::PathBuf,
+        process_ledger: Arc<crate::process_ledger::ProcessLedger>,
     ) -> Self {
         let (events, _) = broadcast::channel(1024);
         Self {
@@ -702,6 +706,7 @@ impl AppState {
             interrupts: Mutex::new(HashSet::new()),
             stalled_directory_passes: Default::default(),
             unresolved_removals: Default::default(),
+            process_ledger,
         }
     }
 
@@ -1128,6 +1133,8 @@ impl AppState {
 
     pub fn register_live(self: &Arc<Self>, session: Arc<LiveSession>) {
         session.enter_crash_cleanup();
+        self.process_ledger
+            .launch_started(&session.launch_id, &session.id, session.pid);
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.sessions.insert(session.id.clone(), session.clone());
         drop(live);
@@ -1135,8 +1142,9 @@ impl AppState {
         // sessions has listed the running ones already, so this one is ended here. The exit
         // watcher records it interrupted, as for the rest.
         if self.shutting_down.load(Ordering::Acquire) {
-            let late = session.clone();
+            let (late, ledger) = (session.clone(), Arc::clone(&self.process_ledger));
             std::thread::spawn(move || {
+                ledger.scan_before_ending();
                 late.end();
             });
         }
@@ -2639,7 +2647,16 @@ impl AppState {
                 let (state, live) = (state.clone(), live.clone());
                 tokio::task::spawn_blocking(move || state.save_output(&live))
             };
-            let _ = saving.await;
+            // What the agent started outside its terminal session is stopped before the session
+            // reads as having no process: whatever waits for that — the removal of an archived
+            // session's worktree above all — must not find a dev server still working in it.
+            let ending = {
+                let (state, live) = (state.clone(), live.clone());
+                tokio::task::spawn_blocking(move || {
+                    state.process_ledger.end_launch(&live.launch_id)
+                })
+            };
+            let _ = tokio::join!(saving, ending);
             state.unregister_live(&live);
             match state.store.get_session(&live.id) {
                 Ok(Some(mut session)) => {
@@ -2700,6 +2717,11 @@ impl AppState {
                 }
             }
         }
+        // What the agents started a moment ago is attributed while their chains through the
+        // agents still show. Nothing is relaunched from here on, so nothing is carried over.
+        self.process_ledger.close();
+        let ledger = Arc::clone(&self.process_ledger);
+        let _ = tokio::task::spawn_blocking(move || ledger.scan_before_ending()).await;
         // `terminate` waits out the graceful period, so it goes to a blocking thread. The output is
         // saved here rather than left to each exit watcher, which the daemon may not outlive.
         let handles: Vec<_> = sessions
@@ -2709,12 +2731,17 @@ impl AppState {
                 tokio::task::spawn_blocking(move || {
                     live.terminate();
                     state.save_output(&live);
+                    // The exit watcher would too, but the daemon may not outlive it.
+                    state.process_ledger.end_launch(&live.launch_id);
                 })
             })
             .collect();
         for handle in handles {
             let _ = handle.await;
         }
+        // What an account switch under way held for its relaunch, which will not come.
+        let ledger = Arc::clone(&self.process_ledger);
+        let _ = tokio::task::spawn_blocking(move || ledger.end_held_launches()).await;
     }
 
     // -- saved output ------------------------------------------------------------

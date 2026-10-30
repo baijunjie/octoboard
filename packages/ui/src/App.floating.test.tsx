@@ -5,13 +5,13 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { App } from "./App";
 import { PanelHeader } from "./components/PanelHeader";
 import { mountForTooltip, openTooltip } from "./components/tooltipTestSupport";
-import { ALL_AGENTS, consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
+import { ALL_AGENTS, consoleOf, projectOf, sessionOf, shellTerminalOf, snapshotState } from "./gallery/fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { touchEvent } from "./layout/touchTestSupport";
 import { defaultStack } from "./panels/stackState";
 import { usePanelStacks } from "./panels/usePanelStacks";
 import { PlatformProvider } from "./platform/react";
-import type { Project } from "./protocol";
+import type { Project, RequestBody } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./theme";
 
@@ -114,7 +114,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
       ...snapshotState({ consoles: [console_], projects: [project], sessions }),
       ...(agents ? { agentAvailability: new Map(ALL_AGENTS.map((agent) => [agent, { agent, availability: "available" as const, default_account_dir: `/Users/dev/.${agent}` }])) } : {}),
     }),
-    request: vi.fn(async () => ({ type: "ack" })) as Daemon["request"],
+    request: vi.fn(async (body: RequestBody) => body.type === "list_processes" ? { type: "processes_listed", trees: [] } : { type: "ack" }) as Daemon["request"],
     toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {},
     dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "",
   };
@@ -123,7 +123,7 @@ function mountApp(width: number, touch = false, agents = false, waiting = false)
       <ThemeProvider><DaemonProvider value={daemon}><StackReset /><App /></DaemonProvider></ThemeProvider>
     </PlatformProvider>,
   );
-  return { resize, stacks: () => stacks };
+  return { resize, stacks: () => stacks, daemon, project };
 }
 
 const pressElement = (element: HTMLElement | null | undefined) => {
@@ -470,7 +470,8 @@ it("opens the drawer on a swipe towards the end and closes it on one towards the
 });
 
 it("brings the panel the owner had open last in on a swipe towards the start, else its first, then cycles through its panels, wrapping", async () => {
-  mountApp(390, true);
+  const { daemon, project } = mountApp(390, true);
+  await act(async () => daemon.store.setState({ shellTerminals: new Map([["shell", shellTerminalOf("shell", project, "Shell", 0)]]) }));
   await selectProjectSession();
   await swipe(-120);
   expect(cards()).toEqual(["panel-files"]);
@@ -634,4 +635,71 @@ it("hands focus back to the rail's Settings as Settings opened from it by a key 
   expect(document.querySelector("[role=dialog]")).toBeNull();
   expect(document.activeElement).toBe(settings);
   expect(toggle("Hide sessions")).not.toBeNull();
+});
+
+it("skips empty process and terminal panels on swipes while their topbar toggles still open them", async () => {
+  const { daemon } = mountApp(390, true);
+  await selectProjectSession();
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  expect(daemon.request).toHaveBeenCalledWith({ type: "list_processes", project_id: "p-site" });
+  await pressElement(toggle("Show processes panel"));
+  expect(cards()).toEqual(["panel-processes"]);
+  expect(document.getElementById("panel-processes")?.textContent).toContain("No processes");
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  await pressElement(toggle("Show terminal panel"));
+  expect(cards()).toEqual(["panel-terminal"]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+});
+
+it("keeps a process panel reachable by swipe while its list is loading or failed", async () => {
+  const { daemon } = mountApp(390, true);
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? new Promise<never>(() => {}) : { type: "ack" });
+  await selectProjectSession();
+  await swipe(-120);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-processes"]);
+  expect(document.getElementById("panel-processes")?.textContent).toContain("Loading processes");
+});
+
+it("updates swipe availability with the selected session's filtered processes", async () => {
+  const { daemon, project } = mountApp(390, true);
+  const other = sessionOf("s-other", project.console_id, project.id, "Other work", "idle");
+  await act(async () => daemon.store.setState((state) => ({ sessions: new Map([...state.sessions, [other.id, other]]) })));
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
+    type: "processes_listed",
+    trees: [{ id: "1", session_id: "s-site", command: "vite", cwd: "/app", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
+  } : { type: "ack" });
+  await selectProjectSession();
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-processes"]);
+  await pressElement(toggle("Show sessions"));
+  await pressElement(row("Other work"));
+  await swipe(-120);
+  expect(cards()).toEqual(["panel-files"]);
+  await pressElement(toggle("Show processes panel"));
+  expect(document.getElementById("panel-processes")?.textContent).toContain("No processes");
+});
+
+it("shows all project processes when opened from a project with no session selected", async () => {
+  const { daemon } = mountApp(1400);
+  vi.mocked(daemon.request).mockImplementation(async (body) => body.type === "list_processes" ? {
+    type: "processes_listed",
+    trees: [{ id: "all-tree", session_id: "s-site", command: "vite all sessions", cwd: "/app", cwd_missing: false, kept: false, started_at: Date.now(), process_count: 1, memory_bytes: 0, ports: [] }],
+  } : { type: "ack" });
+  await pressElement(byLabel(`Actions for project ${isolate("Website")}`));
+  await pressMenuItem("Open panel");
+  await pressMenuItem("Files");
+  await pressElement(toggle("Hide files panel"));
+  await pressElement(toggle("Show processes panel"));
+  const panel = document.getElementById("panel-processes")!;
+  expect(panel.querySelector("h2")?.textContent).toBe("Processes");
+  expect(panel.textContent).toContain("All sessions");
+  expect(panel.textContent).toContain("vite all sessions");
 });
