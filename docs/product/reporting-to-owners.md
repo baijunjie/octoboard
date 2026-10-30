@@ -68,6 +68,17 @@ too ends with work still running.
 launched or resumed: it has stopped to wait for its sessions, not stopped working. With none of them running, its turn
 is reported on as any reporting session's is.
 
+**A failed turn's report waits for the automatic account switch.** While **Automatically switch accounts at the usage
+limit** is on, the report owed for a turn that ended in an error is held while that switch judges the turn (see "When a
+session is switched" in `docs/product/automatic-account-switch.md`). When the switch moves the session to another
+account, or resumes it on its own account because its quota has recovered, no report is sent: the owner gets the
+switch's message instead, which says whether the session was sent a prompt to continue. Otherwise — the turn did not
+stop on the usage limit, the session is left alone, it is held for a reset due within 5 minutes, no account qualifies,
+or the switch fails, even when the session is brought back up on the account it had — the report is sent once the switch
+has decided. Since the switch can read the session's record again for up to 4 seconds and wait up to 15 seconds for
+another operation's hold on the session to end, a failed turn's report can arrive that much later while the setting is
+on, whatever the error was. With the setting off, nothing waits.
+
 **No report is synthesised for a turn that was cancelled** — by the user in the terminal, or by its owner's
 `interrupt_session` (see `docs/product/interrupting-turns.md`): the session is back at its prompt, awaiting
 instructions. How a cancel that fires no hook event is recognised is in `docs/product/turns-hooks-do-not-report.md`.

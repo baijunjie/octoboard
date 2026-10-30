@@ -229,8 +229,9 @@ The console, project, new-session and handoff dialogs, session request and accou
 account submenu, the rail's quota panel and the menu bar's quota submenus all use this display order. An inheritance
 choice, such as **Same as console**, stays ahead of the accounts. A removed account still recorded by a session is
 appended after its agent's current accounts. When a dialog passes over an unavailable account, it follows this display
-order; automatic weekly-quota selection keeps its separate tie order (see "Which account a session uses" in
-`docs/product/opening-sessions.md`).
+order. Automatic account selection takes the accounts in this order too: it breaks a tie between accounts ranked alike
+and settles which usable account is taken when none ranks (see "Which account a session uses" in
+`docs/product/opening-sessions.md` and "Which account it is switched to" in `docs/product/automatic-account-switch.md`).
 
 ## The account details dialog
 

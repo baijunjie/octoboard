@@ -323,10 +323,14 @@ came from:
 
 ## Continuing after a switch
 
-Ending a session's process cuts off a turn it was in, and with the process goes the agent's own wait to carry on
-after a usage limit (Claude Code's offer to continue automatically at a given time). So once the switch has
-relaunched the session, it is sent a prompt asking it to continue the task it was working on when it was interrupted
-without repeating work already complete — **only where the switch itself ended a live process** and that process was:
+Ending a session's process cuts off a turn it was in, and with the process goes the agent's own wait to carry on after a
+usage limit (Claude Code's offer to continue automatically at a given time). So once the switch has relaunched the
+session, it is sent a prompt that begins as a message from Octoboard saying the session was restarted and asks it to
+continue the task it was working on when it was interrupted without repeating work already complete, so the session's
+history counts it as Octoboard's rather than the user's (see "What the history lists" in
+`docs/product/session-history.md`). Where the relaunch carries a notice of its own (Octoboard's automatic switch, see
+"When the switch succeeds" in `docs/product/automatic-account-switch.md`), only the request to continue follows that
+notice. The prompt is sent **only where the switch itself ended a live process** and that process was:
 
 - **in the middle of a turn**, or
 - **stopped on the plan's usage limit**.

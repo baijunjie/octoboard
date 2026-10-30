@@ -133,9 +133,11 @@ would turn one on (see "The application settings an export carries" in
 ## Waiting for the answer
 
 The call **waits for the user's answer for up to 8 minutes**. The limit is Octoboard's own, the same for every agent,
-and lies below the 10 minutes within which Octoboard forwards any tool call from the session to the daemon, leaving
-room for an approval given at the last moment to be carried out. Octoboard does not obey an agent's own time limit on a
-tool call; where the agent has one, Octoboard sets it above Octoboard's own instead (see below).
+and lies below the 10 minutes within which Octoboard forwards any tool call from the session to the daemon, leaving room
+for an approval given at the last moment to be carried out. A call of any tool that those 10 minutes end gets a tool
+error saying Octoboard did not answer in time, that the call may still finish in Octoboard, and to check what it was to
+do before calling again. Octoboard does not obey an agent's own time limit on a tool call; where the agent has one,
+Octoboard sets it above Octoboard's own instead (see below).
 
 **While the call waits, the session reads *waiting for the user*.** The hand goes up as the call starts waiting and
 comes down as the request ends — when the user answers, and equally when the request times out or is withdrawn; a
@@ -198,9 +200,12 @@ A request is **withdrawn** on the signals Octoboard sees for every agent alike:
 - the caller's process ends — it is interrupted, archived, deleted or exits;
 - the call's connection to the daemon is dropped;
 - the agent cancels the call over MCP, which gets it a tool error saying the call was cancelled. This holds for
-  `request_session`, `request_resume_session`, `switch_session_account` and `handoff_session` only: a cancelled call of
-  any other Octoboard tool is left to finish in the daemon, and so is a switch or a handoff made without asking (see
-  "Approving requests automatically" above);
+  `request_session`, `request_resume_session`, `switch_session_account` and `handoff_session` only. A switch or a
+  handoff made without asking is left to finish (see "Approving requests automatically" above), and so is a call of any
+  other Octoboard tool, cancelled or not, even when its connection to the daemon goes part-way, as when the agent's
+  process exits mid-call: a `new_session` that opened its session still hands over its branches, a `report` already
+  delivered still goes on to archive its session where it would (`set_session_model` sees to its own end, see "Changing
+  a session's model and effort" in `docs/product/model-and-reasoning-effort.md`);
 - the same session makes another request that takes its place (see below).
 
 **A session has at most one request for a session waiting**, of either `request_session` or `request_resume_session`.

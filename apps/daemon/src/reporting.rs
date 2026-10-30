@@ -576,6 +576,11 @@ fn archived_owner(owner: &Session) -> anyhow::Error {
 /// Closes the session's open turn on `turn` ending it, and has a report synthesised for the owner
 /// when the session reported nothing itself. What closing amounted to is returned, for the caller
 /// to decide what else the ending says about the session.
+///
+/// A report owed for a failed turn waits while the automatic account switch judges that turn, and
+/// is not sent when the switch moved the session to another account or resumed it on its own,
+/// which its owner is told of instead: the owner would otherwise act on a failure already dealt
+/// with, possibly before that notice reaches it.
 pub fn close_turn_and_report(
     state: &Arc<AppState>,
     session_id: &str,
@@ -584,14 +589,26 @@ pub fn close_turn_and_report(
     let close = state.close_turn(session_id, turn.backstop);
     // The turn stopped on an error, which may be the plan's usage limit; whether it was, and
     // whether to do anything about it, is the switch's to judge.
-    if turn.failed && matches!(close, TurnClose::OwesReport | TurnClose::Reported) {
-        crate::auto_switch::after_failed_turn(state, session_id);
-    }
+    let judging = if turn.failed && matches!(close, TurnClose::OwesReport | TurnClose::Reported) {
+        crate::auto_switch::after_failed_turn(state, session_id)
+    } else {
+        None
+    };
     if close == TurnClose::OwesReport {
         let state = state.clone();
         let session_id = session_id.to_string();
-        // Delivery writes into the owner's PTY, which blocks, so it goes off the caller's path.
-        tokio::task::spawn_blocking(move || synthesise_report(&state, &session_id, turn));
+        tokio::spawn(async move {
+            // A switch that failed, panicked or found nothing to do leaves the report owed.
+            if let Some(judging) = judging {
+                if judging.await.unwrap_or(false) {
+                    return;
+                }
+            }
+            // Delivery writes into the owner's PTY, which blocks, so it goes off the caller's path.
+            let _ =
+                tokio::task::spawn_blocking(move || synthesise_report(&state, &session_id, turn))
+                    .await;
+        });
     }
     close
 }
@@ -1852,6 +1869,48 @@ mod tests {
         assert!(!asked("ordinary"));
         assert!(!asked("stale"));
         assert!(!asked("off"));
+    }
+
+    /// The report owed for a failed turn waits while the automatic switch judges that turn: it is
+    /// dropped when the switch moved the session on, and sent when the switch did not. Only the
+    /// check made before either judgement ends is ordered; the later absence is best-effort.
+    #[tokio::test]
+    async fn a_failed_turns_report_waits_for_the_switch_and_is_dropped_once_it_moved_on() {
+        let (state, _dir, hub) = team_state(
+            "reporting-failed-turn-held",
+            &[
+                ("switch-moved", "hub", false, SessionStatus::Working),
+                ("switch-stayed", "hub", false, SessionStatus::Working),
+            ],
+        );
+        state.store.set_auto_switch_on_usage_limit(true).unwrap();
+        let (moved, moved_judged) = tokio::sync::oneshot::channel();
+        let (stayed, stayed_judged) = tokio::sync::oneshot::channel();
+        crate::auto_switch::MOVES.lock().unwrap().extend([
+            ("switch-moved".to_string(), moved_judged),
+            ("switch-stayed".to_string(), stayed_judged),
+        ]);
+        let turn = |summary: &str| hooks::TurnEnd {
+            last_assistant_message: Some(summary.to_string()),
+            failed: true,
+            backstop: false,
+        };
+        for id in ["switch-moved", "switch-stayed"] {
+            state.turn_started(id, Some("work"));
+        }
+
+        close_turn_and_report(&state, "switch-moved", turn("summary-of-the-moved-turn"));
+        close_turn_and_report(&state, "switch-stayed", turn("summary-of-the-stayed-turn"));
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("summary-of-the-"), "{heard}");
+
+        moved.send(true).unwrap();
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("summary-of-the-moved-turn"), "{heard}");
+        stayed.send(false).unwrap();
+        let heard = hub_heard_of(&hub, "summary-of-the-stayed-turn").await;
+        assert!(heard.contains("summary-of-the-stayed-turn"), "{heard}");
+        assert!(!heard.contains("summary-of-the-moved-turn"), "{heard}");
     }
 
     /// A claim on the session says nothing of how its process ended: one that exits by itself

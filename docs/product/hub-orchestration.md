@@ -353,9 +353,12 @@ and caller. An explicit agent or account wins; automatic selection can change an
   from the destination project or console (see "Which model and reasoning effort a session uses" in
   `docs/product/opening-sessions.md`). Explicit values are checked against that agent's offered choices.
 
-`handoff_session` always names its receiving agent and keeps it. Its left-out account follows "Handing off from an
-owner's tool" in `docs/product/handing-off-sessions.md`; automatic selection never redirects the handoff to another
-agent. Resuming a conversation and switching a session's account likewise keep their specified agent.
+`handoff_session` always names its receiving agent and keeps it. With automatic selection on, its left-out account is
+chosen as above for a session of that agent the caller starts where the handed-off session is, and is never another
+agent's: the receiving session is always in the caller's own console, so the caller's own account takes its place in
+that order when the receiving agent is the caller's. With it off, its left-out account follows "Handing off from an
+owner's tool" in `docs/product/handing-off-sessions.md`. Resuming a conversation and switching a session's account
+likewise keep their specified agent.
 
 ## Which sessions an owner drives
 

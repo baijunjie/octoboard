@@ -930,8 +930,9 @@ pub struct Settings {
     /// Every account of every agent, application-wide. The default account of each agent is not
     /// among these — it is the state of pinning nothing, not a row (see `Account`).
     pub accounts: Vec<Account>,
-    /// Display order by agent wire name; null entries represent the default account. Missing
-    /// accounts are appended by clients and stale IDs are ignored. Kept local to this machine.
+    /// The user's order of each agent's accounts, by agent wire name, which clients list them in
+    /// and automatic account selection takes them in; null entries represent the default account.
+    /// Missing accounts are appended and stale IDs are ignored. Kept local to this machine.
     pub account_order: std::collections::BTreeMap<String, Vec<Option<String>>>,
     /// The agents the user has added, in the order the user set; a newly added agent goes last. Only these are offered for a
     /// new choice; removing one leaves its accounts here. `null` while the daemon has not yet
@@ -2233,7 +2234,7 @@ pub enum RequestBody {
     ReorderAgents {
         agents: Vec<Agent>,
     },
-    /// Sets the display order of all accounts of the agent, including its default (null), each
+    /// Sets the order of all accounts of the agent, including its default (null), each
     /// exactly once. Refused with `account_order_invalid` for stale or mismatched lists.
     /// Broadcasts `settings_updated` only when the stored order changed.
     ReorderAccounts {
