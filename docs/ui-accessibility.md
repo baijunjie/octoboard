@@ -412,7 +412,7 @@ when the panel has no tab. Unlike the agent terminal, a shell terminal also keep
 (vim, less and fzf need it): the floating-pane Escape handling in `packages/ui/src/layout/usePaneToggles.ts` stands
 aside for a target inside a shell terminal, and the pane is dismissed with Close panel or by moving the pointer away.
 A control in a shell terminal's view that xterm's Tab handling puts out of reach (the exited notice's Close terminal)
-needs an equivalent reachable another way; Close terminal in the panel's header menu and the tab's context menu is it.
+needs an equivalent reachable another way; Close terminal in the panel's tab-row menu and the tab's context menu is it.
 
 ### A floating panel that does not take the window
 
@@ -1718,6 +1718,12 @@ outlines, so add no colour or opacity override to make a default component pass 
 component's own supported variants and slots; layout and sizing adaptations do not authorize replacing its visual
 treatment. Application-authored text on a custom surface is checked against its actual background in both appearances.
 
+The Terminal panel's tabs are an approved departure by the user's decision: compact rectangular tabs with modest
+corner rounding, consistent spacing and always-visible close marks. The selected tab uses an accent-soft fill and
+an accent outline, and hover uses the default fill. A close mark has a separate foreground-tinted background on
+hover, deepened while pressed, so it stays distinct from the tab beneath it. These styles apply only to the Terminal
+panel.
+
 ### Form controls on a surface
 
 A form control on a surface — in a dialog, a popover, a card — takes HeroUI's `variant="secondary"` (`TextField`,
@@ -1911,7 +1917,7 @@ hit box.
 
 A Terminal panel tab's close mark is drawn at 16 and hit at 24 through such an `::after`. It is a pointer-only
 shortcut, hidden from assistive technology, with its tooltip anchored beside it since a tab cannot hold a trigger; the
-keyboard reaches the same action as Close terminal in the panel's header menu and the tab's context menu.
+keyboard reaches the same action as Close terminal in the panel's tab-row menu and the tab's context menu.
 
 The right pane's resize handles (the width handle and the separator between stacked panel cards) take a 24-pixel
 pointer target centred on their gap, reaching into the cards' edges where the gap is narrower; the sidebar's width

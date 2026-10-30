@@ -3,12 +3,12 @@
 The **Terminal panel** is a kind of panel in the right pane's stack (see `docs/product/right-pane-panels.md`) that
 shows a project's shell terminals — the plain login shells the daemon runs for a project (see
 `docs/product/shell-terminals.md`) — as **tabs**, one tab per terminal. Only a project's stack has it: a console
-session has no Terminal panel and no Terminal toggle, since a shell needs a project's directory. It is stacked last,
-under the Files and Processes panels, and is **closed** until the user opens it.
+session has no Terminal panel and no Terminal toggle, since a shell needs a project's directory. It is **closed** until
+the user opens it; its place among other panels follows "Opening and closing panels" in
+`docs/product/right-pane-panels.md`.
 
-Its header's title is "Terminal", retained as an accessible heading when its visual title is hidden (see "A panel's
-header" in `docs/product/right-pane-panels.md`); for assistive technology the panel is a region named for the project's
-terminals.
+Its header's title is "Terminal", visible at every width (see "A panel's header" in
+`docs/product/right-pane-panels.md`); for assistive technology the panel is a region named for the project's terminals.
 
 ## Starting a terminal
 
@@ -19,7 +19,7 @@ terminals.
   `docs/product/right-pane-panels.md`);
 - **Terminal under Open panel** in a project's action menu while the project has no terminal, which opens the panel as
   its toggle does (see "Opening a panel from a project's action menu" in `docs/product/right-pane-panels.md`);
-- **New terminal**, the "+" button in the panel's header;
+- **New terminal**, the "+" button on the tab row below the panel's header;
 - **New terminal** in the panel's empty state;
 - **Terminal under Open in on a folder's row** in the project pane (see "A row's actions" in
   `docs/product/project-pane.md`), which opens the project's Terminal panel too, as Open panel would.
@@ -52,13 +52,21 @@ directory afterwards, is in "Starting a shell terminal" in `docs/product/shell-t
 
 ## Tabs
 
-The tabs sit in the panel's header after its title when that title is visible, one per terminal of the project,
-**oldest first**.
+The tabs sit in a separate row immediately below the panel's header, one per terminal of the project, **oldest first**.
+The row uses the panel's width, separately from the title and controls above it. The tabs occupy its leading side;
+**New terminal** and then the shown terminal's actions menu stay fixed at its trailing end, outside the tabs' scrolling
+area. With no terminal, the row holds only New terminal at that end.
 
-- **A tab's name is its terminal's title**, which follows the title the shell sets until the user renames the terminal
-  (see "Terminal title" in `docs/product/shell-terminals.md`). A tab whose shell has exited reads "*title* (exited)",
-  in the muted colour. A name is at most 160 px wide; a longer one fades out at its cut edge, with its full text as
-  its tooltip.
+- **Tabs are rectangular with rounded corners and equal gaps**. The shown tab has a soft accent fill and an accent
+  border; the other tabs have a neutral background on hover.
+- **A tab's name follows its terminal's title**, which follows the title the shell sets until the user renames the
+  terminal (see "Terminal title" in `docs/product/shell-terminals.md`). An automatic title that is an absolute path or
+  a path beginning with `~/`, optionally prefixed by a host or `user@host` followed by a colon, shows only its final
+  folder name. Without that prefix, a title containing whitespace is shown unchanged. Trailing slashes are ignored,
+  and `/` and `~/` show as `/` and `~`. A shortened title's tooltip shows the full title, even when its name fits.
+  User-chosen names and other titles are shown unchanged. A tab whose shell has exited uses the muted colour and adds
+  "(exited)" to its name and tooltip. A name is at most 160 px wide; a longer one fades out at its cut edge, with its
+  full title as its tooltip.
 - **When the tabs do not fit, the tab strip scrolls**, with scroll buttons at its ends, and the shown tab is kept in
   view in it — as it becomes the shown tab and whenever the strip changes width.
 - **Pressing a tab** with the pointer shows its terminal and puts keyboard focus in it. From the keyboard the arrow
@@ -78,16 +86,18 @@ started, renamed, exited or closed from another client show here as they happen.
 
 **Rename terminal** and **Close terminal** are offered:
 
-- for the shown tab, in the "⋯" menu in the panel's header, there only while a tab is shown;
+- for the shown tab, in the "⋯" menu at the end of the tab row, after New terminal, there only while a tab is shown;
 - for any tab, in its context menu: a right-click on the tab, or `Shift+F10` or the context-menu key with keyboard
   focus on it.
 
-**The close mark** on a tab closes that terminal with the pointer: it shows on the tab under the pointer and on the
-shown tab, has a 24×24 px target and "Close terminal" as its tooltip, and pressing it closes without showing that tab.
-It is for the pointer alone; from the keyboard a terminal is closed through the menus above.
+**The close mark** is always visible on every tab and closes that terminal with the pointer. It has a 24×24 px target
+and "Close terminal" as its tooltip, with its own background tint on hover and a stronger tint while pressed.
+Pressing it closes without showing that tab. It is for the pointer alone; from the keyboard a terminal is closed
+through the menus above.
 
-**Renaming** opens a "Rename terminal" dialog with a Name field holding the current title. A blank name is refused
-under the field; the name is saved trimmed, and from then on the shell's own titles no longer change it.
+**Renaming** opens a "Rename terminal" dialog with a Name field holding the full current title, including any path
+shortened in the tab. A blank name is refused under the field; the name is saved trimmed, and from then on the shell's
+own titles no longer change it.
 
 **Closing** a terminal whose shell is busy (see "Busy shells" in `docs/product/shell-terminals.md`) asks first: a
 confirmation titled "Close terminal" names the terminal in its first sentence, its title set apart as a chip, and says
@@ -113,7 +123,7 @@ the confirmation put it back.
 
 ## The shell terminal
 
-The shown tab's terminal fills the panel under its header. It is live: keystrokes go to the shell, `Ctrl+C`, `Tab` and
+The shown tab's terminal fills the panel under its tab row. It is live: keystrokes go to the shell, `Ctrl+C`, `Tab` and
 `Shift+Tab` included. `F6` and `Shift+F6` never reach the shell: they move keyboard focus to another region (see
 "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
 
@@ -180,4 +190,4 @@ Keyboard focus and Reconnect:
 The Terminal panel is a stop of its own in the `F6` cycle (see "Panels and keyboard focus" in
 `docs/product/right-pane-panels.md`), the first among the panels while it is maximized. `F6` lands in the shown tab's
 terminal, so typing reaches the shell, or on its cover's Reconnect while that is offered; with no tab, on New terminal
-in the header. From there `Tab` goes to the shell, so `F6` and `Shift+F6` are the way out of a shell terminal.
+on the tab row. From there `Tab` goes to the shell, so `F6` and `Shift+F6` are the way out of a shell terminal.

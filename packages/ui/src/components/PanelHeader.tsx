@@ -31,8 +31,6 @@ export const PanelFrameProvider = PanelFrameContext.Provider;
  * never the title or the controls at the end. A header outside a stack (a test)
  * has neither of the stack's controls. `prioritizeChildren` keeps a mode switch whole instead:
  * the title gives way first, then the kind's actions scroll, with close always outside the clip.
- * `hideTitleWhenNarrow` keeps the heading accessible but only draws it in a docked-width window
- * when the header's content box has at least 352px for the title, tabs and actions.
  */
 export function PanelHeader({
   title,
@@ -40,7 +38,6 @@ export function PanelHeader({
   actions,
   children,
   prioritizeChildren = false,
-  hideTitleWhenNarrow = false,
 }: {
   title: string;
   /** A mark (`StatusMark`) about what the panel shows, right after the title; it stays whole when the title clips. */
@@ -50,8 +47,6 @@ export function PanelHeader({
   children?: React.ReactNode;
   /** Keep the mode switch and close visible, giving up the title before the scrollable actions. */
   prioritizeChildren?: boolean;
-  /** Hide the visual title below docked width or 352px of header content, retaining its heading. */
-  hideTitleWhenNarrow?: boolean;
 }): React.ReactElement {
   const t = useT();
   const frame = useContext(PanelFrameContext);
@@ -67,7 +62,7 @@ export function PanelHeader({
       : "flex";
 
   const headingOnly = (
-    <h2 className={`${hideTitleWhenNarrow ? "sr-only docked:@min-[352px]/panel-header:not-sr-only docked:@min-[352px]/panel-header:flex" : "flex"} min-w-0 max-w-40 ${prioritizeChildren || compact ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
+    <h2 className={`flex min-w-0 max-w-40 ${prioritizeChildren || compact ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
       <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>{title}</FadeOverflow>
     </h2>
   );
@@ -78,7 +73,7 @@ export function PanelHeader({
     </div>
   ) : headingOnly;
   return (
-    <div className={`${hideTitleWhenNarrow ? "@container/panel-header " : ""}${layout} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
+    <div className={`${layout} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
       {prioritizeChildren ? (
         <div className={compact ? "grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,max-content)] items-center gap-2" : "grid grid-cols-[minmax(0,max-content)_max-content] items-center gap-2"}>
           {heading}
