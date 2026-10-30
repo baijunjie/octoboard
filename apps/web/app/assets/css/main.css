@@ -341,10 +341,9 @@ select:focus-visible {
   letter-spacing: -0.04em;
   font-weight: 500;
   transition:
-    color 700ms var(--ease),
-    transform 800ms var(--ease),
-    opacity 800ms var(--ease);
-  transition-delay: calc(var(--link-order) * 80ms);
+    color 160ms var(--ease) 0ms,
+    transform 800ms var(--ease) calc(var(--link-order) * 80ms),
+    opacity 800ms var(--ease) calc(var(--link-order) * 80ms);
 }
 .overlay-links > a[aria-current="location"] {
   color: var(--red);
