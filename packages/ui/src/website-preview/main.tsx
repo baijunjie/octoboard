@@ -53,7 +53,11 @@ document.documentElement.dataset.theme = theme;
 
 async function start(): Promise<void> {
   const { installFakeTerminal } = await import("../gallery/fakeTerminal");
-  installFakeTerminal({ output, strict: true });
+  // A terminal opens only once the app runs, by which time the daemon below exists.
+  installFakeTerminal({
+    output: (session) => output(session, daemon.store.getState()),
+    strict: true,
+  });
   const [
     { default: React },
     { createRoot },

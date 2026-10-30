@@ -8,6 +8,7 @@ import { previewCopy as chinese } from "./locales/zh-Hans";
 import { createTerminalScript, liveSchedule, type TerminalSession } from "./terminals";
 import { terminalScripts } from "./terminalScripts";
 import { previewRepositories } from "./repositories";
+import { sessionOf } from "../gallery/fixtures/builders";
 
 beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(1_000_000); });
 afterEach(() => vi.useRealTimers());
@@ -204,5 +205,19 @@ describe("the preview's agent terminals", () => {
     const bytes = script.tick!(60, 2);
     expect(bytes).toMatch(/^\x1b\[6A\r\x1b\[J\r\n.*next/);
     expect(bytes.endsWith("? for shortcuts\x1b[0m")).toBe(true);
+  });
+
+  // The fake terminal's own sample is the gallery's, which names its local paths and addresses.
+  it("starts a session the visitor opens at rest in its own project, not on the gallery's sample", () => {
+    const { scenario, output } = createPreviewScenario("overview", "en");
+    // A project the visitor added is one the scenario does not know.
+    const added = { ...scenario.state!.projects!.get("preview-server")!, id: "visitor-app", path: "/demo/visitor-app" };
+    const opened = sessionOf("s-gallery-opened-1", "preview-console", added.id, "Opened", "idle", { agent: "codex" });
+    const held = { sessions: new Map([[opened.id, opened]]), projects: new Map([[added.id, added]]), consoles: scenario.state!.consoles! };
+    const screen = plain((output(opened.id, held) as { screen: (cols: number, step: number) => string }).screen(80, 0));
+    expect(screen).toContain("/demo/visitor-app");
+    expect(screen).not.toMatch(/\/Users\/dev|localhost|gallery/);
+    // A shell the visitor opens is no session the daemon holds, and keeps the fake terminal's fresh prompt.
+    expect(output("shell-gallery-1", held)).toBeUndefined();
   });
 });

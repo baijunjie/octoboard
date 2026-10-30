@@ -263,6 +263,13 @@ export function liveSchedule(id: string, count: number): number[] {
 /** The elapsed time a working session opens on, between 1m 20s and 4m 40s. */
 const baseSeconds = (id: string) => 80 + (seedOf(id) % 200);
 
+/** The screen of an agent that has just started, at rest with nothing asked yet: the terminal of a
+ * session the visitor opens, which no script was written for. */
+export function createIdleScript(agent: Agent, cwd: string): TerminalScript {
+  const look = LOOKS[agent];
+  return { screen: (cols) => [...look.header(cwd, cols), ...look.resting(cols)].join("\r\n") };
+}
+
 /** A script that simulates the session's agent in the state its status says: a working session
  * keeps a status line spinning and appends its live steps as they come due, while the others stay
  * as they are. Progress follows the page's clock, not the socket's, so a session that is closed and
