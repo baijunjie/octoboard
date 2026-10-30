@@ -21,6 +21,7 @@ import { createStateStore, type Daemon } from "../store";
 import { reportDaemonExit } from "../lifecycle/exitFailure";
 import { issueReportUrl, recordNames } from "../issueReport";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
+import { registerSessionModelLauncher } from "./sessionModelLauncher";
 
 vi.mock("../issueReport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../issueReport")>();
@@ -229,6 +230,8 @@ it.each([
   ["connection", ["Try again"]],
   ["path", ["Browse"]],
   ["unlock", ["Unlock"]],
+  ["modelChange", ["Change model"]],
+  ["changeModelSetting", ["Change model"]],
 ] as const)("renders %s recovery control references as chips", (recovery, labels) => {
   mount();
   act(() => errorAlerts.report({ message: "Action failed", recovery }));
@@ -252,6 +255,24 @@ it.each([
   act(() => button!.click());
   expect(open).toHaveBeenCalledWith("accounts", { addAgent });
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it.each(["modelChange", "changeModelSetting"] as const)("offers a button for %s recovery that opens Change model for the alert's session", (recovery) => {
+  mount();
+  const open = vi.fn();
+  onTestFinished(registerSessionModelLauncher(open));
+  act(() => errorAlerts.report({ message: "Action failed", session: "s-1", recovery }));
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'));
+  expect(buttons.map((b) => b.textContent)).toEqual(["Change model", "OK"]);
+  act(() => buttons[0].click());
+  expect(open).toHaveBeenCalledExactlyOnceWith("s-1");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("offers no Change model button for an alert that is about no session", () => {
+  mount();
+  act(() => errorAlerts.report({ message: "Action failed", recovery: "modelChange" }));
+  expect(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).map((b) => b.textContent)).toEqual(["OK"]);
 });
 
 it("offers the footer action for a batch only when every failure shares that recovery", () => {

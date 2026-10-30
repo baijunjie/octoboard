@@ -107,6 +107,8 @@ export const en = {
   "error.recovery.pathExists": "Choose a destination that does not already exist, then retry. Keep the existing folder if it contains files you need.",
   "error.recovery.uniqueName": "Enter an account name that is not already used by another account of this agent, then save again.",
   "error.recovery.launchSetting": "Open the session launch settings and select a model and reasoning effort offered by the selected agent.",
+  "error.recovery.changeModelSetting": "Use {changeModel} to pick a model and reasoning effort the agent offers.",
+  "error.recovery.modelChange": "The session is no longer running. Use {changeModel} to pick a model and reasoning effort the agent offers, or resume the session to keep the ones it had.",
   "error.recovery.accountDirectory": "Choose a different configuration directory, or select the account already using this directory.",
   "error.recovery.accountNotShareable": "Choose an account whose configuration directory is not the default account’s. To share with the default account, point this account at a directory of its own.",
   "error.recovery.accountSharing": "Resolve what is reported above, then try once more with the account’s Share default configuration switch in the Agent accounts settings.",
@@ -509,7 +511,7 @@ export const en = {
   "daemon.switch_did_not_come_up":
     "{session} ended as soon as it was relaunched under the new account, so it stays on the account it had.",
   "daemon.model_change_did_not_stop":
-    "The session did not stop in time, so its model was not changed. It may still be running.",
+    "The session did not stop in time. It may still be running.",
   "daemon.model_change_did_not_come_up":
     "The session ended as soon as it was relaunched with the new model, so it keeps the model and reasoning effort it had.",
   "daemon.session_not_running": "This session is not running.",
@@ -1576,10 +1578,20 @@ export const en = {
   "dialog.sessionModel.subject": "The session {title} will run with the model and reasoning effort chosen here.",
   "dialog.sessionModel.restart":
     "It restarts to take them and keeps its conversation. A turn in progress is cut off, and continued automatically where that is safe.",
+  "dialog.sessionModel.restartFresh": "It restarts to take them with a fresh conversation, as nothing has been typed into it yet.",
+  "dialog.sessionModel.restartPrompt": "It is waiting for you, and restarting ends the prompt it is showing.",
   "dialog.sessionModel.nextResume": "It is not running, so it takes them the next time it is resumed.",
+  "dialog.sessionModel.heldStarting": "The session is starting…",
+  "dialog.sessionModel.heldSwitching": "The session is switching accounts…",
+  "dialog.sessionModel.heldRemedy": "Wait for it to finish before changing the model settings.",
+  "dialog.sessionModel.blockedTitle": "Cannot change the model",
+  "daemon.session_model_session_gone": "The session {title} no longer exists, so its model cannot be changed.",
+  "daemon.session_model_session_archived": "The session {title} was archived, so its model cannot be changed. Reopen it to change its model and reasoning effort.",
   "dialog.sessionModel.note": "A model or reasoning effort you change is kept for this session from now on.",
   "dialog.sessionModel.confirm": "Change model",
   "dialog.sessionModel.failedTitle": "Could not change the model",
+  "dialog.sessionModel.done": "{session} restarted with its new model settings",
+  "dialog.sessionModel.doneRecorded": "{session} will use its new model settings when it is resumed",
   "dialog.handOff.title": "Hand off session",
   "dialog.handOff.subject": "The session {title} will be handed off.",
   "dialog.handOff.message":

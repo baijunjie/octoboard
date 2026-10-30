@@ -1046,15 +1046,20 @@ const SET_SESSION_MODEL: ToolDef = ToolDef {
                   instructions, so send it the next step with `instruct_session` — except where \
                   the result's `note` says it was sent a prompt to continue its task (a turn the \
                   restart cut off or a usage limit had stopped), which you must not repeat. The \
-                  call waits a few seconds for the relaunch to come up. An interrupted session \
-                  is not started: it takes the new values when it is next resumed. A `model` or \
-                  `effort` the agent does not offer under the session's account is refused, \
-                  changing nothing; `list_agent_models` lists them. Refused too for an archived \
-                  session (`reopen_session` takes a model and effort), one that is starting or \
-                  being switched, handed off or otherwise changed, and one waiting for the \
-                  user, which the restart would take its prompt from. Returns the session, \
-                  whether it was `restarted`, and its own `model` and `effort` (`null` is the \
-                  agent's own default; absent where it follows its project's or console's).",
+                  call waits a few seconds for the relaunch to come up; should the call be cut \
+                  off before then, the change still runs to its end and its outcome is written \
+                  into your session. An interrupted session is not started: it takes the new \
+                  values when it is next resumed. Values it already has succeed, changing \
+                  nothing, unless a change of its model is under way, which refuses the call. A \
+                  `model` or `effort` the agent does not offer under the session's \
+                  account is refused, changing nothing; `list_agent_models` lists them. Refused \
+                  too for an archived session (`reopen_session` takes a model and effort), one \
+                  that is starting or being switched, handed off or otherwise changed, and one \
+                  waiting for the user, which the restart would take its prompt from — a \
+                  usage-limit dialog alone is not such a wait: the restart ends it, and the turn \
+                  it stopped is continued. Returns the session, whether it was `restarted`, and \
+                  its own `model` and `effort` (`null` is the agent's own default; absent where \
+                  it follows its project's or console's).",
     schema: || {
         object_schema(
             json!({

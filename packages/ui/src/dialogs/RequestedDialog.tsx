@@ -429,8 +429,8 @@ export function RequestedDialog({
   /** Starts switching sessions to an account (`null`, the default account; `accountName` its name) in
    * the background, and returns at once; the outcome is reported once the whole batch is done. */
   onSwitchAccounts: (sessionIds: string[], account: string | null, accountName: string) => void;
-  /** Starts changing a session's model and reasoning effort in the background and returns at once; a
-   * failure is reported once it comes. */
+  /** Starts changing a session's model and reasoning effort in the background and returns at once; the
+   * outcome, a success announced or a failure reported as an error alert, comes once it is known. */
   onChangeSessionModel: (sessionId: string, edits: ModelEdits) => void;
   /** Resumes a session the session dialog found, an archived one (reopening it) or an interrupted one;
    * rejects with the reason when it did not happen. */

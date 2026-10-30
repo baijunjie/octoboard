@@ -1865,12 +1865,12 @@ impl Store {
                 .titles
                 .as_ref()
                 .filter(|titles| &session.record_titles != *titles);
-            let checkpoint: Option<String> = tx.query_row(
+            let boundary: Option<String> = tx.query_row(
                 "SELECT observed_boundary FROM sessions WHERE id = ?1",
                 params![source.id],
                 |row| row.get(0),
             )?;
-            let current_observations = checkpoint == update.observed_checkpoint;
+            let current_observations = boundary == update.observed_boundary;
             let observed_model = update.observed_model.as_ref().filter(|model| {
                 current_observations && session.observed_model.as_ref() != Some(*model)
             });
@@ -2288,15 +2288,17 @@ impl Store {
             .map(drop)
     }
 
-    /// Records a session's model choice only while the user has not archived it.
+    /// Records a session's model choice only while the user has not archived it. With `boundary`,
+    /// a model change's observation boundary (`record_collector::ObservedBoundary`), it also stores
+    /// that and clears the observed model and effort, in the same write.
     pub(crate) fn set_session_launch_overrides_unless_archived(
         &self,
         id: &str,
         model: &Option<Option<String>>,
         effort: &Option<Option<String>>,
-        checkpoint: Option<&str>,
+        boundary: Option<&str>,
     ) -> Result<bool> {
-        self.write_session_launch_overrides(id, model, effort, true, checkpoint)
+        self.write_session_launch_overrides(id, model, effort, true, boundary)
     }
 
     fn write_session_launch_overrides(
@@ -2305,7 +2307,7 @@ impl Store {
         model: &Option<Option<String>>,
         effort: &Option<Option<String>>,
         unless_archived: bool,
-        checkpoint: Option<&str>,
+        boundary: Option<&str>,
     ) -> Result<bool> {
         Ok(self.lock().execute(
             "UPDATE sessions SET model = ?2, effort = ?3, model_override = ?4, effort_override = ?5,
@@ -2320,14 +2322,28 @@ impl Store {
                 model.is_some(),
                 effort.is_some(),
                 unless_archived,
-                checkpoint,
+                boundary,
             ],
         )? > 0)
     }
 
-    /// The collector's private old-record boundary, retained with this conversation across daemon
+    /// Every session's observation boundary that is set, by session id: the collector's private
+    /// record of what the agent's records held when a model change last restarted the session
+    /// (`record_collector::ObservedBoundary`), retained with this conversation across daemon
     /// restarts and archives. It is never part of a session's public record or a configuration.
-    pub(crate) fn observed_checkpoint(&self, id: &str) -> Result<Option<String>> {
+    /// One query for a whole collector pass.
+    pub(crate) fn observed_boundaries(&self) -> Result<std::collections::HashMap<String, String>> {
+        let conn = self.lock();
+        let mut statement = conn.prepare(
+            "SELECT id, observed_boundary FROM sessions WHERE observed_boundary IS NOT NULL",
+        )?;
+        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    /// One session's observation boundary (see [`Self::observed_boundaries`]).
+    #[cfg(test)]
+    pub(crate) fn observed_boundary(&self, id: &str) -> Result<Option<String>> {
         Ok(self
             .lock()
             .query_row(
@@ -2340,11 +2356,11 @@ impl Store {
     }
 
     #[cfg(test)]
-    pub(crate) fn reset_observed_model(&self, id: &str, checkpoint: &str) -> Result<()> {
+    pub(crate) fn reset_observed_model(&self, id: &str, boundary: &str) -> Result<()> {
         self.lock().execute(
             "UPDATE sessions SET observed_boundary = ?2,
             observed_model = NULL, observed_effort = NULL WHERE id = ?1",
-            params![id, checkpoint],
+            params![id, boundary],
         )?;
         Ok(())
     }
@@ -2639,7 +2655,7 @@ fn user_version(conn: &Connection) -> Result<i64> {
 /// - at [`SCHEMA_VERSION`], or holding no tables at all (an empty file, which `open` initializes):
 ///   left as it is;
 /// - at versions 1 and 2: upgraded in place, adding the account display order where needed and
-///   the collector's private observation checkpoint;
+///   the collector's private observation boundary;
 /// - at an older version without an upgrade step, which includes every database from before
 ///   versions were recorded: moved aside, so `open` starts a fresh one. The old file is renamed
 ///   rather than deleted, so a user who needs what was in it still has it on disk; see "Files
@@ -2731,8 +2747,10 @@ pub struct RecordUpdate {
     /// stored. The effort can also be cleared, `Some(None)`, where the records say none is set.
     pub observed_model: Option<String>,
     pub observed_effort: Option<Option<String>>,
-    /// The private checkpoint at scan time; model writes are ignored once a restart supersedes it.
-    pub observed_checkpoint: Option<String>,
+    /// The observation boundary the records were read against (see
+    /// `record_collector::ObservedBoundary`): the model and effort are not written once a restart
+    /// has stored another.
+    pub observed_boundary: Option<String>,
 }
 
 const SESSION_COLUMNS: &str = "id, agent, agent_session_id, console_id, project_id, host_id,
@@ -3275,8 +3293,8 @@ mod tests {
     }
 
     #[test]
-    fn observation_checkpoint_upgrade_preserves_version_two_sessions() {
-        let path = temp_db("model-checkpoint-upgrade");
+    fn observation_boundary_upgrade_preserves_version_two_sessions() {
+        let path = temp_db("model-boundary-upgrade");
         {
             let conn = Connection::open(&path).unwrap();
             conn.execute_batch(&SCHEMA.replace("    observed_boundary TEXT,\n", ""))
@@ -3291,7 +3309,7 @@ mod tests {
         let store = Store::open(&path).unwrap();
         let source = session(None);
         assert!(store.get_session(&source.id).unwrap().is_some());
-        assert!(store.observed_checkpoint(&source.id).unwrap().is_none());
+        assert!(store.observed_boundary(&source.id).unwrap().is_none());
         assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
         assert!(moved_aside(&path).is_empty());
     }
@@ -5538,15 +5556,15 @@ mod tests {
     }
 
     #[test]
-    fn observation_checkpoints_reject_stale_models_and_follow_the_retained_conversation() {
-        let path = temp_db("model-checkpoint-source");
+    fn observation_boundaries_reject_stale_models_and_follow_the_retained_conversation() {
+        let path = temp_db("model-boundary-source");
         let store = Store::open(&path).unwrap();
         store.insert_console(&console(None, None, None)).unwrap();
         let mut source = session(None);
         store.insert_session(&source).unwrap();
-        let checkpoint = r#"{"files":{}}"#;
-        store.reset_observed_model(&source.id, checkpoint).unwrap();
-        let update = |checkpoint: Option<&str>| RecordUpdate {
+        let boundary = r#"{"files":{}}"#;
+        store.reset_observed_model(&source.id, boundary).unwrap();
+        let update = |boundary: Option<&str>| RecordUpdate {
             session: source.clone(),
             context: Some(Some(crate::protocol::SessionContext {
                 tokens: 123,
@@ -5559,14 +5577,14 @@ mod tests {
             }),
             observed_model: Some("new-model".to_string()),
             observed_effort: Some(Some("high".to_string())),
-            observed_checkpoint: checkpoint.map(str::to_string),
+            observed_boundary: boundary.map(str::to_string),
         };
         store.set_record_data(&[update(None)]).unwrap();
         let after = store.get_session(&source.id).unwrap().unwrap();
         assert!(after.observed_model.is_none());
         assert_eq!(after.context.unwrap().tokens, 123);
         assert_eq!(after.record_titles.named.as_deref(), Some("Current title"));
-        store.set_record_data(&[update(Some(checkpoint))]).unwrap();
+        store.set_record_data(&[update(Some(boundary))]).unwrap();
         assert_eq!(
             store
                 .get_session(&source.id)
@@ -5579,15 +5597,15 @@ mod tests {
         source.status = SessionStatus::Archived;
         store.update_session(&source).unwrap();
         assert_eq!(
-            store.observed_checkpoint(&source.id).unwrap().as_deref(),
-            Some(checkpoint)
+            store.observed_boundary(&source.id).unwrap().as_deref(),
+            Some(boundary)
         );
         source.agent_session_id = Some("another-conversation".to_string());
         store.update_session(&source).unwrap();
-        assert!(store.observed_checkpoint(&source.id).unwrap().is_none());
-        store.reset_observed_model(&source.id, checkpoint).unwrap();
+        assert!(store.observed_boundary(&source.id).unwrap().is_none());
+        store.reset_observed_model(&source.id, boundary).unwrap();
         store.delete_session(&source.id).unwrap();
-        assert!(store.observed_checkpoint(&source.id).unwrap().is_none());
+        assert!(store.observed_boundary(&source.id).unwrap().is_none());
     }
 
     #[test]
@@ -5610,7 +5628,7 @@ mod tests {
             used_percent: Some(2),
         };
         let update = |session: &Session, context| RecordUpdate {
-            observed_checkpoint: None,
+            observed_boundary: None,
             session: session.clone(),
             context,
             observed_model: None,
@@ -5697,7 +5715,7 @@ mod tests {
             prompt: Some("Prompt".to_owned()),
         };
         let updates = [RecordUpdate {
-            observed_checkpoint: None,
+            observed_boundary: None,
             session: source.clone(),
             context: None,
             observed_model: None,
@@ -5739,7 +5757,7 @@ mod tests {
         store.insert_session(&session(None)).unwrap();
         let mut source = store.get_session("session-1").unwrap().unwrap();
         let updates = [RecordUpdate {
-            observed_checkpoint: None,
+            observed_boundary: None,
             session: source.clone(),
             context: None,
             observed_model: Some("claude-opus-5-5".to_owned()),
@@ -5756,7 +5774,7 @@ mod tests {
         assert_eq!(stored.observed_model.as_deref(), Some("claude-opus-5-5"));
         assert_eq!(stored.observed_effort.as_deref(), Some("high"));
         let unset = [RecordUpdate {
-            observed_checkpoint: None,
+            observed_boundary: None,
             session: stored,
             context: None,
             observed_model: None,

@@ -392,7 +392,8 @@ fn relationships(agent: Agent, owns: bool) -> String {
              keeping its conversation, and comes back awaiting instructions (a turn in progress \
              is cut off), so send it the next step with `{instruct_session}` — unless the \
              result's `note` says it was sent a prompt to continue, which you must not repeat. A \
-             session waiting for the user is refused.",
+             session waiting for the user is refused, unless all it waits on is a usage-limit \
+             dialog.",
             set_session_model = tool("set_session_model"),
             instruct_session = tool("instruct_session"),
         ));

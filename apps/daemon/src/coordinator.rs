@@ -47,9 +47,9 @@ use crate::project_trash;
 use crate::protocol::{
     error_code, error_parts, notice_code, now_millis, Account, Agent, ApprovalReviewer,
     Availability, ClaudeApprovalMode, CodedError, Console, ConsoleSessionColour,
-    ConversationLocation, Event, Notice, Origin, Present, Project, ProjectAccount, ProjectSource,
-    RequestBody, Role, Session, SessionBranchItem, SessionBranchTarget, SessionStatus,
-    TerminalAppearance,
+    ConversationLocation, Event, ModelChangeOutcome, Notice, Origin, Present, Project,
+    ProjectAccount, ProjectSource, RequestBody, Role, Session, SessionBranchItem,
+    SessionBranchTarget, SessionStatus, TerminalAppearance,
 };
 use crate::relocate;
 use crate::reporting;
@@ -858,8 +858,21 @@ async fn handle_inner(
             effort,
             terminal_appearance,
         } => {
-            set_session_model(state, &session, model, effort, terminal_appearance).await?;
-            Ok(None)
+            let change =
+                set_session_model(state, &session, model, effort, terminal_appearance).await?;
+            let (outcome, continued) = match change {
+                ModelChange::Unchanged => (ModelChangeOutcome::Unchanged, None),
+                ModelChange::Recorded => (ModelChangeOutcome::Recorded, None),
+                ModelChange::Restarted { continued } => {
+                    (ModelChangeOutcome::Restarted, Some(continued))
+                }
+            };
+            Ok(Some(Event::SessionModelSet {
+                id: request_id,
+                session,
+                outcome,
+                continued,
+            }))
         }
 
         RequestBody::HandOffSession {
@@ -2997,6 +3010,7 @@ async fn begin_open(state: &Arc<AppState>, request: OpenRequest) -> Result<Start
         &console,
         model,
         effort,
+        SettingsChecked::All,
     )
     .await?;
     let title = title
@@ -3200,8 +3214,22 @@ fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> R
     state.session_record(&session.id)
 }
 
+/// Which of the values given to [`check_launch_settings`] are held against what the agent offers.
+#[derive(Clone, Copy)]
+enum SettingsChecked<'a> {
+    /// Every value, as for a session being opened or moved to another account.
+    All,
+    /// Only the values that differ from the session's own overrides `model` and `effort`: a value
+    /// it already runs with is not refused because the agent has stopped offering it since.
+    Changed {
+        model: &'a Option<Option<String>>,
+        effort: &'a Option<Option<String>>,
+    },
+}
+
 /// Normalises a session's model and effort override and refuses one `agent` does not offer under
-/// `account_id`, as the launch of a session does.
+/// `account_id`, as the launch of a session does, among the values `checked` names.
+#[allow(clippy::too_many_arguments)]
 async fn check_launch_settings(
     state: &Arc<AppState>,
     agent: Agent,
@@ -3210,6 +3238,7 @@ async fn check_launch_settings(
     console: &Console,
     model: Option<Option<String>>,
     effort: Option<Option<String>>,
+    checked: SettingsChecked<'_>,
 ) -> Result<(Option<Option<String>>, Option<Option<String>>)> {
     let (model, effort) = (
         normalize_session_launch_setting(model),
@@ -3224,16 +3253,42 @@ async fn check_launch_settings(
             None => console.launch(agent).0.clone(),
         },
     };
+    let given = |value: &Option<Option<String>>, had: Option<&Option<Option<String>>>| {
+        value.clone().filter(|_| had != Some(value)).flatten()
+    };
+    let (had_model, had_effort) = match checked {
+        SettingsChecked::All => (None, None),
+        SettingsChecked::Changed { model, effort } => (Some(model), Some(effort)),
+    };
     LaunchCheck {
         agent,
         account_id,
-        model: model.clone().flatten(),
-        effort: effort.clone().flatten(),
+        model: given(&model, had_model),
+        effort: given(&effort, had_effort),
         effective_model,
     }
     .run(state)
     .await?;
     Ok((model, effort))
+}
+
+/// The project a session belongs to, if any, and its console, which its launch settings fall
+/// back on.
+fn session_scope(state: &AppState, session: &Session) -> Result<(Option<Project>, Console)> {
+    let project = match &session.project_id {
+        Some(project_id) => Some(
+            state
+                .store
+                .get_project(project_id)?
+                .ok_or_else(|| CodedError::unknown_project(project_id))?,
+        ),
+        None => None,
+    };
+    let console = state
+        .store
+        .get_console(&session.console_id)?
+        .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+    Ok((project, console))
 }
 
 /// Refuses a session that [`open_session`] would refuse for what `request` asks, a console session
@@ -3279,6 +3334,7 @@ async fn check_open_with(
         &console,
         request.model.clone(),
         request.effort.clone(),
+        SettingsChecked::All,
     )
     .await?;
     Ok((agent, account_id))
@@ -3304,19 +3360,7 @@ async fn checked_launch_overrides(
     if edit.model.is_none() && edit.effort.is_none() {
         return Ok(None);
     }
-    let project = match &session.project_id {
-        Some(project_id) => Some(
-            state
-                .store
-                .get_project(project_id)?
-                .ok_or_else(|| CodedError::unknown_project(project_id))?,
-        ),
-        None => None,
-    };
-    let console = state
-        .store
-        .get_console(&session.console_id)?
-        .ok_or_else(|| CodedError::unknown_console(&session.console_id))?;
+    let (project, console) = session_scope(state, session)?;
     let checked = check_launch_settings(
         state,
         session.agent,
@@ -3325,6 +3369,7 @@ async fn checked_launch_overrides(
         &console,
         edit.model.or_else(|| session.model.clone()),
         edit.effort.or_else(|| session.effort.clone()),
+        SettingsChecked::All,
     )
     .await?;
     Ok(Some(checked))
@@ -5380,7 +5425,7 @@ pub async fn set_session_model(
     model: Option<Option<String>>,
     effort: Option<Option<String>>,
     terminal_appearance: Option<TerminalAppearance>,
-) -> Result<()> {
+) -> Result<ModelChange> {
     set_session_model_with(
         state,
         id,
@@ -5391,7 +5436,6 @@ pub async fn set_session_model(
         term::launch,
     )
     .await
-    .map(drop)
 }
 
 /// Who asks [`set_session_model_with`] for a change.
@@ -5401,12 +5445,15 @@ pub(crate) enum ModelAsker<'a> {
     User,
     /// The owner whose id this is, over MCP: the session must still be bound to it once the change
     /// holds its claim, and a session waiting for the user is refused
-    /// (`session_waiting_for_user`), since the restart would end the prompt the user alone answers.
+    /// (`session_waiting_for_user`), since the restart would end the prompt the user alone answers
+    /// — except where its only wait is a usage-limit dialog, which the restart is free to end, as
+    /// an automatic account switch does (`AppState::status_for_switch`).
     Owner(&'a str),
 }
 
 /// Changes the model and reasoning effort `edit` gives a session, which become its own choices,
-/// checked as opening a session checks them against what its agent offers under its own account.
+/// checked as opening a session checks them against what its agent offers under its own account
+/// (only the values that change).
 /// One mechanism serves every agent, the account switch's without the move: a session with a
 /// running process has the process ended the way archiving ends it (archiving nothing), the new
 /// values recorded, and is relaunched on the same account resuming its conversation, as a resume
@@ -5418,20 +5465,22 @@ pub(crate) enum ModelAsker<'a> {
 /// session waiting on a prompt of its agent's has that prompt ended with the process, unless an
 /// owner asks (see [`ModelAsker::Owner`]).
 ///
-/// Every client is shown the session `starting` from the moment the restart is decided until it is
-/// over (`AppState::mark_model_change`), and the model and effort the agent's records showed are
-/// forgotten once the process is down, for what it records after the relaunch to replace them.
+/// Every client is shown a running session `starting` from the moment the change holds its claim,
+/// before anything is checked that takes time, until it is over (`AppState::mark_model_change`),
+/// and the model and effort the agent's records showed are forgotten once the process is down,
+/// for what it records after the relaunch to replace them.
 ///
-/// An interrupted session only has the values recorded, for its next resume; a session whose
-/// values are already those is answered [`ModelChange::Unchanged`] with nothing done. Refused, with
-/// nothing changed: no value given (`field_required`), an archived session (`session_archived`;
-/// reopening one with another model is `resume_session`'s), one being launched, resumed,
-/// switched, handed off or otherwise claimed (`session_already_starting`) or shown starting, a
-/// value the agent does not offer, and a change of its account's sharing under way. Refused after the process was
-/// asked to end, with nothing recorded: `model_change_did_not_stop`. Once the process is down, a
-/// relaunch the launch rules refuse, or one whose process ends at once
-/// (`model_change_did_not_come_up`), leaves the session interrupted with the model and effort it
-/// had.
+/// Values the session already has are answered [`ModelChange::Unchanged`] with nothing done,
+/// before anything else can refuse them, except while another change of its model is under way,
+/// which claims the session (`session_already_starting`). An interrupted session only has the
+/// values recorded, for its next resume. Refused, with nothing changed: no value given
+/// (`field_required`), an archived session (`session_archived`; reopening one with another model is
+/// `resume_session`'s), one being launched, resumed, switched, handed off or otherwise claimed
+/// (`session_already_starting`) or shown starting, a value the agent does not offer, and a change
+/// of its account's sharing under way. Refused after the process was asked to end, with nothing
+/// recorded: `model_change_did_not_stop`. Once the process is down, a relaunch the launch rules
+/// refuse, or one whose process ends at once (`model_change_did_not_come_up`), leaves the session
+/// interrupted with the model and effort it had.
 ///
 /// The shell snapshot the default account is resolved from comes from `snapshot`, and the process
 /// is started by `launch`: `env_shell::launch_snapshot` and `term::launch` outside the tests.
@@ -5447,57 +5496,60 @@ pub(crate) async fn set_session_model_with(
     if edit.model.is_none() && edit.effort.is_none() {
         return Err(field_required("model"));
     }
+    let (model, effort) = (
+        normalize_session_launch_setting(edit.model),
+        normalize_session_launch_setting(edit.effort),
+    );
+    // The values the session would have, or `None` when it has them already: answered before the
+    // claim, which another holder may have, since there is nothing to change, except while a
+    // change of its model is under way, whose values it may yet put back.
+    let changed = |session: &Session| -> Result<Option<_>> {
+        if let ModelAsker::Owner(owner) = asker {
+            refuse_unless_still_askers(session, Some(owner))?;
+        }
+        refuse_if_archived(session)?;
+        let model = model.clone().or_else(|| session.model.clone());
+        let effort = effort.clone().or_else(|| session.effort.clone());
+        Ok(((&model, &effort) != (&session.model, &session.effort)).then_some((model, effort)))
+    };
+    if changed(&state.session_record(id)?)?.is_none() && !state.is_changing_model(id) {
+        return Ok(ModelChange::Unchanged);
+    }
     // Held until this function returns, as a switch holds its own: nothing else launches,
     // resumes, switches or deletes the session while its process is down or being watched.
     let claim = state.begin_switch(id)?;
     let before = state.session_record(id)?;
-    if let ModelAsker::Owner(owner) = asker {
-        refuse_unless_still_askers(&before, Some(owner))?;
-    }
-    if before.status == SessionStatus::Archived {
-        return Err(session_archived(id));
-    }
-    let shown = state.shown_status(&before);
-    if shown == SessionStatus::Starting {
+    let Some((model, effort)) = changed(&before)? else {
+        return Ok(ModelChange::Unchanged);
+    };
+    if state.status_for_model_change(&before) == SessionStatus::Starting {
         return Err(CodedError::raised(
             error_code::SESSION_ALREADY_STARTING,
             "this session is already being started",
             &[("session", id)],
         ));
     }
+    refuse_if_owner_must_wait(state, asker, &before)?;
+    // Shown restarting at once, as an account switch is shown switching once it has its claim, so
+    // that no window shows the old status or offers another change while the checks run.
+    if !before.status.is_dormant() {
+        state.mark_model_change(id);
+    }
     crate::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;
-    let model = normalize_session_launch_setting(edit.model).or_else(|| before.model.clone());
-    let effort = normalize_session_launch_setting(edit.effort).or_else(|| before.effort.clone());
-    if (&model, &effort) == (&before.model, &before.effort) {
-        return Ok(ModelChange::Unchanged);
-    }
-    let fallback = match &model {
-        Some(model) => model.clone(),
-        None => {
-            let console = state
-                .store
-                .get_console(&before.console_id)?
-                .ok_or_else(|| CodedError::unknown_console(&before.console_id))?;
-            match before.project_id.as_deref() {
-                Some(id) => {
-                    let project = state
-                        .store
-                        .get_project(id)?
-                        .ok_or_else(|| CodedError::unknown_project(id))?;
-                    project_launch_settings(&project, &console, before.agent).0
-                }
-                None => console.launch(before.agent).0.clone(),
-            }
-        }
-    };
-    LaunchCheck {
-        agent: before.agent,
-        account_id: before.account_id.clone(),
-        model: model.clone().filter(|_| model != before.model).flatten(),
-        effort: effort.clone().filter(|_| effort != before.effort).flatten(),
-        effective_model: fallback,
-    }
-    .run(state)
+    let (project, console) = session_scope(state, &before)?;
+    check_launch_settings(
+        state,
+        before.agent,
+        before.account_id.clone(),
+        project.as_ref(),
+        &console,
+        model.clone(),
+        effort.clone(),
+        SettingsChecked::Changed {
+            model: &before.model,
+            effort: &before.effort,
+        },
+    )
     .await?;
     let current = state.session_record(id)?;
     if current.status == SessionStatus::Archived {
@@ -5525,19 +5577,14 @@ pub(crate) async fn set_session_model_with(
     if current.status == SessionStatus::Archived {
         return Err(session_archived(id));
     }
-    if matches!(asker, ModelAsker::Owner(_))
-        && state.shown_status(&current) == SessionStatus::WaitingUser
-    {
-        return Err(CodedError::raised(
-            error_code::SESSION_WAITING_FOR_USER,
-            "this session is waiting for the user, who alone can answer what it is showing; \
-             restarting it would end that prompt",
-            &[("session", id)],
-        ));
-    }
+    // A prompt may have come up while the snapshot was taken.
+    refuse_if_owner_must_wait(state, asker, &current)?;
+    // Committed to the restart from here: a quota recovery waiting to resume the session would
+    // only be cut off by it.
+    state.quota_recovery.cancel(id);
     state.mark_model_change(id);
     let (held_for_relaunch, ended_a_process) = stop_carrying_processes(state, id).await?;
-    if let Err(err) = wait_until_down(state, id).await {
+    if let Err(err) = wait_until_down_within(state, id, state.model_change_stop_timeout()).await {
         let stopped = err
             .downcast_ref::<CodedError>()
             .is_some_and(|coded| coded.code == error_code::SESSION_DID_NOT_STOP);
@@ -5576,12 +5623,12 @@ pub(crate) async fn set_session_model_with(
         })
         .await?;
 
-        let checkpoint = serde_json::to_string(&boundary)?;
+        let boundary = serde_json::to_string(&boundary)?;
         if !state.store.set_session_launch_overrides_unless_archived(
             id,
             &model,
             &effort,
-            Some(&checkpoint),
+            Some(&boundary),
         )? {
             return Err(session_archived(id));
         }
@@ -5640,6 +5687,26 @@ pub(crate) async fn set_session_model_with(
     Ok(ModelChange::Restarted {
         continued: carry_on,
     })
+}
+
+/// Refuses a change of the model of `session` an owner asked for while the session waits for the
+/// user, beyond a usage-limit dialog, which the restart is free to end (see [`ModelAsker::Owner`]).
+fn refuse_if_owner_must_wait(
+    state: &AppState,
+    asker: ModelAsker<'_>,
+    session: &Session,
+) -> Result<()> {
+    if matches!(asker, ModelAsker::Owner(_))
+        && state.status_for_model_change(session) == SessionStatus::WaitingUser
+    {
+        return Err(CodedError::raised(
+            error_code::SESSION_WAITING_FOR_USER,
+            "this session is waiting for the user, who alone can answer what it is showing; \
+             restarting it would end that prompt",
+            &[("session", &session.id)],
+        ));
+    }
+    Ok(())
 }
 
 /// Refuses, in prose, an operation an owner asked for on a session that is no longer its own. The
@@ -13378,6 +13445,44 @@ mod tests {
         assert_eq!(after.status, SessionStatus::Interrupted);
     }
 
+    /// The control request is answered with what the change did.
+    #[tokio::test]
+    async fn a_set_session_model_request_is_answered_with_its_outcome() {
+        let (state, _dir) = console_with_project_and_accounts("coordinator-model-change-reply");
+        crate::test_support::offer_models(&state, Agent::Claude, &[("opus", &["high"])]);
+        state
+            .store
+            .insert_session(&project_session(
+                "s",
+                Agent::Claude,
+                SessionStatus::Interrupted,
+            ))
+            .unwrap();
+        let ask = || RequestBody::SetSessionModel {
+            session: "s".to_string(),
+            model: Some(Some("opus".to_string())),
+            effort: None,
+            terminal_appearance: None,
+        };
+        let outcome = |reply: Option<Event>| match reply {
+            Some(Event::SessionModelSet {
+                id,
+                session,
+                outcome,
+                continued,
+            }) => {
+                assert_eq!((id.as_deref(), session.as_str()), (Some("r"), "s"));
+                (outcome, continued)
+            }
+            other => panic!("answered with {other:?}"),
+        };
+
+        let reply = handle(&state, Some("r".to_string()), ask()).await.unwrap();
+        assert_eq!(outcome(reply), (ModelChangeOutcome::Recorded, None));
+        let reply = handle(&state, Some("r".to_string()), ask()).await.unwrap();
+        assert_eq!(outcome(reply), (ModelChangeOutcome::Unchanged, None));
+    }
+
     #[tokio::test]
     async fn an_unchanged_model_no_longer_in_the_catalogue_is_not_revalidated() {
         let (state, dir) = console_with_project_and_accounts("model-unlisted-noop");
@@ -13513,7 +13618,7 @@ mod tests {
         );
         assert_eq!((after.account_id, after.config_dir), (None, None));
         assert!(!state.is_changing_model("s"));
-        assert!(state.store.observed_checkpoint("s").unwrap().is_some());
+        assert!(state.store.observed_boundary("s").unwrap().is_some());
     }
 
     /// An archive that lands before the relaunch writes anything is not undone by the switch: the

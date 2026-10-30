@@ -1932,10 +1932,10 @@ pub enum RequestBody {
     },
     /// Changes the model and reasoning effort of a session that is not archived, as its own
     /// choice: each absent keeps what the session has, an explicit `null` (or blank) leaves it to
-    /// the agent, a string pins it; at least one is given. A running session is restarted on its account,
-    /// resuming its conversation with them, as an account switch does without moving it; an
-    /// interrupted one only has them recorded for its next resume. See
-    /// `coordinator::set_session_model`.
+    /// the agent, a string pins it; at least one is given. A running session is restarted on its
+    /// account, resuming its conversation with them, as an account switch does without moving it;
+    /// an interrupted one only has them recorded for its next resume. Answered with
+    /// `session_model_set`. See `coordinator::set_session_model`.
     SetSessionModel {
         session: String,
         #[serde(default, deserialize_with = "present_option")]
@@ -2623,6 +2623,18 @@ pub struct PathLinkView {
     pub path: String,
 }
 
+/// What a `set_session_model` did (`Event::SessionModelSet`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ModelChangeOutcome {
+    /// The session had those values already: nothing was written or restarted.
+    Unchanged,
+    /// The session had no process: the values were recorded for its next resume.
+    Recorded,
+    /// The session's process was ended and relaunched with the values.
+    Restarted,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
@@ -2634,6 +2646,15 @@ pub enum Event {
         interrupted: bool,
         status: SessionStatus,
         note: String,
+    },
+    /// The answer to `set_session_model`: what the change did to the session, and for a restart
+    /// whether the relaunch was sent the prompt to carry on with its task.
+    SessionModelSet {
+        id: Option<String>,
+        session: String,
+        outcome: ModelChangeOutcome,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        continued: Option<bool>,
     },
     SessionHistory {
         id: Option<String>,
@@ -5397,6 +5418,68 @@ mod tests {
             ),
             (None, Some(Some("gpt-5".to_string())))
         );
+    }
+
+    /// A model change keeps an absent value, gives an explicit `null` back to the agent and pins
+    /// a string, for the model and the effort alike.
+    #[test]
+    fn a_session_model_change_tells_an_absent_value_from_null() {
+        let parse = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+            RequestBody::SetSessionModel { model, effort, .. } => (model, effort),
+            _ => panic!("parses as set_session_model"),
+        };
+        assert_eq!(
+            parse(r#"{"type":"set_session_model","session":"s","model":"opus"}"#),
+            (Some(Some("opus".to_string())), None)
+        );
+        assert_eq!(
+            parse(r#"{"type":"set_session_model","session":"s","model":null,"effort":"high"}"#),
+            (Some(None), Some(Some("high".to_string())))
+        );
+        assert_eq!(
+            parse(r#"{"type":"set_session_model","session":"s","effort":null}"#),
+            (None, Some(None))
+        );
+    }
+
+    /// The answer to `set_session_model` names its outcome, and only a restart says whether it
+    /// continued the session's task.
+    #[test]
+    fn a_session_model_set_reply_serializes_its_outcome() {
+        use super::ModelChangeOutcome;
+        let reply = |outcome, continued| {
+            serde_json::to_value(Event::SessionModelSet {
+                id: Some("request-1".to_owned()),
+                session: "s-1".to_owned(),
+                outcome,
+                continued,
+            })
+            .unwrap()
+        };
+        assert_eq!(
+            reply(ModelChangeOutcome::Restarted, Some(true)),
+            serde_json::json!({
+                "type": "session_model_set",
+                "id": "request-1",
+                "session": "s-1",
+                "outcome": "restarted",
+                "continued": true,
+            })
+        );
+        for (outcome, word) in [
+            (ModelChangeOutcome::Unchanged, "unchanged"),
+            (ModelChangeOutcome::Recorded, "recorded"),
+        ] {
+            assert_eq!(
+                reply(outcome, None),
+                serde_json::json!({
+                    "type": "session_model_set",
+                    "id": "request-1",
+                    "session": "s-1",
+                    "outcome": word,
+                })
+            );
+        }
     }
 
     /// Absent versus null is how a console's project session agent can be cleared as well as set.

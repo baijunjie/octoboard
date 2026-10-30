@@ -550,6 +550,15 @@ Pressing the button acknowledges the alert and opens Settings there, above whate
 already open, it moves to that section instead (see "Opening and closing Settings" in `docs/product/settings.md`). The
 step in the alert's body then says only what to do, such as adding the agent and trying again.
 
+**A model-change remedy has a Change model button** when the alert identifies its session: an unsupported launch setting
+returned by Change model (`invalid_launch_setting`), or a restart that did not come up (`model_change_did_not_come_up`).
+The remedy names Change model as an inline control reference; the restart failure explains that the session is
+interrupted and can be resumed or have its model changed. The secondary footer button acknowledges the alert, then opens
+Change model for that session. It opens nothing while another dialog, Settings or a pending question is already open,
+and nothing if the session no longer exists. The alert is still acknowledged in those cases. A session that is archived
+is handled by the Change model dialog's failure modal (see "Changing a session's model and effort" in
+`docs/product/model-and-reasoning-effort.md`).
+
 **A plain alert** is a known refusal that says what happened in its own sentences, with no remedy line added after them,
 no request to report an issue and nothing but its acknowledgement button. It is used for a switch confirmed onto an
 account that was used up after the confirmation opened (see "Confirming a switch" in

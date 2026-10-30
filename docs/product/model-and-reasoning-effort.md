@@ -168,22 +168,30 @@ diagnostic output. Neither a missing list nor one still being fetched stops the 
 Switch account, is absent for archived sessions, and is disabled while the session is starting or switching accounts.
 The dialog shows the Model and Reasoning effort pickers directly, with the same choices, loading and unavailable-list
 rules described above. They start on the session's launch choices, taking inherited values where the session has no
-choice of its own; they do not start on the model last observed in the agent's records. Clearing either chooses the
-agent's own default for it. Confirm requires at least one value to differ from what the dialog opened on, and waits if
-the session becomes archived, starting or switching accounts while the dialog is open. Changing a value and changing it
-back leaves it untouched. Only changed values are sent, so the other value keeps its choice or inheritance. Confirm
-closes the dialog immediately and the change runs in the background. A refusal or failure opens an error alert
-identifying the session and the failed model change.
+choice of its own; they do not start on the model last observed in the agent's records. While the dialog is open, its
+session name, account, restart explanation and untouched fields follow the session's current state and settings. An
+edited field keeps its chosen value; choosing the session's current value again makes it follow the session again.
+Clearing either chooses the agent's own default for it. Confirm requires at least one value to differ from the
+session's current launch values. Only changed values are sent, so the other value keeps its choice or inheritance.
+
+A session that becomes starting or switches accounts while the dialog is open temporarily disables Confirm, with a
+warning explaining that the user must wait for it to finish. A session deleted or archived while it is open instead
+turns the dialog into a failure modal, naming the session in an inline name chip; a deleted session keeps its last
+known name, including a rename made while the dialog was open. Confirm closes the dialog immediately and the change
+runs in the background. A refusal or failure opens an error alert identifying the session and the failed model change.
+See "Recovery and unexpected errors" in `docs/product/error-alerts.md` for its recovery action.
 
 The agent and account stay the same. A running session is restarted, keeping its conversation; one with no conversation
-yet starts fresh. It shows as starting throughout the restart in every window and in session reads. A turn the restart
-cuts off, or one stopped by a usage limit, receives a prompt to continue its task; otherwise the session returns
-awaiting instructions. The processes the session's agent left running in the background are carried over to the
-restarted session rather than stopped, as in an account switch, and kept as project processes when the restart fails
-after it ended the process (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). An
-interrupted session is not started: the choices are recorded for its next resume. The changed values become the
-session's own choices, persisting as described at the top of this document. The user can change a session waiting for
-the user too; restarting it ends the prompt it was showing.
+yet starts fresh. It shows as starting in every window and in session reads from when the change claims the running
+session, including time spent checking the settings, until it ends. A refusal before the restart restores its prior
+presentation. A turn the restart cuts off, or one stopped by a usage limit, receives a prompt to continue its task;
+otherwise the session returns awaiting instructions. The processes the session's agent left running in the background
+are carried over to the restarted session rather than stopped, as in an account switch, and kept as project processes
+when the restart fails after it ended the process (see "Automatic stopping and its boundaries" in
+`docs/product/background-processes.md`). An interrupted session is not started: the choices are recorded for its next
+resume. The changed values become the session's own choices, persisting as described at the top of this document. The
+user can change a session waiting for the user too; the dialog explains that restarting ends the prompt it was showing.
+Where no conversation has started, it explains that the restart starts a new conversation instead.
 
 A console session or project coordinator changes a session bound to it with **`set_session_model`**, without asking for
 approval. Workers have no such tool, and an owner cannot change an independent session or another owner's session. The
@@ -191,8 +199,12 @@ call takes `session` and at least one of `model` and `effort`. Each omitted valu
 inheritance; a blank string chooses the agent's own default, and another string is trimmed and becomes the session's own
 value. Only values actually being changed are checked against what the agent offers under the session's account, under
 "The Advanced section" above. Giving the choices it already has succeeds without restarting or checking them again, even
-when the current list no longer offers them. Giving an inherited value explicitly makes it the session's own choice,
-even if it resolves to the same value.
+when the current list no longer offers them. This no-change answer does not bypass another model change already in
+progress: a repeated request is refused while that change holds the session. Giving an inherited value explicitly makes
+it the session's own choice, even if it resolves to the same value.
+
+Once started, the change runs to completion even if the calling session exits and drops the call. If the call is no
+longer waiting when it ends, the result or failure is delivered as a message to the calling session instead.
 
 The call waits for the restart to come up and answers with `session`, `agent`, `restarted` and a `note`, plus the
 session's own `model` and `effort`: each absent when inherited, `null` for the agent's own default, or its chosen
@@ -202,10 +214,19 @@ No separate message about the change is sent to the session.
 
 A change is refused for an archived session (reopen it with the desired values instead), a session starting or already
 being changed, or while its account's sharing of the default configuration is being changed. An owner's call is also
-refused while the session is waiting for the user, so it cannot end a prompt only the user can answer. A changed value
-the agent does not offer is refused before the process is stopped or any choices are recorded. If the process cannot be
-stopped in time, the choices stay as they were (`model_change_did_not_stop`). If the restart is refused, fails to launch
-or ends immediately (`model_change_did_not_come_up`), the session is left interrupted with its earlier choices.
+refused while the session is waiting for the user, so it cannot end a prompt only the user can answer. A usage-limit
+dialog alone does not count as such a wait and can be ended by the restart. A changed value the agent does not offer is
+refused before the process is stopped or any choices are recorded. If the process cannot be stopped in time, the choices
+stay as they were (`model_change_did_not_stop`). If the restart is refused, fails to launch or ends immediately
+(`model_change_did_not_come_up`), the session is left interrupted with its earlier choices.
+
+The window's `session_model_set` reply distinguishes `outcome: unchanged`, `recorded` and `restarted`; only a restarted
+result carries `continued`, saying whether a continuation prompt was sent. The window announces a recorded change as
+settings saved for the next resume and a restarted change as a completed restart; unchanged choices produce no success
+announcement. The session name is read again when the reply arrives. These announcements, and successful account-switch
+announcements, wait until the window is visible and focused and no modal covers their status region, including an error
+alert, Settings or the file viewer. The initial announcement delay and its expiry wait while those conditions are not
+met; a newer result replaces one still waiting to be announced.
 
 ## The model and effort a session is shown running with
 
@@ -254,8 +275,10 @@ to a different native conversation, until the new one shows its own. They are re
 `observed_model` and `observed_effort`, separate from the session's launch choices `model` and `effort`. A model-change
 restart clears the earlier observations once the old process has stopped. Until the restarted agent records its new
 model and effort, the display falls back to its launch choices as above: older records, including an unread tail of the
-previous process's conversation, cannot restore the earlier model or effort. This remains true across a daemon restart
-before the agent records the new values.
+previous process's conversation, cannot restore the earlier model or effort. This remains true across a daemon restart,
+a copy of the same conversation to another account, and Codex unpacking its conversation records before the agent
+records the new values. Moving or recreating the same records does not make their earlier model or effort a new
+observation.
 
 **The agent's own default level.** Where the records name the model a session runs but no effort, the level that model
 runs at by itself is worked out per agent:

@@ -189,11 +189,9 @@ pub(crate) async fn ask_to_change(
     wait_for_answer(state, caller, request, limit).await
 }
 
-/// Runs the operation of `tool` without asking, as the user's standing approval has it run. It runs
-/// on a task of its own: the call is cancelled by dropping it (see `mcp::stdio`), which must not
-/// leave a switch or a handoff half done. When the call is gone by the time the operation ends, its
-/// outcome is written into the caller's session instead, as an approval's is, so the caller still
-/// learns what was done.
+/// Runs the operation of `tool` without asking, as the user's standing approval has it run: the
+/// request of its kind for `target` that is still waiting is closed, as an asked one would
+/// replace it, and the operation runs through [`run_to_the_end`].
 pub(crate) async fn run_unasked(
     state: &Arc<AppState>,
     caller: &Session,
@@ -212,13 +210,29 @@ pub(crate) async fn run_unasked(
         },
         SessionRequestEnding::Withdrawn,
     );
+    let run = async move { run.await.map(|done| done.result) };
+    run_to_the_end(state, caller, tool, run).await
+}
+
+/// Runs the operation of `tool`, which must finish once started, on a task of its own and answers
+/// what it returns: the call is cancelled by dropping it (see `mcp::stdio`), and with it a call's
+/// future at whichever `.await` it had reached, which must not leave the operation half done. When
+/// the call is gone by the time the operation ends, the outcome (the result's `note`, or the
+/// failure) is written into the caller's session instead, so the caller still learns what was
+/// done.
+pub(crate) async fn run_to_the_end(
+    state: &Arc<AppState>,
+    caller: &Session,
+    tool: &'static str,
+    run: impl Future<Output = Result<Value>> + Send + 'static,
+) -> Result<Value> {
     let (reply, awaiting) = oneshot::channel::<Result<Value>>();
     let (state, caller_id, agent) = (state.clone(), caller.id.clone(), caller.agent);
     tokio::spawn(async move {
         let (note, answer) = match run.await {
-            Ok(done) => (
-                done.result["note"].as_str().unwrap_or_default().to_string(),
-                Ok(done.result),
+            Ok(result) => (
+                result["note"].as_str().unwrap_or_default().to_string(),
+                Ok(result),
             ),
             Err(err) => (format!("It could not be carried out: {err:#}."), Err(err)),
         };

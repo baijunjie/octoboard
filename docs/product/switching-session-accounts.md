@@ -52,7 +52,8 @@ from confirming until its own turn is over, the waiting ones included. A failure
 when the whole set is done, one error alert reports every failure of the set (see "The alert for failed switches"
 below). When the whole set is done without a failure and at least one session was switched, the window announces to
 assistive technology how many sessions were switched and to which account; a set with failures is told by its error
-alert alone.
+alert alone. Its announcement waits for the window and its modals as described in "Changing a session's model and
+effort" in `docs/product/model-and-reasoning-effort.md`.
 
 ## The alert for failed switches
 

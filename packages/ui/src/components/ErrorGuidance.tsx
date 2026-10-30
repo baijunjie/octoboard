@@ -6,13 +6,16 @@ import { Message, useT } from "../i18n/react";
 import { InlineReference } from "./InlineReference";
 
 /** The button a recovery offers besides its words: it opens Settings on Agent accounts, with the Add agent
- * dialog in front when `addAgent` is set. None for a recovery with nothing to open. */
-export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: string; addAgent?: boolean } | undefined {
+ * dialog in front when `addAgent` is set, or, when `sessionModel` is set, Change model for the session the alert is
+ * about. None for a recovery with nothing to open. */
+export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: string; addAgent?: boolean; sessionModel?: boolean } | undefined {
   switch (recovery) {
     case "account":
     case "accountDisabled":
     case "accountNotSignedIn":
     case "addedAgents": return { label: t("sidebar.session.manageAccounts") };
+    case "changeModelSetting":
+    case "modelChange": return { label: t("sidebar.session.changeModel"), sessionModel: true };
     case "agentNotAdded": return { label: t("agents.addAction"), addAgent: true };
     default: return undefined;
   }
@@ -23,7 +26,7 @@ export function recoveryAction(t: Translate, recovery: ErrorRecovery): { label: 
 export function recoveryParams<V = never>(t: Translate, mark?: (value: string, monospace: boolean) => V): Record<string, string | V> {
   const values: Record<string, string> = {
     appName: globalParam("appName")!, codex: "Codex", git: "Git", pathVar: "PATH", enter: "Enter",
-    terminal: t("common.terminal"), reopen: t("sidebar.session.reopen"), viewArchive: t("sidebar.archive.consoleSessions"), newSession: t("sidebar.focus.newSession"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"),
+    terminal: t("common.terminal"), reopen: t("sidebar.session.reopen"), viewArchive: t("sidebar.archive.consoleSessions"), newSession: t("sidebar.focus.newSession"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"), changeModel: t("sidebar.session.changeModel"),
     worktreeList: "git worktree list", branchList: "git branch",
     configToml: "config.toml", sqliteHome: "sqlite_home", codexSqliteHome: "CODEX_SQLITE_HOME", tilde: "~", home: "HOME",
   };

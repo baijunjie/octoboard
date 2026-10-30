@@ -17,6 +17,7 @@ import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
 import { DaemonProvider, useErrorRecords, type Daemon } from "../store";
 import { dialogAround } from "./dialogElement";
 import { Dialog } from "./Dialog";
+import { openSessionModelFromAnywhere } from "./sessionModelLauncher";
 import { ErrorAlertBody, alertTitle } from "./ErrorAlertBody";
 
 export const issueUrl = appConfig.issueUrl;
@@ -131,7 +132,9 @@ function ErrorAlertHost(): React.ReactElement | null {
   if (!error) return null;
   const unexpected = error.classification.kind === "unexpected";
   // A button for the remedy when it is the one remedy of every failure the alert is about.
-  const action = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
+  // Change model needs the session the alert is about; without one there is nothing to open it for.
+  const found = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
+  const action = found?.sessionModel && !error.session ? undefined : found;
   return (
     <Dialog
       key={error.id}
@@ -147,7 +150,8 @@ function ErrorAlertHost(): React.ReactElement | null {
         {action && (
           <Button variant="secondary" onPress={() => {
             errorAlerts.acknowledge();
-            openSettingsFromAnywhere("accounts", { addAgent: action.addAgent });
+            if (action.sessionModel && error.session) openSessionModelFromAnywhere(error.session);
+            else openSettingsFromAnywhere("accounts", { addAgent: action.addAgent });
           }}>{action.label}</Button>
         )}
         <Button ref={acknowledge} variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>
