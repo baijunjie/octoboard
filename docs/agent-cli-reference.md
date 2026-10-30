@@ -206,6 +206,14 @@ it every status change. Octoboard reads the user, project and managed files at l
 when the allowlist leaves its URL out; a policy delivered through an MDM profile or the claude.ai console is not
 readable from a file and stays a known gap.
 
+A pattern is matched as a URL, not as plain text (measured on 2.1.314, with the hook URL carrying the daemon's
+`?key=`): the scheme and host compare without regard to case, a `*` port matches any port, a pattern with no path
+(`http://127.0.0.1:*`) matches any path and query, and otherwise the pattern's path and query are matched against the
+URL's path and query case-sensitively, `*` included. So `http://127.0.0.1:*/hook/*` and
+`http://127.0.0.1:*/hook/*?key=*` let the hook through with its query, while `http://127.0.0.1:*/hook/<session>` (no
+wildcard for the query), `http://localhost:*` and `http://127.0.0.1:*/HOOK/*` block it, each logging "HTTP hook
+blocked: … does not match any pattern in allowedHttpHookUrls" to the debug log only.
+
 **`Notification` takes a matcher on its `notification_type`** (from **2.0.37**): a hook registered with
 `"matcher": "idle_prompt"` is delivered only for that type, which keeps the other notifications from reaching a
 handler that reads one.
