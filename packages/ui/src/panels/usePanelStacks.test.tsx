@@ -77,7 +77,7 @@ it("carries a project session's Report panel in the project's stack, open until 
   expect(latest().stacks.project.open).toEqual(["terminal"]);
   act(() => latest().setStack("project", { open: ["files", "terminal"], shares: {} }));
   latest.switchTo("session-b");
-  expect(latest().stacks.project.open).toEqual(["report", "files", "terminal"]);
+  expect(latest().stacks.project.open).toEqual(["report", "terminal", "files"]);
 });
 
 it("never stores the Report panel in the project's stack, and keeps which sessions closed theirs for the next load", async () => {

@@ -1,6 +1,6 @@
 import type { Scenario } from "../scenario";
 import type { Ui } from "../interact";
-import { consoleOf, pageOf, projectOf, sessionOf, snapshotState } from "./builders";
+import { consoleOf, pageOf, projectOf, processTreeOf, sessionOf, shellTerminalOf, snapshotState } from "./builders";
 import { allPagesDeleted, latestPageDeleted, pagePushed } from "./liveChanges";
 
 const GROUP = "Report panel";
@@ -90,7 +90,54 @@ const failedLists = snapshotState({
   pages: { [stale.id]: [pageOf("stale-1", stale.id, summary("Earlier report"), 60 * 3)] },
 });
 
+const panelState = snapshotState({
+  consoles: [console_],
+  projects: [project],
+  sessions: [withReport],
+  pages: { [withReport.id]: [pageOf("pc-1", withReport.id, summary("Idempotency keys, ready for review"), 20)] },
+  shellTerminals: [shellTerminalOf("sh-report", project, "zsh", 0)],
+});
+const panelProcesses = { trees: [processTreeOf("400:1", withReport, "pnpm dev", 60, { ports: [5173] })] };
+
 export const reportScenarios: Scenario[] = [
+  {
+    id: "report-three-panels",
+    group: GROUP,
+    category: "normal",
+    title: "Three panels in two columns",
+    description: "Report fills the first column, with Terminal above Files in the second column. Each column holds at most two cards. Drag the separator between Terminal and Files to resize that column; Report keeps its full height. Report offers Maximize panel beside Close panel. Choose Narrow (800px) to inspect both columns in the available pane width.",
+    // Below the docked-panel breakpoint only one floating card can be shown.
+    minWidth: 782,
+    state: panelState,
+    preferences: { asideWidth: 720, panelStacks: { project: { open: ["terminal", "files"], shares: {} } } },
+    steps: [openProjectSession(withReport.title), (ui) => ui.closeDrawer()],
+  },
+  {
+    id: "report-four-panels",
+    group: GROUP,
+    category: "normal",
+    title: "Four panels in two columns",
+    description: "Report and Terminal stack in the first column, Files and Processes in the second. Each column has its own height separator: resizing one leaves the other unchanged. Both Report and Terminal offer Maximize panel. Close a card to see the remaining cards fill columns in Report, Terminal, Files, Processes order, with at most two in each column.",
+    // Below the docked-panel breakpoint only one floating card can be shown.
+    minWidth: 782,
+    state: panelState,
+    preferences: { asideWidth: 720, panelStacks: { project: { open: ["terminal", "files", "processes"], shares: {} } } },
+    processes: panelProcesses,
+    steps: [openProjectSession(withReport.title), (ui) => ui.closeDrawer()],
+  },
+  {
+    id: "report-maximized",
+    group: GROUP,
+    category: "normal",
+    title: "Report panel maximized",
+    description: "Report covers the agent terminal's area, keeping its page and pager, while Terminal fills the first column and Files and Processes stack in the second. Restore panel size returns Report above Terminal and puts Files above Processes. Restoring or maximizing leaves the report page and shell in place.",
+    // Floating cards have no maximize control.
+    minWidth: 782,
+    state: panelState,
+    preferences: { asideWidth: 720, panelStacks: { project: { open: ["terminal", "files", "processes"], shares: {} } } },
+    processes: panelProcesses,
+    steps: [openProjectSession(withReport.title), (ui) => ui.closeDrawer(), (ui) => ui.pressInPanel("report", ui.t("panel.maximize"))],
+  },
   {
     id: "report-two-console-sessions",
     group: GROUP,
@@ -146,7 +193,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project session with a report",
-    description: "A project session that has pages: the right pane stacks a Report card above the project's Files card, and the top bar offers the Report, Files and Terminal toggles in that order, the order the cards stack, Report and Files pressed. The Report shows only the selected session's two pages, on the latest, not those of the project's other session. Selecting that other session swaps the Report for its own page; the Files card stays as it was. Choose Phone (420px) to see the layout below 782px: the Report floats over the terminal as the only card, as a console session's does, and the top bar lists the Report, Files and Terminal toggles, Report pressed. The \"Live changes\" buttons delete all of the session's pages (the card and its toggle go, the terminal uncovered) and push a page (only the toggle returns, not pressed: at that width the card does not float again until the toggle is pressed).",
+    description: "A project session that has pages: the right pane stacks a Report card above the project's Files card, and the top bar offers the Report, Terminal and Files toggles in that order, the order the cards stack, Report and Files pressed. The Report shows only the selected session's two pages, on the latest, not those of the project's other session. Selecting that other session swaps the Report for its own page; the Files card stays as it was. Choose Phone (420px) to see the layout below 782px: the Report floats over the terminal as the only card, as a console session's does, and the top bar lists the Report, Terminal and Files toggles, Report pressed. The \"Live changes\" buttons delete all of the session's pages (the card and its toggle go, the terminal uncovered) and push a page (only the toggle returns, not pressed: at that width the card does not float again until the toggle is pressed).",
     state: projectSessions,
     steps: [openProjectSession(withReport.title), (ui) => ui.showPanel("report")],
     liveChanges: [
@@ -159,7 +206,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project session with its report closed",
-    description: "The session has pages but its Report is closed: the pane holds only Files, and the Report toggle in the top bar, still offered ahead of Files and Terminal, is not pressed and reads \"Show report panel\". Whether the Report is open belongs to the session: the project's other session, selected next, still has its own open.",
+    description: "The session has pages but its Report is closed: the pane holds only Files, and the Report toggle in the top bar, still offered ahead of Terminal and Files, is not pressed and reads \"Show report panel\". Whether the Report is open belongs to the session: the project's other session, selected next, still has its own open.",
     state: projectSessions,
     preferences: { closedReportPanels: [withReport.id] },
     steps: [openProjectSession(withReport.title)],
@@ -169,7 +216,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Project session with no reports",
-    description: "A project session that has pushed nothing: the top bar offers only the Files and Terminal toggles and the pane holds Files, with no Report toggle or card.",
+    description: "A project session that has pushed nothing: the top bar offers only the Terminal and Files toggles and the pane holds Files, with no Report toggle or card.",
     state: projectSessions,
     steps: [openProjectSession(withoutReport.title)],
   },
@@ -204,7 +251,7 @@ export const reportScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Project session whose reports could not be listed",
-    description: "A project session whose page listing failed, with nothing known of its pages: the Report toggle is still offered, ahead of Files and Terminal, and its card sits above Files with the failure in place of a page, under the panel header, with the daemon's raw message on a surface of its own under the sentence and Try again below it.",
+    description: "A project session whose page listing failed, with nothing known of its pages: the Report toggle is still offered, ahead of Terminal and Files, and its card sits above Files with the failure in place of a page, under the panel header, with the daemon's raw message on a surface of its own under the sentence and Try again below it.",
     state: projectSessions,
     pageListErrors: { [withoutReport.id]: listFailure },
     steps: [openProjectSession(withoutReport.title)],

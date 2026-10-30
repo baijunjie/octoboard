@@ -255,7 +255,7 @@ export function App(): React.ReactElement {
   const ownerStack = asideFloats && ownerKind ? { open: floating.kind ? [floating.kind] : [], shares: {} } : storedStack;
   const openPanels = ownerStack ? shownKinds(ownerStack, ownerOrder) : [];
   const paneShown = openPanels.length > 0;
-  // A maximized panel (the Terminal panel's, `PanelStack.tsx`) leaves the pane's column and covers
+  // A maximized panel (`PanelStack.tsx`) leaves the pane's column and covers
   // the agent terminal's area, which is inert meanwhile and not an F6 stop; the sidebar and the
   // panels left in the column stay as they are. With none left there, the column folds away and the
   // area, with the panel over it, reaches the window's end.
@@ -318,7 +318,7 @@ export function App(): React.ReactElement {
     if (kind === "terminal" && opened && asideOwner?.kind === "project") void startShellTerminal(daemon, asideOwner.project, { ifNone: true });
   };
   // A maximized panel is its owner kind's: once the pane passes to an owner of another kind (a
-  // console session, which has no Terminal panel) or to none, it is restored, so coming back shows
+  // console session) or to none, it is restored, so coming back shows
   // the stack as it was. Moving between projects keeps it.
   useEffect(() => {
     for (const kind of Object.keys(OWNER_KINDS) as OwnerKind[]) {

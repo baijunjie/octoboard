@@ -85,51 +85,50 @@ application buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle at its start and the panel toggles at its end; each
   toggle's tooltip follows its "Show …" / "Hide …" label (see "The sidebar toggle and the panel toggles" in
-  `docs/product/window-layout.md`), and each panel toggle's also names its panel (see "The panel toggles in the top
-  bar" in `docs/product/right-pane-panels.md`);
-- the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded
-  in, the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
+  `docs/product/window-layout.md`), and each panel toggle's also names its panel (see "The panel toggles in the top bar"
+  in `docs/product/right-pane-panels.md`);
+- the rail's buttons — each console's avatar, whose tooltip is the console's name with what is going on in it folded in,
+  the same text as the name announced for it (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
   one, Turn on notifications and Settings (the rail's Account usage button has none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
-  focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A
-  row's actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and each
-  agent tab's (see "The agent strip" in `docs/product/agent-accounts.md`). Its tooltip is a short
-  "More actions", while the name announced for it also names what it belongs to ("Actions for session …", "Actions
-  for file …" and the like), so that each ⋮ can be told apart;
-- the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's
-  Filter projects / Clear filter button (see "Filtering the project list" in `docs/product/sidebar.md`) and its
-  button to expand projects with unarchived sessions or collapse all projects (see "Expanding and collapsing the
-  listed projects" in the same doc), and focus mode's Leave focus mode;
-- the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it
-  also names what it unpins (see "Pinning" in `docs/product/order-of-projects-and-sessions.md`);
-- the Delete or Archive shortcut of a session row, a focus mode's session card or its archive preview row, whose
-  tooltip is a short "Delete" or "Archive", while the name announced for it also names the session it acts on
-  (see "Session rows" in `docs/product/sidebar-session-rows.md`);
+  focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A row's
+  actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and each agent
+  tab's (see "The agent strip" in `docs/product/agent-accounts.md`). Its tooltip is a short "More actions", while the
+  name announced for it also names what it belongs to ("Actions for session …", "Actions for file …" and the like), so
+  that each ⋮ can be told apart;
+- the sidebar's other icon buttons — a project's **+** (New session), wherever it appears, the Projects heading's Filter
+  projects / Clear filter button (see "Filtering the project list" in `docs/product/sidebar.md`) and its button to
+  expand projects with unarchived sessions or collapse all projects (see "Expanding and collapsing the listed projects"
+  in the same doc), and focus mode's Leave focus mode;
+- the pin button of a pinned project or session, whose tooltip is a short "Unpin", while the name announced for it also
+  names what it unpins (see "Pinning" in `docs/product/order-of-projects-and-sessions.md`);
+- the Delete or Archive shortcut of a session row, a focus mode's session card or its archive preview row, whose tooltip
+  is a short "Delete" or "Archive", while the name announced for it also names the session it acts on (see "Session
+  rows" in `docs/product/sidebar-session-rows.md`);
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
 - the report panel's previous-page and next-page buttons;
-- a right pane panel's Close panel button and the Terminal panel's Maximize panel / Restore panel size (see "A
-  panel's header" in `docs/product/right-pane-panels.md`);
+- a right pane panel's Close panel button and the Report and Terminal panels' Maximize panel / Restore panel size (see
+  "A panel's header" in `docs/product/right-pane-panels.md`);
 - the project pane's Refresh and Collapse all folders buttons (see `docs/product/project-pane.md`), and the file
   viewer's Previous file and Next file buttons (see `docs/product/file-viewer.md`);
-- the copy buttons — the file viewer's Copy path and the Git mode's Copy worktree path, on the change list's line
-  naming the worktree — whose tooltip, and the name announced with it, turns to the copied wording after a press (see
-  "Copy buttons" below);
-- the file viewer's File manager and Default application buttons, whose tooltip is the short "File manager" or
-  "Default application" that names the action in a project pane row's menu, while the name announced for each says
-  what pressing it does, "Open in file manager" or "Open in default application" (see "The header" in
-  `docs/product/file-viewer.md`);
+- the copy buttons — the file viewer's Copy path and the Git mode's Copy worktree path, on the change list's line naming
+  the worktree — whose tooltip, and the name announced with it, turns to the copied wording after a press (see "Copy
+  buttons" below);
+- the file viewer's File manager and Default application buttons, whose tooltip is the short "File manager" or "Default
+  application" that names the action in a project pane row's menu, while the name announced for each says what pressing
+  it does, "Open in file manager" or "Open in default application" (see "The header" in `docs/product/file-viewer.md`);
 - the file viewer's three view controls, the Files mode's two — its file-name filter toggle and the include-ignored
   toggle in its filter field — and the Git mode's three view toggles — the one that shows and hides the change filter
   field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state
   (see "Two-state icon toggles" below);
-- the two controls of the console dialog's Avatar field (see "Avatar" in
-  `docs/product/consoles.md`) — the round control itself, named for choosing an image while it is empty
-  and for replacing it once one is picked, and the delete button over its corner, named for removing the image;
-- the console dialog's Manage accounts button, beside the title of its Agent default accounts section (see "Agent
-  config directories" in `docs/product/consoles.md`);
+- the two controls of the console dialog's Avatar field (see "Avatar" in `docs/product/consoles.md`) — the round control
+  itself, named for choosing an image while it is empty and for replacing it once one is picked, and the delete button
+  over its corner, named for removing the image;
+- the console dialog's Manage accounts button, beside the title of its Agent default accounts section (see "Agent config
+  directories" in `docs/product/consoles.md`);
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
 The rail's **Account usage** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting the

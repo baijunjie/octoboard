@@ -10,8 +10,10 @@ import { useT } from "../i18n/react";
 
 /** What a panel's card tells its header about the panel's place in the stack. */
 export interface PanelFrame {
-  /** Whether the header offers maximize / restore: a maximizable kind (the Terminal panel), docked. */
+  /** Whether the header offers maximize / restore: a maximizable kind, docked. */
   canMaximize: boolean;
+  /** Multiple docked columns share the pane width: header content gives way to frame controls. */
+  compact?: boolean;
   maximized: boolean;
   onToggleMaximized: () => void;
   onClose: () => void;
@@ -53,8 +55,19 @@ export function PanelHeader({
 }): React.ReactElement {
   const t = useT();
   const frame = useContext(PanelFrameContext);
+  const compact = frame?.compact === true;
+  const layout = compact
+    ? prioritizeChildren
+      ? "grid min-w-0 grid-cols-[minmax(48px,1fr)_minmax(0,max-content)_max-content]"
+      : actions
+        ? "grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,max-content)_max-content]"
+        : "grid min-w-0 grid-cols-[minmax(0,1fr)_max-content]"
+    : prioritizeChildren
+      ? "grid min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_max-content]"
+      : "flex";
+
   const headingOnly = (
-    <h2 className={`${hideTitleWhenNarrow ? "sr-only docked:@min-[352px]/panel-header:not-sr-only docked:@min-[352px]/panel-header:flex" : "flex"} min-w-0 max-w-40 ${prioritizeChildren ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
+    <h2 className={`${hideTitleWhenNarrow ? "sr-only docked:@min-[352px]/panel-header:not-sr-only docked:@min-[352px]/panel-header:flex" : "flex"} min-w-0 max-w-40 ${prioritizeChildren || compact ? "overflow-hidden" : "shrink-0"} text-base font-semibold`}>
       <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={title}>{title}</FadeOverflow>
     </h2>
   );
@@ -65,20 +78,24 @@ export function PanelHeader({
     </div>
   ) : headingOnly;
   return (
-    <div className={`${hideTitleWhenNarrow ? "@container/panel-header " : ""}${prioritizeChildren ? "grid min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,max-content)_max-content]" : "flex"} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
+    <div className={`${hideTitleWhenNarrow ? "@container/panel-header " : ""}${layout} h-(--pane-header-height-floating) shrink-0 items-center gap-2 groove-b px-(--pane-inset)`}>
       {prioritizeChildren ? (
-        <div className="grid grid-cols-[minmax(0,max-content)_max-content] items-center gap-2">
+        <div className={compact ? "grid min-w-0 grid-cols-[minmax(0,max-content)_minmax(0,max-content)] items-center gap-2" : "grid grid-cols-[minmax(0,max-content)_max-content] items-center gap-2"}>
           {heading}
-          {children}
+          <FadedScroller orientation="horizontal" fade={compact} className={compact ? "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none" : "contents"}>{children}</FadedScroller>
         </div>
-      ) : <>{heading}{children}</>}
-      {prioritizeChildren && (
-        <FadedScroller orientation="horizontal" className="min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none">
-          <RowIconGroup className="w-max">{actions}</RowIconGroup>
+      ) : (
+        <div className={compact ? "flex min-w-0 items-center gap-2" : "contents"}>
+          {heading}
+          {children && <FadedScroller orientation="horizontal" fade={compact} className={compact ? "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none" : "contents"}>{children}</FadedScroller>}
+        </div>
+      )}
+      {actions && (
+        <FadedScroller orientation="horizontal" fade={prioritizeChildren || compact} className={prioritizeChildren || compact ? "min-w-0 p-1.5 -m-1.5 has-[[data-focus-visible=true]]:mask-none" : "contents"}>
+          <RowIconGroup className={prioritizeChildren || compact ? "w-max" : "ms-auto"}>{actions}</RowIconGroup>
         </FadedScroller>
       )}
-      <RowIconGroup className={prioritizeChildren ? "" : "ms-auto"}>
-        {!prioritizeChildren && actions}
+      <RowIconGroup className={prioritizeChildren || compact || actions ? "" : "ms-auto"}>
         {frame?.canMaximize && (
           <TitledControl title={t(frame.maximized ? "panel.restore" : "panel.maximize")}>
             <Button isIconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} aria-label={t(frame.maximized ? "panel.restore" : "panel.maximize")} preventFocusOnPress onPress={frame.onToggleMaximized}>

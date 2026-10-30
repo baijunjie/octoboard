@@ -390,9 +390,9 @@ describe("a project's menu", () => {
       const panel = menu.find((entry) => typeof entry === "object" && entry.label === "Open panel") as ActionMenuSubmenu | undefined;
       return { labels, items: panel?.items.flatMap((item) => typeof item === "object" ? [item.label] : []) };
     };
-    expect(panelItems(undefined).items).toEqual(["Files", "Processes", "Terminal"]);
-    expect(panelItems({ project: "other", kinds: ["files", "terminal"] }).items).toEqual(["Files", "Processes", "Terminal"]);
-    expect(panelItems({ project: "p", kinds: ["files"] }).items).toEqual(["Processes", "Terminal"]);
+    expect(panelItems(undefined).items).toEqual(["Terminal", "Files", "Processes"]);
+    expect(panelItems({ project: "other", kinds: ["files", "terminal"] }).items).toEqual(["Terminal", "Files", "Processes"]);
+    expect(panelItems({ project: "p", kinds: ["files"] }).items).toEqual(["Terminal", "Processes"]);
     expect(panelItems({ project: "p", kinds: ["terminal", "report"] }).items).toEqual(["Files", "Processes"]);
     expect(panelItems({ project: "p", kinds: ["files", "processes"] }).items).toEqual(["Terminal"]);
     expect(panelItems({ project: "p", kinds: ["files", "processes", "terminal"] }).items).toBeUndefined();
@@ -405,7 +405,7 @@ describe("a project's menu", () => {
     const handlers = { onOpenProjectPanel: vi.fn() } as unknown as SidebarHandlers;
     const project = { id: "p" } as Project;
     const panel = projectMenu(t, handlers, project, []).find((entry) => typeof entry === "object" && entry.label === "Open panel") as ActionMenuSubmenu;
-    const [files, processes, terminal] = panel.items as { label: string; icon: unknown; onClick: () => void }[];
+    const [terminal, files, processes] = panel.items as { label: string; icon: unknown; onClick: () => void }[];
     files.onClick();
     processes.onClick();
     terminal.onClick();

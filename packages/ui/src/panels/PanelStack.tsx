@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 
 import { HandOffOnUnmount } from "../components/HandOffOnUnmount";
 import { focusLanding } from "../components/regionFocus";
@@ -28,6 +28,7 @@ import {
   type PanelStack as Stack,
 } from "./stackState";
 import { usePanelStacks } from "./usePanelStacks";
+import { panelColumns } from "./panelColumns";
 
 /**
  * A card's content, keyed by owner so a panel drops whatever it read for the owner before. Once the
@@ -90,8 +91,8 @@ function cardHeights(container: HTMLElement): number[] {
 
 /**
  * The right pane's stack of panel cards (`stackState.ts` has the state, `panelRegistry.tsx` the
- * kinds): the owner's open kinds, top to bottom. The pane pads the cards (`AsidePane.tsx`) and
- * `--panel-stack-gap` lies between neighbours, where a resize grip sits; it paints nothing, so the
+ * kinds): the owner's open kinds, top to bottom in columns of at most two. The pane pads the cards
+ * (`AsidePane.tsx`) and `--panel-stack-gap` lies between neighbours, where a resize grip sits; it paints nothing, so the
  * agent terminal's background shows in it and the cards read as lying on the content. A single card
  * takes the full height. Each card is a named region and a stop of the F6 cycle.
  *
@@ -185,16 +186,23 @@ export function PanelStack({
   const kinds = shownKinds(stack, order);
   const stacked = stackedKinds(stack, order);
   const maximized = maximizedKind(stack, order);
-  const shares = sharesOf(stack, stacked);
+  const [containerSize, setContainerSize] = useState({ width: 0, gap: 0 });
+  const columns = panelColumns(stacked, containerSize.width, containerSize.gap);
   const containerRef = useRef<HTMLDivElement>(null);
   // The heights the cards are laid out at, which the handles' values and the drag's arithmetic need
   // in px; the shares alone cannot say, as the gaps and the minimum heights take their part.
   const [heights, setHeights] = useState<number[]>([]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current;
-    if (!container || typeof ResizeObserver === "undefined") return;
-    const measure = () => setHeights(cardHeights(container));
+    if (!container) return;
+    const measure = () => {
+      const width = container.getBoundingClientRect().width;
+      const gap = parseFloat(getComputedStyle(container).columnGap) || 0;
+      setContainerSize((current) => current.width === width && current.gap === gap ? current : { width, gap });
+      setHeights(cardHeights(container));
+    };
     measure();
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(container);
     for (const card of container.querySelectorAll("[data-panel-card]")) observer.observe(card);
@@ -224,7 +232,10 @@ export function PanelStack({
     if (base.maximized !== kind && card && maximizeArea.current?.contains(document.activeElement)) focusLanding(card);
     setStack(toggleMaximized(base, kind), { persist: false });
   };
-  const available = heights.reduce((sum, height) => sum + height, 0);
+  const resizeColumn = (column: string[], update: (stack: Stack) => Stack, options?: { persist?: boolean }) => {
+    const changed = update({ ...base, open: column });
+    setStack({ ...base, shares: { ...base.shares, ...changed.shares } }, options);
+  };
 
   const close = (kind: PanelKind) => {
     if (open.length === 0) onDismiss();
@@ -233,38 +244,50 @@ export function PanelStack({
   };
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col">
+    <div ref={containerRef} className="grid min-h-0 min-w-0 flex-1 grid-rows-[minmax(0,1fr)] gap-x-(--panel-stack-gap)" style={{ gridTemplateColumns: `repeat(${Math.max(1, columns.length)}, minmax(0, 1fr))` }}>
       {maximized !== undefined && area && <div aria-hidden="true" className={`${MAXIMIZED_LAYER_CLASS} bg-panel`} style={backdropStyle(area)} />}
-      {kinds.map((kind, position) => {
+      {kinds.map((kind) => {
         const entry = PANEL_ENTRIES[kind as PanelKind];
         const Content = entry.Content;
         const covering = kind === maximized && area !== undefined;
-        const index = stacked.indexOf(kind);
+        const columnIndex = Math.max(0, columns.findIndex((candidate) => candidate.includes(kind)));
+        const column = columns[columnIndex] ?? [];
+        const index = column.indexOf(kind);
+        const shares = sharesOf(stack, column);
+        const upper = column[0];
+        const upperPosition = stacked.indexOf(upper ?? "");
+        const upperHeight = heights[upperPosition] ?? 0;
+        const lowerHeight = heights[upperPosition + 1] ?? 0;
+        const available = upperHeight + lowerHeight;
+        // Cards share one grid cell per column. Insets divide that cell independently, without
+        // reparenting a report frame or terminal when maximizing or changing the open kinds.
+        const placement = { gridColumn: columnIndex + 1, gridRow: 1 };
+        const split = `clamp(${MIN_PANEL_HEIGHT}px, calc((100% - var(--panel-stack-gap)) * ${shares[0] ?? 1}), calc(100% - var(--panel-stack-gap) - ${MIN_PANEL_HEIGHT}px))`;
         return (
           <React.Fragment key={kind}>
             {/* First among what goes away with the card, so focus inside it is still found. */}
             <HandOffOnUnmount from={`#${panelId(kind as PanelKind)}`} to={focusTerminal} />
             {/* Only while no card is maximized: the column's shares are then all its own. */}
             {index > 0 && maximized === undefined && (
-              <div className="relative h-(--panel-stack-gap) shrink-0">
+              <div className="relative self-start h-(--panel-stack-gap)" style={{ ...placement, top: split }}>
                 <ResizeSeparator
                   orientation="horizontal"
-                  value={Math.round(heights[index - 1] ?? 0)}
+                  value={Math.round(upperHeight)}
                   min={MIN_PANEL_HEIGHT}
-                  max={Math.max(MIN_PANEL_HEIGHT, Math.round((heights[index - 1] ?? 0) + (heights[index] ?? 0) - MIN_PANEL_HEIGHT))}
+                  max={Math.max(MIN_PANEL_HEIGHT, Math.round(available - MIN_PANEL_HEIGHT))}
                   label={t("pane.resizePanels", {
-                    upper: t(PANEL_ENTRIES[kinds[position - 1] as PanelKind].name),
+                    upper: t(PANEL_ENTRIES[upper as PanelKind].name),
                     lower: t(entry.name),
                   })}
                   grow={1}
                   appearance="grip"
                   tooltip={t("pane.resize")}
                   onChange={(height, options) =>
-                    setStack(resizeBoundary(base, position - 1, height, available, MIN_PANEL_HEIGHT, order), { persist: options?.commit !== false })
+                    resizeColumn(column, (current) => resizeBoundary(current, 0, height, available, MIN_PANEL_HEIGHT, column), { persist: options?.commit !== false })
                   }
                   onCommit={persist}
-                  onReset={() => setStack(resetBoundary(base, position - 1, order))}
-                  region={panelRegion(kinds[position - 1] as PanelKind)}
+                  onReset={() => resizeColumn(column, (current) => resetBoundary(current, 0, column))}
+                  region={panelRegion(upper as PanelKind)}
                   className="absolute inset-x-0 -inset-y-[calc((24px-var(--panel-stack-gap))/2)] z-10"
                 />
               </div>
@@ -278,12 +301,19 @@ export function PanelStack({
               aria-label={entry.label(t, project)}
               style={covering
                 ? cardStyle(area, stacked.length > 0)
-                : { flex: `${stacked.length === 1 || index < 0 ? 1 : shares[index]} 1 0px`, minHeight: MIN_PANEL_HEIGHT }}
+                : {
+                  ...placement,
+                  height: column.length < 2 || index < 0 ? "100%" : index === 0 ? split : `calc(100% - var(--panel-stack-gap) - ${split})`,
+                  top: index === 1 ? `calc(${split} + var(--panel-stack-gap))` : undefined,
+                  minHeight: MIN_PANEL_HEIGHT,
+                  alignSelf: "start",
+                }}
               className={`control-fills pointer-events-auto flex min-w-0 flex-col ${PANEL_CARD_CLASS} ${covering ? MAXIMIZED_LAYER_CLASS : "relative"}`}
             >
               <PanelFrameProvider
                 value={{
                   // Not while only floating in: that card is a hover's preview, not part of the layout.
+                  compact: columns.length > 1 && !covering,
                   canMaximize: entry.maximizable === true && peek === undefined && !floating,
                   maximized: kind === maximized,
                   onToggleMaximized: () => toggleMaximize(kind as PanelKind),
