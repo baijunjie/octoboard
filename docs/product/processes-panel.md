@@ -61,21 +61,23 @@ Each tree is a card:
 - **its command**, after a green play glyph, in monospace on one line; a command too long for the line fades out where
   it is cut, with the whole command as its tooltip (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`). A command that could not be read reads "Unknown command";
-- **its working directory**, or a line saying it is unknown, with an amber "Directory deleted" badge after it when the
-  directory was removed;
+- **its working directory**, after a folder glyph, or a crossed-out folder glyph and a line saying it is unknown,
+  with an amber "Directory deleted" badge after it when the directory was removed;
 - **a line of facts**: how much memory the tree uses, the ports it listens on, when its top process started ("started
-  just now", or how long ago, kept up to date), and, for a tree of more than one process, how many it holds.
+  just now", or how long ago, kept up to date), and, for a tree of more than one process, how many it holds. The facts
+  stay on one line, fading out where they are cut, with the whole line as their tooltip; this also applies to the
+  facts in a process's confirmation and Details disclosure.
 
 What a tree is and what these facts are taken from is in "Process information and actions" in
 `docs/product/background-processes.md`.
 
 ## Stop and Keep
 
-At the end of a card's command line are **Stop** and **Keep**, text buttons, Stop in the danger colour. They show while
-the card is hovered or holds keyboard focus, and always on a device whose primary input cannot hover; hidden, they take
-no room from the command and can still be reached with `Tab`. Each is named for assistive technology with the command,
-"Stop *command*" or "Keep *command*", so the cards' buttons can be told apart. A mouse or touch press on one does not
-take keyboard focus.
+At the bottom end of a card, beside its facts, are **Keep** followed by **Stop**, text buttons, Stop in the danger
+colour. They show while the card is hovered or holds keyboard focus, and always on a device whose primary input
+cannot hover; hidden, they take no room from the facts and can still be reached with `Tab`. Showing the buttons leaves
+the command and directory their full width. Each is named for assistive technology with the command, "Stop *command*"
+or "Keep *command*", so the cards' buttons can be told apart. A mouse or touch press on one does not take keyboard focus.
 
 **Keep is offered only on a project session's trees**: a console session keeps nothing, and a project process already
 belongs to no session, so their cards offer Stop alone (see "Automatic stopping and its boundaries" in
