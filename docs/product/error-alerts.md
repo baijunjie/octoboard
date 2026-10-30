@@ -415,25 +415,29 @@ agent, a stack trace and raw entries never appear inside an alert's body, a fail
 name or the sentence in its popover, a tooltip, or an accessible name; only the names and references the wording cites
 on purpose — a path, a branch name, an address — appear inside it. Raw text is shown on its own, as selectable code: in
 an error alert under **Error details**, in a compact alert behind **Details**, on an empty-state failure's details
-surface, and in a mark's popover as the last thing in it. That includes known raw output from Git and agent commands, also when it is the cause of a launch or
-trust-confirmation failure, an import failure, or a model or quota reading failure. A launch or trust-confirmation
-failure whose cause Octoboard has no words for gives a generic cause in its sentence — for a launch, the sentence of an
-uncatalogued failure (see "Failures shown on the screen" above); for a trust confirmation, that something unexpected
-went wrong — and the cause's own text is the raw text. The output retains its line breaks, indentation and left-to-right
-order. Long lines scroll horizontally, with a labelled region reachable from the keyboard. Raw text that stands as a
-block of its own — in an alert's body, behind **Error details** or **Details**, on an empty-state failure's details
-surface, or in a mark's popover — sits on a tinted surface of its own rather than directly on what holds it, with
-whatever names it (the disclosure's summary, a heading) outside that surface. Under **Error details** in the error
-alert for a crash, its stack trace, and in the one for a daemon's startup failure, the daemon's text, wrap their long
-lines instead of scrolling sideways, and the block is at most 40% of the window's height, scrolling vertically within
-itself beyond that; while it does, it is a region named "Error details" that the keyboard can reach and scroll. On an
-empty-state failure's details surface, every block of raw text does the same, its region named "Error details" or, where
-several blocks stand together, by the heading over it. A reason Octoboard words itself remains part of the explanation; it is not turned into a
-diagnostic block simply because it accompanies an error. Unrecognized daemon messages retain the daemon's own readable
-wording as their raw text, after the sentence of an uncatalogued failure (see "Failures shown on the screen" above).
-These rules hold wherever the failure is shown: in an error alert, where such output is under Error details, in a
-compact alert, where it is behind Details, in an empty-state failure, where it is on the details surface, or in a
-mark's popover, where it comes last.
+surface, and in a mark's popover as the last thing in it. That includes known raw output from Git and agent commands,
+also when it is the cause of a launch or trust-confirmation failure, an import failure, or a model or quota reading
+failure. A launch or trust-confirmation failure whose cause Octoboard has no words for gives a generic cause in its
+sentence — for a launch, the sentence of an uncatalogued failure (see "Failures shown on the screen" above); for a trust
+confirmation, that something unexpected went wrong — and the cause's own text is the raw text. The output retains its
+line breaks, indentation and left-to-right order. Long lines scroll horizontally, with a labelled region reachable from
+the keyboard. Raw text that stands as a block of its own — in an alert's body, behind **Error details** or **Details**,
+on an empty-state failure's details surface, or in a mark's popover — sits on a tinted surface of its own rather than
+directly on what holds it, with whatever names it (the disclosure's summary, a heading) outside that surface. Under
+**Error details** in the error alert for a crash, its stack trace, and in the one for a daemon's startup failure, the
+daemon's text, wrap their long lines instead of scrolling sideways, and the block is at most 40% of the window's height,
+scrolling vertically within itself beyond that; while it does, it is a region named "Error details" that the keyboard
+can reach and scroll. A known daemon failure's separately rendered diagnostic `detail`, including a failed Git push's
+hook output and a recognized trust confirmation diagnostic, uses the same wrapping and height limit wherever that block
+is shown. Other diagnostic blocks, including structured sharing details, an unrecognized daemon message and a cause the
+application has no wording for, keep the horizontal scrolling above unless their containing surface sets wrapping and a
+height limit. On an empty-state failure's details surface, every block of raw text does the same, its region named
+"Error details" or, where several blocks stand together, by the heading over it. A reason Octoboard words itself remains
+part of the explanation; it is not turned into a diagnostic block simply because it accompanies an error. Unrecognized
+daemon messages retain the daemon's own readable wording as their raw text, after the sentence of an uncatalogued
+failure (see "Failures shown on the screen" above). These rules hold wherever the failure is shown: in an error alert,
+where such output is under Error details, in a compact alert, where it is behind Details, in an empty-state failure,
+where it is on the details surface, or in a mark's popover, where it comes last.
 
 ## Recovery and unexpected errors
 
@@ -546,13 +550,15 @@ Pressing the button acknowledges the alert and opens Settings there, above whate
 already open, it moves to that section instead (see "Opening and closing Settings" in `docs/product/settings.md`). The
 step in the alert's body then says only what to do, such as adding the agent and trying again.
 
-**A plain alert** is a known refusal that says what happened in its own sentences, with no remedy line added after
-them, no request to report an issue and nothing but its acknowledgement button. It is used for a switch confirmed onto
-an account that was used up after the confirmation opened (see "Confirming a switch" in
+**A plain alert** is a known refusal that says what happened in its own sentences, with no remedy line added after them,
+no request to report an issue and nothing but its acknowledgement button. It is used for a switch confirmed onto an
+account that was used up after the confirmation opened (see "Confirming a switch" in
 `docs/product/switching-session-accounts.md`) and for a request the daemon refuses because it is shutting down
-(`daemon_shutting_down`; see "Quitting" in `docs/product/application-lifecycle.md`), and it is the form of every
-failure modal (see "The failure modal" above). A switch confirmed onto an account turned off, or found not logged in, after the confirmation opened is not a
-plain alert: it has the remedy and the **Manage accounts…** button above.
+(`daemon_shutting_down`; see "Quitting" in `docs/product/application-lifecycle.md`), and for a second push of a project
+whose push is still running (`push_in_progress`; see "Pushing the current branch" in
+`docs/product/project-git-actions.md`), and it is the form of every failure modal (see "The failure modal" above). A
+switch confirmed onto an account turned off, or found not logged in, after the confirmation opened is not a plain alert:
+it has the remedy and the **Manage accounts…** button above.
 
 **An unexpected failure** explains that it may be a bug the user cannot resolve in the current interface. The alert
 keeps the error explanation and offers expandable diagnostic details, **Error details**, when the original message or

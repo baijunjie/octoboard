@@ -149,7 +149,8 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
       ? <span className="block"><SharingFailureReason cause={error.params.cause} detail={pointedAt} /></span>
       : null;
   const sharingRaw = sharing || (sharingFailure && rawReason) ? <SharingDetails items={sharing ?? []} detail={rawReason} /> : null;
-  const diagnostic = !sharingFailure && (DETAIL_BLOCK_CODES.has(error.code) || trustDiagnostic) && error.params.detail ? <DiagnosticBlock>{error.params.detail}</DiagnosticBlock> : null;
+  // Verbatim diagnostic output (a push's hook checks) can run to hundreds of lines: it wraps and scrolls inside the block.
+  const diagnostic = !sharingFailure && (DETAIL_BLOCK_CODES.has(error.code) || trustDiagnostic) && error.params.detail ? <DiagnosticBlock wrap tall>{error.params.detail}</DiagnosticBlock> : null;
   const unwordedRaw = unworded ? <DiagnosticBlock>{unworded}</DiagnosticBlock> : null;
   const recoveryId = `daemon.${messageCode(error.code, error.params)}.recovery`;
   const recovery = RECOVERY_CODES.has(error.code) && isMessageKey(recoveryId) ? <span className="block"><Message id={recoveryId} params={params as never} /></span> : null;

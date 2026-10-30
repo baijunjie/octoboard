@@ -2,7 +2,7 @@ import { AGENT_LABEL } from "../../agents";
 import type { Session, SessionContext } from "../../protocol";
 import type { Ui } from "../interact";
 import type { Scenario } from "../scenario";
-import { ALL_AGENTS, consoleOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
+import { ALL_AGENTS, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, sessionOf, snapshotState, switchingAccount } from "./builders";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
 const GROUP = "Focus mode";
@@ -125,6 +125,16 @@ const state = snapshotState({
 const longNameState = {
   ...state,
   consoles: new Map([...state.consoles!].map(([id, item]) => [id, id === console_.id ? { ...item, name: "Release console مرحبا 東京 UnbrokenConsoleNameForProductionCompatibilityReview" } : item] as const)),
+};
+
+// The long-names workspace with the long-named project and the short-named one both pushing, the first
+// on a long branch with both counts, for the scenario showing the Git badge in a project group's heading.
+const pushingGroupsState = {
+  ...longNameState,
+  gitStatuses: new Map([
+    gitStatusOf(longProject.id, { branch: "feature/a-long-local-branch-name-to-check-badge-width-and-overflow", activity: "pushing", ahead: 3, behind: 2 }),
+    gitStatusOf(searchProject.id, { activity: "pushing", ahead: 1 }),
+  ].map((status) => [status.project, status] as const)),
 };
 
 // The existing focus views share enough cards to scroll even with the console-bound cards
@@ -560,6 +570,20 @@ export const focusScenarios: Scenario[] = [
     state: longNameState,
     preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
     description: "A long console name fills the single-line header, while the console session's own card above the list clips its long agent task title and original name; long session names and project headings follow in the list. Hover the clipped console name, the card's title or a session heading to run only that text's marquee: after a 600-millisecond initial pause it rests three seconds at the far end, returns in about 200 milliseconds, waits three seconds and runs again, resetting as soon as the pointer leaves. Hovering header controls leaves the console name still.",
+  },
+  {
+    id: "focus-console-session-project-pushing",
+    group: GROUP,
+    category: "normal",
+    title: "Console session focus, project groups pushing",
+    state: pushingGroupsState,
+    preferences: { sidebarWidth: 280, sidebarConsole: console_.id, sidebarFocus: `consoleSession:${longHub.id}` },
+    description: "Two project headings carry their Git badge with the spinning pushing loader beside the name; Search API, which has no repository status, shows none. At this 280px sidebar Search interface service stays readable beside main and the upward 1. The long project's branch track shrinks while the loader and both counts stay whole. Its actions menu is open on the Git submenu: Push current branch is dimmed with no reason beside it, and the badge's loader explains it. Close the menu and move the pointer away: the plus and actions controls disappear without reserving width, leaving more room for the project name. Hover or focus a heading to reveal them again; a pinned project's unpin control stays visible. Widen the sidebar to see the names and branches regain room.",
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.project.actions", { name: longProject.name })),
+      (ui) => ui.press(ui.t("sidebar.project.git")),
+      (ui) => ui.wait(300),
+    ],
   },
   {
     id: "focus-project-long",

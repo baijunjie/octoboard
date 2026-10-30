@@ -503,6 +503,7 @@ export const zhHans: Translation<"other"> = {
   "daemon.no_commits_to_push": "此分支还没有可推送的提交。",
   "daemon.no_push_remote": "此分支没有上游，也没有可以推送到的唯一远程。",
   "daemon.upstream_not_a_remote": "此分支的上游没有指向此仓库的远程，因此没有推送。",
+  "daemon.push_in_progress": "此项目的推送仍在进行，请等它完成。",
   "daemon.git_push_failed": "{git} 无法推送此分支：{detail}",
   "daemon.request_superseded": "此请求已被更新的请求取代。",
   "daemon.trust_directory_too_broad":

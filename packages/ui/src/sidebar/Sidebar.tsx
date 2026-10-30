@@ -820,7 +820,7 @@ const ProjectNode = memo(function ProjectNode({
         {isCollapsed && <ActivityMarker activity={activity} />}
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
           <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository })} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing" })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {!isCollapsed && (

@@ -570,6 +570,7 @@ export const en = {
   "daemon.no_commits_to_push": "This branch has no commits to push yet.",
   "daemon.no_push_remote": "This branch has no upstream, and there is no single remote to push it to.",
   "daemon.upstream_not_a_remote": "This branch's upstream does not name a remote of this repository, so it was not pushed.",
+  "daemon.push_in_progress": "A push of this project is still running. Wait for it to finish.",
   "daemon.git_push_failed": "{git} could not push this branch: {detail}",
   "daemon.request_superseded": "A newer request took the place of this one.",
   "daemon.trust_directory_too_broad":

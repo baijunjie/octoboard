@@ -28,14 +28,21 @@ use crate::hostfs;
 use crate::protocol::{GitActivity, GitStatus, Project};
 use crate::state::{AppState, GitCheckClaim};
 
-/// Upper bound on one `git` subprocess (`fetch`, `status`, `merge`). `GIT_TERMINAL_PROMPT=0` and
-/// `ssh -oBatchMode=yes` (see `crate::git_env`) turn a missing credential or an unknown host key
-/// into an immediate failure rather than a prompt neither of them ever shows on a headless daemon,
-/// but a slow network can still legitimately take tens of seconds on a fetch; two minutes leaves a
-/// wide margin above that while still turning a wedged step into a reported error within one sweep
-/// instead of leaking a blocking-pool thread, and leaving its project excluded from every later
-/// sweep, for the rest of the daemon's life.
+/// Upper bound on one `git` subprocess other than a push (`fetch`, `status`, `merge`).
+/// `GIT_TERMINAL_PROMPT=0` and `ssh -oBatchMode=yes` (see `crate::git_env`) turn a missing
+/// credential or an unknown host key into an immediate failure rather than a prompt neither of them
+/// ever shows on a headless daemon, but a slow network can still legitimately take tens of seconds
+/// on a fetch; two minutes leaves a wide margin above that while still turning a wedged step into a
+/// reported error within one sweep instead of leaking a blocking-pool thread, and leaving its
+/// project excluded from every later sweep, for the rest of the daemon's life.
 const GIT_COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
+
+/// Upper bound on one `git push`. A push runs the repository's `pre-push` hook before anything is
+/// sent, and a hook that runs the project's checks (tests, a build) legitimately takes minutes, so
+/// the two minutes of [`GIT_COMMAND_TIMEOUT`] would kill it mid-check and the user would never see
+/// its output. Half an hour is still a bound: a hook that waits on something that never comes
+/// is reported in the end rather than left running for the rest of the daemon's life.
+const GIT_PUSH_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 
 /// The floor between the end of one check of a project and the start of its next, on top of the
 /// in-flight guard above — a guard that does nothing here, since the daemon owns no timer and each
@@ -560,15 +567,15 @@ pub(crate) fn apply_header(status: &mut GitStatus, header: BranchHeader) {
     status.behind = header.behind;
 }
 
-/// Whether a `git` this module runs only reads the project's repository, or is one of the two
-/// steps meant to write to it (the fetch and the fast-forward). A read is held back from writing
-/// the index, which it otherwise does behind the caller's back — see
-/// [`crate::git_env::read_only`]; a write is not, since both of those steps legitimately take the
-/// locks they need. Which one a step is follows from the wrapper it is run through, each named for
-/// its access, rather than from an argument a call site passes and can get wrong. A read whose
-/// only interesting output is its exit status — a dirty-worktree `git diff --quiet`, say —
-/// therefore still goes through [`run_git_read`] and drops what it returns, never through
-/// [`run_git_write`]: it is exactly such a command that the index guard matters most for.
+/// Whether a `git` this module runs only reads the project's repository, or is one of the steps
+/// meant to write to it (a fetch, a fast-forward, a branch switch or a push). A read is held back
+/// from writing the index, which it otherwise does behind the caller's back — see
+/// [`crate::git_env::read_only`]; a write is not, since those steps legitimately take the locks
+/// they need. Which one a step is follows from the wrapper it is run through rather than from an
+/// argument a call site passes and can get wrong. A read whose only interesting output is its exit
+/// status — a dirty-worktree `git diff --quiet`, say — therefore still goes through
+/// [`run_git_read`] and drops what it returns, never through [`run_git_write`]: it is exactly such
+/// a command that the index guard matters most for.
 #[derive(Clone, Copy)]
 enum GitAccess {
     Read,
@@ -581,31 +588,44 @@ pub(crate) fn run_git_read(
     path: &Path,
     args: &[impl AsRef<std::ffi::OsStr>],
 ) -> Result<String, String> {
-    run_git_access(path, args, GitAccess::Read)
+    run_git_access(path, args, GitAccess::Read, GIT_COMMAND_TIMEOUT)
 }
 
 /// Runs `git` with `args` in `path` and discards its stdout, for a step that writes to the
-/// repository: a fetch, a fast-forward, or a push.
+/// repository: a fetch, a fast-forward or a branch switch.
 pub(crate) fn run_git_write(
     path: &Path,
     args: &[impl AsRef<std::ffi::OsStr>],
 ) -> Result<(), String> {
-    run_git_access(path, args, GitAccess::Write).map(|_| ())
+    run_git_access(path, args, GitAccess::Write, GIT_COMMAND_TIMEOUT).map(|_| ())
 }
 
-/// What both of the above run: the cached shell environment and resolved binary, and the command
+/// [`run_git_write`] for `git push`, under [`GIT_PUSH_TIMEOUT`] in place of the shorter bound of
+/// the other writes: the `pre-push` hook it runs may take minutes, and its output, which `git`
+/// sends to stderr, is what a failed push reports.
+pub(crate) fn run_git_push(
+    path: &Path,
+    args: &[impl AsRef<std::ffi::OsStr>],
+) -> Result<(), String> {
+    run_git_access(path, args, GitAccess::Write, GIT_PUSH_TIMEOUT).map(|_| ())
+}
+
+/// What all of the above run: the cached shell environment and resolved binary, and the command
 /// [`git_command`] builds over them. The error is the verbatim stderr of a failed `git`, the
-/// operating-system message of a failure to even start it, or a timeout past
-/// `GIT_COMMAND_TIMEOUT` — `GitStatus` carries it as is, untranslated, whichever of the two
-/// wrappers produced it.
+/// operating-system message of a failure to even start it, or a timeout past `timeout` — carried
+/// as is, untranslated, into `GitStatus` or the error of the step that failed.
 fn run_git_access(
     path: &Path,
     args: &[impl AsRef<std::ffi::OsStr>],
     access: GitAccess,
+    timeout: Duration,
 ) -> Result<String, String> {
     let env = env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
     let git = env_shell::resolve_binary("git", &env).map_err(|err| format!("{err:#}"))?;
-    run_git_command(&mut git_command(Path::new(&git), &env, path, args, access))
+    run_git_command(
+        &mut git_command(Path::new(&git), &env, path, args, access),
+        timeout,
+    )
 }
 
 /// The `git <args>` command to run in `path`, with the binary and the environment passed in rather
@@ -635,13 +655,16 @@ fn git_command(
     command
 }
 
-/// Runs a command [`git_command`] built, to completion under `GIT_COMMAND_TIMEOUT`, and returns
-/// its stdout as UTF-8.
-fn run_git_command(command: &mut std::process::Command) -> Result<String, String> {
+/// Runs a command [`git_command`] built, to completion within `timeout`, and returns its stdout as
+/// UTF-8.
+fn run_git_command(
+    command: &mut std::process::Command,
+    timeout: Duration,
+) -> Result<String, String> {
     // `run_with_timeout` is generic over whatever bounded subprocess it is given, so neither its
     // pipe-read errors nor its timeout message name `git` on their own — this is where that
     // subject is added.
-    let output = crate::subprocess::run_with_timeout(command, GIT_COMMAND_TIMEOUT)
+    let output = crate::subprocess::run_with_timeout(command, timeout)
         .context("running git")
         .map_err(|err| format!("{err:#}"))?;
     if !output.status.success() {
@@ -751,7 +774,7 @@ mod tests {
     use super::*;
     use crate::test_support::{
         git, git_dir_state, isolated_git_env, move_modification_time_back, redirecting_overrides,
-        repo_pair, repo_with, ScratchDir, SYSTEM_GIT,
+        repo_pair, repo_with, ScratchDir, PATIENCE, SYSTEM_GIT,
     };
 
     #[test]
@@ -943,7 +966,7 @@ mod tests {
             args,
             access,
         );
-        run_git_command(&mut command).expect("the branch header is read")
+        run_git_command(&mut command, GIT_COMMAND_TIMEOUT).expect("the branch header is read")
     }
 
     #[test]
@@ -965,7 +988,8 @@ mod tests {
         let mut unfiltered = crate::git_env::non_interactive(Path::new(SYSTEM_GIT), &env);
         unfiltered.current_dir(&*ours).args(args);
         assert_eq!(
-            run_git_command(&mut unfiltered).expect("the unfiltered read runs"),
+            run_git_command(&mut unfiltered, GIT_COMMAND_TIMEOUT)
+                .expect("the unfiltered read runs"),
             "theirs\n"
         );
 
@@ -973,7 +997,7 @@ mod tests {
         // write, so a write goes through the very same line.
         let mut command = git_command(Path::new(SYSTEM_GIT), &env, &ours, &args, GitAccess::Read);
         assert_eq!(
-            run_git_command(&mut command).expect("the read runs"),
+            run_git_command(&mut command, GIT_COMMAND_TIMEOUT).expect("the read runs"),
             "ours\n"
         );
     }
@@ -1049,5 +1073,26 @@ mod tests {
             marker.exists(),
             "the fixture never provoked a status in the submodule"
         );
+    }
+
+    #[test]
+    fn a_command_is_held_to_the_timeout_it_is_given() {
+        let repo = repo_with("git-status-timeout", &[(b"a.txt", b"ours\n")]);
+        // An alias standing in for a `git` that is slow to finish, as a `pre-push` hook makes a
+        // push.
+        let args = ["-c", "alias.nap=!sleep 1", "nap"];
+        let slow = |timeout| {
+            let mut command = git_command(
+                Path::new(SYSTEM_GIT),
+                &isolated_git_env(),
+                &repo,
+                &args,
+                GitAccess::Write,
+            );
+            run_git_command(&mut command, timeout)
+        };
+        let err = slow(Duration::from_millis(100)).expect_err("the short bound is exceeded");
+        assert!(err.contains("did not finish"), "{err}");
+        slow(PATIENCE).expect("the long bound is not");
     }
 }

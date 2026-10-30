@@ -95,11 +95,12 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   openDefaultApplication: ["path_open_failed"],
   // Expected failures whose sentence already says what follows and what to do, with no remedy of their kind to add.
   // `git_operation_in_progress` is only a restore refused before it starts, and says to finish or abort the operation.
+  // `push_in_progress` is a push refused because the project's previous one is still running, and says so.
   // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
   // release_session without an owner, and offers Unbind only on a bound project session. `path_link_refused` is a path
   // link the daemon will not open; its `cause` picks the remedy (`PATH_LINK_REFUSED_RECOVERY`), which is none for the
   // causes whose sentence says it all.
-  none: ["quick_create_unavailable", "daemon_shutting_down", "git_operation_in_progress", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
+  none: ["quick_create_unavailable", "daemon_shutting_down", "git_operation_in_progress", "push_in_progress", "path_link_refused", "sharing_resume_failed", "trust_not_carried_over", "account_sharing_repair_failed", "console_session_never_bound", "session_not_bound_to_owner"],
 };
 const DOMAIN_RECOVERY = new Map(Object.entries(GROUPS).flatMap(([recovery, codes]) => codes.map((code) => [code, recovery as ErrorRecovery] as const)));
 const OS_RECOVERY: Record<string, ErrorRecovery> = {
