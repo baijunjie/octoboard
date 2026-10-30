@@ -1,5 +1,6 @@
 import type { Language } from "../i18n/languages";
-import type { Agent, AgentAvailability } from "../protocol";
+import type { Agent, AgentAvailability, Session } from "../protocol";
+import type { State } from "../store";
 import type { Scenario } from "../gallery/scenario";
 import { quotaOf, quotaWindow } from "../gallery/fixtures/quotas";
 import {
@@ -15,7 +16,7 @@ import {
 import { previewRepositories } from "./repositories";
 import { previewCopy as english } from "./locales/en";
 import { previewCopy as chinese } from "./locales/zh-Hans";
-import { createTerminalScript } from "./terminals";
+import { createIdleScript, createTerminalScript } from "./terminals";
 import { terminalCopy } from "./terminalScripts";
 import type { TerminalScript } from "../gallery/fakeTerminal";
 import { DEFAULT_GIT_WORKFLOW } from "../gitWorkflow";
@@ -85,7 +86,12 @@ export function createPreviewScenario(
   language: Language,
   /** Whether a working session's terminal moves; false for a visitor who asks for reduced motion. */
   animate = true,
-): { scenario: Scenario; output: (session: string) => string | TerminalScript | undefined } {
+): {
+  scenario: Scenario;
+  /** A terminal's output, given what the preview's daemon holds now: the visitor can open sessions,
+   * and add projects, that the scenario does not know. */
+  output: (session: string, held?: Pick<State, "sessions" | "projects" | "consoles">) => string | TerminalScript | undefined;
+} {
   const copy = copyFor(language);
   const workspace = consoleOf("preview-console", copy.workspace, {
     workdir: "/demo/bistro",
@@ -303,7 +309,7 @@ export function createPreviewScenario(
   const reset = "\x1b[0m";
   return {
     scenario,
-    output: (session) => {
+    output: (session, held) => {
       if (session === shell.id) {
         const prompt = `${cyan}server${reset} % `;
         return [
@@ -316,15 +322,23 @@ export function createPreviewScenario(
           prompt,
         ].join("\r\n");
       }
-      // Additional shells opened by the visitor use the fake terminal's default output.
+      const cwdOf = (target: Session) =>
+        (target.project_id ? held?.projects.get(target.project_id)?.path : undefined)
+        ?? projects.find((project) => project.id === target.project_id)?.path
+        ?? held?.consoles.get(target.console_id)?.workdir
+        ?? workspace.workdir;
+      const opened = held?.sessions.get(session);
       const found = sessions.find((candidate) => candidate.id === session);
-      if (!found) return undefined;
+      // A session the visitor opened starts at rest, never on the fake terminal's own sample, which is
+      // the gallery's and names its paths and addresses. A shell the visitor opens is no session the
+      // daemon holds, so it gets no script and the fake terminal draws it a fresh prompt.
+      if (!found) return opened && createIdleScript(opened.agent, cwdOf(opened));
       return createTerminalScript(
         {
           id: found.id,
           agent: found.agent,
           status: found.status === "working" || found.status === "waiting_user" ? found.status : "idle",
-          cwd: projects.find((project) => project.id === found.project_id)?.path ?? workspace.workdir,
+          cwd: cwdOf(found),
           background: found.background_tasks?.[0]?.description,
           copy: terminalCopy(found.id, copy.terminals[found.id]),
         },
