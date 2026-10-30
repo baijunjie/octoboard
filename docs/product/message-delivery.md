@@ -250,12 +250,21 @@ can be `null` while `queued_messages` still counts messages waiting for safe dra
 ## A message whose acceptance is uncertain
 
 If Codex's independent queue may have accepted an automatic message but its response or the start of that message
-cannot be confirmed, Octoboard reports an error and never sends that message again automatically. The user's draft
+cannot be confirmed, Octoboard never sends that message again automatically. The user's draft
 stays in the composer. Later messages remain queued for up to three seconds or until the agent reports another
 submitted prompt, whichever comes first; the hold is reported as `submission_uncertain`. The user should check the
 conversation before retrying manually, since the message may already be queued or running. This uncertainty does not
 discard the later messages and is distinct from a partial terminal write, which drops the affected queue as described
 above.
+
+Every client is sent the `message_acceptance_unconfirmed` notice about that session, naming its agent (`agent`),
+provided the session's process that was written to is still running. The window shows it as an error alert (see
+`docs/product/error-alerts.md`) titled "Message not confirmed", naming the session and where it is: the agent did not
+confirm accepting a message Octoboard wrote into the session, and the user is to check the conversation before deciding
+whether to send it again. Its details add that the message may already be queued and will not be sent again, and that
+later messages are held for at most three seconds or until another prompt is sent. The alert is a known failure with no
+remedy beyond its own text, not an unexpected one. What a reporting session is told is in
+`docs/product/reporting-to-owners.md`.
 
 ## A message written but not sent
 

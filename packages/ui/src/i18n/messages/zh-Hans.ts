@@ -288,6 +288,15 @@ export const zhHans: Translation<"other"> = {
   "daemon.queued_messages_dropped.summary": "{appName} 丢弃了为此会话排队的内容。",
   "daemon.queued_messages_dropped.recovery": "在发送其他内容之前，请先检查会话的输入行。",
   "daemon.queued_messages_dropped.details": "输入行中可能残留了 {appName} 未能写完的半条消息，下一条写入会话的消息会与它一起运行。",
+  "daemon.message_acceptance_unconfirmed.summary": "{agent} 未确认已接收 {appName} 写入此会话的一条消息。",
+  "daemon.message_acceptance_unconfirmed.recovery": "请先检查对话，再决定是否重新发送这条消息。",
+  "daemon.message_acceptance_unconfirmed.details": "这条消息可能已在队列中，{appName} 不会再次发送。后续消息最多暂缓三秒，或直到发送下一条提示。",
+  "daemon.terminal_input_lost.summary": "终端在接收完全部输入前已断开。",
+  "daemon.terminal_input_lost.recovery": "请先检查终端的输入行，再继续操作。",
+  "daemon.terminal_input_lost.session.summary": "会话 {session} 的终端在接收完全部输入前已断开。",
+  "daemon.terminal_input_lost.session.recovery": "请先检查终端的输入行，再继续操作。",
+  "daemon.terminal_input_lost.shell.summary": "终端 {shell_terminal} 在接收完全部输入前已断开。",
+  "daemon.terminal_input_lost.shell.recovery": "请先检查终端的输入行，再继续操作。",
   "daemon.trust_answer_failed.summary": "{appName} 无法按下 {agent} 的信任确认（{reason}）。",
   "daemon.trust_answer_failed.recovery": "请在终端中回应。",
   "daemon.session_lock_busy.summary": "正在归档或删除会话。",
@@ -500,6 +509,9 @@ export const zhHans: Translation<"other"> = {
   "daemon.invalid_change": "此更改没有可读取的内容。",
   "daemon.clean_filtered": "{path} 经过 {filter} clean 过滤器处理，因此无法读取此更改所依据的内容。",
   "daemon.git_failed": "{git} 无法读取：{detail}",
+  "daemon.terminal_input_lost": "终端在接收完全部输入前已断开。请先检查终端的输入行，再继续操作。",
+  "daemon.terminal_input_lost.session": "会话 {session} 的终端在接收完全部输入前已断开。请先检查终端的输入行，再继续操作。",
+  "daemon.terminal_input_lost.shell": "终端 {shell_terminal} 在接收完全部输入前已断开。请先检查终端的输入行，再继续操作。",
   "daemon.terminal_unavailable": "无法打开系统终端：{detail}",
   "daemon.path_open_failed": "无法打开文件或文件夹：{detail}",
   "daemon.directory_unavailable": "无法打开系统文件管理器：{detail}",
@@ -546,6 +558,8 @@ export const zhHans: Translation<"other"> = {
     "账户的共享更改期间，{appName} 为某个会话暂存的消息已被丢弃，因为该会话没有重新启动。",
   "daemon.message_not_sent":
     "{appName} 写入此会话的一条消息未被 {agent} 发送，仍停留在会话的输入框中。在发送任何提示之前，{appName} 不会再向此会话写入内容。",
+  "daemon.message_acceptance_unconfirmed":
+    "{agent} 未确认已接收 {appName} 写入此会话的一条消息。这条消息可能已在队列中，{appName} 不会再次发送。后续消息最多暂缓三秒，或直到发送下一条提示。请先检查对话，再决定是否重新发送这条消息。",
   "daemon.message_not_sent.retry":
     "{agent} 尚未确认发送 {appName} 写入此会话的消息。{appName} 会再尝试提交一次输入框中的现有内容，不会重复粘贴消息。如有待回答的弹窗，请先处理。",
   "daemon.message_discarded_by_dialog":
@@ -561,6 +575,8 @@ export const zhHans: Translation<"other"> = {
   // The plain title of an error alert, naming what failed: the session and any names are in the body.
   "daemon.launch_failed.alertTitle": "无法启动会话",
   "daemon.message_not_sent.alertTitle": "消息未发送",
+  "daemon.message_acceptance_unconfirmed.alertTitle": "消息未获确认",
+  "daemon.terminal_input_lost.alertTitle": "终端输入未被接收",
   "daemon.trust_answer_failed.alertTitle": "无法回应信任确认",
   "daemon.queued_messages_dropped.alertTitle": "排队内容已丢弃",
   "daemon.handoff_messages_dropped.alertTitle": "移交期间的消息已丢弃",

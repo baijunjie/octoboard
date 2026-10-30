@@ -96,7 +96,7 @@ export const RECORD_ID_PARAMS: Record<string, readonly string[]> = {
   not_a_git_repository: ["project"], conversation_in_session: ["session"],
   conversation_held_in_project: ["session", "project"], conversation_held_in_console: ["session", "console"],
   session_did_not_stop: ["session"], sharing_session_did_not_stop: ["session"], switch_did_not_come_up: ["session"],
-  account_switched_automatically: ["session"],
+  account_switched_automatically: ["session"], terminal_input_lost: ["session", "shell_terminal"],
   session_not_bound_to_owner: ["owner"], session_owner_changing: ["owner"],
 };
 
@@ -138,6 +138,8 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   account_switch_automatically_failed: ["from", "account"],
   account_sharing_failed: ["name"],
   account_still_sharing: ["name"],
+  "terminal_input_lost.session": ["session"],
+  "terminal_input_lost.shell": ["shell_terminal"],
   account_in_use: ["name"],
   "account_in_use.signingIn": ["name"],
   "account_in_use.both": ["name"],
@@ -376,7 +378,7 @@ export const DETAIL_BLOCK_CODES = new Set([
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout", "relocation_failed",
   "directory_unreadable", "source_unavailable", "permission_denied", "path_link_refused",
-  "unreadable_request", "project_directory_trash_failed", "account_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable",
+  "unreadable_request", "project_directory_trash_failed", "account_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable", "terminal_input_lost",
 ]);
 
 /** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */
@@ -390,7 +392,7 @@ export const RECOVERY_CODES = new Set([
   "config_dir_unreachable", "grok_home_not_initialized", "session_archived", "conversation_to_resume_not_found", "conversation_in_session",
   "session_waiting_for_user", "session_trust_pending", "queued_messages_lost", "source_changed", "trust_directory_too_broad", "trust_directory_unreachable",
   "agent_not_available", "queued_messages_dropped", "trust_answer_failed", "session_lock_busy", "session_locked", "restore_not_on_branch",
-  "session_has_running_sessions", "project_directory_trash_failed",
+  "session_has_running_sessions", "project_directory_trash_failed", "message_acceptance_unconfirmed", "terminal_input_lost",
 ]);
 
 /** Codes with no `daemon.<code>.summary`: each is raised only by an action whose alert is titled for what failed, and
@@ -469,9 +471,13 @@ export const UI_PARAMS: Record<string, MessageParams> = {
  * directory holds or overlaps another account's or a project's could not be checked, and `signing_in`, where the
  * account's sign-in did not end in time), worded as `daemon.<code>.<cause>`; `account_directory_shared` by its `kind`
  * (`account`, `default_account` or `project`), worded as `daemon.account_directory_shared.<kind>`; `outside_scope` of a
- * refused link click, with `action` `open`, worded as `daemon.outside_scope.open`). */
+ * refused link click, with `action` `open`, worded as `daemon.outside_scope.open`; `terminal_input_lost` of a
+ * session's terminal or of a shell terminal, naming it by its `session` or `shell_terminal` param, worded as
+ * `daemon.terminal_input_lost.session` or `.shell`). */
 export function messageCode(code: string, params: MessageParams): string {
   if (code === "message_not_sent" && params.submit_retry === "once") return "message_not_sent.retry";
+  if (code === "terminal_input_lost" && params.session) return "terminal_input_lost.session";
+  if (code === "terminal_input_lost" && params.shell_terminal) return "terminal_input_lost.shell";
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
   if (code === "sharing_resume_failed" && params.still_running === "true") return "sharing_resume_failed.running";

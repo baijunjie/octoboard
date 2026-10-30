@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { appConfig } from "./appConfig";
 import { EXAMPLE_CONVERSATION_ID } from "./conversationId";
-import { daemonMessage, daemonParams, richMessageCode } from "./daemonMessage";
+import { daemonMessage, daemonParams, messageCode, richMessageCode } from "./daemonMessage";
 import { CATALOGS } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import type { Language } from "./i18n/languages";
@@ -39,6 +39,26 @@ it("shows a shell terminal param by the terminal's name, and by its id once the 
   const withTerminal = { ...records, shellTerminals: new Map([["t1", { id: "t1", title: "npm run dev" } as ShellTerminal]]) };
   expect(daemonMessage("en", "unknown_shell_terminal", { shell_terminal: "t1" }, "x", withTerminal)).toBe(`Unknown terminal ${isolate("npm run dev")}.`);
   expect(daemonMessage("en", "unknown_shell_terminal", { shell_terminal: "t2" }, "x", withTerminal)).toBe(`Unknown terminal ${isolate("t2")}.`);
+});
+
+it("names the terminal whose input was lost by its session or shell terminal, and words it without a name for an older daemon", () => {
+  const named = { ...records, shellTerminals: new Map([["t1", { id: "t1", title: "npm run dev" } as ShellTerminal]]) };
+  expect(daemonMessage("en", "terminal_input_lost", { session: "s1" }, "x", named, true)).toBe(
+    `The terminal of session ${isolate("Hub")} disconnected before it had taken everything typed into it.`,
+  );
+  expect(daemonMessage("en", "terminal_input_lost", { shell_terminal: "t1" }, "x", named, true)).toBe(
+    `Terminal ${isolate("npm run dev")} disconnected before it had taken everything typed into it.`,
+  );
+  expect(daemonMessage("zh-Hans", "terminal_input_lost", { shell_terminal: "t9" }, "x", named)).toContain(`终端 ${isolate("t9")} 在接收完全部输入前已断开`);
+  expect(daemonMessage("en", "terminal_input_lost", {}, "x", named)).toBe(
+    "The terminal disconnected before it had taken everything typed into it. Check the terminal's input line before continuing.",
+  );
+  // With a failed write's `detail` the alert is worded by the variant's own summary and recovery, in every catalog.
+  for (const params of <Record<string, string>[]>[{ session: "s1", detail: "x" }, { shell_terminal: "t1", detail: "x" }, { detail: "x" }]) {
+    for (const key of [`daemon.${richMessageCode("terminal_input_lost", params)}`, `daemon.${messageCode("terminal_input_lost", params)}.recovery`]) {
+      for (const catalog of Object.values(CATALOGS)) expect(key in catalog, key).toBe(true);
+    }
+  }
 });
 
 it("words an invalid conversation ID with the example the UI supplies", () => {

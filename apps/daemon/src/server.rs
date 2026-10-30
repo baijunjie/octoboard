@@ -19,8 +19,8 @@ use crate::coordinator::Followup;
 use crate::hook_queue::Push;
 use crate::hooks::{self, BackgroundTasksChange};
 use crate::protocol::{
-    Agent, BrowseBody, BrowseRequest, Event, Request, SessionStatus, TermControl, TermEvent,
-    BROWSE_REQUEST_TYPES,
+    error_code, Agent, BrowseBody, BrowseRequest, CodedError, Event, Request, SessionStatus,
+    TermControl, TermEvent, BROWSE_REQUEST_TYPES,
 };
 use crate::pty::{Answering, Attached, PtyCore};
 use crate::reporting;
@@ -547,6 +547,10 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
         let _ = socket.send(Message::Close(None)).await;
         return;
     };
+    let terminal_param = match &terminal {
+        Terminal::Session(_) => "session",
+        Terminal::Shell(_) => "shell_terminal",
+    };
     let pty = terminal.pty();
 
     // Archiving is announced before the process finishes its graceful exit. Its frozen screen
@@ -675,12 +679,24 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String) {
         }
     }
     if deferred.lost_typing() {
-        let detail = failure
-            .map(|error| format!(": {error}"))
-            .unwrap_or_default();
-        state.broadcast(Event::from_error(None, &anyhow::anyhow!(
-            "Terminal input for {id} was not fully accepted before the terminal disconnected{detail}; check the draft before continuing."
-        )));
+        let mut params = vec![(terminal_param, id.as_str())];
+        let suffix = match &failure {
+            Some(detail) => {
+                params.push(("detail", detail.as_str()));
+                format!(": {detail}")
+            }
+            None => String::new(),
+        };
+        state.broadcast(Event::from_error(
+            None,
+            &CodedError::raised(
+                error_code::TERMINAL_INPUT_LOST,
+                format!(
+                    "The terminal {id} disconnected before it had taken everything typed into it{suffix}; check its input line before continuing."
+                ),
+                &params,
+            ),
+        ));
     }
 }
 
