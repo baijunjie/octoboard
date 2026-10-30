@@ -214,7 +214,7 @@ function privacyMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     link(text("privacyBack"), home),
     ...privacySections.flatMap((section) => [
       heading(2, text(`privacy${section}Title`)),
-      text(`privacy${section}Body`),
+      text(section === "Website" ? "privacyWebsiteAnalyticsBody" : `privacy${section}Body`),
       section === "Website"
         ? link(text("privacyGithubLink"), githubPrivacyUrl)
         : undefined,

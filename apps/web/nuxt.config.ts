@@ -31,7 +31,11 @@ for (const { code } of locales) {
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-10-08",
-  modules: ["@nuxtjs/i18n", "@nuxtjs/sitemap"],
+  modules: ["@nuxtjs/i18n", "@nuxtjs/sitemap", "nuxt-gtag"],
+  gtag: {
+    id: "G-9SK49010BJ",
+    enabled: process.env.NODE_ENV === "production",
+  },
   devtools: { enabled: false },
   telemetry: false,
   ssr: true,
