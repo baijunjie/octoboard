@@ -16,9 +16,10 @@ export default defineConfig(async (environment) => {
       ),
       emptyOutDir: true,
       rollupOptions: {
-        input: fileURLToPath(
-          new URL("./website-preview.html", import.meta.url),
-        ),
+        input: {
+          website: fileURLToPath(new URL("./website-preview.html", import.meta.url)),
+          feature: fileURLToPath(new URL("./feature-preview.html", import.meta.url)),
+        },
       },
     },
   });

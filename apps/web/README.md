@@ -68,7 +68,13 @@ Run these commands from the repository root:
 - [`apps/web/app/components/SectionHeading.vue`](app/components/SectionHeading.vue) supplies the homepage's shared
   numbered section heading.
 - [`apps/web/app/components/FeatureWall.vue`](app/components/FeatureWall.vue) renders the grouped feature cards
-  from `featureGroups` in [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with localized copy.
+  from `featureGroups` in [`apps/web/seo/page-outline.ts`](seo/page-outline.ts), with localized copy;
+  [`apps/web/app/components/FeatureIllustration.vue`](app/components/FeatureIllustration.vue) selects their static
+  application views or localized diagrams. [`apps/web/app/components/FeatureAppView.vue`](app/components/FeatureAppView.vue)
+  hosts the focused React views from [`packages/ui/`](../../packages/ui/README.md), including visibility-based loading,
+  scaling and readiness/error messages. [`apps/web/app/components/FeatureGlyph.vue`](app/components/FeatureGlyph.vue)
+  maps diagram symbols to Lucide Vue icons, and
+  [`apps/web/app/components/FeatureAgentMark.vue`](app/components/FeatureAgentMark.vue) supplies the agent brand marks.
 - [`apps/web/app/components/SectionNavigation.vue`](app/components/SectionNavigation.vue) owns the homepage's
   desktop directory rail and narrow-screen directory menu; [`apps/web/app/components/SectionLinks.vue`](app/components/SectionLinks.vue)
   supplies their shared section and feature-group links. [`apps/web/app/composables/useHomeSection.ts`](app/composables/useHomeSection.ts)
@@ -140,7 +146,7 @@ client-side locale choice and persistence, reusing the shared language matcher i
 [`packages/ui/src/i18n/matchLanguage.ts`](../../packages/ui/src/i18n/matchLanguage.ts).
 
 Static generation includes every localized homepage and privacy page, their loading assets, the separately built
-React preview at `preview/website-preview.html`, `sitemap.xml`,
+React preview at `preview/website-preview.html` and focused views at `preview/feature-preview.html`, `sitemap.xml`,
 `robots.txt`, and `404.html`, plus one Markdown file for each of those pages, `llms.txt`, `llms-full.txt`, and
 `sitemap.md`. English home Markdown is `index.md`; every other home is `{route code}.md` (Simplified Chinese
 is `zh.md`). Privacy Markdown is `privacy.md` or `{route code}/privacy.md`. Routes use directory indexes so
