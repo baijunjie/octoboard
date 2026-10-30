@@ -12102,6 +12102,7 @@ mod tests {
         .unwrap();
         let expected = GitWorkflowOverride {
             development: Some(Development::InPlace),
+            squash_before_delivery: None,
             rebase_before_merge: None,
             delivery: Some(Delivery::PullRequest),
             revert_gate: None,

@@ -63,24 +63,26 @@ const choose = async (container: HTMLElement, name: string, option: string) => {
 };
 
 it("shows the daemon's values, every control named", () => {
-  gitWorkflow = { development: "branch", rebase_before_merge: true, delivery: "merge", revert_gate: true };
+  gitWorkflow = { development: "branch", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true };
   const container = mount();
   expect(picker(container, "Where sessions develop")?.textContent).toContain("On a branch of its own");
-  expect(toggle(container, "Rebase before merging").checked).toBe(true);
+  expect(toggle(container, "Squash commits before delivery").checked).toBe(false);
+  expect(toggle(container, "Rebase before delivery").checked).toBe(true);
   expect(toggle(container, "Revert gate").checked).toBe(true);
   expect(picker(container, "Delivery")?.textContent).toContain("Merge locally");
 });
 
-it("lists the controls in order: Where sessions develop, Rebase before merging, Delivery, Revert gate", () => {
+it("lists the controls in order: Where sessions develop, Squash commits before delivery, Rebase before delivery, Delivery, Revert gate", () => {
   const container = mount();
   const names = Array.from(container.querySelectorAll('input[type=checkbox], button[aria-label="Where sessions develop"], button[aria-label="Delivery"], [aria-label="Where sessions develop"] button, [aria-label="Delivery"] button')).map(
     (el) => el.getAttribute("aria-label") ?? el.closest("[aria-label]")?.getAttribute("aria-label"),
   );
-  expect(names.filter((name) => name !== "Automatically pull repositories")).toEqual(["Where sessions develop", "Rebase before merging", "Delivery", "Revert gate"]);
+  expect(names.filter((name) => name !== "Automatically pull repositories")).toEqual(["Where sessions develop", "Squash commits before delivery", "Rebase before delivery", "Delivery", "Revert gate"]);
 });
 
 it.each([
-  { name: "Rebase before merging", key: "rebase_before_merge" as const },
+  { name: "Squash commits before delivery", key: "squash_before_delivery" as const },
+  { name: "Rebase before delivery", key: "rebase_before_merge" as const },
   { name: "Revert gate", key: "revert_gate" as const },
 ])("sends only $key when its switch is turned", async ({ name, key }) => {
   const container = mount();
@@ -120,7 +122,8 @@ it("hides rebase and delivery on the current branch, keeps the revert gate, and 
   const container = mount();
   expect(picker(container, "Where sessions develop")).not.toBeNull();
   expect(toggle(container, "Revert gate").checked).toBe(true);
-  expect(shown(container, "Rebase before merging")).toBe(false);
+  expect(shown(container, "Squash commits before delivery")).toBe(false);
+  expect(shown(container, "Rebase before delivery")).toBe(false);
   expect(shown(container, "Delivery")).toBe(false);
   request.mockImplementation(((message: { git_workflow: Partial<GitWorkflowSettings> }) => {
     store({ ...gitWorkflow, ...message.git_workflow });
@@ -128,7 +131,8 @@ it("hides rebase and delivery on the current branch, keeps the revert gate, and 
   }) as never);
   await choose(container, "Where sessions develop", "In a worktree of its own");
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", git_workflow: { development: "worktree" } });
-  expect(toggle(container, "Rebase before merging").checked).toBe(true);
+  expect(toggle(container, "Squash commits before delivery").checked).toBe(false);
+  expect(toggle(container, "Rebase before delivery").checked).toBe(true);
   expect(picker(container, "Delivery")?.textContent).toContain("Merge locally");
 });
 
@@ -157,13 +161,13 @@ it("splits the rows into Repository, Development and Protection under h3 heading
   const groups = Array.from(container.querySelectorAll("section")).map((section) => ({
     heading: section.querySelector("h3")?.textContent,
     labelled: section.getAttribute("aria-labelledby") === section.querySelector("h3")?.id,
-    has: ["Clone directory", "Where sessions develop", "Rebase before merging", "Delivery", "Revert gate"].filter((name) => section.textContent!.includes(name) || shown(section as HTMLElement, name)),
+    has: ["Clone directory", "Where sessions develop", "Squash commits before delivery", "Rebase before delivery", "Delivery", "Revert gate"].filter((name) => section.textContent!.includes(name) || shown(section as HTMLElement, name)),
   }));
   expect(groups.map((group) => group.heading)).toEqual(["Repository", "Development", "Protection"]);
   expect(groups.every((group) => group.labelled)).toBe(true);
   expect(Array.from(container.querySelectorAll("h3")).every((heading) => heading.hasAttribute("data-sticky-heading"))).toBe(true);
   expect(groups[0].has).toEqual(["Clone directory"]);
-  expect(groups[1].has).toEqual(["Where sessions develop", "Rebase before merging", "Delivery"]);
+  expect(groups[1].has).toEqual(["Where sessions develop", "Squash commits before delivery", "Rebase before delivery", "Delivery"]);
   expect(groups[2].has).toEqual(["Revert gate"]);
 });
 

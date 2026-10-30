@@ -59,14 +59,21 @@ export function GitSection(): React.ReactElement {
               onChange={(value) => change({ development: value })}
             />
           </SettingRow>
-          {/* Rebase and delivery shape the rule of a session that works on a branch of its own, so they are not shown while
+          {/* Squashing, rebase and delivery shape the rule of a session that works on a branch of its own, so they are not shown while
             sessions work on the current branch; their values are kept. */}
           {gitWorkflow.development !== "in_place" && (
             <>
               <SwitchSettingRow
+                motionKey="squash_before_delivery"
+                label={t("settings.gitWorkflow.squash.label")}
+                description={t(gitWorkflow.squash_before_delivery ? "settings.gitWorkflow.squash.description.on" : "settings.gitWorkflow.squash.description.off")}
+                isSelected={gitWorkflow.squash_before_delivery}
+                onChange={(value) => change({ squash_before_delivery: value })}
+              />
+              <SwitchSettingRow
                 motionKey="rebase_before_merge"
-                label={t("settings.gitWorkflow.rebase.label")}
-                description={t(gitWorkflow.rebase_before_merge ? "settings.gitWorkflow.rebase.description.on" : "settings.gitWorkflow.rebase.description.off")}
+                label={t("settings.gitWorkflow.rebaseBeforeDelivery.label")}
+                description={t(gitWorkflow.rebase_before_merge ? "settings.gitWorkflow.rebaseBeforeDelivery.description.on" : "settings.gitWorkflow.rebaseBeforeDelivery.description.off")}
                 isSelected={gitWorkflow.rebase_before_merge}
                 onChange={(value) => change({ rebase_before_merge: value })}
               />

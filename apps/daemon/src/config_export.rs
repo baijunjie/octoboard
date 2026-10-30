@@ -25,7 +25,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::account_dirs::account_dir_key;
 use crate::git_remote;
-use crate::git_workflow::{GitWorkflowOverride, GitWorkflowSettings};
+use crate::git_workflow::{
+    Delivery, Development, GitWorkflowOverride, GitWorkflowSettings, GitWorkflowSettingsChanges,
+};
 use crate::protocol::{
     error_code, Account, Agent, CodedError, Console, Project, ProjectAccount, ProjectSource,
 };
@@ -112,6 +114,42 @@ pub struct DocumentAccount {
     pub disabled: bool,
 }
 
+/// The workflow carried by a configuration document. A setting added after the original
+/// workflow shape is optional, so importing an older document leaves its current value alone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentGitWorkflowSettings {
+    pub development: Development,
+    #[serde(default)]
+    pub squash_before_delivery: Option<bool>,
+    pub rebase_before_merge: bool,
+    pub delivery: Delivery,
+    pub revert_gate: bool,
+}
+
+impl From<GitWorkflowSettings> for DocumentGitWorkflowSettings {
+    fn from(settings: GitWorkflowSettings) -> Self {
+        Self {
+            development: settings.development,
+            squash_before_delivery: Some(settings.squash_before_delivery),
+            rebase_before_merge: settings.rebase_before_merge,
+            delivery: settings.delivery,
+            revert_gate: settings.revert_gate,
+        }
+    }
+}
+
+impl From<DocumentGitWorkflowSettings> for GitWorkflowSettingsChanges {
+    fn from(settings: DocumentGitWorkflowSettings) -> Self {
+        Self {
+            development: Some(settings.development),
+            squash_before_delivery: settings.squash_before_delivery,
+            rebase_before_merge: Some(settings.rebase_before_merge),
+            delivery: Some(settings.delivery),
+            revert_gate: Some(settings.revert_gate),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSettings {
     /// Documents exported before the setting was renamed carry it as `auto_sync_repositories`.
@@ -161,7 +199,7 @@ pub struct DocumentSettings {
     /// existed: importing it leaves them as they are. A version 1 document carries them as
     /// `worktrees`, which `config_upgrade` converts.
     #[serde(default)]
-    pub git_workflow: Option<GitWorkflowSettings>,
+    pub git_workflow: Option<DocumentGitWorkflowSettings>,
     /// The choices the user made on whether an agent other than Claude Code (by wire name) loads
     /// Claude Code's instructions and skills. An agent they never chose for is not listed, so the
     /// importing machine keeps following its own default for it. Absent in a document exported
@@ -395,7 +433,7 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
             auto_approve_account_switches: Some(store.auto_approve_account_switches()?),
             auto_approve_handoffs: Some(store.auto_approve_handoffs()?),
             ask_questions_as_choices: Some(store.ask_questions_as_choices()?),
-            git_workflow: Some(store.git_workflow_settings()?),
+            git_workflow: Some(store.git_workflow_settings()?.into()),
             claude_compatibility: Some(store.claude_compatibility_choices()?),
             keyboard_shortcuts: None,
         })
@@ -823,7 +861,7 @@ mod tests {
                 auto_approve_account_switches: Some(false),
                 auto_approve_handoffs: Some(false),
                 ask_questions_as_choices: Some(true),
-                git_workflow: Some(GitWorkflowSettings::default()),
+                git_workflow: Some(GitWorkflowSettings::default().into()),
                 claude_compatibility: Some(std::collections::BTreeMap::new()),
                 keyboard_shortcuts: None,
             })

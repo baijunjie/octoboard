@@ -118,8 +118,8 @@ const PROJECT_WORK: &str = "You work on the current project's tasks, following i
 
 /// The default rule for where a project session develops, or `None` for `InPlace`, which gives it
 /// none. It yields to the project's own rules, which the agent reads anyway and judges better than
-/// any keyword match could. Only the sentences that name rebasing and delivery depend on the
-/// settings, and they are the same for both variants; `bound` adds the owner to who may say how
+/// any keyword match could. Only the sentences that name squashing, rebasing and delivery depend
+/// on the settings, and they are the same for both variants; `bound` adds the owner to who may say how
 /// work is delivered. Git in a worktree is run with `-C` because Claude Code asks for approval of
 /// every command that changes directory before running git, an allowed git command included.
 fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<String> {
@@ -131,9 +131,9 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
              `git switch -c <name>` in the project directory you were started in; work and \
              commit there. Read-only work, such as investigating or answering questions, needs \
              none.",
-            "A branch handed to you is worked on by switching to it in the project \
-                     directory, or, if it is already checked out in a worktree, there, running \
-                     git in that worktree as `git -C <worktree>` rather than after a `cd`.",
+            "If a branch handed to you already has a worktree, work in that worktree. \
+                     Otherwise, switch to it in the project directory. Run git in a worktree as \
+                     `git -C <worktree>` rather than after a `cd`.",
             "Clean up yourself as soon as a branch is no longer needed:\n   \
              - After a local merge, or after opening a pull request, switch back to the target \
                branch and delete the local branch; after a pull request, leave the remote \
@@ -149,16 +149,16 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
              started in, adding `.worktrees/` to `.git/info/exclude` so no tracked file changes; \
              work and commit there, running git in it as `git -C <worktree>` rather than after a \
              `cd`. Read-only work, such as investigating or answering questions, needs none.",
-            "A branch handed to you that already has a worktree is worked on there.",
+            "If a branch handed to you already has a worktree, work in that worktree.",
             "Clean up yourself as soon as a worktree is no longer needed, rather than leaving it \
              to the cleanup archiving runs:\n   \
-             - After a local merge, remove the worktree and the local branch from the main \
-               working copy at once; this is part of the merge and is not asked again.\n   \
+             - After a local merge, remove the worktree and the local branch from the original \
+               project directory at once; this is part of the merge and is not asked again.\n   \
              - After opening a pull request, remove the worktree and the local branch at once, \
                leaving the remote branch. To change the pull request later, recreate the \
                worktree from the remote branch, push to the same branch, and clean up again.\n   \
-             - A worktree opened only to verify something, never committed, is opened detached \
-               and removed as soon as the verification is done.\n   \
+             - For verification-only worktrees with no commits of their own, use \
+               `git worktree add --detach` and remove them when verification finishes.\n   \
              - Ask before removing a worktree with uncommitted changes, or with ignored files \
                beyond regenerable dependencies and build output (`.env`, local configuration, \
                say); never discard or force-remove anything on the user's behalf.",
@@ -174,12 +174,33 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
         Delivery::Merge => "merge it into its target branch locally",
         Delivery::PullRequest => "push it and open a pull request",
     };
-    let merging = if settings.rebase_before_merge {
-        "When merging, rebase the branch onto its target branch and fast-forward the target \
-         branch to it. A pushed branch that is not yours alone is never rebased."
-    } else {
-        "When merging, merge the branch into its target branch; do not rebase it first."
-    };
+    let mut preparation = vec!["When merging locally, merge the branch into its target branch."];
+    if settings.squash_before_delivery {
+        preparation.push(
+            "Before delivering finished work by merging, pushing or opening a pull request, \
+             consolidate the branch's commits so each resulting commit covers one complete change \
+             and can be reverted on its own. Use one commit if the branch contains only one \
+             complete change. Write commit messages that describe the completed work. If the \
+             original commit messages contain `Reverts:` lines marking deliberate reverts, \
+             preserve them when squashing. Use the common ancestor of the current branch and \
+             its target branch as the base, and rewrite only the current branch's commits \
+             (`git reset --soft $(git merge-base HEAD <target branch>)`). Never squash a pushed \
+             branch that other people or sessions also use. Temporary backup pushes during \
+             development do not trigger this requirement.",
+        );
+    }
+    if settings.rebase_before_merge {
+        preparation.push(
+            "Before delivering finished work by merging, pushing or opening a pull request, \
+             rebase the branch onto its target branch. When merging the rebased branch into its \
+             target branch, advance the target branch to the rebased branch's latest commit \
+             without creating a merge commit (a fast-forward merge). Never rebase a pushed \
+             branch that other people or sessions also use. To merge such a branch into its \
+             target branch, use a regular merge that preserves the existing commit history. \
+             Temporary backup pushes during development do not trigger this requirement.",
+        );
+    }
+    let preparation = preparation.join(" ");
     // The sub-items' indentation sits before each line break, since a continued line loses its
     // leading whitespace.
     Some(format!(
@@ -191,7 +212,7 @@ fn development_rule(settings: &GitWorkflowSettings, bound: bool) -> Option<Strin
          2. {handed_over}\n\
          3. When done, report the branch and its changes. Merge, push or open a pull request as \
             {who}; where nobody has said, {otherwise}.\n\
-         4. {merging}\n\
+         4. {preparation}\n\
          5. {cleanup}"
     ))
 }
@@ -904,6 +925,7 @@ mod tests {
     fn settings(rebase_before_merge: bool, delivery: Delivery) -> GitWorkflowSettings {
         GitWorkflowSettings {
             development: Development::Worktree,
+            squash_before_delivery: false,
             rebase_before_merge,
             delivery,
             revert_gate: true,
@@ -1022,9 +1044,9 @@ mod tests {
                 ));
                 assert!(rule.contains("`git switch -c <name>` in the project directory"));
                 assert!(rule.contains(
-                    "A branch handed to you is worked on by switching to it in the project \
-                     directory, or, if it is already checked out in a worktree, there, running \
-                     git in that worktree as `git -C <worktree>` rather than after a `cd`."
+                    "If a branch handed to you already has a worktree, work in that worktree. \
+                     Otherwise, switch to it in the project directory. Run git in a worktree as \
+                     `git -C <worktree>` rather than after a `cd`."
                 ));
                 assert!(
                     rule.contains("switch back to the target branch and delete the local branch")
@@ -1120,39 +1142,84 @@ mod tests {
         }
     }
 
-    /// Rebasing changes only the sentence that names it; a shared pushed branch is never rebased.
     #[test]
-    fn rebasing_shapes_only_how_a_branch_is_merged() {
-        for agent in Agent::ALL {
-            for owner in every_owner() {
-                let text = |rebase| {
-                    role_description(
-                        Role::Project,
-                        owner.as_ref(),
-                        agent,
-                        &RoleOptions {
-                            git_workflow: Some(&settings(rebase, Delivery::Merge)),
-                            ..Default::default()
+    fn delivery_preparation_adds_only_the_enabled_fragments() {
+        for delivery in [Delivery::Ask, Delivery::Merge, Delivery::PullRequest] {
+            for development in [Development::Branch, Development::Worktree] {
+                let rule = |squash, rebase| {
+                    development_rule(
+                        &GitWorkflowSettings {
+                            development,
+                            squash_before_delivery: squash,
+                            rebase_before_merge: rebase,
+                            delivery,
+                            ..GitWorkflowSettings::default()
                         },
+                        false,
                     )
+                    .unwrap()
                 };
-                let (on, off) = (text(true), text(false));
-                assert!(on.contains(
-                    "4. When merging, rebase the branch onto its target branch and fast-forward \
-                     the target branch to it. A pushed branch that is not yours alone is never \
-                     rebased.\n"
+                let baseline = rule(false, false);
+                assert!(baseline
+                    .contains("When merging locally, merge the branch into its target branch."));
+                assert!(!baseline.contains("squash"));
+                assert!(!baseline.contains("rebase"));
+                assert!(!baseline.contains("Reverts:"));
+                let squash_only = rule(true, false);
+                assert!(squash_only.contains("each resulting commit covers one complete change"));
+                assert!(squash_only.contains("can be reverted on its own"));
+                assert!(squash_only.contains("Use the common ancestor of the current branch and its target branch as the base"));
+                assert!(squash_only.contains("rewrite only the current branch's commits"));
+                assert!(squash_only
+                    .contains("If the original commit messages contain `Reverts:` lines"));
+                assert!(squash_only.contains(
+                    "`Reverts:` lines marking deliberate reverts, preserve them when squashing."
                 ));
-                assert!(off.contains(
-                    "4. When merging, merge the branch into its target branch; do not rebase it \
-                     first.\n"
+                assert!(
+                    squash_only.contains("git reset --soft $(git merge-base HEAD <target branch>)")
+                );
+                assert!(squash_only.contains(
+                    "Never squash a pushed branch that other people or sessions also use"
                 ));
-                let rest = |text: &str| {
+                assert!(!squash_only.contains("rebase"));
+                let rebase_only = rule(false, true);
+                assert!(rebase_only.contains("rebase the branch onto its target branch"));
+                assert!(rebase_only.contains(
+                    "Never rebase a pushed branch that other people or sessions also use"
+                ));
+                assert!(
+                    rebase_only.contains("without creating a merge commit (a fast-forward merge)")
+                );
+                assert!(rebase_only.contains(
+                    "To merge such a branch into its target branch, use a regular merge that preserves the existing commit history."
+                ));
+                assert!(!rebase_only.contains("squash"));
+                assert!(!rebase_only.contains("Reverts:"));
+
+                // Removing either complete fragment leaves exactly the other switch's rule.
+                let prefix = "When merging locally, merge the branch into its target branch. ";
+                let fragment = |text: &str| {
                     text.lines()
-                        .filter(|line| !line.starts_with("4. "))
-                        .collect::<Vec<_>>()
-                        .join("\n")
+                        .find_map(|line| line.strip_prefix("4. "))
+                        .unwrap()
+                        .strip_prefix(prefix)
+                        .unwrap()
+                        .to_string()
                 };
-                assert_eq!(rest(&on), rest(&off));
+                let squash_fragment = fragment(&squash_only);
+                let rebase_fragment = fragment(&rebase_only);
+                let both = rule(true, true);
+                assert_eq!(
+                    both.replacen(&format!("{squash_fragment} "), "", 1),
+                    rebase_only
+                );
+                assert_eq!(
+                    both.replacen(&format!(" {rebase_fragment}"), "", 1),
+                    squash_only
+                );
+                assert!(
+                    both.find(&squash_fragment).unwrap() < both.find(&rebase_fragment).unwrap()
+                );
             }
         }
     }

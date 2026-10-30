@@ -448,8 +448,8 @@ it("leaves out the setting a file from before it existed does not carry", async 
 });
 
 describe("the git workflow settings", () => {
-  const FILE: GitWorkflowSettings = { development: "in_place", rebase_before_merge: true, delivery: "merge", revert_gate: true };
-  const inspecting = (git_workflow: typeof FILE | undefined, current: typeof FILE | undefined) => {
+  const FILE: GitWorkflowSettings = { development: "in_place", squash_before_delivery: false, rebase_before_merge: true, delivery: "merge", revert_gate: true };
+  const inspecting = (git_workflow: Omit<typeof FILE, "squash_before_delivery"> & { squash_before_delivery?: boolean | null } | undefined, current: typeof FILE | undefined) => {
     const { git_workflow: _, current_git_workflow: __, ...rest } = REVIEW.settings!;
     const settings = { ...rest, ...(git_workflow && { git_workflow }), ...(current && { current_git_workflow: current }) };
     return (body: RequestBody) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected" as const, ...REVIEW, settings }) : reply(body));
@@ -462,6 +462,12 @@ describe("the git workflow settings", () => {
 
   it("notes that applying changes nothing when they are the same", async () => {
     await reviewingSettings({ reply: inspecting(FILE, FILE) });
+    expect(settingLines()["Git workflow"]).toEqual({ badge: "No change" });
+  });
+
+  it("keeps the current squash value when an older workflow omits it", async () => {
+    const { squash_before_delivery: _, ...older } = FILE;
+    await reviewingSettings({ reply: inspecting(older, { ...FILE, squash_before_delivery: true }) });
     expect(settingLines()["Git workflow"]).toEqual({ badge: "No change" });
   });
 
