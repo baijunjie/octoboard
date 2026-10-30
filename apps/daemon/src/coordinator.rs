@@ -263,22 +263,17 @@ async fn handle_inner(
             // Its sessions cascade the same way, and their saved output is Octoboard's own.
             let session_ids = session_ids_where(state, |session| session.console_id == id)?;
             state.store.delete_console(&id)?;
-            for project in &projects {
-                state.remove_git_status(&project.id);
-                state.unresolved_removals.forget(&project.id);
-                crate::git_watch::remove(state, &project.id);
-                crate::branch_origin::project_deleted(state, &project.path);
-            }
             let project_ids: Vec<&str> =
                 projects.iter().map(|project| project.id.as_str()).collect();
+            state.forget_deleted_projects(&project_ids);
+            state.forget_cascaded_sessions(&session_ids);
+            state.stalled_directory_passes.forget(&id);
+            for project in &projects {
+                crate::branch_origin::project_deleted(state, &project.path);
+            }
             crate::shell_terminal::close_projects(state, &project_ids).await;
             // Their processes, which no session owns, go with the projects.
             crate::process_requests::stop_project_processes(state, &projects).await;
-            for session_id in &session_ids {
-                state.forget_saved_output(session_id);
-                state.forget_left_for_limit(session_id);
-                state.forget_handoff_package(session_id);
-            }
             // The working directory is Octoboard's own, under `~/.octoboard/consoles/`; no project
             // directory is ever touched by this.
             if let Err(err) = mcp::console_instructions::remove_console_workdir(&console.workdir) {
@@ -491,16 +486,10 @@ async fn handle_inner(
             // The project's sessions cascade with it, so their saved output is collected first.
             let session_ids = session_ids_where(state, in_project)?;
             state.store.delete_project(&id)?;
-            state.remove_git_status(&id);
-            state.unresolved_removals.forget(&id);
-            crate::git_watch::remove(state, &id);
+            state.forget_deleted_projects(&[id.as_str()]);
+            state.forget_cascaded_sessions(&session_ids);
             crate::shell_terminal::close_project(state, &id).await;
             crate::branch_origin::project_deleted_in(state, repository);
-            for session_id in &session_ids {
-                state.forget_saved_output(session_id);
-                state.forget_left_for_limit(session_id);
-                state.forget_handoff_package(session_id);
-            }
             state.broadcast(Event::ProjectDeleted {
                 project: id.clone(),
             });
@@ -3176,12 +3165,7 @@ async fn finish_open(
 
 /// Moves a session that has no process out of `starting`, to the status a click resumes from.
 fn mark_interrupted(state: &Arc<AppState>, id: &str) {
-    let result = state.session_record(id).and_then(|mut session| {
-        session.status = SessionStatus::Interrupted;
-        session.ended_at = Some(now_millis());
-        state.save_session(&session)
-    });
-    if let Err(err) = result {
+    if let Err(err) = state.interrupt_session_record(id) {
         tracing::warn!(session = %id, %err, "marking a session that failed to launch interrupted failed");
     }
 }
@@ -4706,11 +4690,8 @@ pub(crate) fn session_labels<'a>(sessions: impl IntoIterator<Item = &'a Session>
 
 /// Marks one session archived and ends its process, if it has one.
 fn archive_record(state: &Arc<AppState>, id: &str) -> Result<()> {
-    let mut session = state.session_record(id)?;
-    ensure_unlocked([session.clone()])?;
-    session.status = SessionStatus::Archived;
-    session.ended_at = Some(now_millis());
-    state.save_session(&session)?;
+    ensure_unlocked([state.session_record(id)?])?;
+    state.archive_session_record(id)?;
     state.forget_left_for_limit(id);
     if let Some(live) = state.live_session(id) {
         // Ending the process waits out the graceful period, which the caller should not.
@@ -7206,10 +7187,7 @@ const MAX_ICON_BYTES: usize = 256 * 1024;
 
 /// Renames a session and broadcasts it. The title is stored trimmed and cannot be blank.
 pub fn rename_session(state: &Arc<AppState>, id: &str, title: &str) -> Result<Session> {
-    let mut session = state.session_record(id)?;
-    session.title = required_text("title", title)?;
-    state.save_session(&session)?;
-    Ok(session)
+    state.set_session_title(id, &required_text("title", title)?)
 }
 
 /// Pins or unpins a session and broadcasts it.
@@ -7993,10 +7971,12 @@ mod tests {
         assert!(state.store.get_session("project").unwrap().is_none());
     }
 
-    /// Every request that removes a session's record removes the output saved for it as well,
-    /// including the two where the record goes by cascade.
+    /// Every request that removes a session's record drops what the daemon holds for it as well —
+    /// its saved output, the accounts it left for a usage limit, the hand a session request raised —
+    /// including the two where the record goes by cascade; and a console takes its stalled
+    /// directory pass with it.
     #[tokio::test]
-    async fn a_session_record_takes_its_saved_output_with_it() {
+    async fn a_session_record_takes_what_is_held_for_it_with_it() {
         let requests = [
             RequestBody::DeleteSession {
                 session: "s".to_string(),
@@ -8052,21 +8032,42 @@ mod tests {
                 .unwrap();
             state
                 .store
-                .insert_session(&project_session(
-                    "s",
-                    Agent::Claude,
-                    SessionStatus::Archived,
-                ))
+                .insert_session(&project_session("s", Agent::Claude, SessionStatus::Idle))
                 .unwrap();
+            // Raised while it ran, and left behind by the archive.
+            state.raise_request_hand("s").unwrap();
+            state.archive_session_record("s").unwrap();
+            assert!(state.has_request_hand("s"));
             let saved = dir.join("output").join("s");
             std::fs::create_dir_all(saved.parent().unwrap()).unwrap();
             std::fs::write(&saved, b"last output").unwrap();
             assert_eq!(state.saved_output("s"), Some(b"last output".to_vec()));
+            state.note_left_for_limit("s", Some("account-1"));
+            let stuck = Arc::new(());
+            state.stalled_directory_passes.record_from(
+                "console-1".to_string(),
+                Arc::downgrade(&stuck),
+                std::time::Instant::now() - Duration::from_secs(1),
+            );
+            assert!(state.stalled_directory_passes.is_stuck("console-1"));
 
             let label = format!("{request:?}");
+            let console_goes = matches!(request, RequestBody::DeleteConsole { .. });
             handle(&state, None, request).await.unwrap();
             assert!(state.store.get_session("s").unwrap().is_none(), "{label}");
             assert!(!saved.exists(), "{label}");
+            assert!(
+                state
+                    .recently_left_for_limit("s", Duration::from_secs(3600))
+                    .is_empty(),
+                "{label}"
+            );
+            assert!(!state.has_request_hand("s"), "{label}");
+            assert_eq!(
+                state.stalled_directory_passes.is_stuck("console-1"),
+                !console_goes,
+                "{label}"
+            );
         }
     }
 

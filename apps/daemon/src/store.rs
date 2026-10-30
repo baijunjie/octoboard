@@ -1,5 +1,11 @@
-//! The coordinator's SQLite storage: consoles, projects, sessions, branch origins and the host
-//! table.
+//! The coordinator's SQLite storage: hosts, accounts, consoles, projects, sessions, report-panel
+//! pages, trusted directories, the information held for interrupted sessions, branch origins and
+//! the application settings.
+//!
+//! A session's changing fields are written by methods that each write their own columns, never by
+//! writing back a record read earlier: the writers run on tasks of their own, so a whole-record
+//! write would undo whatever another wrote in between. A status change that must not undo another
+//! matches the status it expects in the statement itself.
 //!
 //! Enum columns hold the same text the protocol puts on the wire — the conversion goes through
 //! serde (`enum_to_text` / `enum_from_text`) rather than a second hand-written mapping, so a
@@ -1800,15 +1806,14 @@ impl Store {
         Ok(session)
     }
 
-    /// Writes back the fields that change over a session's life. Identity and placement
-    /// (`console_id`, `project_id`, `role`, `origin`, `ordinal`, `model`, `effort`)
-    /// never change; `bound_to` and `lead` change only through [`Self::set_binding`], and
-    /// `account_id` and `config_dir` change only through [`Self::set_session_account`], the one
-    /// write path a switch of the session's account uses, so a record read before a switch can
-    /// never write the old account back over it. `pinned` and `locked` are the user's own statements
-    /// ([`Self::set_session_pinned`] and [`Self::set_session_locked`]), which a record read earlier
-    /// must not overwrite, and neither may it overwrite `colour` ([`Self::set_session_colour`]).
-    /// Returns whether a row was written: `false` means the session is gone (deleted meanwhile).
+    /// Writes a whole record's changing fields back, for tests to put a session in a state. The
+    /// daemon itself never writes a record it read earlier back whole: whatever another task wrote
+    /// to the row in between would be lost, so each change goes through the method that writes its
+    /// own columns ([`Self::set_session_title`], [`Self::set_running_status`],
+    /// [`Self::archive_session`] and the others below). Identity, placement, the binding, the
+    /// account, `pinned`, `locked` and `colour` are left alone, as those methods leave them.
+    /// Returns whether a row was written: `false` means the session is gone.
+    #[cfg(test)]
     pub fn update_session(&self, session: &Session) -> Result<bool> {
         let changed = self.lock().execute(
             "UPDATE sessions SET agent = ?2, agent_session_id = ?3, title = ?4, status = ?5,
@@ -1832,6 +1837,158 @@ impl Store {
             ],
         )?;
         Ok(changed > 0)
+    }
+
+    /// Runs `update`, one `UPDATE` of session `id`'s row, and returns the row as it then stands
+    /// when the statement matched it, `None` when it did not. Both run under one take of the lock,
+    /// so the record returned is the one the write produced.
+    fn update_session_row(
+        &self,
+        id: &str,
+        update: &str,
+        params: impl rusqlite::Params,
+    ) -> Result<Option<Session>> {
+        let conn = self.lock();
+        if conn.execute(update, params)? == 0 {
+            return Ok(None);
+        }
+        Ok(conn
+            .query_row(
+                &format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1"),
+                params![id],
+                read_session,
+            )
+            .optional()?)
+    }
+
+    /// Writes the session's title and nothing else. Returns the record as it now stands, or `None`
+    /// when the session is gone.
+    pub fn set_session_title(&self, id: &str, title: &str) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET title = ?2 WHERE id = ?1",
+            params![id, title],
+        )
+    }
+
+    /// Records the id the agent gave the session's conversation, unless it already holds that id.
+    /// What the agent's records gave the session (context, record titles, observed model and
+    /// effort) belonged to the previous conversation and is dropped with it. Returns the record as
+    /// it now stands, or `None` when nothing changed or the session is gone.
+    pub fn set_agent_session_id(
+        &self,
+        id: &str,
+        agent_session_id: &str,
+    ) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET agent_session_id = ?2, context = NULL, record_title = NULL,
+                                 record_prompt = NULL, observed_model = NULL,
+                                 observed_effort = NULL, observed_boundary = NULL
+             WHERE id = ?1 AND agent_session_id IS NOT ?2",
+            params![id, agent_session_id],
+        )
+    }
+
+    /// Records that the session has had a turn. Returns the record as it now stands, or `None`
+    /// when it was already recorded or the session is gone.
+    pub fn mark_conversation_started(&self, id: &str) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET has_conversation = 1 WHERE id = ?1 AND has_conversation = 0",
+            params![id],
+        )
+    }
+
+    /// Forgets the session's conversation, its id and what the agent's records gave it, as for a
+    /// session that has had no turn. Returns the record as it now stands, or `None` when the
+    /// session is gone.
+    pub fn forget_conversation(&self, id: &str) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET has_conversation = 0, agent_session_id = NULL, context = NULL,
+                                 record_title = NULL, record_prompt = NULL, observed_model = NULL,
+                                 observed_effort = NULL, observed_boundary = NULL
+             WHERE id = ?1",
+            params![id],
+        )
+    }
+
+    /// Moves a session to `status`, which must not be dormant, but only while the session is not
+    /// dormant itself and is at another status. A running session's status follows its agent's
+    /// events, which arrive on tasks of their own; matching in the statement means one that lands
+    /// after an archive or an exit cannot bring the session back to life. Returns the record as it
+    /// now stands, or `None` when nothing changed or the session is gone.
+    pub fn set_running_status(&self, id: &str, status: SessionStatus) -> Result<Option<Session>> {
+        debug_assert!(!status.is_dormant());
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET status = ?2
+             WHERE id = ?1 AND status != ?2 AND status NOT IN (?3, ?4)",
+            params![
+                id,
+                enum_to_text(&status),
+                enum_to_text(&SessionStatus::Interrupted),
+                enum_to_text(&SessionStatus::Archived),
+            ],
+        )
+    }
+
+    /// Archives the session as of `ended_at`, from whatever status it is at; a locked session is
+    /// refused by the schema. Returns the record as it now stands, or `None` when the session is
+    /// gone.
+    pub fn archive_session(&self, id: &str, ended_at: i64) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET status = ?2, ended_at = ?3 WHERE id = ?1",
+            params![id, enum_to_text(&SessionStatus::Archived), ended_at],
+        )
+    }
+
+    /// Interrupts the session as of `ended_at`, unless it is archived: an archive is the user's
+    /// decision and outlasts the process going away. Returns the record as it now stands, or
+    /// `None` when the session is archived or gone.
+    pub fn interrupt_session(&self, id: &str, ended_at: i64) -> Result<Option<Session>> {
+        self.update_session_row(
+            id,
+            "UPDATE sessions SET status = ?2, ended_at = ?3 WHERE id = ?1 AND status != ?4",
+            params![
+                id,
+                enum_to_text(&SessionStatus::Interrupted),
+                ended_at,
+                enum_to_text(&SessionStatus::Archived),
+            ],
+        )
+    }
+
+    /// Records that the session's process ended at `ended_at`: an archived session stays archived,
+    /// anything else becomes interrupted. Returns the status the session was at and the record as
+    /// it now stands, or `None` when the session is gone; both are read under the write's lock.
+    pub fn record_session_exit(
+        &self,
+        id: &str,
+        ended_at: i64,
+    ) -> Result<Option<(SessionStatus, Session)>> {
+        let conn = self.lock();
+        let select = format!("SELECT {SESSION_COLUMNS} FROM sessions WHERE id = ?1");
+        let Some(before) = conn
+            .query_row(&select, params![id], read_session)
+            .optional()?
+        else {
+            return Ok(None);
+        };
+        conn.execute(
+            "UPDATE sessions SET status = CASE WHEN status = ?2 THEN status ELSE ?3 END, ended_at = ?4
+             WHERE id = ?1",
+            params![
+                id,
+                enum_to_text(&SessionStatus::Archived),
+                enum_to_text(&SessionStatus::Interrupted),
+                ended_at,
+            ],
+        )?;
+        let after = conn.query_row(&select, params![id], read_session)?;
+        Ok(Some((before.status, after)))
     }
 
     /// Persists what the agent's records gave sessions, only while the source still belongs to the
@@ -1952,7 +2109,7 @@ impl Store {
     /// Moves a session to `status`, but only while it is still `expected`, and returns the record
     /// as it now stands when it moved. Both statements run under one lock, so a caller whose write
     /// is only valid while the session has not moved on cannot be overtaken between deciding and
-    /// writing — which an [`Self::update_session`] after a separate [`Self::get_session`] can be.
+    /// writing — which a write after a separate [`Self::get_session`] can be.
     /// `None` means the session was something other than `expected`, or is gone. Asking for the
     /// status it already has counts as a move, so a caller that would gain nothing from that should
     /// not ask.
@@ -2276,8 +2433,8 @@ impl Store {
     }
 
     /// Replaces the session's model and effort overrides, each as `Session::model` states it: absent
-    /// inherits, `Some(None)` leaves the choice to the agent, a value pins it. Written apart from
-    /// [`Self::update_session`], which keeps what is stored.
+    /// inherits, `Some(None)` leaves the choice to the agent, a value pins it. Nothing else writes
+    /// these columns.
     pub fn set_session_launch_overrides(
         &self,
         id: &str,
@@ -2366,7 +2523,7 @@ impl Store {
     }
 
     /// Sets the colour of a console session. Like `pinned`, it is the user's own statement, which
-    /// [`Self::update_session`] never writes back.
+    /// no other write touches.
     pub fn set_session_colour(&self, id: &str, colour: ConsoleSessionColour) -> Result<()> {
         self.lock().execute(
             "UPDATE sessions SET colour = ?2 WHERE id = ?1 AND role = ?3",
@@ -2654,8 +2811,8 @@ fn user_version(conn: &Connection) -> Result<i64> {
 ///
 /// - at [`SCHEMA_VERSION`], or holding no tables at all (an empty file, which `open` initializes):
 ///   left as it is;
-/// - at versions 1 and 2: upgraded in place, adding the account display order where needed and
-///   the collector's private observation boundary;
+/// - at versions 1 and 2: upgraded in place, adding the account display order (version 2) where
+///   needed and the collector's private observation boundary (version 3);
 /// - at an older version without an upgrade step, which includes every database from before
 ///   versions were recorded: moved aside, so `open` starts a fresh one. The old file is renamed
 ///   rather than deleted, so a user who needs what was in it still has it on disk; see "Files
@@ -4122,20 +4279,21 @@ mod tests {
         let mut record = session(None);
         record.project_id = Some("project-1".to_string());
         store.insert_session(&record).unwrap();
-        let mut stale = store.get_session("session-1").unwrap().unwrap();
-        assert!(!stale.locked);
+        assert!(!store.get_session("session-1").unwrap().unwrap().locked);
         store.set_session_locked("session-1", true).unwrap();
-        assert!(store.update_session(&stale).unwrap());
+        assert!(store
+            .set_session_title("session-1", "Renamed")
+            .unwrap()
+            .is_some());
         assert!(store.get_session("session-1").unwrap().unwrap().locked);
-        stale.status = SessionStatus::Archived;
-        assert!(store.update_session(&stale).is_err());
+        assert!(store.archive_session("session-1", 1).is_err());
         assert!(store.delete_session("session-1").is_err());
         assert!(store.delete_session_if_unused("session-1").is_err());
         assert!(store.delete_project("project-1").is_err());
         assert!(store.delete_console("console-1").is_err());
         assert!(store.get_project("project-1").unwrap().is_some());
         store.set_session_locked("session-1", false).unwrap();
-        store.update_session(&stale).unwrap();
+        store.archive_session("session-1", 1).unwrap();
         store.set_session_locked("session-1", true).unwrap();
         assert!(store.delete_session_if_archived("session-1").is_err());
         drop(store);
@@ -4148,29 +4306,124 @@ mod tests {
             .is_some());
     }
 
-    /// A session record read before the user pinned it, written back afterwards, does not undo
-    /// the pin; and writing back a deleted session reports that nothing was written.
+    /// Each write of a session's changing fields writes its own columns, so writers on tasks of
+    /// their own — a rename, the hook that names the conversation, the one that records its first
+    /// turn — cannot undo each other or the user's pin; and a write to a deleted session reports
+    /// that nothing was written.
     #[test]
-    fn a_stale_session_write_leaves_the_pin_alone_and_a_deleted_one_is_not_written() {
-        let path = temp_db("stale-session");
+    fn session_writes_leave_each_others_columns_alone() {
+        let path = temp_db("session-columns");
         let store = Store::open(&path).expect("store");
         store
             .insert_console(&console(None, None, None))
             .expect("console");
-        let mut archived = session(None);
-        archived.status = SessionStatus::Archived;
-        store.insert_session(&archived).expect("insert");
+        store.insert_session(&session(None)).expect("insert");
 
-        let stale = store.get_session("session-1").unwrap().unwrap();
         store.set_session_pinned("session-1", true).unwrap();
-        assert!(store.update_session(&stale).unwrap());
-        assert!(store.get_session("session-1").unwrap().unwrap().pinned);
+        assert!(store
+            .set_agent_session_id("session-1", "conversation-1")
+            .unwrap()
+            .is_some());
+        assert!(store
+            .mark_conversation_started("session-1")
+            .unwrap()
+            .is_some());
+        let renamed = store
+            .set_session_title("session-1", "Renamed")
+            .unwrap()
+            .expect("renamed");
+        assert_eq!(renamed.agent_session_id.as_deref(), Some("conversation-1"));
+        assert!(renamed.has_conversation);
+        assert!(renamed.pinned);
+        let running = store
+            .set_running_status("session-1", SessionStatus::Working)
+            .unwrap()
+            .expect("working");
+        assert_eq!(running.title, "Renamed");
+        assert_eq!(running.agent_session_id.as_deref(), Some("conversation-1"));
 
+        // Nothing to change is no write.
+        assert!(store
+            .set_agent_session_id("session-1", "conversation-1")
+            .unwrap()
+            .is_none());
+        assert!(store
+            .mark_conversation_started("session-1")
+            .unwrap()
+            .is_none());
+        assert!(store
+            .set_running_status("session-1", SessionStatus::Working)
+            .unwrap()
+            .is_none());
+
+        assert!(store.archive_session("session-1", 1).unwrap().is_some());
         assert!(store
             .delete_session_if_archived("session-1")
             .unwrap()
             .is_some());
-        assert!(!store.update_session(&stale).unwrap());
+        assert!(store
+            .set_session_title("session-1", "Gone")
+            .unwrap()
+            .is_none());
+        assert!(store.archive_session("session-1", 2).unwrap().is_none());
+        assert!(store.record_session_exit("session-1", 2).unwrap().is_none());
+        drop(store);
+    }
+
+    /// A running status reported after the session went dormant — a Stop hook landing after an
+    /// archive, a late event after the process ended — leaves it dormant; and the process going
+    /// away keeps an archive while interrupting anything else.
+    #[test]
+    fn a_dormant_session_stays_so_whatever_its_agent_reports() {
+        let path = temp_db("session-dormant");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        store.insert_session(&session(None)).expect("insert");
+        store
+            .set_running_status("session-1", SessionStatus::Working)
+            .unwrap()
+            .expect("working");
+
+        let archived = store
+            .archive_session("session-1", 10)
+            .unwrap()
+            .expect("archived");
+        assert_eq!(archived.status, SessionStatus::Archived);
+        assert!(store
+            .set_running_status("session-1", SessionStatus::Idle)
+            .unwrap()
+            .is_none());
+        assert!(store.interrupt_session("session-1", 20).unwrap().is_none());
+        let (before, exited) = store
+            .record_session_exit("session-1", 20)
+            .unwrap()
+            .expect("exited");
+        assert_eq!(before, SessionStatus::Archived);
+        assert_eq!(exited.status, SessionStatus::Archived);
+        assert_eq!(exited.ended_at, Some(20));
+
+        store
+            .update_session_lifecycle_if(
+                "session-1",
+                SessionStatus::Archived,
+                SessionStatus::Working,
+                None,
+            )
+            .unwrap()
+            .expect("relaunched");
+        let (before, exited) = store
+            .record_session_exit("session-1", 30)
+            .unwrap()
+            .expect("exited");
+        assert_eq!(before, SessionStatus::Working);
+        assert_eq!(exited.status, SessionStatus::Interrupted);
+        assert_eq!(exited.ended_at, Some(30));
+        assert!(store
+            .set_running_status("session-1", SessionStatus::WaitingUser)
+            .unwrap()
+            .is_none());
         drop(store);
     }
 

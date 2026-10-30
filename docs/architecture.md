@@ -293,14 +293,20 @@ are in `apps/daemon/src/store.rs`; what is worth knowing is the reasoning behind
 
 The database carries a schema version (`PRAGMA user_version`, `SCHEMA_VERSION` in `store.rs`), and a new database gets the
 whole current schema at once. A file at the current version is used as is, and a file with no tables is initialized in
-place. Supported older versions upgrade in place: version 1 gains the nullable account display order in version 2,
-preserving the existing data. An older file with tables and no supported upgrade is moved aside as
+place. Supported older versions upgrade in place to the current version 3, preserving the existing data: version 1
+gains the nullable account display order (added in version 2), and versions 1 and 2 gain the sessions' private
+observation boundary of the agent-record collector (added in version 3). An older file with tables and no supported
+upgrade is moved aside as
 `<name>.superseded-<unix seconds>` (never deleted, with a warning logged) while a fresh database starts. A file of a
 newer version, or one that is not SQLite, is refused and left untouched. Each later schema change adds a step from
 version N to N+1.
 
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
+- A session row is never written back whole from a copy read earlier. Its fields change on tasks of their own — hooks,
+  renames, archives, the exit watcher, account switches — so each change writes only its own columns, and a change of
+  status that must not undo another is a conditional write: a status the agent reports never moves a session out of
+  `interrupted` or `archived`, and the process ending never moves it out of `archived`.
 - `Session.bound_to` is the id of a session's parent — a console session or a project coordinator of the same
   project — or unset for an independent session. `new_session` sets it to the creating session; `transfer_session`
   changes the parent; `bind_to_session` sets a parent for an independent project coordinator; and `release_session`

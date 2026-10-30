@@ -302,7 +302,6 @@ fn deliver_and_archive(
     session_id: &str,
     report: Report<'_>,
 ) -> Result<(String, Vec<Session>, Delivery)> {
-    let _removal = state.claim_session_removal();
     let session = state.session_record(session_id)?;
     let Some(bound_to) = &session.bound_to else {
         bail!("this session is unbound, so there is nobody to report to");
@@ -335,15 +334,9 @@ fn deliver_and_archive(
     }
     let finished = report.status == ReportStatus::Done
         && report.open_items.is_empty()
-        && coordinator::ensure_unlocked(
-            std::iter::once(session.clone()).chain(coordinator::team(state, &session)?),
-        )
-        .is_ok();
+        && unlocked_with_team(state, &session)?;
     if finished {
-        let unfinished: Vec<Session> = coordinator::bound_sessions(state, &session)?
-            .into_iter()
-            .filter(|bound| bound.status != SessionStatus::Archived)
-            .collect();
+        let unfinished = unfinished_bound(state, &session)?;
         if !unfinished.is_empty() {
             let named = coordinator::session_labels(&unfinished);
             bail!(
@@ -411,10 +404,27 @@ fn deliver_and_archive(
     // A report the owner has not read archives nothing: the session would be gone before its
     // owner, or the user, ever saw why.
     let held_back = finished && delivery == Delivery::Unsent;
-    let finished = finished && !held_back;
+    let mut finished = finished && !held_back;
+    let mut changed_meanwhile = false;
     let (left, archived) = if finished {
-        let left = cleanup::will_be_left(state, std::slice::from_ref(&session));
-        (left, coordinator::archive_session(state, session_id)?)
+        // Taken only once the report is delivered, which can wait out the owner's claim and its
+        // agent sending the message: held across that, it would refuse every change of a lock in
+        // the daemon. The checks that decided the archive are made again under it.
+        let _removal = state.claim_session_removal();
+        let session = state.session_record(session_id)?;
+        if session.status == SessionStatus::Archived {
+            // Archived by someone else while the report was delivered.
+            (Vec::new(), Vec::new())
+        } else if unlocked_with_team(state, &session)?
+            && unfinished_bound(state, &session)?.is_empty()
+        {
+            let left = cleanup::will_be_left(state, std::slice::from_ref(&session));
+            (left, coordinator::archive_session(state, session_id)?)
+        } else {
+            finished = false;
+            changed_meanwhile = true;
+            (Vec::new(), Vec::new())
+        }
     } else {
         (Vec::new(), Vec::new())
     };
@@ -452,6 +462,12 @@ fn deliver_and_archive(
             }
         ),
     };
+    if changed_meanwhile {
+        note.push_str(
+            " This session was not archived: while the report was delivered, it or a session under \
+             it was locked, or a session was bound to it that is not archived.",
+        );
+    }
     if !left.is_empty() {
         note.push_str(&format!(
             " These git branches and worktrees bound to this session will not be removed: {}.",
@@ -459,6 +475,23 @@ fn deliver_and_archive(
         ));
     }
     Ok((note, archived, delivery))
+}
+
+/// Whether neither `session` nor any session under it is locked, which a `done` report needs to
+/// archive it.
+fn unlocked_with_team(state: &Arc<AppState>, session: &Session) -> Result<bool> {
+    Ok(coordinator::ensure_unlocked(
+        std::iter::once(session.clone()).chain(coordinator::team(state, session)?),
+    )
+    .is_ok())
+}
+
+/// The sessions bound to `session` that are not archived, which refuse its `done` report.
+fn unfinished_bound(state: &Arc<AppState>, session: &Session) -> Result<Vec<Session>> {
+    Ok(coordinator::bound_sessions(state, session)?
+        .into_iter()
+        .filter(|bound| bound.status != SessionStatus::Archived)
+        .collect())
 }
 
 /// A failure to write into `owner`, worded from the reporter's side.
@@ -2078,6 +2111,41 @@ mod tests {
             SessionStatus::Idle
         );
         assert!(kept_texts(&state).is_empty());
+    }
+
+    /// A `done` report waiting for its owner's claim holds no claim on removals meanwhile, so the
+    /// user can lock the reporter while it waits; the lock is seen once the report is delivered,
+    /// and the reporter is left as it was, saying why.
+    #[test]
+    fn a_report_waiting_for_its_owner_leaves_the_locks_free_and_sees_a_lock_set_meanwhile() {
+        let (state, _dir) = interrupted_hub_state("reporting-lock-while-waiting");
+        state
+            .store
+            .update_session_lifecycle_if(
+                "worker",
+                SessionStatus::WaitingUser,
+                SessionStatus::Idle,
+                None,
+            )
+            .unwrap();
+        let claim = state.begin_launch("hub").unwrap();
+        let reporting = {
+            let state = state.clone();
+            std::thread::spawn(move || deliver_report(&state, "worker", done_report()))
+        };
+
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(!reporting.is_finished(), "the report waits for the claim");
+        state.set_session_locked("worker", true).expect("not busy");
+        drop(claim);
+        let note = reporting.join().unwrap().expect("delivered");
+
+        assert!(note.contains("was not archived"), "{note}");
+        assert_eq!(kept_texts(&state).len(), 1);
+        assert_eq!(
+            state.session_record("worker").unwrap().status,
+            SessionStatus::Idle
+        );
     }
 
     /// A report that waits for its owner's claim while a handoff moves the reporter to the session

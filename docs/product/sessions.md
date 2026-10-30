@@ -102,7 +102,10 @@ same step that writes the lock, so a lock never lands on a session archived a mo
 session is allowed, and a lock an archived session already carries keeps protecting it as described above.
 
 While an archive or deletion is in progress, changing any session's lock is refused with `session_lock_busy`; retry
-after that operation finishes. A failed lock change leaves the stored lock unchanged.
+after that operation finishes. A failed lock change leaves the stored lock unchanged. Only the archive or deletion
+itself counts: a `done` report still on its way to its owner, and `archive_self` while it judges which branches will
+stay, do not block lock changes, and a lock set meanwhile is seen before they archive (see "Automatic archiving" in
+`docs/product/reporting-to-owners.md` and "A session archiving itself" in `docs/product/hub-orchestration.md`).
 
 ## Archiving, interruption and resuming
 

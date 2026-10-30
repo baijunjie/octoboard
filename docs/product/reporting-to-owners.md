@@ -161,6 +161,12 @@ is locked, its report is delivered normally, including `done` with no open items
 unfinished-session refusal for a coordinator's completion report does not apply in that case. Unlocking does not
 retroactively archive it; a later qualifying report or an explicit archive must do so.
 
+Locks can be changed while a `done` report is on its way to its owner, and what decided the archive is checked again
+once the report has been accepted. If by then the reporting session or a session under it has been locked, or a
+session that is not archived has been bound to it, the report stays delivered but the session is not archived, and the
+answer adds that it was not archived because one of those changed while the report was delivered. A session someone
+else archived meanwhile is answered as archived.
+
 A report with `status: done` and **no** open items, with no lock blocking it, wraps the session up: once the report
 has been accepted for its owner — delivered, queued, or kept for an interrupted owner — the session's process is ended
 and the session is archived. The git branches it was working on, and the linked worktrees that have them checked out,
