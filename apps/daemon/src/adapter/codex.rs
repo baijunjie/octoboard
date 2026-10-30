@@ -260,6 +260,8 @@ impl AgentAdapter for CodexAdapter {
             args.push("resume".to_string());
             args.push(id.to_string());
         }
+        // A remote TUI cannot infer the workspace from its process's working directory.
+        args.extend(["--cd".to_string(), spec.cwd.to_string_lossy().into_owned()]);
 
         let command = spec.hook_script.to_string_lossy().into_owned();
         for event in HOOK_EVENTS {
@@ -711,6 +713,7 @@ mod tests {
         let private = plan.codex_server.as_ref().unwrap();
         assert_eq!(overrides(&private.args), overrides(&plan.args));
         assert_eq!(private.tui_args, plan.args);
+        assert_eq!(&private.tui_args[..2], ["--cd", spec.cwd.to_str().unwrap()]);
         assert_eq!(
             private.tui_args.last().map(String::as_str),
             Some("first task")
@@ -722,6 +725,10 @@ mod tests {
         assert_eq!(private.resume_thread.as_deref(), Some("thread-to-resume"));
         assert_eq!(private.tui_args, resumed.args);
         assert_eq!(&private.tui_args[..2], ["resume", "thread-to-resume"]);
+        assert_eq!(
+            &private.tui_args[2..4],
+            ["--cd", spec.cwd.to_str().unwrap()]
+        );
         fixture.agent_version = None;
         assert!(CodexAdapter
             .plan(&fixture.spec())
