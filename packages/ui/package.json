@@ -1,7 +1,6 @@
 {
   "name": "@octoboard/ui",
   "private": true,
-  "version": "0.1.0",
   "description": "Octoboard UI: a HeroUI React application that talks to octoboardd over WebSocket only, runs in a plain browser, and reaches native capabilities only through a platform adapter.",
   "type": "module",
   "scripts": {

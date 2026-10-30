@@ -7,9 +7,9 @@
 //
 //   pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path) [--dry-run]
 //
-// The version is the one in `tauri.conf.json`, which must be the one of the universal build in
-// `target/universal-apple-darwin/release/bundle`. The release's tag is created on the current commit, which has to
-// be pushed. `--dry-run` prints what would be published and calls nothing outside this machine.
+// The version is the one in `apps/desktop/package.json` (which `tauri.conf.json` reads), which must be the one of
+// the universal build in `target/universal-apple-darwin/release/bundle`. The release's tag is created on the current
+// commit, which has to be pushed. `--dry-run` prints what would be published and calls nothing outside this machine.
 //
 // The versioned release is created before the manifests are written, so a manifest never names an archive that
 // is not there yet. The build is universal, so one archive serves both platforms of the manifest. A run that
@@ -20,7 +20,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSyn
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { appDir, appVersion, findBundle, universalBundleDir as bundleDir } from "./bundle.mjs";
+import { appDir, appVersion, findBundle, repoRoot, universalBundleDir as bundleDir } from "./bundle.mjs";
 import {
   archiveName,
   buildManifest,
@@ -49,10 +49,9 @@ const notes = (options.notes ?? readFileSync(options["notes-file"], "utf8")).tri
 if (!notes) throw new Error("The release notes are empty.");
 const dryRun = options["dry-run"];
 
-const repoRoot = path.dirname(path.dirname(appDir));
-const config = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
+const { productName } = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
+const { version } = JSON.parse(readFileSync(path.join(appDir, "package.json"), "utf8"));
 const appConfig = JSON.parse(readFileSync(path.join(repoRoot, "config", "app.json"), "utf8"));
-const { version, productName } = config;
 const prerelease = isPrerelease(version);
 const repo = repositorySlug(appConfig.repositoryUrl);
 
@@ -65,10 +64,10 @@ const archive = findBundle(macosDir, ".app.tar.gz");
 const signatureFile = findBundle(macosDir, ".app.tar.gz.sig");
 const rebuild = "Run `pnpm release` again.";
 if (appVersion(app) !== version) {
-  throw new Error(`${app} is a ${appVersion(app)} build, and ${version} is the version in tauri.conf.json. ${rebuild}`);
+  throw new Error(`${app} is a ${appVersion(app)} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
 }
 if (!path.basename(dmg).includes(`_${version}_`)) {
-  throw new Error(`${dmg} is not a ${version} build, and ${version} is the version in tauri.conf.json. ${rebuild}`);
+  throw new Error(`${dmg} is not a ${version} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
 }
 for (const file of [archive, signatureFile]) {
   if (statSync(file).mtimeMs < statSync(app).mtimeMs) {
@@ -135,7 +134,8 @@ if (git("status", "--porcelain")) {
 const neverReplaced = (detail) =>
   new Error(
     `The release ${tag(version)} already exists ${detail}, and a published version is never replaced. Raise the ` +
-      "version in tauri.conf.json (and in the package and crate manifests), run `pnpm release` and publish again. " +
+      "version in apps/desktop/package.json and the root Cargo.toml, run `cargo check` so that Cargo.lock " +
+      "records it, commit and push, run `pnpm release` and publish again. " +
       `Delete the release (\`gh release delete ${tag(version)} --cleanup-tag\`) only if nobody has downloaded it.`,
   );
 

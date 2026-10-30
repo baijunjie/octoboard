@@ -1,15 +1,12 @@
-// What the desktop build scripts share around `tauri build`: running it (the Tauri CLI binary, its
-// environment and working directory), the universal target and the architectures it is made of, where its
-// output lands, the lookup for the bundle file it produced, the version an `.app` says it is, the check that it
-// carries the layered icon, the removal of the update archives a build leaves behind, and the arguments and
-// environment of a build that makes no update archive.
+// What the desktop build scripts share around `tauri build`: where things are, running it and the environment it
+// gets, and finding and checking what it produced.
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 export const appDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const repoRoot = path.dirname(path.dirname(appDir));
+export const repoRoot = path.dirname(path.dirname(appDir));
 // The Tauri crate is a member of the root Cargo workspace, so its bundle lands in the workspace's
 // own build directory at the repository root, not under `src-tauri/`.
 export const bundleDir = path.join(repoRoot, "target", "release", "bundle");
@@ -41,6 +38,22 @@ export function withoutUpdaterArtifacts(args, env) {
     Object.entries(env).filter(([name]) => !name.startsWith("TAURI_SIGNING_PRIVATE_KEY")),
   );
   return [["--config", JSON.stringify({ bundle: { createUpdaterArtifacts: false } }), ...args], kept];
+}
+
+// `env` without any `APPLE_*` variable, for a build that must never be notarized, or Developer ID-signed unless the
+// caller adds the identity back. Filtered here and handed to `execFileSync` as an explicit `env`, never by a shell:
+// stripping with `UNSET=$(...)` and `env $UNSET ...` is a no-op in zsh, which does not split an unquoted parameter.
+export function withoutAppleVariables(env) {
+  return Object.fromEntries(Object.entries(env).filter(([name]) => !name.startsWith("APPLE_")));
+}
+
+// Fails unless `bundle` was written after `startedAt`. An argument a caller does not know to refuse can leave a
+// build's output elsewhere, or produce none, with a bundle from an earlier build still sitting where it is looked
+// up; a check on that bundle would then pass on one this build did not make.
+export function assertProducedSince(bundle, startedAt) {
+  if (statSync(bundle).mtimeMs < startedAt) {
+    throw new Error(`${bundle} predates this build, so this build did not produce it; check the arguments given.`);
+  }
 }
 
 // The version the `.app` says it is (`CFBundleShortVersionString`), which is what the build was made from.

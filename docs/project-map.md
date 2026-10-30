@@ -51,7 +51,8 @@ Per-package commands are in that package's doc.
 - [`.github/workflows/`](../.github/workflows/) — CI: `release.yml` (builds, signs and publishes the desktop release
   when a version tag is pushed), `quality.yml` (application checks before release and on request) and
   `website.yml` (publishing the website to GitHub Pages); [`.github/release-notes.sh`](../.github/release-notes.sh)
-  validates a release tag and prints its notes for `release.yml`.
+  validates a release tag and prints its notes for `release.yml`; [`.github/dependabot.yml`](../.github/dependabot.yml)
+  configures Dependabot's updates of the actions the workflows use.
 - [`config/app.json`](../config/app.json) — the single source for product identity, repository and issue-report
   destinations, author and support contacts, website address, license and copyright year, read by the UI, the website
   and both Cargo crates' `build.rs`; the copies the toolchain requires elsewhere are checked against it.

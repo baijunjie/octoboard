@@ -86,7 +86,9 @@ A universal build needs both Rust targets, which `pnpm release` adds with `rustu
 nothing when they are there). For it `scripts/build-daemon.mjs`, which Tauri runs as `beforeBuildCommand`, sees
 `TAURI_ENV_TARGET_TRIPLE` and builds the daemon for both architectures into `src-tauri/binaries/` (`octoboardd-<triple>`
 for each, which each per-architecture build resolves, and their `lipo` join `octoboardd-universal-apple-darwin`, which
-the bundler wants). `pnpm build:app` and `pnpm install:macos` stay on the host's architecture.
+the bundler wants). `pnpm build:app` and `pnpm install:macos` stay on the host's architecture. A universal build
+compiles the daemon and the shell with `--locked`, so a `Cargo.lock` that no longer matches the manifests fails at the
+first compile instead of being rewritten under the release.
 
 Like `pnpm install:macos`, it needs Xcode 26's `actool` as the selected developer directory and fails when the `.app` lacks
 the layered app icon.
@@ -115,7 +117,8 @@ A channel with no manifest yet (the manifest's address answers 404) means "no up
 or a request that fails, is a failed check.
 
 `pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path) [--dry-run]`
-(`scripts/publish-release.mjs`) publishes what the last signed `pnpm release` built, for the version in `tauri.conf.json`:
+(`scripts/publish-release.mjs`) publishes what the last signed `pnpm release` built, for the application's version
+(see "Releasing by tag"):
 
 1. It refuses unless `gh` is logged in, the working tree is clean and the universal build in
    `target/universal-apple-darwin/release/bundle` is this version's, signed and notarized: the `.app` says it is
@@ -145,9 +148,11 @@ Pushing a tag `v<version>` runs `.github/workflows/release.yml`, which does the 
 application checks (`.github/workflows/quality.yml`) pass; the manual `pnpm release` and `publish-release` path above stays
 available. The workflow:
 
-1. `validate` runs `.github/release-notes.sh`: the tag must equal `v<version>` from `tauri.conf.json` and be an annotated
-   tag with a non-empty message. The message, minus any signature, is the release notes, which the in-app update notice
-   shows too. It also checks that the tagged commit is on `main` and that the repository secrets below are set.
+1. `validate` runs `.github/release-notes.sh`: the tag must equal `v<version>` from this directory's `package.json` and
+   be an annotated tag with a non-empty message. The message, minus any signature, is the release notes, which the
+   in-app update notice shows too. It also checks that the tagged commit is on `main`, that the repository secrets below
+   are set, and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would
+   otherwise find only after the checks.
 2. `checks` runs `quality.yml`; then `release` builds, signs and notarizes with `pnpm --filter @octoboard/desktop release`
    and publishes with `publish-release --notes-file`, using the workflow's own token for `gh`. The signing certificate and
    its intermediate go into a keychain that exists for that run only.
@@ -159,11 +164,19 @@ Repository secrets: `APPLE_CERTIFICATE` (base64 of the Developer ID Application 
 contents of the API key's `.p8`), `TAURI_SIGNING_PRIVATE_KEY` (the key's contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 (not set for a key without a password).
 
-To release: raise the version in `tauri.conf.json` (and in the package and crate manifests), push that commit to
-`main`, write the notes to a file, then `git tag -a v<version> --cleanup=whitespace -F <notes-file>` and
-`git push origin v<version>`. `--cleanup=whitespace` keeps the notes' Markdown heading lines, which the default
-`--cleanup=strip` drops; the file rather than the editor keeps git's `#` template lines out of them. Push tags one at a time: GitHub creates no push event
-when more than three tags are pushed at once.
+The application's version is kept in two places: `version` in this directory's `package.json`, which `tauri.conf.json`
+reads (its `version` is the path `../package.json`) and the release scripts read, and the workspace `version` in the
+root `Cargo.toml`, which both crates take (`version.workspace = true`) and the daemon reports in the configuration
+export and to the agent CLIs. The shell's build script (`src-tauri/build.rs`) fails every build and test of the shell
+when the two differ, when `tauri.conf.json` names a version of its own, or when the daemon's manifest does not take the
+workspace version.
+
+To release: raise the version in this directory's `package.json` and in the root `Cargo.toml`, run `cargo check` so
+that `Cargo.lock` records it, push that commit to `main`, write the notes to a file, then
+`git tag -a v<version> --cleanup=whitespace -F <notes-file>` and `git push origin v<version>`. `--cleanup=whitespace`
+keeps the notes' Markdown heading lines, which the default `--cleanup=strip` drops; the file rather than the editor
+keeps git's `#` template lines out of them. Push tags one at a time: GitHub creates no push event when more than three
+tags are pushed at once.
 
 When a run fails after `gh release create` but before the manifests are uploaded, re-running it rebuilds with a different
 signature, and `publish-release` refuses it. Delete the release but keep the tag (`gh release delete v<version>`, without
@@ -204,7 +217,7 @@ window theme, window show and window drag/zoom commands the UI uses.
 
 | Path | Role |
 |---|---|
-| `src-tauri/build.rs` | Exposes the app name and the repository address from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` and `OCTOBOARD_REPOSITORY_URL` (where the update manifests are), and fails the build when `productName` in `tauri.conf.json` or the workspace `repository` or `license` no longer matches that file |
+| `src-tauri/build.rs` | Exposes the app name and the repository address from the repo-root `config/app.json` as `OCTOBOARD_APP_NAME` and `OCTOBOARD_REPOSITORY_URL` (where the update manifests are), and fails the build when `productName` in `tauri.conf.json` or the workspace `repository` or `license` no longer matches that file, or when the application's version has two values (see "Releasing by tag") |
 | `src-tauri/src/lib.rs` | `run()`: builds the Tauri app, wires the menu, exit flow, close request and reopen event, and opens the main window (overlay titlebar, translucent material, hidden until the UI reveals it) |
 | `src-tauri/src/exit.rs` | The exit-confirmation flow: `ExitState`, the two exit-flow commands, `request_quit` and `request_quit_from_window`, and the `applicationShouldTerminate:` override for Dock Quit and system shutdown |
 | `src-tauri/src/background.rs` | Running in the background: `set_run_in_background`, the close button hiding the window when chosen, and `bring_to_front` |
@@ -229,5 +242,5 @@ window theme, window show and window drag/zoom commands the UI uses.
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon; no script regenerates it |
 | `scripts/build-daemon.mjs`, `scripts/build-app.mjs`, `scripts/install-app.mjs`, `scripts/release.mjs`, `scripts/publish-release.mjs` | The build, local-verification, local-install, release and release-publishing scripts above |
 | `scripts/release-manifest.mjs` | What `publish-release.mjs` decides without GitHub: manifests per version, asset names and addresses, the manifest itself (tested by `scripts/release-manifest.test.mjs`) |
-| `scripts/bundle.mjs` | Shared by the build scripts: `tauriBuild` (runs `tauri build` in this directory with `scripts/actool/` first on the `PATH`), where its output lands, `UNIVERSAL_TARGET` and `UNIVERSAL_ARCHITECTURES` (a release's target and the architectures it is made of), `universalBundleDir` (where a release's output lands), the lookup for the bundle it produced, `appVersion` (the version an `.app` says it is), `removeUpdateArchives` (clears earlier builds' update archives), `assertLayeredIcon` (checks the `.app` for the compiled layered icon) and `withoutUpdaterArtifacts` (the arguments and environment of a build that makes no update archive) |
+| `scripts/bundle.mjs` | Shared by the build scripts: `appDir` and `repoRoot`, `tauriBuild` (runs `tauri build` in this directory with `scripts/actool/` first on the `PATH`), where its output lands, `UNIVERSAL_TARGET` and `UNIVERSAL_ARCHITECTURES` (a release's target and the architectures it is made of), `universalBundleDir` (where a release's output lands), the lookup for the bundle it produced, `appVersion` (the version an `.app` says it is), `removeUpdateArchives` (clears earlier builds' update archives), `assertLayeredIcon` (checks the `.app` for the compiled layered icon), `assertProducedSince` (fails when a bundle predates the build that should have made it), `withoutUpdaterArtifacts` (the arguments and environment of a build that makes no update archive) and `withoutAppleVariables` (an environment without the `APPLE_*` variables, so a build is neither signed nor notarized) |
 | `scripts/actool/actool` | A shim for Xcode's `actool` that runs it with stdin on `/dev/null`, working around the Node-hosted Tauri CLI starting it with stdin closed; temporary, to be removed once the upstream fix ships |

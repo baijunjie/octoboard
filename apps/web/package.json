@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "node scripts/build-preview.mjs && nuxt dev",
     "build": "node scripts/build-preview.mjs && nuxt generate",
-    "generate": "node scripts/build-preview.mjs && nuxt generate",
     "preview": "node scripts/preview.mjs",
     "check:locales": "node scripts/check-locales.mjs",
     "generate:og-images": "python3 scripts/generate-og-images.py",

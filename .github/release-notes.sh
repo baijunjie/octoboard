@@ -1,14 +1,14 @@
 #!/bin/sh
 # Prints the release notes of the version tag $1, the message of the annotated tag without its signature, after
-# checking that the tag names the version in tauri.conf.json.
+# checking that the tag names the application's version, the one in apps/desktop/package.json.
 set -eu
 tag=$1
 
 # A checkout may hold the tag as a lightweight ref; the annotated tag object carries the message.
 git fetch --quiet --force origin "refs/tags/$tag:refs/tags/$tag"
-version=$(node -p 'require("./apps/desktop/src-tauri/tauri.conf.json").version')
+version=$(node -p 'require("./apps/desktop/package.json").version')
 if [ "$tag" != "v$version" ]; then
-  echo "::error::The tag $tag does not match the version $version in tauri.conf.json. Tag v$version instead." >&2
+  echo "::error::The tag $tag does not match the version $version in apps/desktop/package.json. Tag v$version instead." >&2
   exit 1
 fi
 if [ "$(git cat-file -t "refs/tags/$tag")" != "tag" ]; then

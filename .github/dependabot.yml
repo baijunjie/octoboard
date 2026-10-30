@@ -1,0 +1,16 @@
+# Proposes updates to the actions the workflows use. They are pinned to full commit SHAs with the version in a
+# trailing comment, and an update moves both.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      # Major versions come one by one, so one that needs changes does not hold back the rest.
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

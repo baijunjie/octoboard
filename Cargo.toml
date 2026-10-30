@@ -7,9 +7,13 @@
 resolver = "2"
 members = ["apps/daemon", "apps/desktop/src-tauri"]
 
+# The version is the application's and must equal the one in `apps/desktop/package.json`, which
+# `tauri.conf.json` reads; the desktop crate's build script fails the build when they differ.
+#
 # `rust-version` matches the toolchain pinned in `rust-toolchain.toml`: the project is built and
 # checked on that one release only, so it claims no older one.
 [workspace.package]
+version = "0.1.0"
 authors = ["BaiJunjie"]
 license = "MIT"
 repository = "https://github.com/baijunjie/octoboard"

@@ -1,6 +1,6 @@
 [package]
 name = "octoboard"
-version = "0.1.0"
+version.workspace = true
 description = "Octoboard desktop application: spawns octoboardd as a sidecar and hands its window the daemon's port. Talks to the daemon only over WebSocket — this crate carries no daemon traffic or session state."
 authors.workspace = true
 license.workspace = true
