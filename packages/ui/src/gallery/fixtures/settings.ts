@@ -385,9 +385,10 @@ function sharingAccounts(work: { share: boolean; incomplete?: boolean }, client:
 /** Work does not share and Client does, with no working session or sign-in in the way. */
 const sharingState = sharingAccounts({ share: false }, { share: true });
 
-/** `sharingState` with Work signed in under an email, for the heading of its settings. */
+/** `sharingState` with a renamed default account and Work signed in under an email, for its settings heading. */
 const sharingEmailState: Scenario["state"] = {
   ...sharingState,
+  settings: { ...sharingState.settings!, default_account_names: { claude: RENAMED_DEFAULT } },
   accountQuotas: [quotaOf("claude", "a-work", "pro", [quotaWindow("session", 38, 150), quotaWindow("weekly", 66, 2 * 24 * 60 + 5 * 60)], { email: WORK_EMAIL })],
 };
 
@@ -1303,9 +1304,18 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing the default configuration",
-    description: "Work's Account settings, opened from the second entry of its ⋮ menu, in a modal with no footer button: the body starts with the bold name Work, its muted email dev@work.octoboard.example on the line under it, with nothing after the name (plan, login state, config directory and usage are in the details), and under it Share default configuration as the row above Disable account: the label with its help button, the description under it, which says turning it on links the account's configuration and history to the default account's directory (it reads as already linked once the switch is on), and the switch at the end, off and usable, with nothing else under it. The help button holds what is shared and never shared, what turning sharing off does and what changing it does to idle sessions. The default account's settings dialog has no such row.",
+    description: "Work's Account settings, opened from the second entry of its ⋮ menu, in a modal with no footer button: the body starts with the bold name Work, its muted email dev@work.octoboard.example on the line under it, with nothing after the name (plan, login state, config directory and usage are in the details), and under it Share default configuration as the row above Disable account: the label with its help button, the description under it, which says turning it on links the account's configuration and history to Studio laptop's directory, with the renamed default account shown as a reference chip, and the switch at the end, off and usable, with nothing else under it. The help button holds what is shared and never shared, what turning sharing off does and what changing it does to idle sessions. The default account's settings dialog has no such row.",
     state: sharingEmailState,
     steps: accountSettings("Work"),
+  },
+  {
+    id: "settings-accounts-sharing-enabled",
+    group: GROUP,
+    category: "normal",
+    title: "Settings: account shares the renamed default account's configuration",
+    description: "Client's sharing switch is on. Its description says the configuration and history are already linked to Studio laptop's directory, using the renamed default account's actual name as a reference chip.",
+    state: sharingEmailState,
+    steps: accountSettings("Client"),
   },
   {
     id: "settings-accounts-sharing-in-use",

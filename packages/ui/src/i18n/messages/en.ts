@@ -2389,6 +2389,8 @@ export const en = {
   "settings.accounts.sharing.helpOff": "Once sharing is off, this account’s {appName} sessions take their conversations back; the rest stay in the default directory.",
   "settings.accounts.sharing.describeOff": "Turning this on links the account’s configuration and conversation history to the default account’s directory.",
   "settings.accounts.sharing.describeOn": "The account’s configuration and conversation history are linked to the default account’s directory.",
+  "settings.accounts.sharing.describeOffAccount": "Turning this on links the account’s configuration and conversation history to {name}’s directory.",
+  "settings.accounts.sharing.describeOnAccount": "The account’s configuration and conversation history are linked to {name}’s directory.",
   "settings.accounts.sharing.inUseSessions": {
     one: "Sharing cannot be changed while {count} of this account’s sessions is working. Wait for it to finish.",
     other: "Sharing cannot be changed while {count} of this account’s sessions are working. Wait for them to finish.",
