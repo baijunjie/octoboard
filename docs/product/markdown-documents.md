@@ -107,7 +107,9 @@ fetched: the reader sees its alt text, with no notice and no read. A relative im
 shown, in the formats the viewer already shows as images (see "What it shows" in `docs/product/file-viewer.md`), no
 wider than the document. An SVG is shown as an image, so its scripts never run and nothing it refers to is fetched, as
 for an SVG opened for itself. Its alt text is its accessible name. Until the read has answered, the alt text is what is
-shown.
+shown. Images are read one at a time across the window, whatever document they belong to, in the order they ask, so a
+later image keeps showing its alt text while earlier reads are out. An image that goes — its document closed, or its
+address changed — gives up its read, whether the read is still waiting or already out.
 
 **Diagrams.** A fence whose info word is exactly `mermaid` is a diagram, in both light and dark, using the same ink and
 paper as highlighted code (see "What follows the choice" in `docs/product/appearance.md`). Its accessible name is the
