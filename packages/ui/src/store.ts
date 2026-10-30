@@ -409,6 +409,24 @@ function withoutRemovedProjectTerminals(terminals: Map<string, ShellTerminal>, p
   return new Map(Array.from(terminals).filter(([, terminal]) => projects.has(terminal.project_id)));
 }
 
+/** `state` without the sessions in `ids` and what is held for them: their pages, the pages they had
+ * deleted, and any confirmation, request or account switch of theirs, none of which anyone can act
+ * on once the session is gone. The daemon announces a session's deletion through one event for the
+ * session itself, and through only the console's or the project's when that takes its sessions
+ * with it, so each of those cascades goes through here. */
+function withoutSessions(state: State, ids: ReadonlySet<string>): State {
+  const kept = ([id]: [string, unknown]) => !ids.has(id);
+  return {
+    ...state,
+    sessions: new Map(Array.from(state.sessions).filter(kept)),
+    pages: new Map(Array.from(state.pages).filter(kept)),
+    deletedPages: new Map(Array.from(state.deletedPages).filter(kept)),
+    trustPrompts: state.trustPrompts.filter((p) => !ids.has(p.session)),
+    sessionRequests: state.sessionRequests.filter((r) => !ids.has(r.session)),
+    daemonSwitching: new Set(Array.from(state.daemonSwitching).filter((id) => !ids.has(id))),
+  };
+}
+
 function reducer(state: State, action: Action): State {
   switch (action.kind) {
     case "connection":
@@ -488,22 +506,15 @@ function reducer(state: State, action: Action): State {
           const projects = new Map(
             Array.from(state.projects).filter(([, p]) => p.console_id !== event.console),
           );
-          const sessions = new Map(
-            Array.from(state.sessions).filter(([, s]) => s.console_id !== event.console),
-          );
-          // A page goes with the session that pushed it, so with its console's.
-          const pages = new Map(
-            Array.from(state.pages).filter(([consoleSessionId]) => sessions.has(consoleSessionId)),
+          const removed = new Set(
+            Array.from(state.sessions.values()).filter((s) => s.console_id === event.console).map((s) => s.id),
           );
           // Same cascade one level further down: a git status for a project the console took
           // with it has nothing left to be about.
           const gitStatuses = new Map(
             Array.from(state.gitStatuses).filter(([projectId]) => projects.has(projectId)),
           );
-          const deletedPages = new Map(
-            Array.from(state.deletedPages).filter(([consoleSessionId]) => sessions.has(consoleSessionId)),
-          );
-          return { ...state, consoles, projects, sessions, pages, deletedPages, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
+          return { ...withoutSessions(state, removed), consoles, projects, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
         }
         case "session_opened": {
           // A title or status broadcast can arrive before this launch-time reply. Keep the
@@ -528,13 +539,13 @@ function reducer(state: State, action: Action): State {
           const projects = new Map(state.projects);
           projects.delete(event.project);
           // Same cascade as a deleted console, one level down.
-          const sessions = new Map(
-            Array.from(state.sessions).filter(([, s]) => s.project_id !== event.project),
+          const removed = new Set(
+            Array.from(state.sessions.values()).filter((s) => s.project_id === event.project).map((s) => s.id),
           );
           // The daemon sends no event for this; see `gitStatuses` above.
           const gitStatuses = new Map(state.gitStatuses);
           gitStatuses.delete(event.project);
-          return { ...state, projects, sessions, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
+          return { ...withoutSessions(state, removed), projects, gitStatuses, shellTerminals: withoutRemovedProjectTerminals(state.shellTerminals, projects) };
         }
         case "session_upserted": {
           // A session's status broadcasts repeat what the store holds as often as they change it.
@@ -556,25 +567,8 @@ function reducer(state: State, action: Action): State {
             : state.trustPrompts.filter((p) => p.session !== event.session.id);
           return { ...state, sessions, trustPrompts, daemonSwitching };
         }
-        case "session_deleted": {
-          const sessions = new Map(state.sessions);
-          sessions.delete(event.session);
-          // The daemon takes a console session's pages with it, and says so only through this event.
-          const pages = new Map(state.pages);
-          pages.delete(event.session);
-          const deletedPages = new Map(state.deletedPages);
-          deletedPages.delete(event.session);
-          // A session deleted while it ran leaves no confirmation or request that anyone can answer.
-          return {
-            ...state,
-            sessions,
-            daemonSwitching: withMember(state.daemonSwitching, event.session, false),
-            pages,
-            deletedPages,
-            trustPrompts: state.trustPrompts.filter((p) => p.session !== event.session),
-            sessionRequests: state.sessionRequests.filter((r) => r.session !== event.session),
-          };
-        }
+        case "session_deleted":
+          return withoutSessions(state, new Set([event.session]));
         case "trust_prompt": {
           if (state.trustPrompts.some((p) => p.session === event.session)) return state;
           // The daemon sends only a confirmation nobody has the permission for, judging a trusted
