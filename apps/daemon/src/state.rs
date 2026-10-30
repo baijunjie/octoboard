@@ -2540,9 +2540,22 @@ impl AppState {
             }
         }
         if matches!(outcome, Drain::Uncertain(_)) && still_running {
-            self.broadcast(Event::from_error(None, &anyhow::anyhow!(
-                "The native message queue for session {id} did not confirm accepting a message. It may already be queued and will not be sent again. Later messages are held for at most three seconds or until another prompt is submitted; check the conversation before retrying manually."
-            )));
+            self.broadcast(
+                Notice::new(
+                    notice_code::MESSAGE_ACCEPTANCE_UNCONFIRMED,
+                    format!(
+                        "{} did not confirm that it accepted a message {} wrote into this \
+                         session. The message may already be queued and will not be sent \
+                         again. Later messages are held for at most three seconds or until \
+                         another prompt is sent; check the conversation before deciding whether \
+                         to send it again.",
+                        live.agent.label(),
+                        crate::APP_NAME
+                    ),
+                    &[("agent", live.agent.label())],
+                )
+                .about(id),
+            );
         }
         if outcome == Drain::Lost {
             // Nobody is waiting on a return value for most of these drains, and a message Octoboard

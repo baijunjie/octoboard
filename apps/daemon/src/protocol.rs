@@ -4080,6 +4080,9 @@ pub mod error_code {
     pub const GIT_FAILED: &str = "git_failed";
     /// The system terminal could not be opened at a project's directory. `params` names `detail`.
     pub const TERMINAL_UNAVAILABLE: &str = "terminal_unavailable";
+    /// A terminal's connection ended before input someone may have typed was written into it.
+    /// `params` carries the `detail` of the write that failed, when one did.
+    pub const TERMINAL_INPUT_LOST: &str = "terminal_input_lost";
     /// The system file manager could not open a project directory. `params` names `detail`.
     pub const DIRECTORY_UNAVAILABLE: &str = "directory_unavailable";
     pub const PATH_OPEN_FAILED: &str = "path_open_failed";
@@ -4215,6 +4218,9 @@ pub mod notice_code {
     /// box; nothing more is written into the session until a prompt is sent. `params` names the
     /// `agent`.
     pub const MESSAGE_NOT_SENT: &str = "message_not_sent";
+    /// The session's agent did not confirm accepting a message written into its own queue. The
+    /// message may already be queued, and is not sent again. `params` names the `agent`.
+    pub const MESSAGE_ACCEPTANCE_UNCONFIRMED: &str = "message_acceptance_unconfirmed";
     /// A message written into the session was thrown away by a dialog its agent raised as the
     /// message went in; it is back at the front of the queue and is written again once the dialog
     /// has been answered. `params` names the `agent`.

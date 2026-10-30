@@ -161,7 +161,9 @@ connection to the daemon is open. Pressing Reconnect starts the attempts over an
 A terminal whose attempts are spent is tried again by Reconnect, or by itself when the application re-reads the
 daemon's whole state on a new connection to the daemon. Each tab reconnects on its own, shown or hidden; only the shown
 tab's state is told to assistive technology, as it begins, and, for a tab already reconnecting or disconnected, about
-1.5 seconds after the tab is shown. A reconnect in the background never moves keyboard focus.
+1.5 seconds after the tab is shown. A reconnect in the background never moves keyboard focus. Typing a dropped
+connection had not yet written into the shell is reported as for a session's terminal, naming the shell terminal (see
+"Reconnecting" in `docs/product/session-terminal.md`).
 
 Keyboard focus and Reconnect:
 

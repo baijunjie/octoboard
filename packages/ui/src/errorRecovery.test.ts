@@ -24,7 +24,7 @@ it.each([
   ["git_failed", "gitFailure"], ["git_clone_failed", "gitFailure"], ["git_push_failed", "gitFailure"],
   ["git_switch_failed", "gitSwitchFailure"], ["git_restore_failed", "gitRestoreFailure"], ["git_operation_in_progress", "none"], ["push_in_progress", "none"],
   ["terminal_unavailable", "openTerminal"], ["directory_unavailable", "openFileManager"], ["path_open_failed", "openDefaultApplication"],
-  ["sharing_resume_failed", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
+  ["sharing_resume_failed", "none"], ["message_acceptance_unconfirmed", "none"], ["terminal_input_lost", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {
   const error = new DaemonRequestError("localized text", code, { session: "s1" });
   expect(errorPresentation(error)).toBe(error);
@@ -52,6 +52,13 @@ it.each([
   const error = new DaemonRequestError("localized text", "source_unavailable", { path: "/p", detail: "x", ...(cause && { cause }) });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
 });
+
+it.each<Record<string, string>>([{}, { session: "s1" }, { shell_terminal: "t1" }, { session: "s1", detail: "write failed" }, { shell_terminal: "t1", detail: "write failed" }])(
+  "gives a terminal_input_lost of %j no remedy of the group's own",
+  (params) => {
+    expect(classifyError(new DaemonRequestError("text", "terminal_input_lost", params))).toEqual({ kind: "actionable", recovery: "none" });
+  },
+);
 
 it("keeps internal, protocol and unknown failures unexpected unless an environmental cause is known", () => {
   for (const code of ["internal_error", "unreadable_request", "field_required", "conflicting_fields", "a_future_code"]) {

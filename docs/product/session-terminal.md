@@ -180,6 +180,15 @@ answers, yet **the program gets one answer per query**:
   daemon's whole state, as it does on each new connection to the daemon (see "Losing the daemon connection" in
   `docs/product/application-lifecycle.md`). Each of these starts the five attempts over. An update to the session's
   status does not try it again.
+- **Typing a connection had not yet passed on is reported, not retried.** When a terminal's connection ends, for any
+  reason, before everything typed into it over that connection has been written into the program — or a write into the
+  program failed part way — every client is sent the error `terminal_input_lost`, with no request id. It carries
+  `session` (a session's terminal) or `shell_terminal` (a shell terminal of the Terminal panel), the terminal's id, and `detail`, the failed write's own message, left out when no
+  write failed. Answers to the program's queries left unwritten do not raise it. What was typed is not written again,
+  so the program's input line may hold only part of it. The window shows an error alert titled "Terminal input not
+  accepted", naming the session (or the shell terminal) whose terminal disconnected before it had taken everything
+  typed into it, and telling the user to check the terminal's input line before continuing; `detail` is under Error
+  details. The alert is a known failure with no remedy beyond its own text, not an unexpected one.
 
 ## Loading
 

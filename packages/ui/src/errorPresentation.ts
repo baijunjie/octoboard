@@ -72,7 +72,7 @@ export function hasCodeParams(error: { code: string; params: MessageParams }): b
 }
 
 /** The session notices that are failures, shown as an error alert rather than a toast. */
-const FAILURE_NOTICES = new Set(["launch_failed", "account_switch_automatically_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped", "sharing_messages_dropped", "sharing_resume_failed", "account_sharing_repair_failed", "message_not_sent"]);
+const FAILURE_NOTICES = new Set(["launch_failed", "account_switch_automatically_failed", "trust_answer_failed", "queued_messages_dropped", "handoff_messages_dropped", "sharing_messages_dropped", "sharing_resume_failed", "account_sharing_repair_failed", "message_not_sent", "message_acceptance_unconfirmed"]);
 
 /** How a session notice is shown: a failure as an error alert, anything else as a toast. A trust entry not carried
  * over is a notice, Grok Build only asking again the next time, unless it carries what the system said (a
