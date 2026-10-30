@@ -325,6 +325,13 @@ and is skipped by the arrow keys. When the browser is opened on a path that does
 directory not created yet), it lists the nearest ancestor that does exist instead (a `~/` path goes no higher than the
 home directory), so there is always somewhere to navigate from; any other failure is reported as described next.
 
+A listing can be held up (a volume's access prompt left unanswered) and answer after one asked for later. Only the
+newest answer is taken: an older listing, or the failure of the listing made as the browser opens, that arrives after a
+newer listing has been shown is dropped. A navigation that failed changes nothing, so an older listing arriving after it
+is still shown. Once a listing is shown, the path field takes the directory it resolved to (`~` becoming the home
+directory) only when it is the newest navigation asked for; otherwise the field keeps what it holds, such as the path
+the user typed. The directory can be selected only while the path field names the directory listed.
+
 A listing can fail, and that is a normal path rather than an edge case: a packaged application is granted file access
 per volume by macOS, and the user may decline the prompt or leave it unanswered. The reason names the path and gives
 the hint that per-volume access has to be granted. Where the failure is shown depends on who asked for the listing:
@@ -336,7 +343,7 @@ the hint that per-volume access has to be granted. Where the failure is shown de
 - **A navigation the user starts** — **Go**, **Try again**, opening an entry or the parent-directory entry — that
   fails opens the error alert titled "Could not open the directory" (see "The error alert" in
   `docs/product/error-alerts.md`), whether a listing stands or
-  not, and the browser stays as it was: it keeps the listing it had, so it can be navigated from as before, or, with
+  not, and even when a newer listing has been shown since; the browser stays as it was: it keeps the listing it had, so it can be navigated from as before, or, with
   none yet, the alert of the listing made as it opened.
 
 The same failure can surface when a session is opened: a project directory the daemon cannot reach is reported as such

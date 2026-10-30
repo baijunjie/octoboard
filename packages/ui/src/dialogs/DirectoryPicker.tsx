@@ -78,29 +78,46 @@ export function DirectoryPicker({
   // taking a second press, and the failure stays shown until the listing answers.
   const [retrying, setRetrying] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const load = async (targetPath: string, initial = false) => {
+  // Numbers the listings in the order they are asked for, and holds the number of the latest one
+  // whose answer was taken. One can be held for long (a volume's file-access prompt left unanswered)
+  // and answer after a newer one, and taking it then would show, and let "Select this directory"
+  // pick, a directory the user has already left. A newer one that failed changed nothing, so an
+  // older answer arriving after it is still taken. The opening listing's walk up to an ancestor
+  // keeps the opening listing's number, so it never takes the place of the user's own navigation.
+  const loads = useRef({ asked: 0, taken: 0 });
+  const load = async (targetPath: string, initial = false, call = ++loads.current.asked) => {
+    const take = () => {
+      if (call < loads.current.taken) return false;
+      loads.current.taken = call;
+      return true;
+    };
     try {
       const event = (await request({ type: "list_dir", path: targetPath })) as Extract<Event, { type: "dir_listing" }>;
+      if (!take()) return;
       setFailure(undefined);
       setResolvedPath(event.path);
       setEntries(event.entries);
       // Keeps the field in sync with what was actually resolved (e.g. `~` becoming the real home
       // directory), which is what lets "Select this directory" below simply compare the two rather
-      // than needing its own notion of "has the user edited this since the last listing".
-      setPath(event.path);
+      // than needing its own notion of "has the user edited this since the last listing". A listing
+      // the user has asked past since (one that failed or is still out) leaves the field with what
+      // they asked for.
+      if (call === loads.current.asked) setPath(event.path);
     } catch (err) {
+      // A navigation the user started (Go, Try again, an entry) is a failure of their own action, with or without a
+      // listing yet: it is reported apart from the picker, which keeps its listing or its first-listing Alert as they are,
+      // and reported even when a newer listing has been taken since.
+      if (!initial) {
+        reportError(err, undefined, undefined, undefined, t("directoryPicker.navigationFailedTitle"));
+        return;
+      }
+      if (!take()) return;
       // A starting path that does not exist yet (a default clone directory not yet created) would
       // leave nothing to navigate from, so the first listing walks up to the nearest ancestor that
       // lists. Only that failure does: a declined volume prompt or an unreadable directory is
       // shown as it is.
-      if (initial && targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
-        return load(ancestorOf(targetPath), true);
-      }
-      // A navigation the user started (Go, Try again, an entry) is a failure of their own action, with or without a
-      // listing yet: it is reported apart from the picker, which keeps its listing or its first-listing Alert as they are.
-      if (!initial) {
-        reportError(err, undefined, undefined, undefined, t("directoryPicker.navigationFailedTitle"));
-        return;
+      if (targetPath !== "~" && err instanceof DaemonRequestError && err.code === "path_not_found") {
+        return load(ancestorOf(targetPath), true, call);
       }
       setFailure({ target: targetPath, error: errorPresentation(err) });
     }

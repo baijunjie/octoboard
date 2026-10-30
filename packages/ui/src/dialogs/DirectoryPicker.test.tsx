@@ -9,6 +9,7 @@ import { errorAlerts } from "../errorAlerts";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { DirectoryPicker } from "./DirectoryPicker";
+import { DaemonRequestError } from "../daemon-client";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -228,4 +229,76 @@ it("shows an empty listing at the root as the only option, with no parent row", 
   expect(options[0]!.textContent).toBe("No subdirectories");
   expect(options[0]!.getAttribute("aria-disabled")).toBe("true");
   expect(options[0]!.querySelector('[data-slot="empty-state"] svg')).not.toBeNull();
+});
+
+// A listing held up (a volume's file-access prompt left unanswered) can answer after one the user asked for later.
+it("keeps the latest listing when an earlier one answers after it", async () => {
+  let answerFirst!: (event: unknown) => void;
+  const request = vi.fn()
+    .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
+    .mockResolvedValue({ type: "dir_listing", path: "/later", entries: [] });
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const onPick = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" initialPath="/slow" onPick={onPick} onClose={() => {}} /></DaemonProvider>));
+  await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
+  await act(async () => answerFirst({ type: "dir_listing", path: "/slow", entries: [] }));
+  expect((document.querySelector('[aria-label="Directory path"]') as HTMLInputElement).value).toBe("/later");
+  await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Select this directory")!.click());
+  expect(onPick).toHaveBeenCalledWith("/later");
+});
+
+it("takes an earlier listing that answers after a later one failed, which changed nothing, keeping the path asked for", async () => {
+  const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
+  onTestFinished(() => report.mockRestore());
+  let answerFirst!: (event: unknown) => void;
+  const request = vi.fn()
+    .mockReturnValueOnce(new Promise((resolve) => (answerFirst = resolve)))
+    .mockRejectedValue(new Error("Permission denied"));
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" initialPath="/slow" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
+  const field = document.querySelector('[aria-label="Directory path"]') as HTMLInputElement;
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "/denied");
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
+  expect(report).toHaveBeenCalledOnce();
+  await act(async () => answerFirst({ type: "dir_listing", path: "/slow", entries: [{ name: "listed-late", path: "/slow/listed-late", is_git_repo: false }] }));
+  expect(document.body.textContent).toContain("listed-late");
+  expect(field.value).toBe("/denied");
+  expect([...document.querySelectorAll("button")].find((button) => button.textContent === "Select this directory")?.hasAttribute("disabled")).toBe(true);
+});
+
+it("keeps the user's navigation when the opening listing's walk up to an ancestor answers first", async () => {
+  let failFirst!: (error: unknown) => void;
+  let answerGo!: (event: unknown) => void;
+  const request = vi.fn()
+    .mockReturnValueOnce(new Promise((_, reject) => (failFirst = reject)))
+    .mockReturnValueOnce(new Promise((resolve) => (answerGo = resolve)))
+    .mockResolvedValue({ type: "dir_listing", path: "/", entries: [] });
+  const daemon = { store: createStateStore(), request } as unknown as Daemon;
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  await act(async () => root.render(<DaemonProvider value={daemon}><DirectoryPicker title="Choose directory" initialPath="/missing" onPick={() => {}} onClose={() => {}} /></DaemonProvider>));
+  await act(async () => [...document.querySelectorAll("button")].find((button) => button.textContent === "Go")!.click());
+  await act(async () => failFirst(new DaemonRequestError("missing", "path_not_found", {})));
+  expect(request).toHaveBeenCalledTimes(3);
+  await act(async () => answerGo({ type: "dir_listing", path: "/later", entries: [] }));
+  expect((document.querySelector('[aria-label="Directory path"]') as HTMLInputElement).value).toBe("/later");
 });
