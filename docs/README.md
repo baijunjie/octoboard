@@ -225,8 +225,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
   oracles, positive controls and out-of-band proof.
 - [Raising an error alert in the UI](memory/raising-an-error-alert-in-the-ui.md) — passing a title and raising
   UI-detected failures as `ActionableError`.
-- [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — selectors, effect dependencies and event
-  ordering when reading daemon state.
+- [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — selectors, effect dependencies, polling
+  deduplication and event ordering when reading daemon state.
 - [Running git from the daemon](memory/running-git-from-the-daemon.md) — building `git` commands in the daemon:
   environment, deadlines, flags and test fixtures.
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — bounding the window's
