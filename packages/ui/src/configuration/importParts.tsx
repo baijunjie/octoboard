@@ -181,7 +181,7 @@ export function FailureReason({ failure, withoutSummary = false }: { failure: Im
     <div className="flex flex-col items-start gap-1.5 text-sm">
       {!withoutSummary && <p className="min-w-0 [overflow-wrap:anywhere]" dir="auto">{failureNode(failure, "summary")}</p>}
       {remedy && <p className="min-w-0 text-app-muted [overflow-wrap:anywhere]" dir="auto">{remedy}</p>}
-      {details && <DetailsButton placement="bottom">{details}</DetailsButton>}
+      {details && <DetailsButton>{details}</DetailsButton>}
     </div>
   );
 }
