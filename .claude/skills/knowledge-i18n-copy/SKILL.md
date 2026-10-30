@@ -570,6 +570,10 @@ are now wrong or it leaves out one thing, the meaning has changed.
   - An error alert's opening sentence, the cause "Errors" asks of the body, is optional: it is there only for what the
     title leaves unexplained and never says the title again in other words; when the title says it all, the body
     starts with the remedy (see "The error alert" in `docs/product/error-alerts.md`).
+  - An error alert states the error and its cause, and nothing unrelated to it: no guidance that assumes what the
+    user wants to do instead (removing without the option they chose, choosing another folder), and no step that
+    does not follow from the cause itself. A confirmation, by contrast, may say how to proceed, such as what has to
+    happen first for its disabled confirm button to become available.
   - An error with a way out plus Cancel makes the way out the default action.
   - A load failure also carries a warning icon; its wording is the one "Errors" above already gives.
   - Only an icon-only button swaps its icon for a spinner while in progress.
