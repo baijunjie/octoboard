@@ -4,13 +4,13 @@ import { expect, it } from "vitest";
 import { DaemonRequestError } from "./daemon-client";
 import { errorAlerts } from "./errorAlerts";
 import { errorPresentation } from "./errorPresentation";
-import { classifyError, pathLinkRecovery } from "./errorRecovery";
+import { classifyError, modelChangeRecovery, pathLinkRecovery } from "./errorRecovery";
 import { ActionableError } from "./actionableError";
 import { hasErrorRemedy } from "./components/errorPartPresence";
 
 it.each([
   ["path_not_found", "path"], ["source_unavailable", "sourceGone"], ["path_already_exists", "pathExists"], ["session_locked", "unlock"],
-  ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"], ["model_change_did_not_come_up", "launchSetting"], ["model_change_did_not_stop", "stopProcess"],
+  ["account_name_taken", "uniqueName"], ["invalid_launch_setting", "launchSetting"], ["model_change_did_not_come_up", "modelChange"], ["model_change_did_not_stop", "stopProcess"],
   ["connection_closed", "connection"], ["not_a_git_repository", "repository"],
   ["conversation_unresumable", "unresumable"], ["codex_unarchive_failed", "unarchive"],
   ["session_branches_not_removed", "sessionBranches"], ["project_branches_not_determined", "projectBranches"],
@@ -150,6 +150,15 @@ it.each([
 ])("gives a failed automatic switch whose cause is %s a remedy without the operation to retry", (_name, detail, recovery) => {
   const error = new DaemonRequestError("fallback", "account_switch_automatically_failed", { agent: "Claude Code", from: "A", account: "B", reason: detail, reason_code: "internal_error", detail });
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
+});
+
+it("sends a launch setting the agent does not offer back to Change model when the change came from there, and leaves other failures alone", () => {
+  const unoffered = new DaemonRequestError("no", "invalid_launch_setting", { field: "model", value: "x", agent: "Codex" });
+  expect(modelChangeRecovery(unoffered)).toBe("changeModelSetting");
+  expect(classifyError(unoffered, modelChangeRecovery(unoffered))).toEqual({ kind: "actionable", recovery: "changeModelSetting" });
+  expect(classifyError(unoffered)).toEqual({ kind: "actionable", recovery: "launchSetting" });
+  expect(modelChangeRecovery(new DaemonRequestError("no", "model_change_did_not_stop", {}))).toBeUndefined();
+  expect(modelChangeRecovery(new Error("x"))).toBeUndefined();
 });
 
 it("keeps a missing path's remedy and an operating-system cause over the remedy of the application that failed to open", () => {

@@ -780,7 +780,7 @@ describe("the fixture daemon's model changes", () => {
 
   it("records the values on a running session and forgets what its records showed", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await expect(daemon.request({ type: "set_session_model", session: "s", model: "opus" })).resolves.toEqual({ type: "ack" });
+    await expect(daemon.request({ type: "set_session_model", session: "s", model: "opus" })).resolves.toEqual({ type: "session_model_set", session: "s", outcome: "restarted", continued: true });
     expect(daemon.store.getState().sessions.get("s")).toEqual({ ...forgotten, model: "opus", effort: "medium" });
     await daemon.request({ type: "set_session_model", session: "s", effort: " " });
     expect(daemon.store.getState().sessions.get("s")).toMatchObject({ model: "opus", effort: null });
@@ -788,10 +788,10 @@ describe("the fixture daemon's model changes", () => {
 
   it("only records the values of an interrupted session, and leaves one that already has them alone", async () => {
     const daemon = createFixtureDaemon(scenario);
-    await daemon.request({ type: "set_session_model", session: "down", model: "opus", effort: "high" });
+    await expect(daemon.request({ type: "set_session_model", session: "down", model: "opus", effort: "high" })).resolves.toEqual({ type: "session_model_set", session: "down", outcome: "recorded" });
     expect(daemon.store.getState().sessions.get("down")).toEqual({ ...interrupted, model: "opus", effort: "high" });
     const before = daemon.store.getState().sessions;
-    await daemon.request({ type: "set_session_model", session: "s", model: "sonnet", effort: "medium" });
+    await expect(daemon.request({ type: "set_session_model", session: "s", model: "sonnet", effort: "medium" })).resolves.toEqual({ type: "session_model_set", session: "s", outcome: "unchanged" });
     expect(daemon.store.getState().sessions).toBe(before);
   });
 

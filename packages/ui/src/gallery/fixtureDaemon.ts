@@ -575,10 +575,10 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           // A value left out keeps what the session has; a blank one leaves the choice to the agent.
           const chosen = (value: string | null | undefined, kept: string | null | undefined) => (value === undefined ? kept : value?.trim() || null);
           const [model, effort] = [chosen(body.model, session.model), chosen(body.effort, session.effort)];
-          if (model === session.model && effort === session.effort) return { type: "ack" };
+          if (model === session.model && effort === session.effort) return { type: "session_model_set", session: session.id, outcome: "unchanged" };
           if (session.status === "interrupted") {
             applyDaemonEvent(store, { type: "session_upserted", session: { ...session, model, effort } });
-            return { type: "ack" };
+            return { type: "session_model_set", session: session.id, outcome: "recorded" };
           }
           // The daemon shows the session starting from the moment the restart is decided; once the process is down the
           // model and effort its records showed are forgotten.
@@ -595,7 +595,7 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
             return fail(reply);
           }
           applyDaemonEvent(store, { type: "session_upserted", session: { ...forgotten, status: "idle", model, effort } });
-          return { type: "ack" };
+          return { type: "session_model_set", session: session.id, outcome: "restarted", continued: true };
         }
         case "hand_off_session": {
           const current = store.getState();

@@ -1,5 +1,8 @@
 import { runAccountSwitchBatch } from "./accountSwitchBatch";
-import { StatusAnnouncer } from "./components/StatusAnnouncer";
+import { AttendedStatusAnnouncer } from "./components/AttendedStatusAnnouncer";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "./components/StatusAnnouncer";
+import { useAccessibilityHidden } from "./components/useAccessibilityHidden";
+import { useWindowAttended } from "./components/useWindowAttended";
 import type { PlainMessageKey } from "./i18n/catalog";
 import { isolate } from "./i18n/isolate";
 import { noAgentState, pickableAgents } from "./agents";
@@ -10,9 +13,10 @@ import { FadeOverflow } from "./components/FadeOverflow";
 import { GitBranch } from "lucide-react";
 import type { ActionMenuEntry } from "./components/ActionMenu";
 import { displayWirePath } from "./wirePath";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { errorPresentation } from "./errorPresentation";
+import { modelChangeRecovery } from "./errorRecovery";
 import { flushSync } from "react-dom";
 
 import { ArchiveLayer } from "./archive/ArchiveLayer";
@@ -43,6 +47,7 @@ import type { ModelEdits } from "./dialogs/SessionModelDialog";
 import { useConfirmIncompleteLaunch } from "./dialogs/useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { forcibleBranches, inspectSessionBranches, lockedWorktrees } from "./dialogs/useSessionBranches";
+import { errorAlerts } from "./errorAlerts";
 import { textDirection } from "./i18n/languages";
 import { useCurrentLanguage, useT } from "./i18n/react";
 import { useOctoboardTheme } from "./theme";
@@ -76,6 +81,7 @@ import { useProjectReportSession } from "./report/useProjectReportSession";
 import { LoginPageOpener } from "./settings/AccountLogin";
 import { SettingsDialog } from "./settings/SettingsDialog";
 import { registerSettingsLauncher } from "./settings/settingsLauncher";
+import { registerSessionModelLauncher } from "./dialogs/sessionModelLauncher";
 import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { updateNoticeKind } from "./updates/noticeKind";
 import { UpdateNotice } from "./updates/UpdateNotice";
@@ -106,8 +112,9 @@ const NO_SESSIONS: Session[] = [];
 /** What the open drawer is made of: the sidebar and, below the `phone` breakpoint, the rail inside its card. */
 const DRAWER_CONTROLS = "[data-pane=sidebar], [data-region=rail]";
 
-/** How long the result of a batch of account switches stays in the status region. */
-const SWITCH_ANNOUNCEMENT_MS = 10_000;
+/** How long the result of a batch of account switches or of a model change stays in the status region once it can be
+ * heard, after the focus-move wait that `AttendedStatusAnnouncer` adds. */
+const ANNOUNCEMENT_MS = 10_000;
 
 export function App(): React.ReactElement {
   const t = useT();
@@ -151,9 +158,8 @@ export function App(): React.ReactElement {
   const [archiveRestore, setArchiveRestore] = useState<ArchiveViewState>();
   // Sessions whose `resume_session` is in flight, for the terminal's loading state.
   const [resumingIds, setResumingIds] = useState<ReadonlySet<string>>(new Set());
-  // What the window says once a batch of account switches is done, for assistive technology.
-  const [switchAnnouncement, setSwitchAnnouncement] = useState<string>();
-  const switchAnnouncementTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // What the window says once a batch of account switches or a model change is done, for assistive technology.
+  const [announcement, setAnnouncement] = useState<string>();
 
   const terminalRef = useRef<TerminalPaneHandle>(null);
   const welcomeRef = useRef<WelcomeScreenHandle>(null);
@@ -513,6 +519,18 @@ export function App(): React.ReactElement {
     if (!settingsOpen) settingsFromDrawer.current = false;
   }, [settingsOpen]);
 
+  // An announcement waits while a modal covers the status region (it hides what lies outside it, and closing it moves
+  // focus) or the window is not attended, and counts its lifetime only once it can be heard.
+  const attended = useWindowAttended();
+  const alertOpen = useSyncExternalStore(errorAlerts.subscribe, errorAlerts.getSnapshot).length > 0;
+  const { ref: announcementRef, hidden: announcementCovered } = useAccessibilityHidden();
+  const announcementHidden = otherModalOpen || settingsOpen || alertOpen || announcementCovered;
+  useEffect(() => {
+    if (announcement === undefined || announcementHidden || !attended) return;
+    const timer = setTimeout(() => setAnnouncement(undefined), AFTER_FOCUS_MOVE_DELAY_MS + ANNOUNCEMENT_MS);
+    return () => clearTimeout(timer);
+  }, [announcement, announcementHidden, attended]);
+
   // A dormant session can be resumed through several controls, so overlapping requests for the
   // same session share one in-flight guard.
   const inFlightRef = useRef<Set<string>>(new Set());
@@ -546,6 +564,12 @@ export function App(): React.ReactElement {
   const resumeFromDialog = (sessionId: string): Promise<void> =>
     runOnceRejecting(inFlightRef.current, `resume:${sessionId}`, () => startResume(sessionId));
 
+  /** Hands `text` to the window's status region, replacing one that has not been said yet. The region says it
+   * once the window is attended and no modal covers it, a focus-move wait after that (`AttendedStatusAnnouncer`),
+   * so a result that arrives as a dialog closes is not lost to the focus move; it is emptied again later, so that an
+   * identical result of a later change is written afresh. */
+  const announce = (text: string): void => setAnnouncement(text);
+
   /** Switches sessions to an account in the background, the dialog that asked being gone by then.
    * Each session shows as switching its account until its turn is over (see
    * `runAccountSwitchBatch`), so its terminal says so instead of offering a Resume that would race
@@ -557,23 +581,32 @@ export function App(): React.ReactElement {
         request({ type: "switch_session_account", session: sessionId, account: target, terminal_appearance: appearance }).then(() => undefined),
       onFinished: ({ switched, failed }) => {
         // The dialog that asked is gone, and with it anything that would say the outcome. A batch with
-        // failures is told by its error alert alone. The text is cleared again so that an identical
-        // result of a later batch is written afresh. A switch takes seconds, so this is never within the
+        // failures is told by its error alert alone. A switch takes seconds, so this is never within the
         // focus move of the dialog closing.
         if (failed > 0 || switched === 0) return;
-        clearTimeout(switchAnnouncementTimer.current);
-        setSwitchAnnouncement(t("dialog.switchAccount.done", { count: switched, account: isolate(accountName) }));
-        switchAnnouncementTimer.current = setTimeout(() => setSwitchAnnouncement(undefined), SWITCH_ANNOUNCEMENT_MS);
+        announce(t("dialog.switchAccount.done", { count: switched, account: isolate(accountName) }));
       },
     });
   };
 
   /** Changes a session's model and reasoning effort in the background, the dialog that asked being gone
    * by then. The daemon shows the session as starting while it restarts; a refusal or a failure,
-   * which can come seconds later, is an error alert. */
+   * which can come seconds later, is an error alert, and success is announced as the reply's `outcome`
+   * tells: a restart, or values only recorded for the next resume. A session that had the values already
+   * changed nothing, so nothing is announced. A model the agent does not offer points back to Change model,
+   * not to launch settings. */
   const changeSessionModel = (sessionId: string, edits: ModelEdits): void => {
     request({ type: "set_session_model", session: sessionId, ...edits, terminal_appearance: appearance })
-      .catch((err: unknown) => toastError(errorPresentation(err as Error), sessionId, t("dialog.sessionModel.failedTitle")));
+      .then((reply) => {
+        // Named as it is now: it may have been renamed while the change was out, and is gone if deleted since.
+        const session = store.getState().sessions.get(sessionId);
+        if (!session || reply.type !== "session_model_set") return;
+        const params = { session: isolate(sessionDisplayTitle(t, session)) };
+        // A restart is answered only once the relaunch has settled, long past the dialog's focus move; a recorded
+        // change is answered at once, and `announce` holds both back past the focus move.
+        if (reply.outcome === "recorded") announce(t("dialog.sessionModel.doneRecorded", params));
+        else if (reply.outcome === "restarted") announce(t("dialog.sessionModel.done", params));
+      }, (err: unknown) => toastError(errorPresentation(err as Error), sessionId, t("dialog.sessionModel.failedTitle"), modelChangeRecovery(err)));
   };
 
   const openConsoleSession = (console_: Console) => openDialog({ kind: "new-console-session", console: console_ });
@@ -1041,6 +1074,13 @@ export function App(): React.ReactElement {
   const stableSetPinned = useStableHandler(setPinned);
   const stableOpenSettingsAt = useStableHandler(openSettingsAt);
   useEffect(() => registerSettingsLauncher(stableOpenSettingsAt), [stableOpenSettingsAt]);
+  // The error alert's Change model button; it opens nothing over another dialog or Settings, which would lose what the
+  // user has typed there.
+  const openSessionModel = useStableHandler((sessionId: string) => {
+    const session = store.getState().sessions.get(sessionId);
+    if (session && !(otherModalOpen || settingsOpen)) openDialog({ kind: "session-model", session });
+  });
+  useEffect(() => registerSessionModelLauncher(openSessionModel), [openSessionModel]);
   // Where focus goes once the last alert or pending question, or Settings with no dialog under it, closes with nothing to
   // give it back to.
   const focusAfterModal = useStableHandler(() => focusAfterLoss(focusTerminal));
@@ -1308,7 +1348,9 @@ export function App(): React.ReactElement {
       <LoginPageOpener />
       <UpdateNotice focusTerminal={focusTerminal} />
       <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
-      <StatusAnnouncer text={switchAnnouncement} />
+      <div ref={announcementRef}>
+        <AttendedStatusAnnouncer text={announcementHidden ? undefined : announcement} />
+      </div>
       {settingsOpen && <SettingsDialog navigation={settingsNavigation} onClose={closeSettings} />}
       {dialogRequest && (
         <RequestedDialog

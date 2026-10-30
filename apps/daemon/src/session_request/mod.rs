@@ -73,7 +73,9 @@ use crate::protocol::{
 use crate::reporting::{self, WhenBlocked};
 use crate::state::AppState;
 
-pub(crate) use change::{ask_to_change, run_unasked, Change, Edits, Perform, Performed};
+pub(crate) use change::{
+    ask_to_change, run_to_the_end, run_unasked, Change, Edits, Perform, Performed,
+};
 pub(crate) use outcome::branch_outcome;
 use outcome::{
     approval_wording, outcome_note, record_outcome_note, resume_outcome_note, resume_result,

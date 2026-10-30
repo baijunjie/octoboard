@@ -1,13 +1,17 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { createRoot } from "react-dom/client";
 import * as reactAria from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { DaemonRequestError } from "./daemon-client";
 import { ErrorAlerts } from "./dialogs/ErrorAlerts";
 import { errorAlerts } from "./errorAlerts";
 import { App } from "./App";
 import { setProjectBrowserMode, useProjectBrowserState } from "./browser/browserState";
+import { AFTER_FOCUS_MOVE_DELAY_MS } from "./components/StatusAnnouncer";
 import { mountForTooltip } from "./components/tooltipTestSupport";
+import { windowAttention } from "./components/windowTestSupport";
 import { consoleOf, projectOf, sessionOf, snapshotState } from "./gallery/fixtures/builders";
 import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
@@ -15,6 +19,7 @@ import type { PlatformAdapter } from "./platform";
 import type { Project } from "./protocol";
 import { createStateStore, DaemonProvider, type Daemon } from "./store";
 import { ThemeProvider } from "./theme";
+import { FileViewer } from "./viewer/FileViewer";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 // Each test mounts the whole App, which a machine under load can take longer than the default 5s for.
@@ -596,4 +601,159 @@ it("opens the project repository through the platform and reports an opening fai
   await press("GitLab");
   expect(errorAlerts.getSnapshot().some((failure) => failure.message === "The link did not open in a browser. Its address is shown below.")).toBe(true);
   expect(document.querySelector('[role="alertdialog"] p[dir=ltr]')?.textContent).toBe("https://gitlab.com/team/app");
+});
+
+/** Opens Change model on the idle session `s-archive`, which the daemon lists two models for, and picks Sonnet. */
+async function pickSonnetInChangeModel(answer: (body: { type: string }) => unknown) {
+  const mounted = mountApp(false, undefined, true);
+  vi.mocked(mounted.daemon.request).mockImplementation((async (body: { type: string; agent?: string }) => {
+    if (body.type === "list_agent_models") {
+      return { type: "agent_models", agent: body.agent, account: null, unavailable: null, models: [
+        { id: "opus", name: "Opus", efforts: ["low", "high"] },
+        { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
+      ] };
+    }
+    return answer(body);
+  }) as Daemon["request"]);
+  await press(`Actions for session ${isolate("Fix bug")}`);
+  await press("Change model");
+  const model = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) =>
+    button.getAttribute("aria-labelledby")?.split(" ").some((id) => document.getElementById(id)?.textContent === "Model"))!;
+  await act(async () => model.click());
+  await act(async () => Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent === "Sonnet")!.click());
+  // From here only the announcement's waits are timed by the test.
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  onTestFinished(() => { vi.useRealTimers(); });
+  await act(async () => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((button) => button.textContent === "Change model")!.click());
+  return mounted;
+}
+
+const said = () => document.querySelector('[role="status"]:not(:empty)')?.textContent;
+const passTime = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+
+it("sends only the edited values when a model is changed, and announces the restart", async () => {
+  windowAttention();
+  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "restarted", continued: true }));
+  expect(sentOf(daemon, "set_session_model")).toEqual([[
+    { type: "set_session_model", session: "s-archive", model: "sonnet", terminal_appearance: expect.stringMatching(/^(light|dark)$/) },
+  ]]);
+  expect(said()).toBeUndefined();
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  expect(said()).toContain("restarted with its new model settings");
+  expect(daemon.toastError).not.toHaveBeenCalled();
+});
+
+it("announces values recorded for the next resume after the focus move", async () => {
+  windowAttention();
+  await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "recorded" }));
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  expect(said()).toBeUndefined();
+  await passTime(200);
+  expect(said()).toContain("will use its new model settings when it is resumed");
+});
+
+it("names the session by its title at the time of the reply", async () => {
+  windowAttention();
+  let reply!: () => void;
+  const { daemon } = await pickSonnetInChangeModel(() => new Promise((resolve) => {
+    reply = () => resolve({ type: "session_model_set", session: "s-archive", outcome: "recorded" });
+  }));
+  await act(async () => daemon.store.setState((state) => ({
+    sessions: new Map(state.sessions).set("s-archive", { ...state.sessions.get("s-archive")!, title: "Renamed" }),
+  })));
+  await act(async () => reply());
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  expect(said()).toContain("Renamed");
+});
+
+it("holds an announcement while the window is not attended, then says it after the focus-move wait", async () => {
+  const attend = windowAttention();
+  attend(false);
+  await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "recorded" }));
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(said()).toBeUndefined();
+  attend(true);
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  expect(said()).toBeUndefined();
+  await passTime(200);
+  expect(said()).toContain("will use its new model settings when it is resumed");
+});
+
+it("holds an announcement while a modal is open over the window", async () => {
+  windowAttention();
+  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "recorded" }));
+  await act(async () => errorAlerts.report({ message: "Something else failed.", recovery: "none" }));
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS * 3);
+  expect(said()).toBeUndefined();
+  await act(async () => errorAlerts.acknowledge());
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  expect(said()).toContain("will use its new model settings when it is resumed");
+  expect(daemon.toastError).not.toHaveBeenCalled();
+});
+
+it("announces nothing when the session had the model settings already", async () => {
+  windowAttention();
+  const { daemon } = await pickSonnetInChangeModel(() => ({ type: "session_model_set", session: "s-archive", outcome: "unchanged" }));
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS + 100);
+  expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
+  expect(daemon.toastError).not.toHaveBeenCalled();
+});
+
+it("points a launch setting the agent does not offer back to Change model", async () => {
+  const error = new DaemonRequestError("No.", "invalid_launch_setting", { field: "model", value: "sonnet", agent: "Codex" });
+  const { daemon } = await pickSonnetInChangeModel((body) => {
+    if (body.type === "set_session_model") throw error;
+    return { type: "ack" };
+  });
+  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(error, "s-archive", "Could not change the model", "changeModelSetting");
+});
+
+it("opens Change model for the session from the alert of a launch setting the agent does not offer", async () => {
+  const { daemon } = mountApp(false, undefined, true);
+  await act(async () => errorAlerts.report({
+    message: "No.", session: "s-archive", title: "Could not change the model", recovery: "changeModelSetting",
+  }));
+  const open = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((button) => button.textContent === "Change model")!;
+  await act(async () => open().click());
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Change model");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain("The session Fix bug will run");
+  expect(daemon.toastError).not.toHaveBeenCalled();
+});
+
+it("reports a refused model change under its own title for the session", async () => {
+  const error = new DaemonRequestError("Did not stop.", "model_change_did_not_stop", { session: "s-archive" });
+  const { daemon } = await pickSonnetInChangeModel((body) => {
+    if (body.type === "set_session_model") throw error;
+    return { type: "ack" };
+  });
+  expect(daemon.toastError).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ code: "model_change_did_not_stop" }), "s-archive", "Could not change the model", undefined);
+  expect(document.querySelector('[role="status"]:not(:empty)')).toBeNull();
+});
+
+it("keeps a reply unheard and unexpired while a FileViewer covers the status region", async () => {
+  windowAttention();
+  let reply!: () => void;
+  const { daemon, container: app } = await pickSonnetInChangeModel(() => new Promise((resolve) => {
+    reply = () => resolve({ type: "session_model_set", session: "s-archive", outcome: "recorded" });
+  }));
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const close = () => root.render(null);
+  await act(async () => root.render(
+    <PlatformProvider value={{ kind: "browser" }}><ThemeProvider><DaemonProvider value={daemon}>
+      <FileViewer subject={{ key: "file", path: "test.bin", content: { state: "file", body: { kind: "binary", size: 1 } } }} onClose={close} />
+    </DaemonProvider></ThemeProvider></PlatformProvider>,
+  ));
+  const status = Array.from(app.querySelectorAll('[role="status"]')).at(-1)!;
+  expect(status.closest('[inert], [aria-hidden="true"]')).not.toBeNull();
+  await act(async () => reply());
+  await passTime(20_000);
+  expect(status.textContent).toBe("");
+  await act(async () => close());
+  await passTime(AFTER_FOCUS_MOVE_DELAY_MS - 100);
+  expect(status.textContent).toBe("");
+  await passTime(200);
+  expect(status.textContent).toContain("will use its new model settings when it is resumed");
 });

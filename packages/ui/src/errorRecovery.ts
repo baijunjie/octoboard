@@ -8,7 +8,7 @@ export type ErrorRecovery =
   | "unlock" | "stopSessions" | "wait" | "trust" | "conversation" | "session" | "ownerGone"
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
-  | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
+  | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
@@ -31,8 +31,10 @@ const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   existingProject: ["all_projects_already_added"],
   pathExists: ["path_already_exists"],
   uniqueName: ["account_name_taken"],
-  // A relaunch that ends at once with a new model most likely does not take that model.
-  launchSetting: ["invalid_launch_setting", "model_change_did_not_come_up"],
+  launchSetting: ["invalid_launch_setting"],
+  // A relaunch that ends at once with a new model most likely does not take that model, and leaves the session not
+  // running.
+  modelChange: ["model_change_did_not_come_up"],
   accountDirectory: ["config_dir_taken"],
   access: ["directory_unreadable"],
   // A read of the project's files the system denied, where there is no folder to choose instead and nothing is written.
@@ -261,6 +263,13 @@ const GONE = new Set(["file_not_found", "path_not_found", "path_not_a_directory"
  * which keeps its own. */
 export function hostPathRecovery(error: unknown): ErrorRecovery | undefined {
   return error instanceof DaemonRequestError && GONE.has(error.code) ? "hostPathGone" : undefined;
+}
+
+/** The remedy for a failed Change model whose model or reasoning effort the agent does not offer: Change model is where
+ * to pick another, not the launch settings of a new session that the code's own remedy points to. Undefined for any
+ * other failure, which keeps its own. */
+export function modelChangeRecovery(error: unknown): ErrorRecovery | undefined {
+  return error instanceof DaemonRequestError && error.code === "invalid_launch_setting" ? "changeModelSetting" : undefined;
 }
 
 /** The remedy for a failed click on a path link, at either step of it (reading the file for the viewer, or opening the

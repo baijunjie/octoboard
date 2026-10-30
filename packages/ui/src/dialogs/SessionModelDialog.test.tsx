@@ -16,7 +16,7 @@ vi.mock("../theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }))
 const parentConsole = consoleOf("c-1", "Main");
 const project = { ...projectOf("p-1", parentConsole.id, "Search API"), claude_session_model: "opus", claude_session_effort: "high" };
 
-async function mount(session: Session, models: "pending" | "unavailable" | "listed" = "listed") {
+async function mount(session: Session, models: "pending" | "unavailable" | "empty" | "listed" = "listed") {
   const store = createStateStore({
     consoles: new Map([[parentConsole.id, parentConsole]]),
     projects: new Map([[project.id, project]]),
@@ -27,10 +27,11 @@ async function mount(session: Session, models: "pending" | "unavailable" | "list
     if (models === "pending") return new Promise<never>(() => {});
     return { type: "agent_models", agent: body.agent, account: body.account ?? null, ...(models === "unavailable"
       ? { models: [], unavailable: { code: "models_binary_not_found", params: { binary: "claude" }, message: "claude was not found" } }
-      : { models: [
-        { id: "opus", name: "Opus", efforts: ["low", "high"] },
-        { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
-      ], unavailable: null }) };
+      : models === "empty" ? { models: [], unavailable: null }
+        : { models: [
+          { id: "opus", name: "Opus", efforts: ["low", "high"] },
+          { id: "sonnet", name: "Sonnet", efforts: ["low", "high"] },
+        ], unavailable: null }) };
   });
   const daemon = { store, request, toastError: vi.fn(), toastNotice: vi.fn(), onToast: () => () => {}, dismissTrustPrompt: () => {}, reconnect: () => {}, terminalUrl: () => "" } as unknown as Daemon;
   const onClose = vi.fn();
@@ -87,7 +88,7 @@ it("starts on what the session runs with, waits for a change, and sends only wha
   expect(document.body.textContent).toContain("It restarts to take them and keeps its conversation.");
   expect(picker("Model").textContent).toContain("Opus");
   expect(picker("Reasoning effort").textContent).toContain("low");
-  expect(confirm().disabled || confirm().getAttribute("aria-disabled") === "true" || confirm().hasAttribute("data-disabled")).toBe(true);
+  expect(confirm().disabled).toBe(true);
 
   await act(async () => picker("Model").click());
   await act(async () => options().find((option) => option.textContent === "Sonnet")!.click());
@@ -120,7 +121,7 @@ it("does not offer Confirm while the session is starting", async () => {
   const { onChangeModel } = await mount(session);
 
   await act(async () => picker("Model").querySelector<HTMLElement>('[data-slot="select-clear-button"]')!.click());
-  expect(confirm().disabled || confirm().getAttribute("aria-disabled") === "true" || confirm().hasAttribute("data-disabled")).toBe(true);
+  expect(confirm().disabled).toBe(true);
   await act(async () => confirm().click());
   expect(onChangeModel).not.toHaveBeenCalled();
 });
@@ -146,4 +147,133 @@ it("leaves a stored value unmarked when the list could not be read, the warning 
   expect(picker("Model").textContent).toContain("retired");
   expect(picker("Model").textContent).not.toContain("Not in the list");
   expect(picker("Reasoning effort").textContent).not.toContain("Not in the list");
+});
+
+it("marks nothing as missing from a list that came back empty", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { model: "retired", effort: "ultra" });
+  await mount(session, "empty");
+  expect(picker("Model").textContent).toContain("retired");
+  expect(picker("Model").textContent).not.toContain("Not in the list");
+  expect(picker("Reasoning effort").textContent).not.toContain("Not in the list");
+});
+
+const setSession = (store: ReturnType<typeof createStateStore>, session: Session, extra: Partial<Session>) =>
+  act(async () => store.setState({ sessions: new Map([[session.id, { ...session, ...extra }]]) }));
+
+it("follows a change made to the session while it is open, for the fields the user has not edited", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
+  const { onChangeModel, store } = await mount(session);
+  await act(async () => picker("Reasoning effort").click());
+  await act(async () => options().find((option) => option.textContent === "high")!.click());
+
+  await setSession(store, session, { model: "sonnet", effort: "low" });
+  expect(picker("Model").textContent).toContain("Sonnet");
+  // The user's own edit stays.
+  expect(picker("Reasoning effort").textContent).toContain("high");
+  await act(async () => confirm().click());
+  expect(onChangeModel).toHaveBeenCalledExactlyOnceWith("s-1", { effort: "high" });
+});
+
+it("recomputes what changed against the session's latest values", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
+  const { store } = await mount(session);
+  await act(async () => picker("Reasoning effort").click());
+  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  expect(confirm().disabled).toBe(false);
+
+  // Another window made the same change: nothing is left to do.
+  await setSession(store, session, { effort: "high" });
+  expect(confirm().disabled).toBe(true);
+});
+
+it.each([
+  ["starting", { status: "starting" }, "The session is starting…"],
+  ["switching its account", { switching_account: true }, "The session is switching accounts…"],
+] as const)("keeps Confirm disabled when the session becomes %s while the dialog is open", async (_name, change, explanation) => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
+  const { onChangeModel, store } = await mount(session);
+  await act(async () => picker("Reasoning effort").click());
+  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  expect(confirm().disabled).toBe(false);
+
+  await setSession(store, session, change);
+  expect(document.querySelector(".alert")?.textContent).toContain(explanation);
+  expect(document.body.textContent).toContain("Wait for it to finish before changing the model settings.");
+  expect(confirm().disabled).toBe(true);
+  await act(async () => confirm().click());
+  expect(onChangeModel).not.toHaveBeenCalled();
+});
+
+it("follows the session again for a field picked back to the session's value", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
+  const { onChangeModel, store } = await mount(session);
+  await act(async () => picker("Reasoning effort").click());
+  await act(async () => options().find((option) => option.textContent === "high")!.click());
+  await act(async () => picker("Reasoning effort").click());
+  await act(async () => options().find((option) => option.textContent === "low")!.click());
+
+  await setSession(store, session, { effort: "high" });
+  expect(picker("Reasoning effort").textContent).toContain("high");
+  expect(confirm().disabled).toBe(true);
+  await act(async () => confirm().click());
+  expect(onChangeModel).not.toHaveBeenCalled();
+});
+
+const failureModal = () => document.querySelector('[role="alertdialog"]');
+const acknowledge = () => buttons().find((button) => button.textContent === "OK")!;
+
+it("turns into a failure modal when the session is archived while the dialog is open", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working", { effort: "low" });
+  const { onChangeModel, onClose, store } = await mount(session);
+  await act(async () => picker("Reasoning effort").click());
+  await act(async () => options().find((option) => option.textContent === "high")!.click());
+
+  await setSession(store, session, { status: "archived" });
+  expect(failureModal()?.textContent).toContain("Cannot change the model");
+  expect(failureModal()?.querySelectorAll("[data-inline-reference]")).toHaveLength(1);
+  expect(failureModal()?.querySelector("[data-inline-reference]")?.textContent).toBe("Fix search");
+  expect(failureModal()?.textContent).toContain("was archived, so its model cannot be changed. Reopen it to change its model and reasoning effort.");
+  expect(buttons().some((button) => button.textContent === "Change model")).toBe(false);
+  expect(onChangeModel).not.toHaveBeenCalled();
+  await act(async () => acknowledge().click());
+  expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("turns into a failure modal when the session is deleted while the dialog is open, even if nothing was edited", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle", { has_conversation: false });
+  const { onChangeModel, store } = await mount(session);
+  expect(failureModal()).toBeNull();
+
+  await act(async () => store.setState({ sessions: new Map() }));
+  expect(failureModal()?.textContent).toContain("no longer exists, so its model cannot be changed.");
+  expect(failureModal()?.querySelectorAll("[data-inline-reference]")).toHaveLength(1);
+  expect(failureModal()?.querySelector("[data-inline-reference]")?.textContent).toBe("Fix search");
+  expect(buttons().some((button) => button.textContent === "Change model")).toBe(false);
+  expect(onChangeModel).not.toHaveBeenCalled();
+});
+
+it("says a running session with no conversation yet starts a fresh one", async () => {
+  await mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle", { has_conversation: false }));
+  expect(document.body.textContent).toContain("with a fresh conversation, as nothing has been typed into it yet");
+  expect(document.body.textContent).not.toContain("keeps its conversation");
+});
+
+it("says restarting a session waiting for the user ends the prompt it is showing", async () => {
+  await mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "waiting_user"));
+  expect(document.body.textContent).toContain("It is waiting for you, and restarting ends the prompt it is showing.");
+});
+
+it("does not mention a prompt for a session that is not waiting for the user", async () => {
+  await mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "working"));
+  expect(document.body.textContent).not.toContain("It is waiting for you, and restarting ends the prompt it is showing.");
+});
+
+it("freezes the latest session name when a renamed session is deleted", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const { store } = await mount(session);
+  await setSession(store, session, { title: "New title" });
+  expect(document.querySelector('[role="dialog"] [data-inline-reference]')?.textContent).toBe("New title");
+  await act(async () => store.setState({ sessions: new Map() }));
+  expect(failureModal()?.querySelector("[data-inline-reference]")?.textContent).toBe("New title");
+  expect(failureModal()?.textContent).not.toContain("Fix search");
 });

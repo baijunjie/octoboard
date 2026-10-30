@@ -166,6 +166,10 @@ pub struct AppState {
     /// and when (`crate::auto_switch`), so that it does not move the session straight back to one.
     left_for_limit: Mutex<HashMap<String, Vec<AccountLeft>>>,
     pub(crate) quota_recovery: crate::auto_switch::RecoveryState,
+    /// How long a change of a session's model waits for the process it ended to be recorded down,
+    /// in place of the switch's generous wait (`coordinator::SWITCH_STOP_TIMEOUT`).
+    #[cfg(test)]
+    pub(crate) model_change_stop_timeout: Mutex<Option<std::time::Duration>>,
     /// The generation each session's record watch (`crate::record_watch`, run for Claude Code by
     /// `crate::transcript` and for Codex by `crate::rollout`) is currently on.
     /// Starting a watch records a fresh value here; the watch keeps polling only while its own
@@ -675,6 +679,8 @@ impl AppState {
             turns: Mutex::new(HashMap::new()),
             left_for_limit: Mutex::new(HashMap::new()),
             quota_recovery: Default::default(),
+            #[cfg(test)]
+            model_change_stop_timeout: Mutex::new(None),
             request_hands: Mutex::new(HashMap::new()),
             background_tasks: Mutex::new(HashMap::new()),
             default_efforts: Mutex::new(HashMap::new()),
@@ -914,9 +920,10 @@ impl AppState {
 
     /// Marks a session whose claim from [`Self::begin_switch`] the caller holds as restarted for a
     /// change of its model: until the claim is released every client is shown it `starting` (see
-    /// [`Self::shown_status`]), so nothing offers to resume it while its process is down.
+    /// [`Self::shown_status`]), so nothing offers to resume it while its process is down. Marked
+    /// once the change has the claim, so a change that is then refused shows it starting only
+    /// for as long as the checks take.
     pub fn mark_model_change(&self, id: &str) {
-        self.quota_recovery.cancel(id);
         let marked = {
             let mut live = self.live.write().expect("live sessions lock poisoned");
             live.switching.contains(id) && live.model_changes.insert(id.to_string())
@@ -924,6 +931,16 @@ impl AppState {
         if marked {
             self.publish_session_by_id(id);
         }
+    }
+
+    /// How long a change of a session's model waits for the process it ended to be recorded down:
+    /// [`crate::coordinator::SWITCH_STOP_TIMEOUT`], shortened by a test.
+    pub(crate) fn model_change_stop_timeout(&self) -> std::time::Duration {
+        #[cfg(test)]
+        if let Some(shorter) = *self.model_change_stop_timeout.lock().unwrap() {
+            return shorter;
+        }
+        crate::coordinator::SWITCH_STOP_TIMEOUT
     }
 
     /// Whether a change of its model is restarting the session (see [`Self::mark_model_change`]).
@@ -1308,10 +1325,25 @@ impl AppState {
         self.status_when(session, LiveSession::waits_for_user_beyond_usage_limit)
     }
 
+    /// [`Self::status_for_switch`] as a change of the session's model judges it, which holds the
+    /// session's claim and may have it shown starting already: the status the session would be
+    /// shown without that change.
+    pub(crate) fn status_for_model_change(&self, session: &Session) -> SessionStatus {
+        self.status_beside_model_change(session, LiveSession::waits_for_user_beyond_usage_limit)
+    }
+
     fn status_when(&self, session: &Session, waits: fn(&LiveSession) -> bool) -> SessionStatus {
         if session.status != SessionStatus::Archived && self.is_changing_model(&session.id) {
             return SessionStatus::Starting;
         }
+        self.status_beside_model_change(session, waits)
+    }
+
+    fn status_beside_model_change(
+        &self,
+        session: &Session,
+        waits: fn(&LiveSession) -> bool,
+    ) -> SessionStatus {
         let waiting = !session.status.is_dormant()
             && self
                 .live_session(&session.id)

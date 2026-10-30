@@ -250,7 +250,8 @@ const CONSOLE_SESSION_INSTRUCTIONS: &str = "# Octoboard console session\n\
            cut off, so send it the next step with `instruct_session` — unless the result's `note` \
            says it was sent a prompt to continue, which you must not repeat. An interrupted \
            session takes them when it is next resumed. A session waiting for the user is \
-           refused: the restart would end the prompt only they can answer.\n\
+           refused: the restart would end the prompt only they can answer. A usage-limit dialog \
+           alone does not count: the restart ends it and continues the turn it stopped.\n\
          - `transfer_session` passes a session of yours to another parent session — another \
          console session of this console, or a project session of that session's project that \
          can own sessions — without asking the user. A coordinator with child sessions, \

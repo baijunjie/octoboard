@@ -106,6 +106,25 @@ impl RecoveryState {
         inner.waiting.remove(id);
     }
 
+    /// Has the session `id` waiting for quota, as a failed turn on a usage limit leaves it.
+    #[cfg(test)]
+    pub(crate) fn wait_for_test(&self, state: &Arc<AppState>, id: &str) {
+        if let Some(trigger) = self.capture(state, id).ok().flatten() {
+            self.inner
+                .lock()
+                .expect("quota recovery lock poisoned")
+                .waiting
+                .insert(id.to_string(), trigger);
+        }
+    }
+
+    /// Whether the session `id` is waiting for quota (see [`Self::wait_for_test`]).
+    #[cfg(test)]
+    pub(crate) fn is_waiting_for_test(&self, id: &str) -> bool {
+        let inner = self.inner.lock().expect("quota recovery lock poisoned");
+        inner.waiting.contains_key(id)
+    }
+
     pub fn clear(&self) {
         let mut inner = self.inner.lock().expect("quota recovery lock poisoned");
         inner.waiting.clear();

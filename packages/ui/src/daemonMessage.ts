@@ -111,6 +111,8 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   unknown_account: ["account"],
   not_a_git_repository: ["project"],
   quick_create_owner_gone: ["name"],
+  session_model_session_gone: ["title"],
+  session_model_session_archived: ["title"],
   account_name_taken: ["name"],
   config_dir_taken: ["name"],
   project_directory_shared: ["project"],

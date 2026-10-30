@@ -6,9 +6,16 @@
 //! `agent_records.rs`'s business; this module reads them and hands each line to the three
 //! modules above, and asks `default_effort.rs` for the effort a session's agent runs it at where
 //! the records give the model alone.
+//!
+//! A change of a session's model restarts it on the same conversation, so its records go on
+//! naming the old model up to where the old process stopped. The change stores an observation
+//! boundary for the session ([`ObservedBoundary`], taken by [`observed_boundary`] once the old
+//! process is down) and clears the observed model and effort in the same write; from then on the
+//! collector takes neither from what the records held at the boundary, only from what is written
+//! after it, and the store refuses a model or effort read against an older boundary.
 
 use std::collections::{HashMap, HashSet};
-use std::os::unix::fs::MetadataExt;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,105 +45,207 @@ struct Cursor {
     /// segment, with the path it was read from.
     first_prompt: Option<(PathBuf, Option<String>)>,
     observed: Observed,
-    observed_reset: Option<ObservedReset>,
-    observed_checkpoint: Option<String>,
+    /// The session's observation boundary as the store holds it (`Store::observed_boundaries`),
+    /// which tells a boundary a later model change stored from the one already applied, and is
+    /// handed back with what is read against it (`RecordUpdate::observed_boundary`).
+    stored_boundary: Option<String>,
+    /// [`Self::stored_boundary`] read: what of the records the process before the last model
+    /// change wrote, which gives no model or effort.
+    observed_boundary: Option<ObservedBoundary>,
+    /// Where in the record file read the lines written after the boundary start, with that
+    /// file's path: worked out by [`ObservedBoundary::start`] once per file read from its start,
+    /// since that reads the whole of what the file held at the boundary; not kept while it cannot
+    /// be told.
+    boundary_start: Option<(PathBuf, u64)>,
     /// The summary file beside the record, which Grok keeps its titles and configured model in.
     summary: JsonFile,
     /// The signals file beside the record, which Grok keeps its context window in.
     signals: JsonFile,
 }
 
-/// The record boundaries left by the stopped process. Kept across cursor/path resets so an old
-/// segment or unchanged summary cannot restore a model from before the relaunch.
+/// What a session's records held when a change of its model ended its process (see the module
+/// header): the model and effort shown up to there are the old process's, so none is taken from
+/// them again, while what the relaunched process writes after them is. Stored as JSON with the
+/// session, and kept across cursor resets and daemon restarts.
+///
+/// A file is known by its name, without the `.zst` Codex gives a rollout it compresses, and by
+/// what it held, never by its directory or inode: an account switch copies a conversation's
+/// records into another account's directory, Codex writes a compressed rollout out as a new plain
+/// file when it resumes the thread, and a device number can change across a reboot or a remount,
+/// and in each case the content held at the boundary is still the old process's. A file whose
+/// beginning no longer matches is read whole, as new.
 #[derive(Default, serde::Serialize, serde::Deserialize)]
-pub(crate) struct ObservedReset {
-    files: HashMap<PathBuf, (u64, u64, Signature)>,
+pub(crate) struct ObservedBoundary {
+    files: HashMap<String, Vec<Held>>,
 }
 
-impl ObservedReset {
-    fn insert(&mut self, path: PathBuf) {
-        if let Ok(metadata) = std::fs::metadata(&path) {
-            self.files.insert(
-                path,
-                (
-                    metadata.dev(),
-                    metadata.ino(),
-                    (metadata.len(), metadata.modified().ok()),
-                ),
-            );
-        }
-    }
+/// The first `len` bytes of a file (decompressed, for a compressed one), by length and digest,
+/// so that the store keeps no conversation content.
+#[derive(Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct Held {
+    len: u64,
+    digest: u64,
+}
 
-    fn start(&self, path: &Path) -> u64 {
-        // A compressed rollout is immutable, including one compressed since the boundary was
-        // taken. The uncompressed name identifies the same old history in that case.
-        let compressed = path.extension().is_some_and(|ext| ext == "zst");
-        if compressed && self.files.contains_key(&path.with_extension("")) {
-            return u64::MAX;
-        }
-        let Ok(now) = std::fs::metadata(path) else {
-            return 0;
-        };
-        let Some((dev, ino, signature)) = self.files.get(path).or_else(|| {
-            self.files
-                .values()
-                .find(|(dev, ino, _)| (now.dev(), now.ino()) == (*dev, *ino))
-        }) else {
-            return 0;
-        };
-        if (now.dev(), now.ino()) != (*dev, *ino)
-            || now.len() < signature.0
-            || (now.len() == signature.0 && now.modified().ok() != signature.1)
-        {
-            return 0;
-        }
-        if compressed {
-            u64::MAX
-        } else {
-            signature.0
-        }
-    }
-
-    fn unchanged(&self, path: &Path) -> bool {
-        self.files.get(path).is_some_and(|(dev, ino, signature)| {
-            std::fs::metadata(path).is_ok_and(|now| {
-                (now.dev(), now.ino(), (now.len(), now.modified().ok())) == (*dev, *ino, *signature)
-            })
+impl Held {
+    /// What the file at `path` holds in full now.
+    fn whole(path: &Path) -> std::io::Result<Self> {
+        let mut digest = Digest::default();
+        let len = std::io::copy(&mut crate::line_file::open(path, 0)?, &mut digest)?;
+        Ok(Self {
+            len,
+            digest: digest.0,
         })
     }
+
+    /// Whether the file at `path` still begins with exactly what this holds. A file shorter than
+    /// that, or one that cannot be read through that far (an I/O error, a compressed file with an
+    /// incomplete frame), proves nothing either way.
+    fn begins(&self, path: &Path) -> Prefix {
+        let compressed = path.extension().is_some_and(|ext| ext == "zst");
+        if !compressed && std::fs::metadata(path).map_or(true, |now| now.len() < self.len) {
+            return Prefix::Unknown;
+        }
+        let mut digest = Digest::default();
+        match crate::line_file::open(path, 0)
+            .and_then(|file| std::io::copy(&mut file.take(self.len), &mut digest))
+        {
+            Ok(read) if read < self.len => Prefix::Unknown,
+            Ok(_) if digest.0 == self.digest => Prefix::Is,
+            Ok(_) => Prefix::IsNot,
+            Err(_) => Prefix::Unknown,
+        }
+    }
 }
 
-/// Captures old observations after the process ended and before its replacement can write. The
-/// caller runs this on the blocking pool with the same shell snapshot used for the relaunch.
+/// What a file's content says of whether it begins with what an [`ObservedBoundary`] held of it.
+#[derive(PartialEq, Eq)]
+enum Prefix {
+    Is,
+    IsNot,
+    Unknown,
+}
+
+/// FNV-1a, 64 bits: a digest whose value stays the same across daemon versions, which a stored
+/// boundary relies on (the standard library's hashers promise no such thing).
+struct Digest(u64);
+
+impl Default for Digest {
+    fn default() -> Self {
+        Self(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl Digest {
+    fn update(&mut self, bytes: &[u8]) {
+        for byte in bytes {
+            self.0 = (self.0 ^ u64::from(*byte)).wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+}
+
+impl std::io::Write for Digest {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// What names a file in an [`ObservedBoundary`]: its name, without a `.zst`.
+fn boundary_key(path: &Path) -> Option<String> {
+    let name = path.file_name()?.to_string_lossy();
+    Some(name.strip_suffix(".zst").unwrap_or(&name).to_string())
+}
+
+impl ObservedBoundary {
+    fn insert(&mut self, path: &Path) {
+        let (Some(key), Ok(held)) = (boundary_key(path), Held::whole(path)) else {
+            return;
+        };
+        let held_by_name = self.files.entry(key).or_default();
+        if !held_by_name.contains(&held) {
+            held_by_name.push(held);
+        }
+    }
+
+    fn held(&self, path: &Path) -> &[Held] {
+        boundary_key(path)
+            .and_then(|key| self.files.get(&key))
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// Where in the file at `path` the lines written after the boundary start: the length of
+    /// what it held then when it still begins with that, 0 when its content shows it is not that
+    /// file (or the boundary never held one by its name), the whole file being new. `None` when it
+    /// cannot be told yet, the file being shorter than what it held or unreadable: nothing is
+    /// taken from it until it can.
+    fn start(&self, path: &Path) -> Option<u64> {
+        let mut unknown = false;
+        let mut start = None;
+        for held in self.held(path) {
+            match held.begins(path) {
+                Prefix::Is => start = start.max(Some(held.len)),
+                Prefix::IsNot => {}
+                Prefix::Unknown => unknown = true,
+            }
+        }
+        match start {
+            Some(start) => Some(start),
+            None if unknown => None,
+            None => Some(0),
+        }
+    }
+
+    /// Whether the file at `path` holds exactly what it held at the boundary.
+    fn unchanged(&self, path: &Path) -> bool {
+        let held = self.held(path);
+        !held.is_empty() && Held::whole(path).is_ok_and(|now| held.contains(&now))
+    }
+}
+
+/// Captures what the records hold once the process has ended and before its replacement can
+/// write: the files the collector goes on to ask [`ObservedBoundary::start`] about, which are the
+/// record the process was hinted at and the one the agent now names (the head, for Codex), and,
+/// where the agent keeps one, the summary file beside it. Grok's lines never give the observed
+/// model, so only its summary is kept. Reads each in full, so the caller runs this on the
+/// blocking pool, with the same shell snapshot as the relaunch.
 pub(crate) fn observed_boundary(
     state: &AppState,
     session: &Session,
     shell: Option<HashMap<String, String>>,
-) -> ObservedReset {
-    let mut boundary = ObservedReset::default();
+) -> ObservedBoundary {
+    let mut boundary = ObservedBoundary::default();
     let mut locator = shell.map(Locator::with_shell).unwrap_or_default();
-    let mut paths = Vec::new();
+    let mut records = Vec::new();
     if let Some(path) = state.record_hints.hint(session) {
-        paths.push(path);
+        records.push(path);
     }
     if let (Some(root), Some(id)) = (
         locator.root(session.agent, session.config_dir.as_deref()),
         session.agent_session_id.as_deref(),
     ) {
         if let Some(path) = locator.current_record(session.agent, &root, id) {
-            if session.agent == Agent::Codex {
-                if let Some(stretches) = locator.rollout_stretches(&root, id, &path) {
-                    paths.extend(stretches.into_iter().map(|stretch| stretch.path));
-                }
-            }
-            paths.push(path);
+            records.push(path);
         }
     }
-    for path in paths {
+    let mut files = Vec::new();
+    for path in records {
         if let Some(summary) = crate::agent_records::title_files(session.agent).summary {
-            boundary.insert(path.with_file_name(summary));
+            files.push(path.with_file_name(summary));
         }
-        boundary.insert(path);
+        if session.agent != Agent::Grok {
+            files.push(path);
+        }
+    }
+    let mut seen = HashSet::new();
+    for file in files {
+        if seen.insert(file.clone()) {
+            boundary.insert(&file);
+        }
     }
     boundary
 }
@@ -189,6 +298,10 @@ pub fn spawn(state: &Arc<AppState>) {
 
 fn collect(state: &AppState, cursors: &mut Cursors) {
     let Ok(sessions) = state.store.list_sessions() else {
+        return;
+    };
+    // One read for the whole pass; the store refuses a model read against a replaced boundary.
+    let Ok(boundaries) = state.store.observed_boundaries() else {
         return;
     };
     let ids: HashSet<_> = sessions.iter().map(|session| session.id.as_str()).collect();
@@ -251,21 +364,49 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 ..Default::default()
             };
         }
-        // A durable checkpoint also gates writes under the store lock: a pass already scanning
-        // when a restart recorded it may still update context/titles, never the old model.
-        let Ok(checkpoint) = state.store.observed_checkpoint(&session.id) else {
+        let live = state.live_session(&session.id).is_some();
+        if let Some(hint) = crate::agent_records::hinted_path(&hints, &session) {
+            if cursor.path.as_ref() != Some(&hint) {
+                *cursor = Cursor {
+                    identity: cursor.identity.clone(),
+                    path: Some(hint),
+                    stored_boundary: cursor.stored_boundary.take(),
+                    observed_boundary: cursor.observed_boundary.take(),
+                    ..Default::default()
+                };
+            }
+        }
+        // A session whose records are not read this pass takes its default effort from the stored
+        // record, since an account's catalogue can change after the session stops. A boundary
+        // stored meanwhile waits for its process: a model change stores one only for a session
+        // whose process it relaunches, and the change's write cleared the observed model already.
+        if cursor.dormant && !live {
+            settle_default_effort(
+                state,
+                &mut cursors.default_efforts,
+                &locator,
+                &session,
+                (
+                    session.observed_model.as_deref(),
+                    session.observed_effort.as_deref(),
+                ),
+                &mut republish,
+            );
             continue;
-        };
-        if cursor.observed_checkpoint != checkpoint {
-            cursor.observed_reset = checkpoint
+        }
+        // The boundary also gates writes under the store lock: a pass already scanning when a
+        // restart stored it may still update the context and titles, never the old model.
+        let stored_boundary = boundaries.get(&session.id).cloned();
+        if cursor.stored_boundary != stored_boundary {
+            cursor.observed_boundary = stored_boundary
                 .as_deref()
                 .and_then(|text| serde_json::from_str(text).ok());
-            cursor.observed_checkpoint = checkpoint;
+            cursor.stored_boundary = stored_boundary;
+            cursor.boundary_start = None;
             cursor.observed = Observed::default();
             // A stale pass may have consumed the replacement process's first records before its
-            // write was rejected by the new checkpoint. Replay them through the new boundary.
+            // write was rejected by the new boundary. Replay them through the new boundary.
             cursor.file = LineFile::default();
-            cursor.dormant = false;
             cursor.context.forget();
             cursor.titles.clear();
             cursor.summary = JsonFile::default();
@@ -275,20 +416,6 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 session.observed_effort = current.observed_effort;
             }
         }
-        let live = state.live_session(&session.id).is_some();
-        if let Some(hint) = crate::agent_records::hinted_path(&hints, &session) {
-            if cursor.path.as_ref() != Some(&hint) {
-                *cursor = Cursor {
-                    identity: cursor.identity.clone(),
-                    path: Some(hint),
-                    observed_reset: cursor.observed_reset.take(),
-                    observed_checkpoint: cursor.observed_checkpoint.take(),
-                    ..Default::default()
-                };
-            }
-        }
-        // A session whose records are not read this pass takes its default effort from the stored
-        // record, since an account's catalogue can change after the session stops.
         let stored = |defaults: &mut DefaultEfforts, republish: &mut Vec<Session>| {
             settle_default_effort(
                 state,
@@ -302,10 +429,6 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 republish,
             )
         };
-        if cursor.dormant && !live {
-            stored(&mut cursors.default_efforts, &mut republish);
-            continue;
-        }
         if cursor.path.is_none() {
             let Some(root) = locator.root(session.agent, session.config_dir.as_deref()) else {
                 stored(&mut cursors.default_efforts, &mut republish);
@@ -330,14 +453,16 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
             }
             if let Some(summary) = crate::agent_records::title_files(session.agent).summary {
                 let summary_path = path.with_file_name(summary);
-                let old = cursor
-                    .observed_reset
-                    .as_ref()
-                    .is_some_and(|reset| reset.unchanged(&summary_path));
                 if let Some(summary) = cursor.summary.read(&summary_path) {
                     cursor
                         .titles
                         .fold_summary(adapter_for(session.agent).as_ref(), &summary);
+                    // Rewritten in place rather than appended to: as it was at the boundary, it
+                    // still names the old process's model.
+                    let old = cursor
+                        .observed_boundary
+                        .as_ref()
+                        .is_some_and(|boundary| boundary.unchanged(&summary_path));
                     if !old {
                         cursor.observed.fold_grok(&summary);
                     }
@@ -408,7 +533,7 @@ fn collect(state: &AppState, cursors: &mut Cursors) {
                 titles,
                 observed_model,
                 observed_effort,
-                observed_checkpoint: cursor.observed_checkpoint.clone(),
+                observed_boundary: cursor.stored_boundary.clone(),
             });
         }
     }
@@ -530,16 +655,23 @@ fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
         cursor.signals = JsonFile::default();
     }
     if change != Change::Unchanged {
-        let start = cursor
-            .observed_reset
-            .as_ref()
-            .map_or(0, |reset| reset.start(&record));
+        let start = match &cursor.boundary_start {
+            Some((read, start)) if *read == record && change != Change::Restarted => Some(*start),
+            _ => {
+                let start = cursor
+                    .observed_boundary
+                    .as_ref()
+                    .map_or(Some(0), |boundary| boundary.start(&record));
+                cursor.boundary_start = start.map(|start| (record.clone(), start));
+                start
+            }
+        };
         let adapter = adapter_for(agent);
         cursor.file.read_with_position(&record, |at, line| {
             match agent {
                 Agent::Codex => {
                     cursor.context.fold_codex(line);
-                    if at >= start {
+                    if start.is_some_and(|start| at >= start) {
                         cursor.observed.fold_codex(line);
                     }
                 }
@@ -547,7 +679,7 @@ fn scan(agent: Agent, path: &Path, cursor: &mut Cursor) -> std::io::Result<()> {
                     if line.contains("\"usage\"") || line.contains("compact_boundary") {
                         if let Ok(value) = serde_json::from_str::<Value>(line) {
                             cursor.context.fold_claude(&value);
-                            if at >= start {
+                            if start.is_some_and(|start| at >= start) {
                                 cursor.observed.fold_claude(&value);
                             }
                         }
@@ -853,9 +985,9 @@ mod tests {
     }
 
     #[test]
-    fn a_model_checkpoint_survives_a_fresh_daemon_and_accepts_new_observations() {
+    fn a_model_boundary_survives_a_fresh_daemon_and_accepts_new_observations() {
         const ID: &str = "019a0000-0000-7000-8000-000000000001";
-        let (state, directory) = crate::test_support::app_state("model-checkpoint-restart");
+        let (state, directory) = crate::test_support::app_state("model-boundary-restart");
         state
             .store
             .insert_console(&crate::test_support::console(&directory))
@@ -870,13 +1002,13 @@ mod tests {
         codex_session(&state, &root, ID);
         collect(&state, &mut Cursors::default());
         assert!(state.session_record("s").unwrap().observed_model.is_some());
-        let checkpoint = serde_json::to_string(&observed_boundary(
+        let boundary = serde_json::to_string(&observed_boundary(
             &state,
             &state.session_record("s").unwrap(),
             None,
         ))
         .unwrap();
-        // The production write checkpoints the old record and new override atomically.
+        // The production write stores the boundary and the new override at once.
         let mut session = state.session_record("s").unwrap();
         session.status = crate::protocol::SessionStatus::Interrupted;
         state.store.update_session(&session).unwrap();
@@ -886,7 +1018,7 @@ mod tests {
                 "s",
                 &Some(Some("gpt-6.1-sol".to_string())),
                 &None,
-                Some(&checkpoint)
+                Some(&boundary)
             )
             .unwrap());
         drop(state);
@@ -910,10 +1042,12 @@ mod tests {
         // A real turn context captured from the same fixture, after the restart boundary.
         let new = old.lines().next().unwrap();
         std::fs::write(&rollout, format!("{old}{new}\n")).unwrap();
-        // An in-flight pre-checkpoint scan can consume the new line yet have its write rejected.
+        // A scan in flight from before the boundary can consume the new line, yet have its write
+        // rejected.
         let cursor = cursors.sessions.get_mut("s").unwrap();
-        cursor.observed_checkpoint = None;
-        cursor.observed_reset = None;
+        cursor.stored_boundary = None;
+        cursor.observed_boundary = None;
+        cursor.boundary_start = None;
         scan(Agent::Codex, &rollout, cursor).unwrap();
         state
             .store
@@ -923,7 +1057,7 @@ mod tests {
                 titles: None,
                 observed_model: cursor.observed.model.clone(),
                 observed_effort: cursor.observed.effort.clone().map(Some),
-                observed_checkpoint: None,
+                observed_boundary: None,
             }])
             .unwrap();
         assert!(state.session_record("s").unwrap().observed_model.is_none());
@@ -940,63 +1074,184 @@ mod tests {
         );
     }
 
+    /// A boundary knows a file by its name and what it held, so moving it to another directory
+    /// leaves it old, while a rewrite in place of the same length is new output.
     #[test]
-    fn an_observation_boundary_survives_renaming_and_compression_but_allows_a_new_file() {
+    fn an_observation_boundary_follows_a_moved_file_but_not_a_rewrite() {
         let dir = crate::test_support::ScratchDir::new("model-boundary-path");
-        let original = dir.join("original.jsonl");
-        let renamed = dir.join("renamed.jsonl");
+        let (original, moved) = (dir.join("a/rollout.jsonl"), dir.join("b/rollout.jsonl"));
+        std::fs::create_dir_all(original.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(moved.parent().unwrap()).unwrap();
         let capture = include_str!("../testdata/observed_codex_0.162.1.jsonl");
         std::fs::write(&original, capture).unwrap();
-        let mut boundary = ObservedReset::default();
-        boundary.insert(original.clone());
-        std::fs::rename(&original, &renamed).unwrap();
+        let mut boundary = ObservedBoundary::default();
+        boundary.insert(&original);
+        std::fs::rename(&original, &moved).unwrap();
         let mut cursor = Cursor {
-            observed_reset: Some(boundary),
+            observed_boundary: Some(boundary),
             ..Default::default()
         };
-        scan(Agent::Codex, &renamed, &mut cursor).unwrap();
+        scan(Agent::Codex, &moved, &mut cursor).unwrap();
         assert!(
             cursor.observed.model.is_none(),
-            "a renamed old file stays old"
+            "a moved old file stays old"
         );
         let rewritten = capture.replace("codex-auto-review", "codex-next-review");
         assert_eq!(rewritten.len(), capture.len());
-        std::fs::write(&renamed, &rewritten).unwrap();
-        let previous_time = cursor.observed_reset.as_ref().unwrap().files[&original]
-            .2
-             .1
-            .unwrap();
-        std::fs::File::open(&renamed)
+        std::fs::write(&moved, &rewritten).unwrap();
+        // A later modification time, so the cursor sees the rewrite.
+        std::fs::File::options()
+            .write(true)
+            .open(&moved)
             .unwrap()
-            .set_modified(previous_time + Duration::from_secs(1))
+            .set_modified(std::time::SystemTime::now() + Duration::from_secs(60))
             .unwrap();
-        scan(Agent::Codex, &renamed, &mut cursor).unwrap();
+        scan(Agent::Codex, &moved, &mut cursor).unwrap();
         assert_eq!(
             cursor.observed.model.as_deref(),
             Some("codex-next-review"),
             "a same-length in-place rewrite is new output"
         );
-        std::fs::write(&renamed, capture).unwrap();
-        cursor.observed = Observed::default();
-        let mut boundary = ObservedReset::default();
-        boundary.insert(renamed.clone());
-        cursor.observed_reset = Some(boundary);
-        let compressed = dir.join("renamed.jsonl.zst");
-        std::fs::write(
-            &compressed,
-            zstd::stream::encode_all(capture.as_bytes(), 1).unwrap(),
-        )
-        .unwrap();
-        std::fs::remove_file(&renamed).unwrap();
+    }
+
+    /// Codex compresses a rollout it is done with, and writes a compressed head out again as a
+    /// new plain file when it resumes the thread: either way the old history stays old, and only
+    /// the turns after it are read.
+    #[test]
+    fn an_observation_boundary_survives_codex_compressing_and_decompressing_a_rollout() {
+        let dir = crate::test_support::ScratchDir::new("model-boundary-zst");
+        let capture = include_str!("../testdata/observed_codex_0.162.1.jsonl");
+        let next = capture.replace("codex-auto-review", "codex-next-review");
+        let (plain, compressed) = (dir.join("rollout.jsonl"), dir.join("rollout.jsonl.zst"));
+        let compress = |text: &str| zstd::stream::encode_all(text.as_bytes(), 1).unwrap();
+
+        // Taken from the plain file, read once Codex has compressed it.
+        std::fs::write(&plain, capture).unwrap();
+        let mut boundary = ObservedBoundary::default();
+        boundary.insert(&plain);
+        std::fs::remove_file(&plain).unwrap();
+        std::fs::write(&compressed, compress(capture)).unwrap();
+        let mut cursor = Cursor {
+            observed_boundary: Some(boundary),
+            ..Default::default()
+        };
         scan(Agent::Codex, &compressed, &mut cursor).unwrap();
         assert!(
             cursor.observed.model.is_none(),
             "compressing old history does not make it new"
         );
-        // A replacement at the original name is new process output, even at the same length.
-        std::fs::write(&renamed, capture).unwrap();
-        scan(Agent::Codex, &renamed, &mut cursor).unwrap();
-        assert_eq!(cursor.observed.model.as_deref(), Some("codex-auto-review"));
+
+        // Taken from the compressed head, which the resumed thread writes out as a new plain
+        // file and appends its next turn to.
+        let mut boundary = ObservedBoundary::default();
+        boundary.insert(&compressed);
+        std::fs::remove_file(&compressed).unwrap();
+        std::fs::write(&plain, capture).unwrap();
+        let mut cursor = Cursor {
+            observed_boundary: Some(boundary),
+            ..Default::default()
+        };
+        scan(Agent::Codex, &plain, &mut cursor).unwrap();
+        assert!(cursor.observed.model.is_none(), "the old history stays old");
+        std::fs::write(&plain, format!("{capture}{next}")).unwrap();
+        scan(Agent::Codex, &plain, &mut cursor).unwrap();
+        assert_eq!(cursor.observed.model.as_deref(), Some("codex-next-review"));
+        // Read by a fresh cursor, as after a daemon restart, the old part is still skipped.
+        let mut fresh = Cursor {
+            observed_boundary: cursor.observed_boundary.take(),
+            ..Default::default()
+        };
+        std::fs::write(&plain, format!("{capture}{capture}")).unwrap();
+        scan(Agent::Codex, &plain, &mut fresh).unwrap();
+        assert_eq!(fresh.observed.model.as_deref(), Some("codex-auto-review"));
+        std::fs::write(&plain, capture).unwrap();
+        let mut fresh = Cursor {
+            observed_boundary: fresh.observed_boundary.take(),
+            ..Default::default()
+        };
+        scan(Agent::Codex, &plain, &mut fresh).unwrap();
+        assert!(fresh.observed.model.is_none());
+    }
+
+    /// A session whose model was changed and which was then switched to another account reads
+    /// its conversation from the copy in that account's directory: what the copy holds of the
+    /// old process's records gives no model, and what the relaunch writes after it does.
+    #[test]
+    fn an_observation_boundary_survives_an_account_switch_copying_the_claude_transcript() {
+        const ID: &str = "00000000-0000-4000-8000-0000000000aa";
+        let (state, directory) = crate::test_support::app_state("model-boundary-switch");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let transcript = |account: &str| {
+            directory
+                .join(account)
+                .join("projects/-work")
+                .join(format!("{ID}.jsonl"))
+        };
+        let capture = include_str!("../testdata/observed_claude.jsonl");
+        std::fs::create_dir_all(transcript("a").parent().unwrap()).unwrap();
+        std::fs::write(transcript("a"), capture).unwrap();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"claude","agent_session_id":ID,"console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":directory.join("a").to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let mut cursors = Cursors::default();
+        let observed = || state.session_record("s").unwrap().observed_model;
+        collect(&state, &mut cursors);
+        assert_eq!(observed().as_deref(), Some("claude-opus-5-5"));
+
+        let boundary = observed_boundary(&state, &session, None);
+        state
+            .store
+            .reset_observed_model("s", &serde_json::to_string(&boundary).unwrap())
+            .unwrap();
+        // The switch copies the transcript into the other account and moves the session there.
+        std::fs::create_dir_all(transcript("b").parent().unwrap()).unwrap();
+        std::fs::copy(transcript("a"), transcript("b")).unwrap();
+        let target = directory.join("b").to_string_lossy().into_owned();
+        state
+            .set_session_account("s", Some("b"), Some(&target))
+            .unwrap();
+        collect(&state, &mut cursors);
+        assert_eq!(observed(), None, "the copied old records give no model");
+        collect(&state, &mut Cursors::default());
+        assert_eq!(observed(), None, "nor after a daemon restart");
+
+        let next = json!({"type":"assistant","isSidechain":false,"message":{
+            "model":"claude-sonnet-5","usage":{"input_tokens":1,"output_tokens":1}}});
+        std::fs::write(transcript("b"), format!("{capture}{next}\n")).unwrap();
+        collect(&state, &mut cursors);
+        assert_eq!(observed().as_deref(), Some("claude-sonnet-5"));
+    }
+
+    /// Grok keeps its configured model in a summary file it rewrites in place: copied unchanged
+    /// into another account it still names the old model, and once rewritten it names the new one.
+    #[test]
+    fn a_grok_summary_copied_unchanged_by_an_account_switch_stays_old() {
+        let dir = crate::test_support::ScratchDir::new("model-boundary-grok");
+        let capture = include_str!("../testdata/titles_grok_1.0.60_summary.json");
+        let (old, copied) = (
+            dir.join("a/sessions/proj/grok-1/summary.json"),
+            dir.join("b/sessions/proj/grok-1/summary.json"),
+        );
+        for path in [&old, &copied] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        }
+        std::fs::write(&old, capture).unwrap();
+        let mut boundary = ObservedBoundary::default();
+        boundary.insert(&old);
+        std::fs::copy(&old, &copied).unwrap();
+        assert!(boundary.unchanged(&copied));
+        std::fs::write(&copied, capture.replace("\"grok-4.7\"", "\"grok-4.8\"")).unwrap();
+        assert!(!boundary.unchanged(&copied));
     }
 
     /// A Codex turn that names its model and no effort unsets the effort an earlier turn named,
@@ -1444,5 +1699,141 @@ mod tests {
                 used_percent: Some(9),
             })
         );
+    }
+
+    /// What a boundary holds is what the collector asks it about: the head of a Codex thread alone,
+    /// not the earlier history segments it was cut from.
+    #[test]
+    fn a_boundary_of_a_codex_thread_holds_only_its_head() {
+        const ID: &str = "019a0000-0000-7000-8000-000000000001";
+        let (state, directory) = crate::test_support::app_state("model-boundary-head-only");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let root = directory.join("account");
+        let head = segment_chain(&root, ID, [Some(1_000), Some(2_000)]);
+        codex_session(&state, &root, ID);
+
+        let boundary = observed_boundary(&state, &state.session_record("s").unwrap(), None);
+
+        let name = head.file_name().unwrap().to_string_lossy().into_owned();
+        assert_eq!(boundary.files.keys().collect::<Vec<_>>(), [&name]);
+        assert_eq!(boundary.files[&name].len(), 1);
+    }
+
+    /// Grok's lines never give the observed model, so only its summary is held, and a summary
+    /// that the relaunch has not rewritten is still the old process's inside `collect`.
+    #[test]
+    fn a_grok_summary_at_the_boundary_stays_old_in_the_collector_until_it_is_rewritten() {
+        let (state, directory) = crate::test_support::app_state("model-boundary-grok-collect");
+        state
+            .store
+            .insert_console(&crate::test_support::console(&directory))
+            .unwrap();
+        let console_id = state.store.list_consoles().unwrap()[0].id.clone();
+        let root = directory.join("account");
+        let session_dir = root.join("sessions/project/native");
+        std::fs::create_dir_all(&session_dir).unwrap();
+        std::fs::write(session_dir.join("usage.json"), "{}").unwrap();
+        std::fs::write(
+            session_dir.join("updates.jsonl"),
+            include_str!("../testdata/context_grok_1.0.62_updates.jsonl"),
+        )
+        .unwrap();
+        let capture = include_str!("../testdata/titles_grok_1.0.60_summary.json");
+        let summary = session_dir.join("summary.json");
+        std::fs::write(&summary, capture).unwrap();
+        let session: crate::protocol::Session = serde_json::from_value(json!({
+            "id":"s","agent":"grok","agent_session_id":"native","console_id":console_id,
+            "host_id":"local","role":"console","origin":"user","title":"Session",
+            "status":"idle","has_conversation":true,"pinned":false,"started_at":0,
+            "config_dir":root.to_string_lossy()}))
+        .unwrap();
+        state.store.insert_session(&session).unwrap();
+        let live = crate::test_support::idle_stand_in("s");
+        state.register_live(live.clone());
+        let mut cursors = Cursors::default();
+        let observed = || state.session_record("s").unwrap().observed_model;
+
+        collect(&state, &mut cursors);
+        assert_eq!(observed().as_deref(), Some("grok-4.7"));
+        let boundary = observed_boundary(&state, &session, None);
+        assert_eq!(
+            boundary.files.keys().collect::<Vec<_>>(),
+            [&"summary.json".to_string()],
+            "neither the usage file nor the log is held"
+        );
+        state
+            .store
+            .reset_observed_model("s", &serde_json::to_string(&boundary).unwrap())
+            .unwrap();
+        collect(&state, &mut cursors);
+        assert_eq!(observed(), None, "the summary as it was is the old model");
+        collect(&state, &mut Cursors::default());
+        assert_eq!(observed(), None, "nor after a daemon restart");
+
+        std::fs::write(&summary, capture.replace("\"grok-4.7\"", "\"grok-4.8\"")).unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&summary)
+            .unwrap()
+            .set_modified(std::time::SystemTime::now() + Duration::from_secs(60))
+            .unwrap();
+        collect(&state, &mut cursors);
+        assert_eq!(observed().as_deref(), Some("grok-4.8"));
+    }
+
+    /// A file that is still shorter than what the boundary held of it, or cannot be read through
+    /// that far, proves nothing: the model is not taken from it for that pass, and what is later
+    /// written after the old prefix is.
+    #[test]
+    fn a_file_that_cannot_yet_be_told_from_the_old_one_gives_no_model() {
+        let dir = crate::test_support::ScratchDir::new("model-boundary-unknown");
+        let capture = include_str!("../testdata/observed_codex_0.162.1.jsonl");
+        let next = capture.replace("codex-auto-review", "codex-next-review");
+        let path = dir.join("rollout.jsonl");
+        std::fs::write(&path, capture).unwrap();
+        let mut boundary = ObservedBoundary::default();
+        boundary.insert(&path);
+
+        // Shorter than the prefix: cut at a line end, so its lines read whole.
+        let cut = capture[..capture.len() / 2].rfind('\n').unwrap() + 1;
+        std::fs::write(&path, &capture[..cut]).unwrap();
+        assert_eq!(boundary.start(&path), None);
+        let mut cursor = Cursor {
+            observed_boundary: Some(boundary),
+            ..Default::default()
+        };
+        scan(Agent::Codex, &path, &mut cursor).unwrap();
+        assert!(cursor.observed.model.is_none(), "nothing from a short file");
+        assert!(cursor.boundary_start.is_none(), "and nothing is remembered");
+
+        // Grown past the prefix with the old content intact: only what follows it is new.
+        std::fs::write(&path, format!("{capture}{next}")).unwrap();
+        scan(Agent::Codex, &path, &mut cursor).unwrap();
+        assert_eq!(cursor.observed.model.as_deref(), Some("codex-next-review"));
+        assert_eq!(
+            cursor.boundary_start,
+            Some((path.clone(), capture.len() as u64))
+        );
+
+        // A compressed file whose last frame is incomplete cannot be read through.
+        let compressed = dir.join("other.jsonl.zst");
+        let bytes = zstd::stream::encode_all(capture.as_bytes(), 1).unwrap();
+        std::fs::write(&compressed, &bytes).unwrap();
+        let mut boundary = ObservedBoundary::default();
+        boundary.insert(&compressed);
+        std::fs::write(&compressed, &bytes[..bytes.len() - 4]).unwrap();
+        assert_eq!(boundary.start(&compressed), None);
+        // Whole again, it is the old file; a different one is new.
+        std::fs::write(&compressed, &bytes).unwrap();
+        assert_eq!(boundary.start(&compressed), Some(capture.len() as u64));
+        std::fs::write(
+            &compressed,
+            zstd::stream::encode_all(next.as_bytes(), 1).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(boundary.start(&compressed), Some(0));
     }
 }

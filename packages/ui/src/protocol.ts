@@ -1598,7 +1598,7 @@ export type RequestBody =
    * the session has, `null` leaves it to the agent; at least one is sent. A running session is
    * restarted on its account, resuming its conversation, and is shown `starting` meanwhile; an
    * interrupted one only has them recorded for its next resume. Answered once the relaunched session
-   * has stayed up, or with the reason it did not. */
+   * has stayed up, with `session_model_set`, or with the reason it did not. */
   | {
     type: "set_session_model";
     session: string;
@@ -2254,6 +2254,11 @@ export type Event =
     new: SideRead;
   }
   | { type: "ack"; id?: string }
+  /** The answer to `set_session_model`: `unchanged` when the session had those values already, `recorded`
+   * when it had no process and keeps them for its next resume, `restarted` when its process was relaunched
+   * with them. `continued` is only with `restarted`: whether the relaunch was sent the prompt to carry on
+   * with its task. */
+  | { type: "session_model_set"; id?: string; session: string; outcome: "unchanged" | "recorded" | "restarted"; continued?: boolean }
   /** A failure, worded from `code` and `params` (see `daemonMessage.ts`); `message` is the English
    * text, shown for a code the client does not know. A client also branches on some codes — see
    * `ALREADY_RUNNING_CODES`, `TRUST_REFUSED_CODES`, `TRUST_NOT_WAITING`,
