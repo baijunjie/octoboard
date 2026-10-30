@@ -66,6 +66,16 @@ The `--` matters because an operand of that form is also a valid path, so a work
 one makes `git` refuse the whole command as an ambiguous argument — a condition that depends on what the user has on
 disk, which no fixture without such a file reproduces.
 
+## Name a ref to `git` by its full name or `@{upstream}`, never by a short name
+
+Applies wherever daemon code passes a branch, an upstream or a remote-tracking branch back to `git` as a revision
+(`merge`, `rev-list`, `log`, `rev-parse`). `git` resolves a short name by trying `$GIT_DIR/<name>`, `refs/<name>`,
+`refs/tags/<name>`, `refs/heads/<name>` and `refs/remotes/<name>` in that order, so a tag named like a branch, or a
+local branch named `origin/main`, takes the name, and the command quietly acts on that other commit: a fast-forward
+onto `origin/main` lands on the local branch. Anyone working in the repository, an agent included, can create such a
+ref. Write `refs/heads/<branch>` or `refs/remotes/<remote>/<branch>`, take an upstream from `%(upstream)`, which prints
+it in full, or name it `@{upstream}`; a short name such as the branch header's `upstream` is for showing.
+
 ## Compare the paths `git` prints with names read from disk only in one Unicode form
 
 Applies to daemon code on macOS that matches paths a `git` prints against names it read from the filesystem itself — a

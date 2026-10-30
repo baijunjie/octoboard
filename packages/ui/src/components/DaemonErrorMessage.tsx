@@ -46,8 +46,9 @@ function LeftBranches({ count, items, part }: { count: number; items: LeftBranch
   const homeDir = useErrorRecords((s) => s.homeDir);
   const groups = leftBranchGroups(items).map((group) => ({
     key: group.key,
-    lead: t(group.lead, { count: group.items.length }),
-    note: group.note && t(group.note, { count: group.items.length }),
+    // A `Message` rather than `t`, so a product name in the lead is a chip as in any prose.
+    lead: <Message id={group.lead} params={{ count: group.items.length }} />,
+    note: group.note && <Message id={group.note} params={{ count: group.items.length }} />,
     rows: group.items.map((item, at) => ({
       id: `${at}`,
       worktree: item.kind === "worktree",

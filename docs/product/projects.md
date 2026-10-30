@@ -31,7 +31,7 @@ There are three sources:
 | Source | Input | Result |
 |---|---|---|
 | A single directory | a path | That one directory becomes a project. The path must exist and be a directory. |
-| A parent directory | a path | Every git repository **directly beneath** that path becomes its own project, including directories whose names begin with a dot. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
+| A parent directory | a path | Every git repository **directly beneath** that path becomes its own project, including directories whose names begin with a dot; a directory counts as one by the rule in "What one check does" in `docs/product/project-git-status.md`. Only one level down is scanned; a checkout nested deeper belongs to the repository above it. Associating nothing is an error: if no git repository is found directly beneath the path, the request is refused and names the directory. |
 | A git repository URL | a repository URL plus a parent directory | The repository, from any git remote and not only GitHub, is cloned into a new directory beneath the parent, and the clone is then associated. The parent directory is filled in with the default clone directory (see below), which can be changed in the form or left blank to use that directory anyway. |
 
 For a single directory, the form asks the daemon about the path as soon as it is entered or picked (after a short pause
@@ -79,8 +79,11 @@ For a git association:
   `https://host/owner/repo(.git)` and `git@host:owner/repo(.git)` are understood.
 - If that directory already exists, the request is refused rather than cloning into or over it.
 - The clone runs with the user's own shell environment, so it uses the `git` on the user's `PATH` and their git
-  configuration and credentials. Capturing that environment is bounded the same way a session launch's is, and a
-  capture that does not complete refuses the clone (see "The launch environment" in
+  configuration and credentials. That environment is filtered as a git status check's is (see "The environment a check
+  runs `git` in" in `docs/product/project-git-status.md`): a `GIT_*` variable exported in the user's shell that would
+  point git at another repository, set configuration items outright or turn TLS certificate verification off does not
+  reach the clone, nor the form's check of a git URL. Capturing that environment is bounded the same way a session
+  launch's is, and a capture that does not complete refuses the clone (see "The launch environment" in
   `docs/product/launching-agents.md`).
 - A clone can take minutes; other state updates keep flowing while it runs.
 

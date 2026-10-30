@@ -46,7 +46,7 @@ a console.
 | A branch not merged as above | Kept; the confirmation can force it |
 | A worktree locked with `git worktree lock` (git's lock, not "Locking a session" in `docs/product/sessions.md`) | Kept; the confirmation can take it, under a choice of its own |
 | A branch checked out in a worktree that stays — the main worktree, a worktree not bound, or a bound one that is kept | Kept, whatever is asked |
-| A worktree that is a project's folder or holds one — any project's — or of which that cannot be told (see "A worktree that is or holds a project's folder" below) | Never touched |
+| A worktree that is a project's folder or holds one — any project's — or that is the home folder, the root of a disk or a folder holding Octoboard's own data, or of which that cannot be told (see "A worktree that is or holds a project's folder" below) | Never touched |
 
 - **A branch pushed to its upstream counts as merged into it**, so it is deleted locally even when it is merged
   nowhere else; its remote branch stays.
@@ -61,7 +61,14 @@ No cleanup — a session's, or a project's removal with its folder moved to the 
 Trash a linked worktree that is a project's folder or holds one, since that project's files would go with it. Holding
 the common directory of a project's Git repository counts as holding that project's folder, as a main worktree holds
 the repository a linked worktree elsewhere works from. A session's cleanup looks at every project, its own included; a
-project's removal at every project but the one removed.
+project's removal at every project but the one removed. A project's folder that holds the worktree, as one with its
+worktrees laid out inside it (`<project>/.worktrees/x`) does, does not keep it.
+
+Nor does any cleanup remove a linked worktree that is the home folder, the root of a disk (`/` or a mount point), or a
+folder that holds Octoboard's own data, judged by the same rules as a project's folder moved to the Trash (see "Moving
+the project folder to the Trash" in `docs/product/removing-projects.md`). A session's cleanup keeps it as `failed`, with
+the cause `protected_folder`, and always reports it as left (see "What is left is reported" below); a project's removal
+neither lists nor takes it, and it stays unreported, as a worktree that is another project's folder does.
 
 - **Folders are told by what they are on disk** (device and inode), not by how their paths are written: a symbolic
   link, a spelling that differs only in letter case, a bind mount, or a macOS firmlink naming one folder makes no
@@ -72,11 +79,12 @@ project's removal at every project but the one removed.
   resolved. A worktree whose directory is already gone is compared only that way, as it holds no project's files
   otherwise.
 - **When it cannot be told, the worktree is kept, as one that holds a project's folder is**: where another project's
-  path fails with another error, lies on a file system that reports no inode, does not answer within about 5 seconds
-  (as on a mount that hangs) or is still not answering an earlier look, or where the worktree's own directory cannot
-  be read or resolved. It is never removed or forced, and it is always reported as left, where a worktree known to be
-  or hold a project's folder is reported only when the user forced it in an archive or deletion (see "What is left is
-  reported" below).
+  path fails with another error, lies on a file system that reports no inode, does not answer within about 5 seconds (as
+  on a mount that hangs) or is still not answering an earlier look, where the worktree's own directory cannot be read or
+  resolved, or where the home folder or Octoboard's data folder cannot be looked at, so that whether the worktree is the
+  one or holds the other cannot be told. It is never removed or forced, and it is always reported as left, where a
+  worktree known to be or hold a project's folder is reported only when the user forced it in an archive or deletion
+  (see "What is left is reported" below).
 - **A session's cleanup decides again when it removes.** Its confirmation offers no such worktree to force, so one that
   could not be told when the confirmation looked, but can be at the removal, goes only as an unforced
   `git worktree remove` takes it; git keeping it, it is reported like any other item the confirmation did not list.
@@ -84,10 +92,10 @@ project's removal at every project but the one removed.
   folder moved to the Trash" below).
 - **A project's removal also looks again when it carries out.** Right before it moves the outside worktrees it takes to
   the Trash — once its sessions' processes have ended — it looks again at each of them. One that has come to be or hold
-  another project's folder by then stays, and so does the branch it has checked out, neither of them reported. One of
-  which that cannot be told by then stays and is reported as left, like any other worktree that cannot be told, the
-  branch it has checked out staying unreported. When the projects cannot be listed at that point, none of the outside
-  worktrees it takes can be told.
+  another project's folder, or to be the home folder, the root of a disk or a folder holding Octoboard's own data, by
+  then stays, and so does the branch it has checked out, neither of them reported. One of which that cannot be told by
+  then stays and is reported as left, like any other worktree that cannot be told, the branch it has checked out staying
+  unreported. When the projects cannot be listed at that point, none of the outside worktrees it takes can be told.
 
 ## The confirmation
 
@@ -175,6 +183,8 @@ this order, each group led by one line saying so over the names:
 - the branch is not merged;
 - the branch is checked out in a worktree that stays;
 - the worktree is a project's folder;
+- the worktree is the home folder, the root of a disk, or holds Octoboard's own data, so it was kept — with no reason
+  under the item's name;
 - whether the worktree is or holds another project's folder could not be checked (see "A worktree that is or holds a
   project's folder" above) — with no reason under the item's name, and after the names a note that it may hold
   another project's files, and that once it can be read, what is in it should be checked before removing it by hand.
@@ -184,13 +194,16 @@ were to be removed and are still there comes first; with a single group its lead
 
 The alert's recovery guidance is to open a Terminal in the repository — from the project's action menu, when the
 project is still there — deal with what is reported for each item, then remove it with Git or move it to the Trash, or
-leave it in place. An alert whose every item is a worktree of which it could not be checked whether it is or holds
-another project's folder has no recovery guidance of its own, that group's note standing for it.
+leave it in place. An alert whose every item is a worktree kept for its folder — one that is the home folder, the root
+of a disk or holds Octoboard's own data, or one of which it could not be checked whether it is or holds another
+project's folder — has no recovery guidance of its own.
 
 What is reported:
 
 - every item that could not be removed;
 - every worktree kept because whether it is or holds another project's folder could not be told;
+- after an archive or deletion, every worktree kept because it is the home folder, the root of a disk or holds
+  Octoboard's own data;
 - every forced item still there, whatever keeps it now. After an archive or deletion, that includes a forced worktree
   that came to be or hold a project's folder before its removal ran, reported in the project's-folder group;
 - every item git refuses that the confirmation did not list as kept in the state it stands in now: one that came to
@@ -202,10 +215,12 @@ What is not reported:
 - items the user chose to keep, while they stand as they were listed;
 - a branch checked out in a worktree that stays, unless the user forced that branch in an archive or deletion. After a
   project's removal, such a worktree is one the removal does not take — the main worktree, one not bound, or one that
-  is or holds another project's folder or of which that cannot be told, even when that is found only as the removal
-  carries out — or a locked worktree the user chose to keep;
+  is or holds another project's folder, that is the home folder, the root of a disk or a folder holding Octoboard's
+  own data, or of which that cannot be told, even when that is found only as the removal carries out — or a locked
+  worktree the user chose to keep;
 - a worktree known to be a project's folder or to hold one, unless the user forced that worktree in an archive or
-  deletion. After a project's removal it is never reported.
+  deletion. After a project's removal it is never reported, nor is one that is the home folder, the root of a disk or
+  a folder holding Octoboard's own data.
 
 Nothing is shown when nothing is left.
 
@@ -284,11 +299,11 @@ otherwise be left without its folder:
 - **A locked worktree** goes only when the user chooses so (below), and only while it has no uncommitted changes the
   confirmation did not show. It is moved to the Trash first and only then unlocked, where the repository outlives the
   folder, so one whose move fails keeps its lock. A branch a locked worktree has checked out goes only with it.
-- **Never touched**: the main worktree, and a worktree that is another project's folder or holds one, or of which that
-  cannot be told (see "A worktree that is or holds a project's folder" above). One that cannot be told is reported as
-  left, and listed by the confirmation as staying when it could not be told by then; where the repository outlives
-  the folder, a branch such a worktree has checked out is left, unreported, as one checked out in a worktree that
-  stays.
+- **Never touched**: the main worktree, a worktree that is another project's folder or holds one, one that is the home
+  folder, the root of a disk or a folder holding Octoboard's own data — neither listed nor reported — and one of which
+  that cannot be told (see "A worktree that is or holds a project's folder" above). One that cannot be told is reported
+  as left, and listed by the confirmation as staying when it could not be told by then; where the repository outlives
+  the folder, a branch such a worktree has checked out is left, unreported, as one checked out in a worktree that stays.
 
 **The confirmation** looks up what goes along each time its option to move the folder to the Trash is ticked, and
 again, still open, after a removal with that option ticked is refused as protected, as shared or as a failed move;

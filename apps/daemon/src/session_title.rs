@@ -73,7 +73,7 @@ pub fn project_names(cwd: &Path) -> Vec<String> {
         }
         if marker.is_file() {
             push(dir);
-            if let Some(main) = main_repository(dir, &marker) {
+            if let Some(main) = main_repository(dir) {
                 push(&main);
             }
             break;
@@ -84,9 +84,8 @@ pub fn project_names(cwd: &Path) -> Vec<String> {
 
 /// The main repository of the linked worktree at `dir`, whose `.git` file names
 /// `<main repository>/.git/worktrees/<name>`, absolutely or relative to `dir`.
-fn main_repository(dir: &Path, marker: &Path) -> Option<PathBuf> {
-    let text = std::fs::read_to_string(marker).ok()?;
-    let gitdir = lexically_normalise(&dir.join(text.trim().strip_prefix("gitdir:")?.trim()));
+fn main_repository(dir: &Path) -> Option<PathBuf> {
+    let gitdir = lexically_normalise(&crate::hostfs::git_dir::git_dir(dir)?);
     let worktrees = gitdir.parent()?;
     let git = worktrees.parent()?;
     (worktrees.file_name()? == "worktrees" && git.file_name()? == ".git")

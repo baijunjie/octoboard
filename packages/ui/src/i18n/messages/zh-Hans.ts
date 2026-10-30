@@ -1535,6 +1535,9 @@ export const zhHans: Translation<"other"> = {
   "branchCleanup.group.projectFolder": {
     other: "以下工作树是项目文件夹：",
   },
+  "branchCleanup.group.protectedFolder": {
+    other: "以下工作树是你的主文件夹、磁盘的根目录，或存放着 {appName} 自身的数据，因此已保留：",
+  },
   "branchCleanup.group.projectFolderUnknown": {
     other: "无法检查以下工作树是否为或包含其他项目的文件夹：",
   },

@@ -1,8 +1,9 @@
-//! Whether a directory may be moved to the Trash without taking away what belongs to something
-//! else: never one whose loss would be drastic, nor one that would take along, or leave without
-//! its folder, the files of a path the caller says must stay (another project's folder, another
-//! account's directory). The refusals' wording and what each caller does with an answer are the
-//! caller's: [`looked_at_for_trash`] only says what stands in the way.
+//! Whether a directory may be moved to the Trash, or a linked worktree removed, without taking
+//! away what belongs to something else: never one whose loss would be drastic, nor one that would
+//! take along, or leave without its folder, the files of a path the caller says must stay (another
+//! project's folder, another account's directory). The refusals' wording and what each caller does
+//! with an answer are the caller's: [`looked_at_for_trash`] and [`Worktrees`] only say what stands
+//! in the way.
 //!
 //! Directories are told apart by device and inode ([`Place`]), never by their paths' text, which
 //! misses a directory with two real paths (a bind mount, a macOS firmlink). A match is what keeps
@@ -14,7 +15,7 @@
 //! the way is its [`Overlap`]. The home directory, the root of a disk and a directory holding
 //! Octoboard's data are protected whatever else is found.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -40,7 +41,8 @@ fn is_disk_root(directory: &Path) -> bool {
     }
 }
 
-/// What the path to be moved leads to, as moving that path to the Trash would take it.
+/// What the path to be moved leads to, as moving that path to the Trash, or removing the worktree
+/// there, would take it.
 enum TrashedEntry {
     /// A directory, link or not, where it really is: its place, its real path, and whether it is
     /// the root of a disk.
@@ -105,7 +107,8 @@ impl TrashedEntry {
     }
 }
 
-/// Why a path a move to the Trash depends on could not be resolved, for the refusal's `cause`.
+/// Why a path a move to the Trash, or a worktree's removal, depends on could not be resolved, for
+/// the refusal's words and `cause`.
 #[derive(Clone, Copy)]
 pub(crate) enum Failure {
     /// The look gave no answer in time, or one at the path is still stuck (`unanswered`).
@@ -136,9 +139,9 @@ fn file_identity(metadata: &std::fs::Metadata) -> Option<Identity> {
 
 /// What is at another path that must keep its files, at the home directory or at Octoboard's data
 /// directory.
-pub(crate) enum Seen {
+enum Seen {
     /// A directory, where it really is, with the place of its Git repository's common directory
-    /// when it was looked for ([`Overlap::Whole`]) and it is in one.
+    /// when it was looked for ([`Overlap::looks_for_repository`]) and it is in one.
     Directory {
         place: Place,
         repository: Option<Place>,
@@ -161,7 +164,7 @@ impl Seen {
     /// `None` when it cannot be told: the path is not absolute, an error other than nothing being
     /// there or a refused permission reading it, or a directory or repository that cannot be
     /// resolved. With `repository`, a directory's repository is looked for too. Blocking.
-    pub(crate) fn of(path: &Path, repository: bool) -> Option<Self> {
+    fn of(path: &Path, repository: bool) -> Option<Self> {
         let path = lexically_normalise(path);
         if !path.is_absolute() {
             return None;
@@ -207,7 +210,7 @@ impl Seen {
     /// told only by its text by whether that text starts with one of `texts`, the directory's path
     /// as written and as resolved. Without a `place`, where nothing is at the directory, only a
     /// text can lie in it.
-    pub(crate) fn lies_in(&self, place: Option<&Place>, texts: &[PathBuf]) -> bool {
+    fn lies_in(&self, place: Option<&Place>, texts: &[PathBuf]) -> bool {
         match (self, place) {
             (Self::Directory { place: ours, .. }, Some(place)) => ours.lies_in(place),
             (Self::Entry { parents, .. }, Some(place)) => {
@@ -222,22 +225,31 @@ impl Seen {
 
     /// Whether this is a directory whose Git repository's common directory, looked for with
     /// [`Seen::of`], lies in the directory at `place`.
-    pub(crate) fn repository_lies_in(&self, place: &Place) -> bool {
+    fn repository_lies_in(&self, place: &Place) -> bool {
         matches!(self, Self::Directory { repository: Some(repository), .. }
             if repository.lies_in(place))
     }
 }
 
-/// The directory moved to the Trash, as far as the paths of what it must not take are compared
-/// with it.
-struct Trashed {
-    entry: TrashedEntry,
+/// The directory moved to the Trash, or the worktree removed, as far as the paths of what it must
+/// not take are compared with it.
+struct Trashed<'a> {
+    entry: &'a TrashedEntry,
     /// Its path as written and, for a directory, as resolved: what a path told only by its text is
     /// compared with.
     texts: Vec<PathBuf>,
 }
 
-impl Trashed {
+impl<'a> Trashed<'a> {
+    /// What is at `written`, found to be `entry`.
+    fn new(written: &Path, entry: &'a TrashedEntry) -> Self {
+        let mut texts = vec![lexically_normalise(written)];
+        if let TrashedEntry::Directory { real, .. } = entry {
+            texts.push(real.clone());
+        }
+        Self { entry, texts }
+    }
+
     /// Whether any of `paths` is the same text as this one's or lies inside it, or (with `holding`)
     /// holds it.
     fn text_overlaps(&self, paths: &[PathBuf], holding: bool) -> bool {
@@ -248,19 +260,20 @@ impl Trashed {
         })
     }
 
-    /// Whether moving this would take `other`'s files along, or leave what holds it without it,
-    /// as `overlap` counts: they are the same directory, one lies in the other, or `other`'s
-    /// repository, where one was looked for, lies in this one.
+    /// Whether moving or removing this would take `other`'s files along, or leave what holds it
+    /// without it, as `overlap` counts: they are the same directory, one lies in the other, or
+    /// `other`'s repository, where one was looked for, lies in this one.
     fn takes(&self, other: &Seen, overlap: Overlap) -> bool {
-        let inside_only = matches!(overlap, Overlap::Inside);
-        match (&self.entry, other) {
+        let inside_only = overlap.inside_only();
+        match (self.entry, other) {
             (_, Seen::Text { paths }) => self.text_overlaps(paths, !inside_only),
             (
                 TrashedEntry::Directory { place: ours, .. },
                 Seen::Directory { place: theirs, .. },
             ) => {
                 theirs.lies_in(ours)
-                    || (!inside_only && (ours.lies_in(theirs) || other.repository_lies_in(ours)))
+                    || (!inside_only && ours.lies_in(theirs))
+                    || (overlap.looks_for_repository() && other.repository_lies_in(ours))
             }
             (TrashedEntry::Directory { place: ours, .. }, Seen::Entry { parents, .. }) => {
                 parents.iter().any(|parent| parent.lies_in(ours))
@@ -283,7 +296,7 @@ impl Trashed {
 
     /// Whether this is the home directory `home`.
     fn is_home(&self, home: &Seen) -> bool {
-        match (&self.entry, home) {
+        match (self.entry, home) {
             (TrashedEntry::Directory { place, .. }, Seen::Directory { place: home, .. }) => {
                 place.is(home)
             }
@@ -296,10 +309,55 @@ impl Trashed {
 
     /// Whether this holds Octoboard's data directory `data`.
     fn holds_data(&self, data: &Seen) -> bool {
-        let TrashedEntry::Directory { place: ours, .. } = &self.entry else {
+        let TrashedEntry::Directory { place: ours, .. } = self.entry else {
             return false;
         };
         data.lies_in(Some(ours), &self.texts)
+    }
+
+    /// Why this may not go, as [`looked_at_for_trash`] says, given what each of `others` was found
+    /// to be (`seen`) and what `home` and `data` were (`kept`), a path absent from those where its
+    /// look gave no answer in time.
+    fn blocked(
+        &self,
+        others: &[(PathBuf, Overlap)],
+        seen: &HashMap<PathBuf, Look<Seen>>,
+        home: Option<&PathBuf>,
+        data: &PathBuf,
+        kept: &HashMap<PathBuf, Look<Seen>>,
+    ) -> Result<(), Blocked> {
+        if let TrashedEntry::Directory { disk_root, .. } = self.entry {
+            // A disk's root is refused for what it is, whatever else can be looked at.
+            if *disk_root {
+                return Err(Blocked::Protected);
+            }
+            let found = |path: &PathBuf, what: Unresolved| match kept.get(path) {
+                Some(Look::Found(seen)) => Ok(seen),
+                Some(Look::Unresolved) => Err(Blocked::Unlooked(what, Failure::Unresolved)),
+                None => Err(Blocked::Unlooked(what, Failure::Unanswered)),
+            };
+            let home = home.map(|home| found(home, Unresolved::Home)).transpose()?;
+            let data = found(data, Unresolved::Data)?;
+            if home.is_some_and(|home| self.is_home(home)) || self.holds_data(data) {
+                return Err(Blocked::Protected);
+            }
+        }
+
+        // One known to overlap is named before one that only could not be resolved, which is in
+        // the way all the same.
+        let in_the_way = others
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (path, overlap))| match seen.get(path) {
+                Some(Look::Found(seen)) => self.takes(seen, *overlap).then_some((index, None)),
+                Some(Look::Unresolved) => Some((index, Some(Failure::Unresolved))),
+                None => Some((index, Some(Failure::Unanswered))),
+            })
+            .min_by_key(|(_, unresolved)| unresolved.is_some());
+        match in_the_way {
+            Some((index, unresolved)) => Err(Blocked::InTheWay { index, unresolved }),
+            None => Ok(()),
+        }
     }
 }
 
@@ -317,7 +375,8 @@ impl<T> From<Option<T>> for Look<T> {
     }
 }
 
-/// Which of the paths a move to the Trash depends on did not resolve, for the refusal's words.
+/// Which of the paths a move to the Trash, or a worktree's removal, depends on did not resolve, for
+/// the refusal's words.
 #[derive(Clone, Copy)]
 pub(crate) enum Unresolved {
     Folder,
@@ -325,7 +384,7 @@ pub(crate) enum Unresolved {
     Data,
 }
 
-/// How a path that is in the way of a move to the Trash is in it.
+/// How a path that is in the way of a move to the Trash, or of a worktree's removal, is in it.
 #[derive(Clone, Copy)]
 pub(crate) enum Overlap {
     /// It is the directory moved, lies inside it or holds it, or its Git repository lies inside it
@@ -336,16 +395,26 @@ pub(crate) enum Overlap {
     Nested,
     /// It is the directory moved or lies inside it: only what the move would take along.
     Inside,
+    /// It is the directory moved or lies inside it, or its Git repository lies inside it: only what
+    /// the move would take along, a repository another folder works from among it. Its repository
+    /// is looked for.
+    InsideWithRepository,
 }
 
 impl Overlap {
     /// Whether a directory's Git repository is looked for.
     fn looks_for_repository(self) -> bool {
-        matches!(self, Overlap::Whole)
+        matches!(self, Overlap::Whole | Overlap::InsideWithRepository)
+    }
+
+    /// Whether only what the move would take along counts, not a path holding the directory.
+    fn inside_only(self) -> bool {
+        matches!(self, Overlap::Inside | Overlap::InsideWithRepository)
     }
 }
 
-/// Why a directory may not be moved to the Trash, from [`looked_at_for_trash`].
+/// Why a directory may not be moved to the Trash, from [`looked_at_for_trash`], or a linked
+/// worktree removed, from [`Worktrees::judged`].
 pub(crate) enum Blocked {
     /// A path the decision depends on could not be resolved.
     Unlooked(Unresolved, Failure),
@@ -357,6 +426,33 @@ pub(crate) enum Blocked {
         index: usize,
         unresolved: Option<Failure>,
     },
+}
+
+/// The home directory, where it is known, and Octoboard's data directory: what a directory moved
+/// must not be or hold.
+fn kept_paths(home: Option<&PathBuf>, data: &Path) -> Vec<PathBuf> {
+    home.cloned()
+        .into_iter()
+        .chain([data.to_path_buf()])
+        .collect()
+}
+
+/// What is at a path of [`kept_paths`], whose repository is not looked for. Blocking.
+fn kept_look(path: &Path) -> Look<Seen> {
+    Look::from(Seen::of(path, false))
+}
+
+/// What the look at the directory to be moved found (`None` where nothing is at it), from its
+/// answer: `None` where the look gave none in time, and blocked where the directory could not be
+/// resolved.
+fn entry_found(
+    found: Option<&Result<Option<TrashedEntry>, Failure>>,
+) -> Result<Option<&TrashedEntry>, Blocked> {
+    match found {
+        Some(Ok(entry)) => Ok(entry.as_ref()),
+        Some(Err(failure)) => Err(Blocked::Unlooked(Unresolved::Folder, *failure)),
+        None => Err(Blocked::Unlooked(Unresolved::Folder, Failure::Unanswered)),
+    }
 }
 
 /// Whether the directory `written` may be moved to the Trash given the `others` paths that must
@@ -389,13 +485,13 @@ pub(crate) async fn looked_at_for_trash(
     data: PathBuf,
 ) -> Result<Option<PathBuf>, Blocked> {
     let written = written.to_path_buf();
-    let kept: Vec<PathBuf> = home.iter().cloned().chain([data.clone()]).collect();
+    let kept = kept_paths(home.as_ref(), &data);
     let with_repository: HashSet<PathBuf> = others
         .iter()
         .filter(|(_, overlap)| overlap.looks_for_repository())
         .map(|(path, _)| path.clone())
         .collect();
-    let (mut entry, seen, kept_seen) = tokio::join!(
+    let (entry, seen, kept_seen) = tokio::join!(
         looked_within_stuck(
             &state.directory_looks,
             vec![written.clone()],
@@ -409,55 +505,153 @@ pub(crate) async fn looked_at_for_trash(
             move |path| Some(Look::from(Seen::of(path, with_repository.contains(path)))),
         ),
         looked_within_stuck(&state.directory_looks, kept, looking, |path| {
-            Some(Look::from(Seen::of(path, false)))
+            Some(kept_look(path))
         }),
     );
-    let entry = match entry.remove(&written) {
-        Some(Ok(Some(entry))) => entry,
-        Some(Ok(None)) => return Ok(None),
-        Some(Err(failure)) => return Err(Blocked::Unlooked(Unresolved::Folder, failure)),
-        None => return Err(Blocked::Unlooked(Unresolved::Folder, Failure::Unanswered)),
+    let Some(entry) = entry_found(entry.get(&written))? else {
+        return Ok(None);
     };
-    let mut texts = vec![lexically_normalise(&written)];
-    if let TrashedEntry::Directory { real, .. } = &entry {
-        texts.push(real.clone());
-    }
-    let trashed = Trashed { entry, texts };
+    Trashed::new(&written, entry).blocked(others, &seen, home.as_ref(), &data, &kept_seen)?;
+    Ok(Some(written))
+}
 
-    if let TrashedEntry::Directory { disk_root, .. } = &trashed.entry {
-        // A disk's root is refused for what it is, whatever else can be looked at.
-        if *disk_root {
-            return Err(Blocked::Protected);
+/// What one path of [`Worktrees::look`] was found to be, in each role it was looked at for.
+struct Looked {
+    root: Option<Result<Option<TrashedEntry>, Failure>>,
+    other: Option<Look<Seen>>,
+    kept: Option<Look<Seen>>,
+}
+
+/// Linked worktrees a cleanup may remove, each judged as [`looked_at_for_trash`] judges a
+/// directory against the same other paths that must keep their files, the home directory and
+/// Octoboard's data directory, with each of those paths looked at once however many worktrees are
+/// judged.
+///
+/// Another path is in the way of a worktree as [`Overlap::InsideWithRepository`] says: being the
+/// worktree, lying inside it or having its Git repository inside it, never holding it, as a
+/// project's folder holds the worktrees laid out under it. A root that leads to no directory — a
+/// file, a link to one or to nothing — cannot be told, and blocks as [`Blocked::Unlooked`]. A
+/// root with nothing at it holds no files, though git still takes its record: it is blocked only
+/// by another path told by its text that lies in it, and a path that cannot be resolved does not
+/// block it.
+pub(crate) struct Worktrees {
+    others: Vec<(PathBuf, Overlap)>,
+    home: Option<PathBuf>,
+    data: PathBuf,
+    /// Whether `others`, `home` and `data` have been looked at.
+    others_looked: bool,
+    roots_looked: HashSet<PathBuf>,
+    roots: HashMap<PathBuf, Result<Option<TrashedEntry>, Failure>>,
+    seen: HashMap<PathBuf, Look<Seen>>,
+    kept: HashMap<PathBuf, Look<Seen>>,
+}
+
+impl Worktrees {
+    /// For the `others` paths that must keep their files, with `home` and `data` the home
+    /// directory and Octoboard's data directory, none of them looked at yet.
+    pub(crate) fn new(others: Vec<PathBuf>, home: Option<PathBuf>, data: PathBuf) -> Self {
+        Self {
+            others: others
+                .into_iter()
+                .map(|path| (path, Overlap::InsideWithRepository))
+                .collect(),
+            home,
+            data,
+            others_looked: false,
+            roots_looked: HashSet::new(),
+            roots: HashMap::new(),
+            seen: HashMap::new(),
+            kept: HashMap::new(),
         }
-        let found = |path: &PathBuf, what: Unresolved| match kept_seen.get(path) {
-            Some(Look::Found(seen)) => Ok(seen),
-            Some(Look::Unresolved) => Err(Blocked::Unlooked(what, Failure::Unresolved)),
-            None => Err(Blocked::Unlooked(what, Failure::Unanswered)),
+    }
+
+    /// Looks at the worktree roots `roots` not looked at yet and, the first time, at the other
+    /// paths, the home directory and Octoboard's data directory, as `looking` says
+    /// ([`looked_within_stuck`]). Nothing is looked at without a root to look at.
+    pub(crate) async fn look(
+        &mut self,
+        state: &AppState,
+        looking: Looking,
+        roots: impl IntoIterator<Item = PathBuf>,
+    ) {
+        let as_root: HashSet<PathBuf> = roots
+            .into_iter()
+            .filter(|root| !self.roots_looked.contains(root))
+            .collect();
+        if as_root.is_empty() {
+            return;
+        }
+        let (as_other, as_kept): (HashSet<PathBuf>, HashSet<PathBuf>) = if self.others_looked {
+            Default::default()
+        } else {
+            (
+                self.others.iter().map(|(path, _)| path.clone()).collect(),
+                kept_paths(self.home.as_ref(), &self.data)
+                    .into_iter()
+                    .collect(),
+            )
         };
-        let home = home
-            .as_ref()
-            .map(|home| found(home, Unresolved::Home))
-            .transpose()?;
-        let data = found(&data, Unresolved::Data)?;
-        if home.is_some_and(|home| trashed.is_home(home)) || trashed.holds_data(data) {
-            return Err(Blocked::Protected);
+        self.others_looked = true;
+        self.roots_looked.extend(as_root.iter().cloned());
+        let paths: Vec<PathBuf> = as_root
+            .iter()
+            .chain(&as_other)
+            .chain(&as_kept)
+            .cloned()
+            .collect();
+        let found = looked_within_stuck(&state.directory_looks, paths, looking, move |path| {
+            Some(Looked {
+                root: as_root.contains(path).then(|| TrashedEntry::of(path)),
+                other: as_other
+                    .contains(path)
+                    .then(|| Look::from(Seen::of(path, true))),
+                kept: as_kept.contains(path).then(|| kept_look(path)),
+            })
+        })
+        .await;
+        for (path, looked) in found {
+            if let Some(root) = looked.root {
+                self.roots.insert(path.clone(), root);
+            }
+            if let Some(other) = looked.other {
+                self.seen.insert(path.clone(), other);
+            }
+            if let Some(kept) = looked.kept {
+                self.kept.insert(path, kept);
+            }
         }
     }
 
-    // One known to overlap is named before one that only could not be resolved, which is in the
-    // way all the same.
-    let in_the_way = others
-        .iter()
-        .enumerate()
-        .filter_map(|(index, (path, overlap))| match seen.get(path) {
-            Some(Look::Found(seen)) => trashed.takes(seen, *overlap).then_some((index, None)),
-            Some(Look::Unresolved) => Some((index, Some(Failure::Unresolved))),
-            None => Some((index, Some(Failure::Unanswered))),
-        })
-        .min_by_key(|(_, unresolved)| unresolved.is_some());
-    match in_the_way {
-        Some((index, unresolved)) => Err(Blocked::InTheWay { index, unresolved }),
-        None => Ok(Some(written)),
+    /// Whether the worktree at `root`, looked at through [`Worktrees::look`], may be removed; a
+    /// root that was not looked at counts as one whose look gave no answer in time.
+    pub(crate) fn judged(&self, root: &Path) -> Result<(), Blocked> {
+        let entry = match entry_found(self.roots.get(root))? {
+            Some(entry @ TrashedEntry::Directory { .. }) => entry,
+            Some(TrashedEntry::Entry { .. }) => {
+                return Err(Blocked::Unlooked(Unresolved::Folder, Failure::Unresolved))
+            }
+            None => {
+                let texts = [lexically_normalise(root)];
+                let lies_in_root = |path: &PathBuf| match self.seen.get(path) {
+                    Some(Look::Found(seen)) => seen.lies_in(None, &texts),
+                    _ => false,
+                };
+                return match self.others.iter().position(|(path, _)| lies_in_root(path)) {
+                    Some(index) => Err(Blocked::InTheWay {
+                        index,
+                        unresolved: None,
+                    }),
+                    None => Ok(()),
+                };
+            }
+        };
+        Trashed::new(root, entry).blocked(
+            &self.others,
+            &self.seen,
+            self.home.as_ref(),
+            &self.data,
+            &self.kept,
+        )
     }
 }
 

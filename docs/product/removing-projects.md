@@ -74,7 +74,8 @@ running will still be stopped, announced as it appears, and no count (see "Failu
 - Once the project is removed and its sessions' processes have ended, linked worktrees outside the folder that would
   be left without it, and where the repository outlives the folder the branches of the project's sessions, go too
   (which ones depends on whether the repository goes with the folder), but never a worktree that is or holds another
-  project's folder, or of which that cannot be told (see "A worktree that is or holds a project's folder" in
+  project's folder, one that is the home folder, the root of a disk or a folder holding Octoboard's own data, or one
+  of which that cannot be told (see "A worktree that is or holds a project's folder" in
   `docs/product/branch-and-worktree-cleanup.md`); a failure there does not undo the removal and is reported (see "With a
   project's folder moved to the Trash" in `docs/product/branch-and-worktree-cleanup.md`).
 - A folder that no longer exists is skipped: nothing is moved, and the project is removed as usual.

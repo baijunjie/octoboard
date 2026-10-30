@@ -23,7 +23,7 @@ export type BranchRow = {
 /** A group of branches and worktrees standing the same way: `lead` says how, once, and the list
  * under it names each, as monospace text; `note`, where there is one, follows the list, saying what to do with them. A
  * group whose heading already says it has no lead. */
-export type BranchGroup = { key: string; lead?: string; note?: string; rows: BranchRow[] };
+export type BranchGroup = { key: string; lead?: React.ReactNode; note?: React.ReactNode; rows: BranchRow[] };
 
 /** A path or branch name shown on its own, so plain monospace text rather than a chip. */
 function code(value: string): React.ReactElement {

@@ -211,8 +211,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Focus and key handling in the UI](memory/focus-and-key-handling-in-the-ui.md) — keeping focus from dropping, Escape
   and key handlers, top layers and the shortcut registry.
 - [Handling paths and files in the daemon](memory/handling-paths-and-files-in-the-daemon.md) — treating hook-reported
-  paths as untrusted, destructive acts, reading project files safely, and telling directories apart by device and
-  inode.
+  paths as untrusted, destructive acts, reading project and git-directory files safely, and telling directories apart
+  by device and inode.
 - [Isolating agent CLI probes](memory/isolating-agent-cli-probes.md) — keeping a probe of an agent CLI or a live session
   off the user's configuration, accounts and data.
 - [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — avoiding document-wide style
@@ -228,7 +228,7 @@ Development plan docs and bug tickets are temporary and are not listed here.
 - [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — selectors, effect dependencies, polling
   deduplication and event ordering when reading daemon state.
 - [Running git from the daemon](memory/running-git-from-the-daemon.md) — building `git` commands in the daemon:
-  environment, deadlines, flags and test fixtures.
+  environment, deadlines, flags, ref names and test fixtures.
 - [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — bounding the window's
   outstanding browse requests under the daemon's budget.
 - [Styling the UI](memory/styling-the-ui.md) — keeping HeroUI's look and the Tailwind, class-name, spacing and divider

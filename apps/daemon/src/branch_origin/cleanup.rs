@@ -11,9 +11,10 @@
 //! branch through `git branch -d`, git's own check that it is merged into its upstream (into
 //! `HEAD` when it has none). Every command runs in the repository's common directory, where `HEAD`
 //! is the main worktree's, and which outlives any worktree. The main worktree is never removed, nor
-//! a worktree that is a project's folder or holds one, nor one of which that cannot be told
-//! ([`Holders`]); a branch still checked out in a worktree that stays is left, as git would refuse
-//! it anyway.
+//! a worktree that is a project's folder or holds one, nor the home directory, the root of a disk
+//! or one holding Octoboard's data, nor one of which that cannot be told
+//! ([`WorktreeRemovability`]); a branch still checked out in a worktree that stays is left, as git
+//! would refuse it anyway.
 //!
 //! What git would refuse — a worktree with uncommitted changes or submodules, an unmerged branch, a
 //! locked worktree — goes only when the caller names it as forced (`--force`, `-D`, `--force` twice
@@ -43,14 +44,13 @@ use super::git_files::uses_reftable;
 use super::repo_key;
 use crate::browse::source::admin_dir;
 use crate::browse::wire_path;
-use crate::hostfs::place::{looked_within, Place};
-use crate::hostfs::{self, lexically_normalise};
+use crate::hostfs::place::Looking;
 use crate::protocol::{
     Session, SessionBranchCause, SessionBranchItem, SessionBranchKind, SessionBranchState,
     SessionBranchTarget, SessionStatus,
 };
 use crate::state::AppState;
-use crate::trash_safety::{Seen, TRASH_LOOK_DEADLINE};
+use crate::trash_safety::{Blocked, Unresolved, Worktrees, TRASH_LOOK_DEADLINE};
 
 /// How long removal waits for the sessions' processes to end before going ahead anyway. Far above
 /// the graceful period an ending process gets; past it, a process that would not die is left to
@@ -91,17 +91,17 @@ impl Cleanups {
 
 /// What is bound to `sessions`, and where each item stands now. Runs no `git` when none of the
 /// sessions is responsible for a branch, which is most sessions. Blocking, waiting for its looks
-/// as [`Holders::look`] says.
+/// as [`WorktreeRemovability::look`] says.
 pub fn inspect(state: &AppState, sessions: &[Session]) -> Result<Vec<SessionBranchItem>> {
     let bound = bound_in(state, sessions)?;
     if bound.is_empty() {
         return Ok(Vec::new());
     }
     let git = (state.host_tools.get().git)()?;
-    let mut holders = Holders::of_projects(state, None)?;
+    let mut judge = WorktreeRemovability::of_projects(state, None)?;
     let mut items = Vec::new();
     for repo in &bound {
-        match survey(state, &git, repo, &mut holders) {
+        match survey(state, &git, repo, &mut judge) {
             Ok(survey) => items.extend(survey.items()),
             Err(detail) => items.extend(repo.all_failed(&detail)),
         }
@@ -150,14 +150,14 @@ pub async fn remove_once_stopped(
             Ok(git) => git,
             Err(err) => return all_failed(&bound, &format!("{err:#}")),
         };
-        let mut holders = match Holders::of_projects(&state, None) {
-            Ok(holders) => holders,
+        let mut judge = match WorktreeRemovability::of_projects(&state, None) {
+            Ok(judge) => judge,
             Err(err) => return all_failed(&bound, &format!("{err:#}")),
         };
         let mut left = Vec::new();
         for repo in &bound {
             left.extend(state.branch_cleanups.serialized(&repo.repo, || {
-                remove_in(&state, &git, repo, &mut holders, &forced)
+                remove_in(&state, &git, repo, &mut judge, &forced)
             }));
         }
         left
@@ -467,11 +467,21 @@ fn failed(mut item: SessionBranchItem, detail: String) -> SessionBranchItem {
     item
 }
 
-/// `item` as one kept because whether it is or holds another project's folder could not be told.
-fn untold(item: SessionBranchItem) -> SessionBranchItem {
+/// `item` as one kept because it is the home directory, the root of a disk or a directory holding
+/// Octoboard's data.
+fn protected(item: SessionBranchItem) -> SessionBranchItem {
+    SessionBranchItem {
+        cause: Some(SessionBranchCause::ProtectedFolder),
+        ..failed(item, PROTECTED.to_string())
+    }
+}
+
+/// `item` as one kept because whether it is or holds another project's folder, or what else it
+/// must not take, could not be told, for the reason `detail`.
+fn untold(item: SessionBranchItem, detail: String) -> SessionBranchItem {
     SessionBranchItem {
         cause: Some(SessionBranchCause::ProjectFolderUnknown),
-        ..failed(item, HOLDING_UNTOLD.to_string())
+        ..failed(item, detail)
     }
 }
 
@@ -531,185 +541,109 @@ fn item_of(
     }
 }
 
-// -- what holds another project's folder ------------------------------------------
+// -- what removing a worktree would take along ----------------------------------------
 
 /// Why a worktree is kept when whether it is or holds another project's folder could not be told,
 /// as a `failed` item's `detail`.
-const HOLDING_UNTOLD: &str = "whether it is or holds another project's folder could not be told";
+const PROJECT_FOLDER_UNTOLD: &str =
+    "whether it is or holds another project's folder could not be told";
 
-/// Whether a worktree is another project's folder or holds one.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Holding {
-    No,
-    Yes,
-    /// It could not be told. A miss would remove that project's files with the worktree, so the
-    /// worktree is kept, as for `Yes`, though named as one that could not be told.
-    Unknown,
+/// Why a worktree whose loss would be drastic is kept, as a `failed` item's `detail`.
+const PROTECTED: &str =
+    "it is the home folder, the root of a disk or a folder holding Octoboard's data";
+
+/// Whether a worktree may be removed without taking what belongs to something else.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Removability {
+    Removable,
+    /// It is another project's folder or holds one.
+    ProjectFolder,
+    /// It is the home directory, the root of a disk or a directory holding Octoboard's data.
+    Protected,
+    /// It could not be told, for the reason given as a `failed` item's `detail`. A miss would
+    /// remove what it holds with the worktree, so the worktree is kept, as for `ProjectFolder`,
+    /// though named as one that could not be told.
+    Untold(String),
 }
 
-/// The root of a worktree the cleanup may remove, as looked at.
-struct Root {
-    /// Where it really is; `None` where nothing is at it.
-    place: Option<Place>,
-    /// Its path as given and, where it resolves, as resolved: what a path told only by its text
-    /// is compared with.
-    texts: Vec<PathBuf>,
-}
-
-impl Root {
-    /// What is at `root`, `None` where that cannot be told: permission to read it is refused,
-    /// another I/O error, something other than a directory, a directory that cannot be resolved (no
-    /// inode). Blocking.
-    fn of(root: &Path) -> Option<Self> {
-        let written = lexically_normalise(root);
-        match std::fs::symlink_metadata(&written) {
-            Err(err) if hostfs::is_not_found(&err) => {
-                return Some(Self {
-                    place: None,
-                    texts: vec![written],
-                })
-            }
-            Err(_) => return None,
-            Ok(_) => {}
-        }
-        let (place, real) = Place::resolved(&written)?;
-        Some(Self {
-            place: Some(place),
-            texts: vec![written, real],
-        })
-    }
-}
-
-/// What one path of [`Holders::look`] was found to be, in each role it was looked at for.
-struct Looked {
-    seen: Option<Seen>,
-    root: Option<Root>,
-}
-
-/// Whether a worktree the cleanup may remove is another project's folder or holds one, told by
-/// device and inode, never by the paths' text, which misses a folder with a second real path (a
-/// bind mount, a macOS firmlink). A miss removes that project's files with the worktree, so what
-/// cannot be told counts as held: another project's path that cannot be resolved (an I/O error
-/// other than a refused permission, no inode, a look that outran its deadline or is still stuck
-/// from an earlier one), and the worktree's root when it cannot be read or resolved. Only another
-/// project's path with nothing at it or that cannot be read for want of permission is compared by
-/// its text, as written and as resolved, with the root's, as is a root with nothing at it, which
-/// holds nothing else.
+/// The worktrees a cleanup may remove, judged against every project's folder but one, the home
+/// directory and Octoboard's data directory as `trash_safety` judges them ([`Worktrees`]).
 ///
 /// The paths are read off the store's lock, each distinct one once per cleanup, a few at a time,
-/// each bounded by [`TRASH_LOOK_DEADLINE`] ([`looked_within`]).
-pub(super) struct Holders {
-    /// The other projects' paths, as stored.
-    others: Vec<PathBuf>,
-    /// Whether `others` have been looked at.
-    others_looked: bool,
-    roots_looked: HashSet<PathBuf>,
-    seen: HashMap<PathBuf, Seen>,
-    roots: HashMap<PathBuf, Root>,
-}
+/// each bounded by [`TRASH_LOOK_DEADLINE`].
+pub(super) struct WorktreeRemovability(Worktrees);
 
-impl Holders {
+impl WorktreeRemovability {
     /// For the paths of every project but `except`, none of them looked at yet.
     pub(super) fn of_projects(state: &AppState, except: Option<&str>) -> Result<Self> {
-        Ok(Self {
-            others: state
-                .store
-                .list_projects()?
-                .into_iter()
-                .filter(|project| Some(project.id.as_str()) != except)
-                .map(|project| PathBuf::from(project.path))
-                .collect(),
-            others_looked: false,
-            roots_looked: HashSet::new(),
-            seen: HashMap::new(),
-            roots: HashMap::new(),
-        })
+        Self::of(
+            state,
+            except,
+            crate::paths::known_home_dir(),
+            crate::paths::data_dir(),
+        )
     }
 
-    /// Looks at the other projects' paths and at the worktree roots `roots`, those not looked at
-    /// yet. Nothing is looked at while there is no other project, as no worktree holds one then.
+    /// [`WorktreeRemovability::of_projects`], with `home` and `data` the home directory and
+    /// Octoboard's data directory.
+    fn of(
+        state: &AppState,
+        except: Option<&str>,
+        home: Option<PathBuf>,
+        data: PathBuf,
+    ) -> Result<Self> {
+        let others = state
+            .store
+            .list_projects()?
+            .into_iter()
+            .filter(|project| Some(project.id.as_str()) != except)
+            .map(|project| PathBuf::from(project.path))
+            .collect();
+        Ok(Self(Worktrees::new(others, home, data)))
+    }
+
+    /// Looks at the worktree roots `roots` and at what they are judged against, those not looked
+    /// at yet ([`Worktrees::look`]).
     ///
     /// Blocking: this thread waits for the looks, which the runtime runs on blocking threads of
     /// their own so each can be left behind at its deadline. So it runs on a blocking thread of
     /// the runtime (`spawn_blocking`), as every blocking function here does, never on one of its
     /// workers; off any runtime nothing is looked at, and every worktree counts as untold.
     pub(super) fn look(&mut self, state: &AppState, roots: impl IntoIterator<Item = PathBuf>) {
-        if self.others.is_empty() {
-            return;
-        }
-        let as_other: HashSet<PathBuf> = if self.others_looked {
-            HashSet::new()
-        } else {
-            self.others.iter().cloned().collect()
-        };
-        let as_root: HashSet<PathBuf> = roots
-            .into_iter()
-            .filter(|root| !self.roots_looked.contains(root))
-            .collect();
-        if as_root.is_empty() {
+        let roots: Vec<PathBuf> = roots.into_iter().collect();
+        if roots.is_empty() {
             return;
         }
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
             tracing::warn!("no runtime to look at worktrees with; each counts as untold");
             return;
         };
-        self.others_looked = true;
-        self.roots_looked.extend(as_root.iter().cloned());
-        let paths: Vec<PathBuf> = as_other.union(&as_root).cloned().collect();
-        let found = runtime.block_on(looked_within(
-            &state.directory_looks,
-            paths,
-            TRASH_LOOK_DEADLINE,
-            move |path| {
-                Some(Looked {
-                    seen: as_other
-                        .contains(path)
-                        .then(|| Seen::of(path, true))
-                        .flatten(),
-                    root: as_root.contains(path).then(|| Root::of(path)).flatten(),
-                })
-            },
-        ));
-        for (path, looked) in found {
-            if let Some(seen) = looked.seen {
-                self.seen.insert(path.clone(), seen);
-            }
-            if let Some(root) = looked.root {
-                self.roots.insert(path, root);
-            }
-        }
+        runtime.block_on(
+            self.0
+                .look(state, Looking::within(TRASH_LOOK_DEADLINE), roots),
+        );
     }
 
-    /// Whether the worktree at `root`, looked at through [`Holders::look`], is another project's
-    /// folder or holds one.
-    fn holding(&self, root: &Path) -> Holding {
-        if self.others.is_empty() {
-            return Holding::No;
-        }
-        let Some(root) = self.roots.get(root) else {
-            return Holding::Unknown;
-        };
-        let mut untold = false;
-        for other in &self.others {
-            match self.seen.get(other) {
-                Some(seen)
-                    if seen.lies_in(root.place.as_ref(), &root.texts)
-                        || root
-                            .place
-                            .as_ref()
-                            .is_some_and(|place| seen.repository_lies_in(place)) =>
-                {
-                    return Holding::Yes
-                }
-                Some(_) => {}
-                // Nothing at the root holds no files of anyone's.
-                None => untold |= root.place.is_some(),
+    /// Whether the worktree at `root`, looked at through [`WorktreeRemovability::look`], may be
+    /// removed.
+    fn removability(&self, root: &Path) -> Removability {
+        match self.0.judged(root) {
+            Ok(()) => Removability::Removable,
+            Err(Blocked::Protected) => Removability::Protected,
+            Err(Blocked::InTheWay {
+                unresolved: None, ..
+            }) => Removability::ProjectFolder,
+            Err(Blocked::InTheWay { .. } | Blocked::Unlooked(Unresolved::Folder, _)) => {
+                Removability::Untold(PROJECT_FOLDER_UNTOLD.to_string())
             }
-        }
-        if untold {
-            Holding::Unknown
-        } else {
-            Holding::No
+            Err(Blocked::Unlooked(Unresolved::Home, failure)) => Removability::Untold(format!(
+                "the home folder {}, so whether this worktree is it could not be told",
+                failure.described().0
+            )),
+            Err(Blocked::Unlooked(Unresolved::Data, failure)) => Removability::Untold(format!(
+                "Octoboard's data folder {}, so whether it is in this worktree could not be told",
+                failure.described().0
+            )),
         }
     }
 }
@@ -793,7 +727,7 @@ fn survey(
     state: &AppState,
     git: &Git,
     bound: &Bound,
-    holders: &mut Holders,
+    judge: &mut WorktreeRemovability,
 ) -> Result<Survey, String> {
     let listed = worktrees(git, &bound.repo)?;
     let names = stored_names(git, &bound.repo, &bound.branches);
@@ -803,7 +737,7 @@ fn survey(
             .find(|(name, _)| worktree.branch.as_deref() == Some(name.as_slice()))
             .map(|(_, branch)| *branch)
     };
-    holders.look(
+    judge.look(
         state,
         listed
             .iter()
@@ -830,10 +764,11 @@ fn survey(
                 state,
             )
         };
-        let item = match holders.holding(&worktree.root) {
-            Holding::Yes => item(SessionBranchState::ProjectFolder),
-            Holding::Unknown => untold(item(SessionBranchState::Failed)),
-            Holding::No => {
+        let item = match judge.removability(&worktree.root) {
+            Removability::ProjectFolder => item(SessionBranchState::ProjectFolder),
+            Removability::Protected => protected(item(SessionBranchState::Failed)),
+            Removability::Untold(detail) => untold(item(SessionBranchState::Failed), detail),
+            Removability::Removable => {
                 let (state, uncommitted, detail) = worktree_state(git, worktree);
                 SessionBranchItem {
                     uncommitted,
@@ -987,10 +922,10 @@ fn remove_in(
     state: &AppState,
     git: &Git,
     bound: &Bound,
-    holders: &mut Holders,
+    judge: &mut WorktreeRemovability,
     forced: &[SessionBranchTarget],
 ) -> Vec<SessionBranchItem> {
-    let survey = match survey(state, git, bound, holders) {
+    let survey = match survey(state, git, bound, judge) {
         Ok(survey) => survey,
         Err(detail) => return bound.all_failed(&detail),
     };

@@ -52,17 +52,8 @@ impl Dirs {
     /// directory of a linked worktree, whose `commondir` file names the common one. Both come
     /// back canonical, since a watch reports canonical paths (`/private/var` for `/var`).
     fn resolve(project_dir: &Path) -> Option<Self> {
-        let dot_git = project_dir.join(".git");
-        let git_dir = if dot_git.is_dir() {
-            dot_git
-        } else {
-            let text = std::fs::read_to_string(&dot_git).ok()?;
-            project_dir.join(text.trim().strip_prefix("gitdir:")?.trim())
-        };
-        let common_dir = match std::fs::read_to_string(git_dir.join("commondir")) {
-            Ok(text) => git_dir.join(text.trim()),
-            Err(_) => git_dir.clone(),
-        };
+        let git_dir = hostfs::git_dir::git_dir(project_dir)?;
+        let common_dir = hostfs::git_dir::common_dir(&git_dir).ok()?;
         Some(Self {
             git_dir: git_dir.canonicalize().ok()?,
             common_dir: common_dir.canonicalize().ok()?,

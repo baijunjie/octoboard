@@ -21,9 +21,7 @@
 //! matches only a name in the same Unicode form as the pattern.
 
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
 use std::hash::{Hash, Hasher};
-use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{LazyLock, Mutex};
@@ -77,18 +75,8 @@ fn stamp(path: &Path) -> Stamp {
 /// The repository's own directory and its common directory (the same, apart from a linked
 /// worktree), for the worktree whose `.git` entry is in `top`.
 fn git_dirs(top: &Path) -> Option<(PathBuf, PathBuf)> {
-    let dot_git = top.join(".git");
-    let git_dir = if dot_git.is_dir() {
-        dot_git
-    } else {
-        let text = std::fs::read(&dot_git).ok()?;
-        let target = text.strip_prefix(b"gitdir:")?.trim_ascii();
-        top.join(OsStr::from_bytes(target))
-    };
-    let common_dir = match std::fs::read(git_dir.join("commondir")) {
-        Ok(text) => git_dir.join(OsStr::from_bytes(text.trim_ascii())),
-        Err(_) => git_dir.clone(),
-    };
+    let git_dir = crate::hostfs::git_dir::git_dir(top)?;
+    let common_dir = crate::hostfs::git_dir::common_dir(&git_dir).ok()?;
     Some((git_dir, common_dir))
 }
 
