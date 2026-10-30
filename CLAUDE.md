@@ -55,15 +55,15 @@ repeated trial — should go to a subagent wherever you can; you take only the c
   writers — not only your own.
 - The UI state gallery is written only through its own skill, which dispatches the subagent that owns it.
 
-<!-- setup-git:worktree:begin -->
+## Repository checks
 
-## Development workflow: Git worktree
-
-- Any task that produces code changes is done in a dedicated git worktree on a dedicated branch; read-only investigation, answering questions, and anything else that produces no changes are exempt.
-- **Before creating the worktree, and before getting ready to merge the branch back into its target branch, read the `git-worktree` skill first**, and follow its steps.
-- Do not add `--no-verify`, set skip environment variables, or change the hook configuration to get around the repository's checks.
-
-<!-- setup-git:worktree:end -->
+- Do not add `--no-verify`, set skip environment variables (such as `REVERT_GATE_SKIP`), or change the hook
+  configuration to get around the repository's checks or Octoboard's revert gate.
+- In addition to the development rule Octoboard gives its sessions, before a branch is merged back into its target
+  branch, squash it into commits that each explain and revert on their own (one commit for a branch that did one
+  thing), with messages that describe the final state; carry every `Reverts:` line of the original commits into the
+  squashed ones. Squash on the branch's own merge base (`git reset --soft $(git merge-base HEAD <target branch>)`),
+  never onto the target branch's tip, then rebase onto the target branch.
 
 <!-- setup-agent:workflow:begin -->
 
@@ -180,8 +180,9 @@ the earlier steps do not run them separately (the related tests a step runs to c
   gets a warning and the stage is skipped; a missing `node_modules` fails it with a hint to run `pnpm install`. Do not
   run a whole-repository formatter as a delivery step. `pnpm install` in the main working copy, on the main
   branch, installs the hooks (`.githooks/auto-install.sh`); after hook changes have landed in the main branch, run
-  it there again to refresh them (`pnpm hooks:install` also resets the resident guarded branches).
-- Before pushing, the `pre-push` hook runs the revert gate, then the checks through `scripts/pre-push.mjs` and
+  it there again to refresh them (`pnpm hooks:install` does the same explicitly; run it on the main branch, since it installs the
+  checkout's own `hook.sh`).
+- Before pushing, the `pre-push` hook runs the checks through `scripts/pre-push.mjs` and
   `pnpm verify`. It measures from each actual destination's advertised remote commit to the exact pushed commit,
   including all unpushed local changes; a newly created branch is measured from its merge base with the live remote
   target branch (or remote HEAD), falling back to all checks when no baseline can be established. Tag pushes are not

@@ -45,9 +45,9 @@ Per-package commands are in that package's doc.
 - [`scripts/`](../scripts/) — repository-level commands and hook helpers: `env.mjs` (shared env-file reader),
   `test-rust.mjs` (Rust tests), `format-staged.mjs` (staged-file formatting), `pre-push.mjs` (push verification), and
   `verify.mjs` with `verify/` (checks selected from changed inputs, plus the application release checks).
-- [`.githooks/`](../.githooks/) — git hook entry points for staged-file formatting, push verification and the revert
-  gate (`hook.sh`, `revert-gate.py`, installed by `install.sh` and, on `pnpm install`, by `auto-install.sh`; resident
-  guarded branches in `branches`), plus the `flow-*.sh` scripts for the worktree merge flow.
+- [`.githooks/`](../.githooks/) — git hook entry points: `hook.sh` dispatches pre-commit to `scripts/format-staged.mjs`
+  and pre-push to `scripts/pre-push.mjs`; `install.sh` installs them into the common hooks directory (and migrates
+  older clones), and `auto-install.sh` runs it on `pnpm install` in the main checkout.
 - [`.github/workflows/`](../.github/workflows/) — CI: `release.yml` (builds, signs and publishes the desktop release
   when a version tag is pushed), `quality.yml` (application checks before release and on request) and
   `website.yml` (publishing the website to GitHub Pages); [`.github/release-notes.sh`](../.github/release-notes.sh)

@@ -28,8 +28,7 @@ using it, so those surfaces are inside this narrow scope rather than outside it:
 for one new caller collapsed the path boxes in the Settings rows, and neither the type checker, the unit tests nor a
 gallery pass over the new caller's own surface showed it. Settle such a change by putting each existing call site
 side by side against the merge base — a second gallery server run from a branchless temporary worktree at that
-commit (the `git worktree add --detach` case in the "Creating" section of
-`.claude/skills/git-worktree/SKILL.md`) — rather than judging the new rendering on its own.
+commit (`git worktree add --detach <path> <commit>`) — rather than judging the new rendering on its own.
 
 Where what the change alters is the data a fixture answers with rather than any markup, settle it on the replies instead
 of on renderings: dump every scenario's reply for the affected requests to JSON at the merge base and on the branch and
@@ -64,9 +63,8 @@ fields, data conditions and contracts behind a new UI state against the code.
 How the bundle loads what it fetches at run time — lazy chunks, a worker, WebAssembly, assets — and anything a
 build-only Vite plugin changes are not settled there either: the gallery runs Vite's unbundled dev modules from
 `http://localhost`, while the app loads the built `dist/` from `tauri://localhost`. Check those in a packaged build
-(`pnpm build:app`). For UI the app does not render yet, build that from a temporary detached worktree (the
-`git worktree add --detach` case in the "Creating" section of `.claude/skills/git-worktree/SKILL.md`) whose `main.tsx`
-renders the gallery's scenarios in place of the app.
+(`pnpm build:app`). For UI the app does not render yet, build that from a temporary detached worktree
+(`git worktree add --detach`) whose `main.tsx` renders the gallery's scenarios in place of the app.
 
 The gallery's "File viewer" group hands `FileViewer` a fixed subject instead of driving the app, so it carries none of
 what the project browser supplies while running — above all the loader for a change's whole bodies, which is the only
