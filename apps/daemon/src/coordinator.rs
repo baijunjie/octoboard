@@ -6302,10 +6302,13 @@ pub(crate) fn automatic_open_choice(
 /// account, and `None` when no account has a weekly window that still has quota and resets
 /// ahead, skipping a disabled account, one found logged out, and an account whose sharing change
 /// is running (a launch on it would be refused as `account_sharing_in_progress`). The soonest
-/// reset wins; a larger remainder breaks a tie, and an earlier candidate wins one that is still
-/// tied — the default account, then the stored accounts in the order they are kept. Rank from the
-/// reading held for the account's current directory. The list of readings carries no directory,
-/// so one still stored under another directory would be chosen.
+/// weekly reset wins, except that weekly resets less than one session window apart from the
+/// soonest count as tied. Among the tied, an account whose 5-hour session window is running goes
+/// first, then the sooner session reset, the sooner weekly reset and the larger remainder, in
+/// that order (see [`account_quotas::preferred_signal`]); an earlier candidate wins one that is
+/// still tied — the default account, then the stored accounts in the order they are kept. Rank
+/// from the reading held for the account's current directory. The list of readings carries no
+/// directory, so one still stored under another directory would be chosen.
 pub(crate) fn preferred_weekly_account(
     state: &Arc<AppState>,
     agent: Agent,
@@ -6331,7 +6334,8 @@ pub(crate) fn preferred_weekly_account_except(
     }
     candidates.retain(|candidate| !except.contains(candidate));
     let now = now_millis();
-    let mut best: Option<(i64, f64, Option<String>)> = None;
+    let mut signals = Vec::new();
+    let mut accounts = Vec::new();
     for account_id in candidates {
         if !account_can_open(state, agent, account_id.as_deref())? {
             continue;
@@ -6359,19 +6363,13 @@ pub(crate) fn preferred_weekly_account_except(
         if readable_only && quota.unavailable.is_some() {
             continue;
         }
-        let Some(weekly) = crate::account_quotas::expiring_weekly(&quota.windows, now) else {
+        let Some(signal) = account_quotas::AccountSignal::of(&quota.windows, now) else {
             continue;
         };
-        if best.as_ref().is_none_or(|(resets_at, remaining, _)| {
-            weekly.ranks_ahead_of(account_quotas::ExpiringWeekly {
-                resets_at: *resets_at,
-                remaining: *remaining,
-            })
-        }) {
-            best = Some((weekly.resets_at, weekly.remaining, account_id));
-        }
+        signals.push(signal);
+        accounts.push(account_id);
     }
-    Ok(best.map(|(_, _, account_id)| account_id))
+    Ok(account_quotas::preferred_signal(&signals).map(|index| accounts.swap_remove(index)))
 }
 
 /// A span of milliseconds in the rough terms of a message to read: `3d 4h`, `5h 20m` or `7m`.

@@ -466,9 +466,11 @@ fn session_in(
 }
 
 /// The account of a session of `agent` that `caller` starts, or hands one off to, when the call
-/// names none: with automatic account selection on, the one whose weekly quota resets soonest;
-/// otherwise, or when none ranks, `caller`'s own (`callers_account`) in its own console, else the
-/// project's account for the agent, else the console's.
+/// names none: with automatic account selection on, the one ranked first by
+/// [`coordinator::preferred_weekly_account`] (mostly the soonest weekly reset, a running 5-hour
+/// window deciding between close ones); otherwise, or when none ranks, `caller`'s own
+/// (`callers_account`) in its own console, else the project's account for the agent, else the
+/// console's.
 pub(super) fn account_when_unset(
     state: &Arc<AppState>,
     caller: &Session,

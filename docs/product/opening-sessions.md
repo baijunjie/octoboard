@@ -381,11 +381,12 @@ neither pins anything. The session's account is named in its agent icon's toolti
 (see "What both views show" in `docs/product/focus-mode.md`) and of its row in the archive view (see "The archive view"
 in `docs/product/archive-view.md`); wherever the agent's name is shown, it carries no account suffix.
 
-While the switch is on, a new session whose account was not named first prefers the usable account of its initial
-agent whose weekly quota resets soonest. If none ranks, it tries the usable account inherited from the project or
-console, then the first usable account in that agent's saved display order. Only when that agent has no usable account
-does selection try another agent as described in "Which agent a session uses" above. An unread quota or a reading that
-cannot report a quota does not by itself make an account unusable. An account the session names still wins,
+While the switch is on, a new session whose account was not named first prefers the usable account of its initial agent
+whose quota is to be spent first, ranked as set out below: mostly the soonest weekly reset, with a running five-hour
+window deciding between weekly resets that are close together. If none ranks, it tries the usable account inherited from
+the project or console, then the first usable account in that agent's saved display order. Only when that agent has no
+usable account does selection try another agent as described in "Which agent a session uses" above. An unread quota or a
+reading that cannot report a quota does not by itself make an account unusable. An account the session names still wins,
 including an explicit choice of the agent's default account, which does not fall through to a project pin. On
 `open_session`, `null` is that explicit choice of the default account, not the absence of a choice. Where an agent's
 tool names an account, `default` is the same choice; leaving `account` out, or sending it blank, is not.
@@ -431,17 +432,33 @@ The dialog and the daemon rank the same way:
 - The default account is a candidate ahead of that agent's stored accounts, in the order they are kept.
 - The window that ranks is an account-wide weekly window, or a credit pool whose period is about a week (6 to 8 days,
   the ends included), the window "Quota windows" in `docs/product/account-quotas.md` calls **Weekly**. A five-hour
-  window, a model-specific weekly window, and a monthly credit pool do not rank. How much of the five-hour window
-  remains is not a key.
+  window, a model-specific weekly window, and a monthly credit pool are not that window. How much of the five-hour
+  window remains is not a key, but whether it is running and when it resets decides between accounts tied on the
+  weekly reset, as below.
 - The share used must be a finite number below 100, and the reset must be strictly in the future. A reset that has
   passed or is missing does not rank.
 - On one account, the soonest such reset wins, then the larger remainder.
-- Across accounts, the soonest reset wins, so quota about to reset is spent first; a larger remainder breaks a tie; an
-  equal tie keeps the earlier candidate. One percent left that resets in an hour is chosen over ninety percent that
-  resets in three days.
+- Across accounts, the soonest weekly reset wins, so quota about to reset is spent first, with one exception: weekly
+  resets less than **5 hours** (one five-hour window) after the soonest one count as the same deadline, and among those
+  accounts the one whose **five-hour window is already running** goes first. A window is running when it has a reset
+  still ahead and quota left; the agents report a reset only once the window has started, so a window that shows none
+  has not started. Of two running windows the sooner reset goes first, because what is left of a window is lost when it
+  resets. Between accounts of which neither is running, or both are running with the same reset, the sooner weekly reset
+  wins, then the larger remainder, then the earlier candidate. The 5 hours are measured from the soonest weekly reset,
+  not from one account to the next, and exactly 5 hours later is not tied. One percent left that resets in an hour is
+  chosen over ninety percent that resets in three days; an account whose weekly quota resets in 26 hours with its
+  five-hour window running is chosen over one that resets in 24 hours with none, but not over one that resets in 4
+  hours.
 - An account used up on its five-hour window is not chosen even when its weekly window resets soon.
 - The reading used is the one held for that account under the directory it points at now. A reading taken under another
   directory does not count (see "Which accounts have a quota" in `docs/product/account-quotas.md`).
+
+When no account of the initial agent can be used and no other agent has one either, the dialog opens on the account of
+the initial agent that becomes usable soonest: of the accounts kept off only by a used-up quota (not turned off, not
+logged out, with no sharing change running), the one whose blocking window resets first. Where several windows of an
+account are used up, that is the one that resets last, and a blocking window with no reset time counts as never. Equal
+times keep the candidate order. With none of those, or with automatic selection off, the dialog keeps the inherited
+account. A new session the daemon opens in this situation is refused, naming the inherited account.
 
 ## Which model and reasoning effort a session uses
 
