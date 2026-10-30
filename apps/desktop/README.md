@@ -218,7 +218,9 @@ window theme, window show and window drag/zoom commands the UI uses.
 | `src-tauri/src/window_state.rs` | Remembers the window's frame and maximized state across launches and validates it against the connected displays |
 | `src-tauri/src/page_isolation.rs` | macOS only: the webview configuration that blocks every `http(s)` request the page would make |
 | `src-tauri/capabilities/default.json`, `src-tauri/permissions/` | The IPC allowlist and the app-defined permission files it names |
-| `src-tauri/tauri.conf.json` | Where the window's UI comes from, the `octoboardd` `externalBin`, the bundle targets, and the update archive and the public key that verifies it |
+| `src-tauri/tauri.conf.json` | Where the window's UI comes from, the `octoboardd` `externalBin`, the bundle targets, the DMG's Finder background and icon layout, and the update archive and the public key that verifies it |
+| `src-tauri/images/dmg-background-pixel.png` | The pixel-art mechanical-octopus background used by the DMG's Finder window |
+| `src-tauri/images/dmg-background.png` | The photorealistic mechanical-octopus background retained as an alternative DMG artwork |
 | `src-tauri/Info.plist` | Merged into the bundle's `Info.plist`; declares the UI languages as `CFBundleLocalizations` |
 | `src-tauri/icons/AppIcon.icon/` | The macOS 26 layered app icon (an Icon Composer package: `icon.json` and `Assets/octopus.png`), listed in `bundle.icon` of `tauri.conf.json`; the bundler compiles it with Xcode 26's `actool` into the `.app`'s `Assets.car`. `Assets/octopus.png` is derived by hand from `assets/branding/logo.png` (trimmed to its alpha bounds, centered on a 1024 px canvas); no script regenerates it. `icons/icon.icns` stays as the fallback for earlier macOS |
 | `src-tauri/icons/tray-template.png` | The menu bar icon's monochrome template image, derived by hand from the app icon; no script regenerates it |

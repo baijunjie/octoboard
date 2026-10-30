@@ -114,6 +114,8 @@ jobs:
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
       - name: Build, sign and notarize
         env:
+          # Apply the Finder background and icon layout on the macOS release runner.
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}

@@ -39,7 +39,13 @@
     "externalBin": ["binaries/octoboardd"],
     "macOS": {
       "minimumSystemVersion": "11.0",
-      "hardenedRuntime": true
+      "hardenedRuntime": true,
+      "dmg": {
+        "background": "images/dmg-background-pixel.png",
+        "windowSize": { "width": 806, "height": 488 },
+        "appPosition": { "x": 226, "y": 199 },
+        "applicationFolderPosition": { "x": 581, "y": 199 }
+      }
     }
   }
 }
