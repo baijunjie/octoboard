@@ -95,3 +95,23 @@ it("fails a request the reconnect cut off in the UI's language, as a closed conn
     setLanguage("en");
   }
 });
+
+it("keeps waiting for a request queued while connecting once the socket opens and sends it", async () => {
+  const client = new DaemonClient("ws://test");
+  const socket = FakeSocket.last;
+  socket.readyState = 0;
+  let settled: unknown;
+  const reply = client.request({ type: "shutdown" }).then(
+    (event) => (settled = event),
+    (error: unknown) => (settled = error),
+  );
+  socket.readyState = FakeSocket.OPEN;
+  socket.dispatchEvent(new globalThis.Event("open"));
+  const id = (JSON.parse(socket.sent[0]) as { id: string }).id;
+  vi.advanceTimersByTime(10_000);
+  await Promise.resolve();
+  expect(settled).toBeUndefined();
+  socket.receive({ type: "ack", id });
+  await reply;
+  expect(settled).toEqual({ type: "ack", id });
+});

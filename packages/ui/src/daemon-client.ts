@@ -4,6 +4,7 @@ import type { Event, MessageParams, Request, RequestBody } from "./protocol";
 type Listener = (event: Event) => void;
 type BatchListener = (events: Event[]) => void;
 type PendingReply = { resolve: (event: Event) => void; reject: (error: Error) => void };
+type QueuedRequest = { payload: string; timer: ReturnType<typeof setTimeout> };
 
 const MAX_RECONNECT_ATTEMPTS = 2;
 const RECONNECT_BASE_DELAY_MS = 500;
@@ -66,8 +67,10 @@ export class DaemonClient {
   private flushTimer?: ReturnType<typeof setTimeout>;
   private connectionListeners = new Set<(state: ConnectionState) => void>();
   private pending = new Map<string, PendingReply>();
-  /** Requests made before the socket reaches `OPEN` are queued rather than dropped or thrown. */
-  private sendQueue: string[] = [];
+  /** Requests made before the socket reaches `OPEN` are queued rather than dropped or thrown, each
+   * with the timer that gives up on it while it waits. Once sent, a request waits for its reply as
+   * long as it takes, as one sent on an open socket does, so the timer is cleared on the flush. */
+  private sendQueue: QueuedRequest[] = [];
   private reconnectAttempts = 0;
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private connectionState: ConnectionState = "connecting";
@@ -103,7 +106,10 @@ export class DaemonClient {
     socket.addEventListener("open", () => {
       if (!current()) return;
       this.reconnectAttempts = 0;
-      for (const payload of this.sendQueue.splice(0)) socket.send(payload);
+      for (const queued of this.sendQueue.splice(0)) {
+        clearTimeout(queued.timer);
+        socket.send(queued.payload);
+      }
       this.setConnectionState("open");
     });
     socket.addEventListener("message", (ev) => {
@@ -120,7 +126,7 @@ export class DaemonClient {
       this.failPending(t("connection.error.connectionClosed"));
       // Rejecting and retrying are contradictory: a payload still queued here would otherwise be
       // flushed on the next connection and run an action the caller was already told had failed.
-      this.sendQueue.length = 0;
+      for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
       if (this.closedPermanently) return;
       if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         const delay = RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts;
@@ -236,13 +242,16 @@ export class DaemonClient {
       // never come back, and nothing else will reject this once `sendQueue` is the only place it
       // lives.
       this.pending.set(id, { resolve, reject });
-      this.sendQueue.push(json);
-      setTimeout(() => {
-        if (!this.pending.delete(id)) return;
-        const queuedIndex = this.sendQueue.indexOf(json);
-        if (queuedIndex !== -1) this.sendQueue.splice(queuedIndex, 1);
-        reject(new DaemonRequestError(t("connection.error.timedOut"), "request_timed_out", {}));
-      }, QUEUED_REQUEST_TIMEOUT_MS);
+      const queued: QueuedRequest = {
+        payload: json,
+        timer: setTimeout(() => {
+          if (!this.pending.delete(id)) return;
+          const queuedIndex = this.sendQueue.indexOf(queued);
+          if (queuedIndex !== -1) this.sendQueue.splice(queuedIndex, 1);
+          reject(new DaemonRequestError(t("connection.error.timedOut"), "request_timed_out", {}));
+        }, QUEUED_REQUEST_TIMEOUT_MS),
+      };
+      this.sendQueue.push(queued);
     });
   }
 
