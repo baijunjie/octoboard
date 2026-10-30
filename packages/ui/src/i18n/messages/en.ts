@@ -2665,6 +2665,7 @@ export const en = {
   "processes.empty": "No processes",
   "processes.empty.session": "Nothing the session started is still running.",
   "processes.empty.allSessions": "No session or project processes are running.",
+  "processes.sessions": "Session processes",
   "processes.project": "Project processes",
   "processes.project.note": "These processes belong to no session. They are never stopped automatically; only you can stop them.",
   "processes.sessionUnknown": "Unknown session",

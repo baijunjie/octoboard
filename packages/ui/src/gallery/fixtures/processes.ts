@@ -57,6 +57,15 @@ const projectProcesses = [
   leftoverOf("301:1", "esbuild --service=0.21.5 --ping", 610, { cwd: `${WEBSITE}/.worktrees/old-nav`, memory_bytes: 24_000_000 }),
 ];
 
+// Enough rows in both categories to scroll each heading to the top and see the next replace it.
+const scrollingProjectProcesses = [
+  ...projectProcesses,
+  keptOf("303:1", "pnpm storybook --port 6006", 240, { memory_bytes: 180_000_000, ports: [6006] }),
+  keptOf("304:1", "pnpm exec tsc --watch", 180, { memory_bytes: 92_000_000 }),
+  keptOf("305:1", "node scripts/watch-content.mjs", 120, { memory_bytes: 36_000_000 }),
+  keptOf("306:1", "python3 -m http.server 8080", 60, { memory_bytes: 18_000_000, ports: [8080] }),
+];
+
 const listFailed: FixtureError = { code: "internal_error", params: { detail: "the process table could not be read" }, message: "the process table could not be read" };
 const stopRefused: FixtureError = { code: "internal_error", params: { detail: "the process ledger could not be updated" }, message: "the process ledger could not be updated" };
 const keepRefused: FixtureError = { code: "internal_error", params: { detail: "the process ledger could not be kept" }, message: "the process ledger could not be kept" };
@@ -120,10 +129,10 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Processes of a project, by session and project processes",
-    description: "No session is selected, so the native right panel's session filter is empty and shows its placeholder All sessions, with the general message below it. The trees are grouped under the title of the session that started them (Serve the preview with two, Fix the summary layout with one), each group's rows oldest first. The last group, Project processes, carries the note that these processes belong to no session, are never stopped automatically and only you can stop them; it holds a kept process beside two whose working directory was deleted (the Directory deleted badge), oldest first, and its rows offer Stop alone, with no Keep, while the rows of the sessions' groups offer both.",
+    description: "The session filter shows All sessions. Session processes is the first category, with its automatic-stop note below, and the session names are subordinate headings: Serve the preview has five rows and Fix the summary layout has one. Project processes follows with its own note and rows that offer Stop alone. Scroll the list: Session processes stays at the top below the filter while the session names and rows pass underneath; Project processes replaces it as that category reaches the top, then stays there over its own rows. Both headings have an opaque panel background. The same hierarchy and scrolling behaviour should remain clear at narrow widths and shorter heights, chosen with the viewing controls.",
     state,
     preferences: panelPreferences,
-    processes: { trees: projectTrees, projectProcesses: { [web.id]: projectProcesses } },
+    processes: { trees: [...sessionTrees, projectTrees[2]], projectProcesses: { [web.id]: scrollingProjectProcesses } },
     steps: openProject,
   },
   {
@@ -131,7 +140,7 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Processes of a project, only project processes",
-    description: "No running session of the project has a process, so Project processes is the only group, with no session heading or session automatic-stop note above it. Its own note says these processes belong to no session, are never stopped automatically and only you can stop them.",
+    description: "No running session of the project has a process, so Project processes is the only category, with no Session processes heading or session automatic-stop note above it. Its own note says these processes belong to no session, are never stopped automatically and only you can stop them. At a short height, scroll the list to see the category heading stay at the top below the session filter.",
     state,
     preferences: panelPreferences,
     processes: { projectProcesses: { [web.id]: projectProcesses } },
@@ -177,7 +186,7 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Processes opened from the project menu with a session selected",
-    description: "Serve the preview stays selected in the sidebar and its conversation remains in the centre, yet the project menu's Open panel, Processes opens the panel for the whole project: the session filter is empty and shows its All sessions placeholder, and the list holds both sessions' processes and Project processes. Refreshes keep this empty filter. Select Fix the summary layout in the sidebar to see the filter follow that newly selected session.",
+    description: "Serve the preview stays selected in the sidebar and its conversation remains in the centre, yet the project menu's Open panel, Processes opens the panel for the whole project: the session filter is empty and shows its All sessions placeholder, and the list holds Session processes, with both sessions under their own names, followed by Project processes. Refreshes keep this empty filter. Select Fix the summary layout in the sidebar to see the filter follow that newly selected session.",
     state,
     preferences: panelPreferences,
     processes: { trees: projectTrees, projectProcesses: { [web.id]: projectProcesses } },

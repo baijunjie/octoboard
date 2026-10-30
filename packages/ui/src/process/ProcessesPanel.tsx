@@ -44,6 +44,8 @@ const ACTIONS = {
   keep: { title: "processes.keepTitle", message: "processes.keepMessage", confirm: "processes.keep", failedTitle: "processes.keepFailedTitle", done: "processes.kept", send: keepProcesses },
 } as const satisfies Record<ProcessAction, { title: PlainMessageKey; message: PlainMessageKey; confirm: PlainMessageKey; failedTitle: PlainMessageKey; done: PlainMessageKey; send: unknown }>;
 
+const CATEGORY_HEADING_HEIGHT = 36;
+
 function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof useProcessPanelContext>> }): React.ReactElement {
   const t = useT();
   const { toastNotice } = useDaemon();
@@ -51,6 +53,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
   const scrollRegion = useFadeRegion({ label: t("panel.processes.name") });
   const bodyRef = useRef<HTMLDivElement>(null);
   const failed = trees === undefined && error !== undefined;
+  const grouped = data.projectId !== undefined && data.sessionId === undefined;
   const [selected, setSelected] = useState<{ tree: ProcessTree; action: ProcessAction; nextId?: string }>();
   // A confirmed request that is on its way keeps its confirmation, and with it the success toast and the
   // hand-over of focus, even when a refresh has already taken the tree out of the list.
@@ -114,11 +117,11 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
       <PanelHeader title={t("panel.processes.name")} />
       {data.projectId && <ProcessSessionSelect projectId={data.projectId} value={data.sessionId} onChange={data.selectSession} landing={!failed} />}
       <div ref={bodyRef} className={`flex min-h-0 flex-1 flex-col ${scrollRegion.focused ? "ring-2 ring-inset ring-focus" : ""}`}>
-        <FadedScroller region={scrollRegion} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-(--pane-inset)">
+        <FadedScroller region={scrollRegion} stickyHeadingHeight={grouped && trees?.length ? CATEGORY_HEADING_HEIGHT : undefined} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-(--pane-inset)">
           {failed ? (
             <PaneFailure title={t("processes.listFailedTitle")} summary={t("processes.listFailed")} details={errorDetails(error)} onRetry={retryList} announce announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} landing />
           ) : (
-            <ProcessList grouped={data.projectId !== undefined && data.sessionId === undefined} keepable={data.projectId !== undefined} trees={trees} error={error} acting={selected !== undefined} onStop={(tree) => ask("stop", tree)} onKeep={(tree) => ask("keep", tree)} />
+            <ProcessList grouped={grouped} keepable={data.projectId !== undefined} trees={trees} error={error} acting={selected !== undefined} onStop={(tree) => ask("stop", tree)} onKeep={(tree) => ask("keep", tree)} />
           )}
         </FadedScroller>
       </div>
@@ -204,7 +207,7 @@ function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }
     <div ref={rootRef} className="flex min-w-0 flex-1 flex-col gap-4" {...handoff}>
       {/* Allow the panel's focus announcement to finish before speaking its loading state. */}
       <StatusAnnouncer text={loading ? t("processes.loading") : undefined} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
-      {trees?.some((tree) => tree.session_id !== undefined) && <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>}
+      {!grouped && trees?.some((tree) => tree.session_id !== undefined) && <p className={NOTE_CLASS}>{t("processes.panelMessage")}</p>}
       {loading && <p aria-hidden="true" className="text-sm text-app-muted">{t("processes.loading")}</p>}
       {trees !== undefined && error !== undefined && (
         <ErrorAlert status="warning" title={t("processes.refreshFailedTitle")} details={errorDetails(error)} announce>
@@ -216,13 +219,51 @@ function ProcessList({ grouped, keepable, trees, error, acting, onStop, onKeep }
       )}
       {trees !== undefined && trees.length > 0 && (!grouped
         ? <TreeList trees={trees} acting={acting} keepable={keepable} onStop={onStop} onKeep={onKeep} />
-        : groupsOf(trees).map((group) => <TreeGroup key={group.key} group={group} acting={acting} onStop={onStop} onKeep={onKeep} />))}
+        : <GroupedTrees trees={trees} acting={acting} onStop={onStop} onKeep={onKeep} />)}
     </div>
   );
 }
 
-/** One group of a project's trees: a heading naming the session, or "Project processes" with a note
- * on what those trees are, over the list. A project process cannot be kept: no session stops it. */
+function ProcessCategory({ title, note, children }: { title: string; note: string; children: React.ReactNode }): React.ReactElement {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="flex min-w-0 shrink-0 flex-col gap-2">
+      <h3 id={headingId} data-sticky-heading="" className="sticky top-[calc(-1*var(--pane-inset))] z-3 -mx-(--pane-inset) flex h-[36px] shrink-0 items-center bg-panel-sidebar px-(--pane-inset) text-sm font-semibold">
+        {title}
+      </h3>
+      <p className={NOTE_CLASS}>{note}</p>
+      {children}
+    </section>
+  );
+}
+
+function GroupedTrees({ trees, acting, onStop, onKeep }: {
+  trees: ProcessTree[];
+  acting: boolean;
+  onStop: (tree: ProcessTree) => void;
+  onKeep: (tree: ProcessTree) => void;
+}): React.ReactElement {
+  const t = useT();
+  const groups = groupsOf(trees);
+  const sessions = groups.filter((group) => group.sessionId !== undefined);
+  const project = groups.find((group) => group.sessionId === undefined);
+  return (
+    <>
+      {sessions.length > 0 && (
+        <ProcessCategory title={t("processes.sessions")} note={t("processes.panelMessage")}>
+          {sessions.map((group) => <TreeGroup key={group.key} group={group} acting={acting} onStop={onStop} onKeep={onKeep} />)}
+        </ProcessCategory>
+      )}
+      {project && (
+        <ProcessCategory title={t("processes.project")} note={t("processes.project.note")}>
+          <TreeList trees={project.trees} acting={acting} keepable={false} onStop={onStop} onKeep={onKeep} />
+        </ProcessCategory>
+      )}
+    </>
+  );
+}
+
+/** A session's trees under its displayed name, within the Session processes category. */
 function TreeGroup({ group, acting, onStop, onKeep }: {
   group: Group;
   acting: boolean;
@@ -232,18 +273,13 @@ function TreeGroup({ group, acting, onStop, onKeep }: {
   const t = useT();
   const headingId = useId();
   const session = useSession(group.sessionId);
-  const heading = group.sessionId === undefined
-    ? t("processes.project")
-    : session ? sessionDisplayTitle(t, session) : t("processes.sessionUnknown");
+  const heading = session ? sessionDisplayTitle(t, session) : t("processes.sessionUnknown");
   return (
     <section aria-labelledby={headingId} className="flex min-w-0 flex-col gap-2">
-      <div className="flex min-w-0 flex-col gap-1">
-        <h3 id={headingId} className="text-sm font-semibold">
-          <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={heading}>{heading}</FadeOverflow>
-        </h3>
-        {group.sessionId === undefined && <p className={NOTE_CLASS}>{t("processes.project.note")}</p>}
-      </div>
-      <TreeList trees={group.trees} acting={acting} keepable={group.sessionId !== undefined} onStop={onStop} onKeep={onKeep} labelledBy={headingId} />
+      <h4 id={headingId} className="text-sm font-semibold">
+        <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={heading}>{heading}</FadeOverflow>
+      </h4>
+      <TreeList trees={group.trees} acting={acting} keepable onStop={onStop} onKeep={onKeep} labelledBy={headingId} />
     </section>
   );
 }
