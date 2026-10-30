@@ -14,7 +14,7 @@ agent.
 | What | Claude Code | Codex | Grok Build |
 |---|---|---|---|
 | The session's id | `--session-id <id>` on a new session; `--resume <id>` on a resume | None on a new session (see "Codex" below); `codex resume <id>` on a resume | `--session-id <id>` on a new session; `--resume <id>` on a resume |
-| Status hooks | In the JSON passed with `--settings`, which Claude Code merges with the settings files rather than replacing them, so the project's own hooks still run | One `-c hooks.<event>=…` override per event, each run asynchronously, together with `--dangerously-bypass-hook-trust` | A `hooks/` directory of Octoboard's own in the per-session Grok home (see "The per-session Grok home" below) |
+| Status hooks | In the JSON passed with `--settings`, which Claude Code merges with the settings files rather than replacing them, so the project's own hooks still run | One `-c hooks.<event>=…` override per event, each run asynchronously; hook trust is handled as described in "Codex" below | A `hooks/` directory of Octoboard's own in the per-session Grok home (see "The per-session Grok home" below) |
 | Octoboard's MCP server | `--mcp-config` | `-c mcp_servers.octoboard.command=…` and `-c mcp_servers.octoboard.args=[…]` | An `[mcp_servers.octoboard]` table in the per-session copy of `config.toml` |
 | Running Octoboard's tools without asking | An `allow` rule, `mcp__octoboard`, in the `--settings` JSON | `-c mcp_servers.octoboard.default_tools_approval_mode="approve"` | Nothing is passed |
 | The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
@@ -77,9 +77,10 @@ refuses, and the requests Octoboard puts to the user before acting on a session'
 
 ## Codex
 
-Codex cannot be given a session id in advance, and its conversation is created lazily on the first prompt submission —
-so a session opened without a task has no agent-side id until the user types something, unless it was opened to resume a
-conversation, whose id it has from the start. The launch conditions that are visible:
+Octoboard does not assign Codex a session id in advance. A resumed session has its conversation's id from the start;
+a new session learns its agent-side id from a submitted prompt. With the supported private-server launch below, an
+automatic message can be that first prompt, without requiring the user to submit the draft in the composer first.
+The launch conditions that are visible:
 
 - project trust is not passed: in a git repository Codex has not been told to trust, its own folder-trust confirmation
   appears, and Octoboard presses it under the user's permission (see `docs/product/folder-trust.md`);
@@ -101,17 +102,29 @@ conversation, whose id it has from the start. The launch conditions that are vis
   until the user has answered it (see "Messages held until a session can take them" in
   `docs/product/message-delivery.md`). Like the title items and the working directory, these hold for that launch alone;
   nothing is written into the user's configuration;
-- the review Codex would otherwise raise for Octoboard's own hooks is bypassed, which costs two warning lines in the
-  session's own output on **every** launch, a resume included. The bypass covers hook review only; it does not weaken
-  the sandbox or the approval policy. These two lines are a standing cost, not a defect waiting to be fixed: Codex gates
-  a hook behind a trust hash taken over the hook's own command, and that command is the session's own per-session
-  script, so no pre-captured hash could ever match it.
+- Octoboard suppresses the extra review of its injected hooks for that launch. The ordinary launch passes
+  `--dangerously-bypass-hook-trust`, which can produce two warning lines in the session's output. A persistent remote
+  resume does not honour that bypass, so the supported private-server launch trusts only Octoboard's generated hook
+  command through invocation-local overrides. It does not record trust in the user's files or grant trust to their
+  other hooks. Hook trust does not weaken the sandbox or the approval policy.
 - Octoboard's own tools are pre-approved for the session, so a console session's orchestration calls raise no approval
   dialog. This covers Octoboard's tools alone; every other tool, the sandbox and the approval policy are untouched.
 - Codex's own time limit on a call to Octoboard's tools (300 s by default) is raised to 660 seconds, above Octoboard's
   own limit on a forwarded call (the 10 minutes in "Waiting for the answer" of `docs/product/session-requests.md`), so
   that a call that waits for the user, such as a session request, can return its result. This is the limit on
   Octoboard's tools alone; no other tool's limit changes.
+
+**Codex 0.163.0 runs with a private app server for the session.** Its terminal connects explicitly to that server;
+both processes receive the launch's configuration overrides, and use the same environment and working directory.
+The terminal retains its title, resume-directory and startup-notice settings. The server belongs to that running
+session and ends with it. This launch path is enabled only for the verified version 0.163.0, not for an unknown or
+different version. Other versions use the ordinary terminal launch.
+
+Automatic messages on the supported launch use Codex's independent queue, without typing into the composer, including
+in a fresh session before any user submission and after cancellation. During an active turn the message is queued
+for after it. The draft-preservation, conversation-identity and uncertain-acceptance rules are in
+`docs/product/message-delivery.md`'s "Messages held until a session can take them" and "A message whose acceptance is
+uncertain" sections.
 
 An explicit Codex approval reviewer chosen for Codex in Settings takes precedence on every launch of any of its
 accounts, a resume included. When the setting follows each account's configuration, whether Codex resolves approval

@@ -228,10 +228,10 @@ The submission is written into the session that pushed the page as a **user mess
 the page it came from, then one `key: value` line per field. A form with no named fields is still
 delivered, with `{}` in place of the field lines.
 
-Delivery takes the same path as every other write into a running session (see "Messages held until a
-session can take them" in `docs/product/message-delivery.md`): written straight away while the
-session is working or awaiting instructions, and **queued** while the session is waiting for the user — queued rather
-than refused, because the user is the one submitting and there is nobody to ask to answer the session's prompt first.
+Delivery takes the same path as every other write into a running session (see "Messages held until a session can take
+them" in `docs/product/message-delivery.md`): written while the session can take a message, and **queued** while a hold
+applies or the session is waiting for the user — queued rather than refused, because the user is the one submitting
+and there is nobody to ask to answer the session's prompt first.
 
 The submission goes to the session that pushed the page, found from the page itself, whichever session the user happens
 to be looking at. It fails, and the failure is shown to the user, when the page is no longer its session's newest, when

@@ -9,7 +9,7 @@ export type ErrorRecovery =
   | "configuration" | "exportSelection" | "image" | "avatarSize" | "avatarImage" | "clipboard" | "fileRead" | "fileWrite" | "gitFailure" | "gitSwitchFailure" | "gitRestoreFailure" | "gitHistory" | "branch"
   | "refresh" | "scope" | "limit" | "openExternal" | "openTerminal" | "openFileManager" | "openDefaultApplication" | "issueAddress"
   | "hostPathGone" | "readAccess" | "sourceGone" | "sourceLink" | "sourceNotFolder" | "sourceUnreadable" | "pathExists" | "uniqueName" | "launchSetting" | "changeModelSetting" | "modelChange" | "accountDirectory" | "repository" | "trash" | "noCommits" | "remote" | "stopProcess" | "existingProject"
-  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
+  | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "unarchive" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn" | "grokSandbox"
   | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate"
   | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
@@ -201,6 +201,9 @@ function failedSwitchCause(error: DaemonRequestError): DaemonRequestError {
 
 export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorClassification {
   const explicit = recovery ?? (error instanceof ActionableError ? error.recovery : undefined);
+  if (!explicit && error instanceof DaemonRequestError && error.code === "message_not_sent" && error.params.submit_retry === "once") {
+    return { kind: "actionable", recovery: "submitRetry" };
+  }
   // A file that could not be read keeps its own remedy over the one an operating-system signature names: the
   // signature's access and disk-space remedies are about writing, which reading a file never needed.
   if (explicit === "issueAddress" || explicit === "openExternal" || explicit === "fileRead") return { kind: "actionable", recovery: explicit };

@@ -17,6 +17,7 @@ mod auto_switch;
 mod availability;
 mod branch_origin;
 mod browse;
+mod codex_transport;
 mod config_export;
 mod config_import;
 mod config_upgrade;

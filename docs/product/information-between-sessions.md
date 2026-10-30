@@ -38,16 +38,14 @@ for an interrupted owner is kept for its resume as the information itself would 
 session" below). A copy that cannot be delivered — the owner is archived, or has no process running for another reason —
 does not fail the delivery to the receiver; the sender is told the owner was not copied.
 
-Delivery is the same as for any other message: sanitized as in "Messages held until a session can take them" in
-`docs/product/message-delivery.md`, held when the receiver's own agent is waiting for the user — at a permission prompt
-or a question of its own — may be at its trust confirmation, or shows a screen only the user can answer. A receiver
-with no process running is the exception: an interrupted one has the information kept for its resume (see
-"Information for an interrupted session" below), one a change of its account's sharing is restarting has it held for
-the resumed process (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`), and
-any other refuses it. A receiver reading as *waiting for the user* only because a
-session request of its own is waiting takes the message straight away, since what has to be answered there is a dialog
-(see "Waiting for the answer" in `docs/product/session-requests.md`). The two tools are on by default and have no
-setting.
+Delivery is the same as for any other message, including its draft protection and other holds: see "Messages held
+until a session can take them" in `docs/product/message-delivery.md`. A receiver with no process running is the
+exception: an interrupted one has the information kept for its resume (see "Information for an interrupted session"
+below), one a change of its account's sharing is restarting has it held for the resumed process (see "When a change is
+carried out" in `docs/product/sharing-the-default-configuration.md`), and any other refuses it. A receiver reading as
+*waiting for the user* only because a session request of its own is waiting takes the message subject to those holds,
+since what has to be answered there is a dialog (see "Waiting for the answer" in `docs/product/session-requests.md`).
+The two tools are on by default and have no setting.
 
 ## Narrowing the list of sessions
 

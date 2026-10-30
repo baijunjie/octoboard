@@ -367,6 +367,23 @@ pub(crate) fn heard_after_marker(state: &Arc<AppState>, live: &LiveSession) -> S
 pub(crate) struct StandIn(Arc<LiveSession>);
 
 impl StandIn {
+    pub(crate) fn with_composer(mut self) -> Self {
+        Arc::get_mut(&mut self.0)
+            .expect("configure before registering the stand-in")
+            .checks_composer = true;
+        self
+    }
+
+    pub(crate) fn with_codex_transport(
+        mut self,
+        transport: crate::codex_transport::CodexTransport,
+    ) -> Self {
+        Arc::get_mut(&mut self.0)
+            .expect("configure before registering the stand-in")
+            .codex_transport = Some(Arc::new(transport));
+        self
+    }
+
     pub(crate) fn with_auto_review(mut self) -> Self {
         Arc::get_mut(&mut self.0)
             .expect("configure before registering the stand-in")
@@ -505,6 +522,8 @@ fn stand_in(
             |tag| tag.launch_id().to_string(),
         ),
         spawned,
+        checks_composer: false,
+        codex_transport: None,
         scratch_dir: None,
         resolves_approvals_itself: false,
         carried_trust,

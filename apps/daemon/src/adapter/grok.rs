@@ -149,6 +149,27 @@ impl AgentAdapter for GrokAdapter {
         true
     }
 
+    /// Native releases resolve to a versioned download, without spawning a CLI process.
+    fn installed_version(&self, binary: &str) -> Option<super::AgentVersion> {
+        let resolved = std::fs::canonicalize(binary).ok()?;
+        let filename = resolved.file_name()?.to_str()?;
+        let release = filename.strip_prefix("grok-")?;
+        let (version, platform) = release.split_once('-')?;
+        if !matches!(
+            platform,
+            "macos-aarch64" | "macos-x86_64" | "linux-aarch64" | "linux-x86_64"
+        ) {
+            return None;
+        }
+        let mut parts = version.split('.');
+        let version = (
+            parts.next()?.parse().ok()?,
+            parts.next()?.parse().ok()?,
+            parts.next()?.parse().ok()?,
+        );
+        parts.next().is_none().then_some(version)
+    }
+
     /// Grok's title is its items joined by ` - `: while it works a spinner and a status ending in
     /// an ellipsis, then the conversation's title, then its own name last. The item after the
     /// spinner is a status when a title still follows it, or when it is the known wait status.
@@ -933,6 +954,32 @@ fn set_table_array(
 mod tests {
     use super::*;
     use crate::adapter::tests::{spec_fixture, SpecFixture};
+
+    #[test]
+    fn native_download_versions_are_read_through_the_launcher_symlink() {
+        let scratch = crate::test_support::ScratchDir::new("grok-installed-version");
+        let release = scratch.join("grok-1.0.70-macos-aarch64");
+        std::fs::write(&release, "not executed").unwrap();
+        let launcher = scratch.join("grok");
+        std::os::unix::fs::symlink(&release, &launcher).unwrap();
+        assert_eq!(
+            GrokAdapter.installed_version(launcher.to_str().unwrap()),
+            Some((1, 0, 70))
+        );
+        for filename in [
+            "grok-1.0.70",
+            "grok-1.0.70.1-macos-aarch64",
+            "grok-1.0.70-unknown",
+            "grok-unknown-macos-aarch64",
+        ] {
+            let release = scratch.join(filename);
+            std::fs::write(&release, "not executed").unwrap();
+            assert_eq!(
+                GrokAdapter.installed_version(release.to_str().unwrap()),
+                None
+            );
+        }
+    }
 
     #[test]
     fn terminal_titles_lose_the_spinner_the_status_and_groks_own_name() {

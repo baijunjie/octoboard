@@ -148,7 +148,24 @@ async fn codex_is_sent_one_esc_and_told_of_the_messages_its_cancel_dropped() {
     fixture.state.turn_started("s", None);
     fixture.state.note_written_mid_turn("s");
     fixture.state.note_written_mid_turn("s");
-    let agent = respond(&fixture, vec![(ESC, back_at_prompt(&fixture.state))]);
+    draw(&fixture.live, "›\n\n  100% context left");
+    assert_eq!(
+        input_box(Agent::Codex, &fixture.live.screen_text_undimmed()).as_deref(),
+        Some("")
+    );
+    fixture.live.on_output(running_title(Agent::Codex));
+    let live = fixture.live();
+    let state = fixture.state.clone();
+    let agent = respond(
+        &fixture,
+        vec![(
+            ESC,
+            Box::new(move || {
+                draw(&live, "› preserved user draft\n\n  100% context left");
+                state.apply_hook_status("s", SessionStatus::Idle).unwrap();
+            }),
+        )],
+    );
 
     let result = interrupt_session(&fixture.state, "s").await.unwrap();
     agent.join().unwrap();

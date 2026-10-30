@@ -1,0 +1,215 @@
+[?2004h[>4;0m[>7u[?1004h[6n]10;?\]11;?\[?u[c[?2026h[?2026h[1;1H[J[?25l[1;2H[0m[K[2;29H[0m[K[3;13H[0m[K[4;2H[0m[K[5;2H[0m[K[6;27H[0m[K[7;2H[0m[K[8;2H[0m[K[1;1H [2;1H  >_ [1mOpenAI Codex[22m[2m[2m (v0.163.0)[3;1H[22m     [2mloading[4;1H[22m [5;1H [6;1H[1m›[22m [2mAsk Codex to do anything[7;1H[22m [8;1H [0m[1;1H[0 q[1;1H [0m[6;3H[?25h[?2026l[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[?25l[3;6H[2m/private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l[?2026h[0m[6;3H[?25h[?2026l]0;cwd]7501;state=idle:app=codex\[?2026h[?25l[8;3Hprobe[8;9Hdefault[8;17H·[8;19H/private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd[0m[6;3H[?25h[?2026l[?2026h[?25l[8;115H⚠[8;117H2[8;119Hwarnings[8;128H·[8;130H[1mf2[8;133H[22mto[8;136Hview[0m[6;3H[?25h[?2026l]0;⠋ cwd]0;cwd[?2026h[1;1H[J[1;45r[1;1HMMMMMMMMMMM[r[1;11r[1;1H
+[K[0m
+[K  >_ [1mOpenAI Codex[22m[2m[2m (v0.163.0)[0m
+[K     [2m/private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd[0m
+[K[0m
+[K[2m  To get started, describe a task or try one of these commands:[0m
+[K[0m
+[K  /init[2m - create an AGENTS.md file with instructions for Codex[0m
+[K  /status[2m - show current session configuration[0m
+[K  /permissions[2m - choose what Codex is allowed to do[0m
+[K  /model[2m - choose what model and reasoning effort to use[0m
+[K  /review[2m - review any changes and find issues[0m[r[6;3H[?25l[12;2H[0m[K[13;2H[0m[K[14;27H[0m[K[15;2H[0m[K[16;140H[0m[K[12;1H [13;1H [14;1H[1m›[22m [2mAsk Codex to do anything[15;1H[22m [16;1H  probe default · /private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd            ⚠ 2 warnings · [1mf2[22m to view[0m[12;1H[0 q[12;1H [0m[14;3H[?25h[?2026l[?2026h[0m[14;3H[?25h[?2026l[?2026h[?25l[14;3H[Pasted Content 10287 chars][0m[14;31H[?25h[?2026l[?2026h[12;45r[12;1HMMMMMMMMMMMMMMMMMMMMMMMMMMMMM[r[1;40r[11;1H
+[K[0m
+[K[0m
+[K[1m[2m› [22m[22mLEADING_SPACE_SENTINEL[0m
+[K  CODEX_PASTE_LINE_000 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_001 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_002 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_003 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_004 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_005 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_006 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_007 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_008 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_009 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_010 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_011 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_012 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_013 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_014 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_015 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_016 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_017 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_018 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_019 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_020 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_021 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_022 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_023 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_024 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_025 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_026 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_027 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_028 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_029 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_030 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_031 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_032 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_033 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_034 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_035 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_036 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_037 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_038 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_039 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_040 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_041 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_042 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_043 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_044 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_045 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_046 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_047 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_048 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_049 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_050 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_051 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_052 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_053 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_054 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_055 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_056 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_057 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_058 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_059 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_060 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_061 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_062 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_063 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_064 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_065 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_066 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_067 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_068 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_069 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_070 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_071 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_072 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_073 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_074 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_075 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_076 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_077 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_078 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_079 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_080 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_081 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_082 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_083 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_084 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_085 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_086 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_087 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_088 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_089 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_090 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_091 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_092 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_093 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_094 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_095 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_096 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_097 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_098 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_099 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_100 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_101 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_102 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_103 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_104 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_105 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_106 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_107 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_108 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_109 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_110 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_111 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_112 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_113 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_114 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_115 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_116 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_117 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_118 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_119 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_120 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_121 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_122 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_123 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_124 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_125 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_126 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_127 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_128 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_129 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_130 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_131 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_132 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_133 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_134 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_135 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_136 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_137 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_138 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_139 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_140 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_141 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_142 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_143 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_144 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_145 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_146 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_147 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_148 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_149 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_150 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_151 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_152 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_153 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_154 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_155 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_156 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_157 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_158 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_159 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_160 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_161 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_162 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_163 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_164 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_165 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_166 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_167 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_168 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_169 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_170 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_171 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_172 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_173 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_174 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_175 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_176 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_177 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_178 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K  CODEX_PASTE_LINE_179 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[0m
+[K[0m[r[14;31H[?25l[43;27H[0m[K[43;3H[2mAsk Codex to do anything[0m[41;1H[0 q[41;1H [0m[43;3H[?25h[?2026l[?2026h[0m[43;3H[?25h[?2026l[?2026h[?25l[45;117H3[0m[43;3H[?25h[?2026l]0;⠇ cwd]7501;state=working:app=codex\[?2026h[1;40r[40;1H
+
+[r[43;3H[39;1H[J[?25l[39;2H[0m[K[40;34H[0m[K[41;2H[0m[K[42;2H[0m[K[43;27H[0m[K[44;2H[0m[K[45;140H[0m[K[39;1H [40;1H• [2mWorking[22m [2m(0s • [22m[1mesc[22m[2m[2m to interrupt)[41;1H[22m [42;1H [43;1H[1m›[22m [2mAsk Codex to do anything[44;1H[22m [45;1H  probe default · /private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd            ⚠ 3 warnings · [1mf2[22m to view[0m[39;1H[0 q[39;1H [0m[43;3H[?25h[?2026l]0;⠇ ⠇ | cwd[?2026h[?25l[45;104H·[45;106H⠇[0m[43;3H[?25h[?2026l]0;⠇ | cwd]7501;state=idle:app=codex\[?2026h[39;1H[J[39;45r[39;1HMM[r[1;40r[38;1H
+[K[0m
+[K[2m• [22mSTUB_OK[0m
+[K[0m
+[K[2m  Worked for <1s • 14:49[0m[r[43;3H[?25l[41;2H[0m[K[42;2H[0m[K[43;27H[0m[K[44;2H[0m[K[45;140H[0m[K[41;1H [42;1H [43;1H[1m›[22m [2mAsk Codex to do anything[44;1H[22m [45;1H  probe default · /private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd · ⠇        ⚠ 3 warnings · [1mf2[22m to view[0m[41;1H[0 q[41;1H [0m[43;3H[?25h[?2026l]0;cwd[?2026h[?25l[45;104H [45;106H [0m[43;3H[?25h[?2026l[?2026h[1;40r[40;1H
+
+[r[43;3H[39;1H[J[?25l[39;2H[0m[K[40;2H[0m[K[41;2H[0m[K[42;24H[0m[K[43;17H[0m[K[44;2H[0m[K[45;140H[0m[K[39;1H [40;1H [41;1H[1m›[42;1H[22m  FRESH_BLANK_FIRST_ROW[43;1H  LAST_DRAFT_ROW[44;1H [45;1H  probe default · /private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd            ⚠ 3 warnings · [1mf2[22m to view[0m[39;1H[0 q[39;1H [0m[43;17H[?25h[?2026l[?2026h[39;1H[J[39;45r[39;1HMM[r[1;40r[38;1H
+[K[0m
+[K[0m
+[K[1m[2m› [22m[22mFRESH_BLANK_FIRST_ROW[0m
+[K  LAST_DRAFT_ROW[0m
+[K[0m[r[43;17H[?25l[41;2H[0m[K[42;2H[0m[K[43;27H[0m[K[44;2H[0m[K[45;140H[0m[K[41;1H [42;1H [43;1H[1m›[22m [2mAsk Codex to do anything[44;1H[22m [45;1H  probe default · /private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd            ⚠ 3 warnings · [1mf2[22m to view[0m[41;1H[0 q[41;1H [0m[43;3H[?25h[?2026l[?2026h[0m[43;3H[?25h[?2026l]0;⠏ cwd]7501;state=working:app=codex\[?2026h[1;40r[40;1H
+
+[r[43;3H[39;1H[J[?25l[39;2H[0m[K[40;34H[0m[K[41;2H[0m[K[42;2H[0m[K[43;27H[0m[K[44;2H[0m[K[45;140H[0m[K[39;1H [40;1H• [2mWorking[22m [2m(0s • [22m[1mesc[22m[2m[2m to interrupt)[41;1H[22m [42;1H [43;1H[1m›[22m [2mAsk Codex to do anything[44;1H[22m [45;1H  probe default · /private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd            ⚠ 3 warnings · [1mf2[22m to view[0m[39;1H[0 q[39;1H [0m[43;3H[?25h[?2026l[?2026h[0m[43;3H[?25h[?2026l]0;⠏ ⠏ | cwd[?2026h[39;1H[J[39;45r[39;1HMM[r[1;40r[38;1H
+[K[0m
+[K[2m• [22mSTUB_OK[0m[r[43;3H[?25l[41;2H[0m[K[42;2H[0m[K[43;27H[0m[K[44;2H[0m[K[45;140H[0m[K[41;1H [42;1H [43;1H[1m›[22m [2mAsk Codex to do anything[44;1H[22m [45;1H  probe default · /private/var/folders/jn/3nccnzf92m12rmfn30s5x3zw0000gn/T/ob-codex-queue-d9_xadb_/cwd · ⠏        ⚠ 3 warnings · [1mf2[22m to view[0m[41;1H[0 q[41;1H [0m[43;3H[?25h[?2026l]0;⠏ | cwd]7501;state=idle:app=codex\[?2026h[1;40r[40;1H
+[K[0m
+[K[2m  Worked for <1s • 14:49[0m[r[43;3H[0m[43;3H[?25h[?2026l]0;⠋ | cwd]0;cwd[?2026h[?25l[45;104H [45;106H [0m[43;3H[?25h[?2026l

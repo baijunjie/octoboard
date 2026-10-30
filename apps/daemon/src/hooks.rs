@@ -314,14 +314,15 @@ pub fn starts_conversation(event: &str) -> bool {
 /// off: Octoboard writes every message as a paste, and Claude Code (2.1.295) hands a long one over
 /// as `<pasted_content id="…">` and the text on the lines after it.
 ///
-/// Claude Code's alone. Codex's schema has a `prompt` and Grok's documentation names none, but how
-/// either hands over a pasted message is unmeasured, and a prompt read wrongly would make a turn
-/// unrecognisable rather than unread — so for them, as for a payload without one, this is `None`.
+/// Grok Build (1.0.70) supplies the pasted text verbatim in the same field. Codex (0.163.0)
+/// trims whitespace at the beginning and end, preserving internal line breaks.
 pub fn submitted_prompt(agent: Agent, payload: &Value) -> Option<&str> {
-    if agent != Agent::Claude {
-        return None;
-    }
-    Some(without_paste_wrapper(payload.get("prompt")?.as_str()?))
+    let prompt = payload.get("prompt")?.as_str()?;
+    Some(match agent {
+        Agent::Claude => without_paste_wrapper(prompt),
+        Agent::Codex => prompt.trim(),
+        Agent::Grok => prompt,
+    })
 }
 
 /// `text` with the wrapper Claude Code puts around a paste taken off: the `<pasted_content id="…">`
@@ -492,6 +493,29 @@ mod tests {
         });
         let prompt = submitted_prompt(Agent::Claude, &pasted).unwrap();
         assert!(prompt.starts_with("Message from Octoboard"), "{prompt}");
+    }
+
+    /// Captured from Grok Build 1.0.70: a long multiline paste reaches the hook verbatim.
+    #[test]
+    fn grok_reports_the_text_of_a_pasted_prompt() {
+        let payload: Value =
+            serde_json::from_str(include_str!("../testdata/grok_user_prompt_submit.json")).unwrap();
+        assert_eq!(event_name(&payload).as_deref(), Some("UserPromptSubmit"));
+        let prompt = submitted_prompt(Agent::Grok, &payload).unwrap();
+        assert!(prompt.starts_with("USER_DRAFT_SENTINEL_"));
+        assert!(prompt.contains("\n"));
+        assert_eq!(prompt, payload["prompt"].as_str().unwrap());
+    }
+
+    #[test]
+    fn codex_reports_a_multiline_prompt_with_outer_whitespace_trimmed() {
+        let payload: Value =
+            serde_json::from_str(include_str!("../testdata/codex_user_prompt_submit.json"))
+                .unwrap();
+        let prompt = submitted_prompt(Agent::Codex, &payload).unwrap();
+        assert_eq!(prompt, payload["prompt"].as_str().unwrap());
+        assert_eq!(prompt, prompt.trim());
+        assert!(prompt.contains('\n'));
     }
 
     /// Only a closing tag on the last line is the wrapper's: text after it, or a second paste, stays.
