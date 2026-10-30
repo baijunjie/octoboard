@@ -368,7 +368,7 @@ const bypassSteps: Step[] = [
 
 /** The two owned Claude Code accounts the sharing scenarios share the page with the default account: Work is the first
  * row, Client the second. A third row does not fit under the explanation lines. */
-function sharingAccounts(work: { share: boolean; incomplete?: boolean }, client: { share: boolean; incomplete?: boolean }): Scenario["state"] {
+function sharingAccounts(work: { share: boolean; incomplete?: boolean }, client: { share: boolean; incomplete?: boolean }): NonNullable<Scenario["state"]> {
   const base = browserState!;
   return {
     ...base,

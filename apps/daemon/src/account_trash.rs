@@ -1083,6 +1083,79 @@ mod tests {
         assert!(directory.exists());
     }
 
+    /// A switch admitted before the removal locks its target can still record the session there.
+    /// The removal must count the switch's claim after acquiring the agent's lock, even before
+    /// the session's new process exists.
+    #[tokio::test]
+    async fn a_switch_recording_its_target_under_the_copy_lock_refuses_removal() {
+        let (state, _dir) = fixture("account-trash-switch-entering");
+        let directory = create_directory(&state);
+        state
+            .store
+            .insert_session(&project_session(
+                "switching",
+                Agent::Claude,
+                SessionStatus::Interrupted,
+            ))
+            .unwrap();
+        let claim = state.begin_account_switch("switching", false).unwrap();
+        let copying =
+            crate::shared_config::before_switch_copy(&state, Agent::Claude, Some("claude-a"))
+                .await
+                .unwrap();
+        let removal = {
+            let state = state.clone();
+            tokio::spawn(async move { remove(&state, true).await })
+        };
+        wait_until_held(&directory).await;
+        assert!(state.sharing_locked("claude-a").is_some());
+        assert!(!removal.is_finished());
+
+        state
+            .set_session_account(
+                "switching",
+                Some("claude-a"),
+                Some(&account(&state, "claude-a").config_dir),
+            )
+            .unwrap();
+        drop(copying);
+        let err = removal.await.unwrap().unwrap_err();
+        assert_eq!(coded(&err).code, error_code::ACCOUNT_HAS_RUNNING_SESSIONS);
+        assert_eq!(coded(&err).params["account"], "claude-a");
+        assert_eq!(coded(&err).params["sessions"], "1");
+        assert!(directory.join("settings.json").exists());
+        assert!(state.store.get_account("claude-a").unwrap().is_some());
+        assert!(state.live_session("switching").is_none());
+        drop(claim);
+    }
+
+    /// A removal already holding the target account refuses a switch's copy before it writes
+    /// there; the pending short read keeps the removal at a known wait point.
+    #[tokio::test]
+    async fn the_switch_copy_guard_refuses_an_account_held_by_removal() {
+        let (state, _dir) = fixture("account-trash-switch-refused");
+        let directory = create_directory(&state);
+        let read = crate::shared_config::reading_account(Some(&directory)).unwrap();
+        let removal = {
+            let state = state.clone();
+            tokio::spawn(async move { remove(&state, true).await })
+        };
+        wait_until_held(&directory).await;
+        assert!(state.sharing_locked("claude-a").is_some());
+        assert!(!removal.is_finished());
+
+        let err = crate::shared_config::before_switch_copy(&state, Agent::Claude, Some("claude-a"))
+            .await
+            .unwrap_err();
+        assert_eq!(coded(&err).code, error_code::ACCOUNT_SHARING_IN_PROGRESS);
+        assert_eq!(coded(&err).params["account"], "claude-a");
+        assert!(directory.join("settings.json").exists());
+        drop(read);
+        removal.await.unwrap().unwrap();
+        assert!(!directory.exists());
+        assert!(state.store.get_account("claude-a").unwrap().is_none());
+    }
+
     /// The last judgement comes after the wait for the short reads: a project added inside the
     /// directory meanwhile is caught.
     #[tokio::test]
