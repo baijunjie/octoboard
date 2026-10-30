@@ -30,7 +30,7 @@ function StopOption({ tree, isSelected, onChange, isReadOnly }: {
         </Checkbox>
       </div>
       {/* Under the command's text: the checkbox, its gap and the glyph come before it. */}
-      <div className="ps-13">
+      <div className="ps-12">
         <OptionDetails describedBy={optionId} name={t("processes.details")}>
           <ProcessTreeDetails tree={tree} />
         </OptionDetails>
@@ -50,7 +50,7 @@ export function StoppedRow({ tree }: { tree: ProcessTree }): React.ReactElement 
       <div id={rowId} className="min-h-6">
         <ProcessCommand tree={tree} leading={<StopGlyph />} />
       </div>
-      <div className="ps-6">
+      <div className="ps-5">
         <OptionDetails describedBy={rowId} name={t("processes.details")}>
           <ProcessTreeDetails tree={tree} />
         </OptionDetails>

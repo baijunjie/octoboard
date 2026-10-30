@@ -36,13 +36,13 @@ it("says a command it could not read, and keeps the glyph out of a replaced `lea
   expect(host.querySelector("[data-testid=lead]")).not.toBeNull();
 });
 
-it("starts an unknown working directory in the text column, after a 16px slot, as a known one starts after its glyph", async () => {
+it("starts an unknown working directory in the text column, after a 14px icon, as a known one starts after its glyph", async () => {
   const unknown = await render(<ProcessTreeDetails tree={tree({ cwd: null })} />);
-  const slot = unknown.querySelector<HTMLElement>("span[aria-hidden=true].size-4");
+  const slot = unknown.querySelector<SVGElement>("svg.lucide-folder-x[aria-hidden=true]");
   expect(slot).not.toBeNull();
   expect(slot!.nextSibling?.textContent).toBe("Working directory unknown");
   const known = await render(<ProcessTreeDetails tree={tree()} />);
-  expect(known.querySelector("svg[width='16']")).not.toBeNull();
+  expect(known.querySelector("svg[width='14']")).not.toBeNull();
   expect(known.textContent).toContain("/work/search");
 });
 

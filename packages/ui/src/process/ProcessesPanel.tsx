@@ -268,7 +268,7 @@ function TreeList({ trees, acting, keepable, onStop, onKeep, labelledBy }: {
   );
 }
 
-/** A tree: its command and details, and at the end of the command's line its Stop and, where `keepable`, Keep,
+/** A tree: its command and details, and at the bottom end its Stop and, where `keepable`, Keep,
  * shown while the row is hovered or holds focus and always where nothing can hover. Each is named with the command so
  * the rows' buttons can be told apart. An open confirmation makes them unavailable. */
 function TreeRow({ tree, acting, keepable, onStop, onKeep }: {
@@ -284,25 +284,21 @@ function TreeRow({ tree, acting, keepable, onStop, onKeep }: {
   // `--panel-row` comment in style.css and docs/ui-accessibility.md, "Conformance level and exceptions").
   return (
     <div className="group flex min-w-0 flex-col gap-1 rounded-lg bg-(--panel-row) px-3 py-2 shadow-(--panel-shadow)">
-      <div className="flex min-w-0 items-center">
-        <div className="min-w-0 flex-1">
-          <ProcessCommand tree={tree} />
-        </div>
-        {/* Clipped to no width rather than removed while hidden, so the buttons take no room from the
-            command yet stay reachable with Tab; focus lifts the clip so the focus ring can paint. They
-            stand on the command's line alone: the lines below take the card's whole width. */}
-        <div className="-my-0.5 flex max-w-0 shrink-0 items-center gap-1 overflow-hidden opacity-0 transition-opacity motion-reduce:transition-none [@media(hover:none)]:ms-2 [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:ms-2 group-hover:max-w-none group-hover:opacity-100 group-focus-within:ms-2 group-focus-within:max-w-none group-focus-within:overflow-visible group-focus-within:opacity-100">
-          <Button data-region-landing size="xs" variant="danger-soft" aria-label={t("processes.stopNamed", { command })} preventFocusOnPress isDisabled={acting} onPress={onStop}>
-            {t("processes.stop")}
-          </Button>
+      <ProcessCommand tree={tree} />
+      <ProcessTreeDetails tree={tree} actions={
+        /* Clipping keeps hidden actions reachable with Tab without taking width from the facts;
+           revealing them leaves the command and directory at the card's full width. */
+        <div className="flex max-w-0 shrink-0 items-center gap-1 overflow-hidden opacity-0 transition-opacity motion-reduce:transition-none [@media(hover:none)]:ms-2 [@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100 group-hover:ms-2 group-hover:max-w-none group-hover:opacity-100 group-focus-within:ms-2 group-focus-within:max-w-none group-focus-within:overflow-visible group-focus-within:opacity-100">
           {keepable && (
-            <Button size="xs" variant="secondary" aria-label={t("processes.keepNamed", { command })} preventFocusOnPress isDisabled={acting} onPress={onKeep}>
+            <Button data-region-landing size="xs" variant="secondary" aria-label={t("processes.keepNamed", { command })} preventFocusOnPress isDisabled={acting} onPress={onKeep}>
               {t("processes.keep")}
             </Button>
           )}
+          <Button data-region-landing={keepable ? undefined : true} size="xs" variant="danger-soft" aria-label={t("processes.stopNamed", { command })} preventFocusOnPress isDisabled={acting} onPress={onStop}>
+            {t("processes.stop")}
+          </Button>
         </div>
-      </div>
-      <ProcessTreeDetails tree={tree} />
+      } />
     </div>
   );
 }

@@ -187,7 +187,7 @@ it("offers Stop and Keep on a session's tree, each named by the command, and onl
     type: "processes_listed",
     trees: [tree("1:1"), tree("2:2", { session_id: undefined, command: "node old.js" }), tree("3:3", { command: "" })],
   }));
-  expect(rows()[0].querySelectorAll("button")).toHaveLength(2);
+  expect([...rows()[0].querySelectorAll("button")].map((candidate) => candidate.textContent)).toEqual(["Keep", "Stop"]);
   expect(button("Stop").getAttribute("aria-label")).toBe("Stop \u2068npm run dev\u2069");
   expect(button("Keep").getAttribute("aria-label")).toBe("Keep \u2068npm run dev\u2069");
   expect(button("Keep", rows()[1]).getAttribute("aria-label")).toContain("Unknown command");
@@ -195,12 +195,15 @@ it("offers Stop and Keep on a session's tree, each named by the command, and onl
   expect(button("Stop", rows()[2]).getAttribute("aria-label")).toContain("node old.js");
 });
 
-it("puts the row's buttons on the command's line alone, so the directory and the facts take the card's whole width", async () => {
+it("puts actions beside single-line facts while the command and directory keep the card's whole width", async () => {
   await mount({ project }, async () => ({ type: "processes_listed", trees: [tree("1:1")] }));
   const line = button("Stop").parentElement!.parentElement!;
-  expect(line.textContent).toContain("npm run dev");
+  expect(line.textContent).toContain("120 MB");
+  expect(line.textContent).not.toContain("npm run dev");
   expect(line.textContent).not.toContain("/work/search");
-  expect(line.parentElement!.children).toHaveLength(2);
+  expect(line.querySelector(".whitespace-nowrap")?.textContent).toContain("120 MB");
+  expect(rows()[0].textContent).toContain("npm run dev");
+  expect(rows()[0].textContent).toContain("/work/search");
 });
 
 it("offers a console session's trees only Stop", async () => {
@@ -416,7 +419,7 @@ it("hands focus to the next row's first action after a confirmed stop, with the 
   await confirmStop();
   await settleFocus();
   expect(rows()).toHaveLength(1);
-  expect(document.activeElement).toBe(button("Stop"));
+  expect(document.activeElement).toBe(button("Keep"));
   expect(getInteractionModality()).toBe("keyboard");
 });
 
@@ -434,7 +437,7 @@ it("hands focus on after a stop opened from the keyboard but confirmed with the 
   await confirmWithPointer();
   await settleFocus();
   expect(rows()).toHaveLength(1);
-  expect(document.activeElement).toBe(button("Stop"));
+  expect(document.activeElement).toBe(button("Keep"));
   expect(getInteractionModality()).toBe("keyboard");
 });
 
@@ -544,7 +547,7 @@ it("hands focus to the card that followed the tree when a refresh took it out wh
   await act(async () => answer({ type: "processes_stopped", ids: ["2:2"] }));
   await settleFocus();
   expect(confirmation()).toBeNull();
-  expect(document.activeElement).toBe(button("Stop", rows()[1]));
+  expect(document.activeElement).toBe(button("Keep", rows()[1]));
   expect(rows()[1].textContent).toContain("node third.js");
 });
 
@@ -558,6 +561,6 @@ it("hands focus to the next row's first action when a refresh takes the tree out
   await settleFocus();
   expect(confirmation()).toBeNull();
   expect(rows()).toHaveLength(2);
-  expect(document.activeElement).toBe(button("Stop", rows()[1]));
+  expect(document.activeElement).toBe(button("Keep", rows()[1]));
   expect(rows()[1].textContent).toContain("node third.js");
 });
