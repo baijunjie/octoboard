@@ -202,7 +202,12 @@ pub(super) fn kick(
 ) -> anyhow::Result<()> {
     let KickCommand { args, env } = kick_command(agent);
     // The account's directory must not change sharing under the CLI while it runs.
-    let _reading = crate::shared_config::reading_account(config_dir);
+    let _reading = crate::shared_config::admitted_reading(config_dir).map_err(|missing| {
+        anyhow::anyhow!(
+            "the account's configuration directory {} does not exist",
+            missing.0.display()
+        )
+    })?;
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let mut command =
         adapter::account_command(agent, shell_env, config_dir, &args).map_err(|binary| {
@@ -241,6 +246,27 @@ mod tests {
 
     fn fake(dir: &Path, agent: Agent, body: &str) -> HashMap<String, String> {
         fake_agent(dir, adapter::adapter_for(agent).binary(), body)
+    }
+
+    /// A kick admitted after the account's directory was moved (a removal held it back) runs
+    /// nothing, which would create the directory again.
+    #[test]
+    fn a_kick_admitted_after_the_directory_was_moved_runs_nothing() {
+        let dir = ScratchDir::new("kick-moved");
+        let ran = dir.join("ran");
+        let env = fake(&dir, Agent::Codex, &format!("touch '{}'", ran.display()));
+        let account = dir.join("account");
+        let err = kick(
+            Agent::Codex,
+            &env,
+            Some(&account),
+            SHORT,
+            &AtomicBool::new(false),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("does not exist"), "{err}");
+        assert!(!ran.exists(), "the CLI was not run");
+        assert!(!account.exists());
     }
 
     /// Each agent's own choice of model and effort, and what it leaves out, in the order the
@@ -294,6 +320,7 @@ mod tests {
                 ),
             );
             let account = dir.join("account");
+            std::fs::create_dir(&account).unwrap();
             kick(
                 agent,
                 &env,

@@ -45,12 +45,12 @@ use crate::browse::source::admin_dir;
 use crate::browse::wire_path;
 use crate::hostfs::place::{looked_within, Place};
 use crate::hostfs::{self, lexically_normalise};
-use crate::project_trash::{Seen, TRASH_LOOK_DEADLINE};
 use crate::protocol::{
     Session, SessionBranchCause, SessionBranchItem, SessionBranchKind, SessionBranchState,
     SessionBranchTarget, SessionStatus,
 };
 use crate::state::AppState;
+use crate::trash_safety::{Seen, TRASH_LOOK_DEADLINE};
 
 /// How long removal waits for the sessions' processes to end before going ahead anyway. Far above
 /// the graceful period an ending process gets; past it, a process that would not die is left to

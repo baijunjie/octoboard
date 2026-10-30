@@ -21,6 +21,8 @@ export type { AlertStatus };
  * cause's own fix, further guidance), then the raw text not written for the reader (the system's own message, a
  * diagnostic block, raw entries); with no `details` there is no Details button. The buttons wrap beneath the text when
  * the Alert is too narrow to hold both.
+ * `textId` is the id of the title and the description alone, for a field that is described by what the Alert says and
+ * not by its buttons and details (`id` is the whole Alert's).
  * `status` is `warning` for a warning, or a failure that leaves the subject usable. It also carries a warning about
  * the consequence of a choice the user is making, through `ChoiceWarning`.
  *
@@ -37,6 +39,7 @@ export type { AlertStatus };
  */
 export function ErrorAlert({
   id,
+  textId,
   title,
   announce = false,
   announceKey,
@@ -50,6 +53,7 @@ export function ErrorAlert({
 }: {
   /** For a field that is described by the alert. */
   id?: string;
+  textId?: string;
   title: React.ReactNode;
   announce?: boolean;
   announceKey?: number;
@@ -68,7 +72,7 @@ export function ErrorAlert({
       <AlertFrame status={status} className="flex-wrap">
         <Alert.Indicator aria-hidden="true" />
         <Alert.Content className="min-w-40 basis-0">
-          <div key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
+          <div id={textId} key={announcement.key} role={announcement.role} className="flex min-w-0 max-w-full flex-col items-start">
             <Alert.Title>{title}</Alert.Title>
             {children && <Alert.Description>{children}</Alert.Description>}
           </div>

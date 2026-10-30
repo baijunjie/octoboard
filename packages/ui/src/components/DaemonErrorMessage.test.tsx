@@ -764,3 +764,17 @@ it("keeps an ActionableError's detail as raw text of a block of its own whether 
   expect(body.textContent).not.toContain("ENOENT");
   expect(raw.querySelector("pre")?.textContent).toBe("ENOENT: no such file");
 });
+
+describe("a failure that states only its cause", () => {
+  const trashFailed = (detail: string, extra: Record<string, string> = {}) => new DaemonRequestError("plain", "account_directory_trash_failed", { path: "/a", detail, ...extra });
+
+  it("says the cause the system's text names after its sentence, with no remedy", () => {
+    const { body, raw } = mountApart(trashFailed("Operation not permitted (os error 1)"));
+    expect(body.textContent).toBe("The directory could not be moved to the Trash. Access was denied.");
+    expect(raw.textContent).toContain("Operation not permitted");
+  });
+
+  it("says no cause where the system's text names none, or where the sentence is the cause", () => {
+    expect(mountApart(trashFailed("something else")).body.textContent).toBe("The directory could not be moved to the Trash.");
+  });
+});

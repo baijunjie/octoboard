@@ -37,7 +37,9 @@ use crate::state::{AppState, Running};
 use link::{Cause, Failure, Left};
 
 pub use change::{before_delete, before_repoint, set};
-pub(crate) use cli_reads::{reading_account, running_long, Run};
+pub(crate) use cli_reads::{admitted_reading, hold, is_missing, running_long, Run};
+#[cfg(test)]
+pub(crate) use cli_reads::{is_held, reading_account};
 pub use launch::before_launch;
 pub use link::{Cause as FailureCause, Failure as FailedItem};
 pub use status::{forget_session, note_session, publish, states};
@@ -87,6 +89,13 @@ pub async fn before_switch_copy<'a>(
     Ok(guard)
 }
 
+/// The agent's lock, for an operation on an account's directory that must see every account switch
+/// of the agent either finished and recorded, or refused: a switch holds it from before it copies
+/// the conversation in until it has recorded the session ([`before_switch_copy`]).
+pub(crate) async fn lock_agent(state: &AppState, agent: Agent) -> MutexGuard<'_, ()> {
+    state.account_sharing.locks.lock(agent).await
+}
+
 /// Whether `session` runs under `account`'s directory: one of the account's sessions, or one
 /// holding its directory.
 pub(crate) fn runs_under(account: &Account, session: &Session) -> bool {
@@ -131,7 +140,7 @@ fn in_use(account: &Account, running: &[Running]) -> Uses {
 
 /// The directory the agent's default account resolves to, as the default account's own sessions
 /// see it: what availability found at start-up, else the launch environment's.
-async fn default_dir(state: &Arc<AppState>, agent: Agent) -> Result<PathBuf> {
+pub(crate) async fn default_dir(state: &Arc<AppState>, agent: Agent) -> Result<PathBuf> {
     if let Some(dir) = state.agent_availability_of(agent).default_account_dir {
         return Ok(PathBuf::from(dir));
     }

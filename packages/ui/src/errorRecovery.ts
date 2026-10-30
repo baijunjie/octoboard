@@ -16,6 +16,10 @@ export type ErrorRecovery =
   | "diskSpaceNoRetry" | "accessNoRetry"
   | "none";
 
+/** Removing an account with its directory, and a login refused because the account is being removed: the alert says
+ * only why it was refused or failed, never what to do. */
+const CAUSE_ONLY = new Set(["account_directory_trash_failed", "account_directory_shared", "account_directory_protected", "account_has_running_sessions", "account_being_removed"]);
+
 const GROUPS: Partial<Record<ErrorRecovery, readonly string[]>> = {
   path: ["path_not_absolute", "path_not_found", "path_not_a_directory", "invalid_path", "directory_unreachable", "file_not_found", "config_dir_not_absolute", "config_dir_unreachable", "no_repositories_found", "repository_name_missing"],
   // The project's directory, or its place in a worktree, that a request is scoped to: nothing the user typed or picked
@@ -170,6 +174,12 @@ function isNotRestored(error: unknown): boolean {
   return error instanceof DaemonRequestError && error.code === "relocation_failed" && relocationCause(error.params.cause) === "not_restored";
 }
 
+/** The cause the system's own text names in a failure that states only its cause (`CAUSE_ONLY`: no remedy follows it),
+ * so its alert can say the cause after the failure's own sentence; the raw text stays in the details. */
+export function namedSystemCause(error: unknown): ErrorRecovery | undefined {
+  return error instanceof DaemonRequestError && CAUSE_ONLY.has(error.code) ? environmentRecovery(error) : undefined;
+}
+
 /** The remedy that goes with a failure's own as well, said after it: what a recognised operating-system signature in
  * a failure that kept an older item aside asks for (free space, permissions), which `classifyError` leaves behind the
  * remedy that prevents losing that item. */
@@ -214,6 +224,8 @@ export function classifyError(error: unknown, recovery?: ErrorRecovery): ErrorCl
     // said (a full disk, a denied access) is.
     return { kind: "actionable", recovery: withoutRetry(environmentRecovery(nested)) ?? "none" };
   }
+  // Ahead of the operating-system signature, whose remedy would otherwise be added.
+  if (!explicit && error instanceof DaemonRequestError && CAUSE_ONLY.has(error.code)) return { kind: "actionable", recovery: "none" };
   const remedy = environmentRecovery(error) ?? explicit;
   if (remedy) return { kind: "actionable", recovery: remedy };
   if (error instanceof DaemonRequestError) {

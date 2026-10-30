@@ -246,6 +246,10 @@ pub struct AppState {
     pub account_quotas: crate::account_quotas::AccountQuotas,
     /// The logins running now, one per account (`crate::account_login`). Held in memory only.
     pub account_logins: crate::account_login::AccountLogins,
+    /// The accounts a `delete_account` that moves the directory to the Trash is running for, each
+    /// with the number of such removals; see [`AppState::begin_account_removal`]. Held in memory
+    /// only. A plain mutex, never held across an `.await`.
+    accounts_being_removed: Mutex<HashMap<String, (crate::protocol::Account, usize)>>,
     /// What the accounts' changes of sharing of the default configuration hold: one lock per
     /// agent over the default directory, and each account's progress and last failure
     /// (`crate::shared_config`). Held in memory only.
@@ -253,8 +257,9 @@ pub struct AppState {
     /// The shell terminals running, or exited and not yet closed (`crate::shell_terminal`). Held in
     /// memory only: each is a process of this daemon's.
     pub shell_terminals: crate::shell_terminal::ShellTerminals,
-    /// The paths looked at on the file system whose look outran its deadline and is still stuck
-    /// (`crate::hostfs::place::looked_within`). Held in memory only.
+    /// The paths looked at on the file system whose look outran its deadline and is still running,
+    /// stuck once it has run long enough (`crate::hostfs::place::looked_within`). Held in memory
+    /// only.
     pub directory_looks: StalledPasses<std::path::PathBuf>,
     /// For each session with a session request waiting, the status its agent's own events
     /// say it has, while the record shows `WaitingUser` for the request. Kept so that the daemon's
@@ -304,12 +309,19 @@ pub struct AppState {
     pub process_ledger: Arc<crate::process_ledger::ProcessLedger>,
 }
 
-/// Blocking work that outran its deadline and whose thread is still stuck, one per key — a console
-/// whose project directories were being looked at, a path being looked at. Each entry is held
-/// weakly: the thread owns the strong reference, so the entry reads as gone once the thread has
-/// ended. While it is there, later work for the same key takes its fallback at once instead of
-/// starting another thread that would be stuck the same way.
-pub struct StalledPasses<K>(Mutex<HashMap<K, std::sync::Weak<()>>>);
+/// Blocking work that outran its deadline and whose thread is still running, per key — a console
+/// whose project directories were being looked at, a path being looked at. Each thread is held
+/// weakly: it owns the strong reference, so its entry reads as gone once it has ended. Once a
+/// thread has run long enough to count as stuck ([`StalledPasses::record_from`]; at once for
+/// [`StalledPasses::record`]), later work for the same key takes its fallback at once instead of
+/// starting another thread that would be stuck the same way; before that its entry only keeps its
+/// place and the key reads as not stuck. A key can hold several threads, the later ones started
+/// while the earlier were not yet stuck: each keeps its own time, so a later record never pushes
+/// back when an earlier thread counts as stuck, and the key is stuck while any of them is.
+pub struct StalledPasses<K>(Mutex<HashMap<K, Vec<StalledThread>>>);
+
+/// A thread of a [`StalledPasses`] key: its pass, and from when it counts as stuck.
+type StalledThread = (std::sync::Weak<()>, std::time::Instant);
 
 impl<K> Default for StalledPasses<K> {
     fn default() -> Self {
@@ -318,30 +330,40 @@ impl<K> Default for StalledPasses<K> {
 }
 
 impl<K: Eq + std::hash::Hash> StalledPasses<K> {
-    /// Whether the work recorded for `key` is still stuck on its thread.
+    /// Whether work recorded for `key` is still stuck on its thread, and has been long enough to
+    /// count as stuck ([`StalledPasses::record_from`]).
     pub fn is_stuck<Q>(&self, key: &Q) -> bool
     where
         K: std::borrow::Borrow<Q>,
         Q: Eq + std::hash::Hash + ?Sized,
     {
         let mut passes = self.0.lock().expect("stalled pass lock poisoned");
-        match passes.get(key).map(|pass| pass.strong_count() > 0) {
-            Some(true) => true,
-            Some(false) => {
-                passes.remove(key);
-                false
-            }
-            None => false,
+        let Some(threads) = passes.get_mut(key) else {
+            return false;
+        };
+        threads.retain(|(pass, _)| pass.strong_count() > 0);
+        let now = std::time::Instant::now();
+        let stuck = threads.iter().any(|(_, from)| now >= *from);
+        if threads.is_empty() {
+            passes.remove(key);
         }
+        stuck
     }
 
     /// Records that the work for `key` outran its deadline; `pass` is held strongly by the thread
     /// that is still running it.
     pub fn record(&self, key: K, pass: std::sync::Weak<()>) {
-        self.0
-            .lock()
-            .expect("stalled pass lock poisoned")
-            .insert(key, pass);
+        self.record_from(key, pass, std::time::Instant::now());
+    }
+
+    /// [`StalledPasses::record`], where the work counts as stuck only from `from` on: until then
+    /// its thread is running on and later work for the key starts as if nothing were recorded. An
+    /// earlier thread of the key that is still running keeps its own entry and time.
+    pub fn record_from(&self, key: K, pass: std::sync::Weak<()>, from: std::time::Instant) {
+        let mut passes = self.0.lock().expect("stalled pass lock poisoned");
+        let threads = passes.entry(key).or_default();
+        threads.retain(|(earlier, _)| earlier.strong_count() > 0);
+        threads.push((pass, from));
     }
 }
 
@@ -694,6 +716,7 @@ impl AppState {
             agent_models: Default::default(),
             account_quotas: Default::default(),
             account_logins: Default::default(),
+            accounts_being_removed: Default::default(),
             account_sharing: Default::default(),
             shell_terminals: Default::default(),
             directory_looks: Default::default(),
@@ -966,6 +989,34 @@ impl AppState {
         live.sharing_locks
             .get(id)
             .map(|entry| entry.account.clone())
+    }
+
+    /// Marks `account` as being removed with its directory moved to the Trash, until the answer is
+    /// dropped: [`crate::account_login::AccountLogins`] refuses to start a sign-in for it
+    /// meanwhile, which would write into the directory once its sign-in has ended.
+    pub fn begin_account_removal(
+        self: &Arc<Self>,
+        account: &crate::protocol::Account,
+    ) -> AccountRemoval {
+        self.accounts_being_removed
+            .lock()
+            .expect("accounts being removed lock poisoned")
+            .entry(account.id.clone())
+            .or_insert_with(|| (account.clone(), 0))
+            .1 += 1;
+        AccountRemoval {
+            state: self.clone(),
+            account: account.id.clone(),
+        }
+    }
+
+    /// The account `id` while its removal with its directory moved to the Trash is running.
+    pub fn account_being_removed(&self, id: &str) -> Option<crate::protocol::Account> {
+        self.accounts_being_removed
+            .lock()
+            .expect("accounts being removed lock poisoned")
+            .get(id)
+            .map(|(account, _)| account.clone())
     }
 
     /// The sessions running or holding a claim, each once, as a change of sharing sees them.
@@ -3121,6 +3172,28 @@ pub struct Running {
     pub restarting: bool,
 }
 
+/// An account marked as being removed (see [`AppState::begin_account_removal`]), until dropped.
+pub struct AccountRemoval {
+    state: Arc<AppState>,
+    account: String,
+}
+
+impl Drop for AccountRemoval {
+    fn drop(&mut self) {
+        let mut removing = self
+            .state
+            .accounts_being_removed
+            .lock()
+            .expect("accounts being removed lock poisoned");
+        if let Some((_, count)) = removing.get_mut(&self.account) {
+            *count -= 1;
+            if *count == 0 {
+                removing.remove(&self.account);
+            }
+        }
+    }
+}
+
 /// The account locked for a change of its sharing that `session` runs under, if any.
 fn locked_over<'a>(live: &'a LiveSessions, session: &Session) -> Option<&'a SharingLockEntry> {
     live.sharing_locks
@@ -4725,5 +4798,54 @@ mod tests {
             late_check.was_ended_on_purpose(),
             "by `end`, so its owner is not told"
         );
+    }
+
+    /// A record for a key whose earlier thread is still running keeps the earlier entry and its
+    /// time, and the later thread counts too once the earlier has ended.
+    #[test]
+    fn a_live_stalled_entry_is_not_replaced_by_a_later_record() {
+        let passes = StalledPasses::<String>::default();
+        let key = "key".to_string();
+        let begun = Instant::now();
+
+        // The earlier thread's time is not pushed back by a later record.
+        let first = Arc::new(());
+        passes.record_from(
+            key.clone(),
+            Arc::downgrade(&first),
+            begun + Duration::from_millis(300),
+        );
+        assert!(!passes.is_stuck(&key), "not stuck before its time");
+        let second = Arc::new(());
+        passes.record_from(
+            key.clone(),
+            Arc::downgrade(&second),
+            begun + Duration::from_secs(60),
+        );
+        std::thread::sleep(Duration::from_millis(350));
+        assert!(passes.is_stuck(&key), "the first's own time stands");
+
+        // Once it ended, the later thread is what the key waits on, from its own time.
+        drop(first);
+        assert!(!passes.is_stuck(&key), "the second's time is not yet");
+        drop(second);
+        assert!(!passes.is_stuck(&key), "and with it gone nothing is left");
+        let third = Arc::new(());
+        passes.record_from(key.clone(), Arc::downgrade(&third), begun);
+        assert!(passes.is_stuck(&key), "a record after the end is taken");
+    }
+
+    /// An account is marked as being removed until every removal of it has ended.
+    #[test]
+    fn an_account_is_being_removed_until_every_removal_has_ended() {
+        let (state, _dir) = crate::test_support::console_with_project_and_accounts("state-removal");
+        let account = state.store.get_account("claude-a").unwrap().unwrap();
+        assert!(state.account_being_removed(&account.id).is_none());
+        let first = state.begin_account_removal(&account);
+        let second = state.begin_account_removal(&account);
+        drop(first);
+        assert!(state.account_being_removed(&account.id).is_some());
+        drop(second);
+        assert!(state.account_being_removed(&account.id).is_none());
     }
 }

@@ -69,6 +69,8 @@ Development plan docs and bug tickets are temporary and are not listed here.
   owned accounts, the accounts table and the account details and settings dialogs.
 - [Per-agent settings](product/per-agent-settings.md) — settings that apply to every account of one agent: permission
   approval modes and Claude compatibility.
+- [Removing an account](product/removing-accounts.md) — what removing an account clears, its confirmation, and the option
+  to move the account directory to the Trash.
 - [Logging an account in](product/logging-accounts-in.md) — the login dialog and how each agent signs in.
 - [Sharing the default configuration](product/sharing-the-default-configuration.md) — an account sharing the agent's
   default configuration and how a change is carried out.

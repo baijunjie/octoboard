@@ -135,9 +135,11 @@ refuse every other holder (a handoff, a handover, a binding change, a resume) fo
 account switch's claim shows the session as switching to every client. That refusal suits a request the user can
 repeat; work the daemon starts from an event that will not come again — a turn that failed, a hook — and that finds
 the session under a claim waits for the claim to end, with a bound, and then re-reads what it decided on, instead of
-returning, or the event is lost. So a wait on something that may never come —
-polling a record for what an agent has yet to write — runs before the claim is taken, and only one confirming read of
-it runs under the claim. The same goes for what the operation writes on the way: a write that
+returning, or the event is lost. So a wait on something that may never come — polling a record for what an agent has
+yet to write, a sign-in or other runs under the same directory ending — runs before the claim, or a lock such as
+`shared_config::lock_agent`, is taken, and only one confirming read of it runs under the claim. Every wait makes the
+checks before it stale again: where an operation waits more than once (for a lock, a sign-in to end, other runs to
+finish), the check that decides a destructive act is made after the last wait, immediately before the act. The same goes for what the operation writes on the way: a write that
 goes with it (the model and effort an account switch sets, the account a switch for a usage limit left) is made under
 the claim, after its checks, and put back on each of its failure paths, since one made before the claim is read by
 whatever launches in between, and one made after it by whatever was waiting for the claim. Put

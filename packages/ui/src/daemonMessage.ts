@@ -114,6 +114,9 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   account_name_taken: ["name"],
   config_dir_taken: ["name"],
   project_directory_shared: ["project"],
+  account_has_running_sessions: ["name"],
+  "account_directory_shared.account": ["name"],
+  "account_directory_shared.project": ["name"],
   conversation_in_session: ["session"],
   session_not_bound_to_owner: ["owner"],
   session_owner_changing: ["owner"],
@@ -137,6 +140,7 @@ export const NAME_PARAMS: Record<string, readonly string[]> = {
   "account_in_use.signingIn": ["name"],
   "account_in_use.both": ["name"],
   account_sharing_in_progress: ["name"],
+  account_being_removed: ["name"],
   sharing_resume_failed: ["name"],
   "sharing_resume_failed.running": ["name"],
   account_sharing_repair_failed: ["name"],
@@ -369,7 +373,7 @@ export const DETAIL_BLOCK_CODES = new Set([
   "git_push_failed", "git_switch_failed", "git_restore_failed", "git_unavailable",
   "models_command_failed", "models_shell_environment_failed", "quota_command_failed", "quota_shell_environment_failed", "codex_unarchive_failed", "login_failed", "sharing_resume_failed", "shell_environment_timeout", "relocation_failed",
   "directory_unreadable", "source_unavailable", "permission_denied", "path_link_refused",
-  "unreadable_request", "project_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable",
+  "unreadable_request", "project_directory_trash_failed", "account_directory_trash_failed", "configuration_unreadable", "terminal_unavailable", "path_open_failed", "directory_unavailable",
 ]);
 
 /** These trust reasons carry an OS write/read diagnostic, not another daemon error code. */
@@ -456,9 +460,13 @@ export const UI_PARAMS: Record<string, MessageParams> = {
  * with a `resets_at` time, worded as `daemon.account_quota_exhausted.resets`; `account_in_use` while the
  * account is being signed in, worded as `daemon.account_in_use.signingIn`, or `.both` with sessions too; a refused
  * avatar of an imported console, which names it, worded as `daemon.icon_too_large.import`; `path_link_refused` by its
- * `cause`, worded as `daemon.path_link_refused.<cause>`, an unknown one as `other`; `project_directory_trash_failed`
- * with `cause` `unanswered`, where a folder it depends on did not respond in time, or `unreadable`, where the folder
- * itself could not be read, worded as `daemon.project_directory_trash_failed.<cause>`; `outside_scope` of a refused link click, with `action` `open`, worded as `daemon.outside_scope.open`). */
+ * `cause`, worded as `daemon.path_link_refused.<cause>`, an unknown one as `other`; `project_directory_trash_failed` and
+ * `account_directory_trash_failed` with `cause` `unanswered`, where a folder it depends on did not respond in time, or
+ * `unreadable`, where the folder itself could not be read (for an account also `other_unlooked`, where whether the
+ * directory holds or overlaps another account's or a project's could not be checked, and `signing_in`, where the
+ * account's sign-in did not end in time), worded as `daemon.<code>.<cause>`; `account_directory_shared` by its `kind`
+ * (`account`, `default_account` or `project`), worded as `daemon.account_directory_shared.<kind>`; `outside_scope` of a
+ * refused link click, with `action` `open`, worded as `daemon.outside_scope.open`). */
 export function messageCode(code: string, params: MessageParams): string {
   if (code === "field_too_long" && (params.field === "name" || params.field === "description")) return `${code}.${params.field}`;
   if (code === "account_quota_exhausted" && /^\d+$/.test(params.resets_at ?? "")) return "account_quota_exhausted.resets";
@@ -466,7 +474,8 @@ export function messageCode(code: string, params: MessageParams): string {
   if (code === "relocation_failed" && (params.stage === "thread_record" || params.stage === "kept_staging")) return `${code}.${params.stage}`;
   if (code === "outside_scope" && params.action === "open") return "outside_scope.open";
   if (code === "path_link_refused") return `${code}.${pathLinkRefusedCause(params.cause)}`;
-  if (code === "project_directory_trash_failed" && (params.cause === "unanswered" || params.cause === "unreadable")) return `${code}.${params.cause}`;
+  if (code === "account_directory_shared" && (params.kind === "account" || params.kind === "default_account" || params.kind === "project")) return `${code}.${params.kind}`;
+  if ((code === "project_directory_trash_failed" || code === "account_directory_trash_failed") && (params.cause === "unanswered" || params.cause === "unreadable" || (code === "account_directory_trash_failed" && (params.cause === "other_unlooked" || params.cause === "signing_in")))) return `${code}.${params.cause}`;
   if ((code === "icon_not_an_image" || code === "icon_too_large") && params.console_name) return `${code}.import`;
   if (code === "account_in_use" && params.signing_in === "true") return /^[1-9]\d*$/.test(params.sessions ?? "") ? "account_in_use.both" : "account_in_use.signingIn";
   return code === "unsupported_file_type" && params.file_type === "unmerged" ? "unsupported_file_type.unmerged" : code;
@@ -578,7 +587,7 @@ export function daemonParams<V = never>(
   }
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
-  if (code === "account_in_use" && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);
+  if ((code === "account_in_use" || code === "account_has_running_sessions") && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);
   if (code === "field_too_long" && /^\d+$/.test(all.limit ?? "")) shown.limit = Number(all.limit);
   // The window is worded in the UI's language from its structured params; a refusal without them, as a quota of
   // its English `window` name.

@@ -7,6 +7,7 @@ mod access;
 mod account_dirs;
 mod account_login;
 mod account_quotas;
+mod account_trash;
 mod adapter;
 mod agent_dialogs;
 mod agent_models;
@@ -93,6 +94,7 @@ mod test_support;
 mod title_activity;
 mod title_interrupt;
 mod transcript;
+mod trash_safety;
 mod trust;
 
 use std::sync::Arc;

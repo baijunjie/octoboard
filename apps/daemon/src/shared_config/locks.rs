@@ -1,6 +1,7 @@
 //! One lock per agent over changing and repairing the sharing of its accounts, and over an
-//! account switch's copy into an account: every account of an agent writes into the same default
-//! directory, and none of these may work on a directory another is changing.
+//! account switch's copy into an account, and over an account removal's last judgement and the
+//! move of its directory: every account of an agent writes into the same default directory, and
+//! none of these may work on a directory another is changing.
 
 use tokio::sync::{Mutex, MutexGuard};
 

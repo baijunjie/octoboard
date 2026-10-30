@@ -722,7 +722,7 @@ it.each(["agent", "account"] as const)("puts focus on the section's entry once a
   const confirm = buttonNamed(document.querySelector('[role="alertdialog"]')!, "Remove")!;
   act(() => confirm.focus());
   await act(async () => confirm.click());
-  expect(request).toHaveBeenCalledExactlyOnceWith(removed === "agent" ? { type: "remove_agent", agent: "grok" } : { type: "delete_account", account: "claude-work" });
+  expect(request).toHaveBeenCalledExactlyOnceWith(removed === "agent" ? { type: "remove_agent", agent: "grok" } : { type: "delete_account", account: "claude-work", trash_directory: false });
   if (removed === "agent") settings.added_agents = ["claude", "codex"];
   else settings.accounts = settings.accounts.filter((held) => held.id !== "claude-work");
   act(() => bus.notify());

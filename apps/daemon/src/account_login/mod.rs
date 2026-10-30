@@ -185,8 +185,9 @@ impl AccountLogins {
         }
     }
 
-    /// Starts the login of an account and returns once the CLI is running, or refuses it. What
-    /// follows is announced as `account_login_updated`.
+    /// Starts the login of an account and returns once the CLI is running, or refuses it, as
+    /// `account_being_removed` while the account's removal is moving its directory to the Trash.
+    /// What follows is announced as `account_login_updated`.
     pub async fn start(state: &Arc<AppState>, start: Start) -> Result<()> {
         // Waited for as a person's launch is: the first login may be the first thing to need it.
         let shell_env = tokio::task::spawn_blocking(crate::env_shell::launch_snapshot)
@@ -234,6 +235,16 @@ impl AccountLogins {
         };
         let logins = &state.account_logins;
         let mut running = logins.lock();
+        // Judged under the logins' lock, which `end` takes as well: an account whose removal is
+        // moving its directory to the Trash has either ended a login started before it was marked
+        // or refuses this one, so none starts writing into the directory.
+        if let Some(removing) = start
+            .account
+            .as_deref()
+            .and_then(|account| state.account_being_removed(account))
+        {
+            return Err(crate::account_trash::being_removed(&removing));
+        }
         if running.contains_key(&key) {
             return Err(CodedError::raised(
                 error_code::LOGIN_ALREADY_RUNNING,
@@ -317,6 +328,24 @@ impl AccountLogins {
         };
         entry.cancel.notify_one();
         Ok(())
+    }
+
+    /// Ends the login of an account and waits, for at most `within`, until it is gone and the CLI
+    /// with it: `true` where none runs for the account any more, including where none ran.
+    pub async fn end(&self, agent: Agent, account: &str, within: Duration) -> bool {
+        if self.cancel(agent, Some(account.to_string())).is_err() {
+            return true;
+        }
+        let key = Key {
+            agent,
+            account: Some(account.to_string()),
+        };
+        let gone = async {
+            while self.lock().contains_key(&key) {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        };
+        tokio::time::timeout(within, gone).await.is_ok()
     }
 
     /// Ends every login, killing every CLI, and returns once they are gone. For the daemon's own

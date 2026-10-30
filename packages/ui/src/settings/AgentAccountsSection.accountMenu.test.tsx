@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import type { AccountLogin } from "../protocol";
+import type { AccountLogin, AccountTrashOutcome, Session } from "../protocol";
 import { DaemonRequestError } from "../daemon-client";
 import { errorAlerts } from "../errorAlerts";
 import { ErrorAlerts } from "../dialogs/ErrorAlerts";
@@ -12,7 +12,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/StatusAnnouncer";
 import { windowAttention } from "../components/windowTestSupport";
 import { SettingsDialog } from "./SettingsDialog";
 import { registerSettingsLauncher } from "./settingsLauncher";
-import { accountLogins, bus, dismissAccountLogin, request, settings, toastError, trackAccountLogin } from "./agentAccountsSectionTestState";
+import { accountLogins, bus, dismissAccountLogin, request, sessions, settings, toastError, trackAccountLogin } from "./agentAccountsSectionTestState";
 import { buttonNamed, chooseItem, mount, openDetailsOf, openSettingsOf, openTabMenu, rowOf } from "./agentAccountsSectionTestSupport";
 
 vi.mock("../store", async (importOriginal) => (await import("./agentAccountsSectionTestState")).storeStandIn(await importOriginal()));
@@ -405,6 +405,21 @@ describe("an account's actions menu", () => {
     expect(buttonNamed(dialog, "Log in again")).toBeDefined();
   });
 
+  it("says a login refused because the account is being removed with a pronoun, not the account's name again", async () => {
+    const { container } = mount();
+    request.mockRejectedValueOnce(Object.assign(new Error("removing"), { code: "account_being_removed", params: { account: "claude", name: "Default" } }));
+    await openAccountMenu(container, 0);
+    await chooseItem("Log in");
+    await act(async () => {});
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    const text = dialog.querySelector("p")?.textContent?.replace(/[\u2068\u2069]/g, "");
+    expect(text).toBe("Logging in to Claude Code account Default failed. The account is being removed.");
+    expect(dialog.textContent).not.toContain("is being removed.It");
+    expect(dialog.querySelectorAll("p")).toHaveLength(1);
+    expect(buttonNamed(dialog, "Log in again")).toBeDefined();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
   it("notes that this window started the login it asked for, and shows a refusal in the modal", async () => {
     const { container } = mount();
     request.mockRejectedValueOnce(Object.assign(new Error("busy"), { code: "login_codex_busy", params: {} }));
@@ -440,7 +455,275 @@ describe("an account's actions menu", () => {
     expect(document.querySelector('[role="alertdialog"], [role="dialog"]')?.textContent).toContain("Remove account");
     expect(document.querySelector('[role="alertdialog"], [role="dialog"]')?.textContent).toContain("The account claude-work will be removed.");
     await act(async () => buttonNamed(document.querySelector('[role="alertdialog"], [role="dialog"]')!, "Remove")!.click());
-    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work" });
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work", trash_directory: false });
+  });
+
+  /** Answers the daemon's inspection of the account's directory with `outcome`, or holds it until the returned function is
+   * called with one; every other request is answered with nothing. */
+  function inspectionAnswers(outcome?: AccountTrashOutcome) {
+    const waiting: ((outcome: AccountTrashOutcome) => void)[] = [];
+    request.mockImplementation(((body: { type: string }) => body.type === "inspect_account_trash"
+      ? outcome ? Promise.resolve({ type: "account_trash_inspected", outcome }) : new Promise((resolve) => waiting.push((answer) => resolve({ type: "account_trash_inspected", outcome: answer })))
+      : Promise.resolve({})) as never);
+    return (answer: AccountTrashOutcome) => waiting.shift()!(answer);
+  }
+  const inspections = () => (request.mock.calls as unknown as [{ type: string }][]).filter(([body]) => body.type === "inspect_account_trash").length;
+  const removeDialog = () => document.querySelector('[role="alertdialog"], [role="dialog"]')!;
+  const trashOption = () => [...removeDialog().querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!;
+  /** Disabled, or pending: a button held while an operation runs is `aria-disabled`, so it keeps focus. */
+  const removeHeld = () => {
+    const button = buttonNamed(removeDialog(), "Remove")!;
+    return button.disabled || button.getAttribute("aria-disabled") === "true";
+  };
+  async function openRemoval(container: HTMLElement) {
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+  }
+
+  it("offers to move the account directory to the Trash, unticked, and sends the choice with the removal", async () => {
+    inspectionAnswers({ status: "ok" });
+    const { container } = mount();
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+    const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]')!;
+    const option = () => [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].find((box) => box.closest("label")?.textContent?.includes("Also move the account directory to the Trash"))!;
+    expect(option().checked).toBe(false);
+    expect(dialog.textContent).toContain("including its login, settings and conversation history");
+    expect(dialog.textContent).toContain("recover it from the Trash");
+    expect(dialog.textContent).not.toContain("archived sessions can no longer be resumed");
+    await act(async () => option().click());
+    expect(option().checked).toBe(true);
+    expect(dialog.textContent).toContain("Its directory is moved to the Trash, so its archived sessions can no longer be resumed");
+    // The confirm button keeps its label: the message says the directory goes.
+    await act(async () => buttonNamed(dialog, "Remove")!.click());
+    expect(request).toHaveBeenCalledWith({ type: "inspect_account_trash", account: "claude-work" });
+    expect(request).toHaveBeenLastCalledWith({ type: "delete_account", account: "claude-work", trash_directory: true });
+  });
+
+  it("holds Remove, quietly, while the daemon is asked whether the directory may go, and frees it on ok", async () => {
+    const answer = inspectionAnswers();
+    const { container } = mount();
+    await openRemoval(container);
+    expect(inspections()).toBe(0);
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(1);
+    expect(removeHeld()).toBe(true);
+    expect(removeDialog().querySelector('[role="alert"]')).toBeNull();
+    await act(async () => answer({ status: "ok" }));
+    expect(removeHeld()).toBe(false);
+    expect(removeDialog().textContent).toContain("including its login, settings and conversation history");
+  });
+
+  it("says there is nothing to move for a missing directory and leaves Remove enabled", async () => {
+    inspectionAnswers({ status: "missing" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(removeDialog().textContent).toContain("The account’s directory does not exist, so there is nothing to move.");
+    expect(removeDialog().textContent).not.toContain("moved to the Trash, so");
+    expect(removeDialog().querySelector('[role="alert"]')).toBeNull();
+    expect(removeHeld()).toBe(false);
+  });
+
+  it.each([
+    [{ status: "protected" }, "The directory is your home folder, the root of a disk, or holds Octoboard"],
+    [{ status: "shared", kind: "account", name: "codex-work", agent: "Codex" }, "The directory overlaps the directory of the Codex account codex-work, so it cannot be moved to the Trash."],
+    [{ status: "shared", kind: "default_account", agent: "Claude Code" }, "The directory is, holds or lies inside the default Claude Code account’s directory, so it cannot be moved to the Trash."],
+    [{ status: "shared", kind: "project", name: "Site" }, "The directory holds the folder of project Site, so it cannot be moved to the Trash."],
+    [{ status: "unlookable", cause: "unreadable" }, "The directory could not be read"],
+    [{ status: "unlookable" }, "The directory could not be accessed, so it cannot be moved to the Trash."],
+    [{ status: "unlookable", cause: "other_unlooked" }, "Whether the directory holds or overlaps another account’s or a project’s directory could not be checked, so it cannot be moved to the Trash."],
+  ] as [AccountTrashOutcome, string][])("shows %j under the ticked option as its cause alone, disables Remove, and clears both on unticking", async (outcome, cause) => {
+    inspectionAnswers(outcome);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    const text = () => removeDialog().textContent!.replace(/[\u2066-\u2069]/g, "");
+    expect(text()).toContain(cause);
+    // Only the cause: no remedy, and nothing says the account was kept, as nothing has happened.
+    expect(text()).not.toContain("was kept");
+    expect(text()).not.toMatch(/Try again|Check the|instead/);
+    expect(removeHeld()).toBe(true);
+    // The option is described by the alert, after its own note.
+    const described = trashOption().getAttribute("aria-describedby")!.split(" ");
+    expect(described).toHaveLength(2);
+    expect(document.getElementById(described[1]!)?.textContent).toContain(cause);
+    await act(async () => trashOption().click());
+    expect(text()).not.toContain(cause);
+    expect(removeHeld()).toBe(false);
+    expect(trashOption().getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
+  });
+
+  it("shows nothing and leaves Remove enabled when the daemon could not decide in time", async () => {
+    inspectionAnswers({ status: "undecided" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(removeDialog().querySelector('[role="alert"]')).toBeNull();
+    expect(removeDialog().textContent).not.toContain("cannot be moved to the Trash");
+    expect(removeHeld()).toBe(false);
+    expect(trashOption().getAttribute("aria-describedby")!.split(" ")).toHaveLength(1);
+  });
+
+  it("shows an alert and disables Remove when the inspection itself fails, and asks again from Try again", async () => {
+    let failing = true;
+    request.mockImplementation(((body: { type: string }) => body.type === "inspect_account_trash"
+      ? failing ? Promise.reject(new Error("connection lost")) : Promise.resolve({ type: "account_trash_inspected", outcome: { status: "ok" } })
+      : Promise.resolve({})) as never);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(removeDialog().textContent).toContain("Could not check whether the directory can be moved to the Trash");
+    expect(removeHeld()).toBe(true);
+    // The option is described by what the alert says, not by its Details and Try again buttons.
+    const described = trashOption().getAttribute("aria-describedby")!.split(" ");
+    expect(document.getElementById(described[1]!)?.textContent).toContain("Could not check whether");
+    expect(document.getElementById(described[1]!)?.textContent).not.toContain("Try again");
+    failing = false;
+    await act(async () => buttonNamed(removeDialog(), "Try again")!.click());
+    expect(removeDialog().textContent).not.toContain("Could not check whether");
+    expect(removeHeld()).toBe(false);
+  });
+
+  it("keeps the failure and Try again, focus on it, while the retry is out, and keeps focus in the dialog when it succeeds", async () => {
+    const waiting: ((reply: () => Promise<unknown>) => void)[] = [];
+    let first = true;
+    request.mockImplementation(((body: { type: string }) => {
+      if (body.type !== "inspect_account_trash") return Promise.resolve({});
+      if (first) {
+        first = false;
+        return Promise.reject(new Error("connection lost"));
+      }
+      return new Promise((resolve, reject) => waiting.push((reply) => reply().then(resolve, reject)));
+    }) as never);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    const retry = () => buttonNamed(removeDialog(), "Try again")!;
+    await act(async () => retry().focus());
+    await act(async () => retry().click());
+    // The failure is still shown, held (not removed), and focus is still on the button that asked again.
+    expect(removeDialog().textContent).toContain("Could not check whether the directory can be moved to the Trash");
+    expect(document.activeElement).toBe(retry());
+    expect(retry().getAttribute("aria-disabled") === "true" || retry().disabled).toBe(true);
+    expect(removeHeld()).toBe(true);
+    await act(async () => waiting.shift()!(() => Promise.resolve({ type: "account_trash_inspected", outcome: { status: "ok" } })));
+    expect(removeDialog().textContent).not.toContain("Could not check whether");
+    expect(removeDialog().contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it.each(["account_directory_shared", "account_directory_protected", "account_directory_trash_failed"])("asks about the directory again once the alert for %s has closed, so its reason stands, is announced and takes focus off Remove", async (code) => {
+    const alerts = document.body.appendChild(document.createElement("div"));
+    const alertsRoot = createRoot(alerts);
+    onTestFinished(() => act(() => alertsRoot.unmount()));
+    act(() => alertsRoot.render(<ErrorAlerts />));
+    let refusing = false;
+    let hold = false;
+    let release = () => {};
+    let inspected: AccountTrashOutcome = { status: "ok" };
+    request.mockImplementation(((body: { type: string }) => {
+      if (body.type === "inspect_account_trash") return hold ? new Promise((resolve) => { release = () => resolve({ type: "account_trash_inspected", outcome: inspected }); }) : Promise.resolve({ type: "account_trash_inspected", outcome: inspected });
+      if (body.type === "delete_account" && refusing) return Promise.reject(new DaemonRequestError("refused", code, { path: "/a", detail: "x" }));
+      return Promise.resolve({});
+    }) as never);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(1);
+    expect(removeHeld()).toBe(false);
+    refusing = true;
+    inspected = { status: "protected" };
+    const remove = buttonNamed(removeDialog(), "Remove")!;
+    await act(async () => remove.focus());
+    await act(async () => remove.click());
+    // Not while the alert is open: the dialog is hidden behind it, so the change would be neither seen nor announced.
+    expect(inspections()).toBe(1);
+    const failure = [...document.querySelectorAll('[role="alertdialog"]')].find((dialog) => buttonNamed(dialog, "OK"))!;
+    hold = true;
+    await act(async () => buttonNamed(failure, "OK")!.click());
+    expect(inspections()).toBe(2);
+    // Focus goes back to Remove, which is still held (not disabled) while the question is out.
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });
+    expect(document.activeElement).toBe(remove);
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    await act(async () => release());
+    expect(removeDialog().textContent).toContain("The directory is your home folder");
+    expect(removeHeld()).toBe(true);
+    // Remove is disabled now, so focus is handed to Cancel rather than left on <body>.
+    expect(document.activeElement).toBe(buttonNamed(removeDialog(), "Cancel"));
+    await act(async () => { vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS + 1); });
+    expect(removeDialog().querySelector('[role="alert"]')?.textContent).toContain("The directory is your home folder");
+  });
+
+  it("does not ask about the directory again when removing is refused for running sessions", async () => {
+    inspectionAnswers({ status: "ok" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    request.mockImplementation(((body: { type: string }) => body.type === "delete_account"
+      ? Promise.reject(new DaemonRequestError("refused", "account_has_running_sessions", { name: "Work", sessions: "1" }))
+      : Promise.resolve({ type: "account_trash_inspected", outcome: { status: "ok" } })) as never);
+    await act(async () => buttonNamed(removeDialog(), "Remove")!.click());
+    expect(inspections()).toBe(1);
+  });
+
+  it("asks again each time the option is ticked, and ignores an answer that arrives after unticking", async () => {
+    const answer = inspectionAnswers();
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(1);
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(2);
+    // The first question's answer, a refusal, comes after the second was asked: it is not the second's.
+    await act(async () => answer({ status: "protected" }));
+    expect(removeDialog().textContent).not.toContain("holds Octoboard");
+    expect(removeHeld()).toBe(true);
+    await act(async () => answer({ status: "ok" }));
+    expect(removeDialog().textContent).not.toContain("holds Octoboard");
+    expect(removeHeld()).toBe(false);
+  });
+
+  it("does not ask about the directory when the option is not ticked", async () => {
+    inspectionAnswers({ status: "protected" });
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => buttonNamed(removeDialog(), "Remove")!.click());
+    expect(inspections()).toBe(0);
+    expect(request).toHaveBeenCalledExactlyOnceWith({ type: "delete_account", account: "claude-work", trash_directory: false });
+  });
+
+  it("lists the account's open sessions under the ticked option and holds Remove while any is open", async () => {
+    const open = { id: "open", title: "Fix build", agent: "claude", status: "idle", account_id: "claude-work" } as Session;
+    inspectionAnswers({ status: "ok" });
+    sessions.set("open", open);
+    sessions.set("archived", { ...open, id: "archived", title: "Old", status: "archived" });
+    sessions.set("elsewhere", { ...open, id: "elsewhere", title: "Other", account_id: "other" });
+    const { container } = mount();
+    await openAccountMenu(container);
+    await chooseItem("Remove");
+    const dialog = document.querySelector('[role="alertdialog"], [role="dialog"]')!;
+    expect(dialog.textContent).not.toContain("Fix build");
+    expect(buttonNamed(dialog, "Remove")!.disabled).toBe(false);
+    await act(async () => [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!.click());
+    const text = dialog.textContent!.replace(/[\u2066-\u2069]/g, "");
+    expect(text).toContain("The account still has 1 session that is running or starting. End it, or switch it to another account, first.");
+    expect(text).toContain("Fix build");
+    expect(text).not.toContain("Old");
+    expect(text).not.toContain("Other");
+    expect(buttonNamed(dialog, "Remove")!.disabled).toBe(true);
+    // The option is described by the reason's title, which is the alert that announces it, and by nothing of a button.
+    const box = [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!;
+    const described = box.getAttribute("aria-describedby")!.split(" ");
+    expect(described).toHaveLength(2);
+    expect(document.getElementById(described[1]!)?.textContent).toContain("The account still has 1 session");
+    // Unticked, the sessions block nothing: open sessions are left as they are.
+    await act(async () => [...dialog.querySelectorAll<HTMLInputElement>("input[type=checkbox]")][0]!.click());
+    expect(buttonNamed(dialog, "Remove")!.disabled).toBe(false);
+    expect(dialog.textContent).not.toContain("Fix build");
   });
 
   it.each(["account_still_sharing", "account_sharing_failed"] as const)("reports %s when removing the account is refused", async (code) => {

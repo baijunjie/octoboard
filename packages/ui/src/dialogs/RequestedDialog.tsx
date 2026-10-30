@@ -6,15 +6,11 @@ import { errorDetails } from "../components/errorParts";
 import { useStableHandler } from "../components/useLatest";
 import { DaemonRequestError } from "../daemon-client";
 import { errorPresentation } from "../errorPresentation";
-import { useListMotion } from "../components/useListMotion";
 import { InlineReference } from "../components/InlineReference";
-import { SessionAgentIcon } from "../components/SessionAgentIcon";
-import { FadeOverflow } from "../components/FadeOverflow";
-import { StatusIcon } from "../components/StatusIcon";
 import { ImportConfigurationDialog } from "../configuration/ImportConfigurationDialog";
 import { Message, useT } from "../i18n/react";
 import { isLive, SESSION_BINDING_CHANGED, SESSION_NOT_BOUND, type Console as ConsoleRecord, type Project, type Session } from "../protocol";
-import { sessionAgentLabel, sessionDisplayTitle, sessionShownStatusKind, sessionStatusKind } from "../sessionLabel";
+import { sessionDisplayTitle, sessionStatusKind } from "../sessionLabel";
 import {
   boundArchivedSessions,
   boundSessionsArchivedWith,
@@ -25,6 +21,7 @@ import {
 } from "../sidebar/order";
 import { useProjectProcesses } from "../process/useProjectProcesses";
 import { useDaemon, useDaemonStore } from "../store";
+import { ConfirmConsequences, ConsequenceLines, SessionList } from "./ConfirmConsequences";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
 import { HandoffDialog } from "./HandoffDialog";
@@ -34,65 +31,13 @@ import { RenameDialog } from "./RenameDialog";
 import { SessionDialog } from "./SessionDialog";
 import { SessionModelDialog, type ModelEdits } from "./SessionModelDialog";
 import { SwitchAccountDialog } from "./SwitchAccountDialog";
-import { useBranchCleanup, useProjectRemovalCleanup, type ConsequenceLine } from "./BranchCleanupOptions";
+import { useBranchCleanup, useProjectRemovalCleanup } from "./BranchCleanupOptions";
 import { ConfirmOption } from "./ConfirmOption";
 import { KeepFocusInDialog } from "./KeepFocusInDialog";
 import { useSessionRecords } from "./useSessionRecords";
 import { StoppedRow, useProcessStopping } from "./ProcessStopOptions";
 import { isRemovalRefusal, useArchiveInspection, useSessionBranches, type SessionInspection } from "./useSessionBranches";
 import { PROJECT_NAME_LIMIT } from "./textLength";
-
-/** The sessions a confirmation names, each with its agent's icon and title, plus a status glyph for live
- * sessions; archived sessions are already identified by the wording of what heads the list. */
-function SessionList({ sessions }: { sessions: Session[] }): React.ReactElement {
-  const t = useT();
-  const sessionsRef = useListMotion<HTMLUListElement>();
-  const accounts = useDaemonStore((s) => s.settings.accounts);
-  const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
-  return (
-    <ul ref={sessionsRef} className="relative flex min-w-0 flex-col gap-1">
-      {sessions.map((session) => (
-        <li key={session.id} data-list-motion={session.id} className="flex min-w-0 items-center gap-2">
-          {/* The list items are not pressable, so a tap on a mark opens the popover. */}
-          {session.status !== "archived" && <StatusIcon status={sessionShownStatusKind(session)} withTooltip touchPopover />}
-          <SessionAgentIcon session={session} accounts={accounts} defaultNames={defaultNames} touchPopover />
-          {/* The icon is decorative, and nothing else here names the agent. The comma keeps the name apart from the
-              title when the row is read as one phrase: a hidden element's trailing space is dropped in rendering. */}
-          <span className="sr-only">{`${sessionAgentLabel(t, session, accounts, defaultNames)}, `}</span>
-          <FadeOverflow as="span" dir="auto" className="min-w-0 flex-1" titleWhenClipped={sessionDisplayTitle(t, session)}>
-            {sessionDisplayTitle(t, session)}
-          </FadeOverflow>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** The consequence lines of what is ticked, one paragraph each. Always mounted, so a line added or
- * removed by an option moves in and out. */
-function ConsequenceLines({ lines }: { lines: ConsequenceLine[] }): React.ReactElement {
-  const linesRef = useListMotion<HTMLDivElement>();
-  return (
-    <div ref={linesRef} className="relative flex min-w-0 flex-col gap-1">
-      {lines.map((line) => <p key={line.key} data-list-motion={line.key}>{line.text}</p>)}
-    </div>
-  );
-}
-
-/** What a confirmation says it is about to take along or take away, as body text under its options:
- * `title` when there is one, over the list of sessions when there is one to show (`SessionList`),
- * and `lines`: further consequences, such as one for each option the user has ticked.
- * Nothing at all when there is neither a title nor a line. */
-function ConfirmConsequences({ title, sessions, lines = [] }: { title?: string; sessions?: Session[]; lines?: ConsequenceLine[] }): React.ReactElement | null {
-  if (!title && lines.length === 0) return null;
-  return (
-    <div className="flex min-w-0 flex-col gap-2 text-sm">
-      {title && <p>{title}</p>}
-      {sessions && <SessionList sessions={sessions} />}
-      <ConsequenceLines lines={lines} />
-    </div>
-  );
-}
 
 /** One topic of a sectioned confirmation (the archive's, the project removal's): a labelled group whose `<h3>` heading names it (the
  * dialog's own title is the `<h2>`), under a groove divider when `divided`, i.e. when another section is
