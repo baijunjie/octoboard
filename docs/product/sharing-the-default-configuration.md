@@ -405,7 +405,9 @@ with `account_still_sharing` while sessions of the account are working under its
 turning working before it was ended included) or it is being signed in, with `sharing_session_did_not_stop` when an
 idle session's process does not end in time, with `account_sharing_in_progress` while a change of its sharing runs
 (for any account, sharing or not), and with `account_sharing_failed` when turning sharing off does not
-complete — the choice then stays off, incomplete — and the account is left in place, on its directory. A rename
+complete — the choice then stays off, incomplete — and the account is left in place, on its directory. Where the
+removal also moves the account's directory to the Trash, sharing is turned off before the move (see "Moving the
+account directory to the Trash" in `docs/product/removing-accounts.md`). A rename
 changes nothing, and so does respelling the directory in another letter case on macOS, where directories compare
 without regard to case.
 

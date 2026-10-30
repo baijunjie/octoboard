@@ -1394,12 +1394,40 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::DeleteAccount { account } => {
-            // A sharing account's directory is brought back to its own before it is let go.
+        RequestBody::DeleteAccount {
+            account,
+            trash_directory,
+        } => {
+            // Checked before anything is changed, sharing turned off included, so a refusal
+            // leaves everything as it was.
+            // Once the pre-check has passed, and until the removal ends however it does, no sign-in
+            // starts for the account: it would write into the directory after its sign-in was ended.
+            let _removing = if trash_directory {
+                crate::account_trash::directory_to_trash(state, &account).await?;
+                state
+                    .store
+                    .get_account(&account)?
+                    .map(|account| state.begin_account_removal(&account))
+            } else {
+                None
+            };
+            // A sharing account's directory is brought back to its own before it is let go, so it
+            // is never a directory of links into the default one that goes to the Trash.
             let _sharing = crate::shared_config::before_delete(state, &account).await?;
+            if trash_directory {
+                // The account is locked now, so it cannot be repointed and no session of it starts
+                // from here on: what was judged before the lock is judged again.
+                // The directory goes first, so a failure keeps the account for a retry.
+                crate::account_trash::move_directory(state, &account).await?;
+            }
             delete_account(state, &account)?;
             Ok(None)
         }
+
+        RequestBody::InspectAccountTrash { account } => Ok(Some(Event::AccountTrashInspected {
+            id: request_id,
+            outcome: crate::account_trash::inspect(state, &account).await?,
+        })),
 
         RequestBody::AddAgent { agent } => {
             add_agent(state, agent)?;
@@ -10042,6 +10070,7 @@ mod tests {
             None,
             RequestBody::DeleteAccount {
                 account: created.id.clone(),
+                trash_directory: false,
             },
         )
         .await
@@ -10578,6 +10607,7 @@ mod tests {
             } else {
                 RequestBody::DeleteAccount {
                     account: account.clone(),
+                    trash_directory: false,
                 }
             };
             handle(&state, None, request).await.expect("accepted");
@@ -10595,9 +10625,16 @@ mod tests {
             assert_eq!(ended.account.as_deref(), Some(account.as_str()));
             assert!(state.account_logins.running().is_empty());
             if repoint {
-                handle(&state, None, RequestBody::DeleteAccount { account })
-                    .await
-                    .expect("deleted");
+                handle(
+                    &state,
+                    None,
+                    RequestBody::DeleteAccount {
+                        account,
+                        trash_directory: false,
+                    },
+                )
+                .await
+                .expect("deleted");
             }
         }
     }
@@ -10661,6 +10698,7 @@ mod tests {
             None,
             RequestBody::DeleteAccount {
                 account: account.clone(),
+                trash_directory: false,
             },
         )
         .await
@@ -12181,6 +12219,7 @@ mod tests {
             None,
             RequestBody::DeleteAccount {
                 account: account_id,
+                trash_directory: false,
             },
         )
         .await

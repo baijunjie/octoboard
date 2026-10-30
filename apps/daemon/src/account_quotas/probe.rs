@@ -218,7 +218,8 @@ pub(super) fn probe(
 ) -> Result<Reading, QuotaUnavailable> {
     let conversation = conversation(agent);
     // The account's directory must not change sharing under the CLI while it runs.
-    let _reading = crate::shared_config::reading_account(config_dir);
+    let _reading = crate::shared_config::admitted_reading(config_dir)
+        .map_err(|missing| config_dir_missing(agent, &missing.0.to_string_lossy()))?;
     let mut command = adapter::account_command(agent, shell_env, config_dir, conversation.args)
         .map_err(|binary| {
             QuotaUnavailable::new(
@@ -1196,6 +1197,7 @@ mod tests {
             let dir = ScratchDir::new("quota-dir");
             let env = answering_agent(&dir, agent, reply_of(agent));
             let account_dir = dir.join("account");
+            std::fs::create_dir(&account_dir).unwrap();
             probe(
                 agent,
                 &env,
@@ -1296,6 +1298,27 @@ mod tests {
                 "{unavailable:?}"
             );
         }
+    }
+
+    /// A read admitted after the account's directory was moved (a removal held it back) runs
+    /// nothing, which would create the directory again, and reports it missing.
+    #[test]
+    fn a_read_admitted_after_the_directory_was_moved_runs_nothing() {
+        let dir = ScratchDir::new("quota-probe-moved");
+        let ran = dir.join("ran");
+        let env = fake(&dir, Agent::Codex, &format!("touch '{}'", ran.display()));
+        let account = dir.join("account");
+        let unavailable = probe(
+            Agent::Codex,
+            &env,
+            Some(&account),
+            crate::test_support::PATIENCE,
+            &AtomicBool::new(false),
+        )
+        .expect_err("no reading");
+        assert_eq!(unavailable.code, code::CONFIG_DIR_MISSING);
+        assert!(!ran.exists(), "the CLI was not run");
+        assert!(!account.exists());
     }
 
     #[test]

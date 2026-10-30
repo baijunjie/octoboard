@@ -255,6 +255,8 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
   /** The shell terminals this window started, which draw a fresh prompt instead of the sample of a used shell. */
   const startedShellTerminals = new Set<string>();
   let createdProjectCount = 0;
+  /** The `inspect_account_trash` requests answered so far, which a list of answers is read by. */
+  let trashInspections = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
   const initial = store.getState();
@@ -938,9 +940,19 @@ export function createFixtureDaemon(scenario: Scenario): FixtureDaemon {
           }
           return { type: "ack" };
         }
+        case "inspect_account_trash": {
+          if (!store.getState().settings.accounts.some((account) => account.id === body.account)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          const answers = scenario.accountTrashInspection;
+          const inspection = (Array.isArray(answers) ? answers[Math.min(trashInspections, answers.length - 1)] : answers) ?? { status: "ok" } as const;
+          trashInspections += 1;
+          if (inspection === "pending") return new Promise<Event>(() => {});
+          if ("code" in inspection) return fail(inspection);
+          return { type: "account_trash_inspected", outcome: inspection };
+        }
         case "delete_account": {
           const current = store.getState();
           if (!current.settings.accounts.some((account) => account.id === body.account)) return fail({ code: "unknown_account", params: { account: body.account }, message: `unknown account ${body.account}` });
+          if (body.trash_directory && scenario.accountDeleteError) return fail(scenario.accountDeleteError);
           const fields = ["claude_account_id", "codex_account_id", "grok_account_id"] as const;
           const consoles = new Map([...current.consoles].map(([id, console]) => {
             const updated = { ...console };

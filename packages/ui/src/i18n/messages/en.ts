@@ -360,6 +360,32 @@ export const en = {
     "The folder could not be read, so it could not be checked for another project’s files, and the project was kept.",
   "daemon.project_directory_trash_failed.unreadable.recovery":
     "Check the folder’s file permissions and grant {appName} access in system privacy settings if needed, then try again, or remove the project without moving its folder to the Trash.",
+  "daemon.account_has_running_sessions": {
+    one: "Account {name} still has {count} session that is running or starting, so its directory cannot be moved to the Trash.",
+    other: "Account {name} still has {count} sessions that are running or starting, so its directory cannot be moved to the Trash.",
+  },
+  "daemon.account_directory_protected": "The directory is your home folder, the root of a disk, or holds {appName}’s own data, so it cannot be moved to the Trash.",
+  "daemon.account_directory_shared.account": "The directory overlaps the directory of the {agent} account {name}, so it cannot be moved to the Trash.",
+  "daemon.account_directory_shared.default_account": "The directory is, holds or lies inside the default {agent} account’s directory, so it cannot be moved to the Trash.",
+  "daemon.account_directory_shared.project": "The directory holds the folder of project {name}, so it cannot be moved to the Trash.",
+  "daemon.account_directory_trash_failed": "The directory could not be moved to the Trash: {detail}",
+  "daemon.account_directory_trash_failed.summary": "The directory could not be moved to the Trash.",
+  "daemon.account_directory_trash_failed.unanswered":
+    "The directory, your home folder or {appName}’s data folder did not respond in time, so the directory could not be checked.",
+  "daemon.account_directory_trash_failed.unanswered.summary":
+    "The directory, your home folder or {appName}’s data folder did not respond in time, so the directory could not be checked.",
+  "daemon.account_directory_trash_failed.unreadable":
+    "The directory could not be read, so it could not be checked for files of other accounts or projects.",
+  "daemon.account_directory_trash_failed.unreadable.summary":
+    "The directory could not be read, so it could not be checked for files of other accounts or projects.",
+  "daemon.account_directory_trash_failed.other_unlooked":
+    "Whether the directory holds or overlaps another account’s or a project’s directory could not be checked, so it cannot be moved to the Trash.",
+  "daemon.account_directory_trash_failed.other_unlooked.summary":
+    "Whether the directory holds or overlaps another account’s or a project’s directory could not be checked, so it cannot be moved to the Trash.",
+  "daemon.account_directory_trash_failed.signing_in":
+    "The account’s login did not end in time, so the directory could not be moved to the Trash.",
+  "daemon.account_directory_trash_failed.signing_in.summary":
+    "The account’s login did not end in time, so the directory could not be moved to the Trash.",
   "daemon.path_not_absolute": "{path} is not an absolute path. Give the full path, or start it with {tilde}.",
   "daemon.path_not_found": "{path} does not exist.",
   "daemon.path_not_a_directory": "{path} is not a directory.",
@@ -410,6 +436,7 @@ export const en = {
   "daemon.sharing_resume_failed.summary": "A session of account {name} could not be resumed after its sharing changed, so it is left interrupted. Resume it yourself.",
   "daemon.sharing_resume_failed": "A session of account {name} could not be resumed after its sharing changed, so it is left interrupted. Resume it yourself. Reason: {detail}",
   "daemon.account_sharing_in_progress": "Sharing for account {name} is being changed.",
+  "daemon.account_being_removed": "Account {name} is being removed.",
   "daemon.agent_not_installed": "{agent} is not installed on this machine.",
   "daemon.agent_not_added": "{agent} is not added, so a session cannot be opened with it.",
   "daemon.agent_already_added": "{agent} is already added.",
@@ -2330,6 +2357,7 @@ export const en = {
   "settings.accounts.login.failedTitle": "Could not log in",
   "settings.accounts.login.failedLead": "Logging in to {agent} account {name} failed.",
   "settings.accounts.login.failedLeadBecause": "Logging in to {agent} account {name} failed. {reason}",
+  "settings.accounts.login.failedBeingRemoved": "The account is being removed.",
   "settings.accounts.login.timedOutTitle": "Login timed out",
   "settings.accounts.login.timedOutLead": "The login to {agent} account {name} timed out.",
   "settings.accounts.login.reopen": "Open the page again",
@@ -2453,7 +2481,26 @@ export const en = {
   "settings.accounts.reorderAgentsFailedTitle": "Could not reorder the agents",
   "settings.accounts.removeSubject": "The account {name} will be removed.",
   "settings.accounts.removeMessage":
-    "Consoles that use it go back to the default {agent} account, and projects that use it go back to their console's. Sessions that are already open are kept, each going on with the directory it started from.",
+    "Consoles that use it go back to the default {agent} account, and projects that use it go back to their console’s. Sessions that are already open are kept, each going on with the directory it started from.",
+  "settings.accounts.removeMessageTrash":
+    "Consoles that use it go back to the default {agent} account, and projects that use it go back to their console’s. Its directory is moved to the Trash, so its archived sessions can no longer be resumed: their conversations are in it.",
+  "settings.accounts.removeTrash": "Also move the account directory to the Trash",
+  "settings.accounts.removeTrashHint": "The whole directory goes, including its login, settings and conversation history. You can recover it from the Trash.",
+  "settings.accounts.removeTrashHintMissing": "The account’s directory does not exist, so there is nothing to move.",
+  "settings.accounts.removeTrashInspectFailed": "Could not check whether the directory can be moved to the Trash",
+  "settings.accounts.removeTrashRefused.protected": "The directory is your home folder, the root of a disk, or holds {appName}’s own data, so it cannot be moved to the Trash.",
+  "settings.accounts.removeTrashRefused.sharedAccount": "The directory overlaps the directory of the {agent} account {name}, so it cannot be moved to the Trash.",
+  "settings.accounts.removeTrashRefused.sharedDefaultAccount": "The directory is, holds or lies inside the default {agent} account’s directory, so it cannot be moved to the Trash.",
+  "settings.accounts.removeTrashRefused.sharedProject": "The directory holds the folder of project {name}, so it cannot be moved to the Trash.",
+  "settings.accounts.removeTrashRefused.unlookable": "The directory could not be accessed, so it cannot be moved to the Trash.",
+  "settings.accounts.removeTrashRefused.unreadable":
+    "The directory could not be read, so it could not be checked for files of other accounts or projects, and cannot be moved to the Trash.",
+  "settings.accounts.removeTrashRefused.otherUnlooked":
+    "Whether the directory holds or overlaps another account’s or a project’s directory could not be checked, so it cannot be moved to the Trash.",
+  "settings.accounts.removeRunning": {
+    one: "The account still has {count} session that is running or starting. End it, or switch it to another account, first.",
+    other: "The account still has {count} sessions that are running or starting. End them, or switch them to another account, first.",
+  },
   "settings.accounts.dialog.edit": "Edit account",
   "settings.accounts.dialog.editSubject": "Edit the name and config directory of the {agent} account {name}.",
   "settings.accounts.agent": "Agent",

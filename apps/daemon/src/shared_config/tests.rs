@@ -802,6 +802,7 @@ async fn deleting_a_sharing_account_turns_its_sharing_off_first() {
             None,
             RequestBody::DeleteAccount {
                 account: "claude-a".to_string(),
+                trash_directory: false,
             },
         )
     };
@@ -822,6 +823,51 @@ async fn deleting_a_sharing_account_turns_its_sharing_off_first() {
         .is_none());
     assert_eq!(read(&account, "settings.json"), "account settings");
     assert!(!is_link(&account.join("projects")));
+}
+
+/// Moving a sharing account's directory to the Trash turns its sharing off first, so what goes is
+/// the directory holding its own content, not links into the default one.
+#[tokio::test]
+async fn deleting_a_sharing_account_with_its_directory_turns_sharing_off_before_the_move() {
+    let fixture = Fixture::new();
+    let (_, account) = claude_setup(&fixture);
+    fixture.share(Agent::Claude, true).await.unwrap();
+    assert!(is_link(&account.join("settings.json")));
+    // What the Trash is handed: the settings file, and whether it is still a link.
+    static HANDED: Mutex<Vec<(Option<String>, bool)>> = Mutex::new(Vec::new());
+    fixture.state.host_tools.replace(crate::host_tools::Tools {
+        trash: |directory| {
+            let settings = directory.join("settings.json");
+            HANDED
+                .lock()
+                .unwrap()
+                .push((std::fs::read_to_string(&settings).ok(), is_link(&settings)));
+            std::fs::remove_dir_all(directory)?;
+            Ok(())
+        },
+        ..test_support::host_tools()
+    });
+    handle(
+        &fixture.state,
+        None,
+        RequestBody::DeleteAccount {
+            account: "claude-a".to_string(),
+            trash_directory: true,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(fixture
+        .state
+        .store
+        .get_account("claude-a")
+        .unwrap()
+        .is_none());
+    assert_eq!(
+        *HANDED.lock().unwrap(),
+        [(Some("account settings".to_string()), false)]
+    );
+    assert!(!account.exists());
 }
 
 #[tokio::test]
@@ -1585,6 +1631,7 @@ async fn nothing_of_the_account_starts_while_its_change_runs() {
             None,
             RequestBody::DeleteAccount {
                 account: "claude-a".to_string(),
+                trash_directory: false,
             },
         )
         .await
@@ -2240,6 +2287,7 @@ async fn removing_or_repointing_restarts_idle_sessions_and_refuses_working_ones(
         None,
         RequestBody::DeleteAccount {
             account: "claude-a".to_string(),
+            trash_directory: false,
         },
     )
     .await

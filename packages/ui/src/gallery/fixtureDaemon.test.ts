@@ -269,6 +269,21 @@ describe("the fixture daemon's project removal", () => {
   });
 });
 
+describe("the fixture daemon's account removal", () => {
+  const account = { id: "a", agent: "claude" as const, name: "Work", config_dir: "/Users/dev/.claude-work" };
+  const error = { code: "account_directory_protected", params: { path: account.config_dir }, message: "protected" };
+  const base = snapshotState({});
+  const scenario = { id: "account-removal", group: "Settings" as const, category: "exceptional" as const, title: "", state: { ...base, settings: { ...base.settings!, accounts: [account] } }, accountDeleteError: error };
+
+  it("refuses only a removal that asks for the directory to be moved to the Trash", async () => {
+    await expect(createFixtureDaemon(scenario).request({ type: "delete_account", account: account.id, trash_directory: true })).rejects.toMatchObject({ code: error.code, params: error.params });
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "delete_account", account: account.id, trash_directory: false })).resolves.toEqual({ type: "ack" });
+    expect(daemon.store.getState().settings.accounts).toEqual([]);
+    await expect(createFixtureDaemon(scenario).request({ type: "delete_account", account: "missing", trash_directory: true })).rejects.toMatchObject({ code: "unknown_account" });
+  });
+});
+
 describe("the fixture daemon's session colour", () => {
   const owner = consoleOf("c", "Main");
   const hub = sessionOf("hub", owner.id, undefined, "Hub", "idle", { colour: "lime" });

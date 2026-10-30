@@ -351,6 +351,15 @@ it("words account_sharing_in_progress with the account's name in every language"
   }
 });
 
+it("words account_being_removed with the account's name and no remedy in every language", () => {
+  for (const language of Object.keys(CATALOGS) as Language[]) {
+    const text = daemonMessage(language, "account_being_removed", { account: "a1", name: "Work" }, "fallback", records);
+    expect(text).not.toBe("fallback");
+    expect(text).toContain(isolate("Work"));
+  }
+  expect(daemonMessage("en", "account_being_removed", { account: "a1", name: "Work" }, "x", records)).toBe(`Account ${isolate("Work")} is being removed.`);
+});
+
 it("says a failed sharing change rolled nothing back, and no longer calls it pending", () => {
   const text = daemonMessage("en", "account_sharing_failed", { account: "a1", name: "Work", detail: "x", items: "[]" }, "x", records);
   expect(text).toContain("Nothing was rolled back");
@@ -492,4 +501,29 @@ it("words every path link refusal that carries the system's text, an unknown cau
     const key = `daemon.${richMessageCode("path_link_refused", { path: "a", cause, detail: "x" })}`;
     for (const catalog of Object.values(CATALOGS)) expect(key in catalog, `${key}`).toBe(true);
   }
+});
+
+describe("the refusals of removing an account with its directory moved to the Trash", () => {
+  it.each(["en", "zh-Hans"] as const)("words each one in %s, naming what is in the way and counting the sessions", (language) => {
+    const said = (code: string, params: Record<string, string>) => daemonMessage(language, code, params, "fallback", records);
+    expect(said("account_has_running_sessions", { account: "a", name: "Work", sessions: "2" })).toContain(isolate("Work"));
+    expect(said("account_has_running_sessions", { account: "a", name: "Work", sessions: "2" })).toContain("2");
+    expect(said("account_directory_shared", { kind: "account", name: "Home", agent: "Codex" })).toContain(isolate("Home"));
+    expect(said("account_directory_shared", { kind: "project", name: "Site" })).toContain(isolate("Site"));
+    expect(said("account_directory_shared", { kind: "default_account", agent: "Grok Build" })).toContain(isolate("Grok Build"));
+    for (const code of ["account_directory_protected", "account_directory_trash_failed"]) expect(said(code, { path: "/a", detail: "full" })).not.toBe("fallback");
+    for (const cause of ["unanswered", "unreadable", "other_unlooked", "signing_in"]) expect(said("account_directory_trash_failed", { path: "/a", detail: "x", cause })).not.toContain("x:");
+    // Each cause has a sentence of its own, and none restates the title's "could not remove" by saying the account was kept.
+    expect(said("account_directory_trash_failed", { path: "/a", detail: "x", cause: "other_unlooked" })).not.toBe(said("account_directory_trash_failed", { path: "/a", detail: "x" }));
+    expect(daemonMessage("en", "account_directory_protected", {}, "fallback", records)).not.toContain("kept");
+  });
+
+  it("words the trash failure as its sentence only where its detail is shown apart", () => {
+    expect(richMessageCode("account_directory_trash_failed", { detail: "full" })).toBe("account_directory_trash_failed.summary");
+    expect(richMessageCode("account_directory_trash_failed", { detail: "full", cause: "unreadable" })).toBe("account_directory_trash_failed.unreadable.summary");
+    expect(richMessageCode("account_directory_trash_failed", { detail: "full", cause: "other_unlooked" })).toBe("account_directory_trash_failed.other_unlooked.summary");
+    expect(richMessageCode("account_directory_trash_failed", { detail: "full", cause: "signing_in" })).toBe("account_directory_trash_failed.signing_in.summary");
+    // Only an account's removal has the cause: a project's folder has no sign-in.
+    expect(richMessageCode("project_directory_trash_failed", { detail: "full", cause: "signing_in" })).toBe("project_directory_trash_failed.summary");
+  });
 });

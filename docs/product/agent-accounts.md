@@ -167,7 +167,8 @@ settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-
 ## The accounts the user owns
 
 The accounts the user owns each have their name, directory and an actions menu holding **Details**, **Settings**,
-**Edit**, **Log in**, **Move earlier** and **Move later** and, set apart, **Remove**; where else **Log in** appears is
+**Edit**, **Log in**, **Move earlier** and **Move later** and, set apart, **Remove** (see
+`docs/product/removing-accounts.md`); where else **Log in** appears is
 in "Where Log in appears" in `docs/product/logging-accounts-in.md`. Both kinds of directory are shown as in "How paths
 are shown" in `docs/product/settings.md`.
 
@@ -464,12 +465,9 @@ share a name. A name already taken by another account of the same agent, or by t
 shown under, which is the name the user gave it or else its name in the current language — is reported under the name
 field. So is the English word "Default", which is reserved for the default account in every language.
 
-Removing an account asks first and says that consoles referring to it go back to the agent's default account and that
-sessions already open are not affected. A project referring to it is put back to inheriting its console's reference at
-the same time (see "The project's account, model and reasoning effort" in `docs/product/projects.md`). Removing an
-account, or pointing it at another directory, ends a login running for it. An account that shares the default
-configuration, or whose last change of it is incomplete, has its sharing turned off first instead, under the same rule
-as a change of the switch, its idle sessions ended and resumed around it: refused while sessions of the account are
-working or it is being signed in, and while a
-change of its sharing runs (see "Removing or repointing a sharing account" in
-`docs/product/sharing-the-default-configuration.md`).
+Pointing an account at another directory ends a login running for it, and an account that shares the default
+configuration, or whose last change of it is incomplete, has its sharing undone first (see "Removing or repointing a
+sharing account" in `docs/product/sharing-the-default-configuration.md`).
+
+Removing an account — what it clears, its confirmation, and its option to move the account's directory to the Trash —
+is in `docs/product/removing-accounts.md`.

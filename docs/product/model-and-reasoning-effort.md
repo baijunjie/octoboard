@@ -146,7 +146,8 @@ sessions and Project sessions, each carry this note. Asking the agent is bounded
 
 The agent cannot always be asked: its binary does not resolve on the user's login shell `PATH`, the shell environment
 could not be captured (see "The launch environment" in `docs/product/launching-agents.md`), the command failed or did
-not finish in time, or what it printed held no model that could be read. None of those stops the dialog, and it is about
+not finish in time, or what it printed held no model that could be read. For a Codex or Grok Build account the user owns
+whose config directory does not exist the command is not run at all, so the directory is never created by it, and the reason is that the command failed. None of those stops the dialog, and it is about
 the whole field rather than the value it holds, so the reason is said by an amber warning mark right after the Model
 field's label, named that the models could not be loaded. In the console dialog's table of console-session and
 project-session settings, the mark follows the Model row's name, once; where the table is stacked, with the setting's

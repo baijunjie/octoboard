@@ -1301,9 +1301,9 @@ fn read(
 /// to the CLI to report. The default account pins nothing, so Codex's own refusal of a missing
 /// home is what tells that case (see `probe`).
 fn missing_config_dir(key: &Key) -> Option<&str> {
-    key.config_dir.as_deref().filter(|dir| {
-        matches!(std::fs::metadata(dir), Err(err) if err.kind() == std::io::ErrorKind::NotFound)
-    })
+    key.config_dir
+        .as_deref()
+        .filter(|dir| crate::shared_config::is_missing(Path::new(dir)))
 }
 
 /// Kicks one account in the shell environment `shell` gives, unless its directory is gone: the

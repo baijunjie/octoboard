@@ -157,8 +157,10 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
     const raw = presentation && rawErrorDetails(presentation);
     // A login that failed with no cause the agent named (`login_failed`) has a summary that only says again that it
     // failed, which the lead has said already; only a failed login has a cause at all.
+    // The refusal because the account is being removed is said with a pronoun, as the lead names the account already.
     const cause = presentation && !timedOut && presentation.code !== "login_failed"
-      ? uncatalogued ? t(uncataloguedSummaryKey(presentation)) : <DaemonErrorMessage error={presentation} part="summary" />
+      ? presentation.code === "account_being_removed" ? t("settings.accounts.login.failedBeingRemoved")
+        : uncatalogued ? t(uncataloguedSummaryKey(presentation)) : <DaemonErrorMessage error={presentation} part="summary" />
       : undefined;
     const lead = timedOut
       ? <Message id="settings.accounts.login.timedOutLead" params={{ agent: agentChip, name: who }} />

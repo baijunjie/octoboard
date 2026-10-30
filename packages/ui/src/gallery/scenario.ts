@@ -6,7 +6,7 @@ import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
 import type { AvailableUpdate, MacosPermissionsStatus, UpdateChannel, UpdateProgress } from "../platform";
 import type { OwnerKind, PanelKind } from "../panels/stackState";
-import type { Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, SessionBranchItem, SessionRecordsPresence } from "../protocol";
+import type { AccountTrashOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MessageParams, ModelsUnavailable, PathLinkKind, PathLinkRefusedCause, PathLinkView, ProcessTree, SessionBranchItem, SessionRecordsPresence } from "../protocol";
 import type { FixtureError, FixtureFiles } from "./fixtures/projectFiles";
 import type { GroupTitle } from "./fixtures/groups";
 import type { FixtureGit } from "./fixtures/changeFixtures";
@@ -81,6 +81,9 @@ export interface ToastFixture {
 /** An interaction run once the app is mounted, to reach state that lives in a component (a dialog,
  * the archive view, which session is selected) rather than in the store. */
 export type Step = (ui: Ui) => Promise<void>;
+
+/** One answer of `inspect_account_trash`: an outcome, a failure of the request, or `"pending"` for one never answered. */
+export type AccountTrashAnswer = AccountTrashOutcome | FixtureError | "pending";
 
 /** A change the daemon makes while the window already shows the scenario's view (an account added by another
  * window, a terminal closed there), for the motion and focus that only a live change shows: the view never
@@ -361,6 +364,16 @@ export interface Scenario {
    * an account that `state.accountSharing` marks as in use or changing are turned away whether or not this is set.
    * Left out, a change is carried out at once. */
   accountSharingError?: FixtureError;
+  /** A refusal of `delete_account` that asks for the account's directory to be moved to the Trash (`trash_directory`),
+   * as the daemon refuses a directory that must stay or cannot be moved, or an account with running sessions. A removal
+   * that does not ask for it is not refused. */
+  accountDeleteError?: FixtureError;
+  /** What `inspect_account_trash` answers for any account, which the removal confirmation asks each time its Trash
+   * option is ticked and again after a refusal of the removal that the directory's state decides: an outcome, a
+   * `FixtureError` that fails the request, or `"pending"` for one never answered. A list answers the asks in order, the
+   * last one for every ask after it (a refusal that the check then finds, a retry that has not answered). Left out, `ok`:
+   * the directory may be moved. */
+  accountTrashInspection?: AccountTrashAnswer | readonly AccountTrashAnswer[];
   /** How a login started from Settings ends, a moment after it reaches `waiting` with its page (Grok Build's with its
    * device code); `failed` carries `login_failed`. Left out, a started login stays waiting until it is cancelled. A
    * state shown from the start is set in `state.accountLogins` instead. */

@@ -7,7 +7,7 @@ Where a failure, a warning or a note is shown follows from how it arises, not fr
 | A failure of the user's own action, once it has been sent: a submitted form, a Save or a confirm, a switch, a menu or row action, copying, opening, and daemon and connection failures reported in reply | The **error alert**, a dialog that requires acknowledgement (see "The error alert" below). A submit or a save that fails inside a dialog opens it over that dialog, which keeps what was entered |
 | An error located at one input field: the form's own validation (a field left empty, a malformed or too long value, a duplicate of a name the window knows); a lookup the form makes on its own that finds the field's value wrong (a path that does not exist or is not a directory, a conversation ID found nowhere); a value the field holds that cannot be used (an account turned off, used up, not logged in or having its sharing changed) | Under its field, which is marked invalid (see "Errors under a field" below) |
 | An important failure of automatic behaviour — a load, a refresh, a lookup a form makes on its own that could not run — one that blocks what follows, or that a component cannot do its job without | On that screen: in place of a whole page, pane, panel or list that could not be loaded, an empty-state failure; among other content, a compact alert (see "Failures shown on the screen" below) |
-| A warning about the consequence of a choice the user is making: an option of a dialog that, selected, makes what the dialog does riskier | A warning alert directly under that option, only while it is selected, never a mark (see "Warnings about a choice being made" below). A warning about the state of what an option acts on is a mark beside it, as below |
+| A warning about the consequence of a choice the user is making: an option of a dialog that, selected, makes what the dialog does riskier; or the reason an option, selected, cannot be carried out | A warning alert directly under that option, only while it is selected, never a mark (see "Warnings about a choice being made" below). A warning about the state of what an option acts on is a mark beside it, as below |
 | A failure or a warning about the state of something that does not block what follows, and a note | A mark at the point it concerns — a row, a table cell, a field, a checkbox, a setting, a list section's heading, a page's heading or a pane's or view's title, a line naming what it is about, a spot in a rendered document; one with no point to be located at is a compact alert in a shared place, the top of a dialog's body or of a section (see "Failures, warnings and notes marked at their point" below) |
 | A result view showing a failed result | In that view: a part that failed as a whole is a compact alert, such as a configuration import's application settings that could not be applied; an item of the result that failed has its outcome and its reason written out in its row, such as a console, project or account of a configuration import (see "The import result" in `docs/product/configuration-export-and-import-dialogs.md`) |
 | A failure that ends what a dialog was opened for, while it is open | The dialog turns into a failure modal (see "The failure modal" below) |
@@ -235,10 +235,12 @@ The places with a compact alert:
   which they describe to assistive technology: a project folder's detection that could not be made, and a
   repository's check (see "Associating a project" in `docs/product/projects.md`), and the session dialog's Session ID
   lookup that failed, or that found the conversation held by a session elsewhere or by an agent or account no longer
-  offered (see "Finding the conversation" in `docs/product/resuming-a-conversation-by-its-session-id.md`). A lookup that finds the field's value wrong
-  is that field's error instead (see "Errors under a field" above). A model list that is not to be had leaves the
-  dialog usable, so it is a warning mark after the Model field's label instead (see "Failures, warnings and notes
-  marked at their point" below);
+  offered (see "Finding the conversation" in `docs/product/resuming-a-conversation-by-its-session-id.md`), and the
+  remove-account confirmation's check of whether the account directory can be moved to the Trash, under its option,
+  with **Try again** (see "Checking the directory when the option is ticked" in
+  `docs/product/removing-accounts.md`). A lookup that finds the field's value wrong is that field's error instead
+  (see "Errors under a field" above). A model list that is not to be had leaves the dialog usable, so it is a warning
+  mark after the Model field's label instead (see "Failures, warnings and notes marked at their point" below);
 - a reason a dialog cannot go on that lies outside its fields, at the top of its body: in the confirmation of a
   request to switch a session's account or to hand a session off, what holds the session itself, whatever is chosen
   (see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md` and "The user's
@@ -278,6 +280,14 @@ The places with such a warning:
   export dialog" in `docs/product/configuration-export-and-import-dialogs.md`);
 - the trust dialog's choice to trust every project under a folder, saying that projects added there later will be
   trusted too (see "The trust dialog" in `docs/product/folder-trust.md`).
+
+**An option that cannot be carried out**, as a check the dialog makes when it is selected finds, has the reason said by
+a warning alert directly under it in the same way, shown only while the option is selected, and the dialog's confirm
+button is disabled meanwhile. Its title is the cause alone, with no sentence of what to do; it has no buttons and no
+**Details**. It is part of the option's description to assistive technology and is announced as it appears, held back
+until the option's new state has been spoken. The one place with such a warning is the remove-account confirmation's
+option to move the account directory to the Trash (see "Checking the directory when the option is ticked" in
+`docs/product/removing-accounts.md`).
 
 ## Failures, warnings and notes marked at their point
 
@@ -498,7 +508,8 @@ operating-system cause takes precedence over the others, except for a switch's c
 an older item: that is classified by the item put aside, and the operating-system cause's remedy is given as well;
 except for a file the user picked that could not be read, which keeps its own remedy for reading a file (see "When the
 file fails" in `docs/product/configuration-export-and-import-dialogs.md`); and except for a denied read of the
-project's files, which keeps its own remedy (see above) — each whatever operating-system cause it names. A failure whose named cause is
+project's files, which keeps its own remedy (see above) — each whatever operating-system cause it names; and except
+for an alert that states only its cause (below), which gives no remedy at all. A failure whose named cause is
 not one the window knows stays unexpected, except a folder a request is scoped to that cannot be read, which gets the
 remedy for any other cause (see above). An unfamiliar failure does not get generic retry advice merely because it
 occurred during a familiar operation. A failed automatic account switch has nothing left to retry, so none of its
@@ -510,6 +521,15 @@ its kind after it: the message's own step is the remedy — "Reopen it first." f
 step of a launch failure whose configuration directory cannot be reached, the step of `directory_unreadable`. Its
 classification, and any remedy button it has (see below), stay as they are. An alert whose body Octoboard words for the
 operation keeps its kind's remedy line.
+
+**An alert that states only its cause** says what failed or refused and why, and nothing after it: no remedy line, no
+request to report an issue and no remedy button. A recognized operating-system cause its system text names is said
+instead as a sentence of its own right after the failure's — that the disk is full, that access was denied, or that the
+connection failed — as the cause, not as what to do; the system's own text stays under **Error details**. It is used for the refusals and failures of removing an account with its directory moved to the
+Trash (`account_has_running_sessions`, `account_directory_protected`, `account_directory_shared`,
+`account_directory_trash_failed`; see "When a removal is refused or fails" in `docs/product/removing-accounts.md`) and
+for a login refused because its account is being removed (`account_being_removed`; see "How a login ends" in
+`docs/product/logging-accounts-in.md`).
 
 **A remedy that lives in Settings' Agent accounts section has a button** in the footer, a secondary action before the
 acknowledgement button, instead of the step naming where to go:

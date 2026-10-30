@@ -156,3 +156,9 @@ it("keeps a missing path's remedy and an operating-system cause over the remedy 
   expect(classifyError(new DaemonRequestError("gone", "path_open_failed", {}), "hostPathGone")).toEqual({ kind: "actionable", recovery: "hostPathGone" });
   expect(classifyError(new DaemonRequestError("denied", "directory_unavailable", { detail: "Permission denied (os error 13)" }))).toEqual({ kind: "actionable", recovery: "access" });
 });
+
+it("gives removing an account with its directory no remedy, even where the system's text names one", () => {
+  for (const code of ["account_directory_trash_failed", "account_directory_shared", "account_directory_protected", "account_has_running_sessions", "account_being_removed"]) {
+    expect(classifyError(new DaemonRequestError("x", code, { detail: "Permission denied (os error 13)" }))).toEqual({ kind: "actionable", recovery: "none" });
+  }
+});

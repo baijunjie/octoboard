@@ -79,7 +79,10 @@ A login ends in one of these:
 - **Lost**, when the daemon restarts or the connection is re-established while the login runs: the dialog closes.
 
 A login that cannot start is shown the same way as one that could not log in, with the daemon's reason: for example
-while another Codex account is logging in. A start refused because this account's login is already running is not
+while another Codex account is logging in, or while the account is being removed with its directory moved to the Trash
+(`account_being_removed`; see "Logins and agent reads during the removal" in `docs/product/removing-accounts.md`),
+where the cause says only that the account is being removed, with no remedy (see "Recovery and unexpected errors" in
+`docs/product/error-alerts.md`). A start refused because this account's login is already running is not
 shown as a failure; the dialog takes up that login instead.
 
 ### When a login fails

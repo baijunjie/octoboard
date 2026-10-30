@@ -81,12 +81,16 @@ is ticked:
 - **Removing a project** always reads **Remove**, or **End and remove** when the project has sessions running; its
   options leave it as it is — moving the project folder to the Trash, and the locked worktrees with it — since the
   message then says the folder goes.
+- **Removing an account** always reads **Remove**; its option of moving the account directory to the Trash leaves it
+  as it is, since the message then says the directory goes (see "The confirmation" in
+  `docs/product/removing-accounts.md`).
 
 What a ticked option adds is said in the confirmation's message and in the lines under its options, not on the button.
 While the action runs, the button either shows as pending under its label or shows one in-progress text naming the
 single step underway — never several actions combined, and never chosen by an option. Archiving a session, deleting a
-session, deleting all archived sessions and removing a project show as pending under their label; restoring a project's
-file changes shows that it is restoring, and switching a session's account that it is switching account.
+session, deleting all archived sessions, removing a project and removing an account show as pending under their label;
+restoring a project's file changes shows that it is restoring, and switching a session's account that it is switching
+account.
 
 ## Where keyboard focus starts in a form dialog
 

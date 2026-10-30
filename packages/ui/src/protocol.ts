@@ -4,6 +4,17 @@
 // request field is named `id`: what a request acts on is named for its kind (`console`, `project`,
 // `session`), because the envelope's own `id` and the request's fields share one flat object.
 
+/** What `delete_account` with `trash_directory` would do with an account's directory: `shared` names what else holds it
+ * (`kind` another account with `name` and `agent`, an agent's default directory with `agent`, or a project with `name`),
+ * `unlookable` says by `cause` why it could not be looked at where known (`unreadable`, or `other_unlooked` where whether
+ * it holds or overlaps another account's or a project's directory could not be checked), and `undecided` that a look did not answer in
+ * time, so that nothing is said against the directory. */
+export type AccountTrashOutcome =
+  | { status: "ok" | "missing" | "protected" }
+  | { status: "shared"; kind: "account" | "default_account" | "project"; name?: string; agent?: string }
+  | { status: "unlookable"; cause?: "unreadable" | "other_unlooked" }
+  | { status: "undecided" };
+
 /** Unknown when the daemon cannot prove presence or absence of the sessions’ native files. */
 export type SessionRecordsPresence = "present" | "absent" | "unknown";
 
@@ -1699,8 +1710,8 @@ export type RequestBody =
   /** Signs an account in with its agent's CLI run in the background (`account` omitted or null is the agent's
    * default account). Answered with `ack` once the CLI has started; progress and outcome follow as
    * `account_login_updated`. Refused with `unknown_account`, `agent_not_available`, `shell_environment_timeout`,
-   * `binary_not_found`, `login_already_running` and, for a second Codex account at once, `login_codex_busy`. A success re-reads the
-   * account's quota. */
+   * `binary_not_found`, `login_already_running`, `account_being_removed` while the account is being removed and, for a
+   * second Codex account at once, `login_codex_busy`. A success re-reads the account's quota. */
   | { type: "start_account_login"; agent: Agent; account?: string | null }
   /** Ends a login that is running; refused with `login_not_running` when there is none. */
   | { type: "cancel_account_login"; agent: Agent; account?: string | null }
@@ -1760,9 +1771,16 @@ export type RequestBody =
    * to it. */
   | { type: "update_account"; account: string; name?: string; config_dir?: string }
   /** Clears the reference of every console that refers to this account, putting each back on its
-   * agent's default account, then removes the account. Broadcasts `settings_updated`, and a
-   * `console_upserted` for every console whose reference was cleared. */
-  | { type: "delete_account"; account: string }
+   * agent's default account, then removes the account. With `trash_directory` its config directory is
+   * moved to the system Trash first, and the account kept when that cannot be done: refused with
+   * `account_has_running_sessions` while one of its sessions has a process or is being launched,
+   * `account_directory_protected` and `account_directory_shared` for a directory that must stay, and
+   * `account_directory_trash_failed` when it cannot be looked at or moved. Absent means false. Broadcasts
+   * `settings_updated`, and a `console_upserted` for every console whose reference was cleared. */
+  | { type: "delete_account"; account: string; trash_directory?: boolean }
+  /** Asks what `delete_account` with `trash_directory` would do with the account's directory, without doing it. Answers
+   * `account_trash_inspected`; refused with `unknown_account` for an unknown account. */
+  | { type: "inspect_account_trash"; account: string }
   /** Puts an agent at the end of `Settings.added_agents`. Refused with `agent_already_added`, with
    * `agent_not_installed` when it has been determined not installed, and with
    * `agent_availability_pending` while that is not yet determined. Broadcasts `settings_updated`. */
@@ -1888,6 +1906,7 @@ export type Event =
   | { type: "session_history"; id?: string; session: string; messages: HistoryMessage[]; unavailable?: boolean }
   | { type: "session_records_inspected"; id?: string; presence: SessionRecordsPresence }
   | { type: "session_branches_inspected"; id?: string; items: SessionBranchItem[]; processes?: ProcessTree[] }
+  | { type: "account_trash_inspected"; id?: string; outcome: AccountTrashOutcome }
   | { type: "processes_listed"; id?: string; trees: ProcessTree[] }
   /** `ids` are the trees that were stopped. */
   | { type: "processes_stopped"; id?: string; ids: string[] }

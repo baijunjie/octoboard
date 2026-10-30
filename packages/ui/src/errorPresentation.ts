@@ -1,6 +1,6 @@
 import { DaemonRequestError } from "./daemon-client";
 import { CODE_PARAMS, DETAIL_BLOCK_CODES, lacksSummary, hasTrustDiagnostic, RECOVERY_CODES, referenceNameParams, leftBranchItems, NAME_PARAMS, runningSessionIds, messageCode, withUiParams } from "./daemonMessage";
-import { classifyError } from "./errorRecovery";
+import { classifyError, namedSystemCause, type ErrorRecovery } from "./errorRecovery";
 import { globalParam, isMessageKey, type PlainMessageKey } from "./i18n/catalog";
 import { NESTED_FAILURE_CODES, type MessageParams } from "./protocol";
 import { isUncataloguedFailure } from "./uncataloguedFailure";
@@ -18,12 +18,23 @@ export function hasShellTimeoutDetails(error: { code: string; params: MessagePar
 export function uncataloguedSummaryKey(error: { code: string; params: MessageParams; message: string }): PlainMessageKey {
   const classification = classifyError(error);
   if (classification.kind === "unexpected") return "error.unexpected.summary";
-  switch (classification.recovery) {
+  return systemFailureKey(classification.recovery);
+}
+
+function systemFailureKey(recovery: ErrorRecovery): PlainMessageKey {
+  switch (recovery) {
     case "diskSpace": return "error.systemFailure.diskSpace";
     case "access": return "error.systemFailure.access";
     case "connection": return "error.systemFailure.connection";
     default: return "error.systemFailure.other";
   }
+}
+
+/** The sentence for the cause the system's text names in a failure that states only its cause, which follows the
+ * failure's own sentence (see `namedSystemCause`); undefined where the text names none. */
+export function systemCauseKey(error: unknown): PlainMessageKey | undefined {
+  const recovery = namedSystemCause(error);
+  return recovery && systemFailureKey(recovery);
 }
 
 /** Whether the application words `error` in a structured way, with chips, the shell timeout's layout or the generic sentence

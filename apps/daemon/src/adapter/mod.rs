@@ -287,7 +287,7 @@ pub fn default_account_dir(agent: Agent, shell_env: &HashMap<String, String>) ->
 /// binary's name when it does not resolve.
 ///
 /// A caller running it outside a session or its launch claim holds
-/// [`crate::shared_config::reading_account`] for the whole run: otherwise a change to the account's
+/// [`crate::shared_config::admitted_reading`] for the whole run: otherwise a change to the account's
 /// sharing can move what the CLI opens, such as Codex's state database and history, from under it.
 pub fn account_command(
     agent: Agent,

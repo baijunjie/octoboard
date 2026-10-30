@@ -12,7 +12,6 @@ import { InlineReference } from "../components/InlineReference";
 import { PATH_VAR_PARAMS } from "../components/literalParams";
 import { canTakeFocus } from "../components/regionFocus";
 import { useStickyHeadingFocus } from "../components/stickyHeadingFocus";
-import { ConfirmDialog } from "../dialogs/ConfirmDialog";
 import { Message, useT } from "../i18n/react";
 import type { Account, Agent } from "../protocol";
 import { useDaemon, useDaemonStore } from "../store";
@@ -30,6 +29,7 @@ import { AddAgentDialog } from "./AddAgentDialog";
 import { AgentApprovalSetting } from "./AgentApprovalSetting";
 import { AgentClaudeCompatibilitySetting } from "./AgentClaudeCompatibilitySetting";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
+import { RemoveAccountDialog } from "./RemoveAccountDialog";
 import { AgentTabActions, AgentTabMenu, RemoveAgentDialog, useAgentList } from "./AgentListMenu";
 import { useAccountOrder } from "./useAccountOrder";
 import { StartQuotaWindowsSetting } from "./StartQuotaWindowsSetting";
@@ -90,10 +90,11 @@ function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; 
  * accounts in their saved order, each a row (name, plan and email, usage, status, the Disable switch) with an actions
  * menu whose first entries open the account's details and its settings, each in a modal. The section also has the
  * means to add, edit and remove the accounts the user owns, to rename the default account, and to add, remove and
- * reorder the agents (see `docs/product/agent-accounts.md`); a new account starts on the agent of the tab in view. The
- * three switches, one that picks a new session's account by the weekly quota resetting soonest, one that switches a
- * session stopped at its account's usage limit to another account, and one that starts a usage window that has not
- * begun counting, sit above that list, once: all apply to every agent, including when none is added. While the daemon
+ * reorder the agents (see `docs/product/agent-accounts.md`, and `docs/product/removing-accounts.md` for removal); a
+ * new account starts on the agent of the tab in view. The three switches, one that picks a new session's account by
+ * the weekly quota resetting soonest, one that switches a session stopped at its account's usage limit to another
+ * account, and one that starts a usage window that has not begun counting, sit above that list, once: all apply to
+ * every agent, including when none is added. While the daemon
  * has not decided the list every agent is shown, and the agents cannot be removed or reordered yet. The default account
  * is not a record: it is the state of pinning nothing, so it is shown from the agent's availability and can be renamed
  * but not edited or removed. Opening the section asks the daemon to refresh the quotas that are due, those of every
@@ -324,16 +325,9 @@ export function AgentAccountsSection(): React.ReactElement {
         />
       )}
       {removing && (
-        <ConfirmDialog
-          title={t("settings.accounts.removeTitle")}
-          errorTitle={t("settings.accounts.removeFailedTitle")}
-          subject={<Message id="settings.accounts.removeSubject" params={{ name: <InlineReference dir="auto" wrap>{removing.name}</InlineReference> }} />}
-          message={<p><Message id="settings.accounts.removeMessage" params={{ agent: <InlineReference dir="auto" wrap>{AGENT_LABEL[removing.agent]}</InlineReference> }} /></p>}
-          confirmLabel={t("common.remove")}
-          destructive
-          resetKey={removing.id}
-          onConfirm={async () => {
-            await request({ type: "delete_account", account: removing.id });
+        <RemoveAccountDialog
+          account={removing}
+          onRemoved={() => {
             setRemoving(undefined);
             removalDone();
           }}

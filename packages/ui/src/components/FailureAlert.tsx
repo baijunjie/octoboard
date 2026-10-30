@@ -20,6 +20,7 @@ import { ErrorAlert, type AlertStatus } from "./ErrorAlert";
  * with the pointer leaves focus where it was. */
 export function FailureAlert({
   id,
+  textId,
   title,
   message,
   onRetry,
@@ -32,6 +33,8 @@ export function FailureAlert({
 }: {
   /** For a field that is described by the alert. */
   id?: string;
+  /** For a field that is described by what the failure says, and not by its buttons (`ErrorAlert`'s). */
+  textId?: string;
   title: React.ReactNode;
   message: ErrorPresentation;
   onRetry?: () => void;
@@ -46,6 +49,7 @@ export function FailureAlert({
   return (
     <ErrorAlert
       id={id}
+      textId={textId}
       className={className}
       title={title}
       announce={announce}

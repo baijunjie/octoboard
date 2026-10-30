@@ -111,7 +111,9 @@ screens, terminal titles and session records the tests replay.
 | `src/git_status.rs`, `src/git_push.rs`, `src/git_switch.rs`, `src/git_restore.rs`, `src/git_remote.rs`, `src/git_watch.rs` | Per-project git: status against the remote and fast-forward, push, switch to a local branch, restore of tracked changes, the recorded remote URL, and the ref watch that republishes the branch header |
 | `src/browse/` | Project-browsing reads, over the control socket and for the MCP tools that look at a project's changes (below) |
 | `src/hostfs.rs`, `src/open_directory.rs`, `src/open_terminal.rs`, `src/path_links.rs`, `src/host_tools.rs` | Host filesystem work (browsing, Trash, repository discovery, clone, remote probing, agent detection), launching the system terminal, file manager or default application, probing and opening the file paths a terminal shows, and `HostTools`, the seam a test substitutes stand-ins behind |
-| `src/project_trash.rs` | Which folder removing a project may move to the Trash: refused for a drastic loss, or while it would take another project's files along, told apart by device and inode; an inspection's refusal that a path that could not be resolved decided, or the worktrees outside the folder it held back, is kept under a token, for the removal confirmed after it to repeat |
+| `src/trash_safety.rs` | Whether a directory may be moved to the Trash without taking away what belongs to something else: protected directories (the home directory, a disk's root, Octoboard's data), and paths that must keep their files (`Overlap`), told apart by device and inode, a path that cannot be resolved counting as in the way; each caller words its own refusals |
+| `src/project_trash.rs` | Which folder removing a project may move to the Trash, on `trash_safety`'s rules: the project refusals and their wording; an inspection's refusal that a path that could not be resolved decided, or the worktrees outside the folder it held back, is kept under a token, for the removal confirmed after it to repeat |
+| `src/account_trash.rs` | Moving a removed account's config directory to the Trash (`delete_account` with `trash_directory`, `inspect_account_trash`): refused while its sessions run, and on `trash_safety`'s rules with the other accounts', the agents' default and the projects' directories in the way; judged before and again under the account's lock, the sign-in ended first |
 | `src/subprocess.rs`, `src/process_session.rs` | Running a spawned process to completion within bounds, and starting, observing and ending a process as the leader of a session of its own |
 | `src/env_shell/` | The user's real shell environment every agent is launched with, and resolving a binary on it |
 
@@ -162,8 +164,10 @@ External interfaces (re-exported from `mod.rs`, defined where each says):
   list them for a `snapshot`.
 - `Sharing` (`mod.rs`) — what `AppState` holds: the per-agent locks (`locks.rs`) and each account's progress and last
   failure.
-- `reading_account`, `running_long` (`cli_reads.rs`) — taken by agent CLI runs outside a session, which a change waits
-  for or refuses.
+- `admitted_reading`, `running_long` (`cli_reads.rs`) — taken by agent CLI runs outside a session, which a change, or
+  the move of a removed account's directory to the Trash, waits for or refuses.
+- `hold` (`cli_reads.rs`) — taken by a sharing change and by an account's removal (`src/account_trash.rs`) for as long
+  as it moves files under the directory; no CLI run starts there meanwhile.
 
 The lock over an account's change is not in this module: it lives on `AppState` (`lock_account_sharing`), under the
 same lock as the sessions' launch claims, and `begin_launch` refuses a session of a locked account.

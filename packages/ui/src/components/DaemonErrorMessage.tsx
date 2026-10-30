@@ -2,7 +2,7 @@ import React, { useId } from "react";
 
 import { DaemonRequestError } from "../daemon-client";
 import { daemonParams, DETAIL_BLOCK_CODES, RECOVERY_CODES, hasTrustDiagnostic, leftBranchDetail, leftBranchGroups, leftBranchItems, leftBranchName, richMessageCode, lacksSummary, sharingFailureItems, sharingRawReason, hasSharingReason, runningSessionIds, hasRefusedQuotaWindow, messageCode, type LeftBranchItem } from "../daemonMessage";
-import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../errorPresentation";
+import { hasCodeParams, hasShellTimeoutDetails, systemCauseKey, uncataloguedSummaryKey, unwordedReason, type ErrorPresentation } from "../errorPresentation";
 import { isUncataloguedFailure } from "../uncataloguedFailure";
 import { ActionableError } from "../actionableError";
 import { errorText, unexpectedFailureDiagnostic } from "../errorText";
@@ -85,6 +85,7 @@ function LeftBranchDetail({ name, detail }: { name: string; detail: string }): R
 
 /** A failure with names or technical literals set apart as chips in the catalog's wording. */
 function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?: DaemonErrorPart }): React.ReactElement | null {
+  const t = useT();
   const language = useCurrentLanguage();
   // The records are subscribed to only for a message that names one, so a failure that does not
   // re-renders with none of them.
@@ -168,7 +169,9 @@ function CodedDaemonMessage({ error, part }: { error: DaemonRequestError; part?:
   // One element, so a container that lays its children out as flex items (an alert's column) keeps
   // the sentence whole instead of making each run of text and each literal an item of its own.
   // A code with no opening sentence (`NO_SUMMARY_CODES`) has no sentence: the body starts with the remedy.
-  const sentence = summaryless ? null : <span><Message id={id as MessageKey} params={params as never} /></span>;
+  // A failure that states only its cause says the cause the system's text names after its sentence.
+  const systemCause = systemCauseKey(error);
+  const sentence = summaryless ? null : <span><Message id={id as MessageKey} params={params as never} />{systemCause && `${t("common.sentenceSeparator")}${t(systemCause)}`}</span>;
   // A failed automatic switch says what happened in its sentence and why on a line of its own, which is
   // the nested failure's summary (or the generic sentence of one the application has no words for).
   const reasonLine = error.code === "account_switch_automatically_failed" && params.reason !== undefined ? <span className="block">{params.reason}</span> : null;

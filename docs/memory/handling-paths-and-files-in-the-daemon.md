@@ -102,6 +102,11 @@ refused permission, no inode, a look that timed out) counts as a match. Only a p
 another project's, the home directory's, the data directory's — with nothing at it or refused for want of permission
 falls back to the text, as written and as resolved; the folder to be moved itself, when it cannot be read, refuses.
 The looks read the file system, so they run on blocking threads after the store's lock is released, each with a
-deadline, and one that outran it is left to finish and recorded in a `state::StalledPasses` under its key, so later
-decisions take the fallback at once instead of starting another thread a stuck mount holds the same way;
-`hostfs::place::looked_within` and `coordinator::identities_within` are the shape.
+deadline, and one that outran it is left to finish and, once it has run past its stuck threshold, recorded in a
+`state::StalledPasses` under its key, so later decisions take the fallback at once instead of starting another thread a
+stuck mount holds the same way; `hostfs::place::looked_within` and `coordinator::identities_within` are the shape.
+`state.directory_looks` is one registry for every decision of this kind (trust, project removal, branch cleanup,
+account removal), so a look with a shorter deadline than theirs — a quick check ahead of a confirmation — keeps
+`hostfs::place::Looking::stuck_after` at the full deadline: a merely slow path recorded as stuck makes all of them take
+a healthy path as unreachable. A decision that must not be cut short by what such an earlier look left running takes
+`Stuck::Wait` instead of `Stuck::Skip`.

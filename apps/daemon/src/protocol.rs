@@ -2187,7 +2187,28 @@ pub enum RequestBody {
     /// on its agent's default account, then removes the account. A session holding it is left
     /// alone — it already carries its own copy of the directory it launches with. Broadcasts
     /// `settings_updated`, and a `console_upserted` for every console whose reference was cleared.
+    ///
+    /// With `trash_directory`, the account's config directory is moved to the system Trash first
+    /// (never deleted outright), and the account removed only if that worked. Judged once before
+    /// anything is changed, and again once the account is locked, after its sharing was turned
+    /// off, so a refusal from the second judgement leaves sharing turned off. Refused with
+    /// `account_has_running_sessions` while a session of the account has a process or is being
+    /// launched, resumed or switched, `account_directory_protected` and `account_directory_shared`
+    /// for a directory that must stay, and `account_directory_trash_failed` when it cannot be
+    /// looked at or the account's sign-in does not end in time; a move that fails keeps the
+    /// account. While it runs, a sign-in for the account is refused with `account_being_removed`.
+    /// A directory that does not exist is skipped.
     DeleteAccount {
+        account: String,
+        /// Absent is false: only the record goes.
+        #[serde(default)]
+        trash_directory: bool,
+    },
+    /// What `delete_account` with `trash_directory` would do with the account's config directory
+    /// now, judged as it judges it before changing anything, and answered as
+    /// `account_trash_inspected` data rather than a refusal. Running sessions are not counted: a
+    /// client lists them itself, and `delete_account` still refuses them. See `account_trash`.
+    InspectAccountTrash {
         account: String,
     },
     /// Puts an agent at the end of `Settings.added_agents`. Refused with `agent_already_added` when
@@ -2273,8 +2294,9 @@ pub enum RequestBody {
     /// `unknown_account`, an agent determined unavailable with `agent_not_available`, a login shell
     /// whose environment could not be captured with `shell_environment_timeout`, a CLI that does
     /// not resolve with `binary_not_found`, an account that is already being signed in with
-    /// `login_already_running`, and a second Codex login while one runs for any account with
-    /// `login_codex_busy`. A success re-reads the account's quota at once.
+    /// `login_already_running`, a second Codex login while one runs for any account with
+    /// `login_codex_busy`, and an account whose removal is moving its directory to the Trash with
+    /// `account_being_removed`. A success re-reads the account's quota at once.
     StartAccountLogin {
         agent: Agent,
         #[serde(default)]
@@ -2520,6 +2542,50 @@ pub struct SessionBranchTarget {
     pub uncommitted: bool,
 }
 
+/// What `delete_account` with `trash_directory` would do with an account's config directory, as
+/// `inspect_account_trash` answers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum AccountTrashOutcome {
+    /// The directory is there and may be moved to the Trash.
+    Ok,
+    /// Nothing is at the path: there is nothing to move, and the removal goes ahead without it.
+    Missing,
+    /// The home directory, the root of a disk or a directory holding Octoboard's data
+    /// (`account_directory_protected`).
+    Protected,
+    /// Something else's directory is, holds or lies inside it (`account_directory_shared`): by
+    /// `kind` another account (`name`, `agent`), an agent's default directory (`agent`) or a
+    /// project's folder (`name`).
+    Shared {
+        kind: AccountTrashSharing,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        agent: Option<String>,
+    },
+    /// A path that decides it could not be looked at at once (`account_directory_trash_failed`):
+    /// the directory, the home directory or Octoboard's data directory, with `cause` `unreadable`
+    /// where that is known, or another account's, an agent's default or a project's path, with
+    /// `cause` `other_unlooked`.
+    Unlookable {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cause: Option<String>,
+    },
+    /// A look did not answer within the short time the inspection allows: nothing is said against
+    /// the directory, and `delete_account` judges it with the full time.
+    Undecided,
+}
+
+/// What `AccountTrashOutcome::Shared` shares the directory with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountTrashSharing {
+    Account,
+    DefaultAccount,
+    Project,
+}
+
 /// What a path asked about in `probe_path_links` names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -2597,6 +2663,10 @@ pub enum Event {
     ProcessesKept {
         id: Option<String>,
         ids: Vec<String>,
+    },
+    AccountTrashInspected {
+        id: Option<String>,
+        outcome: AccountTrashOutcome,
     },
     ProjectRemovalInspected {
         id: Option<String>,
@@ -3663,6 +3733,31 @@ pub mod error_code {
     /// The project's directory could not be moved to the Trash. The project is kept. The reason
     /// is carried as the `detail` param.
     pub const PROJECT_DIRECTORY_TRASH_FAILED: &str = "project_directory_trash_failed";
+    /// A `delete_account` with `trash_directory` while a session of the account has a process or is
+    /// being launched, resumed or switched: its directory holds what they run on. `params` names
+    /// the `account`, its `name` and `sessions`, how many.
+    pub const ACCOUNT_HAS_RUNNING_SESSIONS: &str = "account_has_running_sessions";
+    /// A `delete_account` with `trash_directory` for a directory that is, holds or lies inside an
+    /// agent's default configuration directory or another account's directory, or holds a
+    /// project's folder. The account is kept.
+    /// `params` has `kind` (`account`, `default_account` or `project`), the `name` of that account
+    /// or project, and the `agent` of an account or default account.
+    pub const ACCOUNT_DIRECTORY_SHARED: &str = "account_directory_shared";
+    /// A `delete_account` with `trash_directory` for a directory the Trash is never offered for:
+    /// the home directory, the root of a disk, or one holding Octoboard's own data. The account is
+    /// kept. `params` names the `path`.
+    pub const ACCOUNT_DIRECTORY_PROTECTED: &str = "account_directory_protected";
+    /// A `delete_account` with `trash_directory` whose directory could not be moved to the Trash,
+    /// or it, the home directory, Octoboard's data directory, or another account's, an agent's
+    /// default or a project's path could not be looked at, or a sign-in could still write into the
+    /// directory. The account is kept. `params` has the `path`, the `detail` and, as for
+    /// `project_directory_trash_failed`, the `cause` where there is one: `unanswered` and
+    /// `unreadable` for the directory itself, the home directory and the data directory,
+    /// `other_unlooked` where whether the directory holds or overlaps another account's, an agent's
+    /// default or a project's directory could not be told, and `signing_in` where the account's
+    /// sign-in did not end within five seconds, or a sign-in of another account pointed at the same
+    /// directory is running.
+    pub const ACCOUNT_DIRECTORY_TRASH_FAILED: &str = "account_directory_trash_failed";
     pub const PATH_NOT_ABSOLUTE: &str = "path_not_absolute";
     pub const PATH_NOT_FOUND: &str = "path_not_found";
     pub const PATH_NOT_A_DIRECTORY: &str = "path_not_a_directory";
@@ -3825,8 +3920,8 @@ pub mod error_code {
     /// cause the items share (`other` when they differ), or why the change could not start when
     /// there are none. A `cause` of `default_moved` means the agent's default directory is no
     /// longer the one the links lead into or sharing was started into: turning sharing off, then on
-    /// again, shares the new one. An entry about a conversation turning sharing off could not take back names
-    /// the agent's id of it as `item` and the sessions recording it as `sessions`.
+    /// again, shares the new one. An entry about a conversation turning sharing off could not take
+    /// back names the agent's id of it as `item` and the sessions recording it as `sessions`.
     pub const ACCOUNT_SHARING_FAILED: &str = "account_sharing_failed";
     /// A `delete_account`, or an `update_account` pointing it at another directory, for an account
     /// that shares the default configuration, or whose last change of sharing is incomplete,
@@ -3841,9 +3936,13 @@ pub mod error_code {
     pub const ACCOUNT_IN_USE: &str = "account_in_use";
     /// A change of the account's sharing is running: creating, launching or resuming a session of
     /// it, switching a session to or from it, a second `set_account_sharing` for it, and removing
-    /// or repointing it are refused until the change ends. `params` names the `account` and its
+    /// or repointing it, are refused until the change ends. `params` names the `account` and its
     /// `name`.
     pub const ACCOUNT_SHARING_IN_PROGRESS: &str = "account_sharing_in_progress";
+    /// A `start_account_login` for an account whose `delete_account` with `trash_directory` is
+    /// running: a sign-in would write into the directory after it was ended and before it moves.
+    /// Nothing was started. `params` names the `account` and its `name`.
+    pub const ACCOUNT_BEING_REMOVED: &str = "account_being_removed";
     /// A `set_account_sharing`, or a `delete_account` or `update_account` repointing an account,
     /// ended one of the account's idle sessions for the change and did not see its process gone
     /// after a generous wait: the change did not start, nothing was recorded, and the sessions it
@@ -4133,8 +4232,8 @@ pub fn now_millis() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        Event, HistoryMessage, HistorySpeaker, ProjectAccount, ProjectSource, Request, RequestBody,
-        SessionStatus,
+        AccountTrashOutcome, AccountTrashSharing, Event, HistoryMessage, HistorySpeaker,
+        ProjectAccount, ProjectSource, Request, RequestBody, SessionStatus,
     };
 
     #[test]
@@ -4248,6 +4347,57 @@ mod tests {
     }
 
     #[test]
+    fn an_account_trash_inspection_travels_in_the_documented_shape() {
+        let wire = |outcome| {
+            serde_json::to_value(Event::AccountTrashInspected {
+                id: Some("request-1".to_owned()),
+                outcome,
+            })
+            .unwrap()
+        };
+        assert_eq!(
+            wire(AccountTrashOutcome::Shared {
+                kind: AccountTrashSharing::DefaultAccount,
+                name: None,
+                agent: Some("Codex".to_owned()),
+            }),
+            serde_json::json!({
+                "type": "account_trash_inspected", "id": "request-1",
+                "outcome": {"status": "shared", "kind": "default_account", "agent": "Codex"},
+            })
+        );
+        assert_eq!(
+            wire(AccountTrashOutcome::Shared {
+                kind: AccountTrashSharing::Project,
+                name: Some("Held".to_owned()),
+                agent: None,
+            })["outcome"],
+            serde_json::json!({"status": "shared", "kind": "project", "name": "Held"})
+        );
+        assert_eq!(
+            wire(AccountTrashOutcome::Unlookable {
+                cause: Some("other_unlooked".to_owned())
+            })["outcome"],
+            serde_json::json!({"status": "unlookable", "cause": "other_unlooked"})
+        );
+        assert_eq!(
+            wire(AccountTrashOutcome::Unlookable { cause: None })["outcome"],
+            serde_json::json!({"status": "unlookable"})
+        );
+        for (outcome, status) in [
+            (AccountTrashOutcome::Undecided, "undecided"),
+            (AccountTrashOutcome::Ok, "ok"),
+            (AccountTrashOutcome::Missing, "missing"),
+            (AccountTrashOutcome::Protected, "protected"),
+        ] {
+            assert_eq!(
+                wire(outcome)["outcome"],
+                serde_json::json!({"status": status})
+            );
+        }
+    }
+
+    #[test]
     fn a_session_interrupted_reply_serializes_with_its_type_and_fields() {
         assert_eq!(
             serde_json::to_value(Event::SessionInterrupted {
@@ -4322,6 +4472,20 @@ mod tests {
                 r#"{"type":"delete_console","id":"request-1","console":"console-7"}"#,
                 |body| match body {
                     RequestBody::DeleteConsole { console } => Some(console),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"delete_account","id":"request-1","account":"account-7"}"#,
+                |body| match body {
+                    RequestBody::DeleteAccount { account, .. } => Some(account),
+                    _ => None,
+                },
+            ),
+            (
+                r#"{"type":"inspect_account_trash","id":"request-1","account":"account-7"}"#,
+                |body| match body {
+                    RequestBody::InspectAccountTrash { account } => Some(account),
                     _ => None,
                 },
             ),

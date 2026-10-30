@@ -173,7 +173,7 @@ fn claude_listing() -> Listing {
 
 /// [`load`] over an already-captured environment and with its deadline given, which is what makes
 /// the failure paths testable without waiting out [`COMMAND_TIMEOUT`].
-fn list(
+pub(crate) fn list(
     agent: Agent,
     shell_env: &HashMap<String, String>,
     config_dir: Option<&Path>,
@@ -229,8 +229,18 @@ fn run(
     args: &[&str],
     timeout: Duration,
 ) -> Result<String, ModelsUnavailable> {
-    // The account's directory must not change sharing under the CLI while it runs.
-    let _reading = crate::shared_config::reading_account(config_dir);
+    // The account's directory must not change sharing under the CLI while it runs, and the
+    // listing never runs under a pinned directory that is missing, like the quota read:
+    // Grok would create it, and Codex refuses it.
+    let _reading = crate::shared_config::admitted_reading(config_dir).map_err(|missing| {
+        failed(
+            agent,
+            &format!(
+                "the account's configuration directory {} does not exist",
+                missing.0.display()
+            ),
+        )
+    })?;
     let mut command =
         adapter::account_command(agent, shell_env, config_dir, args).map_err(|binary| {
             ModelsUnavailable::new(
@@ -627,6 +637,20 @@ mod tests {
         assert_eq!(reason(&listing), code::UNREADABLE_OUTPUT);
     }
 
+    /// A listing admitted after the account's directory was moved (a removal held it back) runs
+    /// nothing, which would create the directory again.
+    #[test]
+    fn a_listing_admitted_after_the_directory_was_moved_runs_nothing() {
+        let dir = ScratchDir::new("agent-models-moved");
+        let ran = dir.join("ran");
+        let env = fake_agent(&dir, "codex", &format!("touch '{}'", ran.display()));
+        let account = dir.join("account");
+        let listing = list(Agent::Codex, &env, Some(&account), COMMAND_TIMEOUT);
+        assert_eq!(reason(&listing), code::COMMAND_FAILED);
+        assert!(!ran.exists(), "the CLI was not run");
+        assert!(!account.exists());
+    }
+
     /// The command runs from the environment given, with the account's directory exported, and its
     /// stdout is parsed end to end. The fake agent prints the fixture only when `CODEX_HOME` is
     /// the directory the account names.
@@ -636,6 +660,7 @@ mod tests {
         let fixture = dir.join("catalogue.json");
         std::fs::write(&fixture, CODEX_CATALOGUE).unwrap();
         let account = dir.join("account");
+        std::fs::create_dir(&account).unwrap();
         let env = fake_agent(
             &dir,
             "codex",

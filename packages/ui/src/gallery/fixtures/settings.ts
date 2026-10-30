@@ -1,10 +1,11 @@
 import { AGENT_LABEL } from "../../agents";
 import { describing, type Ui } from "../interact";
-import type { AccountLogin, AccountSharing, Agent, AgentAvailability } from "../../protocol";
-import type { Scenario, Step } from "../scenario";
-import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, snapshotState } from "./builders";
+import type { AccountLogin, AccountSharing, AccountTrashOutcome, Agent, AgentAvailability } from "../../protocol";
+import type { AccountTrashAnswer, Scenario, Step } from "../scenario";
+import { ALL_AGENTS, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState } from "./builders";
 import { noneAddedState } from "./empty";
 import { agentAvailability } from "./liveChanges";
+import type { FixtureError } from "./projectFiles";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow } from "./quotas";
 import { DEFAULT_GIT_WORKFLOW } from "../../gitWorkflow";
 
@@ -508,6 +509,140 @@ const SHARING_TURN_ON_ERROR = {
   },
   message: "sharing the default configuration with account `Work` did not complete: `skills/` left unchanged (permission denied)",
 };
+
+/** Work's removal confirmation, reached from its ⋮ menu on Claude Code's tab. */
+const removeWork: Step[] = [
+  (ui) => ui.press(ui.t("rail.settings")),
+  (ui) => ui.press(ui.t("settings.section.accounts")),
+  (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: AGENT_LABEL.claude })),
+  (ui) => ui.press(ui.t("common.remove")),
+];
+
+/** The removal confirmation with the Trash option ticked. */
+const removeWorkToTrash: Step[] = [...removeWork, (ui) => ui.press(ui.t("settings.accounts.removeTrash"))];
+
+/** Work's config directory. */
+const WORK_DIR = browserState.settings!.accounts[0].config_dir;
+
+/** Work with live sessions on its directory: three recorded under its id (working, waiting for the user, starting) and one
+ * that only has its directory (idle). An archived session of Work and a session of Client are not among those that block. */
+const workRunningState: Scenario["state"] = (() => {
+  const [consoleSession, web1, web2, api1] = SAMPLE.sessions;
+  return {
+    ...browserState,
+    sessions: new Map([
+      { ...consoleSession, account_id: "a-long" },
+      { ...web1, account_id: "a-work" },
+      { ...web2, config_dir: WORK_DIR },
+      { ...api1, account_id: "a-work" },
+      sessionOf("s-web-3", SAMPLE.console.id, SAMPLE.web.id, "Draft the release notes", "starting", { account_id: "a-work" }),
+      sessionOf("s-web-old", SAMPLE.console.id, SAMPLE.web.id, "Earlier layout work", "archived", { account_id: "a-work" }),
+    ].map((session) => [session.id, session])),
+  };
+})();
+
+/** What the daemon's quick look at Work's directory answers once the Trash option is ticked, for each refusal the dialog
+ * prevents: the removal is disabled with the cause stated under the option, one scenario each. */
+const TRASH_PREVENTED = [
+  {
+    key: "protected",
+    outcome: { status: "protected" },
+    title: "Remove account to the Trash prevented, directory protected",
+    description: "A warning alert under the ticked option says the directory is your home folder, the root of a disk or holds Octoboard's own data, so it cannot be moved to the Trash; the sentence stops at the cause. Remove is disabled.",
+  },
+  {
+    key: "shared-account",
+    outcome: { status: "shared", kind: "account", name: "Client", agent: "Claude Code" },
+    title: "Remove account to the Trash prevented, directory shared with an account",
+    description: "A warning alert under the ticked option says the directory overlaps the directory of the Claude Code account Client, the agent and the account each a chip, so it cannot be moved to the Trash. Remove is disabled.",
+  },
+  {
+    key: "shared-default",
+    outcome: { status: "shared", kind: "default_account", agent: "Claude Code" },
+    title: "Remove account to the Trash prevented, directory is the default account's",
+    description: "A warning alert under the ticked option says the directory is, holds or lies inside the default Claude Code account's directory (the agent a chip), so it cannot be moved to the Trash. No account is named. Remove is disabled.",
+  },
+  {
+    key: "shared-project",
+    outcome: { status: "shared", kind: "project", name: "Website" },
+    title: "Remove account to the Trash prevented, directory holds a project",
+    description: "A warning alert under the ticked option says the directory holds the folder of the project Website (a chip), so it cannot be moved to the Trash. Remove is disabled.",
+  },
+  {
+    key: "unlookable",
+    outcome: { status: "unlookable" },
+    title: "Remove account to the Trash prevented, directory could not be looked at",
+    description: "A warning alert under the ticked option says the directory could not be accessed, so it cannot be moved to the Trash. Remove is disabled.",
+  },
+  {
+    key: "unreadable",
+    outcome: { status: "unlookable", cause: "unreadable" },
+    title: "Remove account to the Trash prevented, directory could not be read",
+    description: "A warning alert under the ticked option says the directory could not be read, so it cannot be checked for files of other accounts or projects and cannot be moved to the Trash. Remove is disabled.",
+  },
+  {
+    key: "other-unlooked",
+    outcome: { status: "unlookable", cause: "other_unlooked" },
+    title: "Remove account to the Trash prevented, other accounts' and projects' directories not checked",
+    description: "A warning alert under the ticked option says it could not be checked whether the directory holds or overlaps another account's or a project's directory, so it cannot be moved to the Trash. Remove is disabled.",
+  },
+] as const satisfies readonly { key: string; outcome: AccountTrashOutcome; title: string; description: string }[];
+
+/** What the daemon refuses, once Remove is pressed, a removal that asks for Work's directory to be moved to the Trash
+ * with: only what the quick look before could not foresee (a state that changed since, a look that outran its time, the
+ * move itself failing), one scenario each. */
+const TRASH_REFUSALS = [
+  {
+    key: "sessions-started",
+    error: { code: "account_has_running_sessions", params: { account: "a-work", name: "Work", sessions: "2" }, message: "account `Work` still has 2 sessions with a process" },
+    inspection: undefined,
+    title: "Remove account to the Trash refused, sessions started since",
+    description: "Work's confirmation was opened with no live sessions, so the option was ticked and Remove was available; two sessions started on Work meanwhile, and the daemon refused. An error dialog titled Could not remove the account, over the confirmation, says only that Account Work still has 2 sessions that are running or starting, so its directory cannot be moved to the Trash. Behind it the dialog is unchanged and Work is still listed.",
+  },
+  {
+    key: "shared-account",
+    error: { code: "account_directory_shared", params: { kind: "account", name: "Client", agent: "Claude Code" }, message: "the directory is shared with another account" },
+    inspection: [{ status: "ok" }, { status: "shared", kind: "account", name: "Client", agent: "Claude Code" }],
+    title: "Remove account to the Trash refused, directory shared since",
+    description: "The directory was not shared when the option was ticked and Remove was available; Client began using it meanwhile. An error dialog titled Could not remove the account, over the confirmation, says only that the directory overlaps the directory of the Claude Code account Client (the agent and the account each a chip), so it cannot be moved to the Trash. The confirmation asks again once the error is closed, so then the same reason stands under the option, announced, and Remove is disabled.",
+  },
+  {
+    key: "failed",
+    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "Operation not permitted (os error 1)" }, message: "could not move the directory to the Trash: Operation not permitted (os error 1)" },
+    inspection: undefined,
+    title: "Account directory could not be moved to the Trash",
+    description: "An error dialog titled Could not remove the account, over the confirmation, says that the directory could not be moved to the Trash and, as the system's text names it (Operation not permitted, os error 1), that access was denied, with no remedy; the system's own text is in its Error details disclosure, closed here.",
+  },
+  {
+    key: "unanswered",
+    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "it did not respond in time", cause: "unanswered" }, message: "could not move the directory to the Trash: it did not respond in time" },
+    inspection: { status: "undecided" },
+    title: "Account directory did not respond in time",
+    description: "The quick look outran its time, so the option left Remove available; the full check on Remove did not get an answer either. An error dialog titled Could not remove the account, over the confirmation, says the directory, your home folder or Octoboard's data folder did not respond in time, so the directory could not be checked. The daemon's own text is in the closed Error details disclosure. The check asked again once the error is closed does not answer in time either, so the dialog stays as it was, Remove available to try again.",
+  },
+  {
+    key: "unreadable",
+    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "it could not be read", cause: "unreadable" }, message: "could not move the directory to the Trash: it could not be read" },
+    inspection: [{ status: "undecided" }, { status: "unlookable", cause: "unreadable" }],
+    title: "Account directory could not be read when removing",
+    description: "The quick look outran its time, so the option left Remove available; the full check on Remove could not read the directory. An error dialog titled Could not remove the account, over the confirmation, says the directory could not be read, so it could not be checked for files of other accounts or projects. The daemon's own text is in the closed Error details disclosure. The confirmation asks again once the error is closed, so then the same reason stands in a warning alert under the option, announced, and Remove is disabled.",
+  },
+  {
+    key: "other-unlooked",
+    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "it could not be checked", cause: "other_unlooked" }, message: "could not move the directory to the Trash: it could not be checked" },
+    inspection: [{ status: "undecided" }, { status: "unlookable", cause: "other_unlooked" }],
+    title: "Account directory could not be checked against other directories when removing",
+    description: "The quick look outran its time, so the option left Remove available; the full check on Remove could not tell whether the directory holds or overlaps another account's, the default account's or a project's directory. An error dialog titled Could not remove the account, over the confirmation, says only that, and that the directory cannot be moved to the Trash. The daemon's own text is in the closed Error details disclosure. The confirmation asks again once the error is closed, so then the same reason stands in a warning alert under the option, announced, and Remove is disabled.",
+  },
+  {
+    key: "signing-in",
+    error: { code: "account_directory_trash_failed", params: { path: WORK_DIR, detail: "its sign-in did not end in time", cause: "signing_in" }, message: "could not move the directory to the Trash: its sign-in did not end in time" },
+    inspection: undefined,
+    title: "Account directory could not be moved to the Trash, login did not end",
+    description: "Remove was pressed while Work's login was running and it did not end in time. An error dialog titled Could not remove the account, over the confirmation, says that the account's login did not end in time, so the directory could not be moved to the Trash. The daemon's own text is in the closed Error details disclosure. Closing the error leaves the dialog as it was, with no new check of the directory, Remove available to try again.",
+  },
+
+] as const satisfies readonly { key: string; error: FixtureError; inspection: AccountTrashAnswer | readonly AccountTrashAnswer[] | undefined; title: string; description: string }[];
 
 export const settingsScenarios: Scenario[] = [
   {
@@ -1244,6 +1379,16 @@ export const settingsScenarios: Scenario[] = [
     ],
   },
   {
+    id: "settings-account-login-being-removed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Account login refused, the account is being removed",
+    description: "Choosing Log in on Work is refused while the account is being removed with its directory: the dialog opens straight as a fixed failure alert (no close button), with the danger icon in its header and the title \"Could not log in\". The body is one sentence: the login to Claude Code account Work failed (agent and account as chips), followed by the cause \"The account is being removed.\" It has no remedy line and no Error details; the footer reads Close, then Log in again, which has the focus.",
+    state: notSignedInState,
+    loginStartError: { code: "account_being_removed", params: { account: "a-work", name: "Work" }, message: "account `Work` is being removed" },
+    steps: loginFromInline(),
+  },
+  {
     id: "settings-add-agent-refused",
     group: GROUP,
     category: "exceptional",
@@ -1566,14 +1711,47 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Remove account confirmation",
-    description: "A warning modal titled Remove account: the account name is a chip in the first sentence of the body.",
+    description: "A warning modal titled Remove account: the account name is a chip in the first sentence of the body. Under the message, an unticked option \"Also move the account directory to the Trash\" with a hint that the whole directory goes, including login, settings and conversation history, and can be recovered from the Trash. The confirming button reads Remove.",
     state: browserState,
-    steps: [
-      (ui) => ui.press(ui.t("rail.settings")),
-      (ui) => ui.press(ui.t("settings.section.accounts")),
-      (ui) => ui.press(ui.t("settings.accounts.actionsLabel", { name: "Work", agent: "Claude Code" })),
-      (ui) => ui.press(ui.t("common.remove")),
-    ],
+    steps: removeWork,
+  },
+  {
+    id: "settings-account-delete-trash",
+    group: GROUP,
+    category: "normal",
+    title: "Remove account to the Trash",
+    description: "The option is ticked and Work has no live sessions: the message now says the directory is moved to the Trash and that its archived sessions can no longer be resumed, the hint stays, and Remove is available.",
+    state: browserState,
+    steps: removeWorkToTrash,
+  },
+  {
+    id: "settings-account-delete-trash-running",
+    group: GROUP,
+    category: "normal",
+    title: "Remove account to the Trash, sessions still running",
+    description: "The option is ticked and Work has four live sessions, so a plain line reads \"The account still has 4 sessions that are running or starting\" and says they must be ended or switched to another account first, over the list of them with their status marks, agent icons and titles; Remove is disabled. Neither Work's archived session nor Client's session is listed. Unticking the option removes the list and enables Remove.",
+    state: workRunningState,
+    steps: removeWorkToTrash,
+  },
+  {
+    id: "settings-account-delete-trash-missing",
+    group: GROUP,
+    category: "normal",
+    title: "Remove account to the Trash, directory not there",
+    description: "The option is ticked and nothing is at Work's directory: the hint now says the account's directory does not exist, so there is nothing to move, the message stays the plain one for an unticked removal (nothing about the Trash or archived sessions), and Remove is available.",
+    state: browserState,
+    accountTrashInspection: { status: "missing" },
+    steps: removeWorkToTrash,
+  },
+  {
+    id: "settings-account-delete-trash-checking",
+    group: GROUP,
+    category: "normal",
+    title: "Remove account to the Trash, directory being checked",
+    description: "The option is ticked and the check of the directory has not answered: Remove is faded as waiting and cannot be pressed, with no alert under the option yet.",
+    state: browserState,
+    accountTrashInspection: "pending",
+    steps: removeWorkToTrash,
   },
   {
     id: "settings-account-delete-sharing-failed",
@@ -1590,6 +1768,47 @@ export const settingsScenarios: Scenario[] = [
       (ui) => ui.confirm(),
     ],
   },
+  ...TRASH_PREVENTED.map(({ key, outcome, title, description }): Scenario => ({
+    id: `settings-account-delete-trash-prevented-${key}`,
+    group: GROUP,
+    category: "exceptional",
+    title,
+    description,
+    state: browserState,
+    accountTrashInspection: outcome,
+    steps: removeWorkToTrash,
+  })),
+  {
+    id: "settings-account-delete-trash-inspect-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remove account to the Trash prevented, the directory could not be checked",
+    description: "The request that checks the directory failed. A danger alert under the ticked option says it could not check whether the directory can be moved to the Trash, adds a general unexpected-error line, and offers Details and Try again; Remove is disabled.",
+    state: browserState,
+    accountTrashInspection: { code: "internal_error", params: { detail: "the daemon could not check the directory" }, message: "the daemon could not check the directory" },
+    steps: removeWorkToTrash,
+  },
+  {
+    id: "settings-account-delete-trash-inspect-retrying",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remove account to the Trash prevented, the check being retried",
+    description: "Try again was pressed on the failed check. The danger alert under the ticked option stays with its text and Details, and Try again stays where it is, faded as waiting; Remove is faded and disabled.",
+    state: browserState,
+    accountTrashInspection: [{ code: "internal_error", params: { detail: "the daemon could not check the directory" }, message: "the daemon could not check the directory" }, "pending"],
+    steps: [...removeWorkToTrash, (ui) => ui.press(ui.t("error.tryAgain"))],
+  },
+  ...TRASH_REFUSALS.map(({ key, error, inspection, title, description }): Scenario => ({
+    id: `settings-account-delete-trash-${key}`,
+    group: GROUP,
+    category: "exceptional",
+    title,
+    description,
+    state: browserState,
+    accountDeleteError: error,
+    ...(inspection && { accountTrashInspection: inspection }),
+    steps: [...removeWorkToTrash, (ui) => ui.confirm()],
+  })),
   ...(["existing", "default", "reserved"] as const).map((kind): Scenario => ({
     id: `settings-account-name-taken-${kind}`,
     group: GROUP,

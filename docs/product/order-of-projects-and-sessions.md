@@ -65,7 +65,9 @@ The setting reaches every list that follows this order: both focus modes' lists 
 project's focus mode for the console sessions above its left-out sessions (see `docs/product/focus-mode.md`); the order
 in which the rail's waiting count walks waiting sessions (see "The raised hand" in `docs/product/session-statuses.md`);
 the menu bar icon's session lists (see "The icon's menu" in `docs/product/menu-bar-icon.md`); and the list of running
-sessions in the confirmation for removing a project (see `docs/product/removing-projects.md`). Other lists of sessions
+sessions in the confirmation for removing a project (see `docs/product/removing-projects.md`), and the list of running
+sessions in the confirmation for removing an account with its directory (see "The confirmation" in
+`docs/product/removing-accounts.md`). Other lists of sessions
 in confirmations, such as the archive confirmation's list of the sessions under an owner, stay ranked by status whatever
 the setting. The switch strip never ranks by status (see "The switch strip" in `docs/product/focus-mode.md`).
 
