@@ -6,8 +6,9 @@
 //! outside worktree is moved to the Trash whatever it holds, as recoverably as the folder itself.
 //! Only a locked worktree waits for the user's own word (`force_remove`), given for it as it was
 //! shown — one that has gained changes since stays — and a worktree that is another project's
-//! folder, or holds one, is never touched. Nor is one of which that cannot be told
-//! ([`Holders`]): it is listed as staying, and stays with the removal, which reports it as left.
+//! folder, or holds one, is never touched, nor one that is the home directory, the root of a disk
+//! or holds Octoboard's data. Nor is one of which that cannot be told ([`WorktreeRemovability`]):
+//! it is listed as staying, and stays with the removal, which reports it as left.
 //! An inspection that held one back keeps it under a token that the removal confirmed after it
 //! sends back (`crate::project_trash::UnresolvedRemovals`), so that worktree stays even once it
 //! can be told: the confirmation showed it staying. As the removal runs only once the project's
@@ -35,7 +36,8 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use super::{
-    exists, failed, is_merged, item_of, names, stored_names, wait_until_stopped, Holders, Holding,
+    exists, failed, is_merged, item_of, names, stored_names, wait_until_stopped, Removability,
+    WorktreeRemovability, PROJECT_FOLDER_UNTOLD,
 };
 use crate::branch_origin::bound::bound_in;
 use crate::branch_origin::git::{changes, worktrees, Git, Listed};
@@ -117,24 +119,40 @@ impl Removal {
     /// Looks again at whether each outside worktree it takes is or holds another project's folder,
     /// as one may have come to since the plan: one that is stays, unreported, as one known to be so
     /// at the plan does, and one of which that cannot be told now is held back. Blocking, as
-    /// [`Holders::look`] says.
+    /// [`WorktreeRemovability::look`] says.
     fn look_again(&mut self, state: &AppState) {
-        let mut holders = Holders::of_projects(state, Some(&self.project));
-        if let Ok(holders) = &mut holders {
-            holders.look(state, self.worktrees.iter().map(|(_, root)| root.clone()));
+        self.look_again_with(
+            state,
+            crate::paths::known_home_dir(),
+            crate::paths::data_dir(),
+        );
+    }
+
+    /// [`Removal::look_again`], with `home` and `data` the home directory and Octoboard's data
+    /// directory.
+    pub(super) fn look_again_with(
+        &mut self,
+        state: &AppState,
+        home: Option<PathBuf>,
+        data: PathBuf,
+    ) {
+        let mut judge = WorktreeRemovability::of(state, Some(&self.project), home, data);
+        if let Ok(judge) = &mut judge {
+            judge.look(state, self.worktrees.iter().map(|(_, root)| root.clone()));
         }
         for (item, root) in std::mem::take(&mut self.worktrees) {
-            let holding = holders
-                .as_ref()
-                .map_or(Holding::Unknown, |holders| holders.holding(&root));
-            match holding {
-                Holding::No => self.worktrees.push((item, root)),
-                Holding::Yes => {
+            let removability = judge.as_ref().map_or_else(
+                |_| Removability::Untold(PROJECT_FOLDER_UNTOLD.to_string()),
+                |judge| judge.removability(&root),
+            );
+            match removability {
+                Removability::Removable => self.worktrees.push((item, root)),
+                Removability::ProjectFolder | Removability::Protected => {
                     self.going.remove(&root);
                 }
-                Holding::Unknown => {
+                Removability::Untold(detail) => {
                     self.going.remove(&root);
-                    self.held_back.push((super::untold(item), root));
+                    self.held_back.push((super::untold(item, detail), root));
                 }
             }
         }
@@ -145,12 +163,31 @@ impl Removal {
 /// `git` for a project in no repository, nor where the repository survives and none of the
 /// project's sessions is responsible for a branch. An outside worktree whose root is among
 /// `held_back`, those its inspection held back, is held back again however it stands now.
-/// Blocking, waiting for its looks as [`Holders::look`] says.
+/// Blocking, waiting for its looks as [`WorktreeRemovability::look`] says.
 pub fn plan(
     state: &AppState,
     project: &Project,
     reads: Reads,
     held_back: &[PathBuf],
+) -> Result<Option<Removal>> {
+    plan_with(
+        state,
+        project,
+        reads,
+        held_back,
+        crate::paths::known_home_dir(),
+        crate::paths::data_dir(),
+    )
+}
+
+/// [`plan`], with `home` and `data` the home directory and Octoboard's data directory.
+pub(super) fn plan_with(
+    state: &AppState,
+    project: &Project,
+    reads: Reads,
+    held_back: &[PathBuf],
+    home: Option<PathBuf>,
+    data: PathBuf,
 ) -> Result<Option<Removal>> {
     let Some(repo) = repository_of(Path::new(&project.path)) else {
         return Ok(None);
@@ -172,7 +209,7 @@ pub fn plan(
         return Ok(None);
     }
     let git = (state.host_tools.get().git)()?;
-    let mut holders = Holders::of_projects(state, Some(&project.id))?;
+    let mut judge = WorktreeRemovability::of(state, Some(&project.id), home, data)?;
     let listed = worktrees(&git, &repo).map_err(anyhow::Error::msg)?;
     let names = stored_names(&git, &repo, &bound);
     let full = reads == Reads::Inspection;
@@ -189,7 +226,7 @@ pub fn plan(
             && !worktree.prunable
             && !(survives && bound_branch(worktree).is_none())
     };
-    holders.look(
+    judge.look(
         state,
         listed
             .iter()
@@ -226,17 +263,20 @@ pub fn plan(
                 state,
             )
         };
-        // One known to hold another project's folder never counts, whatever its inspection said.
-        match holders.holding(&worktree.root) {
-            Holding::Yes => continue,
-            Holding::No if !held_back.contains(&worktree.root) => {}
-            Holding::No | Holding::Unknown => {
-                untold.push((
-                    super::untold(item(SessionBranchState::Failed)),
-                    worktree.root.clone(),
-                ));
-                continue;
-            }
+        // One known to hold another project's folder, or to be protected, never counts, whatever
+        // its inspection said.
+        let untold_why = match judge.removability(&worktree.root) {
+            Removability::ProjectFolder | Removability::Protected => continue,
+            Removability::Removable if !held_back.contains(&worktree.root) => None,
+            Removability::Removable => Some(PROJECT_FOLDER_UNTOLD.to_string()),
+            Removability::Untold(detail) => Some(detail),
+        };
+        if let Some(detail) = untold_why {
+            untold.push((
+                super::untold(item(SessionBranchState::Failed), detail),
+                worktree.root.clone(),
+            ));
+            continue;
         }
         // A status that cannot be read counts as changes, so they are shown.
         let uncommitted = full && changes(&git, &worktree.root).unwrap_or(true);

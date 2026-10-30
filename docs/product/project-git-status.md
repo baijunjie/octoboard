@@ -139,12 +139,13 @@ again until its next check, or until its refs change (see "Following changes to 
 
 ### What one check does
 
-- A directory that is not a git repository is reported as such, and the badge shows nothing for it. For this badge,
-  for the Git actions in its project menu, a directory is a git repository only when it has a `.git`
-  entry of its own; a subdirectory of a repository is not one. The project pane's Git mode looks further up the
-  folders (see "The repository and its worktrees" in `docs/product/project-pane-git-mode.md`); the badge does not.
-  The project's recorded remote URL is cleared, unless the directory cannot be seen at all (see "The project's remote
-  URL" in `docs/product/projects.md`).
+- A directory that is not a git repository is reported as such, and the badge shows nothing for it. For this badge, for
+  the Git actions in its project menu, a directory is a git repository only when it has a `.git` entry of its own that
+  is a directory or a regular file, a link to either counting as it; anything else at `.git`, a FIFO or a device say, is
+  no repository. A subdirectory of a repository is not one. The project pane's Git mode looks further up the folders
+  (see "The repository and its worktrees" in `docs/product/project-pane-git-mode.md`); the badge does not. The project's
+  recorded remote URL is cleared, unless the directory cannot be seen at all (see "The project's remote URL" in
+  `docs/product/projects.md`).
 - Otherwise the repository's remotes are read, and the project's recorded remote URL is made the one that read gives,
   which is how that value is kept true to a repository whose remote changed outside Octoboard (same section). A read
   that could not be made leaves the recorded value alone. A changed value reaches the open windows at once; nothing
@@ -249,8 +250,8 @@ Two consequences are worth knowing:
   failure (see "The branch badge" above). A push fails the same way, as an error alert, rather than
   publishing some other repository (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 
-A git association's clone, and the check the association form makes of a git URL, are **not** filtered this way: they
-run with the whole shell environment (see "Associating a project" in `docs/product/projects.md`).
+A git association's clone, and the check the association form makes of a git URL, run with the same filtered
+environment (see "Associating a project" in `docs/product/projects.md`).
 
 `git` is run so that it can never stop to ask for a credential, a passphrase or an unknown host key — each of those
 fails immediately instead — and every `git` call of a check is given at most two minutes, so a check cannot hang; a

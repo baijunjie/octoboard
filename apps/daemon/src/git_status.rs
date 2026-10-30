@@ -492,9 +492,9 @@ fn pullable(status: &GitStatus) -> bool {
 fn fast_forward(state: &AppState, path: &Path, status: &mut GitStatus) {
     status.activity = GitActivity::Pulling;
     state.publish_git_status(status.clone());
-    // `pullable` just checked `upstream` to be `Some`.
-    let upstream = status.upstream.clone().expect("upstream is set");
-    if let Err(err) = run_git_write(path, &["merge", "--ff-only", &upstream]) {
+    // `@{upstream}` rather than the upstream's short name, which a local branch of the same name
+    // (`origin/main`) would shadow and fast-forward the branch onto instead.
+    if let Err(err) = run_git_write(path, &["merge", "--ff-only", "@{upstream}"]) {
         tracing::debug!(%err, "fast-forwarding the branch failed");
         status.error = Some(err);
     }
@@ -773,8 +773,8 @@ fn parse_ab(text: &str) -> (u32, u32) {
 mod tests {
     use super::*;
     use crate::test_support::{
-        git, git_dir_state, isolated_git_env, move_modification_time_back, redirecting_overrides,
-        repo_pair, repo_with, ScratchDir, PATIENCE, SYSTEM_GIT,
+        app_state, git, git_dir_state, isolated_git_env, move_modification_time_back,
+        redirecting_overrides, repo_pair, repo_with, ScratchDir, PATIENCE, SYSTEM_GIT,
     };
 
     #[test]
@@ -1094,5 +1094,55 @@ mod tests {
         let err = slow(Duration::from_millis(100)).expect_err("the short bound is exceeded");
         assert!(err.contains("did not finish"), "{err}");
         slow(PATIENCE).expect("the long bound is not");
+    }
+
+    /// A local branch named like the upstream (`origin/main`) is what a bare `origin/main` names
+    /// first; the pull must still fast-forward onto the remote-tracking branch.
+    #[test]
+    fn the_pull_fast_forwards_onto_the_upstream_not_a_local_branch_of_its_name() {
+        let (state, _dir) = app_state("git-status-pull-shadowed");
+        let repo = repo_with("git-status-pull-shadowed-repo", &[(b"a.txt", b"one\n")]);
+        let rev = |name: &str| String::from_utf8(git(&repo, &["rev-parse", name])).unwrap();
+        let branch = String::from_utf8(git(&repo, &["symbolic-ref", "--short", "HEAD"])).unwrap();
+        let branch = branch.trim();
+        let commit_on = |message: &str| {
+            git(&repo, &["commit", "-q", "--allow-empty", "-m", message]);
+            let commit = rev("HEAD");
+            git(&repo, &["reset", "-q", "--hard", "HEAD~"]);
+            commit
+        };
+        let upstream = commit_on("upstream");
+        let shadow = commit_on("shadow");
+        git(
+            &repo,
+            &["update-ref", "refs/remotes/origin/main", upstream.trim()],
+        );
+        git(
+            &repo,
+            &["update-ref", "refs/heads/origin/main", shadow.trim()],
+        );
+        for (key, value) in [
+            ("remote.origin.url", "/nonexistent"),
+            ("remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"),
+            (&format!("branch.{branch}.remote"), "origin"),
+            (&format!("branch.{branch}.merge"), "refs/heads/main"),
+        ] {
+            git(&repo, &["config", key, value]);
+        }
+
+        let mut status = GitStatus {
+            project: "project-1".to_string(),
+            repository: true,
+            branch: Some(branch.to_string()),
+            detached: false,
+            upstream: Some("origin/main".to_string()),
+            ahead: 0,
+            behind: 1,
+            activity: GitActivity::Idle,
+            error: None,
+        };
+        fast_forward(&state, &repo, &mut status);
+        assert_eq!(status.error, None);
+        assert_eq!(rev("HEAD"), upstream);
     }
 }

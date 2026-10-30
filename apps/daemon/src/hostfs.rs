@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 
 use crate::protocol::{error_code, Agent, CodedError, DirEntry};
 
+pub mod git_dir;
 pub mod place;
 
 /// Expands a leading `~` and makes the path absolute. The UI sends whatever the user typed.
@@ -136,8 +137,47 @@ pub fn identity(metadata: &std::fs::Metadata) -> (u64, u64) {
     (metadata.dev(), metadata.ino())
 }
 
+/// Opens `path` for reading, following links, without blocking, and refuses anything but a regular
+/// file: a FIFO's open would otherwise wait for a writer, and a device reads forever.
+pub fn open_regular(path: &Path) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "not a regular file",
+        ));
+    }
+    Ok(file)
+}
+
+/// The bytes of the regular file at `path` (see [`open_regular`]), refused when it holds more than
+/// `limit`.
+pub fn read_regular(path: &Path, limit: usize) -> std::io::Result<Vec<u8>> {
+    use std::io::Read;
+
+    let too_large = || std::io::Error::new(std::io::ErrorKind::InvalidData, "file too large");
+    let file = open_regular(path)?;
+    if file.metadata()?.len() > limit as u64 {
+        return Err(too_large());
+    }
+    let mut bytes = Vec::new();
+    file.take(limit as u64 + 1).read_to_end(&mut bytes)?;
+    if bytes.len() > limit {
+        return Err(too_large());
+    }
+    Ok(bytes)
+}
+
+/// Whether `path` is a git working tree: its `.git` is a directory or a regular file, as `git`
+/// takes one. Anything else there (a FIFO, a link to a device) is no repository.
 pub fn is_git_repo(path: &Path) -> bool {
-    path.join(".git").exists()
+    std::fs::metadata(path.join(".git"))
+        .is_ok_and(|metadata| metadata.is_dir() || metadata.is_file())
 }
 
 /// The agent a project directory is set up for, read from marker files at its top level (see
@@ -265,12 +305,16 @@ const CLONE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30 * 6
 /// A `git` command for the user's remote work, run with `shell_env`, the user's shell environment
 /// that agents are launched with, rather than the daemon's own: a daemon started from Finder has a
 /// minimal `PATH` with no `git` on it, and its own environment may carry the agent-session markers
-/// that environment exists to filter out. Made non-interactive, so a missing credential or an
-/// unknown host key fails at once instead of waiting on a terminal nobody is watching; the caller
-/// gives it a deadline.
+/// that environment exists to filter out. Only the user's own git configuration is taken from it,
+/// as for every `git` the daemon runs. Made non-interactive, so a missing credential or an unknown
+/// host key fails at once instead of waiting on a terminal nobody is watching; the caller gives it
+/// a deadline.
 fn git_command(shell_env: &HashMap<String, String>) -> Result<std::process::Command> {
     let git = crate::env_shell::resolve_binary("git", shell_env)?;
-    Ok(crate::git_env::non_interactive(git, shell_env))
+    Ok(crate::git_env::non_interactive(
+        git,
+        crate::git_env::user_configuration_only(shell_env),
+    ))
 }
 
 /// Clones `remote_url` into a new directory under `parent` and returns that directory. Blocking:
@@ -429,6 +473,13 @@ mod tests {
         assert!(!entries[1].is_git_repo);
     }
 
+    #[test]
+    fn a_dot_git_that_is_neither_a_directory_nor_a_regular_file_is_no_repository() {
+        let dir = ScratchDir::new("hostfs-dot-git-device");
+        std::os::unix::fs::symlink("/dev/zero", dir.join(".git")).expect("link");
+        assert!(!super::is_git_repo(&dir));
+    }
+
     fn detected_with(label: &str, markers: &[&str]) -> Option<Agent> {
         let dir = ScratchDir::new(&format!("hostfs-detect-{label}"));
         for marker in markers {
@@ -532,6 +583,22 @@ mod tests {
             coded.code,
             crate::protocol::error_code::GIT_REMOTE_UNREACHABLE
         );
+    }
+
+    /// A login shell exporting `GIT_DIR` and the like must not point the probe at another
+    /// repository: here one set up for Codex, while the remote probed is set up for Claude.
+    #[test]
+    fn probe_ignores_git_variables_that_redirect_it() {
+        let ours = crate::test_support::repo_with("hostfs-probe-ours", &[(b"CLAUDE.md", b"")]);
+        let theirs = crate::test_support::repo_with("hostfs-probe-theirs", &[(b"AGENTS.md", b"")]);
+        let mut env = crate::test_support::isolated_git_env();
+        env.extend(
+            crate::test_support::redirecting_overrides(&theirs)
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value)),
+        );
+        let url = format!("file://{}", ours.display());
+        assert_eq!(probe_remote_agent(&url, &env).unwrap(), Some(Agent::Claude));
     }
 
     #[test]

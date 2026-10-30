@@ -31,11 +31,13 @@ it.each([
   expect(classifyError(error)).toEqual({ kind: "actionable", recovery });
 });
 
-it("gives a list of leftovers that are all worktrees kept for a project folder that could not be checked no remedy of its own", () => {
+it("gives a list of leftovers that are all worktrees kept for a project folder that could not be checked, or as a protected folder, no remedy of its own", () => {
   const untold = { kind: "worktree", name: "/wt", branch: "a", state: "failed", uncommitted: false, detail: "could not be told", cause: "project_folder_unknown" };
   const failed = { kind: "branch", name: "fix/a", branch: "fix/a", state: "failed", uncommitted: false, detail: "error: refused", cause: null };
   const left = (...items: object[]) => new DaemonRequestError("text", "session_branches_not_removed", { count: String(items.length), items: JSON.stringify(items) });
   expect(classifyError(left(untold, { ...untold, name: "/wt2" }))).toEqual({ kind: "actionable", recovery: "none" });
+  // Nor a worktree kept as the home folder, a disk's root or a folder of the app's data, which is to stay.
+  expect(classifyError(left(untold, { ...untold, name: "/home/dev", cause: "protected_folder" }))).toEqual({ kind: "actionable", recovery: "none" });
   // Nor does the message itself carry one, for either list.
   expect(hasErrorRemedy(left(untold))).toBe(false);
   expect(hasErrorRemedy(left(untold, failed))).toBe(false);

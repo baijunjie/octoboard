@@ -7,7 +7,7 @@ import { abbreviateHome } from "./pathDisplay";
 import { sessionDisplayTitle } from "./sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "./quota/quotaFormat";
 import type { Language } from "./i18n/languages";
-import { DEFAULT_ACCOUNT_NAME, isProjectFolderUnknown, NESTED_FAILURE_CODES, pathLinkRefusedCause, type MessageParams, type QuotaWindow, type SessionBranchCause, type SessionBranchState, type SharingEntryCause } from "./protocol";
+import { DEFAULT_ACCOUNT_NAME, isKeptForItsFolder, isProjectFolderUnknown, isProtectedFolder, NESTED_FAILURE_CODES, pathLinkRefusedCause, type MessageParams, type QuotaWindow, type SessionBranchCause, type SessionBranchState, type SharingEntryCause } from "./protocol";
 import type { State } from "./store";
 
 /** The params that are record ids, and what each is shown as: the record's current name. */
@@ -170,22 +170,23 @@ export type LeftBranchItem = { kind: "worktree" | "branch"; name: string; branch
 
 /** The groups a `session_branches_not_removed` alert sorts its items into, in the order shown, each
  * with the lead line that says once why its items are still there, and for some a note after the list on what to do
- * with them; what could not be removed at all comes first. A worktree kept because whether it is or holds another
- * project's folder could not be told is not among what could not be removed, but in a group of its own beside the
- * project folders. */
+ * with them; what could not be removed at all comes first. A worktree kept because it is the home folder, the root of a
+ * disk or a folder holding Octoboard's data, or because whether it is or holds another project's folder could not be
+ * told, is not among what could not be removed, but in a group of its own beside the project folders. */
 type LeftBranchLead =
   | "branchCleanup.group.notRemoved" | "branchCleanup.group.uncommitted" | "branchCleanup.group.submodules"
   | "branchCleanup.group.locked" | "branchCleanup.group.unmerged" | "branchCleanup.group.checkedOut"
-  | "branchCleanup.group.projectFolder" | "branchCleanup.group.projectFolderUnknown";
+  | "branchCleanup.group.projectFolder" | "branchCleanup.group.protectedFolder" | "branchCleanup.group.projectFolderUnknown";
 type LeftBranchNote = "branchCleanup.note.projectFolderUnknown";
 const LEFT_BRANCH_GROUPS: Array<{ key: string; lead: LeftBranchLead; note?: LeftBranchNote; states: SessionBranchState[]; holds: (item: LeftBranchItem) => boolean }> = [
-  { key: "notRemoved", lead: "branchCleanup.group.notRemoved", states: ["failed", "removable"], holds: (item) => !isProjectFolderUnknown(item) },
+  { key: "notRemoved", lead: "branchCleanup.group.notRemoved", states: ["failed", "removable"], holds: (item) => !isKeptForItsFolder(item) },
   { key: "uncommitted", lead: "branchCleanup.group.uncommitted", states: ["uncommitted_changes"], holds: () => true },
   { key: "submodules", lead: "branchCleanup.group.submodules", states: ["submodules"], holds: () => true },
   { key: "locked", lead: "branchCleanup.group.locked", states: ["locked"], holds: () => true },
   { key: "unmerged", lead: "branchCleanup.group.unmerged", states: ["unmerged"], holds: () => true },
   { key: "checkedOut", lead: "branchCleanup.group.checkedOut", states: ["checked_out"], holds: () => true },
   { key: "projectFolder", lead: "branchCleanup.group.projectFolder", states: ["project_folder"], holds: () => true },
+  { key: "protectedFolder", lead: "branchCleanup.group.protectedFolder", states: ["failed"], holds: isProtectedFolder },
   {
     key: "projectFolderUnknown", lead: "branchCleanup.group.projectFolderUnknown", note: "branchCleanup.note.projectFolderUnknown",
     states: ["failed"], holds: isProjectFolderUnknown,
@@ -203,7 +204,7 @@ export function leftBranchGroups(items: LeftBranchItem[]): Array<{ key: string; 
 /** The reason given for a `failed` item of a `session_branches_not_removed` alert, to show under its name: none for
  * one whose group says why in the UI's own words. */
 export function leftBranchDetail(item: LeftBranchItem): string | null {
-  return isProjectFolderUnknown(item) ? null : item.detail;
+  return isKeptForItsFolder(item) ? null : item.detail;
 }
 
 /** How an item of a `session_branches_not_removed` alert is named to a person: a worktree's path

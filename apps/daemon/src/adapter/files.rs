@@ -71,27 +71,7 @@ pub(super) fn read_bounded_text(
 /// directory opened as a project holds the agent's own; the target must be a regular file, opened
 /// without blocking so that a FIFO cannot hold the caller.
 pub(crate) fn read_regular_text(path: &Path, limit: usize) -> std::io::Result<String> {
-    use std::io::{Error, ErrorKind, Read};
-    use std::os::unix::fs::OpenOptionsExt;
-
-    let too_large = || Error::new(ErrorKind::InvalidData, "file too large");
-    let file = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
-        .open(path)?;
-    let meta = file.metadata()?;
-    if !meta.is_file() {
-        return Err(Error::new(ErrorKind::InvalidInput, "not a regular file"));
-    }
-    if meta.len() > limit as u64 {
-        return Err(too_large());
-    }
-    let mut bytes = Vec::new();
-    file.take(limit as u64 + 1).read_to_end(&mut bytes)?;
-    if bytes.len() > limit {
-        return Err(too_large());
-    }
-    utf8(bytes)
+    utf8(crate::hostfs::read_regular(path, limit)?)
 }
 
 fn utf8(bytes: Vec<u8>) -> std::io::Result<String> {

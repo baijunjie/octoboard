@@ -977,7 +977,7 @@ async fn removal_lists(fixture: &Fixture, root: &Path) -> Option<SessionBranchIt
 fn is_untold(item: &SessionBranchItem) -> bool {
     item.state == SessionBranchState::Failed
         && item.cause == Some(SessionBranchCause::ProjectFolderUnknown)
-        && item.detail.as_deref() == Some(HOLDING_UNTOLD)
+        && item.detail.as_deref() == Some(PROJECT_FOLDER_UNTOLD)
 }
 
 /// A worktree holding another project's folder is that project's however the folder's path is
@@ -1042,7 +1042,10 @@ async fn a_worktree_whose_holding_cannot_be_told_is_kept_and_reported() {
     let elsewhere = fixture.worktrees.join("elsewhere");
     std::fs::create_dir(&elsewhere).unwrap();
     other_project_at(&fixture.state, &elsewhere);
-    let untold = (SessionBranchState::Failed, Some(HOLDING_UNTOLD.to_string()));
+    let untold = (
+        SessionBranchState::Failed,
+        Some(PROJECT_FOLDER_UNTOLD.to_string()),
+    );
 
     for stalled in [&elsewhere, &root] {
         let stuck = Arc::new(());
@@ -1209,7 +1212,7 @@ async fn a_removal_after_an_inspection_that_held_a_worktree_back_leaves_it() {
         let told = reported(&mut events).await;
         assert_eq!(told[0]["state"], "failed", "{told}");
         assert_eq!(told[0]["cause"], "project_folder_unknown", "{told}");
-        assert_eq!(told[0]["detail"], HOLDING_UNTOLD, "{told}");
+        assert_eq!(told[0]["detail"], PROJECT_FOLDER_UNTOLD, "{told}");
         assert!(root.exists() && !fixture.repo.exists());
         assert_eq!(state.unresolved_removals.len(), 0);
     }
@@ -1419,6 +1422,157 @@ async fn a_worktree_holding_another_projects_repository_is_never_removed() {
     assert!(removal_lists(&fixture, &root).await.is_none());
     fixture.remove(&archived, &[]).await;
     assert!(root.exists() && linked.exists());
+}
+
+/// A project's folder that holds a worktree, as one with its worktrees laid out under it does,
+/// loses nothing when the worktree goes: the worktree is removed as any other.
+#[tokio::test]
+async fn a_worktree_inside_another_projects_folder_goes() {
+    let fixture = Fixture::new("cleanup-inside-other");
+    let archived = [fixture.store("s1", SessionStatus::Archived)];
+    let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+    other_project_at(&fixture.state, &fixture.worktrees);
+    let left = fixture.remove(&archived, &[]).await;
+    assert!(left.is_empty(), "{left:?}");
+    assert!(!root.exists());
+}
+
+/// What removing what `archived` is bound to leaves, with `home` and `data` the home directory and
+/// Octoboard's data directory.
+fn removed_with(
+    fixture: &Fixture,
+    archived: &[Session],
+    home: PathBuf,
+    data: PathBuf,
+) -> Vec<SessionBranchItem> {
+    blocking(|| {
+        let git = (fixture.state.host_tools.get().git)().unwrap();
+        let bound = bound_in(&fixture.state, archived).unwrap();
+        let mut judge = WorktreeRemovability::of(&fixture.state, None, Some(home), data).unwrap();
+        remove_in(&fixture.state, &git, &bound[0], &mut judge, &[])
+    })
+}
+
+/// A worktree that is the home directory, or holds Octoboard's data directory, is never removed:
+/// it is left as `failed`, saying why, and its branch stays with it.
+#[test]
+fn a_worktree_that_is_home_or_holds_octoboards_data_is_never_removed() {
+    for case in ["home", "data"] {
+        let fixture = Fixture::new(&format!("cleanup-protected-{case}"));
+        let archived = [fixture.store("s1", SessionStatus::Archived)];
+        let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+        std::fs::create_dir(root.join("data")).unwrap();
+        let elsewhere = fixture.worktrees.join("elsewhere");
+        let (home, data) = match case {
+            "home" => (root.clone(), elsewhere),
+            _ => (elsewhere, root.join("data")),
+        };
+        let left = removed_with(&fixture, &archived, home, data);
+        assert!(root.exists() && fixture.has_branch("mine"), "{case}");
+        assert_eq!(
+            summary(&left),
+            expect(&[
+                (true, "mine", SessionBranchState::Failed),
+                (false, "mine", SessionBranchState::CheckedOut),
+            ]),
+            "{case}"
+        );
+        assert_eq!(
+            (left[0].detail.as_deref(), left[0].cause),
+            (Some(PROTECTED), Some(SessionBranchCause::ProtectedFolder)),
+            "{case}"
+        );
+    }
+}
+
+/// Where the home directory, or Octoboard's data directory, does not answer in time, whether the
+/// worktree is the one or holds the other cannot be told: it is kept as one of which that cannot
+/// be told, saying which did not answer, and its branch stays with it.
+#[test]
+fn a_worktree_is_kept_while_home_or_octoboards_data_cannot_be_looked_at() {
+    for (case, detail) in [
+        (
+            "home",
+            "the home folder did not respond in time, so whether this worktree is it could not \
+             be told",
+        ),
+        (
+            "data",
+            "Octoboard's data folder did not respond in time, so whether it is in this worktree \
+             could not be told",
+        ),
+    ] {
+        let fixture = Fixture::new(&format!("cleanup-unlooked-{case}"));
+        let archived = [fixture.store("s1", SessionStatus::Archived)];
+        let root = std::fs::canonicalize(fixture.worktree("mine", "s1")).unwrap();
+        let (home, data) = (
+            fixture.worktrees.join("home"),
+            fixture.worktrees.join("data"),
+        );
+        let stuck = Arc::new(());
+        stall(
+            &fixture.state,
+            if case == "home" { &home } else { &data },
+            &stuck,
+        );
+        let left = removed_with(&fixture, &archived, home, data);
+        assert!(root.exists() && fixture.has_branch("mine"), "{case}");
+        assert_eq!(
+            summary(&left),
+            expect(&[
+                (true, "mine", SessionBranchState::Failed),
+                (false, "mine", SessionBranchState::CheckedOut),
+            ]),
+            "{case}"
+        );
+        assert_eq!(
+            (left[0].detail.as_deref(), left[0].cause),
+            (Some(detail), Some(SessionBranchCause::ProjectFolderUnknown)),
+            "{case}"
+        );
+    }
+}
+
+/// A project's removal never takes along an outside worktree that is the home directory: not when
+/// it plans, nor when it looks again just before carrying out.
+#[test]
+fn a_projects_removal_never_takes_a_worktree_that_is_home() {
+    let fixture = Fixture::without_project("cleanup-project-protected");
+    let folder = fixture.worktree("folder", "s1");
+    insert_project(&fixture.state, &folder);
+    fixture.store("s1", SessionStatus::Archived);
+    let outside = std::fs::canonicalize(fixture.worktree("outside", "s1")).unwrap();
+    let (elsewhere, data) = (
+        fixture.worktrees.join("home"),
+        fixture.worktrees.join("data"),
+    );
+    let project = project_p1(&fixture.state);
+    let planned = |home: &Path| {
+        blocking(|| {
+            let home = Some(home.to_path_buf());
+            project::plan_with(
+                &fixture.state,
+                &project,
+                project::Reads::Removal,
+                &[],
+                home,
+                data.clone(),
+            )
+            .unwrap()
+            .unwrap()
+        })
+    };
+    let takes_outside = |removal: &project::Removal| {
+        removal.items().iter().any(|item| {
+            item.kind == SessionBranchKind::Worktree && item.branch.as_deref() == Some("outside")
+        })
+    };
+
+    assert!(!takes_outside(&planned(&outside)));
+    let mut removal = planned(&elsewhere);
+    assert!(takes_outside(&removal));
+    blocking(|| removal.look_again_with(&fixture.state, Some(outside.clone()), data.clone()));
+    assert!(!takes_outside(&removal));
 }
 
 // -- what an agent is told ---------------------------------------------------------------

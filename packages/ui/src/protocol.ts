@@ -57,16 +57,28 @@ export interface SessionBranchItem {
   /** Git's own message, for `failed`. */
   detail: string | null;
   /** Why a `failed` one is left, where the UI words that itself: `project_folder_unknown` for a worktree kept because
-   * whether it is or holds another project's folder could not be told, whose `detail` is then the daemon's English. */
+   * whether it is or holds another project's folder could not be told, and `protected_folder` for one kept because it is
+   * the home folder, the root of a disk or a folder holding Octoboard's data; its `detail` is then the daemon's English. */
   cause?: SessionBranchCause;
 }
 
 /** Why a `failed` `SessionBranchItem` is left, as the UI words it. */
-export type SessionBranchCause = "project_folder_unknown";
+export type SessionBranchCause = "project_folder_unknown" | "protected_folder";
 
 /** Whether `item` is a worktree kept because whether it is or holds another project's folder could not be told. */
 export function isProjectFolderUnknown(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
   return item.state === "failed" && item.cause === "project_folder_unknown";
+}
+
+/** Whether `item` is a worktree kept because it is the home folder, the root of a disk or a folder holding Octoboard's
+ * data. */
+export function isProtectedFolder(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+  return item.state === "failed" && item.cause === "protected_folder";
+}
+
+/** Whether `item` is a worktree kept for what its folder is or may be, which the UI words itself. */
+export function isKeptForItsFolder(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+  return isProjectFolderUnknown(item) || isProtectedFolder(item);
 }
 
 /** A group of one launch's processes: a top process and its attributed descendants, or, with no

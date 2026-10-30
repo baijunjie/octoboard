@@ -2495,6 +2495,9 @@ pub struct SessionBranchItem {
 pub enum SessionBranchCause {
     /// Whether the worktree is or holds another project's folder could not be told, so it is kept.
     ProjectFolderUnknown,
+    /// The worktree is the home directory, the root of a disk or a directory holding Octoboard's
+    /// data, so it is kept.
+    ProtectedFolder,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2523,7 +2526,8 @@ pub enum SessionBranchState {
     Locked,
     /// A worktree that is a project's folder, or holds one.
     ProjectFolder,
-    /// Git refused or failed to remove it, or to say where it stands, or whether a worktree is or
+    /// Git refused or failed to remove it, or to say where it stands, a worktree is the home
+    /// directory, the root of a disk or a directory holding Octoboard's data, or whether it is or
     /// holds a project's folder could not be told.
     Failed,
 }

@@ -5,7 +5,8 @@
 //!
 //! All of it is read from the filesystem rather than asked of `git`: a report and a listing are
 //! handled while other work waits on the repository's gate, and a file read is cheaper than a
-//! process.
+//! process. For the same reason a file is opened only as a regular file and without blocking: a
+//! FIFO an agent left in the git directory would otherwise hold the gate for good.
 
 use std::ffi::OsStr;
 use std::fs;
@@ -14,6 +15,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::browse::{source, wire_path};
+use crate::hostfs::open_regular;
 
 /// How much of a reflog's first line is read. A line is two object ids, an identity, a time and
 /// a message.
@@ -44,13 +46,12 @@ pub fn repository_of(dir: &Path) -> Option<PathBuf> {
 /// The canonical common directory of the git directory `git_dir`: the one a linked worktree's
 /// `commondir` names, or the directory itself.
 pub(super) fn common_dir_of(git_dir: &Path) -> Option<PathBuf> {
-    match fs::read(git_dir.join("commondir")) {
-        Ok(pointer) => {
-            let pointer = pointer.strip_suffix(b"\n").unwrap_or(&pointer);
-            fs::canonicalize(git_dir.join(OsStr::from_bytes(pointer))).ok()
-        }
-        Err(_) => fs::canonicalize(git_dir).ok(),
-    }
+    // A `commondir` that is there but cannot be read leaves the git directory itself, which lies
+    // inside the common directory of a linked worktree: a folder holding the repository is still
+    // found to hold it, where "no repository" would let a move to the Trash take it.
+    let common_dir =
+        crate::hostfs::git_dir::common_dir(git_dir).unwrap_or_else(|_| git_dir.to_path_buf());
+    fs::canonicalize(common_dir).ok()
 }
 
 /// Whether the repository keeps its references in reftable format, which has no reflog files.
@@ -85,7 +86,7 @@ pub(super) fn first_reflog_entry(common_dir: &Path, branch: &str) -> Option<Refl
 
 /// [`first_reflog_entry`] with the entry's message, as git wrote it (`branch: Created from main`).
 pub(super) fn first_reflog_line(common_dir: &Path, branch: &str) -> Option<(ReflogEntry, Vec<u8>)> {
-    let file = fs::File::open(reflog_path(common_dir, branch)?).ok()?;
+    let file = open_regular(&reflog_path(common_dir, branch)?).ok()?;
     let mut line = Vec::new();
     BufReader::new(file.take(MAX_REFLOG_LINE))
         .read_until(b'\n', &mut line)
@@ -107,7 +108,7 @@ pub(super) fn reference_exists(common_dir: &Path, name: &[u8]) -> bool {
     if common_dir.join(OsStr::from_bytes(name)).is_file() {
         return true;
     }
-    let Ok(file) = fs::File::open(common_dir.join("packed-refs")) else {
+    let Ok(file) = open_regular(&common_dir.join("packed-refs")) else {
         return false;
     };
     BufReader::new(file.take(MAX_PACKED_REFS_SEARCHED))
@@ -133,7 +134,7 @@ pub(super) fn remote_default_branch_in_files(common_dir: &Path) -> Option<Vec<u8
         .filter_map(|entry| {
             let remote = entry.file_name().as_bytes().to_vec();
             let mut text = Vec::new();
-            fs::File::open(entry.path().join("HEAD"))
+            open_regular(&entry.path().join("HEAD"))
                 .ok()?
                 .take(MAX_SYMBOLIC_REF)
                 .read_to_end(&mut text)
@@ -156,7 +157,7 @@ pub(super) fn reflog_has_message(
     branch: &str,
     matches: impl Fn(&[u8]) -> bool,
 ) -> bool {
-    let Some(file) = reflog_path(common_dir, branch).and_then(|path| fs::File::open(path).ok())
+    let Some(file) = reflog_path(common_dir, branch).and_then(|path| open_regular(&path).ok())
     else {
         return false;
     };
@@ -271,5 +272,45 @@ mod tests {
         );
         assert_eq!(repository_of(&linked), repository_of(&repo));
         assert!(repository_of(&repo).is_some());
+    }
+
+    fn mkfifo(path: &Path) {
+        let _ = fs::remove_file(path);
+        let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+    }
+
+    /// Taken for "no repository", it would let a move to the Trash take the folder holding it.
+    #[test]
+    fn an_unreadable_commondir_still_places_the_repository_inside_the_common_directory() {
+        let repo = repo_with("branch-origin-commondir-fifo", &[(b"a", b"a")]);
+        let linked = repo.join("linked");
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "wt",
+                linked.to_str().unwrap(),
+            ],
+        );
+        let common = repository_of(&repo).unwrap();
+        mkfifo(&common.join("worktrees/linked/commondir"));
+        assert!(repository_of(&linked).is_some_and(|found| found.starts_with(&common)));
+    }
+
+    /// The read runs under the repository's gate, so a FIFO there must not block it.
+    #[test]
+    fn a_reflog_that_is_no_regular_file_is_read_as_none() {
+        let repo = repo_with("branch-origin-reflog-fifo", &[(b"a", b"a")]);
+        let common = repository_of(&repo).unwrap();
+        git(&repo, &["branch", "topic"]);
+        mkfifo(&common.join("logs/refs/heads/topic"));
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || sender.send(first_reflog_entry(&common, "topic")));
+        let read = receiver.recv_timeout(crate::test_support::PATIENCE);
+        assert_eq!(read.expect("the reflog read blocked"), None);
     }
 }

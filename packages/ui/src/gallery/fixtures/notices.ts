@@ -18,6 +18,10 @@ const GIT_REFUSAL = [
 // folder; the UI words that itself from `cause` and shows none of this.
 const FOLDER_UNKNOWN_DETAIL = "whether it is or holds another project's folder could not be told";
 
+// The same for a worktree kept because it is the home folder, the root of a disk or holds the app's own data; the UI
+// words that from `cause` as well and shows none of this.
+const PROTECTED_FOLDER_DETAIL = "it is the home folder, the root of a disk or a folder holding Octoboard's data";
+
 const { console: console_, web, api } = SAMPLE;
 // A session of each of the other two agents, for the prompts and notices that name the agent.
 const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the retry logic", "working", {
@@ -673,18 +677,19 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Branches and worktrees left after an archive",
-    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: under \"Removing this failed:\" a branch git failed to delete, shown as its name alone; under the lead for a locked worktree, that worktree, its folder icon before the path shortened with ~ and its branch icon on the next line aligned with the folder icon, its row ending with a soft warning \"uncommitted changes\" badge; and, last, under the plural lead \"Whether these worktrees are or hold another project's folder could not be checked:\", two worktrees with no raw text of their own, followed by the plural note that they may hold another project's files and to check what is in them before removing them by hand. Recovery guidance follows, then the Error details disclosure, open here: below a heading naming the branch, git's multi-line message sits in a block of its own, so no git text is in the list above and none for the two worktrees. The archive itself stands.",
+    description: "Under the header saying these were to be removed and are still there, the danger alert groups the leftovers by reason under short lead lines: under \"Removing this failed:\" a branch git failed to delete, shown as its name alone; under the lead for a locked worktree, that worktree, its folder icon before the path shortened with ~ and its branch icon on the next line aligned with the folder icon, its row ending with a soft warning \"uncommitted changes\" badge; then, under the singular lead saying the worktree is your home folder, the root of a disk or holds the app's own data so it was kept, the ~ worktree on branch scratch-home with no raw text of its own; and, last, under the plural lead \"Whether these worktrees are or hold another project's folder could not be checked:\", two worktrees with no raw text of their own, followed by the plural note that they may hold another project's files and to check what is in them before removing them by hand. Recovery guidance follows, then the Error details disclosure, open here: below a heading naming the branch, git's multi-line message sits in a block of its own, so no git text is in the list above and none for the three worktrees. The archive itself stands.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     toasts: [{
       kind: "error",
       code: "session_branches_not_removed",
       params: {
-        count: "4",
+        count: "5",
         items: JSON.stringify([
           { kind: "worktree", name: "/Users/dev/worktrees/website-changelog-tidy", branch: "changelog-tidy", state: "locked", uncommitted: true, detail: null },
           { kind: "branch", name: "fix/rename-index", branch: "fix/rename-index", state: "failed", uncommitted: false, detail: GIT_REFUSAL },
           { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-share", branch: "mounted-share", state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
           { kind: "worktree", name: "/Users/dev/worktrees/website-mounted-assets", branch: null, state: "failed", uncommitted: false, detail: FOLDER_UNKNOWN_DETAIL, cause: "project_folder_unknown" },
+          { kind: "worktree", name: "/Users/dev", branch: "scratch-home", state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
         ]),
       },
       message: "The worktree is locked; the branch could not be deleted",
@@ -708,6 +713,26 @@ export const noticeScenarios: Scenario[] = [
         ]),
       },
       message: "The worktree could not be removed",
+    }],
+  },
+  {
+    id: "toast-session-branches-not-removed-protected",
+    group: TRUST,
+    category: "exceptional",
+    title: "Worktrees kept as the home folder or the app's data",
+    description: "With only worktrees kept for their folder left, the alert has no header: the plural lead (the worktrees are your home folder, the root of a disk, or hold the app's own data, so they were kept) is its summary, over two worktrees (folder icon, path shortened with ~, branch on the next line) with no raw text under them. There is no recovery guidance, since nothing here is for the person to retry, and no Error details disclosure, as there is no raw text to show.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    toasts: [{
+      kind: "error",
+      code: "session_branches_not_removed",
+      params: {
+        count: "2",
+        items: JSON.stringify([
+          { kind: "worktree", name: "/Users/dev", branch: "scratch-home", state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
+          { kind: "worktree", name: "/Users/dev/.octoboard", branch: null, state: "failed", uncommitted: false, detail: PROTECTED_FOLDER_DETAIL, cause: "protected_folder" },
+        ]),
+      },
+      message: "The worktrees could not be removed",
     }],
   },
   {

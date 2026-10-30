@@ -1673,6 +1673,10 @@ export const en = {
     one: "This worktree is a project's folder:",
     other: "These worktrees are project folders:",
   },
+  "branchCleanup.group.protectedFolder": {
+    one: "This worktree is your home folder, the root of a disk, or holds {appName}’s own data, so it was kept:",
+    other: "These worktrees are your home folder, the root of a disk, or hold {appName}’s own data, so they were kept:",
+  },
   "branchCleanup.group.projectFolderUnknown": {
     one: "Whether this worktree is or holds another project's folder could not be checked:",
     other: "Whether these worktrees are or hold another project's folder could not be checked:",

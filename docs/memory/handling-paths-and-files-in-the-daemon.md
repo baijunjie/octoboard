@@ -41,7 +41,7 @@ holding none of the agent's record directories has never shown a record to be mi
 answers, and unknown never destroys anything; `agent_records::Resumability` is the shape for a session's
 conversation.
 
-## Read a project's files only through `browse::live`, and the agent's own configuration without blocking
+## Read a project's files only through `browse::live`, its git directory and the agent's configuration without blocking
 
 Applies to daemon code that reads a file's content from a project's directory or worktree — to count it, sniff it,
 hash it, send it, or to read the configuration the project keeps while launching a session (`.mcp.json`,
@@ -64,6 +64,14 @@ the agent's too. In an adapter, `read_bounded_text` in `apps/daemon/src/adapter/
 keeps (through `live` inside the canonical project, as a regular file above it), `read_regular_text` a file it does not
 own, and `files::is_agent_config_dir` tells whether a directory in the project's tree is the agent's configuration
 directory.
+
+A repository's own files are files an agent can plant too, though no listing shows them: the `.git` pointer file, a
+linked worktree's `commondir`, reflogs, `packed-refs`, a remote's `HEAD`. A FIFO or a link to `/dev/zero` in their place
+blocks or reads forever just the same, and they are read while watching a project, in a sweep's few slots and under the
+repository's gate, where one stuck read stalls everything behind it. Find a worktree's git and common directories
+through `hostfs::git_dir` (`git_dir`, `common_dir`) rather than reading `.git` or `commondir` yourself, and read any
+other file in a git directory through `hostfs::open_regular` or `hostfs::read_regular` with a bound; `live` is no
+answer here, since a linked worktree's git directory lies outside the project.
 
 A refusal from these readers does not mean the agent cannot read the file. Where taking an unreadable file as absent is
 the unsafe answer (an allowlist it may hold would be skipped), a regular file that is there but refused takes the safe
@@ -96,11 +104,11 @@ answers "is this one of these directories", `hostfs::place::Place` answers "does
 Decide which way a path that cannot be resolved (nothing there, unreadable, no inode, the look timed out) counts by
 what a match does. Where a match grants something, as trust coverage does, it matches nothing, with no fallback to the
 text. Where a match is what protects, as refusing a second project at one directory does, it falls back to the
-normalised text. Where a missed match destroys something, as moving a folder to the Trash with another project's
-files in it would (`project_trash::directory_to_trash`), a path that cannot be resolved (an I/O error other than a
-refused permission, no inode, a look that timed out) counts as a match. Only a path compared against the folder —
-another project's, the home directory's, the data directory's — with nothing at it or refused for want of permission
-falls back to the text, as written and as resolved; the folder to be moved itself, when it cannot be read, refuses.
+normalised text. Where a missed match destroys something — moving a folder to the Trash, removing a linked worktree
+— a path that cannot be resolved counts as a match, and that decision is made only in `apps/daemon/src/trash_safety.rs`
+(`looked_at_for_trash` for a move to the Trash, `Worktrees` for a worktree's removal), whose module header says which
+paths fall back to their text; it also protects the home directory, the root of a disk and a directory holding
+Octoboard's data whatever else is found. Code that destroys a directory asks it; extend it rather than write a second.
 The looks read the file system, so they run on blocking threads after the store's lock is released, each with a
 deadline, and one that outran it is left to finish and, once it has run past its stuck threshold, recorded in a
 `state::StalledPasses` under its key, so later decisions take the fallback at once instead of starting another thread a

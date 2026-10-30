@@ -131,17 +131,9 @@ fn no_application_claims(detail: &str) -> bool {
 /// The open does not block, so a FIFO swapped in for the file is refused rather than waited on.
 fn looks_like_text(path: &Path) -> bool {
     use std::io::Read;
-    use std::os::unix::fs::OpenOptionsExt;
-    let Ok(file) = std::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
-        .open(path)
-    else {
+    let Ok(file) = crate::hostfs::open_regular(path) else {
         return false;
     };
-    if !file.metadata().is_ok_and(|meta| meta.is_file()) {
-        return false;
-    }
     let mut head = Vec::with_capacity(TEXT_SNIFF_BYTES);
     if file
         .take(TEXT_SNIFF_BYTES as u64)

@@ -249,15 +249,7 @@ pub fn find_worktree(
 /// The git directory a worktree's `.git` leads to: the directory itself, or the one a `.git` file
 /// names (relative to the worktree when it is written relative).
 pub(crate) fn admin_dir(root: &Path) -> Option<PathBuf> {
-    let dot_git = root.join(".git");
-    let metadata = fs::symlink_metadata(&dot_git).ok()?;
-    if metadata.is_dir() {
-        return fs::canonicalize(&dot_git).ok();
-    }
-    let contents = fs::read(&dot_git).ok()?;
-    let pointer = contents.strip_prefix(b"gitdir: ")?;
-    let pointer = pointer.strip_suffix(b"\n").unwrap_or(pointer);
-    fs::canonicalize(root.join(std::ffi::OsStr::from_bytes(pointer))).ok()
+    fs::canonicalize(crate::hostfs::git_dir::git_dir(root)?).ok()
 }
 
 /// One record of `git worktree list --porcelain -z`.
